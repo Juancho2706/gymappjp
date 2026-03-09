@@ -1,0 +1,101 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { redirect } from 'next/navigation'
+
+export type RegisterState = {
+    error?: string
+}
+
+export async function registerAction(
+    _prev: RegisterState,
+    formData: FormData
+): Promise<RegisterState> {
+    const fullName = formData.get('full_name') as string
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const brandName = formData.get('brand_name') as string
+
+    if (!fullName || !email || !password || !brandName) {
+        return { error: 'Todos los campos son obligatorios' }
+    }
+
+    if (password.length < 8) {
+        return { error: 'La contraseña debe tener al menos 8 caracteres' }
+    }
+
+    // Generate slug from brand name
+    const slug = brandName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+
+    const adminDb = await createRawAdminClient()
+
+    // Check if slug is already taken
+    const { data: existingCoach } = await adminDb
+        .from('coaches')
+        .select('id')
+        .eq('slug', slug)
+        .maybeSingle()
+
+    if (existingCoach) {
+        return { error: `El slug "${slug}" ya está en uso. Prueba con otro nombre de marca.` }
+    }
+
+    // Check if email already exists
+    const { data: existingEmail } = await adminDb
+        .from('coaches')
+        .select('id')
+        .ilike('email', email)
+        .maybeSingle()
+
+    if (existingEmail) {
+        return { error: 'Ya existe una cuenta con este email.' }
+    }
+
+    // Create auth user
+    const { data: authData, error: authError } = await adminDb.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+    })
+
+    if (authError || !authData.user) {
+        return { error: authError?.message || 'Error al crear la cuenta' }
+    }
+
+    // Create coaches row with 30-day trial
+    const trialEndsAt = new Date()
+    trialEndsAt.setDate(trialEndsAt.getDate() + 30)
+
+    const { error: coachError } = await adminDb
+        .from('coaches')
+        .insert({
+            id: authData.user.id,
+            full_name: fullName,
+            email,
+            brand_name: brandName,
+            slug,
+            primary_color: '#10B981',
+            subscription_status: 'trial',
+            subscription_tier: 'starter',
+            trial_ends_at: trialEndsAt.toISOString(),
+            trial_used_email: email.toLowerCase(),
+        })
+
+    if (coachError) {
+        // Rollback: delete the auth user
+        await adminDb.auth.admin.deleteUser(authData.user.id)
+        return { error: coachError.message || 'Error al configurar el perfil de coach' }
+    }
+
+    // Sign in the user
+    const supabase = await createClient()
+    await supabase.auth.signInWithPassword({ email, password })
+
+    redirect('/coach/dashboard')
+}

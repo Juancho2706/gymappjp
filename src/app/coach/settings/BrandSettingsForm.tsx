@@ -1,0 +1,180 @@
+'use client'
+
+import { useActionState, useEffect, useRef, useState } from 'react'
+import { useFormStatus } from 'react-dom'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Loader2, Save, Palette } from 'lucide-react'
+import { updateBrandSettingsAction, type BrandSettingsState } from './actions'
+import { cn } from '@/lib/utils'
+import type { Coach } from '@/lib/database.types'
+
+const initialState: BrandSettingsState = {}
+
+const PRESET_COLORS = [
+    '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B',
+    '#EF4444', '#EC4899', '#06B6D4', '#F97316',
+]
+
+function SaveButton() {
+    const { pending } = useFormStatus()
+    return (
+        <button
+            type="submit"
+            disabled={pending}
+            className={cn(
+                'flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200',
+                'bg-gradient-to-r from-emerald-500 to-teal-600 text-white',
+                'hover:shadow-lg hover:shadow-emerald-500/25',
+                'disabled:opacity-60 disabled:cursor-not-allowed'
+            )}
+        >
+            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {pending ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+    )
+}
+
+export function BrandSettingsForm({ coach }: { coach: Coach }) {
+    const [state, formAction] = useActionState(updateBrandSettingsAction, initialState)
+    const [selectedColor, setSelectedColor] = useState(coach.primary_color)
+
+    return (
+        <form action={formAction} className="space-y-8">
+            {/* Identity */}
+            <div className="bg-card border border-border rounded-2xl p-6 space-y-5 shadow-sm">
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                    Identidad del Coach
+                </h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="full_name" className="text-sm text-foreground font-semibold">
+                            Tu nombre completo
+                        </Label>
+                        <Input
+                            id="full_name"
+                            name="full_name"
+                            defaultValue={coach.full_name}
+                            required
+                            className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary"
+                        />
+                        {state.fieldErrors?.full_name && (
+                            <p className="text-xs text-destructive">{state.fieldErrors.full_name[0]}</p>
+                        )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label htmlFor="brand_name" className="text-sm text-foreground font-semibold">
+                            Nombre de tu marca
+                        </Label>
+                        <Input
+                            id="brand_name"
+                            name="brand_name"
+                            defaultValue={coach.brand_name}
+                            required
+                            className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary"
+                        />
+                        {state.fieldErrors?.brand_name && (
+                            <p className="text-xs text-destructive">{state.fieldErrors.brand_name[0]}</p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label htmlFor="slug" className="text-sm text-foreground font-semibold">
+                        URL de tu app (slug)
+                    </Label>
+                    <div className="flex items-center gap-0">
+                        <div className="h-10 px-3 flex items-center bg-muted border border-r-0 border-border rounded-l-xl text-sm text-muted-foreground whitespace-nowrap">
+                            /c/
+                        </div>
+                        <Input
+                            id="slug"
+                            name="slug"
+                            defaultValue={coach.slug}
+                            required
+                            placeholder="mi-marca"
+                            className="h-10 rounded-l-none bg-secondary border-border text-foreground rounded-r-xl focus:border-primary"
+                        />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        Solo letras minúsculas, números y guiones. Ej: &quot;juan-fitness&quot;
+                    </p>
+                    {state.fieldErrors?.slug && (
+                        <p className="text-xs text-destructive">{state.fieldErrors.slug[0]}</p>
+                    )}
+                </div>
+            </div>
+
+            {/* Brand color */}
+            <div className="bg-card border border-border rounded-2xl p-6 space-y-5 shadow-sm">
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-primary" />
+                    Color de marca
+                </h2>
+
+                <div className="flex flex-wrap gap-3">
+                    {PRESET_COLORS.map((color) => (
+                        <button
+                            key={color}
+                            type="button"
+                            onClick={() => setSelectedColor(color)}
+                            className={cn(
+                                'w-9 h-9 rounded-xl border-2 transition-all duration-150 hover:scale-110',
+                                selectedColor === color
+                                    ? 'border-foreground scale-110 shadow-lg'
+                                    : 'border-transparent'
+                            )}
+                            style={{ backgroundColor: color }}
+                            title={color}
+                        />
+                    ))}
+
+                    <div className="flex items-center gap-2 ml-2">
+                        <input
+                            type="color"
+                            value={selectedColor}
+                            onChange={(e) => setSelectedColor(e.target.value)}
+                            className="w-9 h-9 rounded-xl cursor-pointer border-2 border-border bg-transparent"
+                            title="Color personalizado"
+                        />
+                        <span className="text-xs text-muted-foreground font-mono">{selectedColor}</span>
+                    </div>
+                </div>
+
+                <input type="hidden" name="primary_color" value={selectedColor} />
+
+                <div className="rounded-xl border border-border p-4 bg-muted/50">
+                    <p className="text-xs text-muted-foreground mb-3">Vista previa del botón de tu app</p>
+                    <button
+                        type="button"
+                        className="px-5 py-2.5 text-sm font-bold rounded-xl text-white transition-all"
+                        style={{ backgroundColor: selectedColor }}
+                    >
+                        Ingresar al Panel
+                    </button>
+                </div>
+
+                {state.fieldErrors?.primary_color && (
+                    <p className="text-xs text-destructive">{state.fieldErrors.primary_color[0]}</p>
+                )}
+            </div>
+
+            {state.error && (
+                <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                    {state.error}
+                </div>
+            )}
+            {state.success && (
+                <div className="rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
+                    ✓ Cambios guardados correctamente.
+                </div>
+            )}
+
+            <div className="flex justify-end">
+                <SaveButton />
+            </div>
+        </form>
+    )
+}
