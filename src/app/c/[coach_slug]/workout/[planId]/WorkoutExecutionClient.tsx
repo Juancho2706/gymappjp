@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -57,6 +57,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     const [currentIndex, setCurrentIndex] = useState(0)
     const [direction, setDirection] = useState(0) // 1 for next, -1 for prev
     const [showTechnique, setShowTechnique] = useState(false)
+    const [showIntro, setShowIntro] = useState(true)
 
     const currentBlock = blocks[currentIndex]
     const currentExercise = Array.isArray(currentBlock.exercises) ? currentBlock.exercises[0] : currentBlock.exercises
@@ -79,6 +80,12 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     }
 
     const progressPercentage = ((currentIndex + 1) / blocks.length) * 100
+
+    // auto‑dismiss intro after a short delay
+    useEffect(() => {
+        const t = setTimeout(() => setShowIntro(false), 1400)
+        return () => clearTimeout(t)
+    }, [])
 
     const variants = {
         enter: (dir: number) => ({
@@ -103,7 +110,28 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     return (
         <WorkoutTimerProvider>
             <div className="fixed inset-0 flex flex-col bg-background overflow-hidden overscroll-none">
-                
+                {/* intro overlay */}
+                <AnimatePresence>
+                    {showIntro && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center"
+                        >
+                            <motion.h1
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1, transition: { duration: 0.6 } }}
+                                exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.3 } }}
+                                className="text-white text-3xl font-bold text-center px-6"
+                                style={{ fontFamily: 'var(--font-outfit)' }}
+                            >
+                                {plan.title}
+                            </motion.h1>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 {/* Top Section (25% approx) - Fixed Header & Progress */}
                 <div className="flex-none bg-card border-b border-border/50 shadow-sm z-20 pb-4 pt-safe">
                     <div className="px-4 py-4 md:px-8 max-w-3xl mx-auto w-full">
@@ -206,11 +234,10 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
 
                                 {/* Logger Section */}
                                 <div className="bg-card border border-border rounded-3xl p-2 md:p-4 shadow-sm">
-                                    <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-3 pb-3 pt-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+                                    <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-2 px-3 pb-3 pt-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
                                         <div className="w-5 text-center">Set</div>
                                         <div className="text-center">Kg</div>
                                         <div className="text-center">Reps</div>
-                                        <div className="text-center">RPE</div>
                                         <div className="w-10 md:w-8"></div>
                                     </div>
 

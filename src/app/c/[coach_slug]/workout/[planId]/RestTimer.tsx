@@ -95,10 +95,10 @@ export function RestTimer({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ y: 100, opacity: 0 }}
+        initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
-        className="fixed bottom-[80px] md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-80 bg-card border border-border/50 shadow-2xl rounded-3xl p-5 z-50 overflow-hidden"
+        exit={{ y: -100, opacity: 0 }}
+        className="fixed top-[80px] md:top-6 left-4 right-4 md:left-auto md:right-6 md:w-80 bg-card border border-border/50 shadow-2xl rounded-3xl p-5 z-50 overflow-hidden"
       >
         {/* Background glow when finished */}
         {timeLeft === 0 && (

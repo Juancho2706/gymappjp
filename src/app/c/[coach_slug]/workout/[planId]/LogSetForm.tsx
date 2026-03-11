@@ -36,7 +36,7 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
 
     return (
         <form ref={formRef} action={formAction}
-            className={`grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 items-center px-2 py-1.5 rounded-xl transition-all
+            className={`grid grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-2 py-1.5 rounded-xl transition-all
             ${isLogged ? 'bg-emerald-500/10' : 'hover:bg-secondary/50'}`}>
 
             <input type="hidden" name="block_id" value={blockId} />
@@ -71,18 +71,11 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
             />
 
-            <input
-                name="rpe"
-                type="number"
-                min="1"
-                max="10"
-                inputMode="numeric"
-                defaultValue={existingLog?.rpe ?? ''}
-                onBlur={handleBlur}
-                placeholder="-"
-                className={`h-11 md:h-9 px-2 text-center text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
-                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
-            />
+            {/* rpe is not editable by the student, we only log weight and reps */}
+            {/* keep any existing value hidden so the backend can record it if supplied */}
+            {existingLog?.rpe != null && (
+                <input type="hidden" name="rpe" value={existingLog.rpe} />
+            )}
 
             <div className="w-8 flex justify-center">
                 <button type="submit"
