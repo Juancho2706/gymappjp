@@ -96,7 +96,7 @@ export default async function ClientDetailPage({
     const workoutHistory = (rawWorkoutLogs || []).map((plan: any) => {
         let totalSets = 0
         let completedSets = 0
-        let exerciseLogs: any[] = []
+        const exerciseLogs: any[] = []
         
         plan.workout_blocks?.forEach((block: any) => {
             const blockSets = block.sets || 0

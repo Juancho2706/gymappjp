@@ -44,7 +44,7 @@ async function main() {
 
     console.log(`📡 Fetching the entire exercise catalog...`)
 
-    let allExercises: any[] = []
+    const allExercises: any[] = []
     let offset = 250 // Start from 250 since 0-249 were already fetched
     const limit = 25
     let hasMore = true

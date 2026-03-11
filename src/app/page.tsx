@@ -83,7 +83,7 @@ const stats = [
 ]
 
 /* ─── Animations ─── */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 const fadeUp: any = {
     hidden: { opacity: 0, y: 40 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] } },

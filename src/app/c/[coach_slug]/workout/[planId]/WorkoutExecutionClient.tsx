@@ -57,7 +57,6 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     const [currentIndex, setCurrentIndex] = useState(0)
     const [direction, setDirection] = useState(0) // 1 for next, -1 for prev
     const [showTechnique, setShowTechnique] = useState(false)
-    const [showIntro, setShowIntro] = useState(true)
 
     const currentBlock = blocks[currentIndex]
     const currentExercise = Array.isArray(currentBlock.exercises) ? currentBlock.exercises[0] : currentBlock.exercises
@@ -81,12 +80,6 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
 
     const progressPercentage = ((currentIndex + 1) / blocks.length) * 100
 
-    // auto‑dismiss intro after a short delay
-    useEffect(() => {
-        const t = setTimeout(() => setShowIntro(false), 1400)
-        return () => clearTimeout(t)
-    }, [])
-
     const variants = {
         enter: (dir: number) => ({
             x: dir > 0 ? 100 : -100,
@@ -109,31 +102,10 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
 
     return (
         <WorkoutTimerProvider>
-            <div className="fixed inset-0 flex flex-col bg-background overflow-hidden overscroll-none">
-                {/* intro overlay */}
-                <AnimatePresence>
-                    {showIntro && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center"
-                        >
-                            <motion.h1
-                                initial={{ scale: 0.8, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1, transition: { duration: 0.6 } }}
-                                exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.3 } }}
-                                className="text-white text-3xl font-bold text-center px-6"
-                                style={{ fontFamily: 'var(--font-outfit)' }}
-                            >
-                                {plan.title}
-                            </motion.h1>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+            <div className="fixed inset-0 flex flex-col bg-background overflow-hidden overscroll-none animate-in fade-in-0 duration-1000">
 
                 {/* Top Section (25% approx) - Fixed Header & Progress */}
-                <div className="flex-none bg-card border-b border-border/50 shadow-sm z-20 pb-4 pt-safe">
+                <div className="flex-none bg-card border-b border-border/50 shadow-sm z-20 pb-4 pt-safe animate-in fade-in-0 slide-in-from-top-5 duration-700 delay-500">
                     <div className="px-4 py-4 md:px-8 max-w-3xl mx-auto w-full">
                         <div className="flex items-center justify-between mb-4">
                             <Link href={`/c/${coachSlug}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -172,7 +144,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             initial="enter"
                             animate="center"
                             exit="exit"
-                            className="absolute inset-0 overflow-y-auto pb-32 pt-6 px-4 md:px-8"
+                            className="absolute inset-0 overflow-y-auto pb-32 pt-6 px-4 md:px-8 animate-in fade-in-0 slide-in-from-bottom-10 duration-700 delay-700"
                         >
                             <div className="max-w-xl mx-auto w-full space-y-6">
                                 
@@ -265,7 +237,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                 </div>
 
                 {/* Bottom Navigation Fixed Bar */}
-                <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/20 p-4 z-40 pb-safe">
+                <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/20 p-4 z-40 pb-safe animate-in fade-in-0 slide-in-from-bottom-5 duration-700 delay-500">
                     <div className="max-w-xl mx-auto flex items-center gap-3">
                         <button
                             onClick={handlePrev}
