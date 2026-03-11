@@ -186,6 +186,8 @@ export type Database = {
                     order_index: number
                     sets: number
                     reps: string
+                    target_weight_kg: number | null
+                    tempo: string | null
                     rir: string | null
                     rest_time: string | null
                     notes: string | null
@@ -198,6 +200,8 @@ export type Database = {
                     order_index?: number
                     sets?: number
                     reps?: string
+                    target_weight_kg?: number | null
+                    tempo?: string | null
                     rir?: string | null
                     rest_time?: string | null
                     notes?: string | null
@@ -209,6 +213,8 @@ export type Database = {
                     order_index?: number
                     sets?: number
                     reps?: string
+                    target_weight_kg?: number | null
+                    tempo?: string | null
                     rir?: string | null
                     rest_time?: string | null
                     notes?: string | null

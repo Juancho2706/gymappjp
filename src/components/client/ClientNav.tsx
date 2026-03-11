@@ -8,7 +8,8 @@ import {
     Settings,
     ChevronRight,
     LogOut,
-    CheckCircle
+    CheckCircle,
+    Dumbbell
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -35,6 +36,11 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
             href: `/c/${coachSlug}/nutrition`,
             label: 'Nutrición',
             icon: Apple,
+        },
+        {
+            href: `/c/${coachSlug}/exercises`,
+            label: 'Aprender',
+            icon: Dumbbell,
         },
         {
             href: `/c/${coachSlug}/check-in`,

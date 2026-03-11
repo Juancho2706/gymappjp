@@ -152,9 +152,11 @@ export default async function CoachClientsPage() {
                                                     </span>
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="text-sm font-semibold text-foreground truncate max-w-[120px] sm:max-w-xs">
-                                                        {client.full_name}
-                                                    </p>
+                                                    <a href={`/coach/clients/${client.id}`} className="block hover:underline">
+                                                        <p className="text-sm font-semibold text-foreground truncate max-w-[120px] sm:max-w-xs">
+                                                            {client.full_name}
+                                                        </p>
+                                                    </a>
                                                     <p className="text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-xs">
                                                         {client.email}
                                                     </p>

@@ -10,6 +10,8 @@ const blockSchema = z.object({
     exercise_id: z.string().uuid(),
     sets: z.coerce.number().int().min(1).max(20),
     reps: z.string().min(1).max(20),
+    target_weight_kg: z.coerce.number().min(0).optional(),
+    tempo: z.string().max(20).optional(),
     rir: z.string().max(10).optional(),
     rest_time: z.string().max(20).optional(),
     notes: z.string().max(200).optional(),
@@ -33,6 +35,8 @@ export async function createPlanAction(payload: {
         exercise_id: string
         sets: number
         reps: string
+        target_weight_kg?: number
+        tempo?: string
         rir?: string
         rest_time?: string
         notes?: string
@@ -87,6 +91,8 @@ export async function createPlanAction(payload: {
         order_index: index,
         sets: block.sets,
         reps: block.reps,
+        target_weight_kg: block.target_weight_kg ?? null,
+        tempo: block.tempo ?? null,
         rir: block.rir ?? null,
         rest_time: block.rest_time ?? null,
         notes: block.notes ?? null,

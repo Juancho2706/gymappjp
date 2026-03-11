@@ -37,6 +37,8 @@ interface BuilderBlock {
     muscle_group: string
     sets: number
     reps: string
+    target_weight_kg: string
+    tempo: string
     rir: string
     rest_time: string
     notes: string
@@ -98,7 +100,7 @@ function SortableBlock({
 
             {/* Expanded fields */}
             {expanded && (
-                <div className="px-4 py-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="px-4 py-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div className="space-y-1">
                         <label className="text-xs text-muted-foreground font-medium">Series</label>
                         <input type="number" min={1} max={20} value={block.sets}
@@ -112,6 +114,18 @@ function SortableBlock({
                             className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
                     </div>
                     <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground font-medium">Peso Sugerido (Kg)</label>
+                        <input type="number" step="0.5" placeholder="Ej: 50" value={block.target_weight_kg}
+                            onChange={e => onChange(block.uid, 'target_weight_kg', e.target.value)}
+                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground font-medium">Tempo</label>
+                        <input type="text" placeholder="Ej: 3-0-1-0" value={block.tempo}
+                            onChange={e => onChange(block.uid, 'tempo', e.target.value)}
+                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                    </div>
+                    <div className="space-y-1">
                         <label className="text-xs text-muted-foreground font-medium">RIR / RPE</label>
                         <input type="text" placeholder="2 RIR" value={block.rir}
                             onChange={e => onChange(block.uid, 'rir', e.target.value)}
@@ -119,11 +133,11 @@ function SortableBlock({
                     </div>
                     <div className="space-y-1">
                         <label className="text-xs text-muted-foreground font-medium">Descanso</label>
-                        <input type="text" placeholder="90 seg" value={block.rest_time}
+                        <input type="text" placeholder="90s" value={block.rest_time}
                             onChange={e => onChange(block.uid, 'rest_time', e.target.value)}
                             className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
                     </div>
-                    <div className="space-y-1 col-span-2 sm:col-span-4">
+                    <div className="space-y-1 col-span-2 sm:col-span-3">
                         <label className="text-xs text-muted-foreground font-medium">Notas</label>
                         <input type="text" placeholder="Ej: Bajar lento en excéntrico" value={block.notes}
                             onChange={e => onChange(block.uid, 'notes', e.target.value)}
@@ -172,8 +186,10 @@ export function PlanBuilder({
             muscle_group: exercise.muscle_group,
             sets: 3,
             reps: '8-12',
-            rir: '2',
-            rest_time: '90 seg',
+            target_weight_kg: '',
+            tempo: '',
+            rir: '',
+            rest_time: '90s',
             notes: '',
         }])
     }, [])
@@ -210,6 +226,8 @@ export function PlanBuilder({
                     exercise_id: b.exercise_id,
                     sets: b.sets,
                     reps: b.reps,
+                    target_weight_kg: b.target_weight_kg ? parseFloat(b.target_weight_kg) : undefined,
+                    tempo: b.tempo || undefined,
                     rir: b.rir || undefined,
                     rest_time: b.rest_time || undefined,
                     notes: b.notes || undefined,

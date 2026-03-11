@@ -68,15 +68,24 @@ export default async function ClientDetailPage({
 
     const checkIns = rawCheckins as CheckIn[] | null
 
-    // Fetch workout history logs
+    // Fetch workout history logs detailed
     const { data: rawWorkoutLogs } = await supabase
         .from('workout_plans')
         .select(`
             id, title, assigned_date,
             workout_blocks (
                 id,
+                target_weight_kg,
+                reps,
+                sets,
+                exercises ( name ),
                 workout_logs (
-                    id
+                    id,
+                    set_number,
+                    weight_kg,
+                    reps_done,
+                    rpe,
+                    logged_at
                 )
             )
         `)
@@ -87,13 +96,28 @@ export default async function ClientDetailPage({
     const workoutHistory = (rawWorkoutLogs || []).map((plan: any) => {
         let totalSets = 0
         let completedSets = 0
+        let exerciseLogs: any[] = []
         
-        // This is a rough estimation since we don't have total sets per block in this query,
-        // but we can count if logs exist. For a real implementation, you'd join with 'sets' count.
         plan.workout_blocks?.forEach((block: any) => {
-            // Assume if a block has logs, it was interacted with
-            if (block.workout_logs && block.workout_logs.length > 0) {
+            const blockSets = block.sets || 0
+            totalSets += blockSets
+            const hasLogs = block.workout_logs && block.workout_logs.length > 0
+
+            if (hasLogs) {
                 completedSets += block.workout_logs.length
+                
+                // Extraemos detalles del ultimo registro para mostrar progreso
+                const latestLog = block.workout_logs[block.workout_logs.length - 1]
+                const exerciseName = block.exercises?.name || 'Ejercicio'
+                
+                exerciseLogs.push({
+                    exerciseName,
+                    targetWeight: block.target_weight_kg,
+                    targetReps: block.reps,
+                    actualWeight: latestLog.weight_kg,
+                    actualReps: latestLog.reps_done,
+                    rpe: latestLog.rpe
+                })
             }
         })
         
@@ -102,7 +126,9 @@ export default async function ClientDetailPage({
             title: plan.title,
             date: plan.assigned_date,
             hasInteracted: completedSets > 0,
-            logCount: completedSets
+            logCount: completedSets,
+            totalSets: totalSets,
+            exerciseLogs: exerciseLogs
         }
     }).filter(p => p.hasInteracted)
 
@@ -212,23 +238,51 @@ export default async function ClientDetailPage({
                         ) : (
                             <div className="space-y-3">
                                 {workoutHistory.slice(0, 5).map((log: any) => (
-                                    <div key={log.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between shadow-sm">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                <Dumbbell className="w-5 h-5 text-primary" />
+                                    <div key={log.id} className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                                    <Dumbbell className="w-5 h-5 text-primary" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-sm">{log.title}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {new Date(log.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="font-semibold text-sm">{log.title}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {new Date(log.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                                                </p>
+                                            <div className="text-right">
+                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border 
+                                                    ${log.logCount >= log.totalSets ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'}`}>
+                                                    {log.logCount} / {log.totalSets} series
+                                                </span>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                                {log.logCount} series logueadas
-                                            </span>
-                                        </div>
+
+                                        {/* Detalle de pesos levantados */}
+                                        {log.exerciseLogs.length > 0 && (
+                                            <div className="bg-muted/30 rounded-lg p-3 space-y-2 border border-border/50">
+                                                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">Desempeño Destacado</p>
+                                                {log.exerciseLogs.slice(0, 3).map((exLog: any, i: number) => (
+                                                    <div key={i} className="flex items-center justify-between text-xs">
+                                                        <span className="font-medium text-foreground truncate pr-4">{exLog.exerciseName}</span>
+                                                        <div className="flex items-center gap-3 flex-shrink-0">
+                                                            <span className="text-muted-foreground">
+                                                                Sugerido: {exLog.targetWeight || '-'}kg
+                                                            </span>
+                                                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                                Real: {exLog.actualWeight || '-'}kg × {exLog.actualReps || '-'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {log.exerciseLogs.length > 3 && (
+                                                    <p className="text-[10px] text-muted-foreground text-center mt-2 pt-2 border-t border-border/50">
+                                                        + {log.exerciseLogs.length - 3} ejercicios más
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
