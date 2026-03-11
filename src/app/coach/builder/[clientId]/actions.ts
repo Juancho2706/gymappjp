@@ -29,6 +29,7 @@ export type PlanState = {
 }
 
 export async function createPlanAction(payload: {
+    planId?: string
     title: string
     clientId: string
     blocks: Array<{
@@ -68,25 +69,44 @@ export async function createPlanAction(payload: {
 
     const adminDb = await createRawAdminClient()
 
-    // Insert plan
-    const { data: plan, error: planError } = await adminDb
-        .from('workout_plans')
-        .insert({
-            client_id: parsed.data.client_id,
-            coach_id: user.id,
-            title: parsed.data.title,
-            assigned_date: new Date().toISOString().split('T')[0],
-        })
-        .select('id')
-        .maybeSingle()
+    let planId = payload.planId
 
-    if (planError || !plan) {
-        return { error: planError?.message ?? 'Error al crear el plan.' }
+    if (planId) {
+        // Update existing plan title
+        const { error: updateError } = await adminDb
+            .from('workout_plans')
+            .update({ title: parsed.data.title })
+            .eq('id', planId)
+            .eq('coach_id', user.id)
+            
+        if (updateError) return { error: 'Error al actualizar el plan.' }
+
+        // Remove old blocks to re-insert them fresh (simplest way to handle edits/reorders)
+        await adminDb.from('workout_blocks').delete().eq('plan_id', planId)
+    } else {
+        // Insert new plan
+        const { data: plan, error: planError } = await adminDb
+            .from('workout_plans')
+            .insert({
+                client_id: parsed.data.client_id,
+                coach_id: user.id,
+                title: parsed.data.title,
+                assigned_date: new Date().toISOString().split('T')[0],
+            })
+            .select('id')
+            .maybeSingle()
+
+        if (planError || !plan) {
+            return { error: planError?.message ?? 'Error al crear el plan.' }
+        }
+        planId = plan.id
     }
+
+    if (!planId) return { error: 'No se pudo obtener el ID del plan.' }
 
     // Insert blocks with order_index
     const blocksToInsert = parsed.data.blocks.map((block, index) => ({
-        plan_id: plan.id,
+        plan_id: planId,
         exercise_id: block.exercise_id,
         order_index: index,
         sets: block.sets,
@@ -103,13 +123,15 @@ export async function createPlanAction(payload: {
         .insert(blocksToInsert)
 
     if (blocksError) {
-        // Rollback plan
-        await adminDb.from('workout_plans').delete().eq('id', plan.id)
+        // Rollback plan if it was a new plan
+        if (!payload.planId) {
+            await adminDb.from('workout_plans').delete().eq('id', planId)
+        }
         return { error: blocksError.message }
     }
 
     revalidatePath(`/coach/clients/${parsed.data.client_id}`)
-    return { planId: plan.id }
+    return { planId }
 }
 
 export async function deletePlanAction(planId: string, clientId: string): Promise<{ error?: string }> {

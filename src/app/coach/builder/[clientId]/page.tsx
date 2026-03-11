@@ -6,12 +6,16 @@ import { PlanBuilder } from './PlanBuilder'
 
 export const metadata: Metadata = { title: 'Constructor de Rutina | OmniCoach OS' }
 
-export default async function BuilderPage({
-    params,
-}: {
-    params: Promise<{ clientId: string }>
-}) {
-    const { clientId } = await params
+export default async function BuilderPage(
+    props: {
+        params: Promise<{ clientId: string }>
+        searchParams: Promise<{ planId?: string }>
+    }
+) {
+    const searchParams = await props.searchParams;
+    const params = await props.params;
+    const { clientId } = params
+    const { planId } = searchParams
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
@@ -37,5 +41,25 @@ export default async function BuilderPage({
 
     const exercises = (rawExercises ?? []) as Exercise[]
 
-    return <PlanBuilder client={client} exercises={exercises} />
+    let initialPlanData = null
+    if (planId) {
+        const { data: rawPlan } = await supabase
+            .from('workout_plans')
+            .select(`
+                id, title,
+                workout_blocks (
+                    id, exercise_id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes,
+                    exercises ( name, muscle_group )
+                )
+            `)
+            .eq('id', planId)
+            .eq('coach_id', user.id)
+            .maybeSingle()
+        
+        if (rawPlan) {
+            initialPlanData = rawPlan
+        }
+    }
+
+    return <PlanBuilder client={client} exercises={exercises} initialPlan={initialPlanData} />
 }

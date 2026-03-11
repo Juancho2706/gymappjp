@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Calendar, Dumbbell, Apple } from 'lucide-react'
+import { ArrowLeft, Plus, Calendar, Dumbbell, Apple, Pencil } from 'lucide-react'
 import type { Client, WorkoutPlan, CheckIn, NutritionPlan } from '@/lib/database.types'
 import type { Metadata } from 'next'
 import { DeletePlanButton } from './DeletePlanButton'
@@ -388,7 +388,16 @@ export default async function ClientDetailPage({
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-semibold text-foreground truncate">{plan.title}</p>
                                         </div>
-                                        <DeletePlanButton planId={plan.id} clientId={clientId} planTitle={plan.title} />
+                                        <div className="flex items-center gap-1">
+                                            <Link 
+                                                href={`/coach/builder/${clientId}?planId=${plan.id}`}
+                                                className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                                title="Editar rutina"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </Link>
+                                            <DeletePlanButton planId={plan.id} clientId={clientId} planTitle={plan.title} />
+                                        </div>
                                     </div>
                                 ))}
                             </div>

@@ -153,13 +153,29 @@ function SortableBlock({
 export function PlanBuilder({
     client,
     exercises,
+    initialPlan,
 }: {
     client: Pick<Client, 'id' | 'full_name' | 'email'>
     exercises: Exercise[]
+    initialPlan?: any
 }) {
     const router = useRouter()
-    const [title, setTitle] = useState('')
-    const [blocks, setBlocks] = useState<BuilderBlock[]>([])
+    const [title, setTitle] = useState(initialPlan?.title || '')
+    const [blocks, setBlocks] = useState<BuilderBlock[]>(
+        initialPlan?.workout_blocks?.sort((a: any, b: any) => a.order_index - b.order_index).map((b: any) => ({
+            uid: b.id, // Using existing ID to track updates vs inserts isn't strictly necessary if we wipe and re-insert, but let's just use it as uid
+            exercise_id: b.exercise_id,
+            exercise_name: b.exercises?.name || 'Unknown',
+            muscle_group: b.exercises?.muscle_group || 'Unknown',
+            sets: b.sets,
+            reps: b.reps,
+            target_weight_kg: b.target_weight_kg?.toString() || '',
+            tempo: b.tempo || '',
+            rir: b.rir || '',
+            rest_time: b.rest_time || '',
+            notes: b.notes || '',
+        })) || []
+    )
     const [search, setSearch] = useState('')
     const [selectedMuscle, setSelectedMuscle] = useState<string>('Todos')
     const [error, setError] = useState<string>()
@@ -174,7 +190,8 @@ export function PlanBuilder({
     const muscleGroups = ['Todos', ...Array.from(new Set(exercises.map(e => e.muscle_group))).sort()]
 
     const filteredExercises = exercises.filter(ex => {
-        const matchesMuscle = selectedMuscle === 'Todos' || ex.muscle_group === selectedMuscle
+        const isSecondary = ex.secondary_muscles?.includes(selectedMuscle) || false
+        const matchesMuscle = selectedMuscle === 'Todos' || ex.muscle_group === selectedMuscle || isSecondary
         const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase())
         return matchesMuscle && matchesSearch
     })
@@ -221,6 +238,7 @@ export function PlanBuilder({
 
         startTransition(async () => {
             const result = await createPlanAction({
+                planId: initialPlan?.id,
                 title: title.trim(),
                 clientId: client.id,
                 blocks: blocks.map(b => ({
@@ -257,7 +275,7 @@ export function PlanBuilder({
                 <input
                     value={title}
                     onChange={e => setTitle(e.target.value)}
-                    placeholder="Nombre de la rutina…"
+                    placeholder={initialPlan ? "Editar nombre..." : "Nombre de la rutina…"}
                     className="flex-1 min-w-[150px] max-w-xs h-9 px-3 text-sm rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
                 />
                 {error && <p className="text-xs text-destructive max-w-40 text-right">{error}</p>}
@@ -269,7 +287,7 @@ export function PlanBuilder({
                         'disabled:opacity-60 disabled:cursor-not-allowed'
                     )}>
                     {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {isPending ? 'Guardando...' : 'Guardar Rutina'}
+                    {isPending ? 'Guardando...' : (initialPlan ? 'Actualizar Rutina' : 'Guardar Rutina')}
                 </button>
             </div>
 
@@ -283,31 +301,29 @@ export function PlanBuilder({
                     )}
                 >
                     <div className="p-3 space-y-2 border-b border-border relative">
-                        {/* Mobile Toggle Button */}
                         <button 
-                            className="md:hidden absolute right-3 top-3 p-1.5 rounded-lg bg-secondary border border-border text-muted-foreground z-10"
+                            className="md:hidden absolute left-1/2 -translate-x-1/2 -bottom-3 p-1 rounded-full bg-secondary border border-border text-muted-foreground z-10 shadow-sm"
                             onClick={() => setIsCatalogExpanded(!isCatalogExpanded)}
                         >
                             {isCatalogExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                         
-                        <div className="relative pr-10 md:pr-0">
+                        <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                             <input value={search} onChange={e => setSearch(e.target.value)}
                                 placeholder="Buscar ejercicio…"
                                 className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none" />
                         </div>
-                        <div className={cn("flex gap-1 flex-wrap", !isCatalogExpanded && "md:flex hidden")}>
-                            {muscleGroups.slice(0, 6).map(m => (
-                                <button key={m} onClick={() => setSelectedMuscle(m)}
-                                    className={cn('px-2 py-0.5 text-xs rounded-full border transition-colors',
-                                        selectedMuscle === m
-                                            ? 'bg-primary border-primary text-primary-foreground'
-                                            : 'border-border text-muted-foreground hover:border-primary/30'
-                                    )}>
-                                    {m}
-                                </button>
-                            ))}
+                        <div className={cn("flex overflow-x-auto pb-1 hide-scrollbar", !isCatalogExpanded && "md:flex hidden")}>
+                            <select 
+                                value={selectedMuscle}
+                                onChange={(e) => setSelectedMuscle(e.target.value)}
+                                className="w-full h-8 px-2 text-xs rounded-lg bg-card border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+                            >
+                                {muscleGroups.map(m => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
