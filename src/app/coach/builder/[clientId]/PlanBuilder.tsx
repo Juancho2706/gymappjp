@@ -242,9 +242,9 @@ export function PlanBuilder({
     }
 
     return (
-        <div className="flex flex-col h-[calc(100vh-0px)]">
+        <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8">
             {/* Top bar */}
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-background flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-3 px-4 md:px-6 py-3 md:py-4 border-b border-border bg-background flex-shrink-0">
                 <Link href={`/coach/clients/${client.id}`}
                     className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                     <ArrowLeft className="w-4 h-4" />
@@ -257,12 +257,12 @@ export function PlanBuilder({
                     value={title}
                     onChange={e => setTitle(e.target.value)}
                     placeholder="Nombre de la rutina…"
-                    className="flex-1 max-w-xs h-9 px-3 text-sm rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                    className="flex-1 min-w-[150px] max-w-xs h-9 px-3 text-sm rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
                 />
                 {error && <p className="text-xs text-destructive max-w-40 text-right">{error}</p>}
                 <button onClick={handleSave} disabled={isPending}
                     className={cn(
-                        'flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all',
+                        'flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all w-full md:w-auto',
                         'bg-gradient-to-r from-emerald-500 to-teal-600 text-white',
                         'hover:shadow-lg hover:shadow-emerald-500/25',
                         'disabled:opacity-60 disabled:cursor-not-allowed'
@@ -273,9 +273,9 @@ export function PlanBuilder({
             </div>
 
             {/* Main split layout */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
                 {/* LEFT: Exercise catalog */}
-                <div className="w-72 flex-shrink-0 border-r border-border flex flex-col bg-muted/30">
+                <div className="h-[40vh] md:h-auto md:w-72 flex-shrink-0 border-b md:border-b-0 md:border-r border-border flex flex-col bg-muted/30">
                     <div className="p-3 space-y-2 border-b border-border">
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -319,7 +319,7 @@ export function PlanBuilder({
                 </div>
 
                 {/* RIGHT: Plan canvas */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
                     {blocks.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center">
                             <div className="w-16 h-16 rounded-2xl bg-muted border border-dashed border-border flex items-center justify-center mb-4">

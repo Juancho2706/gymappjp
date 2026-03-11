@@ -182,7 +182,7 @@ export function NutritionForm({ clientId, coachId }: Props) {
                 )}
             </div>
 
-            <Button type="submit" className="w-full text-base font-bold shadow-xl" disabled={isPending}>
+            <Button type="submit" className="w-full text-sm sm:text-base font-bold shadow-xl h-auto py-3 whitespace-normal" disabled={isPending}>
                 {isPending ? 'Guardando Plan...' : 'Asignar Plan Nutricional al Alumno'}
             </Button>
         </form>

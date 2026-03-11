@@ -133,7 +133,7 @@ export default async function ClientDetailPage({
     }).filter(p => p.hasInteracted)
 
     return (
-        <div className="p-8 max-w-5xl animate-fade-in mx-auto">
+        <div className="max-w-5xl animate-fade-in mx-auto mb-24 md:mb-0">
             {/* Back nav */}
             <Link href="/coach/clients"
                 className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">

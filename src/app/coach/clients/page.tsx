@@ -51,7 +51,7 @@ export default async function CoachClientsPage() {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
     return (
-        <div className="p-4 md:p-8 max-w-6xl animate-fade-in">
+        <div className="max-w-6xl animate-fade-in mb-24 md:mb-0">
             <ClientsHeader />
 
             {/* Stats bar */}
