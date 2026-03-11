@@ -4,6 +4,7 @@ import { Calendar, Dumbbell, TrendingUp, ChevronRight, Apple } from 'lucide-reac
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import type { Client, WorkoutPlan, Coach } from '@/lib/database.types'
+import { WeightProgressChart } from './WeightProgressChart'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -65,6 +66,19 @@ export default async function ClientDashboardPage({ params }: Props) {
         .maybeSingle()
         
     const activeNutrition = rawNutrition
+
+    // Fetch check-ins for weight progress chart
+    const { data: rawCheckins } = await supabase
+        .from('check_ins')
+        .select('created_at, weight_kg')
+        .eq('client_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+    const checkIns = (rawCheckins as any[])?.map(c => ({
+        date: c.created_at,
+        weight: c.weight_kg
+    })) || []
 
     return (
         <div className="min-h-screen bg-background">
@@ -197,6 +211,11 @@ export default async function ClientDashboardPage({ params }: Props) {
                         </div>
                     </div>
                 )}
+                
+                {/* Weight Progress Chart */}
+                <div className="mt-6">
+                    <WeightProgressChart data={checkIns} primaryColor={coachBranding?.primary_color || undefined} />
+                </div>
             </main>
         </div>
     )

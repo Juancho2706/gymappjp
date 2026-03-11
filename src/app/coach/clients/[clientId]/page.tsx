@@ -68,6 +68,44 @@ export default async function ClientDetailPage({
 
     const checkIns = rawCheckins as CheckIn[] | null
 
+    // Fetch workout history logs
+    const { data: rawWorkoutLogs } = await supabase
+        .from('workout_plans')
+        .select(`
+            id, title, assigned_date,
+            workout_blocks (
+                id,
+                workout_logs (
+                    id
+                )
+            )
+        `)
+        .eq('client_id', clientId)
+        .order('assigned_date', { ascending: false })
+
+    // Process workout history: calculate completion percentage for recent plans
+    const workoutHistory = (rawWorkoutLogs || []).map((plan: any) => {
+        let totalSets = 0
+        let completedSets = 0
+        
+        // This is a rough estimation since we don't have total sets per block in this query,
+        // but we can count if logs exist. For a real implementation, you'd join with 'sets' count.
+        plan.workout_blocks?.forEach((block: any) => {
+            // Assume if a block has logs, it was interacted with
+            if (block.workout_logs && block.workout_logs.length > 0) {
+                completedSets += block.workout_logs.length
+            }
+        })
+        
+        return {
+            id: plan.id,
+            title: plan.title,
+            date: plan.assigned_date,
+            hasInteracted: completedSets > 0,
+            logCount: completedSets
+        }
+    }).filter(p => p.hasInteracted)
+
     return (
         <div className="p-8 max-w-5xl animate-fade-in mx-auto">
             {/* Back nav */}
@@ -162,6 +200,41 @@ export default async function ClientDetailPage({
                 {/* Column 1: Routines & Nutrition */}
                 <div className="space-y-10">
                     
+                    {/* Resumen de Actividad Reciente (Coach View) */}
+                    <div>
+                        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Actividad Reciente (Workouts)</span>
+                        </h2>
+                        {workoutHistory.length === 0 ? (
+                            <div className="bg-card border border-dashed border-border rounded-2xl p-6 text-center">
+                                <p className="text-muted-foreground text-sm">El alumno aún no ha registrado entrenamientos.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {workoutHistory.slice(0, 5).map((log: any) => (
+                                    <div key={log.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                                <Dumbbell className="w-5 h-5 text-primary" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-sm">{log.title}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {new Date(log.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                                {log.logCount} series logueadas
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Nutrition Section */}
                     <div>
                         <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">

@@ -84,18 +84,18 @@ export default async function ClientNutritionPage({ params }: Props) {
             <div className="absolute top-0 right-0 w-96 h-96 opacity-10 blur-3xl rounded-full pointer-events-none" 
                  style={{ backgroundColor: coachBranding?.primary_color || 'var(--theme-primary)' }} />
             
-            <header className="border-b border-border/50 px-4 py-4 sticky top-0 bg-background/80 backdrop-blur-md z-10 flex items-center justify-between">
+            <header className="border-b border-border/10 px-4 py-4 md:px-8 sticky top-0 bg-background/80 backdrop-blur-xl z-40 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
                     <Link href={`/c/${coach_slug}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
-                    <h1 className="text-xl font-bold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
+                    <h1 className="text-xl md:text-2xl font-bold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
                         Plan Nutricional
                     </h1>
                 </div>
             </header>
 
-            <main className="px-4 py-6 space-y-8 max-w-lg mx-auto relative z-0 pb-24">
+            <main className="px-4 py-6 space-y-8 max-w-2xl mx-auto relative z-0 pb-32">
                 {/* Macros Overview */}
                 <section>
                     <h2 className="text-2xl font-bold text-foreground mb-1">{plan.name}</h2>

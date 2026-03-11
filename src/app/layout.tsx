@@ -19,12 +19,35 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: {
-    default: 'OmniCoach OS',
+    default: 'OmniCoach OS | Plataforma Todo-en-Uno para Entrenadores',
     template: '%s | OmniCoach OS',
   },
-  description: 'La plataforma todo-en-uno para entrenadores fitness que quieren escalar su negocio',
-  keywords: ['fitness', 'coaching', 'entrenamiento', 'SaaS', 'personal trainer', 'gym'],
+  description: 'La plataforma definitiva para coaches y personal trainers que quieren escalar su negocio. Crea rutinas, planes nutricionales, gestiona alumnos y ten tu propia app white-label.',
+  keywords: ['fitness', 'coaching', 'entrenamiento', 'SaaS', 'personal trainer', 'gym', 'rutinas', 'nutrición', 'white label'],
   authors: [{ name: 'OmniCoach OS' }],
+  openGraph: {
+    title: 'OmniCoach OS | Plataforma Todo-en-Uno para Entrenadores',
+    description: 'Escala tu negocio de fitness con herramientas profesionales para rutinas, nutrición y seguimiento de alumnos.',
+    url: 'https://omnicoach.app',
+    siteName: 'OmniCoach OS',
+    images: [
+      {
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'OmniCoach OS Dashboard',
+      },
+    ],
+    locale: 'es_ES',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'OmniCoach OS | Plataforma Todo-en-Uno para Entrenadores',
+    description: 'La plataforma definitiva para coaches que quieren escalar. Rutinas, nutrición y app propia.',
+    images: ['/og-image.jpg'],
+  },
+  metadataBase: new URL('https://omnicoach.app'),
 }
 
 export default function RootLayout({

@@ -4,21 +4,28 @@ export async function GET() {
   const manifest = {
     name: "OmniCoach OS",
     short_name: "OmniCoach",
-    description: "Plataforma de entrenamiento inteligente",
+    description: "Plataforma de entrenamiento inteligente y gestión para coaches",
     start_url: "/",
     display: "standalone",
+    orientation: "portrait",
     background_color: "#ffffff",
-    theme_color: "#000000",
+    theme_color: "#10B981",
     icons: [
       {
-        src: "/globe.svg",
+        src: "/icon-192x192.png",
         sizes: "192x192",
-        type: "image/svg+xml"
+        type: "image/png"
       },
       {
-        src: "/globe.svg",
+        src: "/icon-512x512.png",
         sizes: "512x512",
-        type: "image/svg+xml"
+        type: "image/png"
+      },
+      {
+        src: "/icon-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable"
       }
     ]
   };

@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, CheckCircle2, Dumbbell, Timer } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Dumbbell, Timer, Zap } from 'lucide-react'
 import type { Metadata } from 'next'
 import { LogSetForm } from './LogSetForm'
+import { WorkoutTimerProvider } from './WorkoutTimerProvider'
 
 export const metadata: Metadata = { title: 'Rutina | OmniCoach OS' }
 
@@ -78,25 +79,26 @@ export default async function WorkoutExecutionPage({ params }: Props) {
     const blocks = plan.workout_blocks.sort((a, b) => a.order_index - b.order_index)
 
     return (
-        <div className="min-h-screen pb-20 bg-background">
-            {/* Header Sticky */}
-            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border px-4 py-4">
-                <Link href={`/c/${coach_slug}/dashboard`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium mb-3 transition-colors"
-                    style={{ color: 'var(--theme-primary)' }}>
-                    <ArrowLeft className="w-4 h-4" />
-                    Volver
-                </Link>
-                <h1 className="text-xl font-bold text-foreground leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
-                    {plan.title}
-                </h1>
-                <p className="text-xs text-muted-foreground mt-1">
-                    {blocks.length} ejercicios · {blocks.reduce((acc, b) => acc + b.sets, 0)} series totales
-                </p>
-            </div>
+        <WorkoutTimerProvider>
+            <div className="min-h-screen pb-32 bg-background">
+                {/* Header Sticky */}
+                <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/10 px-4 py-4 md:px-8 shadow-sm">
+                    <Link href={`/c/${coach_slug}/dashboard`}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium mb-3 transition-colors"
+                        style={{ color: 'var(--theme-primary)' }}>
+                        <ArrowLeft className="w-4 h-4" />
+                        Volver
+                    </Link>
+                    <h1 className="text-2xl font-bold text-foreground leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
+                        {plan.title}
+                    </h1>
+                    <p className="text-sm text-muted-foreground mt-1 font-medium">
+                        {blocks.length} ejercicios · {blocks.reduce((acc, b) => acc + b.sets, 0)} series totales
+                    </p>
+                </div>
 
-            <main className="px-4 py-6 space-y-6 max-w-lg mx-auto">
-                {blocks.map((block, index) => {
+                <main className="px-4 py-6 space-y-8 max-w-2xl mx-auto">
+                    {blocks.map((block, index) => {
                     const exercise = Array.isArray(block.exercises) ? block.exercises[0] : block.exercises
                     if (!exercise) return null
 
@@ -159,23 +161,42 @@ export default async function WorkoutExecutionPage({ params }: Props) {
                                     <div className="w-8"></div>
                                 </div>
 
-                                {Array.from({ length: block.sets }).map((_, i) => {
-                                    const setNumber = i + 1
-                                    const log = blockLogs.find(l => l.set_number === setNumber)
-                                    return (
-                                        <LogSetForm
-                                            key={setNumber}
-                                            blockId={block.id}
-                                            setNumber={setNumber}
-                                            existingLog={log}
-                                        />
-                                    )
-                                })}
+                                    {Array.from({ length: block.sets }).map((_, i) => {
+                                        const setNumber = i + 1
+                                        const log = blockLogs.find(l => l.set_number === setNumber)
+                                        return (
+                                            <LogSetForm
+                                                key={setNumber}
+                                                blockId={block.id}
+                                                setNumber={setNumber}
+                                                restTimeStr={block.rest_time}
+                                                existingLog={log}
+                                            />
+                                        )
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    )
-                })}
-            </main>
-        </div>
+                        )
+                    })}
+                </main>
+
+                {/* Finalize Button Area */}
+                <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-lg border-t border-border/10 p-4 md:p-6 z-30 pb-safe">
+                    <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
+                        <p className="hidden md:block text-sm font-medium text-muted-foreground">
+                            ¿Terminaste tu rutina?
+                        </p>
+                        <Link
+                            href={`/c/${coach_slug}/dashboard`}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-white font-bold text-sm md:text-base transition-transform hover:scale-105 active:scale-95 shadow-lg"
+                            style={{ backgroundColor: 'var(--theme-primary)' }}
+                        >
+                            <Zap className="w-5 h-5 fill-current" />
+                            Finalizar Entrenamiento
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        </WorkoutTimerProvider>
     )
 }

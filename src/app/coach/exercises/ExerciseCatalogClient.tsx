@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import {
     Dialog,
     DialogContent,
@@ -84,13 +85,13 @@ function ExercisePreviewModal({
             <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] overflow-y-auto">
                 {/* GIF demonstration area */}
                 {hasGif && (
-                    <div className="w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-4 border-b border-border">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                    <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-4 border-b border-border min-h-[16rem]">
+                        <Image
                             src={exercise.gif_url!}
                             alt={`Demostración: ${exercise.name}`}
-                            className="max-h-64 rounded-xl object-contain"
-                            loading="eager"
+                            fill
+                            className="object-contain max-h-64 rounded-xl p-2"
+                            unoptimized
                         />
                     </div>
                 )}
@@ -169,12 +170,15 @@ function ExercisePreviewModal({
                         <div className="bg-card border border-border rounded-xl p-4">
                             <div className="flex items-center gap-3">
                                 {hasGif ? (
-                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                    <img
-                                        src={exercise.gif_url!}
-                                        alt={exercise.name}
-                                        className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
-                                    />
+                                    <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
+                                        <Image
+                                            src={exercise.gif_url!}
+                                            alt={exercise.name}
+                                            fill
+                                            className="object-cover"
+                                            unoptimized
+                                        />
+                                    </div>
                                 ) : (
                                     <div className="w-14 h-14 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
                                         <Dumbbell className="w-6 h-6 text-primary" />
