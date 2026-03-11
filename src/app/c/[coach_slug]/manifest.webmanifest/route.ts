@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: Params) {
         description: `Entrenamiento personalizado con ${brandName}`,
         start_url: `/c/${coach_slug}/dashboard`,
         display: 'standalone',
-        background_color: '#0A0A0A',
+        background_color: '#F8FAFC',
         theme_color: primaryColor,
         orientation: 'portrait',
         icons: coach.logo_url

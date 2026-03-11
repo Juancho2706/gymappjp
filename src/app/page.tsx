@@ -1,489 +1,798 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
-import { motion, useScroll, useTransform } from 'framer-motion'
-import {
-  Dumbbell,
-  Users,
-  BarChart3,
-  Camera,
-  Sparkles,
-  ArrowRight,
-  Check,
-  Zap,
-  Shield,
-  Smartphone,
-  ChevronDown,
-} from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LanguageToggle } from '@/components/LanguageToggle'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
+import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring } from 'framer-motion'
+import {
+    Dumbbell, Users, BarChart3, Camera, Sparkles, ArrowRight, Check,
+    Zap, Shield, Smartphone, ChevronDown, Star, Play, Palette,
+    ClipboardList, Apple, Utensils, Menu
+} from 'lucide-react'
+import {
+    Sheet,
+    SheetContent,
+    SheetTrigger,
+    SheetTitle
+} from "@/components/ui/sheet"
 
-/* ─── pricing tiers (Hevy-like: same features, price by client count) ─── */
+/* ─── Constants ─── */
 const clientTiers = [
-  { label: '1–10 alumnos', price: 14990 },
-  { label: '11–25 alumnos', price: 24990 },
-  { label: '26–50 alumnos', price: 39990 },
-  { label: '51–100 alumnos', price: 59990 },
-  { label: '101–200 alumnos', price: 89990 },
+    { label: '1–10 alumnos', price: 14990 },
+    { label: '11–25 alumnos', price: 24990 },
+    { label: '26–50 alumnos', price: 39990 },
+    { label: '51–100 alumnos', price: 59990 },
+    { label: '101–200 alumnos', price: 89990 },
 ]
 
 const premiumFeatures = [
-  'Rutinas ilimitadas con GIFs 3D',
-  'Catálogo de 1,300+ ejercicios',
-  'Ejercicios personalizados ilimitados',
-  'Check-ins de progreso con fotos',
-  'App White-Label con tu marca',
-  'Analítica avanzada por alumno',
-  'Soporte prioritario',
+    'Rutinas ilimitadas con GIFs animados',
+    'Catálogo de 230+ ejercicios',
+    'Planes de nutrición',
+    'Check-ins de progreso con fotos',
+    'App White-Label con tu marca',
+    'Soporte prioritario',
 ]
 
 const features = [
-  {
-    icon: Dumbbell,
-    title: 'Constructor de Rutinas',
-    desc: 'Drag & Drop intuitivo con catálogo de 1,300+ ejercicios con GIFs 3D animados.',
-    gradient: 'from-emerald-500 to-teal-500',
-  },
-  {
-    icon: Camera,
-    title: 'Check-ins con Fotos',
-    desc: 'Tus alumnos envían su peso, energía y fotos de progreso desde su móvil.',
-    gradient: 'from-blue-500 to-cyan-500',
-  },
-  {
-    icon: Smartphone,
-    title: 'App White-Label',
-    desc: 'Tu propia app con logo, colores y URL personalizada. Instalable como PWA.',
-    gradient: 'from-violet-500 to-purple-500',
-  },
-  {
-    icon: BarChart3,
-    title: 'Analítica en Tiempo Real',
-    desc: 'Gráficos de evolución, PRs y volumen de entrenamiento por alumno.',
-    gradient: 'from-amber-500 to-orange-500',
-  },
+    {
+        icon: Dumbbell,
+        title: 'Constructor de rutinas',
+        desc: 'Crea rutinas profesionales con 230+ ejercicios, cada uno con GIF animado e instrucciones.',
+        color: '#10B981',
+    },
+    {
+        icon: Utensils,
+        title: 'Planes de nutrición',
+        desc: 'Asigna planes alimenticios a cada alumno. Ellos anotan lo que comen día a día.',
+        color: '#F59E0B',
+    },
+    {
+        icon: Camera,
+        title: 'Check-ins con fotos',
+        desc: 'Tus alumnos envían peso, energía y fotos de progreso directo desde su celular.',
+        color: '#3B82F6',
+    },
+    {
+        icon: Smartphone,
+        title: 'App White-Label',
+        desc: 'Tu propia app con tu logo, colores y URL. Instálala como PWA en cualquier celular.',
+        color: '#8B5CF6',
+    },
+    {
+        icon: ClipboardList,
+        title: 'Ficha del alumno',
+        desc: 'Recoge datos clave: peso, altura, objetivos, lesiones, nivel. Todo en un solo lugar.',
+        color: '#EC4899',
+    },
+    {
+        icon: BarChart3,
+        title: 'Analítica en vivo',
+        desc: 'Dashboard con métricas de cada alumno: avance de peso, volumen, adherencia.',
+        color: '#06B6D4',
+    },
 ]
 
-function formatCLP(amount: number) {
-  return `$${amount.toLocaleString('es-CL')}`
+const stats = [
+    { value: '230+', label: 'Ejercicios con GIF' },
+    { value: '10', label: 'Grupos musculares' },
+    { value: '30', label: 'Días gratis' },
+    { value: '100%', label: 'Tu marca' },
+]
+
+/* ─── Animations ─── */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const fadeUp: any = {
+    hidden: { opacity: 0, y: 40 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] } },
 }
 
-/* ─── page ─── */
-export default function LandingPage() {
-  const [selectedTier, setSelectedTier] = useState(0)
-  const [tierOpen, setTierOpen] = useState(false)
+const fadeIn: any = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { duration: 0.8 } },
+}
 
-  return (
-    <div className="min-h-screen bg-background text-foreground transition-colors overflow-x-hidden" style={{ fontFamily: 'var(--font-inter)' }}>
-      {/* ─── NAVBAR ─── */}
-      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Dumbbell className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-lg font-extrabold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-              OmniCoach
-            </span>
-          </Link>
+const staggerContainer: any = {
+    hidden: {},
+    visible: { transition: { staggerChildren: 0.12 } },
+}
 
-          <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Funciones
-            </a>
-            <a href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Precios
-            </a>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Iniciar Sesión
-            </Link>
-          </div>
+const scaleIn: any = {
+    hidden: { opacity: 0, scale: 0.85 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] } },
+}
 
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <Link
-              href="/register"
-              className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 hover:-translate-y-0.5"
-              style={{ fontFamily: 'var(--font-outfit)' }}
-            >
-              Empezar Gratis
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </nav>
+/* ─── Component: Animated Counter ─── */
+function AnimatedCounter({ value, label }: { value: string; label: string }) {
+    const ref = useRef<HTMLDivElement>(null)
+    const inView = useInView(ref, { once: true, margin: '-50px' })
 
-      {/* ─── HERO ─── */}
-      <section className="relative pt-20 pb-32 px-6 overflow-hidden">
-        {/* Animated orbs */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <motion.div
-            animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute top-20 left-[10%] w-[400px] h-[400px] bg-emerald-500/10 dark:bg-emerald-500/5 rounded-full blur-[100px]"
-          />
-          <motion.div
-            animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
-            transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute top-40 right-[5%] w-[300px] h-[300px] bg-blue-500/8 dark:bg-blue-500/5 rounded-full blur-[80px]"
-          />
-          <motion.div
-            animate={{ x: [0, 15, 0], y: [0, 15, 0] }}
-            transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute bottom-20 left-[40%] w-[350px] h-[350px] bg-violet-500/6 dark:bg-violet-500/3 rounded-full blur-[90px]"
-          />
-        </div>
-
-        <div className="max-w-5xl mx-auto text-center relative z-10">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-semibold mb-8"
-            style={{ fontFamily: 'var(--font-outfit)' }}
-          >
-            <Sparkles className="w-4 h-4" />
-            La plataforma #1 para coaches fitness
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[0.95]"
-            style={{ fontFamily: 'var(--font-outfit)' }}
-          >
-            <span className="text-foreground">Escala tu</span>
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500">
-              negocio fitness
-            </span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="mt-8 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
-            style={{ fontFamily: 'var(--font-outfit)', fontWeight: 400 }}
-          >
-            Rutinas con GIFs 3D, check-ins, white-label y analítica. Todo lo que necesitas para gestionar tus alumnos.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
-            <Link
-              href="/register"
-              className="group inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-2xl text-lg hover:shadow-2xl hover:shadow-emerald-500/30 transition-all duration-300 hover:-translate-y-1"
-              style={{ fontFamily: 'var(--font-outfit)' }}
-            >
-              Prueba 30 Días Gratis
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <a
-              href="#features"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-card text-foreground font-semibold rounded-2xl text-lg border border-border hover:border-primary/30 hover:shadow-lg transition-all duration-300"
-              style={{ fontFamily: 'var(--font-outfit)' }}
-            >
-              Ver funciones
-            </a>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="mt-20 flex items-center justify-center gap-12 md:gap-20"
-          >
-            {[
-              { value: '1,300+', label: 'Ejercicios 3D' },
-              { value: '100%', label: 'Tu Marca' },
-              { value: 'PWA', label: 'Instalable' },
-            ].map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="text-3xl md:text-4xl font-black text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  {s.value}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1" style={{ fontFamily: 'var(--font-outfit)' }}>{s.label}</p>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ─── FEATURES ─── */}
-      <section id="features" className="py-28 px-6 relative">
-        {/* Subtle background pattern */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.03),transparent_70%)]" />
-
-        <div className="max-w-6xl mx-auto relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-20"
-          >
-            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Funciones
-            </p>
-            <h2 className="text-4xl md:text-6xl font-black text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Todo en un{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">
-                solo lugar
-              </span>
-            </h2>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {features.map((f, i) => (
-              <motion.div
-                key={f.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="group relative bg-card border border-border rounded-3xl p-8 hover:shadow-2xl hover:shadow-primary/5 hover:border-primary/20 transition-all duration-500 hover:-translate-y-1 overflow-hidden"
-              >
-                {/* Gradient accent line */}
-                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${f.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-6 shadow-lg`}>
-                  <f.icon className="w-7 h-7 text-white" />
-                </div>
-                <h3 className="text-xl font-extrabold text-foreground mb-3" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  {f.title}
-                </h3>
-                <p className="text-muted-foreground leading-relaxed" style={{ fontFamily: 'var(--font-outfit)' }}>{f.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── PRICING (Hevy-like: single tier, price by # of clients) ─── */}
-      <section id="pricing" className="py-28 px-6 bg-muted/30">
-        <div className="max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Precios
-            </p>
-            <h2 className="text-4xl md:text-6xl font-black text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Un plan,{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">
-                todo incluido
-              </span>
-            </h2>
-            <p className="mt-4 text-muted-foreground text-lg max-w-xl mx-auto" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Empieza gratis. Sin tarjeta. Solo paga cuando estés listo.
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl shadow-primary/5"
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border">
-              {/* Left: features */}
-              <div className="p-8 lg:p-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                    <Dumbbell className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="text-xl font-extrabold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-                    OmniCoach Premium
-                  </h3>
-                </div>
-                <p className="text-muted-foreground text-sm mb-6" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  Todo lo incluido en tu plataforma de coaching:
-                </p>
-                <ul className="space-y-3.5">
-                  {premiumFeatures.map((f) => (
-                    <li key={f} className="flex items-center gap-3 text-sm text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-                      <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                      </div>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Right: pricing selector */}
-              <div className="p-8 lg:p-10 flex flex-col">
-                <p className="text-emerald-600 dark:text-emerald-400 text-sm font-bold mb-2" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  30 días de prueba gratis
-                </p>
-
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-5xl font-black text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-                    {formatCLP(clientTiers[selectedTier].price)}
-                  </span>
-                  <span className="text-muted-foreground text-sm" style={{ fontFamily: 'var(--font-outfit)' }}>/CLP mes</span>
-                </div>
-
-                {/* Client count selector */}
-                <label className="text-sm font-semibold text-foreground mb-2 block" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  Número de alumnos
-                </label>
-                <div className="relative mb-6">
-                  <button
-                    onClick={() => setTierOpen(!tierOpen)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 bg-secondary border border-border rounded-xl text-foreground text-sm font-medium hover:border-primary/30 transition-colors"
-                    style={{ fontFamily: 'var(--font-outfit)' }}
-                  >
-                    {clientTiers[selectedTier].label}
-                    <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${tierOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {tierOpen && (
-                    <div className="absolute top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-xl z-20 overflow-hidden">
-                      {clientTiers.map((tier, i) => (
-                        <button
-                          key={tier.label}
-                          onClick={() => { setSelectedTier(i); setTierOpen(false); }}
-                          className={`w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors flex items-center justify-between ${i === selectedTier ? 'bg-primary/5 text-primary font-semibold' : 'text-foreground'
-                            }`}
-                          style={{ fontFamily: 'var(--font-outfit)' }}
-                        >
-                          <span>{tier.label}</span>
-                          <span className="text-muted-foreground">{formatCLP(tier.price)}/mes</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Link
-                  href="/register"
-                  className="w-full py-4 rounded-xl font-bold text-center bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 text-lg hover:-translate-y-0.5"
-                  style={{ fontFamily: 'var(--font-outfit)' }}
-                >
-                  Empieza 30 Días Gratis
-                </Link>
-                <p className="text-center text-xs text-muted-foreground mt-3" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  Sin tarjeta de crédito requerida
-                </p>
-
-                <div className="mt-auto pt-6 flex items-center justify-center gap-4 opacity-50">
-                  <span className="text-xs text-muted-foreground font-medium px-3 py-1.5 border border-border rounded-lg" style={{ fontFamily: 'var(--font-outfit)' }}>Visa</span>
-                  <span className="text-xs text-muted-foreground font-medium px-3 py-1.5 border border-border rounded-lg" style={{ fontFamily: 'var(--font-outfit)' }}>Mastercard</span>
-                  <span className="text-xs text-muted-foreground font-medium px-3 py-1.5 border border-border rounded-lg" style={{ fontFamily: 'var(--font-outfit)' }}>PayPal</span>
-                  <span className="text-xs text-muted-foreground font-medium px-3 py-1.5 border border-border rounded-lg" style={{ fontFamily: 'var(--font-outfit)' }}>MercadoPago</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom notice */}
-            <div className="border-t border-border px-8 py-4 text-center">
-              <p className="text-xs text-muted-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-                Puedes cancelar en cualquier momento. Tu suscripción se renueva automáticamente cada mes.
-              </p>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ─── TRUST ─── */}
-      <section className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-8"
-          >
-            {[
-              { icon: Zap, title: 'Ultra rápido', desc: 'Optimizado para que tus alumnos entrenen sin esperas', gradient: 'from-amber-500 to-orange-500' },
-              { icon: Shield, title: '100% Seguro', desc: 'Datos encriptados y respaldados en la nube', gradient: 'from-blue-500 to-cyan-500' },
-              { icon: Users, title: 'Escalable', desc: 'Desde 1 alumno hasta gimnasios completos', gradient: 'from-violet-500 to-purple-500' },
-            ].map((item) => (
-              <div key={item.title} className="text-center group">
-                <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center mb-5 mx-auto shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300`}>
-                  <item.icon className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="font-extrabold text-foreground text-lg" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  {item.title}
-                </h3>
-                <p className="text-muted-foreground text-sm mt-2 max-w-[260px] mx-auto" style={{ fontFamily: 'var(--font-outfit)' }}>{item.desc}</p>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ─── CTA ─── */}
-      <section className="py-28 px-6">
+    return (
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="max-w-4xl mx-auto text-center relative"
+            ref={ref}
+            initial={{ opacity: 0, y: 20 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6 }}
+            className="text-center"
         >
-          {/* Background glow */}
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-cyan-500/5 rounded-[2rem] blur-xl" />
-
-          <div className="relative bg-card border border-border rounded-[2rem] p-12 md:p-20">
-            <h2 className="text-3xl md:text-5xl font-black text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-              ¿Listo para{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">
-                transformar
-              </span>
-              {' '}tu negocio?
-            </h2>
-            <p className="mt-4 text-muted-foreground text-lg" style={{ fontFamily: 'var(--font-outfit)' }}>
-              Únete a los entrenadores que ya gestionan todo desde un solo lugar.
-            </p>
-            <Link
-              href="/register"
-              className="group inline-flex items-center gap-2 mt-8 px-10 py-5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-2xl text-lg hover:shadow-2xl hover:shadow-emerald-500/30 transition-all duration-300 hover:-translate-y-1"
-              style={{ fontFamily: 'var(--font-outfit)' }}
-            >
-              Crear mi Cuenta Gratis
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </div>
+            <div className="text-4xl md:text-5xl font-black text-foreground mb-2">{value}</div>
+            <div className="text-sm text-foreground/50 uppercase tracking-widest font-medium">{label}</div>
         </motion.div>
-      </section>
+    )
+}
 
-      {/* ─── FOOTER ─── */}
-      <footer className="border-t border-border py-12 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <Dumbbell className="w-4 h-4 text-white" />
+/* ─── Component: Feature Card ─── */
+function FeatureCard({ feature, index }: { feature: typeof features[0]; index: number }) {
+    const ref = useRef<HTMLDivElement>(null)
+    const inView = useInView(ref, { once: true, margin: '-80px' })
+
+    return (
+        <motion.div
+            ref={ref}
+            initial={{ opacity: 0, y: 30 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5, delay: index * 0.08 }}
+            className="group relative rounded-3xl border border-border bg-card p-7 hover:bg-white/[0.04] transition-all duration-500"
+        >
+            {/* Glow on hover */}
+            <div
+                className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl"
+                style={{ background: `radial-gradient(circle at 50% 50%, ${feature.color}15, transparent 70%)` }}
+            />
+
+            <div className="relative z-10">
+                <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
+                    style={{ backgroundColor: `${feature.color}15` }}
+                >
+                    <feature.icon className="w-6 h-6" style={{ color: feature.color }} />
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-2">{feature.title}</h3>
+                <p className="text-sm text-foreground/50 leading-relaxed">{feature.desc}</p>
             </div>
-            <span className="font-extrabold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-              OmniCoach OS
-            </span>
-          </div>
+        </motion.div>
+    )
+}
 
-          <div className="flex items-center gap-6 text-sm text-muted-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-            <a href="#features" className="hover:text-foreground transition-colors">Funciones</a>
-            <a href="#pricing" className="hover:text-foreground transition-colors">Precios</a>
-            <Link href="/login" className="hover:text-foreground transition-colors">Login</Link>
-          </div>
+/* ─── Component: Pill Nav ─── */
+function PillNav() {
+    const [scrolled, setScrolled] = useState(false)
+    const { t } = useTranslation();
 
-          <p className="text-xs text-muted-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-            &copy; {new Date().getFullYear()} OmniCoach OS — Animaciones 3D: ExerciseDB
-          </p>
+    useEffect(() => {
+        const handler = () => setScrolled(window.scrollY > 40)
+        window.addEventListener('scroll', handler)
+        return () => window.removeEventListener('scroll', handler)
+    }, [])
+
+    return (
+        <motion.nav
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${scrolled
+                ? 'bg-background/80 backdrop-blur-xl border border-border shadow-2xl shadow-foreground/5'
+                : 'bg-transparent'
+                } rounded-full px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 w-[95%] sm:w-auto justify-between sm:justify-center`}
+        >
+            <Link href="/" className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <Dumbbell className="w-4 h-4 text-emerald-400" />
+                </div>
+                <span className="text-foreground font-bold text-sm tracking-tight hidden sm:inline">OmniCoach</span>
+            </Link>
+
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center gap-1">
+                {[
+                    { key: 'landing.nav.features', id: 'funciones' },
+                    { key: 'landing.nav.pricing', id: 'precios' },
+                    { key: 'landing.nav.contact', id: 'contacto' }
+                ].map(item => (
+                    <a
+                        key={item.id}
+                        href={`#${item.id}`}
+                        className="text-foreground/60 hover:text-foreground text-xs font-medium px-3 py-1.5 rounded-full hover:bg-accent transition-all"
+                    >
+                        {t(item.key)}
+                    </a>
+                ))}
+            </div>
+
+            {/* Desktop Actions */}
+            <div className="hidden md:flex items-center gap-2 ml-2">
+                <LanguageToggle />
+                <ThemeToggle />
+                <Link
+                    href="/login"
+                    className="text-foreground/70 hover:text-foreground text-xs font-medium px-3 py-1.5 transition-colors"
+                >
+                    {t('landing.nav.login')}
+                </Link>
+                <Link
+                    href="/register"
+                    className="bg-emerald-500 hover:bg-emerald-400 text-background text-xs font-bold px-4 py-2 rounded-full transition-all hover:shadow-lg hover:shadow-emerald-500/25"
+                >
+                    {t('landing.nav.register')}
+                </Link>
+            </div>
+
+            {/* Mobile Navigation */}
+            <div className="md:hidden">
+                <Sheet>
+                    <SheetTrigger className="p-2 text-foreground/70 hover:text-foreground transition-colors rounded-full hover:bg-accent focus:outline-none flex items-center justify-center">
+                        <Menu className="w-5 h-5" />
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-[300px] sm:w-[400px] border-l-border bg-background pt-16 flex flex-col gap-8">
+                        <SheetTitle className="sr-only">Menú de Navegación</SheetTitle>
+                        
+                        <div className="flex flex-col gap-4 px-2">
+                            {[
+                                { key: 'landing.nav.features', id: 'funciones' },
+                                { key: 'landing.nav.pricing', id: 'precios' },
+                                { key: 'landing.nav.contact', id: 'contacto' }
+                            ].map(item => (
+                                <a
+                                    key={item.id}
+                                    href={`#${item.id}`}
+                                    className="text-xl font-medium text-foreground/80 hover:text-emerald-500 transition-colors py-2 border-b border-border/50"
+                                >
+                                    {t(item.key)}
+                                </a>
+                            ))}
+                        </div>
+
+                        <div className="mt-auto flex flex-col gap-6 px-2 pb-8">
+                            <div className="flex items-center justify-between py-4 border-t border-border/50">
+                                <span className="text-sm font-medium text-foreground/70 text-left w-full">Configuración</span>
+                                <div className="flex gap-4 shrink-0 justify-end">
+                                    <LanguageToggle />
+                                    <ThemeToggle />
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col gap-3">
+                                <Link
+                                    href="/login"
+                                    className="text-center w-full py-3 rounded-xl border border-border text-foreground font-medium hover:bg-accent transition-colors"
+                                >
+                                    {t('landing.nav.login')}
+                                </Link>
+                                <Link
+                                    href="/register"
+                                    className="text-center w-full py-3 rounded-xl bg-emerald-500 text-background font-bold hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/25 transition-all"
+                                >
+                                    {t('landing.nav.register')}
+                                </Link>
+                            </div>
+                        </div>
+                    </SheetContent>
+                </Sheet>
+            </div>
+        </motion.nav>
+    )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Main Landing Page
+   ═══════════════════════════════════════════════════════════════ */
+export default function LandingPage() {
+    const heroRef = useRef<HTMLDivElement>(null)
+    const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
+    const { t } = useTranslation()
+
+    const heroScale = useTransform(scrollYProgress, [0, 1], [1, 0.9])
+    const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0])
+    const heroY = useTransform(scrollYProgress, [0, 1], [0, 100])
+
+    const [selectedTier, setSelectedTier] = useState(0)
+
+    return (
+        <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+            <PillNav />
+
+            {/* ── HERO ── */}
+            <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-20 pb-32">
+                {/* Background glow orbs */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full bg-emerald-500/8 blur-[150px]" />
+                    <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-emerald-600/5 blur-[120px]" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-emerald-500/3 blur-[200px]" />
+                </div>
+
+                {/* Subtle grid pattern */}
+                <div
+                    className="absolute inset-0 opacity-[0.03]"
+                    style={{
+                        backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
+                        backgroundSize: '60px 60px',
+                    }}
+                />
+
+                <motion.div
+                    style={{ scale: heroScale, opacity: heroOpacity, y: heroY }}
+                    className="relative z-10 max-w-5xl mx-auto px-6 text-center"
+                >
+                    {/* Badge */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="inline-flex items-center gap-2 bg-secondary border border-border rounded-full px-4 py-1.5 mb-8"
+                    >
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-xs text-foreground/70 font-medium">{t('landing.hero.badge')}</span>
+                    </motion.div>
+
+                    {/* Main headline */}
+                    <motion.h1
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4, duration: 0.8 }}
+                        className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[0.9] mb-6"
+                    >
+                        <span className="text-foreground">{t('landing.hero.title1')}</span>
+                        <br />
+                        <span className="bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent">
+                            {t('landing.hero.title2')}
+                        </span>
+                        <br />
+                        <span className="text-foreground/40">{t('landing.hero.title3')}</span>
+                    </motion.h1>
+
+                    {/* Subheadline */}
+                    <motion.p
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6 }}
+                        className="text-lg md:text-xl text-foreground/40 max-w-2xl mx-auto mb-10 leading-relaxed"
+                    >
+                        {t('landing.hero.subtitle')}
+                    </motion.p>
+
+                    {/* CTA buttons */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.7 }}
+                        className="flex flex-col sm:flex-row items-center justify-center gap-4"
+                    >
+                        <Link
+                            href="/register"
+                            className="group relative bg-emerald-500 hover:bg-emerald-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/25 flex items-center gap-2"
+                        >
+                            {t('landing.hero.cta')}
+                            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        </Link>
+                        <a
+                            href="#funciones"
+                            className="text-foreground/50 hover:text-foreground text-sm font-medium px-6 py-4 rounded-full border border-border hover:border-border transition-all flex items-center gap-2"
+                        >
+                            <Play className="w-3.5 h-3.5" />
+                            Ver funciones
+                        </a>
+                    </motion.div>
+
+                    {/* Scroll indicator */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 1.2 }}
+                        className="mt-20"
+                    >
+                        <motion.div
+                            animate={{ y: [0, 8, 0] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                        >
+                            <ChevronDown className="w-5 h-5 text-foreground/20 mx-auto" />
+                        </motion.div>
+                    </motion.div>
+                </motion.div>
+            </section>
+
+            {/* ── STATS BAR ── */}
+            <section className="relative py-16 border-y border-white/[0.04]">
+                <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
+                    {stats.map((stat, i) => (
+                        <AnimatedCounter key={i} value={stat.value} label={stat.label} />
+                    ))}
+                </div>
+            </section>
+
+            {/* ── FEATURES GRID ── */}
+            <section id="funciones" className="relative py-28">
+                {/* Background glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-emerald-500/[0.03] blur-[200px] pointer-events-none" />
+
+                <div className="max-w-6xl mx-auto px-6">
+                    <motion.div
+                        variants={fadeUp}
+                        initial="hidden"
+                        whileInView="visible"
+                        viewport={{ once: true, margin: '-80px' }}
+                        className="text-center mb-16"
+                    >
+                        <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                            Funciones
+                        </span>
+                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
+                            Todo lo que necesitas
+                        </h2>
+                        <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto">
+                            Herramientas diseñadas para coaches que quieren escalar.
+                        </p>
+                    </motion.div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {features.map((feature, i) => (
+                            <FeatureCard key={i} feature={feature} index={i} />
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── EXERCISE SHOWCASE ── */}
+            <section className="relative py-28 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/[0.02] to-transparent pointer-events-none" />
+
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="grid lg:grid-cols-2 gap-16 items-center">
+                        {/* Left: text */}
+                        <motion.div
+                            variants={fadeUp}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-80px' }}
+                        >
+                            <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                                Ejercicios
+                            </span>
+                            <h2 className="text-3xl md:text-5xl font-black text-foreground mb-6 leading-tight">
+                                230+ ejercicios
+                                <br />
+                                <span className="text-foreground/30">con GIF animado</span>
+                            </h2>
+                            <p className="text-foreground/40 text-base leading-relaxed mb-8 max-w-md">
+                                Cada ejercicio incluye demostración visual, instrucciones paso a paso,
+                                equipo necesario y músculos trabajados. En español.
+                            </p>
+
+                            <div className="space-y-3">
+                                {['GIF animado de demostración', 'Instrucciones en español', '10 grupos musculares', 'Agrega ejercicios propios'].map(item => (
+                                    <div key={item} className="flex items-center gap-3">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                                            <Check className="w-3 h-3 text-emerald-400" />
+                                        </div>
+                                        <span className="text-sm text-foreground/60">{item}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+
+                        {/* Right: exercise cards mockup */}
+                        <motion.div
+                            variants={scaleIn}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-80px' }}
+                            className="relative"
+                        >
+                            <div className="absolute inset-0 bg-emerald-500/5 blur-[100px] rounded-full" />
+                            <div className="relative bg-white/[0.03] border border-border rounded-3xl p-6 space-y-3">
+                                {/* Mock exercise cards - Fitonist style */}
+                                {[
+                                    { name: 'Squat Jumps', muscle: 'Piernas', reps: '10 reps', color: '#F59E0B' },
+                                    { name: 'Pull Ups', muscle: 'Espalda', reps: '12 reps', color: '#3B82F6' },
+                                    { name: 'Bench Press', muscle: 'Pecho', reps: '8 reps', color: '#10B981' },
+                                    { name: 'Plank', muscle: 'Core', reps: '60 seg', color: '#8B5CF6' },
+                                ].map((ex, i) => (
+                                    <motion.div
+                                        key={i}
+                                        initial={{ opacity: 0, x: 20 }}
+                                        whileInView={{ opacity: 1, x: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: 0.2 + i * 0.1 }}
+                                        className="flex items-center gap-4 bg-white/[0.03] border border-border rounded-2xl p-4 hover:bg-white/[0.06] transition-colors"
+                                    >
+                                        <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
+                                            <Dumbbell className="w-6 h-6 text-foreground/30" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-foreground truncate">{ex.name}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span
+                                                    className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md"
+                                                    style={{ backgroundColor: `${ex.color}20`, color: ex.color }}
+                                                >
+                                                    {ex.muscle}
+                                                </span>
+                                                <span className="text-xs text-foreground/30">{ex.reps}</span>
+                                            </div>
+                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-foreground/20 flex-shrink-0" />
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    </div>
+                </div>
+            </section>
+
+            {/* ── WHITE-LABEL SHOWCASE ── */}
+            <section className="relative py-28">
+                <div className="max-w-6xl mx-auto px-6 text-center">
+                    <motion.div
+                        variants={fadeUp}
+                        initial="hidden"
+                        whileInView="visible"
+                        viewport={{ once: true, margin: '-80px' }}
+                    >
+                        <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                            White-Label
+                        </span>
+                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
+                            Tu marca. Tu app.
+                        </h2>
+                        <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto mb-16">
+                            Cada coach obtiene su propia URL, logo y colores. Tus alumnos solo ven tu marca.
+                        </p>
+                    </motion.div>
+
+                    {/* Bento grid showcasing white-label features */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <motion.div
+                            variants={scaleIn}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true }}
+                            className="md:col-span-2 bg-card border border-border rounded-3xl p-8 text-left"
+                        >
+                            <Palette className="w-8 h-8 text-emerald-400 mb-4" />
+                            <h3 className="text-xl font-bold text-foreground mb-2">Personalización total</h3>
+                            <p className="text-foreground/40 text-sm leading-relaxed">
+                                Elige tu color de marca, sube tu logo y configura tu URL personalizada.
+                                Tu alumno accede a <code className="text-emerald-400/70 font-mono text-xs">omnicoach.app/c/tu-marca</code> y ve TU identidad.
+                            </p>
+                            <div className="mt-6 flex gap-3">
+                                {['#10B981', '#3B82F6', '#F59E0B', '#EC4899', '#8B5CF6'].map(color => (
+                                    <div
+                                        key={color}
+                                        className="w-8 h-8 rounded-full border-2 border-border"
+                                        style={{ backgroundColor: color }}
+                                    />
+                                ))}
+                            </div>
+                        </motion.div>
+
+                        <motion.div
+                            variants={scaleIn}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.1 }}
+                            className="bg-card border border-border rounded-3xl p-8 text-left"
+                        >
+                            <Smartphone className="w-8 h-8 text-emerald-400 mb-4" />
+                            <h3 className="text-xl font-bold text-foreground mb-2">Instalable</h3>
+                            <p className="text-foreground/40 text-sm leading-relaxed">
+                                PWA que se instala como app nativa en cualquier celular. Sin App Store.
+                            </p>
+                        </motion.div>
+                    </div>
+                </div>
+            </section>
+
+            {/* ── PRICING ── */}
+            <section id="precios" className="relative py-28">
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/[0.02] to-transparent pointer-events-none" />
+
+                <div className="max-w-4xl mx-auto px-6">
+                    <motion.div
+                        variants={fadeUp}
+                        initial="hidden"
+                        whileInView="visible"
+                        viewport={{ once: true, margin: '-80px' }}
+                        className="text-center mb-16"
+                    >
+                        <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                            Precios
+                        </span>
+                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
+                            Un solo plan. Todo incluido.
+                        </h2>
+                        <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto">
+                            Solo pagas por la cantidad de alumnos. Todas las funciones siempre incluidas.
+                        </p>
+                    </motion.div>
+
+                    <motion.div
+                        variants={scaleIn}
+                        initial="hidden"
+                        whileInView="visible"
+                        viewport={{ once: true }}
+                        className="relative bg-card border border-border rounded-3xl overflow-hidden"
+                    >
+                        {/* Glow */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-emerald-500/10 blur-[120px] pointer-events-none" />
+
+                        <div className="relative p-8 md:p-12">
+                            {/* Tier selector */}
+                            <div className="flex flex-wrap justify-center gap-2 mb-10">
+                                {clientTiers.map((tier, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setSelectedTier(i)}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all duration-300 ${selectedTier === i
+                                            ? 'bg-emerald-500 text-background shadow-lg shadow-emerald-500/25'
+                                            : 'bg-secondary text-foreground/50 hover:bg-white/[0.08] hover:text-foreground/70'
+                                            }`}
+                                    >
+                                        {tier.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Price display */}
+                            <div className="text-center mb-10">
+                                <motion.div
+                                    key={selectedTier}
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3 }}
+                                    className="flex items-end justify-center gap-1"
+                                >
+                                    <span className="text-5xl md:text-7xl font-black text-foreground">
+                                        ${clientTiers[selectedTier].price.toLocaleString('es-CL')}
+                                    </span>
+                                    <span className="text-foreground/30 text-lg mb-2">/mes CLP</span>
+                                </motion.div>
+                                <p className="text-foreground/30 text-sm mt-3">
+                                    30 días gratis · Cancela cuando quieras
+                                </p>
+                            </div>
+
+                            {/* Features */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto mb-10">
+                                {premiumFeatures.map((feat, i) => (
+                                    <div key={i} className="flex items-center gap-2.5">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                                            <Check className="w-3 h-3 text-emerald-400" />
+                                        </div>
+                                        <span className="text-sm text-foreground/60">{feat}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* CTA */}
+                            <div className="text-center">
+                                <Link
+                                    href="/register"
+                                    className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/25"
+                                >
+                                    Empieza 30 días gratis
+                                    <ArrowRight className="w-4 h-4" />
+                                </Link>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            </section>
+
+            {/* ── TRUST / TESTIMONIALS ── */}
+            <section className="relative py-28">
+                <div className="max-w-5xl mx-auto px-6 text-center">
+                    <motion.div
+                        variants={fadeUp}
+                        initial="hidden"
+                        whileInView="visible"
+                        viewport={{ once: true, margin: '-80px' }}
+                    >
+                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-16">
+                            Diseñado para coaches
+                            <br />
+                            <span className="text-foreground/30">que quieren crecer</span>
+                        </h2>
+                    </motion.div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[
+                            {
+                                quote: 'Por fin una plataforma que entiende lo que necesito como coach. La app white-label es un game changer.',
+                                name: 'Carlos M.',
+                                role: 'Coach Personal',
+                            },
+                            {
+                                quote: 'Mis alumnos aman los GIFs de los ejercicios. Ya no tengo que mandar videos por WhatsApp.',
+                                name: 'Andrea L.',
+                                role: 'Entrenadora Fitness',
+                            },
+                            {
+                                quote: 'Pasé de una hoja de Excel a una plataforma profesional en 5 minutos. Increíble.',
+                                name: 'Diego R.',
+                                role: 'Preparador Físico',
+                            },
+                        ].map((t, i) => (
+                            <motion.div
+                                key={i}
+                                variants={fadeUp}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true }}
+                                transition={{ delay: i * 0.1 }}
+                                className="bg-card border border-border rounded-3xl p-7 text-left"
+                            >
+                                <div className="flex gap-1 mb-4">
+                                    {[...Array(5)].map((_, j) => (
+                                        <Star key={j} className="w-3.5 h-3.5 fill-emerald-400 text-emerald-400" />
+                                    ))}
+                                </div>
+                                <p className="text-sm text-foreground/50 leading-relaxed mb-6">&ldquo;{t.quote}&rdquo;</p>
+                                <div>
+                                    <p className="text-sm font-bold text-foreground">{t.name}</p>
+                                    <p className="text-xs text-foreground/30">{t.role}</p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── FINAL CTA ── */}
+            <section className="relative py-28">
+                <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/[0.04] to-transparent pointer-events-none" />
+
+                <motion.div
+                    variants={fadeUp}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true }}
+                    className="max-w-3xl mx-auto px-6 text-center"
+                >
+                    <h2 className="text-4xl md:text-6xl font-black text-foreground mb-6 leading-tight">
+                        Empieza hoy.
+                        <br />
+                        <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                            30 días gratis.
+                        </span>
+                    </h2>
+                    <p className="text-foreground/40 text-base md:text-lg mb-10 max-w-lg mx-auto">
+                        Sin tarjeta de crédito. Sin compromisos. Configura tu plataforma en minutos.
+                    </p>
+                    <Link
+                        href="/register"
+                        className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-background font-bold px-10 py-5 rounded-full text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-500/30"
+                    >
+                        Crear cuenta gratis
+                        <ArrowRight className="w-5 h-5" />
+                    </Link>
+                </motion.div>
+            </section>
+
+            {/* ── FOOTER ── */}
+            <footer className="border-t border-white/[0.04] py-12">
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                                <Dumbbell className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <span className="text-foreground font-bold text-sm">OmniCoach OS</span>
+                        </div>
+
+                        <div className="flex items-center gap-6 text-xs text-foreground/30">
+                            <Link href="/pricing" className="hover:text-foreground/60 transition-colors">Precios</Link>
+                            <Link href="/login" className="hover:text-foreground/60 transition-colors">Iniciar sesión</Link>
+                            <Link href="/register" className="hover:text-foreground/60 transition-colors">Registrarse</Link>
+                        </div>
+
+                        <p className="text-xs text-foreground/20">
+                            Ejercicios: <a href="https://exercisedb-api.vercel.app" target="_blank" rel="noopener noreferrer" className="hover:text-foreground/40 underline">ExerciseDB API</a>
+                        </p>
+                    </div>
+                </div>
+            </footer>
         </div>
-      </footer>
-    </div>
-  )
+    )
 }

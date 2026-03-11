@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import type { Coach } from '@/lib/database.types'
+import InstallPrompt from '@/components/InstallPrompt'
+import { ClientNav } from '@/components/client/ClientNav'
 
 interface Props {
     children: React.ReactNode
@@ -44,14 +46,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     return (
         <div
-            className="min-h-screen antialiased flex flex-col"
-            style={
-                {
-                    '--theme-primary': primaryColor,
-                    backgroundColor: '#0A0A0A',
-                    color: '#E4E4E7'
-                } as React.CSSProperties
-            }
+            className="flex flex-col md:flex-row min-h-screen antialiased bg-background text-foreground"
+            style={{ '--theme-primary': primaryColor } as React.CSSProperties}
             data-coach-slug={coach_slug}
             data-brand-name={brandName}
         >
@@ -66,7 +62,13 @@ export default async function ClientBrandLayout({ children, params }: Props) {
             <meta name="apple-mobile-web-app-title" content={brandName} />
             {logoUrl && <link rel="apple-touch-icon" href={logoUrl} />}
 
-            {children}
+            <ClientNav coachSlug={coach_slug} coachBrand={brandName} />
+
+            <main className="flex-1 overflow-auto pb-[72px] md:pb-0 relative z-0">
+                {children}
+            </main>
+
+            <InstallPrompt />
         </div>
     )
 }

@@ -38,8 +38,7 @@ export default async function ClientLoginPage({ params }: Props) {
 
     return (
         <div
-            className="min-h-screen flex items-center justify-center p-4"
-            style={{ backgroundColor: '#0A0A0A' }}
+            className="min-h-screen flex items-center justify-center p-4 bg-background"
         >
             {/* Ambient glow using coach color */}
             <div
@@ -75,12 +74,12 @@ export default async function ClientLoginPage({ params }: Props) {
                         </div>
                     )}
                     <h1
-                        className="text-3xl font-bold tracking-tight text-zinc-50"
+                        className="text-3xl font-bold tracking-tight text-foreground"
                         style={{ fontFamily: 'var(--font-outfit)' }}
                     >
                         {coach.brand_name}
                     </h1>
-                    <p className="mt-1 text-zinc-400 text-sm">Tu plataforma de entrenamiento</p>
+                    <p className="mt-1 text-muted-foreground text-sm">Tu plataforma de entrenamiento</p>
                 </div>
 
                 {/* Login form — client component */}

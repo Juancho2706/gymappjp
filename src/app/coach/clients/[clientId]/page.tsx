@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Calendar, Dumbbell } from 'lucide-react'
-import type { Client, WorkoutPlan, CheckIn } from '@/lib/database.types'
+import { ArrowLeft, Plus, Calendar, Dumbbell, Apple } from 'lucide-react'
+import type { Client, WorkoutPlan, CheckIn, NutritionPlan } from '@/lib/database.types'
 import type { Metadata } from 'next'
 import { DeletePlanButton } from './DeletePlanButton'
 import { CheckInCard } from '@/components/coach/CheckInCard'
@@ -19,7 +19,7 @@ export default async function ClientDetailPage({
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
 
-    const { data: rawClient } = await supabase
+    const { data: rawClient } = await (supabase as any)
         .from('clients')
         .select('*')
         .eq('id', clientId)
@@ -37,6 +37,29 @@ export default async function ClientDetailPage({
 
     const plans = (rawPlans ?? []) as WorkoutPlan[]
 
+    const { data: rawNutrition } = await (supabase as any)
+        .from('nutrition_plans')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+
+    const nutritionPlans = (rawNutrition ?? []) as NutritionPlan[]
+
+    // Fetch today's adherence
+    const today = new Date().toISOString().split('T')[0]
+    const { data: rawDailyLog } = await (supabase as any)
+        .from('daily_nutrition_logs')
+        .select(`
+            *,
+            nutrition_meal_logs (*)
+        `)
+        .eq('client_id', clientId)
+        .eq('log_date', today)
+        .maybeSingle()
+        
+    const todayLog = rawDailyLog
+
     const { data: rawCheckins } = await supabase
         .from('check_ins')
         .select('*')
@@ -46,7 +69,7 @@ export default async function ClientDetailPage({
     const checkIns = rawCheckins as CheckIn[] | null
 
     return (
-        <div className="p-8 max-w-4xl animate-fade-in">
+        <div className="p-8 max-w-5xl animate-fade-in mx-auto">
             {/* Back nav */}
             <Link href="/coach/clients"
                 className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
@@ -55,67 +78,195 @@ export default async function ClientDetailPage({
             </Link>
 
             {/* Header */}
-            <div className="flex items-center gap-4 mb-8">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-2xl font-bold text-primary">
-                        {client.full_name[0].toUpperCase()}
-                    </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-2xl font-bold text-primary">
+                            {client.full_name[0].toUpperCase()}
+                        </span>
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-extrabold text-foreground">
+                            {client.full_name}
+                        </h1>
+                        <p className="text-muted-foreground text-sm">{client.email}</p>
+                    </div>
                 </div>
-                <div className="flex-1">
-                    <h1 className="text-2xl font-extrabold text-foreground">
-                        {client.full_name}
-                    </h1>
-                    <p className="text-muted-foreground text-sm">{client.email}</p>
+                
+                <div className="flex flex-wrap items-center gap-3">
+                    <Link href={`/coach/nutrition-builder/${clientId}`}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm font-bold rounded-xl transition-all shadow-md">
+                        <Apple className="w-4 h-4" />
+                        Plan Nutricional
+                    </Link>
+                    <Link href={`/coach/builder/${clientId}`}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:opacity-90 text-primary-foreground text-sm font-bold rounded-xl transition-all shadow-lg shadow-primary/20">
+                        <Plus className="w-4 h-4" />
+                        Nueva Rutina
+                    </Link>
                 </div>
-                <Link href={`/coach/builder/${clientId}`}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:opacity-90 text-primary-foreground text-sm font-bold rounded-xl transition-all shadow-lg shadow-primary/20">
-                    <Plus className="w-4 h-4" />
-                    Nueva Rutina
-                </Link>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mt-12">
-                {/* Column 1: Workout Plans */}
-                <div>
-                    <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
-                        <span>Rutinas asignadas ({plans.length})</span>
-                        <Link href={`/coach/builder/${clientId}`} className="text-xs text-primary hover:opacity-80 flex items-center gap-1">
-                            <Plus className="w-3 h-3" /> Nueva
-                        </Link>
-                    </h2>
-
-                    {plans.length === 0 ? (
-                        <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
-                            <Dumbbell className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
-                            <p className="text-muted-foreground text-sm mb-4">Sin rutinas asignadas</p>
-                            <Link href={`/coach/builder/${clientId}`}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:opacity-90 text-primary-foreground text-xs font-bold rounded-xl transition-all">
-                                <Plus className="w-3.5 h-3.5" />
-                                Crear Rutina
-                            </Link>
+            {/* Intake Profile Card */}
+            {(() => {
+                const fetchIntake = async () => {
+                    const { data } = await (supabase as any)
+                        .from('client_intake')
+                        .select('*')
+                        .eq('client_id', clientId)
+                        .maybeSingle()
+                    return data
+                }
+                return fetchIntake()
+            })().then(intake => intake && (
+                <div className="bg-card border border-border rounded-2xl p-6 mb-12 shadow-sm">
+                    <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">Perfil del Alumno</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Peso</p>
+                            <p className="font-semibold">{intake.weight_kg} kg</p>
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {plans.map(plan => (
-                                <div key={plan.id}
-                                    className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/20 transition-colors shadow-sm">
-                                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
-                                        <Dumbbell className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-foreground truncate">{plan.title}</p>
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                            <Calendar className="w-3 h-3" />
-                                            {new Date(plan.assigned_date).toLocaleDateString('es-AR', {
-                                                weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
-                                            })}
-                                        </p>
-                                    </div>
-                                    <DeletePlanButton planId={plan.id} clientId={clientId} planTitle={plan.title} />
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Estatura</p>
+                            <p className="font-semibold">{intake.height_cm} cm</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Objetivo</p>
+                            <p className="font-semibold">{intake.goals}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Nivel</p>
+                            <p className="font-semibold">{intake.experience_level}</p>
+                        </div>
+                    </div>
+                    {(intake.injuries || intake.medical_conditions) && (
+                        <div className="mt-6 pt-6 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {intake.injuries && (
+                                <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Lesiones</p>
+                                    <p className="text-sm">{intake.injuries}</p>
                                 </div>
-                            ))}
+                            )}
+                            {intake.medical_conditions && (
+                                <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Condiciones Médicas</p>
+                                    <p className="text-sm">{intake.medical_conditions}</p>
+                                </div>
+                            )}
                         </div>
                     )}
+                </div>
+            ))}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mt-12">
+                {/* Column 1: Routines & Nutrition */}
+                <div className="space-y-10">
+                    
+                    {/* Nutrition Section */}
+                    <div>
+                        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Plan Nutricional</span>
+                            <Link href={`/coach/nutrition-builder/${clientId}`} className="text-xs text-secondary hover:opacity-80 flex items-center gap-1">
+                                <Plus className="w-3 h-3" /> Nuevo
+                            </Link>
+                        </h2>
+
+                        {nutritionPlans.length === 0 ? (
+                            <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
+                                <Apple className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
+                                <p className="text-muted-foreground text-sm mb-4">Sin plan nutricional activo</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {nutritionPlans.map(plan => (
+                                    <div key={plan.id} className="bg-card border border-emerald-500/20 rounded-2xl p-5 shadow-sm">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                                                <Apple className="w-5 h-5 text-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold">{plan.name}</h3>
+                                                {plan.daily_calories && (
+                                                    <p className="text-xs font-semibold text-emerald-500">
+                                                        {plan.daily_calories} Kcal Diarias
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {(plan.protein_g || plan.carbs_g || plan.fats_g) && (
+                                            <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+                                                <div className="bg-muted rounded-lg p-2">
+                                                    <p className="text-[10px] text-muted-foreground uppercase">Protes</p>
+                                                    <p className="font-bold text-sm">{plan.protein_g || 0}g</p>
+                                                </div>
+                                                <div className="bg-muted rounded-lg p-2">
+                                                    <p className="text-[10px] text-muted-foreground uppercase">Carbs</p>
+                                                    <p className="font-bold text-sm">{plan.carbs_g || 0}g</p>
+                                                </div>
+                                                <div className="bg-muted rounded-lg p-2">
+                                                    <p className="text-[10px] text-muted-foreground uppercase">Grasas</p>
+                                                    <p className="font-bold text-sm">{plan.fats_g || 0}g</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {plan.instructions && (
+                                            <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                                                <strong>Notas:</strong> {plan.instructions}
+                                            </div>
+                                        )}
+
+                                        {todayLog && todayLog.plan_id === plan.id && (
+                                            <div className="mt-4 pt-4 border-t border-emerald-500/10">
+                                                <h4 className="text-xs font-bold text-muted-foreground uppercase mb-2">Registro de Hoy</h4>
+                                                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                                                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                                                        {todayLog.nutrition_meal_logs?.filter((l: any) => l.is_completed).length || 0} comidas completadas
+                                                    </span>
+                                                    <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-500 bg-emerald-500/20 px-2 py-1 rounded-md">
+                                                        Al día
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Workout Plans */}
+                    <div>
+                        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Rutinas ({plans.length})</span>
+                            <Link href={`/coach/builder/${clientId}`} className="text-xs text-primary hover:opacity-80 flex items-center gap-1">
+                                <Plus className="w-3 h-3" /> Nueva
+                            </Link>
+                        </h2>
+
+                        {plans.length === 0 ? (
+                            <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
+                                <Dumbbell className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
+                                <p className="text-muted-foreground text-sm mb-4">Sin rutinas asignadas</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {plans.map(plan => (
+                                    <div key={plan.id}
+                                        className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/20 transition-colors shadow-sm">
+                                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
+                                            <Dumbbell className="w-5 h-5 text-primary" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-foreground truncate">{plan.title}</p>
+                                        </div>
+                                        <DeletePlanButton planId={plan.id} clientId={clientId} planTitle={plan.title} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Column 2: Check-ins */}

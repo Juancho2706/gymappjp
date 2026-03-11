@@ -18,6 +18,9 @@ export type Database = {
                     primary_color: string
                     logo_url: string | null
                     subscription_status: 'active' | 'past_due' | 'canceled'
+                    whatsapp: string | null
+                    bio: string | null
+                    timezone: string
                     created_at: string
                     updated_at: string
                 }
@@ -29,6 +32,9 @@ export type Database = {
                     primary_color?: string
                     logo_url?: string | null
                     subscription_status?: 'active' | 'past_due' | 'canceled'
+                    whatsapp?: string | null
+                    bio?: string | null
+                    timezone?: string
                     created_at?: string
                     updated_at?: string
                 }
@@ -40,6 +46,9 @@ export type Database = {
                     primary_color?: string
                     logo_url?: string | null
                     subscription_status?: 'active' | 'past_due' | 'canceled'
+                    whatsapp?: string | null
+                    bio?: string | null
+                    timezone?: string
                     updated_at?: string
                 }
             }
@@ -51,6 +60,16 @@ export type Database = {
                     email: string
                     force_password_change: boolean
                     onboarding_completed: boolean
+                    birth_date: string | null
+                    height_cm: number | null
+                    biological_sex: 'M' | 'F' | 'OTHER' | null
+                    primary_goal: 'WEIGHT_LOSS' | 'MUSCLE_GAIN' | 'MAINTENANCE' | 'ENDURANCE' | 'STRENGTH' | null
+                    experience_level: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | null
+                    medical_conditions: string | null
+                    whatsapp: string | null
+                    training_days_per_week: number | null
+                    training_location: 'GYM' | 'HOME' | 'OTHER' | null
+                    timezone: string
                     created_at: string
                     updated_at: string
                 }
@@ -61,6 +80,16 @@ export type Database = {
                     email: string
                     force_password_change?: boolean
                     onboarding_completed?: boolean
+                    birth_date?: string | null
+                    height_cm?: number | null
+                    biological_sex?: 'M' | 'F' | 'OTHER' | null
+                    primary_goal?: 'WEIGHT_LOSS' | 'MUSCLE_GAIN' | 'MAINTENANCE' | 'ENDURANCE' | 'STRENGTH' | null
+                    experience_level?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | null
+                    medical_conditions?: string | null
+                    whatsapp?: string | null
+                    training_days_per_week?: number | null
+                    training_location?: 'GYM' | 'HOME' | 'OTHER' | null
+                    timezone?: string
                     created_at?: string
                     updated_at?: string
                 }
@@ -70,6 +99,16 @@ export type Database = {
                     email?: string
                     force_password_change?: boolean
                     onboarding_completed?: boolean
+                    birth_date?: string | null
+                    height_cm?: number | null
+                    biological_sex?: 'M' | 'F' | 'OTHER' | null
+                    primary_goal?: 'WEIGHT_LOSS' | 'MUSCLE_GAIN' | 'MAINTENANCE' | 'ENDURANCE' | 'STRENGTH' | null
+                    experience_level?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | null
+                    medical_conditions?: string | null
+                    whatsapp?: string | null
+                    training_days_per_week?: number | null
+                    training_location?: 'GYM' | 'HOME' | 'OTHER' | null
+                    timezone?: string
                     updated_at?: string
                 }
             }
@@ -232,6 +271,152 @@ export type Database = {
                     rpe?: number | null
                 }
             }
+            client_intake: {
+                Row: {
+                    id: string
+                    client_id: string
+                    weight_kg: number | null
+                    height_cm: number | null
+                    goals: string | null
+                    experience_level: string | null
+                    injuries: string | null
+                    medical_conditions: string | null
+                    availability: string | null
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    client_id: string
+                    weight_kg?: number | null
+                    height_cm?: number | null
+                    goals?: string | null
+                    experience_level?: string | null
+                    injuries?: string | null
+                    medical_conditions?: string | null
+                    availability?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    weight_kg?: number | null
+                    height_cm?: number | null
+                    goals?: string | null
+                    experience_level?: string | null
+                    injuries?: string | null
+                    medical_conditions?: string | null
+                    availability?: string | null
+                    updated_at?: string
+                }
+            }
+            nutrition_plans: {
+                Row: {
+                    id: string
+                    client_id: string
+                    coach_id: string
+                    name: string
+                    daily_calories: number | null
+                    protein_g: number | null
+                    carbs_g: number | null
+                    fats_g: number | null
+                    instructions: string | null
+                    is_active: boolean
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    client_id: string
+                    coach_id: string
+                    name: string
+                    daily_calories?: number | null
+                    protein_g?: number | null
+                    carbs_g?: number | null
+                    fats_g?: number | null
+                    instructions?: string | null
+                    is_active?: boolean
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    name?: string
+                    daily_calories?: number | null
+                    protein_g?: number | null
+                    carbs_g?: number | null
+                    fats_g?: number | null
+                    instructions?: string | null
+                    is_active?: boolean
+                    updated_at?: string
+                }
+            }
+            nutrition_meals: {
+                Row: {
+                    id: string
+                    plan_id: string
+                    name: string
+                    description: string
+                    order_index: number
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    plan_id: string
+                    name: string
+                    description: string
+                    order_index?: number
+                    created_at?: string
+                }
+                Update: {
+                    name?: string
+                    description?: string
+                    order_index?: number
+                }
+            }
+            daily_nutrition_logs: {
+                Row: {
+                    id: string
+                    client_id: string
+                    plan_id: string | null
+                    log_date: string
+                    adherence_percentage: number | null
+                    notes: string | null
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    client_id: string
+                    plan_id?: string | null
+                    log_date?: string
+                    adherence_percentage?: number | null
+                    notes?: string | null
+                    created_at?: string
+                }
+                Update: {
+                    plan_id?: string | null
+                    log_date?: string
+                    adherence_percentage?: number | null
+                    notes?: string | null
+                }
+            }
+            nutrition_meal_logs: {
+                Row: {
+                    id: string
+                    daily_log_id: string
+                    meal_id: string
+                    is_completed: boolean
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    daily_log_id: string
+                    meal_id: string
+                    is_completed?: boolean
+                    created_at?: string
+                }
+                Update: {
+                    is_completed?: boolean
+                }
+            }
         }
         Views: {
             [_ in never]: never
@@ -281,4 +466,21 @@ export type WorkoutPlanWithBlocks = WorkoutPlan & {
 
 export type ClientWithCoach = Client & {
     coaches: Coach
+}
+
+export type ClientIntake = Database['public']['Tables']['client_intake']['Row']
+export type ClientIntakeInsert = Database['public']['Tables']['client_intake']['Insert']
+export type ClientIntakeUpdate = Database['public']['Tables']['client_intake']['Update']
+
+export type NutritionPlan = Database['public']['Tables']['nutrition_plans']['Row']
+export type NutritionPlanInsert = Database['public']['Tables']['nutrition_plans']['Insert']
+
+export type NutritionMeal = Database['public']['Tables']['nutrition_meals']['Row']
+export type NutritionMealInsert = Database['public']['Tables']['nutrition_meals']['Insert']
+
+export type DailyNutritionLog = Database['public']['Tables']['daily_nutrition_logs']['Row']
+export type NutritionMealLog = Database['public']['Tables']['nutrition_meal_logs']['Row']
+
+export type NutritionPlanWithMeals = NutritionPlan & {
+    nutrition_meals: NutritionMeal[]
 }

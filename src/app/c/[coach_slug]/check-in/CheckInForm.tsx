@@ -17,12 +17,12 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
 
     if (state.success) {
         return (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
+            <div className="bg-card border border-border rounded-2xl p-8 text-center animate-in fade-in zoom-in duration-300">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
                     <CheckCircle2 className="w-8 h-8" />
                 </div>
-                <h3 className="text-xl font-bold text-zinc-100 mb-2">¡Check-in Enviado!</h3>
-                <p className="text-zinc-400 text-sm mb-6">Tu coach ha recibido tu actualización semanal.</p>
+                <h3 className="text-xl font-bold text-foreground mb-2">¡Check-in Enviado!</h3>
+                <p className="text-muted-foreground text-sm mb-6">Tu coach ha recibido tu actualización semanal.</p>
                 <button
                     onClick={() => router.push(`/c/${coachSlug}/dashboard`)}
                     className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all text-white w-full"
@@ -43,11 +43,11 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
     }
 
     return (
-        <form action={formAction} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
+        <form action={formAction} className="bg-card border border-border rounded-2xl p-6 space-y-6">
             <div className="space-y-4">
                 {/* Weight Input */}
                 <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1.5" htmlFor="weight">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="weight">
                         Peso actual (kg)
                     </label>
                     <input
@@ -59,14 +59,14 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
                         max="400"
                         required
                         placeholder="75.5"
-                        className="w-full h-11 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none transition-colors"
+                        className="w-full h-11 px-3.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none transition-colors"
                         style={{ borderBottomColor: `var(--theme-primary, ${coachPrimaryColor})` }}
                     />
                 </div>
 
                 {/* Energy Level */}
                 <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1.5" htmlFor="energy_level">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="energy_level">
                         Nivel de energía (1-10)
                     </label>
                     <div className="flex items-center gap-4">
@@ -84,14 +84,14 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
                                 if (val) val.innerText = e.target.value
                             }}
                         />
-                        <span id="energy-val" className="w-6 text-center text-lg font-bold text-zinc-100">7</span>
+                        <span id="energy-val" className="w-6 text-center text-lg font-bold text-foreground">7</span>
                     </div>
                 </div>
 
                 {/* Progress Photo */}
                 <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-                        Foto de progreso (Frontal) <span className="text-zinc-600 text-xs font-normal">— Opcional</span>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1.5">
+                        Foto de progreso (Frontal) <span className="text-muted-foreground text-xs font-normal">— Opcional</span>
                     </label>
 
                     <input
@@ -107,7 +107,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
                     {previewUrl ? (
                         <div className="relative w-full aspect-[3/4] max-h-80 rounded-xl overflow-hidden group">
                             <Image src={previewUrl} alt="Preview" fill className="object-cover" />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="absolute inset-0 bg-background/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -124,26 +124,26 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-full flex flex-col items-center justify-center py-6 border-2 border-dashed border-zinc-700 rounded-xl hover:border-zinc-500 hover:bg-zinc-800/50 transition-colors"
+                            className="w-full flex flex-col items-center justify-center py-6 border-2 border-dashed border-border rounded-xl hover:border-muted-foreground hover:bg-secondary/50 transition-colors"
                         >
-                            <Camera className="w-8 h-8 text-zinc-500 mb-2" />
-                            <span className="text-sm font-medium text-zinc-300">Seleccionar foto</span>
-                            <span className="text-xs text-zinc-500 mt-1">Formatos: JPG, PNG, WEBP</span>
+                            <Camera className="w-8 h-8 text-muted-foreground mb-2" />
+                            <span className="text-sm font-medium text-muted-foreground">Seleccionar foto</span>
+                            <span className="text-xs text-muted-foreground mt-1">Formatos: JPG, PNG, WEBP</span>
                         </button>
                     )}
                 </div>
 
                 {/* Notes */}
                 <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1.5" htmlFor="notes">
-                        Notas de la semana <span className="text-zinc-600 text-xs font-normal">— Opcional</span>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="notes">
+                        Notas de la semana <span className="text-muted-foreground text-xs font-normal">— Opcional</span>
                     </label>
                     <textarea
                         id="notes"
                         name="notes"
                         rows={3}
                         placeholder="Ej: Me costó dormir el martes, pero en el gym sentí un aumento de fuerza..."
-                        className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:outline-none transition-colors resize-none"
+                        className="w-full p-3.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none transition-colors resize-none"
                     />
                 </div>
             </div>

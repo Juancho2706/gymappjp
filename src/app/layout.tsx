@@ -3,6 +3,7 @@ import { Inter, Outfit } from 'next/font/google'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from 'next-themes'
+import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -40,8 +41,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          {children}
-          <Toaster richColors position="top-right" />
+          <LanguageProvider>
+            <link rel="manifest" href="/api/manifest/default" />
+            {children}
+            <Toaster richColors position="top-right" />
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

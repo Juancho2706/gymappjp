@@ -17,7 +17,7 @@ const plans = [
         color: 'text-sky-400',
         bg: 'bg-sky-500/10',
         border: 'border-sky-500/20',
-        buttonClass: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700',
+        buttonClass: 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent',
         features: [
             'Hasta 10 alumnos',
             'Rutinas ilimitadas',
@@ -59,7 +59,7 @@ const plans = [
         color: 'text-amber-400',
         bg: 'bg-amber-500/10',
         border: 'border-amber-500/20',
-        buttonClass: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700',
+        buttonClass: 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent',
         features: [
             'Alumnos ilimitados',
             'Todo en Pro',
@@ -77,13 +77,13 @@ export default function PricingPage() {
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
-            <header className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
+            <header className="border-b border-border px-6 py-4 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-violet-500/15 border border-violet-500/25 flex items-center justify-center">
                         <Dumbbell className="w-4 h-4 text-violet-400" />
                     </div>
                     <span
-                        className="font-bold text-zinc-100 text-sm"
+                        className="font-bold text-foreground text-sm"
                         style={{ fontFamily: 'var(--font-outfit)' }}
                     >
                         OmniCoach OS
@@ -91,7 +91,7 @@ export default function PricingPage() {
                 </Link>
                 <Link
                     href="/login"
-                    className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                     Ya tengo cuenta →
                 </Link>
@@ -110,7 +110,7 @@ export default function PricingPage() {
                     Precios simples,<br />
                     <span className="text-violet-400">valor sin límites</span>
                 </h1>
-                <p className="text-zinc-400 text-lg max-w-xl mx-auto">
+                <p className="text-muted-foreground text-lg max-w-xl mx-auto">
                     Tu marca. Tus alumnos. Tu app. OmniCoach OS le da a tu negocio
                     la tecnología de una startup sin el costo de una.
                 </p>
@@ -124,9 +124,9 @@ export default function PricingPage() {
                         return (
                             <div
                                 key={plan.name}
-                                className={`relative bg-zinc-900 border rounded-2xl p-6 flex flex-col ${plan.popular
+                                className={`relative bg-card border rounded-2xl p-6 flex flex-col ${plan.popular
                                     ? 'border-violet-500/40 shadow-[0_0_40px_rgba(139,92,246,0.12)]'
-                                    : 'border-zinc-800'
+                                    : 'border-border'
                                     }`}
                             >
                                 {plan.popular && (
@@ -139,23 +139,23 @@ export default function PricingPage() {
                                     <Icon className={`w-5 h-5 ${plan.color}`} />
                                 </div>
 
-                                <h2 className="text-lg font-bold text-zinc-100 mb-1">{plan.name}</h2>
-                                <p className="text-zinc-500 text-sm mb-4">{plan.description}</p>
+                                <h2 className="text-lg font-bold text-foreground mb-1">{plan.name}</h2>
+                                <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
 
                                 <div className="flex items-baseline gap-1 mb-6">
-                                    <span className="text-zinc-500 text-sm">USD</span>
+                                    <span className="text-muted-foreground text-sm">USD</span>
                                     <span
                                         className="text-4xl font-bold text-zinc-50"
                                         style={{ fontFamily: 'var(--font-outfit)' }}
                                     >
                                         ${plan.price}
                                     </span>
-                                    <span className="text-zinc-500 text-sm">{plan.period}</span>
+                                    <span className="text-muted-foreground text-sm">{plan.period}</span>
                                 </div>
 
                                 <ul className="space-y-3 mb-8 flex-1">
                                     {plan.features.map((feat) => (
-                                        <li key={feat} className="flex items-start gap-2.5 text-sm text-zinc-300">
+                                        <li key={feat} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                                             <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                                             {feat}
                                         </li>
@@ -174,7 +174,7 @@ export default function PricingPage() {
                 </div>
 
                 {/* FAQ teaser */}
-                <p className="text-center text-zinc-500 text-sm mt-12">
+                <p className="text-center text-muted-foreground text-sm mt-12">
                     ¿Tienes preguntas?{' '}
                     <Link href="/login" className="text-violet-400 hover:text-violet-300 transition-colors">
                         Contáctanos

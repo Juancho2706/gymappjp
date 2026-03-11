@@ -55,10 +55,30 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
     }
 
     return (
-        <aside className="w-64 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-colors">
-            {/* Logo area */}
-            <div className="px-6 py-6 border-b border-sidebar-border">
+        <>
+            {/* Mobile Top Header */}
+            <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center">
+                        <Dumbbell className="w-4 h-4 text-primary" />
+                    </div>
+                    <span className="font-bold text-base truncate max-w-[150px]" style={{ fontFamily: 'var(--font-outfit)' }}>
+                        {coachBrand || coachName}
+                    </span>
+                </div>
                 <div className="flex items-center gap-3">
+                    <ThemeToggle />
+                    <button onClick={handleSignOut} className="text-muted-foreground hover:text-destructive">
+                        <LogOut className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
+            <aside className="fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:w-64 md:h-screen bg-sidebar border-t md:border-t-0 md:border-r border-sidebar-border flex flex-col transition-colors">
+                
+                {/* Logo area (Desktop only) */}
+                <div className="hidden md:flex px-6 py-6 border-b border-sidebar-border items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center">
                         <Dumbbell className="w-5 h-5 text-primary" />
                     </div>
@@ -66,64 +86,59 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                         <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">
                             OmniCoach
                         </p>
-                        <p
-                            className="text-sm font-bold text-foreground truncate"
-                            style={{ fontFamily: 'var(--font-outfit)' }}
-                        >
+                        <p className="text-sm font-bold text-foreground truncate" style={{ fontFamily: 'var(--font-outfit)' }}>
                             {coachBrand || coachName}
                         </p>
                     </div>
                 </div>
-            </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 px-3 py-4 space-y-1">
-                {navItems.map((item) => {
-                    const isActive =
-                        pathname === item.href || pathname.startsWith(item.href + '/')
-                    const Icon = item.icon
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={cn(
-                                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group',
-                                isActive
-                                    ? 'bg-primary/10 text-primary border border-primary/15'
-                                    : 'text-sidebar-foreground hover:text-foreground hover:bg-muted'
-                            )}
-                        >
-                            <Icon
+                {/* Navigation Links */}
+                <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 py-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto">
+                    {navItems.map((item) => {
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                        const Icon = item.icon
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
                                 className={cn(
-                                    'w-[18px] h-[18px] flex-shrink-0',
-                                    isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                                    'flex md:flex-row flex-col items-center md:justify-start justify-center gap-1 md:gap-3 px-2 py-2 md:px-3 md:py-2.5 rounded-xl text-[10px] md:text-sm font-medium transition-all duration-200 group flex-1 md:flex-none',
+                                    isActive
+                                        ? 'text-primary md:bg-primary/10 md:border md:border-primary/15'
+                                        : 'text-sidebar-foreground hover:text-foreground md:hover:bg-muted'
                                 )}
-                            />
-                            {item.label}
-                            {isActive && (
-                                <ChevronRight className="w-3 h-3 ml-auto text-primary/60" />
-                            )}
-                        </Link>
-                    )
-                })}
-            </nav>
+                            >
+                                <Icon
+                                    className={cn(
+                                        'w-5 h-5 md:w-[18px] md:h-[18px] flex-shrink-0',
+                                        isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                                    )}
+                                />
+                                <span className="truncate">{item.label}</span>
+                                {isActive && (
+                                    <ChevronRight className="hidden md:block w-3 h-3 ml-auto text-primary/60" />
+                                )}
+                            </Link>
+                        )
+                    })}
+                </nav>
 
-            {/* Bottom area */}
-            <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
-                {/* Theme toggle */}
-                <div className="flex items-center justify-between px-3 py-2">
-                    <p className="text-xs text-muted-foreground truncate">{coachName}</p>
-                    <ThemeToggle />
+                {/* Bottom area (Desktop only) */}
+                <div className="hidden md:block px-3 py-4 border-t border-sidebar-border space-y-2">
+                    <div className="flex items-center justify-between px-3 py-2">
+                        <p className="text-xs text-muted-foreground truncate">{coachName}</p>
+                        <ThemeToggle />
+                    </div>
+
+                    <button
+                        onClick={handleSignOut}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200 group"
+                    >
+                        <LogOut className="w-4 h-4 flex-shrink-0 group-hover:text-destructive" />
+                        Cerrar sesión
+                    </button>
                 </div>
-
-                <button
-                    onClick={handleSignOut}
-                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200 group"
-                >
-                    <LogOut className="w-4 h-4 flex-shrink-0 group-hover:text-destructive" />
-                    Cerrar sesión
-                </button>
-            </div>
-        </aside>
+            </aside>
+        </>
     )
 }

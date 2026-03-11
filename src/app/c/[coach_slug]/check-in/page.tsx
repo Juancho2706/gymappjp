@@ -38,17 +38,17 @@ export default async function ClientCheckInPage({ params }: Props) {
     return (
         <div className="min-h-screen pb-20">
             {/* Header */}
-            <header className="border-b border-zinc-800 px-4 py-4">
+            <header className="border-b border-border px-4 py-4">
                 <Link href={`/c/${coach_slug}/dashboard`}
                     className="inline-flex items-center gap-1.5 text-sm font-medium mb-4 transition-colors hover:opacity-80"
                     style={{ color: coachPrimaryColor }}>
                     <ArrowLeft className="w-4 h-4" />
                     Volver
                 </Link>
-                <h1 className="text-2xl font-bold text-zinc-50" style={{ fontFamily: 'var(--font-outfit)' }}>
+                <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
                     Check-in Semanal
                 </h1>
-                <p className="text-sm text-zinc-400 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                     Registra tu progreso para que tu coach pueda ajustar tu plan.
                 </p>
             </header>

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Calendar, Dumbbell, TrendingUp, ChevronRight } from 'lucide-react'
+import { Calendar, Dumbbell, TrendingUp, ChevronRight, Apple } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import type { Client, WorkoutPlan, Coach } from '@/lib/database.types'
@@ -56,16 +56,26 @@ export default async function ClientDashboardPage({ params }: Props) {
     const todayPlan = todayPlans?.find((p) => p.assigned_date === today)
     const coachBranding = Array.isArray(client.coaches) ? client.coaches[0] : client.coaches
 
+    // Fetch active nutrition plan
+    const { data: rawNutrition } = await (supabase as any)
+        .from('nutrition_plans')
+        .select('*')
+        .eq('client_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle()
+        
+    const activeNutrition = rawNutrition
+
     return (
-        <div className="min-h-screen" style={{ backgroundColor: '#0A0A0A' }}>
+        <div className="min-h-screen bg-background">
             {/* Header */}
-            <header className="border-b border-zinc-800 px-4 py-4 flex items-center justify-between">
+            <header className="border-b border-border px-4 py-4 flex items-center justify-between">
                 <div>
-                    <p className="text-xs text-zinc-500 font-medium uppercase tracking-widest">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">
                         {coachBranding?.brand_name}
                     </p>
                     <h1
-                        className="text-xl font-bold text-zinc-50"
+                        className="text-xl font-bold text-foreground"
                         style={{ fontFamily: 'var(--font-outfit)' }}
                     >
                         Hola, {client.full_name.split(' ')[0]} 👋
@@ -84,48 +94,80 @@ export default async function ClientDashboardPage({ params }: Props) {
             </header>
 
             <main className="px-4 py-6 space-y-6 max-w-lg mx-auto">
-                {/* Today's workout CTA */}
-                {todayPlan ? (
-                    <Link
-                        href={`/c/${coach_slug}/workout/${todayPlan.id}`}
-                        className="block bg-zinc-900 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-all duration-200 group"
-                    >
-                        <div className="flex items-start justify-between mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Today's workout CTA */}
+                    {todayPlan ? (
+                        <Link
+                            href={`/c/${coach_slug}/workout/${todayPlan.id}`}
+                            className="block bg-card border border-border rounded-2xl p-5 hover:border-border hover:border-accent transition-all duration-200 group"
+                        >
+                            <div className="flex items-start justify-between mb-3">
+                                <div
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center border"
+                                    style={{
+                                        backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
+                                        borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+                                    }}
+                                >
+                                    <Dumbbell className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
+                            </div>
+                            <p className="text-xs text-muted-foreground font-medium mb-1">Entrenamiento de hoy</p>
+                            <p className="text-lg font-semibold text-foreground">{todayPlan.title}</p>
                             <div
-                                className="w-10 h-10 rounded-xl flex items-center justify-center border"
+                                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
-                                    borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+                                    color: 'var(--theme-primary)',
                                 }}
                             >
-                                <Dumbbell className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
+                                Empezar ahora →
                             </div>
-                            <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                        </Link>
+                    ) : (
+                        <div className="bg-card border border-border rounded-2xl p-6 text-center h-full flex flex-col justify-center">
+                            <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                            <p className="text-muted-foreground text-sm">No tienes rutina asignada para hoy</p>
+                            <p className="text-muted-foreground text-xs mt-1">Tu coach te asignará una pronto</p>
                         </div>
-                        <p className="text-xs text-zinc-500 font-medium mb-1">Entrenamiento de hoy</p>
-                        <p className="text-lg font-semibold text-zinc-100">{todayPlan.title}</p>
-                        <div
-                            className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                            style={{
-                                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
-                                color: 'var(--theme-primary)',
-                            }}
+                    )}
+
+                    {/* Active Nutrition CTA */}
+                    {activeNutrition ? (
+                        <Link
+                            href={`/c/${coach_slug}/nutrition`}
+                            className="block bg-card border border-border rounded-2xl p-5 hover:border-border hover:border-accent transition-all duration-200 group"
                         >
-                            Empezar ahora →
+                            <div className="flex items-start justify-between mb-3">
+                                <div
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center border border-emerald-500/30 bg-emerald-500/10"
+                                >
+                                    <Apple className="w-5 h-5 text-emerald-500" />
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
+                            </div>
+                            <p className="text-xs text-muted-foreground font-medium mb-1">Plan Nutricional</p>
+                            <p className="text-lg font-semibold text-foreground line-clamp-1">{activeNutrition.name}</p>
+                            <div
+                                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors bg-emerald-500/10 text-emerald-500"
+                            >
+                                Ver Detalles →
+                            </div>
+                        </Link>
+                    ) : (
+                        <div className="bg-card border border-border rounded-2xl p-6 text-center h-full flex flex-col justify-center">
+                            <Apple className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                            <p className="text-muted-foreground text-sm">Sin plan nutricional</p>
+                            <p className="text-muted-foreground text-xs mt-1">Solicítalo a tu coach</p>
                         </div>
-                    </Link>
-                ) : (
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">
-                        <Calendar className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
-                        <p className="text-zinc-400 text-sm">No tienes rutina asignada para hoy</p>
-                        <p className="text-zinc-600 text-xs mt-1">Tu coach te asignará una pronto</p>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 {/* Recent plans */}
                 {todayPlans && todayPlans.length > 0 && (
                     <div className="mt-6">
-                        <h2 className="text-sm font-semibold text-zinc-400 mb-3 uppercase tracking-wider">
+                        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
                             Historial de rutinas
                         </h2>
                         <div className="space-y-2">
@@ -133,7 +175,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                                 <Link
                                     key={plan.id}
                                     href={`/c/${coach_slug}/workout/${plan.id}`}
-                                    className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 hover:border-zinc-700 transition-all group"
+                                    className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 hover:border-border hover:border-accent transition-all group"
                                 >
                                     <div
                                         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -142,14 +184,14 @@ export default async function ClientDashboardPage({ params }: Props) {
                                         <TrendingUp className="w-4 h-4" style={{ color: 'var(--theme-primary)' }} />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-medium text-zinc-200 truncate">{plan.title}</p>
-                                        <p className="text-xs text-zinc-500">
+                                        <p className="text-sm font-medium text-foreground truncate">{plan.title}</p>
+                                        <p className="text-xs text-muted-foreground">
                                             {new Date(plan.assigned_date).toLocaleDateString('es-AR', {
                                                 weekday: 'long', day: 'numeric', month: 'short'
                                             })}
                                         </p>
                                     </div>
-                                    <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
                                 </Link>
                             ))}
                         </div>

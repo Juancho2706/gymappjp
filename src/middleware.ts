@@ -117,12 +117,12 @@ export async function middleware(request: NextRequest) {
             // Verify the user is a client belonging to this coach
             const { data: clientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, force_password_change')
+                .select('id, coach_id, force_password_change, onboarding_completed')
                 .eq('id', user.id)
                 .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            const client = clientData as Pick<Client, 'id' | 'coach_id' | 'force_password_change'> | null
+            const client = clientData as Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed'> | null
 
             if (!client) {
                 // Logged in user is NOT a client of this coach
@@ -135,6 +135,13 @@ export async function middleware(request: NextRequest) {
             if (client.force_password_change && !pathname.includes('/change-password')) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/change-password`
+                return NextResponse.redirect(redirectUrl)
+            }
+
+            // Force intake/onboarding flow right after password change
+            if (!client.force_password_change && !client.onboarding_completed && !pathname.includes('/onboarding')) {
+                const redirectUrl = request.nextUrl.clone()
+                redirectUrl.pathname = `/c/${coachSlug}/onboarding`
                 return NextResponse.redirect(redirectUrl)
             }
         }

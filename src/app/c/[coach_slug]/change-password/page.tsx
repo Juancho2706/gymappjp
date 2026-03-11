@@ -41,8 +41,7 @@ export default function ChangePasswordPage({ params }: Props) {
 
     return (
         <div
-            className="min-h-screen flex items-center justify-center p-4"
-            style={{ backgroundColor: '#0A0A0A' }}
+            className="min-h-screen flex items-center justify-center p-4 bg-background"
         >
             <div className="w-full max-w-md animate-slide-up">
                 <div className="text-center mb-8">
@@ -50,26 +49,26 @@ export default function ChangePasswordPage({ params }: Props) {
                         <ShieldCheck className="w-8 h-8 text-theme" />
                     </div>
                     <h1
-                        className="text-2xl font-bold text-zinc-50"
+                        className="text-2xl font-bold text-foreground"
                         style={{ fontFamily: 'var(--font-outfit)' }}
                     >
                         Crea tu contraseña
                     </h1>
-                    <p className="mt-2 text-zinc-400 text-sm max-w-xs mx-auto">
+                    <p className="mt-2 text-muted-foreground text-sm max-w-xs mx-auto">
                         Es tu primer acceso. Por seguridad, debes crear una contraseña propia.
                     </p>
                 </div>
 
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
+                <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">
                     <form action={formAction} className="space-y-5">
                         <input type="hidden" name="coach_slug" value={coach_slug} />
 
                         <div className="space-y-2">
-                            <Label htmlFor="password" className="text-zinc-300 text-sm font-medium">
+                            <Label htmlFor="password" className="text-muted-foreground text-sm font-medium">
                                 Nueva contraseña
                             </Label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                                 <Input
                                     id="password"
                                     name="password"
@@ -77,24 +76,24 @@ export default function ChangePasswordPage({ params }: Props) {
                                     placeholder="Mínimo 8 caracteres"
                                     required
                                     minLength={8}
-                                    className="pl-10 h-12 bg-zinc-800 border-zinc-700 text-zinc-100 rounded-xl placeholder:text-zinc-600"
+                                    className="pl-10 h-12 bg-secondary border-border hover:border-accent text-foreground rounded-xl placeholder:text-muted-foreground"
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="confirm_password" className="text-zinc-300 text-sm font-medium">
+                            <Label htmlFor="confirm_password" className="text-muted-foreground text-sm font-medium">
                                 Confirmar contraseña
                             </Label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                                 <Input
                                     id="confirm_password"
                                     name="confirm_password"
                                     type="password"
                                     placeholder="Repite tu contraseña"
                                     required
-                                    className="pl-10 h-12 bg-zinc-800 border-zinc-700 text-zinc-100 rounded-xl placeholder:text-zinc-600"
+                                    className="pl-10 h-12 bg-secondary border-border hover:border-accent text-foreground rounded-xl placeholder:text-muted-foreground"
                                 />
                             </div>
                         </div>

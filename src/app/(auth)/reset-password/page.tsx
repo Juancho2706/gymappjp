@@ -51,19 +51,19 @@ export default function ResetPasswordPage() {
                 >
                     Nueva contraseña
                 </h1>
-                <p className="mt-2 text-zinc-400 text-sm">
+                <p className="mt-2 text-muted-foreground text-sm">
                     Elige una contraseña segura para tu cuenta
                 </p>
             </div>
 
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">
                 <form action={formAction} className="space-y-5">
                     <div className="space-y-2">
-                        <Label htmlFor="password" className="text-zinc-300 text-sm font-medium">
+                        <Label htmlFor="password" className="text-muted-foreground text-sm font-medium">
                             Nueva contraseña
                         </Label>
                         <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                             <Input
                                 id="password"
                                 name="password"
@@ -71,24 +71,24 @@ export default function ResetPasswordPage() {
                                 placeholder="Mínimo 8 caracteres"
                                 required
                                 minLength={8}
-                                className="pl-10 h-12 bg-zinc-800 border-zinc-700 text-zinc-100 rounded-xl placeholder:text-zinc-600 focus:border-violet-500"
+                                className="pl-10 h-12 bg-secondary border-border hover:border-accent text-foreground rounded-xl placeholder:text-muted-foreground focus:border-violet-500"
                             />
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="confirm_password" className="text-zinc-300 text-sm font-medium">
+                        <Label htmlFor="confirm_password" className="text-muted-foreground text-sm font-medium">
                             Confirmar contraseña
                         </Label>
                         <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                             <Input
                                 id="confirm_password"
                                 name="confirm_password"
                                 type="password"
                                 placeholder="Repite tu contraseña"
                                 required
-                                className="pl-10 h-12 bg-zinc-800 border-zinc-700 text-zinc-100 rounded-xl placeholder:text-zinc-600 focus:border-violet-500"
+                                className="pl-10 h-12 bg-secondary border-border hover:border-accent text-foreground rounded-xl placeholder:text-muted-foreground focus:border-violet-500"
                             />
                         </div>
                     </div>
@@ -106,7 +106,7 @@ export default function ResetPasswordPage() {
             <div className="mt-6 text-center">
                 <Link
                     href="/login"
-                    className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                     Volver al inicio de sesión
                 </Link>

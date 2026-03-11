@@ -46,16 +46,7 @@ export async function registerAction(
         return { error: `El slug "${slug}" ya está en uso. Prueba con otro nombre de marca.` }
     }
 
-    // Check if email already exists
-    const { data: existingEmail } = await adminDb
-        .from('coaches')
-        .select('id')
-        .ilike('email', email)
-        .maybeSingle()
 
-    if (existingEmail) {
-        return { error: 'Ya existe una cuenta con este email.' }
-    }
 
     // Create auth user
     const { data: authData, error: authError } = await adminDb.auth.admin.createUser({
@@ -68,23 +59,16 @@ export async function registerAction(
         return { error: authError?.message || 'Error al crear la cuenta' }
     }
 
-    // Create coaches row with 30-day trial
-    const trialEndsAt = new Date()
-    trialEndsAt.setDate(trialEndsAt.getDate() + 30)
-
+    // Create coaches row
     const { error: coachError } = await adminDb
         .from('coaches')
         .insert({
             id: authData.user.id,
             full_name: fullName,
-            email,
             brand_name: brandName,
             slug,
             primary_color: '#10B981',
-            subscription_status: 'trial',
-            subscription_tier: 'starter',
-            trial_ends_at: trialEndsAt.toISOString(),
-            trial_used_email: email.toLowerCase(),
+            subscription_status: 'active',
         })
 
     if (coachError) {

@@ -27,12 +27,12 @@ export function LogSetForm({ blockId, setNumber, existingLog }: Props) {
     return (
         <form ref={formRef} action={formAction}
             className={`grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 items-center px-2 py-1.5 rounded-xl transition-all
-            ${isLogged ? 'bg-emerald-500/10' : 'hover:bg-zinc-800/50'}`}>
+            ${isLogged ? 'bg-emerald-500/10' : 'hover:bg-secondary/50'}`}>
 
             <input type="hidden" name="block_id" value={blockId} />
             <input type="hidden" name="set_number" value={setNumber} />
 
-            <div className={`w-5 text-center text-sm font-medium ${isLogged ? 'text-emerald-500' : 'text-zinc-500'}`}>
+            <div className={`w-5 text-center text-sm font-medium ${isLogged ? 'text-emerald-500' : 'text-muted-foreground'}`}>
                 {setNumber}
             </div>
 
@@ -44,8 +44,8 @@ export function LogSetForm({ blockId, setNumber, existingLog }: Props) {
                 defaultValue={existingLog?.weight_kg ?? ''}
                 onBlur={handleBlur}
                 placeholder="-"
-                className={`h-9 px-2 text-center text-sm font-semibold rounded-lg bg-zinc-950 border transition-colors focus:outline-none focus:ring-1
-                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-zinc-100 border-zinc-800 focus:border-violet-500 focus:ring-violet-500'}`}
+                className={`h-9 px-2 text-center text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
+                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
             />
 
             <input
@@ -55,8 +55,8 @@ export function LogSetForm({ blockId, setNumber, existingLog }: Props) {
                 defaultValue={existingLog?.reps_done ?? ''}
                 onBlur={handleBlur}
                 placeholder="-"
-                className={`h-9 px-2 text-center text-sm font-semibold rounded-lg bg-zinc-950 border transition-colors focus:outline-none focus:ring-1
-                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-zinc-100 border-zinc-800 focus:border-violet-500 focus:ring-violet-500'}`}
+                className={`h-9 px-2 text-center text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
+                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
             />
 
             <input
@@ -67,8 +67,8 @@ export function LogSetForm({ blockId, setNumber, existingLog }: Props) {
                 defaultValue={existingLog?.rpe ?? ''}
                 onBlur={handleBlur}
                 placeholder="-"
-                className={`h-9 px-2 text-center text-sm font-semibold rounded-lg bg-zinc-950 border transition-colors focus:outline-none focus:ring-1
-                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-zinc-100 border-zinc-800 focus:border-violet-500 focus:ring-violet-500'}`}
+                className={`h-9 px-2 text-center text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
+                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
             />
 
             <div className="w-8 flex justify-center">
@@ -76,7 +76,7 @@ export function LogSetForm({ blockId, setNumber, existingLog }: Props) {
                     className={`w-7 h-7 rounded-md flex items-center justify-center transition-all shadow-sm
                     ${isLogged
                             ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-zinc-800 text-zinc-400 hover:bg-violet-600 hover:text-white'}`}>
+                            : 'bg-secondary text-muted-foreground hover:bg-violet-600 hover:text-white'}`}>
                     <Check className="w-4 h-4" />
                 </button>
             </div>

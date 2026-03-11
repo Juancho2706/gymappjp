@@ -78,19 +78,19 @@ export default async function WorkoutExecutionPage({ params }: Props) {
     const blocks = plan.workout_blocks.sort((a, b) => a.order_index - b.order_index)
 
     return (
-        <div className="min-h-screen pb-20" style={{ backgroundColor: '#0A0A0A' }}>
+        <div className="min-h-screen pb-20 bg-background">
             {/* Header Sticky */}
-            <div className="sticky top-0 z-10 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900 px-4 py-4">
+            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border px-4 py-4">
                 <Link href={`/c/${coach_slug}/dashboard`}
                     className="inline-flex items-center gap-1.5 text-sm font-medium mb-3 transition-colors"
                     style={{ color: 'var(--theme-primary)' }}>
                     <ArrowLeft className="w-4 h-4" />
                     Volver
                 </Link>
-                <h1 className="text-xl font-bold text-zinc-50 leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
+                <h1 className="text-xl font-bold text-foreground leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
                     {plan.title}
                 </h1>
-                <p className="text-xs text-zinc-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                     {blocks.length} ejercicios · {blocks.reduce((acc, b) => acc + b.sets, 0)} series totales
                 </p>
             </div>
@@ -105,53 +105,53 @@ export default async function WorkoutExecutionPage({ params }: Props) {
 
                     return (
                         <div key={block.id}
-                            className={`bg-zinc-900 border rounded-2xl overflow-hidden transition-all duration-300
-                            ${isCompleted ? 'border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-zinc-800'}`}>
+                            className={`bg-card border rounded-2xl overflow-hidden transition-all duration-300
+                            ${isCompleted ? 'border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-border'}`}>
 
                             {/* Block Header */}
-                            <div className="p-4 border-b border-zinc-800/50">
+                            <div className="p-4 border-b border-border/50">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold
-                                            ${isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                                            ${isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-secondary text-muted-foreground'}`}>
                                             {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : index + 1}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-base font-semibold text-zinc-100 truncate">{exercise.name}</p>
-                                            <p className="text-xs text-zinc-500">{exercise.muscle_group}</p>
+                                            <p className="text-base font-semibold text-foreground truncate">{exercise.name}</p>
+                                            <p className="text-xs text-muted-foreground">{exercise.muscle_group}</p>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Target Details */}
                                 <div className="flex flex-wrap gap-2 mt-4">
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-950 border border-zinc-800 text-xs font-medium text-zinc-300">
-                                        <Dumbbell className="w-3.5 h-3.5 text-zinc-500" />
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-background border border-border text-xs font-medium text-muted-foreground">
+                                        <Dumbbell className="w-3.5 h-3.5 text-muted-foreground" />
                                         {block.sets} × {block.reps}
                                     </span>
                                     {block.rir && (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-950 border border-zinc-800 text-xs font-medium text-zinc-300">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-background border border-border text-xs font-medium text-muted-foreground">
                                             {block.rir} RIR
                                         </span>
                                     )}
                                     {block.rest_time && (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-950 border border-zinc-800 text-xs font-medium text-zinc-300">
-                                            <Timer className="w-3.5 h-3.5 text-zinc-500" />
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-background border border-border text-xs font-medium text-muted-foreground">
+                                            <Timer className="w-3.5 h-3.5 text-muted-foreground" />
                                             {block.rest_time}
                                         </span>
                                     )}
                                 </div>
 
                                 {block.notes && (
-                                    <div className="mt-3 p-2.5 rounded-lg bg-zinc-950/50 border border-zinc-800/50 text-xs text-zinc-400">
-                                        <strong className="text-zinc-300">Nota:</strong> {block.notes}
+                                    <div className="mt-3 p-2.5 rounded-lg bg-background/50 border border-border/50 text-xs text-muted-foreground">
+                                        <strong className="text-muted-foreground">Nota:</strong> {block.notes}
                                     </div>
                                 )}
                             </div>
 
                             {/* Sets Logger */}
-                            <div className="p-4 space-y-3 bg-zinc-950/30">
-                                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800/50">
+                            <div className="p-4 space-y-3 bg-background/30">
+                                <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50">
                                     <div className="w-5 text-center">#</div>
                                     <div className="text-center">kg</div>
                                     <div className="text-center">reps</div>
