@@ -36,13 +36,13 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
 
     return (
         <form ref={formRef} action={formAction}
-            className={`grid grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-2 py-1.5 rounded-xl transition-all
+            className={`grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-1.5 md:px-2 py-1.5 rounded-xl transition-all
             ${isLogged ? 'bg-emerald-500/10' : 'hover:bg-secondary/50'}`}>
 
             <input type="hidden" name="block_id" value={blockId} />
             <input type="hidden" name="set_number" value={setNumber} />
 
-            <div className={`w-5 text-center text-sm font-medium ${isLogged ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+            <div className={`w-4 md:w-5 text-center text-xs md:text-sm font-medium ${isLogged ? 'text-emerald-500' : 'text-muted-foreground'}`}>
                 {setNumber}
             </div>
 
@@ -55,7 +55,7 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
                 defaultValue={existingLog?.weight_kg ?? ''}
                 onBlur={handleBlur}
                 placeholder="-"
-                className={`h-11 md:h-9 px-2 text-center text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
+                className={`h-9 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
             />
 
@@ -67,7 +67,7 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
                 defaultValue={existingLog?.reps_done ?? ''}
                 onBlur={handleBlur}
                 placeholder="-"
-                className={`h-11 md:h-9 px-2 text-center text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
+                className={`h-9 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
             />
 
@@ -86,7 +86,7 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
                     <Check className="w-5 h-5 md:w-4 md:h-4" />
                 </button>
             </div>
-            {state.error && <p className="col-span-5 text-xs text-red-400 px-2 mt-1">{state.error}</p>}
+            {state.error && <p className="col-span-full text-xs text-red-400 px-2 mt-1">{state.error}</p>}
         </form>
     )
 }

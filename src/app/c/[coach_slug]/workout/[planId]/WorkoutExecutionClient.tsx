@@ -234,8 +234,8 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
 
                                 {/* Logger Section */}
                                 <div className="bg-card border border-border rounded-3xl p-2 md:p-4 shadow-sm">
-                                    <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-2 px-3 pb-3 pt-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
-                                        <div className="w-5 text-center">Set</div>
+                                    <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-3 pb-3 pt-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+                                        <div className="w-4 md:w-5 text-center">Set</div>
                                         <div className="text-center">Kg</div>
                                         <div className="text-center">Reps</div>
                                         <div className="w-10 md:w-8"></div>
@@ -299,6 +299,14 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                 {/* Technique Modal */}
                 <Dialog open={showTechnique} onOpenChange={setShowTechnique}>
                     <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw]">
+                        {/* Close button overlay - visible on mobile */}
+                        <button
+                            onClick={() => setShowTechnique(false)}
+                            className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center text-foreground hover:bg-background transition-colors border border-border/50"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+
                         {currentExercise.gif_url && (
                             <div className="relative w-full aspect-square bg-muted flex items-center justify-center">
                                 <Image 
@@ -318,7 +326,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                                 </a>
                             </div>
                         )}
-                        <div className="p-6">
+                        <div className="p-6 pt-14 md:pt-6">
                             <DialogHeader className="mb-4">
                                 <DialogTitle className="text-xl font-bold">{currentExercise.name}</DialogTitle>
                             </DialogHeader>
