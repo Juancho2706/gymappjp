@@ -157,6 +157,7 @@ export type Database = {
                     client_id: string
                     coach_id: string
                     title: string
+                    group_name: string | null
                     assigned_date: string
                     created_at: string
                     updated_at: string
@@ -166,6 +167,7 @@ export type Database = {
                     client_id: string
                     coach_id: string
                     title: string
+                    group_name?: string | null
                     assigned_date?: string
                     created_at?: string
                     updated_at?: string
@@ -174,6 +176,7 @@ export type Database = {
                     client_id?: string
                     coach_id?: string
                     title?: string
+                    group_name?: string | null
                     assigned_date?: string
                     updated_at?: string
                 }

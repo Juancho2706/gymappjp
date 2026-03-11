@@ -128,11 +128,11 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         open={!!selectedExercise}
         onOpenChange={(open) => !open && setSelectedExercise(null)}
       >
-        <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw]">
+        <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col">
           {selectedExercise && (
             <>
               {selectedExercise.gif_url && (
-                <div className="relative w-full aspect-square bg-muted flex items-center justify-center border-b border-border/50">
+                <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50">
                   <Image
                     src={selectedExercise.gif_url}
                     alt={selectedExercise.name}
@@ -143,7 +143,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 </div>
               )}
               {!selectedExercise.gif_url && selectedExercise.video_url && (
-                <div className="p-8 text-center bg-muted border-b border-border/50">
+                <div className="p-8 text-center bg-muted border-b border-border/50 shrink-0">
                   <a
                     href={selectedExercise.video_url}
                     target="_blank"
@@ -155,9 +155,9 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   </a>
                 </div>
               )}
-              <div className="p-6">
+              <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
                 <DialogHeader className="mb-4">
-                  <DialogTitle className="text-xl font-bold">
+                  <DialogTitle className="text-xl font-bold pr-6">
                     {selectedExercise.name}
                   </DialogTitle>
                   <p
@@ -170,7 +170,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
                 {selectedExercise.instructions &&
                 selectedExercise.instructions.length > 0 ? (
-                  <div className="space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="space-y-4 pr-2">
                     <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                       <Info className="w-4 h-4" /> Instrucciones paso a paso
                     </h4>
@@ -206,7 +206,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
                 <button
                   onClick={() => setSelectedExercise(null)}
-                  className="w-full mt-8 py-3.5 rounded-2xl font-bold text-white shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  className="w-full mt-8 py-3.5 rounded-2xl font-bold text-white shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 shrink-0"
                   style={{ backgroundColor: primaryColor }}
                 >
                   <X className="w-5 h-5" />

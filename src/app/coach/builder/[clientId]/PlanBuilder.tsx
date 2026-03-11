@@ -154,13 +154,16 @@ export function PlanBuilder({
     client,
     exercises,
     initialPlan,
+    existingGroups = [],
 }: {
     client: Pick<Client, 'id' | 'full_name' | 'email'>
     exercises: Exercise[]
     initialPlan?: any
+    existingGroups?: string[]
 }) {
     const router = useRouter()
     const [title, setTitle] = useState(initialPlan?.title || '')
+    const [groupName, setGroupName] = useState(initialPlan?.group_name || '')
     const [blocks, setBlocks] = useState<BuilderBlock[]>(
         initialPlan?.workout_blocks?.sort((a: any, b: any) => a.order_index - b.order_index).map((b: any) => ({
             uid: b.id, // Using existing ID to track updates vs inserts isn't strictly necessary if we wipe and re-insert, but let's just use it as uid
@@ -233,6 +236,7 @@ export function PlanBuilder({
 
     function handleSave() {
         if (!title.trim()) { setError('Ingresa un título para la rutina.'); return }
+        if (!groupName.trim()) { setError('Ingresa o selecciona un grupo (ej. Mes 1).'); return }
         if (blocks.length === 0) { setError('Agrega al menos un ejercicio.'); return }
         setError(undefined)
 
@@ -240,6 +244,7 @@ export function PlanBuilder({
             const result = await createPlanAction({
                 planId: initialPlan?.id,
                 title: title.trim(),
+                group_name: groupName.trim(),
                 clientId: client.id,
                 blocks: blocks.map(b => ({
                     exercise_id: b.exercise_id,
@@ -268,16 +273,30 @@ export function PlanBuilder({
                     className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                     <ArrowLeft className="w-4 h-4" />
                 </Link>
-                <div className="flex-1">
-                    <p className="text-xs text-muted-foreground">Rutina para</p>
-                    <p className="text-sm font-bold text-foreground">{client.full_name}</p>
+                <div className="flex-1 min-w-[150px]">
+                    <p className="text-xs text-muted-foreground">Rutina para {client.full_name}</p>
+                    <input
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        placeholder={initialPlan ? "Editar nombre..." : "Nombre de la rutina…"}
+                        className="w-full h-8 px-2 mt-1 text-sm font-bold bg-transparent border-b border-transparent focus:border-primary focus:outline-none"
+                    />
                 </div>
-                <input
-                    value={title}
-                    onChange={e => setTitle(e.target.value)}
-                    placeholder={initialPlan ? "Editar nombre..." : "Nombre de la rutina…"}
-                    className="flex-1 min-w-[150px] max-w-xs h-9 px-3 text-sm rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                />
+                <div className="flex-1 min-w-[150px]">
+                    <p className="text-xs text-muted-foreground mb-1">Grupo / Fase</p>
+                    <input
+                        list="existing-groups"
+                        value={groupName}
+                        onChange={e => setGroupName(e.target.value)}
+                        placeholder="Ej. Mes 1, Hipertrofia..."
+                        className="w-full max-w-[200px] h-9 px-3 text-sm rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                    />
+                    <datalist id="existing-groups">
+                        {existingGroups.map(g => (
+                            <option key={g} value={g} />
+                        ))}
+                    </datalist>
+                </div>
                 {error && <p className="text-xs text-destructive max-w-40 text-right">{error}</p>}
                 <button onClick={handleSave} disabled={isPending}
                     className={cn(

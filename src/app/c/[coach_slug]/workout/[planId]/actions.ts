@@ -22,12 +22,18 @@ export async function logSetAction(
     _prev: LogState,
     formData: FormData
 ): Promise<LogState> {
+    const getOptional = (key: string) => {
+        const val = formData.get(key)
+        if (val === null || val === '') return undefined
+        return val
+    }
+
     const raw = {
         block_id: formData.get('block_id') as string,
         set_number: formData.get('set_number') as string,
-        weight_kg: formData.get('weight_kg') as string,
-        reps_done: formData.get('reps_done') as string,
-        rpe: formData.get('rpe') as string,
+        weight_kg: getOptional('weight_kg'),
+        reps_done: getOptional('reps_done'),
+        rpe: getOptional('rpe'),
     }
 
     const parsed = logSchema.safeParse(raw)
@@ -40,17 +46,50 @@ export async function logSetAction(
     if (!user) return { error: 'No autenticado.' }
 
     const adminDb = await createRawAdminClient()
-    const { error } = await adminDb.from('workout_logs').insert({
-        block_id: parsed.data.block_id,
-        client_id: user.id,
-        set_number: parsed.data.set_number,
-        weight_kg: parsed.data.weight_kg ?? null,
-        reps_done: parsed.data.reps_done ?? null,
-        rpe: parsed.data.rpe ?? null,
-    })
 
-    if (error) return { error: error.message }
+    // Comprobar si ya existe un registro para actualizarlo
+    const { data: existingRows } = await adminDb
+        .from('workout_logs')
+        .select('id')
+        .eq('block_id', parsed.data.block_id)
+        .eq('client_id', user.id)
+        .eq('set_number', parsed.data.set_number)
+        .order('logged_at', { ascending: false })
 
-    revalidatePath(`/c`)
+    let dbError
+
+    if (existingRows && existingRows.length > 0) {
+        // Actualizamos el más reciente
+        const targetId = existingRows[0].id
+        const { error: updateError } = await adminDb
+            .from('workout_logs')
+            .update({
+                weight_kg: parsed.data.weight_kg ?? null,
+                reps_done: parsed.data.reps_done ?? null,
+                rpe: parsed.data.rpe ?? null,
+            })
+            .eq('id', targetId)
+        dbError = updateError
+
+        // Si hay duplicados (por inserciones previas fallidas), los eliminamos (Self-healing)
+        if (existingRows.length > 1) {
+            const duplicateIds = existingRows.slice(1).map(r => r.id)
+            await adminDb.from('workout_logs').delete().in('id', duplicateIds)
+        }
+    } else {
+        const { error: insertError } = await adminDb.from('workout_logs').insert({
+            block_id: parsed.data.block_id,
+            client_id: user.id,
+            set_number: parsed.data.set_number,
+            weight_kg: parsed.data.weight_kg ?? null,
+            reps_done: parsed.data.reps_done ?? null,
+            rpe: parsed.data.rpe ?? null,
+        })
+        dbError = insertError
+    }
+
+    if (dbError) return { error: dbError.message }
+
+    revalidatePath('/c', 'layout')
     return { success: true }
 }

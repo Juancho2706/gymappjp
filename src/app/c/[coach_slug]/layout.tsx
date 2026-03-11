@@ -64,7 +64,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
             <ClientNav coachSlug={coach_slug} coachBrand={brandName} />
 
-            <main className="flex-1 overflow-auto pb-[72px] md:pb-0 relative z-0">
+            <main className="flex-1 overflow-auto pb-[72px] md:pb-0 relative z-0 bg-muted/20 dark:bg-background">
                 {children}
             </main>
 

@@ -44,7 +44,7 @@ export default async function CoachLayout({
                 coachName={coach.full_name}
                 coachBrand={coach.brand_name}
             />
-            <main className="flex-1 overflow-auto pb-[72px] md:pb-0">
+            <main className="flex-1 overflow-auto pb-[72px] md:pb-0 bg-muted/20 dark:bg-background">
                 <div className="max-w-7xl mx-auto px-4 py-6 md:px-6 md:py-8">
                     {children}
                 </div>

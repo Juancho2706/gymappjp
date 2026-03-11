@@ -82,10 +82,10 @@ function ExercisePreviewModal({
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-            <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] overflow-y-auto">
+            <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
                 {/* GIF demonstration area */}
                 {hasGif && (
-                    <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-4 border-b border-border min-h-[16rem]">
+                    <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-4 border-b border-border h-48 md:h-64 shrink-0">
                         <Image
                             src={exercise.gif_url!}
                             alt={`Demostración: ${exercise.name}`}
@@ -98,7 +98,7 @@ function ExercisePreviewModal({
 
                 {/* Video fallback if no GIF but has video */}
                 {!hasGif && hasVideo && (
-                    <div className="w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-6 border-b border-border">
+                    <div className="w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-6 border-b border-border shrink-0">
                         <a
                             href={exercise.video_url!}
                             target="_blank"
@@ -112,9 +112,9 @@ function ExercisePreviewModal({
                     </div>
                 )}
 
-                <div className="p-6 space-y-5">
+                <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-extrabold text-foreground">
+                        <DialogTitle className="text-xl font-extrabold text-foreground pr-6">
                             {exercise.name}
                         </DialogTitle>
                     </DialogHeader>

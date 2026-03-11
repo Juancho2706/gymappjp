@@ -12,9 +12,10 @@ interface Props {
     setNumber: number
     restTimeStr: string | null
     existingLog?: { weight_kg: number | null; reps_done: number | null; rpe: number | null }
+    autoTimerEnabled?: boolean
 }
 
-export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Props) {
+export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog, autoTimerEnabled = true }: Props) {
     const [state, formAction] = useActionState(logSetAction, initialState)
     const isLogged = !!existingLog || state.success
     const { startRest } = useWorkoutTimer()
@@ -24,18 +25,13 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
 
     // Trigger rest timer when successfully logged
     useEffect(() => {
-        if (state.success) {
+        if (state.success && autoTimerEnabled) {
             startRest(restTimeStr)
         }
-    }, [state.success, restTimeStr, startRest])
-
-    // Only auto-submit when changing focus, not on every keystroke
-    function handleBlur() {
-        if (formRef.current) formRef.current.requestSubmit()
-    }
+    }, [state.success, restTimeStr, startRest, autoTimerEnabled])
 
     return (
-        <form ref={formRef} action={formAction}
+        <form key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'} ref={formRef} action={formAction}
             className={`grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-1.5 md:px-2 py-1.5 rounded-xl transition-all
             ${isLogged ? 'bg-emerald-500/10' : 'hover:bg-secondary/50'}`}>
 
@@ -53,7 +49,6 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
                 min="0"
                 inputMode="decimal"
                 defaultValue={existingLog?.weight_kg ?? ''}
-                onBlur={handleBlur}
                 placeholder="-"
                 className={`h-9 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
@@ -65,7 +60,6 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog }: Pro
                 min="0"
                 inputMode="numeric"
                 defaultValue={existingLog?.reps_done ?? ''}
-                onBlur={handleBlur}
                 placeholder="-"
                 className={`h-9 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}

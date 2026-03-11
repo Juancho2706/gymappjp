@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ChevronLeft, ChevronRight, Zap, Info, Dumbbell, Timer, Play, X } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Zap, Info, Dumbbell, Timer, Play, X, Settings } from 'lucide-react'
 import { LogSetForm } from './LogSetForm'
-import { WorkoutTimerProvider } from './WorkoutTimerProvider'
+import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import Image from 'next/image'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 interface ExerciseType {
     id: string
@@ -51,12 +53,39 @@ interface Props {
     coachSlug: string
 }
 
+function ManualTimerButton({ defaultTime, onSettingsClick }: { defaultTime: string | null, onSettingsClick: () => void }) {
+    const { startRest } = useWorkoutTimer()
+    return (
+        <div className="flex items-center gap-1.5">
+            <button
+                onClick={() => startRest(defaultTime || '90')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-bold transition-all hover:bg-secondary/80 active:scale-95"
+            >
+                <Timer className="w-3.5 h-3.5" />
+                Descanso ({defaultTime || '90s'})
+            </button>
+            <button 
+                onClick={onSettingsClick}
+                className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
+                title="Configuración del Cronómetro"
+            >
+                <Settings className="w-4 h-4" />
+            </button>
+        </div>
+    )
+}
+
 export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     const router = useRouter()
     const blocks = plan.workout_blocks.sort((a, b) => a.order_index - b.order_index)
     const [currentIndex, setCurrentIndex] = useState(0)
     const [direction, setDirection] = useState(0) // 1 for next, -1 for prev
     const [showTechnique, setShowTechnique] = useState(false)
+    const [showIntro, setShowIntro] = useState(true)
+    const [mounted, setMounted] = useState(false)
+    const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
+    const [showTimerSettings, setShowTimerSettings] = useState(false)
+    const [showCompleted, setShowCompleted] = useState(false)
 
     const currentBlock = blocks[currentIndex]
     const currentExercise = Array.isArray(currentBlock.exercises) ? currentBlock.exercises[0] : currentBlock.exercises
@@ -67,7 +96,10 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
             setCurrentIndex(prev => prev + 1)
         } else {
             // Finish workout
-            router.push(`/c/${coachSlug}/dashboard`)
+            setShowCompleted(true)
+            setTimeout(() => {
+                router.push(`/c/${coachSlug}/dashboard`)
+            }, 3000)
         }
     }
 
@@ -79,6 +111,23 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     }
 
     const progressPercentage = ((currentIndex + 1) / blocks.length) * 100
+
+    // auto‑dismiss intro after a short delay
+    useEffect(() => {
+        setMounted(true)
+        const savedAutoTimer = localStorage.getItem('omni_autotimer')
+        if (savedAutoTimer !== null) {
+            setAutoTimerEnabled(savedAutoTimer === 'true')
+        }
+        const t = setTimeout(() => setShowIntro(false), 1200)
+        return () => clearTimeout(t)
+    }, [])
+
+    const toggleAutoTimer = () => {
+        const newValue = !autoTimerEnabled
+        setAutoTimerEnabled(newValue)
+        localStorage.setItem('omni_autotimer', String(newValue))
+    }
 
     const variants = {
         enter: (dir: number) => ({
@@ -102,24 +151,61 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
 
     return (
         <WorkoutTimerProvider>
-            <div className="fixed inset-0 flex flex-col bg-background overflow-hidden overscroll-none animate-in fade-in-0 duration-1000">
+            <div className="fixed inset-0 flex flex-col bg-background overflow-hidden overscroll-none">
 
-                {/* Top Section (25% approx) - Fixed Header & Progress */}
-                <div className="flex-none bg-card border-b border-border/50 shadow-sm z-20 pb-4 pt-safe animate-in fade-in-0 slide-in-from-top-5 duration-700 delay-500">
-                    <div className="px-4 py-4 md:px-8 max-w-3xl mx-auto w-full">
+                {/* intro overlay */}
+                {mounted ? createPortal(
+                    <AnimatePresence>
+                        {showIntro && (
+                            <motion.div
+                                initial={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.8, ease: "easeInOut" }}
+                                className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
+                            >
+                                <motion.h1
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.6, delay: 0.2 }}
+                                    className="text-white text-3xl font-bold text-center px-6"
+                                    style={{ fontFamily: 'var(--font-outfit)' }}
+                                >
+                                    {plan.title}
+                                </motion.h1>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>,
+                    document.body
+                ) : null}
+
+                {/* Top Section - Fixed Header & Progress */}
+                <motion.div 
+                    initial={{ y: -50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.6, delay: 1.2, ease: "easeOut" }}
+                    className="flex-none bg-card border-b border-border/50 shadow-sm z-20 pb-4 pt-safe"
+                >
+                    <div className="px-4 py-3 md:px-8 max-w-3xl mx-auto w-full">
+                        {/* Custom Header */}
                         <div className="flex items-center justify-between mb-4">
                             <Link href={`/c/${coachSlug}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors">
-                                <ArrowLeft className="w-5 h-5" />
+                                <ArrowLeft className="w-6 h-6" />
                             </Link>
-                            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                                {currentIndex + 1} de {blocks.length}
-                            </span>
-                            <div className="w-9"></div> {/* Spacer for centering */}
+                            <h1 className="text-lg md:text-xl font-bold text-foreground truncate px-2" style={{ fontFamily: 'var(--font-outfit)' }}>
+                                {plan.title}
+                            </h1>
+                            <div className="flex items-center gap-2">
+                                <ThemeToggle />
+                            </div>
                         </div>
 
-                        <h1 className="text-xl md:text-2xl font-extrabold text-foreground truncate mb-4" style={{ fontFamily: 'var(--font-outfit)' }}>
-                            {plan.title}
-                        </h1>
+                        {/* Progress and Timer */}
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                Ejercicio {currentIndex + 1} de {blocks.length}
+                            </span>
+                            <ManualTimerButton defaultTime={currentBlock.rest_time} />
+                        </div>
 
                         {/* Progress Bar */}
                         <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
@@ -132,10 +218,15 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             />
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* Main Content Area (75% approx) - Carousel */}
-                <div className="flex-1 relative overflow-hidden bg-muted/10 w-full">
+                <motion.div 
+                    initial={{ y: 50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.6, delay: 1.3, ease: "easeOut" }}
+                    className="flex-1 relative overflow-hidden bg-muted/10 w-full"
+                >
                     <AnimatePresence initial={false} custom={direction} mode="wait">
                         <motion.div
                             key={currentIndex}
@@ -144,7 +235,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             initial="enter"
                             animate="center"
                             exit="exit"
-                            className="absolute inset-0 overflow-y-auto pb-32 pt-6 px-4 md:px-8 animate-in fade-in-0 slide-in-from-bottom-10 duration-700 delay-700"
+                            className="absolute inset-0 overflow-y-auto pb-32 pt-6 px-4 md:px-8"
                         >
                             <div className="max-w-xl mx-auto w-full space-y-6">
                                 
@@ -225,6 +316,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                                                     setNumber={setNumber}
                                                     restTimeStr={currentBlock.rest_time}
                                                     existingLog={log}
+                                                    autoTimerEnabled={autoTimerEnabled}
                                                 />
                                             )
                                         })}
@@ -234,10 +326,15 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             </div>
                         </motion.div>
                     </AnimatePresence>
-                </div>
+                </motion.div>
 
                 {/* Bottom Navigation Fixed Bar */}
-                <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/20 p-4 z-40 pb-safe animate-in fade-in-0 slide-in-from-bottom-5 duration-700 delay-500">
+                <motion.div 
+                    initial={{ y: 50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.6, delay: 1.4, ease: "easeOut" }}
+                    className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/20 p-4 z-40 pb-safe"
+                >
                     <div className="max-w-xl mx-auto flex items-center gap-3">
                         <button
                             onClick={handlePrev}
@@ -266,21 +363,88 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             </button>
                         )}
                     </div>
-                </div>
+                </motion.div>
+
+                {/* Timer Settings Modal */}
+                <Dialog open={showTimerSettings} onOpenChange={setShowTimerSettings}>
+                    <DialogContent className="max-w-xs rounded-3xl p-6 bg-card border-border">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold">Cronómetro Automático</DialogTitle>
+                        </DialogHeader>
+                        <p className="text-sm text-muted-foreground mt-2 mb-6">
+                            Si está activado, el cronómetro de descanso comenzará a correr automáticamente cada vez que guardes una serie.
+                        </p>
+                        
+                        <button
+                            onClick={() => {
+                                toggleAutoTimer()
+                            }}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-border bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                            <span className="font-semibold">{autoTimerEnabled ? 'Activado' : 'Desactivado'}</span>
+                            <div className={`w-12 h-7 rounded-full transition-colors flex items-center px-1 ${autoTimerEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`} style={autoTimerEnabled ? { backgroundColor: 'var(--theme-primary)' } : {}}>
+                                <motion.div 
+                                    className="w-5 h-5 bg-white rounded-full shadow-sm"
+                                    animate={{ x: autoTimerEnabled ? 20 : 0 }}
+                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setShowTimerSettings(false)}
+                            className="w-full mt-4 py-3 rounded-xl bg-secondary text-secondary-foreground font-bold"
+                        >
+                            Cerrar
+                        </button>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Workout Completed Overlay */}
+                {mounted ? createPortal(
+                    <AnimatePresence>
+                        {showCompleted && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center"
+                            >
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.2 }}
+                                    className="w-24 h-24 rounded-full flex items-center justify-center mb-6"
+                                    style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' }}
+                                >
+                                    <Zap className="w-12 h-12" style={{ color: 'var(--theme-primary)' }} />
+                                </motion.div>
+                                <motion.h1
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.5, delay: 0.4 }}
+                                    className="text-3xl font-extrabold text-center px-6 mb-2"
+                                    style={{ fontFamily: 'var(--font-outfit)' }}
+                                >
+                                    ¡Entrenamiento Terminado!
+                                </motion.h1>
+                                <motion.p
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ duration: 0.5, delay: 0.6 }}
+                                    className="text-muted-foreground font-medium"
+                                >
+                                    {plan.title}
+                                </motion.p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>,
+                    document.body
+                ) : null}
 
                 {/* Technique Modal */}
                 <Dialog open={showTechnique} onOpenChange={setShowTechnique}>
-                    <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw]">
-                        {/* Close button overlay - visible on mobile */}
-                        <button
-                            onClick={() => setShowTechnique(false)}
-                            className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center text-foreground hover:bg-background transition-colors border border-border/50"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-
+                    <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col">
                         {currentExercise.gif_url && (
-                            <div className="relative w-full aspect-square bg-muted flex items-center justify-center">
+                            <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center">
                                 <Image 
                                     src={currentExercise.gif_url} 
                                     alt={currentExercise.name}
@@ -291,19 +455,19 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             </div>
                         )}
                         {!currentExercise.gif_url && currentExercise.video_url && (
-                            <div className="p-8 text-center bg-muted">
+                            <div className="p-8 text-center bg-muted shrink-0">
                                 <a href={currentExercise.video_url} target="_blank" rel="noopener noreferrer" 
                                    className="inline-flex items-center gap-2 text-primary font-bold">
                                     <Play className="w-5 h-5" /> Ver Video Externo
                                 </a>
                             </div>
                         )}
-                        <div className="p-6 pt-14 md:pt-6">
+                        <div className="p-6 pt-6 flex-1 overflow-y-auto custom-scrollbar">
                             <DialogHeader className="mb-4">
-                                <DialogTitle className="text-xl font-bold">{currentExercise.name}</DialogTitle>
+                                <DialogTitle className="text-xl font-bold pr-8">{currentExercise.name}</DialogTitle>
                             </DialogHeader>
                             {currentExercise.instructions && currentExercise.instructions.length > 0 ? (
-                                <ol className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                <ol className="space-y-3">
                                     {currentExercise.instructions.map((step, i) => (
                                         <li key={i} className="flex gap-3 text-sm text-muted-foreground">
                                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-xs mt-0.5">
@@ -318,7 +482,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             )}
                             <button 
                                 onClick={() => setShowTechnique(false)}
-                                className="w-full mt-6 py-3 rounded-xl bg-secondary text-secondary-foreground font-bold"
+                                className="w-full mt-6 py-3 rounded-xl bg-secondary text-secondary-foreground font-bold shrink-0"
                             >
                                 Entendido
                             </button>

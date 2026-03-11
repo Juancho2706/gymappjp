@@ -19,6 +19,7 @@ const blockSchema = z.object({
 
 const planSchema = z.object({
     title: z.string().min(2, 'El título es requerido').max(100),
+    group_name: z.string().min(1, 'Debes seleccionar o crear un grupo').max(100),
     client_id: z.string().uuid(),
     blocks: z.array(blockSchema).min(1, 'Agrega al menos un ejercicio'),
 })
@@ -31,6 +32,7 @@ export type PlanState = {
 export async function createPlanAction(payload: {
     planId?: string
     title: string
+    group_name: string
     clientId: string
     blocks: Array<{
         exercise_id: string
@@ -45,6 +47,7 @@ export async function createPlanAction(payload: {
 }): Promise<PlanState> {
     const parsed = planSchema.safeParse({
         title: payload.title,
+        group_name: payload.group_name,
         client_id: payload.clientId,
         blocks: payload.blocks,
     })
@@ -72,10 +75,13 @@ export async function createPlanAction(payload: {
     let planId = payload.planId
 
     if (planId) {
-        // Update existing plan title
+        // Update existing plan title and group
         const { error: updateError } = await adminDb
             .from('workout_plans')
-            .update({ title: parsed.data.title })
+            .update({ 
+                title: parsed.data.title,
+                group_name: parsed.data.group_name
+            })
             .eq('id', planId)
             .eq('coach_id', user.id)
             
@@ -91,6 +97,7 @@ export async function createPlanAction(payload: {
                 client_id: parsed.data.client_id,
                 coach_id: user.id,
                 title: parsed.data.title,
+                group_name: parsed.data.group_name,
                 assigned_date: new Date().toISOString().split('T')[0],
             })
             .select('id')

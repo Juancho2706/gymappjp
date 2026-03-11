@@ -46,7 +46,7 @@ export default async function BuilderPage(
         const { data: rawPlan } = await supabase
             .from('workout_plans')
             .select(`
-                id, title,
+                id, title, group_name,
                 workout_blocks (
                     id, exercise_id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes,
                     exercises ( name, muscle_group )
@@ -61,5 +61,13 @@ export default async function BuilderPage(
         }
     }
 
-    return <PlanBuilder client={client} exercises={exercises} initialPlan={initialPlanData} />
+    const { data: groupsData } = await supabase
+        .from('workout_plans')
+        .select('group_name')
+        .eq('coach_id', user.id)
+        .not('group_name', 'is', null)
+
+    const existingGroups = Array.from(new Set(groupsData?.map(g => g.group_name).filter(Boolean) as string[]))
+
+    return <PlanBuilder client={client} exercises={exercises} initialPlan={initialPlanData} existingGroups={existingGroups} />
 }
