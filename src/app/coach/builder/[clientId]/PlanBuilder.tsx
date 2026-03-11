@@ -164,6 +164,7 @@ export function PlanBuilder({
     const [selectedMuscle, setSelectedMuscle] = useState<string>('Todos')
     const [error, setError] = useState<string>()
     const [isPending, startTransition] = useTransition()
+    const [isCatalogExpanded, setIsCatalogExpanded] = useState(true)
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -275,15 +276,28 @@ export function PlanBuilder({
             {/* Main split layout */}
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
                 {/* LEFT: Exercise catalog */}
-                <div className="h-[40vh] md:h-auto md:w-72 flex-shrink-0 border-b md:border-b-0 md:border-r border-border flex flex-col bg-muted/30">
-                    <div className="p-3 space-y-2 border-b border-border">
-                        <div className="relative">
+                <div 
+                    className={cn(
+                        "md:w-72 flex-shrink-0 border-b md:border-b-0 md:border-r border-border flex flex-col bg-muted/30 transition-all duration-300",
+                        isCatalogExpanded ? "h-[45vh] md:h-auto" : "h-[72px] md:h-auto overflow-hidden"
+                    )}
+                >
+                    <div className="p-3 space-y-2 border-b border-border relative">
+                        {/* Mobile Toggle Button */}
+                        <button 
+                            className="md:hidden absolute right-3 top-3 p-1.5 rounded-lg bg-secondary border border-border text-muted-foreground z-10"
+                            onClick={() => setIsCatalogExpanded(!isCatalogExpanded)}
+                        >
+                            {isCatalogExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        
+                        <div className="relative pr-10 md:pr-0">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                             <input value={search} onChange={e => setSearch(e.target.value)}
                                 placeholder="Buscar ejercicio…"
                                 className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none" />
                         </div>
-                        <div className="flex gap-1 flex-wrap">
+                        <div className={cn("flex gap-1 flex-wrap", !isCatalogExpanded && "md:flex hidden")}>
                             {muscleGroups.slice(0, 6).map(m => (
                                 <button key={m} onClick={() => setSelectedMuscle(m)}
                                     className={cn('px-2 py-0.5 text-xs rounded-full border transition-colors',
@@ -297,7 +311,7 @@ export function PlanBuilder({
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                    <div className={cn("flex-1 overflow-y-auto p-2 space-y-0.5", !isCatalogExpanded && "md:block hidden")}>
                         {filteredExercises.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-8">Sin resultados</p>
                         ) : (
@@ -319,7 +333,7 @@ export function PlanBuilder({
                 </div>
 
                 {/* RIGHT: Plan canvas */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background pb-32 md:pb-6">
                     {blocks.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center">
                             <div className="w-16 h-16 rounded-2xl bg-muted border border-dashed border-border flex items-center justify-center mb-4">
