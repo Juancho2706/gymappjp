@@ -65,7 +65,7 @@ export default async function BuilderPage(
         .from('workout_plans')
         .select('group_name')
         .eq('coach_id', user.id)
-        .not('group_name', 'is', null)
+        .not('group_name', 'is', null) as { data: { group_name: string | null }[] | null }
 
     const existingGroups = Array.from(new Set(groupsData?.map(g => g.group_name).filter(Boolean) as string[]))
 
