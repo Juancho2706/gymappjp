@@ -128,11 +128,11 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         open={!!selectedExercise}
         onOpenChange={(open) => !open && setSelectedExercise(null)}
       >
-        <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col">
+        <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col focus:outline-none">
           {selectedExercise && (
             <>
               {(selectedExercise.gif_url || selectedExercise.video_url) && (
-                <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50">
+                <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50 z-0">
                   {(() => {
                     const url = selectedExercise.gif_url || selectedExercise.video_url;
                     const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
@@ -146,9 +146,9 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                       return ytId ? (
                         <iframe
                           className="w-full h-full"
-                          src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}`}
+                          src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`}
                           title={selectedExercise.name}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                           allowFullScreen
                         />
                       ) : null;
