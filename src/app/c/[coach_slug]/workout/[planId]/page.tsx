@@ -62,7 +62,7 @@ export default async function WorkoutExecutionPage({ params }: Props) {
 
     const plan = rawPlan as unknown as PlanType
 
-    // Fetch logs for this plan today to show completion status
+    // Fetch logs for this plan to show completion status
     const blockIds = plan.workout_blocks.map(b => b.id)
     let logs: Array<{
         block_id: string
@@ -81,5 +81,47 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         logs = (rawLogs || []) as typeof logs
     }
 
-    return <WorkoutExecutionClient plan={plan} logs={logs} coachSlug={coach_slug} />
+    // Fetch previous lifting history for these exercises
+    const exerciseIds = plan.workout_blocks
+        .map(b => Array.isArray(b.exercises) ? b.exercises[0]?.id : b.exercises?.id)
+        .filter(Boolean) as string[]
+
+    const previousHistory: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]> = {}
+
+    if (exerciseIds.length > 0) {
+        const { data: historyData } = await supabase
+            .from('workout_logs')
+            .select(`
+                weight_kg, reps_done, logged_at, set_number,
+                workout_blocks!inner(exercise_id)
+            `)
+            .eq('client_id', user.id)
+            .in('workout_blocks.exercise_id', exerciseIds)
+            .not('block_id', 'in', `(${blockIds.join(',')})`) // exclude current plan's logs
+            .order('logged_at', { ascending: false })
+            .limit(200)
+
+        if (historyData) {
+            historyData.forEach((log: any) => {
+                const exId = log.workout_blocks?.exercise_id
+                if (!exId) return
+                if (!previousHistory[exId]) {
+                    previousHistory[exId] = []
+                }
+                // Only keep the most recent session's logs for each exercise
+                const logDate = log.logged_at.split('T')[0]
+                const existingDates = previousHistory[exId].map(h => h.date)
+                
+                if (existingDates.length === 0 || existingDates.includes(logDate)) {
+                    previousHistory[exId].push({
+                        weight_kg: log.weight_kg,
+                        reps_done: log.reps_done,
+                        date: logDate
+                    })
+                }
+            })
+        }
+    }
+
+    return <WorkoutExecutionClient plan={plan} logs={logs} previousHistory={previousHistory} coachSlug={coach_slug} />
 }

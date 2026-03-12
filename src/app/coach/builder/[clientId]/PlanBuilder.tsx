@@ -21,10 +21,11 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
     GripVertical, Plus, X, Save, ArrowLeft, Search,
-    Loader2, ChevronDown, ChevronUp, Dumbbell,
+    Loader2, ChevronDown, ChevronUp, Dumbbell, Copy
 } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { createPlanAction } from './actions'
 import type { Client, Exercise } from '@/lib/database.types'
@@ -155,11 +156,13 @@ export function PlanBuilder({
     exercises,
     initialPlan,
     existingGroups = [],
+    templates = [],
 }: {
     client: Pick<Client, 'id' | 'full_name' | 'email'>
     exercises: Exercise[]
     initialPlan?: any
     existingGroups?: string[]
+    templates?: any[]
 }) {
     const router = useRouter()
     const [title, setTitle] = useState(initialPlan?.title || '')
@@ -265,6 +268,27 @@ export function PlanBuilder({
         })
     }
 
+    function handleLoadTemplate(template: any) {
+        if (!template) return
+        setTitle(template.title || '')
+        setGroupName(template.group_name || '')
+        setBlocks(
+            template.workout_blocks?.sort((a: any, b: any) => a.order_index - b.order_index).map((b: any) => ({
+                uid: `${b.exercise_id}-${Date.now()}-${Math.random()}`,
+                exercise_id: b.exercise_id,
+                exercise_name: b.exercises?.name || 'Unknown',
+                muscle_group: b.exercises?.muscle_group || 'Unknown',
+                sets: b.sets,
+                reps: b.reps,
+                target_weight_kg: b.target_weight_kg?.toString() || '',
+                tempo: b.tempo || '',
+                rir: b.rir || '',
+                rest_time: b.rest_time || '',
+                notes: b.notes || '',
+            })) || []
+        )
+    }
+
     return (
         <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8">
             {/* Top bar */}
@@ -297,6 +321,36 @@ export function PlanBuilder({
                         ))}
                     </datalist>
                 </div>
+                
+                {templates.length > 0 && !initialPlan && (
+                    <Dialog>
+                        <DialogTrigger className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                            <Copy className="w-4 h-4" />
+                            <span className="hidden sm:inline">Plantillas</span>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>Cargar desde una plantilla</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-2 mt-4">
+                                {templates.map(t => (
+                                    <button 
+                                        key={t.id} 
+                                        onClick={() => handleLoadTemplate(t)}
+                                        className="w-full flex items-center justify-between p-3 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-left"
+                                    >
+                                        <div>
+                                            <p className="font-semibold text-sm">{t.title}</p>
+                                            <p className="text-xs text-muted-foreground">{t.workout_blocks?.length || 0} ejercicios</p>
+                                        </div>
+                                        <Plus className="w-4 h-4 text-primary" />
+                                    </button>
+                                ))}
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                )}
+
                 {error && <p className="text-xs text-destructive max-w-40 text-right">{error}</p>}
                 <button onClick={handleSave} disabled={isPending}
                     className={cn(

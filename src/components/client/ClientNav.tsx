@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { PwaNavButton } from './PwaNavButton'
 
 interface Props {
     coachSlug: string
@@ -59,8 +60,8 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
         router.refresh()
     }
 
-    // Don't show nav on login, register, onboarding, etc
-    if (pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/forgot') || pathname.includes('/onboarding')) {
+    // Don't show nav on login, register, onboarding, etc, or during workout execution
+    if (pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/forgot') || pathname.includes('/onboarding') || pathname.includes('/workout')) {
         return null
     }
 
@@ -153,6 +154,10 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
                             </Link>
                         )
                     })}
+                    
+                    {/* PWA Install Button */}
+                    <PwaNavButton isCollapsed={isCollapsed} />
+
                     {/* Logout Button (Mobile Only) */}
                     <button
                         onClick={handleSignOut}

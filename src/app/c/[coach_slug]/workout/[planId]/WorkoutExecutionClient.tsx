@@ -51,6 +51,7 @@ interface Props {
         reps_done: number | null
         rpe: number | null
     }>
+    previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
     coachSlug: string
 }
 
@@ -76,7 +77,7 @@ function ManualTimerButton({ defaultTime, onSettingsClick }: { defaultTime: stri
     )
 }
 
-export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
+export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coachSlug }: Props) {
     const router = useRouter()
     const blocks = plan.workout_blocks.sort((a, b) => a.order_index - b.order_index)
     const [currentIndex, setCurrentIndex] = useState(0)
@@ -351,6 +352,21 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                                             <p className="text-sm text-amber-900/80 dark:text-amber-200/80 leading-relaxed">
                                                 {currentBlock.notes}
                                             </p>
+                                        </div>
+                                    )}
+                                    
+                                    {previousHistory[currentExercise.id] && previousHistory[currentExercise.id].length > 0 && (
+                                        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 mt-2">
+                                            <p className="text-[10px] font-bold text-primary mb-1.5 flex items-center gap-1.5 uppercase tracking-wider">
+                                                <Timer className="w-3.5 h-3.5" /> Sesión Anterior ({new Date(previousHistory[currentExercise.id][0].date + 'T12:00:00Z').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })})
+                                            </p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {previousHistory[currentExercise.id].map((log, idx) => (
+                                                    <span key={idx} className="text-xs font-medium bg-background border border-border px-2 py-1 rounded-md text-muted-foreground shadow-sm">
+                                                        S{idx + 1}: {log.weight_kg ? `${log.weight_kg}kg` : '-'} × {log.reps_done || '-'}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

@@ -49,3 +49,12 @@ supabase/migrations/006_subscription_fields.sql
 supabase/migrations/007_enrich_exercises.sql
 supabase/migrations/008_client_intake.sql
 vertex.json
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+scripts/rls-policies.sql

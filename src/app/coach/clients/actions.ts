@@ -117,3 +117,63 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
     revalidatePath('/coach/clients')
     return {}
 }
+
+// ────────────────────────────────────────────────────────────────
+// Reset Client Password Action (Admin API)
+// ────────────────────────────────────────────────────────────────
+
+export async function resetClientPasswordAction(clientId: string): Promise<{ error?: string, tempPassword?: string }> {
+    const supabase = await createClient()
+    const { data: { user: coachUser } } = await supabase.auth.getUser()
+    if (!coachUser) return { error: 'No autenticado.' }
+
+    // Verify client belongs to this coach
+    const { data: client } = await (supabase as any)
+        .from('clients')
+        .select('id')
+        .eq('id', clientId)
+        .eq('coach_id', coachUser.id)
+        .maybeSingle()
+
+    if (!client) return { error: 'Alumno no encontrado.' }
+
+    // Generate random 6-digit PIN
+    const tempPassword = Math.floor(100000 + Math.random() * 900000).toString()
+
+    const admin = await createRawAdminClient()
+    const { error: authError } = await admin.auth.admin.updateUserById(clientId, {
+        password: tempPassword,
+    })
+
+    if (authError) return { error: `Error al actualizar: ${authError.message}` }
+
+    // Force password change on next login
+    const { error: dbError } = await (supabase as any)
+        .from('clients')
+        .update({ force_password_change: true })
+        .eq('id', clientId)
+
+    if (dbError) return { error: 'Error al actualizar base de datos.' }
+
+    revalidatePath('/coach/clients')
+    return { tempPassword }
+}
+
+
+export async function toggleClientStatusAction(clientId: string, isActive: boolean): Promise<{ error?: string }> {
+    const supabase = await createClient()
+    const { data: { user: coachUser } } = await supabase.auth.getUser()
+    if (!coachUser) return { error: 'No autenticado.' }
+
+    // Verify client belongs to this coach and update
+    const { error } = await (supabase as any)
+        .from('clients')
+        .update({ is_active: isActive })
+        .eq('id', clientId)
+        .eq('coach_id', coachUser.id)
+
+    if (error) return { error: error.message }
+
+    revalidatePath('/coach/clients')
+    return {}
+}

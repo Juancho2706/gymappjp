@@ -153,6 +153,29 @@ export default async function ClientDashboardPage({ params }: Props) {
             </header>
 
             <main className="px-4 py-6 space-y-6 max-w-lg mx-auto">
+                {/* Calendario Semanal */}
+                <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+                    <div className="flex justify-between items-center w-full max-w-sm mx-auto">
+                        {weekDays.map((day, idx) => (
+                            <div key={idx} className="flex flex-col items-center gap-1.5">
+                                <span className={`text-[10px] font-bold ${day.isToday ? 'text-foreground' : 'text-muted-foreground'}`}>{day.dayName}</span>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                                    day.isToday 
+                                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                                        : day.hasWorkout 
+                                            ? 'bg-primary/10 text-primary border border-primary/20' 
+                                            : 'text-muted-foreground'
+                                }`}
+                                style={day.isToday ? { backgroundColor: 'var(--theme-primary)' } : (day.hasWorkout ? { color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' } : {})}
+                                >
+                                    {day.dayNum}
+                                </div>
+                                <div className={`w-1 h-1 rounded-full ${day.hasWorkout && !day.isToday ? 'bg-primary' : 'bg-transparent'}`} style={day.hasWorkout && !day.isToday ? { backgroundColor: 'var(--theme-primary)' } : {}} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Today's workout CTA */}
                     {todayPlan ? (
@@ -185,29 +208,10 @@ export default async function ClientDashboardPage({ params }: Props) {
                             </div>
                         </Link>
                     ) : (
-                        <div className="bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-all h-full flex flex-col justify-center">
-                            <div className="flex items-center justify-between mb-4">
-                                <p className="text-sm font-semibold text-foreground">Plan Semanal</p>
-                                <Calendar className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                            <div className="flex justify-between items-center w-full max-w-sm mx-auto">
-                                {weekDays.map((day, idx) => (
-                                    <div key={idx} className="flex flex-col items-center gap-1.5">
-                                        <span className={`text-[10px] font-bold ${day.isToday ? 'text-foreground' : 'text-muted-foreground'}`}>{day.dayName}</span>
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
-                                            day.isToday 
-                                                ? 'bg-primary text-primary-foreground shadow-sm' 
-                                                : day.hasWorkout 
-                                                    ? 'bg-primary/10 text-primary border border-primary/20' 
-                                                    : 'text-muted-foreground'
-                                        }`}>
-                                            {day.dayNum}
-                                        </div>
-                                        <div className={`w-1 h-1 rounded-full ${day.hasWorkout && !day.isToday ? 'bg-primary' : 'bg-transparent'}`} />
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="text-muted-foreground text-xs mt-4 text-center">Hoy es día de descanso activo o recuperación.</p>
+                        <div className="bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-all h-full flex flex-col justify-center items-center text-center">
+                            <Calendar className="w-10 h-10 text-muted-foreground mb-3" />
+                            <p className="text-sm font-semibold text-foreground">Día de Descanso</p>
+                            <p className="text-muted-foreground text-xs mt-1">Recupérate para tu próxima sesión.</p>
                         </div>
                     )}
 

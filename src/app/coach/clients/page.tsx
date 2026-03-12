@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { Users, CheckCircle, Clock, Link as LinkIcon } from 'lucide-react'
 import { ClientsHeader } from './ClientsHeader'
 import { DeleteClientButton } from './DeleteClientButton'
+import { ToggleStatusButton } from './ToggleStatusButton'
+import { ResetPasswordButton } from './ResetPasswordButton'
 import type { Client } from '@/lib/database.types'
 import type { Metadata } from 'next'
 
@@ -11,7 +13,15 @@ export const metadata: Metadata = {
     title: 'Alumnos | OmniCoach OS',
 }
 
-function StatusBadge({ forceChange }: { forceChange: boolean }) {
+function StatusBadge({ forceChange, isActive }: { forceChange: boolean, isActive?: boolean }) {
+    if (isActive === false) {
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20">
+                <Clock className="w-3 h-3" />
+                Pausado
+            </span>
+        )
+    }
     if (forceChange) {
         return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
@@ -166,13 +176,13 @@ export default async function CoachClientsPage() {
                                                         {client.email}
                                                     </p>
                                                     <div className="mt-1.5 md:hidden">
-                                                        <StatusBadge forceChange={client.force_password_change} />
+                                                        <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
                                                     </div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="hidden md:table-cell px-6 py-4">
-                                            <StatusBadge forceChange={client.force_password_change} />
+                                            <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
                                         </td>
                                         <td className="hidden md:table-cell px-6 py-4 text-sm text-muted-foreground">
                                             {new Date(client.created_at).toLocaleDateString('es-AR', {
@@ -195,10 +205,21 @@ export default async function CoachClientsPage() {
                                             </td>
                                         )}
                                         <td className="px-4 md:px-6 py-4 text-right">
-                                            <DeleteClientButton
-                                                clientId={client.id}
-                                                clientName={client.full_name}
-                                            />
+                                            <div className="flex items-center justify-end gap-1">
+                                                <ResetPasswordButton
+                                                    clientId={client.id}
+                                                    clientName={client.full_name}
+                                                />
+                                                <ToggleStatusButton
+                                                    clientId={client.id}
+                                                    clientName={client.full_name}
+                                                    isActive={client.is_active !== false}
+                                                />
+                                                <DeleteClientButton
+                                                    clientId={client.id}
+                                                    clientName={client.full_name}
+                                                />
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

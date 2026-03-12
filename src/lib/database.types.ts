@@ -58,6 +58,7 @@ export type Database = {
                     coach_id: string
                     full_name: string
                     email: string
+                    is_active: boolean
                     force_password_change: boolean
                     onboarding_completed: boolean
                     birth_date: string | null
@@ -97,6 +98,7 @@ export type Database = {
                     coach_id?: string
                     full_name?: string
                     email?: string
+                    is_active?: boolean
                     force_password_change?: boolean
                     onboarding_completed?: boolean
                     birth_date?: string | null

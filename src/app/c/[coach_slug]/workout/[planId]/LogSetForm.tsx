@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useRef } from 'react'
+import { useActionState, useEffect, useRef, useOptimistic } from 'react'
 import { Check } from 'lucide-react'
 import { logSetAction, type LogState } from './actions'
 import { useWorkoutTimer } from './WorkoutTimerProvider'
@@ -17,24 +17,33 @@ interface Props {
 
 export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog, autoTimerEnabled = true }: Props) {
     const [state, formAction] = useActionState(logSetAction, initialState)
-    const isLogged = !!existingLog || state.success
+    const [optimisticLogged, addOptimisticLogged] = useOptimistic(
+        !!existingLog || state.success,
+        (_, newValue: boolean) => newValue
+    )
+    
+    const isLogged = optimisticLogged
     const { startRest } = useWorkoutTimer()
 
     // Uncontrolled form refs to preserve user input while typing
     const formRef = useRef<HTMLFormElement>(null)
 
-    // Trigger rest timer when successfully logged
-    useEffect(() => {
-        if (state.success && autoTimerEnabled) {
+    const handleSubmit = (formData: FormData) => {
+        addOptimisticLogged(true)
+        
+        // Trigger haptics and timer instantly (optimistic)
+        if (autoTimerEnabled && !isLogged) {
             if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                navigator.vibrate(50) // Haptic feedback on log
+                navigator.vibrate(50)
             }
             startRest(restTimeStr)
         }
-    }, [state.success, restTimeStr, startRest, autoTimerEnabled])
+        
+        formAction(formData)
+    }
 
     return (
-        <form key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'} ref={formRef} action={formAction}
+        <form key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'} ref={formRef} action={handleSubmit}
             className={`grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-1.5 md:px-2 py-1.5 rounded-xl transition-all
             ${isLogged ? 'bg-emerald-500/10' : 'hover:bg-secondary/50'}`}>
 

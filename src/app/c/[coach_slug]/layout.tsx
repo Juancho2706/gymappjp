@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata, Viewport } from 'next'
 import type { Coach } from '@/lib/database.types'
-import InstallPrompt from '@/components/InstallPrompt'
 import { ClientNav } from '@/components/client/ClientNav'
 
 interface Props {
@@ -79,11 +78,9 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         >
             <ClientNav coachSlug={coach_slug} coachBrand={brandName} />
 
-            <main className="flex-1 overflow-auto pb-[72px] md:pb-0 relative z-0 bg-muted/20 dark:bg-background">
+            <main className="flex-1 overflow-auto relative z-0 bg-muted/20 dark:bg-background pb-[80px] md:pb-0 has-[.is-workout-page]:pb-0">
                 {children}
             </main>
-
-            <InstallPrompt />
         </div>
     )
 }
