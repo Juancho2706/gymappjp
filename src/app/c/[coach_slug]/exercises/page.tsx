@@ -21,31 +21,35 @@ export default async function ClientExercisesPage({ params }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect(`/c/${coach_slug}/login`);
 
-  // Fetch client and coach branding
-  const { data: client } = await (supabase as any)
-    .from("clients")
-    .select(
-      `
+  // Fetch client/coach branding AND exercises in parallel
+  const [clientResponse, exercisesResponse] = await Promise.all([
+    (supabase as any)
+      .from("clients")
+      .select(
+        `
             id, coach_id,
             coaches ( brand_name, primary_color )
         `,
-    )
-    .eq("id", user.id)
-    .maybeSingle();
+      )
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("exercises")
+      .select("*")
+      .order("name")
+  ]);
 
+  const client = clientResponse.data;
   if (!client) redirect(`/c/${coach_slug}/login`);
+
   const coachBranding = Array.isArray(client.coaches)
     ? client.coaches[0]
     : client.coaches;
 
-  // Fetch all exercises available (both global and coach specific)
-  const { data: exercises } = await supabase
-    .from("exercises")
-    .select("*")
-    .or(`coach_id.is.null,coach_id.eq.${client.coach_id}`)
-    .order("name");
-
-  const safeExercises = exercises || [];
+  // Filter exercises (server-side filter for security, then group)
+  const safeExercises = (exercisesResponse.data || []).filter((ex: any) => 
+    !ex.coach_id || ex.coach_id === client.coach_id
+  );
 
   // Group by muscle
   const byMuscle = safeExercises.reduce((acc: any, ex: any) => {

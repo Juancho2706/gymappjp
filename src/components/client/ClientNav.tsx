@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -30,6 +30,12 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
     const router = useRouter()
     const supabase = createClient()
     const [isCollapsed, setIsCollapsed] = useState(false)
+    const [isNavigating, setIsNavigating] = useState<string | null>(null)
+
+    // Reset navigating state when pathname changes
+    useEffect(() => {
+        setIsNavigating(null)
+    }, [pathname])
 
     const navItems = [
         {
@@ -61,7 +67,7 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
     }
 
     // Don't show nav on login, register, onboarding, etc, or during workout execution
-    if (pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/forgot') || pathname.includes('/onboarding') || pathname.includes('/workout')) {
+    if (pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/forgot') || pathname.includes('/onboarding')) {
         return null
     }
 
@@ -69,18 +75,6 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
 
     return (
         <>
-            {/* Mobile Top Header */}
-            <div className={cn("md:hidden flex items-center justify-between px-4 py-3 border-b border-border/10 bg-background/80 backdrop-blur-md sticky top-0 z-40", isWorkout && "hidden")}>
-                <div className="flex items-center gap-2.5">
-                    <span className="font-bold text-lg truncate max-w-[200px]" style={{ fontFamily: 'var(--font-outfit)', color: 'var(--theme-primary)' }}>
-                        {coachBrand}
-                    </span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <ThemeToggle />
-                </div>
-            </div>
-
             {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
             <aside className={cn(
                 "client-nav-desktop fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-background/80 backdrop-blur-xl md:bg-card border-t border-border/10 md:border-t-0 md:border-r flex flex-col transition-all duration-300 safe-area-bottom",
@@ -114,19 +108,24 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
                 {/* Navigation Links */}
                 <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 py-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar pb-safe">
                     {navItems.map((item) => {
-                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/workout')
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/workout') || isNavigating === item.href
                         const Icon = item.icon
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                prefetch={true}
+                                onClick={() => {
+                                    if (pathname !== item.href) setIsNavigating(item.href)
+                                }}
                                 title={isCollapsed ? item.label : undefined}
                                 className={cn(
                                     'relative flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-2xl text-[10px] md:text-sm font-medium transition-all duration-300 group flex-1 md:flex-none',
                                     isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start md:px-3',
                                     isActive
                                         ? 'text-foreground md:bg-muted/50 md:border md:border-border/50'
-                                        : 'text-muted-foreground hover:text-foreground md:hover:bg-muted/30'
+                                        : 'text-muted-foreground hover:text-foreground md:hover:bg-muted/30',
+                                    isNavigating === item.href && "animate-pulse"
                                 )}
                             >
                                 {isActive && (

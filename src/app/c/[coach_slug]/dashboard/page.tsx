@@ -23,42 +23,69 @@ export default async function ClientDashboardPage({ params }: Props) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect(`/c/${coach_slug}/login`)
 
-    // Fetch client and their coach branding
-    const { data: clientData } = await supabase
-        .from('clients')
-        .select(`
-      id,
-      full_name,
-      coach_id,
-      coaches (
-        brand_name,
-        primary_color,
-        logo_url
-      )
-    `)
-        .eq('id', user.id)
-        .maybeSingle()
+    // Pre-calculate dates
+    const today = new Date().toISOString().split('T')[0]
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    const client = clientData as ClientWithCoach | null
+    // Fetch everything in parallel to reduce delay
+    const [
+        clientResponse,
+        plansResponse,
+        nutritionResponse,
+        checkinsResponse,
+        logsResponse
+    ] = await Promise.all([
+        supabase
+            .from('clients')
+            .select('id, full_name, coach_id, coaches ( brand_name, primary_color, logo_url )')
+            .eq('id', user.id)
+            .maybeSingle(),
+        supabase
+            .from('workout_plans')
+            .select('id, title, assigned_date, group_name')
+            .eq('client_id', user.id)
+            .order('assigned_date', { ascending: false })
+            .limit(10),
+        supabase
+            .from('nutrition_plans')
+            .select('*')
+            .eq('client_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle(),
+        supabase
+            .from('check_ins')
+            .select('created_at, weight_kg')
+            .eq('client_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(10),
+        supabase
+            .from('workout_logs')
+            .select('logged_at')
+            .eq('client_id', user.id)
+            .gte('logged_at', thirtyDaysAgo.toISOString())
+    ])
 
+    const client = clientResponse.data as ClientWithCoach | null
     if (!client) redirect(`/c/${coach_slug}/login`)
 
-    // Today's workout plans
-    const today = new Date().toISOString().split('T')[0]
-    const { data: rawPlans } = await supabase
-        .from('workout_plans')
-        .select('id, title, assigned_date, group_name')
-        .eq('client_id', user.id)
-        .order('assigned_date', { ascending: false })
-        .limit(10)
-
-    const todayPlans = rawPlans as Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name'>[] | null
-
-    const todayPlan = todayPlans?.find((p) => p.assigned_date === today)
+    const todayPlans = (plansResponse.data || []) as Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name'>[]
+    const todayPlan = todayPlans.find((p) => p.assigned_date === today)
     const coachBranding = Array.isArray(client.coaches) ? client.coaches[0] : client.coaches
+    
+    const activeNutrition = nutritionResponse.data
+    const checkIns = (checkinsResponse.data as any[])?.map(c => ({
+        date: c.created_at,
+        weight: c.weight_kg
+    })) || []
+
+    const uniqueWorkoutDays = new Set(
+        (logsResponse.data || []).map((log: any) => new Date(log.logged_at).toISOString().split('T')[0])
+    )
+    const workoutsLast30Days = uniqueWorkoutDays.size
 
     // Group history plans by group_name
-    const historyPlans = todayPlans?.filter((p) => p.id !== todayPlan?.id) || []
+    const historyPlans = todayPlans.filter((p) => p.id !== todayPlan?.id)
     const groupedHistory = historyPlans.reduce<Record<string, typeof historyPlans>>((acc, plan) => {
         const group = plan.group_name || 'Anteriores'
         if (!acc[group]) acc[group] = []
@@ -70,53 +97,16 @@ export default async function ClientDashboardPage({ params }: Props) {
     const curr = new Date()
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1) // Ajuste para Lunes = primer día
     const weekDays = Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(curr.setDate(firstDay + i))
+        const d = new Date(new Date().setDate(firstDay + i))
+        const dStr = d.toISOString().split('T')[0]
         return {
-            dateStr: d.toISOString().split('T')[0],
+            dateStr: dStr,
             dayName: d.toLocaleDateString('es-ES', { weekday: 'narrow' }).toUpperCase(),
             dayNum: d.getDate(),
-            isToday: d.toISOString().split('T')[0] === today,
-            hasWorkout: todayPlans?.some(p => p.assigned_date === d.toISOString().split('T')[0])
+            isToday: dStr === today,
+            hasWorkout: todayPlans.some(p => p.assigned_date === dStr)
         }
     })
-
-    // Fetch active nutrition plan
-    const { data: rawNutrition } = await (supabase as any)
-        .from('nutrition_plans')
-        .select('*')
-        .eq('client_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle()
-        
-    const activeNutrition = rawNutrition
-
-    // Fetch check-ins for weight progress chart
-    const { data: rawCheckins } = await supabase
-        .from('check_ins')
-        .select('created_at, weight_kg')
-        .eq('client_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-    const checkIns = (rawCheckins as any[])?.map(c => ({
-        date: c.created_at,
-        weight: c.weight_kg
-    })) || []
-
-    // Calculate Workout Gamification
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-    const { data: recentLogs } = await supabase
-        .from('workout_logs')
-        .select('logged_at')
-        .eq('client_id', user.id)
-        .gte('logged_at', thirtyDaysAgo.toISOString()) as { data: { logged_at: string }[] | null }
-
-    const uniqueWorkoutDays = new Set(
-        (recentLogs || []).map(log => new Date(log.logged_at).toISOString().split('T')[0])
-    )
-    const workoutsLast30Days = uniqueWorkoutDays.size
 
     return (
         <div className="min-h-screen bg-background">
@@ -230,7 +220,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                                 <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
                             </div>
                             <p className="text-xs text-muted-foreground font-medium mb-1">Plan Nutricional</p>
-                            <p className="text-lg font-semibold text-foreground line-clamp-1">{activeNutrition.name}</p>
+                            <p className="text-lg font-semibold text-foreground line-clamp-1">{(activeNutrition as any)?.name}</p>
                             <div
                                 className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors bg-emerald-500/10 text-emerald-500"
                             >
