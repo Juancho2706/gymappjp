@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { headers } from 'next/headers'
 
 const schema = z.object({
     email: z.string().email('Email inválido'),
@@ -25,8 +26,13 @@ export async function forgotPasswordAction(
 
     const supabase = await createClient()
 
+    const headersList = await headers()
+    const host = headersList.get('host') || 'localhost:3000'
+    const protocol = host.includes('localhost') ? 'http' : 'https'
+    const appUrl = `${protocol}://${host}`
+
     const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/reset-password`,
+        redirectTo: `${appUrl}/auth/callback?next=/reset-password`,
     })
 
     if (error) {

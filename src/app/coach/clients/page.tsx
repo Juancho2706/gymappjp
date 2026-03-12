@@ -1,3 +1,4 @@
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Users, CheckCircle, Clock, Link as LinkIcon } from 'lucide-react'
@@ -48,14 +49,11 @@ export default async function CoachClientsPage() {
 
     const clients = (rawClients ?? []) as Client[]
 
-    // Detect App URL dynamically for Vercel Preview or Production
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL 
-        ? process.env.NEXT_PUBLIC_APP_URL
-        : process.env.VERCEL_PROJECT_PRODUCTION_URL
-            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-            : process.env.VERCEL_URL 
-                ? `https://${process.env.VERCEL_URL}` 
-                : 'http://localhost:3000';
+    // Generate the correct base URL automatically from the request headers
+    const headersList = await headers()
+    const host = headersList.get('host') || 'localhost:3000'
+    const protocol = host.includes('localhost') ? 'http' : 'https'
+    const appUrl = `${protocol}://${host}`
 
     return (
         <div className="max-w-6xl animate-fade-in mb-24 md:mb-0">
