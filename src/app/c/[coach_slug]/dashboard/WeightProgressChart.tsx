@@ -2,7 +2,8 @@
 
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { TrendingUp, Scale } from 'lucide-react'
+import { TrendingUp, Scale, Plus } from 'lucide-react'
+import Link from 'next/link'
 
 interface CheckIn {
     date: string
@@ -12,12 +13,13 @@ interface CheckIn {
 interface Props {
     data: CheckIn[]
     primaryColor?: string
+    coachSlug?: string
 }
 
-export function WeightProgressChart({ data, primaryColor = '#10B981' }: Props) {
+export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug }: Props) {
     if (!data || data.length === 0) {
         return (
-            <Card className="bg-card border-border shadow-sm">
+            <Card className="bg-card border-border shadow-sm transition-all hover:shadow-md">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                         <TrendingUp className="w-4 h-4 text-muted-foreground" />
@@ -25,11 +27,21 @@ export function WeightProgressChart({ data, primaryColor = '#10B981' }: Props) {
                     </CardTitle>
                     <CardDescription>Aún no hay datos suficientes</CardDescription>
                 </CardHeader>
-                <CardContent className="h-48 flex items-center justify-center">
+                <CardContent className="h-48 flex flex-col items-center justify-center gap-3">
                     <div className="text-center text-muted-foreground">
                         <Scale className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">Realiza check-ins para ver tu progreso</p>
+                        <p className="text-sm">Realiza tu primer check-in para medir tu progreso.</p>
                     </div>
+                    {coachSlug && (
+                        <Link 
+                            href={`/c/${coachSlug}/check-in`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90 active:scale-95 text-white"
+                            style={{ backgroundColor: primaryColor }}
+                        >
+                            <Plus className="w-4 h-4" />
+                            Registrar Peso Hoy
+                        </Link>
+                    )}
                 </CardContent>
             </Card>
         )

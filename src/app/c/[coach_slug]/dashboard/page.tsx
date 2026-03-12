@@ -56,6 +56,20 @@ export default async function ClientDashboardPage({ params }: Props) {
 
     const todayPlan = todayPlans?.find((p) => p.assigned_date === today)
     const coachBranding = Array.isArray(client.coaches) ? client.coaches[0] : client.coaches
+    
+    // Generar calendario de la semana actual (Lunes a Domingo)
+    const curr = new Date()
+    const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1) // Ajuste para Lunes = primer día
+    const weekDays = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(curr.setDate(firstDay + i))
+        return {
+            dateStr: d.toISOString().split('T')[0],
+            dayName: d.toLocaleDateString('es-ES', { weekday: 'narrow' }).toUpperCase(),
+            dayNum: d.getDate(),
+            isToday: d.toISOString().split('T')[0] === today,
+            hasWorkout: todayPlans?.some(p => p.assigned_date === d.toISOString().split('T')[0])
+        }
+    })
 
     // Fetch active nutrition plan
     const { data: rawNutrition } = await (supabase as any)
@@ -80,6 +94,21 @@ export default async function ClientDashboardPage({ params }: Props) {
         weight: c.weight_kg
     })) || []
 
+    // Calculate Workout Gamification
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const { data: recentLogs } = await supabase
+        .from('workout_logs')
+        .select('logged_at')
+        .eq('client_id', user.id)
+        .gte('logged_at', thirtyDaysAgo.toISOString())
+
+    const uniqueWorkoutDays = new Set(
+        (recentLogs || []).map(log => new Date(log.logged_at).toISOString().split('T')[0])
+    )
+    const workoutsLast30Days = uniqueWorkoutDays.size
+
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
@@ -88,12 +117,19 @@ export default async function ClientDashboardPage({ params }: Props) {
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">
                         {coachBranding?.brand_name}
                     </p>
-                    <h1
-                        className="text-xl font-bold text-foreground"
-                        style={{ fontFamily: 'var(--font-outfit)' }}
-                    >
-                        Hola, {client.full_name.split(' ')[0]} 👋
-                    </h1>
+                    <div className="flex items-center gap-2">
+                        <h1
+                            className="text-xl font-bold text-foreground"
+                            style={{ fontFamily: 'var(--font-outfit)' }}
+                        >
+                            Hola, {client.full_name.split(' ')[0]} 👋
+                        </h1>
+                        {workoutsLast30Days > 0 && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20">
+                                🔥 {workoutsLast30Days} este mes
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <Link
                     href={`/c/${coach_slug}/check-in`}
@@ -140,10 +176,29 @@ export default async function ClientDashboardPage({ params }: Props) {
                             </div>
                         </Link>
                     ) : (
-                        <div className="bg-card border border-border rounded-2xl p-6 text-center h-full flex flex-col justify-center">
-                            <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                            <p className="text-muted-foreground text-sm">No tienes rutina asignada para hoy</p>
-                            <p className="text-muted-foreground text-xs mt-1">Tu coach te asignará una pronto</p>
+                        <div className="bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-all h-full flex flex-col justify-center">
+                            <div className="flex items-center justify-between mb-4">
+                                <p className="text-sm font-semibold text-foreground">Plan Semanal</p>
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                            <div className="flex justify-between items-center w-full max-w-sm mx-auto">
+                                {weekDays.map((day, idx) => (
+                                    <div key={idx} className="flex flex-col items-center gap-1.5">
+                                        <span className={`text-[10px] font-bold ${day.isToday ? 'text-foreground' : 'text-muted-foreground'}`}>{day.dayName}</span>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                                            day.isToday 
+                                                ? 'bg-primary text-primary-foreground shadow-sm' 
+                                                : day.hasWorkout 
+                                                    ? 'bg-primary/10 text-primary border border-primary/20' 
+                                                    : 'text-muted-foreground'
+                                        }`}>
+                                            {day.dayNum}
+                                        </div>
+                                        <div className={`w-1 h-1 rounded-full ${day.hasWorkout && !day.isToday ? 'bg-primary' : 'bg-transparent'}`} />
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-muted-foreground text-xs mt-4 text-center">Hoy es día de descanso activo o recuperación.</p>
                         </div>
                     )}
 
@@ -189,10 +244,10 @@ export default async function ClientDashboardPage({ params }: Props) {
                                 <Link
                                     key={plan.id}
                                     href={`/c/${coach_slug}/workout/${plan.id}`}
-                                    className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 hover:border-border hover:border-accent transition-all group"
+                                    className="flex items-center gap-3 bg-card border border-border shadow-sm rounded-xl px-4 py-3 hover:shadow-md hover:-translate-y-0.5 hover:border-accent transition-all duration-200 group"
                                 >
                                     <div
-                                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                                         style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
                                     >
                                         <TrendingUp className="w-4 h-4" style={{ color: 'var(--theme-primary)' }} />
@@ -214,7 +269,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                 
                 {/* Weight Progress Chart */}
                 <div className="mt-6">
-                    <WeightProgressChart data={checkIns} primaryColor={coachBranding?.primary_color || undefined} />
+                    <WeightProgressChart data={checkIns} primaryColor={coachBranding?.primary_color || undefined} coachSlug={coach_slug} />
                 </div>
             </main>
         </div>
