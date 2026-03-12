@@ -4,6 +4,7 @@ import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from 'next-themes'
 import { LanguageProvider } from '@/lib/i18n/LanguageContext'
+import { PwaRegister } from '@/components/PwaRegister'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -93,6 +94,7 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <LanguageProvider>
+            <PwaRegister />
             {children}
             <Toaster richColors position="top-right" />
           </LanguageProvider>
