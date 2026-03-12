@@ -47,15 +47,24 @@ export default async function ClientDashboardPage({ params }: Props) {
     const today = new Date().toISOString().split('T')[0]
     const { data: rawPlans } = await supabase
         .from('workout_plans')
-        .select('id, title, assigned_date')
+        .select('id, title, assigned_date, group_name')
         .eq('client_id', user.id)
         .order('assigned_date', { ascending: false })
-        .limit(5)
+        .limit(10)
 
-    const todayPlans = rawPlans as Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date'>[] | null
+    const todayPlans = rawPlans as Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name'>[] | null
 
     const todayPlan = todayPlans?.find((p) => p.assigned_date === today)
     const coachBranding = Array.isArray(client.coaches) ? client.coaches[0] : client.coaches
+
+    // Group history plans by group_name
+    const historyPlans = todayPlans?.filter((p) => p.id !== todayPlan?.id) || []
+    const groupedHistory = historyPlans.reduce<Record<string, typeof historyPlans>>((acc, plan) => {
+        const group = plan.group_name || 'Anteriores'
+        if (!acc[group]) acc[group] = []
+        acc[group].push(plan)
+        return acc
+    }, {})
     
     // Generar calendario de la semana actual (Lunes a Domingo)
     const curr = new Date()
@@ -234,36 +243,40 @@ export default async function ClientDashboardPage({ params }: Props) {
                 </div>
 
                 {/* Recent plans */}
-                {todayPlans && todayPlans.length > 0 && (
-                    <div className="mt-6">
-                        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
-                            Historial de rutinas
-                        </h2>
-                        <div className="space-y-2">
-                            {todayPlans.filter((p) => p.id !== todayPlan?.id).map((plan) => (
-                                <Link
-                                    key={plan.id}
-                                    href={`/c/${coach_slug}/workout/${plan.id}`}
-                                    className="flex items-center gap-3 bg-card border border-border shadow-sm rounded-xl px-4 py-3 hover:shadow-md hover:-translate-y-0.5 hover:border-accent transition-all duration-200 group"
-                                >
-                                    <div
-                                        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                                        style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
-                                    >
-                                        <TrendingUp className="w-4 h-4" style={{ color: 'var(--theme-primary)' }} />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-medium text-foreground truncate">{plan.title}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {new Date(plan.assigned_date).toLocaleDateString('es-AR', {
-                                                weekday: 'long', day: 'numeric', month: 'short'
-                                            })}
-                                        </p>
-                                    </div>
-                                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
-                                </Link>
-                            ))}
-                        </div>
+                {historyPlans.length > 0 && (
+                    <div className="mt-6 space-y-6">
+                        {Object.entries(groupedHistory).map(([groupName, plansInGroup]) => (
+                            <div key={groupName} className="space-y-3">
+                                <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] pl-1">
+                                    {groupName}
+                                </h2>
+                                <div className="space-y-2">
+                                    {plansInGroup.map((plan) => (
+                                        <Link
+                                            key={plan.id}
+                                            href={`/c/${coach_slug}/workout/${plan.id}`}
+                                            className="flex items-center gap-3 bg-card border border-border shadow-sm rounded-xl px-4 py-3 hover:shadow-md hover:-translate-y-0.5 hover:border-accent transition-all duration-200 group"
+                                        >
+                                            <div
+                                                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
+                                            >
+                                                <TrendingUp className="w-4 h-4" style={{ color: 'var(--theme-primary)' }} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium text-foreground truncate">{plan.title}</p>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    {new Date(plan.assigned_date).toLocaleDateString('es-AR', {
+                                                        weekday: 'long', day: 'numeric', month: 'short'
+                                                    })}
+                                                </p>
+                                            </div>
+                                            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
                 

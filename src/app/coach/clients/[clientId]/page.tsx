@@ -37,6 +37,14 @@ export default async function ClientDetailPage({
 
     const plans = (rawPlans ?? []) as WorkoutPlan[]
 
+    // Group plans by group_name
+    const groupedPlans = plans.reduce<Record<string, WorkoutPlan[]>>((acc, plan) => {
+        const group = plan.group_name || 'Sin grupo'
+        if (!acc[group]) acc[group] = []
+        acc[group].push(plan)
+        return acc
+    }, {})
+
     const { data: rawNutrition } = await (supabase as any)
         .from('nutrition_plans')
         .select('*')
@@ -378,25 +386,34 @@ export default async function ClientDetailPage({
                                 <p className="text-muted-foreground text-sm mb-4">Sin rutinas asignadas</p>
                             </div>
                         ) : (
-                            <div className="space-y-3">
-                                {plans.map(plan => (
-                                    <div key={plan.id}
-                                        className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/20 transition-colors shadow-sm">
-                                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
-                                            <Dumbbell className="w-5 h-5 text-primary" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-foreground truncate">{plan.title}</p>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Link 
-                                                href={`/coach/builder/${clientId}?planId=${plan.id}`}
-                                                className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                                title="Editar rutina"
-                                            >
-                                                <Pencil className="w-4 h-4" />
-                                            </Link>
-                                            <DeletePlanButton planId={plan.id} clientId={clientId} planTitle={plan.title} />
+                            <div className="space-y-6">
+                                {Object.entries(groupedPlans).map(([groupName, plansInGroup]) => (
+                                    <div key={groupName} className="space-y-3">
+                                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">
+                                            {groupName}
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {plansInGroup.map(plan => (
+                                                <div key={plan.id}
+                                                    className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/20 transition-colors shadow-sm">
+                                                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
+                                                        <Dumbbell className="w-5 h-5 text-primary" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold text-foreground truncate">{plan.title}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <Link 
+                                                            href={`/coach/builder/${clientId}?planId=${plan.id}`}
+                                                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                                            title="Editar rutina"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </Link>
+                                                        <DeletePlanButton planId={plan.id} clientId={clientId} planTitle={plan.title} />
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 ))}
