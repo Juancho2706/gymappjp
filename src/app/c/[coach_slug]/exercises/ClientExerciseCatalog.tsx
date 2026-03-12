@@ -84,9 +84,9 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
             className="bg-card border border-border rounded-2xl p-3 flex gap-4 items-center cursor-pointer hover:border-border/80 hover:bg-muted/30 transition-all shadow-sm group"
           >
             <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-              {ex.gif_url ? (
+              {(ex.gif_url || ex.video_url) ? (
                 <Image
-                  src={ex.gif_url}
+                  src={(ex.gif_url || ex.video_url)!}
                   alt={ex.name}
                   fill
                   className="object-cover group-hover:scale-110 transition-transform duration-500"
@@ -131,18 +131,42 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col">
           {selectedExercise && (
             <>
-              {selectedExercise.gif_url && (
+              {(selectedExercise.gif_url || selectedExercise.video_url) && (
                 <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50">
-                  <Image
-                    src={selectedExercise.gif_url}
-                    alt={selectedExercise.name}
-                    fill
-                    className="object-contain p-4"
-                    unoptimized
-                  />
+                  {(() => {
+                    const url = selectedExercise.gif_url || selectedExercise.video_url;
+                    const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
+                    const getYouTubeId = (u: string) => {
+                      const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+                      return match ? match[1] : null;
+                    };
+                    
+                    if (isYouTube) {
+                      const ytId = getYouTubeId(url!);
+                      return ytId ? (
+                        <iframe
+                          className="w-full h-full"
+                          src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}`}
+                          title={selectedExercise.name}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      ) : null;
+                    }
+
+                    return (
+                      <Image
+                        src={url!}
+                        alt={selectedExercise.name}
+                        fill
+                        className="object-contain p-4"
+                        unoptimized
+                      />
+                    );
+                  })()}
                 </div>
               )}
-              {!selectedExercise.gif_url && selectedExercise.video_url && (
+              {!(selectedExercise.gif_url || selectedExercise.video_url) && selectedExercise.video_url && (
                 <div className="p-8 text-center bg-muted border-b border-border/50 shrink-0">
                   <a
                     href={selectedExercise.video_url}

@@ -44,7 +44,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                                     onClick={() => setSelected(ex)}
                                     className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-150 cursor-pointer"
                                 >
-                                    {ex.gif_url && <span className="mr-1.5 text-primary">●</span>}
+                                    {(ex.gif_url || ex.video_url) && <span className="mr-1.5 text-primary">●</span>}
                                     {ex.name}
                                 </button>
                             ))}
@@ -74,23 +74,40 @@ function ExercisePreviewModal({
 }) {
     if (!exercise) return null
 
-    const hasGif = !!exercise.gif_url
+    const displayGif = exercise.gif_url || exercise.video_url
+    const isYouTube = displayGif?.includes('youtube.com') || displayGif?.includes('youtu.be')
+    const hasGif = !!displayGif && !isYouTube
     const hasInstructions = exercise.instructions && exercise.instructions.length > 0
     const hasEquipment = !!exercise.equipment
     const hasSecondary = exercise.secondary_muscles && exercise.secondary_muscles.length > 0
 
+    // Extract YouTube ID
+    const getYouTubeId = (url: string) => {
+        const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)
+        return match ? match[1] : null
+    }
+    const ytId = isYouTube ? getYouTubeId(displayGif!) : null
+
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
             <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
-                {/* GIF demonstration area - Now as header */}
+                {/* Media demonstration area */}
                 <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden">
                     {hasGif ? (
                         <Image
-                            src={exercise.gif_url!}
+                            src={displayGif!}
                             alt={`Demostración: ${exercise.name}`}
                             fill
                             className="object-cover"
                             unoptimized
+                        />
+                    ) : isYouTube && ytId ? (
+                        <iframe
+                            className="w-full h-full"
+                            src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}`}
+                            title={exercise.name}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
                         />
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
@@ -98,8 +115,7 @@ function ExercisePreviewModal({
                             <p className="text-xs font-medium">Sin previsualización</p>
                         </div>
                     )}
-                    {/* Overlay to ensure readability if we add text or buttons later */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                    {hasGif && <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />}
                 </div>
 
                 <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
@@ -162,7 +178,7 @@ function ExercisePreviewModal({
                                 {hasGif ? (
                                     <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
                                         <Image
-                                            src={exercise.gif_url!}
+                                            src={displayGif!}
                                             alt={exercise.name}
                                             fill
                                             className="object-cover"
