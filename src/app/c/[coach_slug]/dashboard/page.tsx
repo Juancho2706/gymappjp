@@ -102,7 +102,7 @@ export default async function ClientDashboardPage({ params }: Props) {
         .from('workout_logs')
         .select('logged_at')
         .eq('client_id', user.id)
-        .gte('logged_at', thirtyDaysAgo.toISOString())
+        .gte('logged_at', thirtyDaysAgo.toISOString()) as { data: { logged_at: string }[] | null }
 
     const uniqueWorkoutDays = new Set(
         (recentLogs || []).map(log => new Date(log.logged_at).toISOString().split('T')[0])
