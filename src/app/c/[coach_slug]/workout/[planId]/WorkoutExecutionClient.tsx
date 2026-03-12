@@ -89,7 +89,42 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     const [showCompleted, setShowCompleted] = useState(false)
 
     const currentBlock = blocks[currentIndex]
-    const currentExercise = Array.isArray(currentBlock.exercises) ? currentBlock.exercises[0] : currentBlock.exercises
+    
+    // Safety check: if no blocks exist (e.g. after a database cleanup), redirect or show error
+    if (!currentBlock) {
+        return (
+            <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                    <Dumbbell className="w-8 h-8" />
+                </div>
+                <h1 className="text-xl font-bold text-foreground mb-2">Rutina sin ejercicios</h1>
+                <p className="text-sm text-muted-foreground mb-6">Esta rutina ya no tiene ejercicios asociados. Tu coach probablemente esté actualizando tu plan.</p>
+                <Link href={`/c/${coachSlug}/dashboard`} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
+                    Volver al Dashboard
+                </Link>
+            </div>
+        )
+    }
+
+    const rawExercise = Array.isArray(currentBlock.exercises) ? currentBlock.exercises[0] : currentBlock.exercises
+    
+    // Safety check for deleted exercises
+    if (!rawExercise) {
+        return (
+            <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                    <Zap className="w-8 h-8 text-amber-500" />
+                </div>
+                <h1 className="text-xl font-bold text-foreground mb-2">Ejercicio no encontrado</h1>
+                <p className="text-sm text-muted-foreground mb-6">Este ejercicio ha sido removido del catálogo global. Por favor contacta a tu coach para que lo actualice.</p>
+                <Link href={`/c/${coachSlug}/dashboard`} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
+                    Volver al Dashboard
+                </Link>
+            </div>
+        )
+    }
+
+    const currentExercise = rawExercise as ExerciseType
 
     // Immersive Mode Logic & Haptic setup
     useEffect(() => {

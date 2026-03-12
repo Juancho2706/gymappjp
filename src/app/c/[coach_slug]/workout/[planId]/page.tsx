@@ -63,18 +63,23 @@ export default async function WorkoutExecutionPage({ params }: Props) {
     const plan = rawPlan as unknown as PlanType
 
     // Fetch logs for this plan today to show completion status
-    const { data: rawLogs } = await supabase
-        .from('workout_logs')
-        .select('block_id, set_number, weight_kg, reps_done, rpe')
-        .in('block_id', plan.workout_blocks.map(b => b.id))
-
-    const logs = (rawLogs || []) as Array<{
+    const blockIds = plan.workout_blocks.map(b => b.id)
+    let logs: Array<{
         block_id: string
         set_number: number
         weight_kg: number | null
         reps_done: number | null
         rpe: number | null
-    }>
+    }> = []
+
+    if (blockIds.length > 0) {
+        const { data: rawLogs } = await supabase
+            .from('workout_logs')
+            .select('block_id, set_number, weight_kg, reps_done, rpe')
+            .in('block_id', blockIds)
+        
+        logs = (rawLogs || []) as typeof logs
+    }
 
     return <WorkoutExecutionClient plan={plan} logs={logs} coachSlug={coach_slug} />
 }

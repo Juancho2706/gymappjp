@@ -1,20 +1,22 @@
 const CACHE_NAME = 'omnicoach-pwa-cache-v1';
 
 // Recursos mínimos a guardar en caché para la PWA
+// He quitado el manifest y el root porque son dinámicos en Next.js
 const urlsToCache = [
-  '/',
   '/icon-192x192.png',
-  '/icon-512x512.png',
-  '/manifest.webmanifest'
+  '/icon-512x512.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        return cache.addAll(urlsToCache);
+        // Usamos addAll con cuidado, si falla un recurso falla todo el SW
+        return cache.addAll(urlsToCache).catch(err => {
+          console.error('Fallo al precargar cache:', err);
+        });
       })
-      .then(() => self.skipWaiting()) // Activar el SW inmediatamente
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -25,7 +27,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName); // Limpiar cachés antiguos
+            return caches.delete(cacheName);
           }
         })
       );
@@ -33,14 +35,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Este es el evento MÁS IMPORTANTE. 
-// Sin esto, Chrome/Android rechazan la instalación de la PWA.
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Devuelve el recurso cacheado si existe, o haz la petición a red
         return response || fetch(event.request);
       })
   );
+});
 });
