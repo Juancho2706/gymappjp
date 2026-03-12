@@ -85,6 +85,24 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="OmniCoach" />
         <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(registration) {
+                      console.log('SW Registration successful with scope: ', registration.scope);
+                    },
+                    function(err) {
+                      console.log('SW Registration failed: ', err);
+                    }
+                  );
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body className={`${inter.variable} ${outfit.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider

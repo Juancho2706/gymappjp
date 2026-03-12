@@ -15,13 +15,17 @@ export default function InstallPrompt() {
   useEffect(() => {
     // Verificar si ya está en modo standalone (instalado)
     if (window.matchMedia('(display-mode: standalone)').matches) {
+      console.log('App is already installed (standalone mode).');
       return;
     }
 
     // Sólo mostrar en móviles
     const mobile = /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
     setIsMobile(mobile);
-    if (!mobile) return; // no need to continue on desktop
+    if (!mobile) {
+      console.log('InstallPrompt blocked: Not a mobile device.');
+      return; 
+    }
 
     // Verificar si es iOS
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
@@ -32,11 +36,14 @@ export default function InstallPrompt() {
       const hasDismissed = localStorage.getItem('pwa_prompt_dismissed');
       if (!hasDismissed) {
         setIsVisible(true);
+      } else {
+        console.log('InstallPrompt blocked (iOS): User previously dismissed it.');
       }
     }
 
     // Escuchar el evento en Android/Chrome
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('beforeinstallprompt event fired!');
       e.preventDefault();
       setDeferredPrompt(e);
       setIsInstallable(true);
@@ -44,6 +51,8 @@ export default function InstallPrompt() {
       const hasDismissed = localStorage.getItem('pwa_prompt_dismissed');
       if (!hasDismissed) {
         setIsVisible(true);
+      } else {
+        console.log('InstallPrompt blocked (Android): User previously dismissed it.');
       }
     };
 
