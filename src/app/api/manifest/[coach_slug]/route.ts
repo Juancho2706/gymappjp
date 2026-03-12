@@ -21,20 +21,22 @@ export async function GET(
     name: coach?.brand_name || "OmniCoach OS",
     short_name: coach?.brand_name || "OmniCoach",
     description: `Entrena con ${coach?.brand_name || 'tu coach'}`,
-    start_url: `/c/${slug}`,
+    start_url: `/c/${slug}/dashboard`,
     display: "standalone",
     background_color: "#ffffff",
     theme_color: coach?.primary_color || "#000000",
     icons: [
       {
-        src: coach?.logo_url || "/globe.svg",
+        src: coach?.logo_url || "/icon-192x192.png",
         sizes: "192x192",
-        type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png"
+        type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
+        purpose: "any maskable"
       },
       {
-        src: coach?.logo_url || "/globe.svg",
+        src: coach?.logo_url || "/icon-512x512.png",
         sizes: "512x512",
-        type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png"
+        type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
+        purpose: "any maskable"
       }
     ]
   };
