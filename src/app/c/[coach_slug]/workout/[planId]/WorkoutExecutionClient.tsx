@@ -204,7 +204,7 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
                             <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                                 Ejercicio {currentIndex + 1} de {blocks.length}
                             </span>
-                            <ManualTimerButton defaultTime={currentBlock.rest_time} />
+                            <ManualTimerButton defaultTime={currentBlock.rest_time} onSettingsClick={() => setShowTimerSettings(true)} />
                         </div>
 
                         {/* Progress Bar */}
