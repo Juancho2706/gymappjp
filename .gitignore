@@ -48,3 +48,4 @@ supabase/migrations/005_checkin_storage.sql
 supabase/migrations/006_subscription_fields.sql
 supabase/migrations/007_enrich_exercises.sql
 supabase/migrations/008_client_intake.sql
+vertex.json
