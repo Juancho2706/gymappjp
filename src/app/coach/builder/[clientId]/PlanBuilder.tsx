@@ -311,23 +311,23 @@ export function PlanBuilder({
             </div>
 
             {/* Main split layout */}
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            <div className="flex flex-col-reverse md:flex-row flex-1 overflow-hidden relative">
                 {/* LEFT: Exercise catalog */}
                 <div 
                     className={cn(
-                        "md:w-72 flex-shrink-0 border-b md:border-b-0 md:border-r border-border flex flex-col bg-muted/30 transition-all duration-300",
-                        isCatalogExpanded ? "h-[45vh] md:h-auto" : "h-[72px] md:h-auto overflow-hidden"
+                        "md:w-72 flex-shrink-0 border-t md:border-t-0 md:border-r border-border flex flex-col bg-muted/30 transition-all duration-300 relative z-20",
+                        isCatalogExpanded ? "h-[50vh] md:h-auto" : "h-[48px] md:h-auto overflow-hidden"
                     )}
                 >
-                    <div className="p-3 space-y-2 border-b border-border relative">
-                        <button 
-                            className="md:hidden absolute left-1/2 -translate-x-1/2 -bottom-3 p-1 rounded-full bg-secondary border border-border text-muted-foreground z-10 shadow-sm"
-                            onClick={() => setIsCatalogExpanded(!isCatalogExpanded)}
-                        >
-                            {isCatalogExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
-                        
-                        <div className="relative">
+                    <button 
+                        className="md:hidden absolute left-1/2 -translate-x-1/2 top-0 w-16 h-4 flex items-center justify-center cursor-pointer z-30"
+                        onClick={() => setIsCatalogExpanded(!isCatalogExpanded)}
+                    >
+                        <div className="w-8 h-1 rounded-full bg-border/80" />
+                    </button>
+
+                    <div className="p-3 pt-5 space-y-2 border-b border-border">
+                        <div className={cn("relative", !isCatalogExpanded && "md:block hidden")}>
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                             <input value={search} onChange={e => setSearch(e.target.value)}
                                 placeholder="Buscar ejercicio…"
@@ -344,6 +344,11 @@ export function PlanBuilder({
                                 ))}
                             </select>
                         </div>
+                        {!isCatalogExpanded && (
+                            <div className="md:hidden text-center text-xs font-bold text-muted-foreground mt-[-8px]">
+                                Catálogo de Ejercicios
+                            </div>
+                        )}
                     </div>
 
                     <div className={cn("flex-1 overflow-y-auto p-2 space-y-0.5", !isCatalogExpanded && "md:block hidden")}>

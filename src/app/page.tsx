@@ -178,10 +178,10 @@ function PillNav() {
                 } rounded-full px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 w-[95%] sm:w-auto justify-between sm:justify-center`}
         >
             <Link href="/" className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                <div className="hidden sm:flex w-8 h-8 rounded-xl bg-emerald-500/20 items-center justify-center shrink-0">
                     <Dumbbell className="w-4 h-4 text-emerald-400" />
                 </div>
-                <span className="text-foreground font-bold text-sm tracking-tight hidden sm:inline">OmniCoach</span>
+                <span className="text-foreground font-bold text-sm tracking-tight">OmniCoach OS</span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -220,7 +220,13 @@ function PillNav() {
             </div>
 
             {/* Mobile Navigation */}
-            <div className="md:hidden">
+            <div className="md:hidden flex items-center gap-2">
+                <Link
+                    href="/login"
+                    className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 text-sm font-bold px-2 py-1.5 transition-colors"
+                >
+                    {t('landing.nav.login')}
+                </Link>
                 <Sheet>
                     <SheetTrigger className="p-2 text-foreground/70 hover:text-foreground transition-colors rounded-full hover:bg-accent focus:outline-none flex items-center justify-center">
                         <Menu className="w-5 h-5" />
@@ -231,13 +237,12 @@ function PillNav() {
                         <div className="flex flex-col gap-4 px-2">
                             {[
                                 { key: 'landing.nav.features', id: 'funciones' },
-                                { key: 'landing.nav.pricing', id: 'precios' },
-                                { key: 'landing.nav.contact', id: 'contacto' }
+                                { key: 'landing.nav.pricing', id: 'precios' }
                             ].map(item => (
                                 <a
                                     key={item.id}
                                     href={`#${item.id}`}
-                                    className="text-xl font-medium text-foreground/80 hover:text-emerald-500 transition-colors py-2 border-b border-border/50"
+                                    className="text-xl font-bold text-foreground/90 hover:text-emerald-500 transition-colors py-3 border-b border-border/40"
                                 >
                                     {t(item.key)}
                                 </a>
@@ -254,12 +259,6 @@ function PillNav() {
                             </div>
                             
                             <div className="flex flex-col gap-3">
-                                <Link
-                                    href="/login"
-                                    className="text-center w-full py-3 rounded-xl border border-border text-foreground font-medium hover:bg-accent transition-colors"
-                                >
-                                    {t('landing.nav.login')}
-                                </Link>
                                 <Link
                                     href="/register"
                                     className="text-center w-full py-3 rounded-xl bg-emerald-500 text-background font-bold hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/25 transition-all"
