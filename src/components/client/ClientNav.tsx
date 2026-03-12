@@ -82,7 +82,7 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
 
             {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
             <aside className={cn(
-                "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-background/80 backdrop-blur-xl md:bg-card border-t border-border/10 md:border-t-0 md:border-r flex flex-col transition-all duration-300 safe-area-bottom",
+                "client-nav-desktop fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-background/80 backdrop-blur-xl md:bg-card border-t border-border/10 md:border-t-0 md:border-r flex flex-col transition-all duration-300 safe-area-bottom",
                 isCollapsed ? "md:w-20" : "md:w-64",
                 isWorkout && "hidden md:flex"
             )}>

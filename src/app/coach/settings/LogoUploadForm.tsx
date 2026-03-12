@@ -36,7 +36,7 @@ export function LogoUploadForm({
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h2 className="text-base font-bold text-foreground mb-5">Logo de tu marca</h2>
 
-            <div className="flex items-center gap-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                 <div className="w-20 h-20 rounded-2xl bg-muted border border-border flex items-center justify-center flex-shrink-0 overflow-hidden">
                     {currentLogoUrl ? (
                         <Image
@@ -53,7 +53,7 @@ export function LogoUploadForm({
                     )}
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground">
                         PNG, JPG o SVG. Máximo 2 MB.
                         <br />
@@ -61,7 +61,7 @@ export function LogoUploadForm({
                             Recomendado: fondo transparente, cuadrado.
                         </span>
                     </p>
-                    <form action={formAction} className="flex items-center gap-3">
+                    <form action={formAction} className="flex flex-wrap items-center gap-3">
                         <input
                             ref={fileRef}
                             name="logo"

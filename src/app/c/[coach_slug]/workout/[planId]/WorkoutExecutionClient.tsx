@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import confetti from 'canvas-confetti'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, ChevronLeft, ChevronRight, Zap, Info, Dumbbell, Timer, Play, X, Settings } from 'lucide-react'
@@ -90,6 +91,24 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
     const currentBlock = blocks[currentIndex]
     const currentExercise = Array.isArray(currentBlock.exercises) ? currentBlock.exercises[0] : currentBlock.exercises
 
+    // Immersive Mode Logic & Haptic setup
+    useEffect(() => {
+        if (!showIntro && !showCompleted) {
+            document.body.classList.add('immersive-workout-mode')
+        } else {
+            document.body.classList.remove('immersive-workout-mode')
+        }
+        return () => {
+            document.body.classList.remove('immersive-workout-mode')
+        }
+    }, [showIntro, showCompleted])
+
+    const vibrate = (pattern: number | number[]) => {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(pattern)
+        }
+    }
+
     const handleNext = () => {
         if (currentIndex < blocks.length - 1) {
             setDirection(1)
@@ -97,6 +116,12 @@ export function WorkoutExecutionClient({ plan, logs, coachSlug }: Props) {
         } else {
             // Finish workout
             setShowCompleted(true)
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#10B981', '#3B82F6', '#8B5CF6']
+            })
             setTimeout(() => {
                 router.push(`/c/${coachSlug}/dashboard`)
             }, 3000)

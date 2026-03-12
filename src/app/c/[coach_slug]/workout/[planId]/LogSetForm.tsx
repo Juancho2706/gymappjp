@@ -26,6 +26,9 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog, autoT
     // Trigger rest timer when successfully logged
     useEffect(() => {
         if (state.success && autoTimerEnabled) {
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                navigator.vibrate(50) // Haptic feedback on log
+            }
             startRest(restTimeStr)
         }
     }, [state.success, restTimeStr, startRest, autoTimerEnabled])

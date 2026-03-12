@@ -403,3 +403,12 @@ body, main, div, nav, header, aside, section, article, p, h1, h2, h3, h4, h5, h6
   transition-duration: 300ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Immersive Workout Mode */
+body.immersive-workout-mode nav.client-nav-mobile,
+body.immersive-workout-mode aside.client-nav-desktop {
+  display: none !important;
+}
+body.immersive-workout-mode main {
+  padding-bottom: 0 !important;
+}
