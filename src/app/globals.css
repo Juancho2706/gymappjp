@@ -397,3 +397,9 @@ th {
   background: rgba(17, 24, 39, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
+/* Smooth theme transitions */
+body, main, div, nav, header, aside, section, article, p, h1, h2, h3, h4, h5, h6, span, a, button, input, select, textarea, label {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}

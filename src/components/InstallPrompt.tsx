@@ -82,42 +82,26 @@ export default function InstallPrompt() {
 
   if (!isVisible) return null;
 
-  // small persistent card that can be tapped to expand
+  // floating action button (FAB) for installation
   const card = (
     <div
-      onClick={() => setExpanded(true)}
-      className="fixed bottom-4 left-4 right-4 z-50 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 p-4 transform transition-all animate-in slide-in-from-bottom-5 cursor-pointer"
+      className="fixed bottom-24 right-4 z-50 transform transition-all animate-in slide-in-from-bottom-5 fade-in duration-500"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 flex gap-3 items-center">
-          <div className="bg-primary/10 p-2 rounded-xl text-primary">
-            <Download size={24} />
-          </div>
-          <div>
-            <h3 className="font-semibold text-zinc-900 dark:text-white">Instala la App</h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {isIOS 
-                ? 'Toca compartir y luego "Añadir a inicio" para instalar.'
-                : 'Añádelo a tu pantalla de inicio para una experiencia más fluida.'}
-            </p>
-          </div>
-        </div>
+      <div className="relative">
+        <button
+          onClick={() => isIOS ? setExpanded(true) : handleInstallClick()}
+          className="flex items-center gap-2 px-5 py-3.5 bg-primary text-primary-foreground font-bold text-sm rounded-full shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all"
+        >
+          <Download className="w-5 h-5 animate-bounce" />
+          Instalar App
+        </button>
         <button 
           onClick={handleDismiss}
-          className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+          className="absolute -top-2 -right-2 p-1 bg-muted text-muted-foreground border border-border rounded-full shadow-sm hover:text-foreground transition-colors"
         >
-          <X size={20} />
+          <X className="w-3.5 h-3.5" />
         </button>
       </div>
-      
-      {!isIOS && isInstallable && (
-        <button
-          onClick={handleInstallClick}
-          className="mt-3 w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium py-2 px-4 rounded-xl transition-colors"
-        >
-          Instalar ahora
-        </button>
-      )}
     </div>
   );
 
