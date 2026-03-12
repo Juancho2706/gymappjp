@@ -75,7 +75,6 @@ function ExercisePreviewModal({
     if (!exercise) return null
 
     const hasGif = !!exercise.gif_url
-    const hasVideo = !!exercise.video_url
     const hasInstructions = exercise.instructions && exercise.instructions.length > 0
     const hasEquipment = !!exercise.equipment
     const hasSecondary = exercise.secondary_muscles && exercise.secondary_muscles.length > 0
@@ -83,34 +82,25 @@ function ExercisePreviewModal({
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
             <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
-                {/* GIF demonstration area */}
-                {hasGif && (
-                    <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-4 border-b border-border h-48 md:h-64 shrink-0">
+                {/* GIF demonstration area - Now as header */}
+                <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden">
+                    {hasGif ? (
                         <Image
                             src={exercise.gif_url!}
                             alt={`Demostración: ${exercise.name}`}
                             fill
-                            className="object-contain max-h-64 rounded-xl p-2"
+                            className="object-cover"
                             unoptimized
                         />
-                    </div>
-                )}
-
-                {/* Video fallback if no GIF but has video */}
-                {!hasGif && hasVideo && (
-                    <div className="w-full bg-black/5 dark:bg-black/20 flex items-center justify-center p-6 border-b border-border shrink-0">
-                        <a
-                            href={exercise.video_url!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-5 py-3 bg-primary/10 text-primary rounded-xl font-semibold text-sm hover:bg-primary/20 transition-colors"
-                        >
-                            <Play className="w-5 h-5" />
-                            Ver video del ejercicio
-                            <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                    </div>
-                )}
+                    ) : (
+                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
+                            <Dumbbell className="w-12 h-12" />
+                            <p className="text-xs font-medium">Sin previsualización</p>
+                        </div>
+                    )}
+                    {/* Overlay to ensure readability if we add text or buttons later */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                </div>
 
                 <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
                     <DialogHeader>
