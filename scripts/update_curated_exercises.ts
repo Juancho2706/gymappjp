@@ -68,8 +68,18 @@ async function main() {
     console.log(`\n✅ Fetched ${allExercises.length} from API. Mapping to curated list...`)
 
     const toInsert = curatedList.map((curated: any) => {
-        // Find best match
-        const match = allExercises.find(ex => ex.name.toLowerCase().includes(curated.en.toLowerCase()) || curated.en.toLowerCase().includes(ex.name.toLowerCase()))
+        // Mejorar la lógica de búsqueda de nombres para encontrar más coincidencias
+        const searchTerms = curated.en.toLowerCase().split(' ')
+        const match = allExercises.find(ex => {
+            const exName = ex.name.toLowerCase()
+            // Caso especial: si el nombre es exacto
+            if (exName === curated.en.toLowerCase()) return true
+            // Caso general: que contenga las palabras clave principales
+            return searchTerms.every((term: string) => exName.includes(term))
+        }) || allExercises.find(ex => {
+            // Intento desesperado: que al menos el nombre de la API esté contenido en el nuestro
+            return curated.en.toLowerCase().includes(ex.name.toLowerCase()) && ex.name.length > 5
+        })
         
         return {
             name: curated.es,
