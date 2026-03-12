@@ -66,6 +66,7 @@ export const metadata: Metadata = {
     images: ['/og-image.jpg'],
   },
   metadataBase: new URL('https://omnicoach.app'),
+  manifest: '/api/manifest/default',
 }
 
 export default function RootLayout({
@@ -78,7 +79,6 @@ export default function RootLayout({
       <head>
         <meta charSet="UTF-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <link rel="manifest" href="/api/manifest/default" />
         <meta name="theme-color" content="#10B981" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

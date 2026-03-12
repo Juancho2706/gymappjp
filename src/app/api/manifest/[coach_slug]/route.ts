@@ -30,13 +30,25 @@ export async function GET(
         src: coach?.logo_url || "/icon-192x192.png",
         sizes: "192x192",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
-        purpose: "any maskable"
+        purpose: "any"
       },
       {
         src: coach?.logo_url || "/icon-512x512.png",
         sizes: "512x512",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
-        purpose: "any maskable"
+        purpose: "any"
+      },
+      {
+        src: "/icon-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable"
+      },
+      {
+        src: "/icon-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable"
       }
     ]
   };
