@@ -48,7 +48,14 @@ export default async function CoachClientsPage() {
 
     const clients = (rawClients ?? []) as Client[]
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    // Detect App URL dynamically for Vercel Preview or Production
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL 
+        ? process.env.NEXT_PUBLIC_APP_URL
+        : process.env.VERCEL_PROJECT_PRODUCTION_URL
+            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+            : process.env.VERCEL_URL 
+                ? `https://${process.env.VERCEL_URL}` 
+                : 'http://localhost:3000';
 
     return (
         <div className="max-w-6xl animate-fade-in mb-24 md:mb-0">
