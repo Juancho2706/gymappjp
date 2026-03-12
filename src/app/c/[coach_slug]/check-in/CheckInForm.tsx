@@ -6,6 +6,7 @@ import { Camera, CheckCircle2, Loader2, UploadCloud, X } from 'lucide-react'
 import Image from 'next/image'
 import { submitCheckinAction, type CheckinState } from './actions'
 import { useRouter } from 'next/navigation'
+import imageCompression from 'browser-image-compression'
 
 const initialState: CheckinState = {}
 
@@ -42,8 +43,26 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
         }
     }
 
+    async function handleAction(formData: FormData) {
+        const file = formData.get('photo') as File
+        if (file && file.size > 0) {
+            try {
+                const options = {
+                    maxSizeMB: 2,
+                    maxWidthOrHeight: 1920,
+                    useWebWorker: true
+                }
+                const compressedFile = await imageCompression(file, options)
+                formData.set('photo', compressedFile, file.name)
+            } catch (error) {
+                console.error('Error compressing image:', error)
+            }
+        }
+        formAction(formData)
+    }
+
     return (
-        <form action={formAction} className="bg-card border border-border rounded-2xl p-6 space-y-6">
+        <form action={handleAction} className="bg-card border border-border rounded-2xl p-6 space-y-6">
             <div className="space-y-4">
                 {/* Weight Input */}
                 <div>
