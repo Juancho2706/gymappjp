@@ -221,12 +221,15 @@ export function NutritionForm({ clientId, coachId }: Props) {
                                         <div className="space-y-2">
                                             {meal.food_items.map((foodItem, foodIndex) => (
                                                 <div key={foodIndex} className="flex items-center gap-2">
-                                                    <Input value={foodItem.name} disabled className="h-8 shadow-none" />
-                                                    <Input type="number" value={foodItem.quantity} onChange={(e) => {
-                                                        const newFoodItems = [...meal.food_items]
-                                                        newFoodItems[foodIndex].quantity = Number(e.target.value)
-                                                        handleMealChange(meal.id, 'food_items', newFoodItems)
-                                                    }} className="h-8 shadow-none w-24" />
+                                                    <Input value={foodItem.name} disabled className="h-8 shadow-none flex-1" />
+                                                    <div className="relative w-28">
+                                                        <Input type="number" value={foodItem.quantity} onChange={(e) => {
+                                                            const newFoodItems = [...meal.food_items]
+                                                            newFoodItems[foodIndex].quantity = Number(e.target.value)
+                                                            handleMealChange(meal.id, 'food_items', newFoodItems)
+                                                        }} className="h-8 shadow-none pr-8" title="Cantidad/Porción" />
+                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">g/u</span>
+                                                    </div>
                                                     <Button type="button" variant="ghost" size="icon" onClick={() => {
                                                         const newFoodItems = meal.food_items.filter((_, i) => i !== foodIndex)
                                                         handleMealChange(meal.id, 'food_items', newFoodItems)

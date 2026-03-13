@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'exercisedb-api.vercel.app',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.youtube.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
       }
     ],
   },

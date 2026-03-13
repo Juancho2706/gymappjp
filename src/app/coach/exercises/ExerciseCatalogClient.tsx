@@ -183,6 +183,7 @@ function ExercisePreviewModal({
                                             alt={exercise.name}
                                             fill
                                             className="object-cover"
+                                            unoptimized
                                         />
                                     </div>
                                 ) : hasGif ? (

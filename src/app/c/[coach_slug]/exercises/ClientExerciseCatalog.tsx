@@ -102,6 +102,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                       alt={ex.name}
                       fill
                       className="object-cover group-hover:scale-110 transition-transform duration-500"
+                      unoptimized
                     />
                   ) : <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
                 }

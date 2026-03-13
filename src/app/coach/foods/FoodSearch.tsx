@@ -33,7 +33,7 @@ export function FoodSearch({ onFoodSelected }: Props) {
     }, [searchTerm])
 
     const handleSearch = async () => {
-        if (!searchTerm.trim()) {
+        if (searchTerm.trim().length < 3) {
             setResults([])
             return
         }
@@ -61,33 +61,33 @@ export function FoodSearch({ onFoodSelected }: Props) {
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {results.map((food) => (
-                    <div key={food.id} className="bg-card border border-border rounded-xl p-4 flex justify-between items-center">
-                        <div>
-                            <h3 className="font-bold">{food.name}</h3>
-                            <p className="text-sm text-muted-foreground">Serving: {food.serving_size_g}g</p>
-                            <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
-                                <div>
-                                    <p className="font-bold">Calorías</p>
-                                    <p>{food.calories}</p>
+                    <div key={food.id} className="bg-card border border-border rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex-1 w-full">
+                            <h3 className="font-bold line-clamp-2">{food.name}</h3>
+                            <p className="text-sm text-muted-foreground mb-2">Porción: {food.serving_size_g}g</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs bg-muted/50 p-2 rounded-lg w-fit">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-muted-foreground">Calorías</span>
+                                    <span>{food.calories}</span>
                                 </div>
-                                <div>
-                                    <p className="font-bold">Proteínas</p>
-                                    <p>{food.protein_g}g</p>
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-muted-foreground">Proteínas</span>
+                                    <span>{food.protein_g}g</span>
                                 </div>
-                                <div>
-                                    <p className="font-bold">Carbs</p>
-                                    <p>{food.carbs_g}g</p>
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-muted-foreground">Carbs</span>
+                                    <span>{food.carbs_g}g</span>
                                 </div>
-                                <div>
-                                    <p className="font-bold">Grasas</p>
-                                    <p>{food.fats_g}g</p>
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-muted-foreground">Grasas</span>
+                                    <span>{food.fats_g}g</span>
                                 </div>
                             </div>
                         </div>
                         {onFoodSelected && (
                             <button
                                 type="button"
-                                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shrink-0 w-full sm:w-auto inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 mt-2 sm:mt-0"
                                 onClick={() => onFoodSelected(food)}
                             >
                                 Agregar
