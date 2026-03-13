@@ -54,12 +54,12 @@ export async function GET(request: NextRequest, { params }: Params) {
             ]
             : [
                 {
-                    src: '/icons/icon-192.png',
+                    src: '/icon-192x192.png',
                     sizes: '192x192',
                     type: 'image/png',
                 },
                 {
-                    src: '/icons/icon-512.png',
+                    src: '/icon-512x512.png',
                     sizes: '512x512',
                     type: 'image/png',
                 },

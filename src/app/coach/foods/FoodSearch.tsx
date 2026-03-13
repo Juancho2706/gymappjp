@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 
 export interface Food {
@@ -25,8 +24,16 @@ export function FoodSearch({ onFoodSelected }: Props) {
     const [searchTerm, setSearchTerm] = useState('')
     const [results, setResults] = useState<Food[]>([])
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            handleSearch()
+        }, 300)
+
+        return () => clearTimeout(timer)
+    }, [searchTerm])
+
     const handleSearch = async () => {
-        if (!searchTerm) {
+        if (!searchTerm.trim()) {
             setResults([])
             return
         }
@@ -50,7 +57,6 @@ export function FoodSearch({ onFoodSelected }: Props) {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                <Button type="button" onClick={handleSearch}>Buscar</Button>
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -78,7 +84,15 @@ export function FoodSearch({ onFoodSelected }: Props) {
                                 </div>
                             </div>
                         </div>
-                        {onFoodSelected && <Button type="button" onClick={() => onFoodSelected(food)}>Agregar</Button>}
+                        {onFoodSelected && (
+                            <button
+                                type="button"
+                                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                                onClick={() => onFoodSelected(food)}
+                            >
+                                Agregar
+                            </button>
+                        )}
                     </div>
                 ))}
             </div>

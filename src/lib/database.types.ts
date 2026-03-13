@@ -522,6 +522,113 @@ export type Database = {
           },
         ]
       }
+      recipe_ingredients: {
+        Row: {
+          created_at: string
+          food_id: string | null
+          id: string
+          name: string
+          quantity: number
+          recipe_id: string
+          unit: string
+        }
+        Insert: {
+          created_at?: string
+          food_id?: string | null
+          id?: string
+          name: string
+          quantity: number
+          recipe_id: string
+          unit: string
+        }
+        Update: {
+          created_at?: string
+          food_id?: string | null
+          id?: string
+          name?: string
+          quantity?: number
+          recipe_id?: string
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_ingredients_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_ingredients_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          coach_id: string | null
+          created_at: string
+          description: string | null
+          fats_g: number | null
+          id: string
+          image_url: string | null
+          instructions: string | null
+          name: string
+          prep_time_minutes: number | null
+          protein_g: number | null
+          source_api: string | null
+          source_api_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          coach_id?: string | null
+          created_at?: string
+          description?: string | null
+          fats_g?: number | null
+          id?: string
+          image_url?: string | null
+          instructions?: string | null
+          name: string
+          prep_time_minutes?: number | null
+          protein_g?: number | null
+          source_api?: string | null
+          source_api_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          coach_id?: string | null
+          created_at?: string
+          description?: string | null
+          fats_g?: number | null
+          id?: string
+          image_url?: string | null
+          instructions?: string | null
+          name?: string
+          prep_time_minutes?: number | null
+          protein_g?: number | null
+          source_api?: string | null
+          source_api_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipes_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_meal_items: {
         Row: {
           food_id: string
