@@ -44,7 +44,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                                     onClick={() => setSelected(ex)}
                                     className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-150 cursor-pointer"
                                 >
-                                    {(ex.gif_url || ex.video_url) && <span className="mr-1.5 text-primary">●</span>}
+                                    {(ex.video_url || ex.gif_url) && <span className="mr-1.5 text-primary">●</span>}
                                     {ex.name}
                                 </button>
                             ))}
@@ -74,9 +74,8 @@ function ExercisePreviewModal({
 }) {
     if (!exercise) return null
 
-    const displayGif = exercise.gif_url || exercise.video_url
-    const isYouTube = displayGif?.includes('youtube.com') || displayGif?.includes('youtu.be')
-    const hasGif = !!displayGif && !isYouTube
+    const displayVideo = exercise.video_url
+    const isYouTube = displayVideo?.includes('youtube.com') || displayVideo?.includes('youtu.be')
     const hasInstructions = exercise.instructions && exercise.instructions.length > 0
     const hasEquipment = !!exercise.equipment
     const hasSecondary = exercise.secondary_muscles && exercise.secondary_muscles.length > 0
@@ -86,22 +85,15 @@ function ExercisePreviewModal({
         const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)
         return match ? match[1] : null
     }
-    const ytId = isYouTube ? getYouTubeId(displayGif!) : null
+    const ytId = isYouTube ? getYouTubeId(displayVideo!) : null
+    const hasGif = !isYouTube && !!exercise.gif_url
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
             <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col focus:outline-none">
                 {/* Media demonstration area */}
                 <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-0">
-                    {hasGif ? (
-                        <Image
-                            src={displayGif!}
-                            alt={`Demostración: ${exercise.name}`}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                        />
-                    ) : isYouTube && ytId ? (
+                    {isYouTube && ytId ? (
                         <iframe
                             className="w-full h-full"
                             src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`}
@@ -109,13 +101,20 @@ function ExercisePreviewModal({
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
                         />
+                    ) : hasGif ? (
+                        <Image
+                            src={exercise.gif_url!}
+                            alt={`Demostración: ${exercise.name}`}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                        />
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
                             <Dumbbell className="w-12 h-12" />
                             <p className="text-xs font-medium">Sin previsualización</p>
                         </div>
                     )}
-                    {hasGif && <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />}
                 </div>
 
                 <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
@@ -175,10 +174,19 @@ function ExercisePreviewModal({
                         </p>
                         <div className="bg-card border border-border rounded-xl p-4">
                             <div className="flex items-center gap-3">
-                                {hasGif ? (
+                                {isYouTube && ytId ? (
                                     <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
                                         <Image
-                                            src={displayGif!}
+                                            src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+                                            alt={exercise.name}
+                                            fill
+                                            className="object-cover"
+                                        />
+                                    </div>
+                                ) : hasGif ? (
+                                    <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
+                                        <Image
+                                            src={exercise.gif_url!}
                                             alt={exercise.name}
                                             fill
                                             className="object-cover"

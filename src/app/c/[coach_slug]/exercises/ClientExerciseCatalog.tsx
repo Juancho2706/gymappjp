@@ -84,17 +84,40 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
             className="bg-card border border-border rounded-2xl p-3 flex gap-4 items-center cursor-pointer hover:border-border/80 hover:bg-muted/30 transition-all shadow-sm group"
           >
             <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-              {(ex.gif_url || ex.video_url) ? (
-                <Image
-                  src={(ex.gif_url || ex.video_url)!}
-                  alt={ex.name}
-                  fill
-                  className="object-cover group-hover:scale-110 transition-transform duration-500"
-                  unoptimized
-                />
-              ) : (
-                <Dumbbell className="w-6 h-6 text-muted-foreground/50" />
-              )}
+              {(() => {
+                const url = ex.video_url || ex.gif_url;
+                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
+                const getYouTubeId = (u: string) => {
+                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+                  return match ? match[1] : null;
+                };
+
+                if (isYouTube) {
+                  const ytId = getYouTubeId(url!);
+                  return ytId ? (
+                    <Image
+                      src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+                      alt={ex.name}
+                      fill
+                      className="object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                  ) : <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
+                }
+
+                if (url) {
+                  return (
+                    <Image
+                      src={url}
+                      alt={ex.name}
+                      fill
+                      className="object-cover group-hover:scale-110 transition-transform duration-500"
+                      unoptimized
+                    />
+                  );
+                }
+
+                return <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
+              })()}
             </div>
             <div className="flex-1 min-w-0">
               <p
