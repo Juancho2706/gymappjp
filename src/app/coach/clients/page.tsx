@@ -6,14 +6,16 @@ import { ClientsHeader } from './ClientsHeader'
 import { DeleteClientButton } from './DeleteClientButton'
 import { ToggleStatusButton } from './ToggleStatusButton'
 import { ResetPasswordButton } from './ResetPasswordButton'
-import type { Client } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Client = Tables<'clients'>
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
     title: 'Alumnos | OmniCoach OS',
 }
 
-function StatusBadge({ forceChange, isActive }: { forceChange: boolean, isActive?: boolean }) {
+function StatusBadge({ forceChange, isActive }: { forceChange: boolean, isActive?: boolean | null }) {
     if (isActive === false) {
         return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20">

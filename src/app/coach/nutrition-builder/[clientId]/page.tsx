@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Apple } from 'lucide-react'
-import type { Client } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Client = Tables<'clients'>
 import { NutritionForm } from './NutritionForm'
 
 export default async function NutritionBuilderPage({

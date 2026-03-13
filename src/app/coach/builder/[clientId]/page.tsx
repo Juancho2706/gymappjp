@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import type { Client, Exercise } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Client = Tables<'clients'>
+type Exercise = Tables<'exercises'>
 import type { Metadata } from 'next'
 import { PlanBuilder } from './PlanBuilder'
 

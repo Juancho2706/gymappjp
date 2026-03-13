@@ -34,7 +34,7 @@ export async function submitIntakeForm(
     }
 
     // Insert the intake form
-    const { error: intakeError } = await (supabase as any)
+    const { error: intakeError } = await supabase
         .from('client_intake')
         .insert({
             client_id: user.id,
@@ -56,7 +56,7 @@ export async function submitIntakeForm(
     }
 
     // Update the client as onboarded
-    const { error: clientError } = await (supabase as any)
+    const { error: clientError } = await supabase
         .from('clients')
         .update({ onboarding_completed: true })
         .eq('id', user.id)

@@ -4,7 +4,9 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
-import type { Coach } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Coach = Tables<'coaches'>
 
 interface Props {
     params: Promise<{ coach_slug: string }>

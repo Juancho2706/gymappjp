@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
@@ -50,7 +51,7 @@ export async function createClientAction(
         .eq('id', coachUser.id)
         .maybeSingle()
 
-    const coach = rawCoachData as Pick<import('@/lib/database.types').Coach, 'id' | 'slug'> | null
+    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug'> | null
 
     if (!coach) return { error: 'Coach no encontrado.' }
 
@@ -128,7 +129,7 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
     if (!coachUser) return { error: 'No autenticado.' }
 
     // Verify client belongs to this coach
-    const { data: client } = await (supabase as any)
+    const { data: client } = await supabase
         .from('clients')
         .select('id')
         .eq('id', clientId)
@@ -148,7 +149,7 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
     if (authError) return { error: `Error al actualizar: ${authError.message}` }
 
     // Force password change on next login
-    const { error: dbError } = await (supabase as any)
+    const { error: dbError } = await supabase
         .from('clients')
         .update({ force_password_change: true })
         .eq('id', clientId)
@@ -166,7 +167,7 @@ export async function toggleClientStatusAction(clientId: string, isActive: boole
     if (!coachUser) return { error: 'No autenticado.' }
 
     // Verify client belongs to this coach and update
-    const { error } = await (supabase as any)
+    const { error } = await supabase
         .from('clients')
         .update({ is_active: isActive })
         .eq('id', clientId)

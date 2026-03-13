@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import type { Coach } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Coach = Tables<'coaches'>
 
 interface Params {
     params: Promise<{ coach_slug: string }>

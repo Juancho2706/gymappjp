@@ -12,7 +12,9 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import type { Client } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Client = Tables<'clients'>
 
 export const metadata: Metadata = { title: 'Dashboard' }
 

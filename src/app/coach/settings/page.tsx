@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { BrandSettingsForm } from './BrandSettingsForm'
 import { LogoUploadForm } from './LogoUploadForm'
-import type { Coach } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Coach = Tables<'coaches'>
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {

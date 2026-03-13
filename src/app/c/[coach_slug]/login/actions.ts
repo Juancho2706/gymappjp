@@ -4,7 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
-import type { Coach, Client } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Coach = Tables<'coaches'>
+type Client = Tables<'clients'>
 
 const clientLoginSchema = z.object({
     email: z.string().email('Email inválido'),

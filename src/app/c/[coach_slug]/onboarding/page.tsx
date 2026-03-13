@@ -14,7 +14,7 @@ export default async function OnboardingPage({ params }: Props) {
     if (!user) redirect(`/c/${coach_slug}/login`)
 
     // Verify if onboarding is already completed
-    const { data: client } = await (supabase as any)
+    const { data: client } = await supabase
         .from('clients')
         .select('onboarding_completed')
         .eq('id', user.id)

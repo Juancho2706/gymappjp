@@ -18,7 +18,7 @@ export async function toggleMealCompletion(
 
     // 1. If daily log doesn't exist today, create it
     if (!dailyLogId) {
-        const { data: newLog, error: logError } = await (supabase as any)
+        const { data: newLog, error: logError } = await supabase
             .from('daily_nutrition_logs')
             .insert({
                 client_id: clientId,
@@ -36,7 +36,7 @@ export async function toggleMealCompletion(
     }
 
     // 2. Check if a meal log exists for this meal today
-    const { data: existingMealLog } = await (supabase as any)
+    const { data: existingMealLog } = await supabase
         .from('nutrition_meal_logs')
         .select('id')
         .eq('daily_log_id', dailyLogId)
@@ -45,13 +45,13 @@ export async function toggleMealCompletion(
 
     if (existingMealLog) {
         // Update
-        await (supabase as any)
+        await supabase
             .from('nutrition_meal_logs')
             .update({ is_completed: isCompleted })
             .eq('id', existingMealLog.id)
     } else {
         // Insert
-        await (supabase as any)
+        await supabase
             .from('nutrition_meal_logs')
             .insert({
                 daily_log_id: dailyLogId,

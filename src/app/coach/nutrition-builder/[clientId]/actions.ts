@@ -9,10 +9,16 @@ export type NutritionFormState = {
     success?: boolean
 }
 
+interface FoodItemPayload {
+    food_id: string
+    quantity: number
+}
+
 interface MealPayload {
     name: string
     description: string
     order_index: number
+    items: FoodItemPayload[]
 }
 
 export async function saveNutritionPlan(
@@ -35,27 +41,43 @@ export async function saveNutritionPlan(
         return { error: 'El nombre del plan es requerido.' }
     }
 
-    // Extract Meals (Dynamic Fields)
-    // Meals are submitted as arrays: meal_name_0, meal_desc_0, meal_name_1, etc.
+    // Extract Meals and Food Items
     const meals: MealPayload[] = []
     let i = 0
     while (formData.has(`meal_name_${i}`)) {
         const mealName = formData.get(`meal_name_${i}`) as string
-        const mealDesc = formData.get(`meal_desc_${i}`) as string
-        if (mealName && mealDesc) {
-            meals.push({ name: mealName, description: mealDesc, order_index: i })
+        const mealItems: FoodItemPayload[] = []
+        
+        let j = 0
+        while (formData.has(`meal_${i}_food_id_${j}`)) {
+            const foodId = formData.get(`meal_${i}_food_id_${j}`) as string
+            const quantity = formData.get(`meal_${i}_quantity_${j}`) as string
+            if (foodId && quantity) {
+                mealItems.push({ 
+                    food_id: foodId, 
+                    quantity: parseInt(quantity) || 0 
+                })
+            }
+            j++
         }
+
+        meals.push({ 
+            name: mealName, 
+            description: "", // Default empty as per current UI
+            order_index: i,
+            items: mealItems
+        })
         i++
     }
 
     // 1. Invalidate previous active plans
-    await (supabase as any)
+    await supabase
         .from('nutrition_plans')
         .update({ is_active: false })
         .eq('client_id', clientId)
 
     // 2. Insert new plan
-    const { data: newPlan, error: planError } = await (supabase as any)
+    const { data: newPlan, error: planError } = await supabase
         .from('nutrition_plans')
         .insert({
             client_id: clientId,
@@ -76,20 +98,38 @@ export async function saveNutritionPlan(
         return { error: 'Error al guardar el plan nutricional.' }
     }
 
-    // 3. Insert meals if any
-    if (meals.length > 0) {
-        const mealsToInsert = meals.map(m => ({
-            plan_id: newPlan.id,
-            ...m
-        }))
-
-        const { error: mealsError } = await (supabase as any)
+    // 3. Insert meals and their items
+    for (const meal of meals) {
+        const { data: insertedMeal, error: mealError } = await supabase
             .from('nutrition_meals')
-            .insert(mealsToInsert)
+            .insert({
+                plan_id: newPlan.id,
+                name: meal.name,
+                description: meal.description,
+                order_index: meal.order_index
+            })
+            .select('id')
+            .single()
 
-        if (mealsError) {
-            console.error('Save Meals Error:', mealsError)
-            return { error: 'El plan se guardó, pero hubo un error al guardar las comidas.' }
+        if (mealError || !insertedMeal) {
+            console.error('Save Meal Error:', mealError)
+            continue // Or handle error more strictly
+        }
+
+        if (meal.items.length > 0) {
+            const itemsToInsert = meal.items.map(item => ({
+                meal_id: insertedMeal.id,
+                food_id: item.food_id,
+                quantity: item.quantity
+            }))
+
+            const { error: itemsError } = await supabase
+                .from('food_items')
+                .insert(itemsToInsert)
+
+            if (itemsError) {
+                console.error('Save Food Items Error:', itemsError)
+            }
         }
     }
 

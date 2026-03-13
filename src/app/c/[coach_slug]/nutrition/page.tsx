@@ -4,6 +4,27 @@ import { ArrowLeft, CheckCircle2, Circle, Apple } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { NutritionTracker } from './NutritionTracker'
+import type { Tables } from '@/lib/database.types'
+
+type NutritionPlan = Tables<'nutrition_plans'>
+type NutritionMeal = Tables<'nutrition_meals'>
+
+interface NutritionMealWithItems extends NutritionMeal {
+    food_items: {
+        quantity: number;
+        foods: {
+            name: string;
+            calories: number;
+            protein_g: number;
+            carbs_g: number;
+            fats_g: number;
+        }
+    }[]
+}
+
+interface NutritionPlanWithMeals extends NutritionPlan {
+    nutrition_meals: NutritionMealWithItems[]
+}
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -19,30 +40,28 @@ export default async function ClientNutritionPage({ params }: Props) {
     if (!user) redirect(`/c/${coach_slug}/login`)
 
     // Fetch client and coach branding
-    const { data: client } = await (supabase as any)
+    const { data: client } = await supabase
         .from('clients')
         .select(`
             id,
             coaches ( brand_name, primary_color )
         `)
         .eq('id', user.id)
-        .maybeSingle()
+        .single()
 
     if (!client) redirect(`/c/${coach_slug}/login`)
     const coachBranding = Array.isArray(client.coaches) ? client.coaches[0] : client.coaches
 
     // Fetch active nutrition plan
-    const { data: rawPlan } = await (supabase as any)
+    const { data: plan } = await supabase
         .from('nutrition_plans')
         .select(`
             *,
-            nutrition_meals (*)
+            nutrition_meals (*, food_items(*, foods(*)))
         `)
         .eq('client_id', user.id)
         .eq('is_active', true)
-        .maybeSingle()
-
-    const plan = rawPlan
+        .single<NutritionPlanWithMeals>()
     
     if (!plan) {
         return (
@@ -66,7 +85,7 @@ export default async function ClientNutritionPage({ params }: Props) {
 
     // Fetch today's log
     const today = new Date().toISOString().split('T')[0]
-    const { data: rawDailyLog } = await (supabase as any)
+    const { data: todayLog } = await supabase
         .from('daily_nutrition_logs')
         .select(`
             *,
@@ -75,9 +94,7 @@ export default async function ClientNutritionPage({ params }: Props) {
         .eq('client_id', user.id)
         .eq('plan_id', plan.id)
         .eq('log_date', today)
-        .maybeSingle()
-
-    const todayLog = rawDailyLog
+        .single()
 
     return (
         <div className="min-h-screen relative overflow-hidden bg-background">

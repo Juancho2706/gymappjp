@@ -2,7 +2,9 @@ import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata, Viewport } from 'next'
-import type { Coach } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Coach = Tables<'coaches'>
 import { ClientNav } from '@/components/client/ClientNav'
 
 interface Props {

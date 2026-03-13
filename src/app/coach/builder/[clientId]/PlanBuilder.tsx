@@ -28,7 +28,10 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { createPlanAction } from './actions'
-import type { Client, Exercise } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Client = Tables<'clients'>
+type Exercise = Tables<'exercises'>
 
 // ─── Types ──────────────────────────────────────────────────────
 interface BuilderBlock {

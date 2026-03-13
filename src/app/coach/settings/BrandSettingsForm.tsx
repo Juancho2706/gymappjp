@@ -7,7 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Loader2, Save, Palette } from 'lucide-react'
 import { updateBrandSettingsAction, type BrandSettingsState } from './actions'
 import { cn } from '@/lib/utils'
-import type { Coach } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Coach = Tables<'coaches'>
 
 const initialState: BrandSettingsState = {}
 

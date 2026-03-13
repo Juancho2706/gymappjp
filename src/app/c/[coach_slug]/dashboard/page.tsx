@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation'
 import { Calendar, Dumbbell, TrendingUp, ChevronRight, Apple } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import type { Client, WorkoutPlan, Coach } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Client = Tables<'clients'>
+type WorkoutPlan = Tables<'workout_plans'>
+type Coach = Tables<'coaches'>
 import { WeightProgressChart } from './WeightProgressChart'
 
 export const metadata: Metadata = { title: 'Dashboard' }

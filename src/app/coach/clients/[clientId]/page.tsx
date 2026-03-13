@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Calendar, Dumbbell, Apple, Pencil } from 'lucide-react'
-import type { Client, WorkoutPlan, CheckIn, NutritionPlan } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Client = Tables<'clients'>
+type WorkoutPlan = Tables<'workout_plans'>
+type CheckIn = Tables<'check_ins'>
+type NutritionPlan = Tables<'nutrition_plans'>
 import type { Metadata } from 'next'
 import { DeletePlanButton } from './DeletePlanButton'
 import { CheckInCard } from '@/components/coach/CheckInCard'
@@ -19,7 +24,7 @@ export default async function ClientDetailPage({
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
 
-    const { data: rawClient } = await (supabase as any)
+    const { data: rawClient } = await supabase
         .from('clients')
         .select('*')
         .eq('id', clientId)
@@ -45,7 +50,7 @@ export default async function ClientDetailPage({
         return acc
     }, {})
 
-    const { data: rawNutrition } = await (supabase as any)
+    const { data: rawNutrition } = await supabase
         .from('nutrition_plans')
         .select('*')
         .eq('client_id', clientId)
@@ -56,7 +61,7 @@ export default async function ClientDetailPage({
 
     // Fetch today's adherence
     const today = new Date().toISOString().split('T')[0]
-    const { data: rawDailyLog } = await (supabase as any)
+    const { data: rawDailyLog } = await supabase
         .from('daily_nutrition_logs')
         .select(`
             *,
@@ -182,7 +187,7 @@ export default async function ClientDetailPage({
             {/* Intake Profile Card */}
             {(() => {
                 const fetchIntake = async () => {
-                    const { data } = await (supabase as any)
+                    const { data } = await supabase
                         .from('client_intake')
                         .select('*')
                         .eq('client_id', clientId)

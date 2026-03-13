@@ -9,7 +9,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Dumbbell, Search, Play, X, Info } from "lucide-react";
-import type { Exercise } from "@/lib/database.types";
+import type { Tables } from "@/lib/database.types";
+
+type Exercise = Tables<"exercises">;
 
 interface Props {
   byMuscle: Record<string, Exercise[]>;

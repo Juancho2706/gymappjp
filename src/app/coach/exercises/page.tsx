@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
-import type { Exercise } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Exercise = Tables<'exercises'>
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Ejercicios | OmniCoach OS' }

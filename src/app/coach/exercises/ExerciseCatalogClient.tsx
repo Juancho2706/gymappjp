@@ -9,7 +9,9 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench } from 'lucide-react'
-import type { Exercise } from '@/lib/database.types'
+import type { Tables } from '@/lib/database.types'
+
+type Exercise = Tables<'exercises'>
 
 interface ExerciseCatalogClientProps {
     globalExercises: Exercise[]
