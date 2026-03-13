@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import * as dotenv from 'dotenv'
 import path from 'path'
+import { searchYouTube } from './lib/youtube'
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
 
@@ -8,21 +9,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const db = createClient(supabaseUrl, serviceKey)
-
-async function searchYouTube(query: string) {
-  try {
-    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + " exercise tutorial technique")}`
-    const response = await fetch(searchUrl)
-    const text = await response.text()
-    
-    // Extract first video ID using regex
-    const match = text.match(/\/watch\?v=([a-zA-Z0-9_-]{11})/)
-    return match ? `https://www.youtube.com/watch?v=${match[1]}` : null
-  } catch (error) {
-    console.error(`Error searching YouTube for ${query}:`, error)
-    return null
-  }
-}
 
 async function main() {
   console.log('🚀 Unificando todo el catálogo a videos de YouTube...')
@@ -52,7 +38,7 @@ async function main() {
     }
 
     process.stdout.write(`- Buscando para: ${ex.name}... `)
-    const videoUrl = await searchYouTube(ex.name)
+    const videoUrl = await searchYouTube(ex.name, 'technique')
     
     if (videoUrl) {
       const { error: updateError } = await db
