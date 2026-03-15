@@ -136,7 +136,7 @@ export function RecipeSearch({ coachId }: { coachId: string }) {
 
             {results.length === 0 && !loading && query && (
                 <div className="text-center py-12 text-muted-foreground">
-                    No se encontraron recetas para "{query}"
+                    No se encontraron recetas para &quot;{query}&quot;
                 </div>
             )}
         </div>

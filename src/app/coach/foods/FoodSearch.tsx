@@ -25,28 +25,24 @@ export function FoodSearch({ onFoodSelected }: Props) {
     const [results, setResults] = useState<Food[]>([])
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            handleSearch()
+        const timer = setTimeout(async () => {
+            if (searchTerm.trim().length < 3) {
+                setResults([])
+                return
+            }
+
+            const { data, error } = await supabase.rpc('search_foods', { search_term: searchTerm })
+
+            if (error) {
+                console.error('Error searching foods:', error)
+                return
+            }
+
+            setResults(data as Food[])
         }, 300)
 
         return () => clearTimeout(timer)
-    }, [searchTerm])
-
-    const handleSearch = async () => {
-        if (searchTerm.trim().length < 3) {
-            setResults([])
-            return
-        }
-
-        const { data, error } = await supabase.rpc('search_foods', { search_term: searchTerm })
-
-        if (error) {
-            console.error('Error searching foods:', error)
-            return
-        }
-
-        setResults(data as Food[])
-    }
+    }, [searchTerm, supabase])
 
     return (
         <div>

@@ -89,6 +89,35 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
     const [showTimerSettings, setShowTimerSettings] = useState(false)
     const [showCompleted, setShowCompleted] = useState(false)
 
+    // Immersive Mode Logic & Haptic setup
+    useEffect(() => {
+        if (!showIntro && !showCompleted) {
+            document.body.classList.add('immersive-workout-mode')
+        } else {
+            document.body.classList.remove('immersive-workout-mode')
+        }
+        return () => {
+            document.body.classList.remove('immersive-workout-mode')
+        }
+    }, [showIntro, showCompleted])
+
+    const vibrate = (pattern: number | number[]) => {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(pattern)
+        }
+    }
+
+    // auto‑dismiss intro after a short delay
+    useEffect(() => {
+        setMounted(true)
+        const savedAutoTimer = localStorage.getItem('omni_autotimer')
+        if (savedAutoTimer !== null) {
+            setAutoTimerEnabled(savedAutoTimer === 'true')
+        }
+        const t = setTimeout(() => setShowIntro(false), 1200)
+        return () => clearTimeout(t)
+    }, [])
+
     const currentBlock = blocks[currentIndex]
     
     // Safety check: if no blocks exist (e.g. after a database cleanup), redirect or show error
@@ -127,24 +156,6 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
 
     const currentExercise = rawExercise as ExerciseType
 
-    // Immersive Mode Logic & Haptic setup
-    useEffect(() => {
-        if (!showIntro && !showCompleted) {
-            document.body.classList.add('immersive-workout-mode')
-        } else {
-            document.body.classList.remove('immersive-workout-mode')
-        }
-        return () => {
-            document.body.classList.remove('immersive-workout-mode')
-        }
-    }, [showIntro, showCompleted])
-
-    const vibrate = (pattern: number | number[]) => {
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            navigator.vibrate(pattern)
-        }
-    }
-
     const handleNext = () => {
         if (currentIndex < blocks.length - 1) {
             setDirection(1)
@@ -172,17 +183,6 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
     }
 
     const progressPercentage = ((currentIndex + 1) / blocks.length) * 100
-
-    // auto‑dismiss intro after a short delay
-    useEffect(() => {
-        setMounted(true)
-        const savedAutoTimer = localStorage.getItem('omni_autotimer')
-        if (savedAutoTimer !== null) {
-            setAutoTimerEnabled(savedAutoTimer === 'true')
-        }
-        const t = setTimeout(() => setShowIntro(false), 1200)
-        return () => clearTimeout(t)
-    }, [])
 
     const toggleAutoTimer = () => {
         const newValue = !autoTimerEnabled

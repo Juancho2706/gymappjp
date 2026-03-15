@@ -112,7 +112,7 @@ export default async function RecipesPage() {
                         <div className="text-center py-12 border rounded-xl border-dashed">
                             <ChefHat className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
                             <h3 className="text-lg font-medium">Aún no tienes recetas</h3>
-                            <p className="text-muted-foreground">Ve a la pestaña "Descubrir Nuevas" para buscar y agregar recetas a tu biblioteca.</p>
+                            <p className="text-muted-foreground">Ve a la pestaña &quot;Descubrir Nuevas&quot; para buscar y agregar recetas a tu biblioteca.</p>
                         </div>
                     )}
                 </TabsContent>

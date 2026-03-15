@@ -12,7 +12,7 @@ const initialState: CheckinState = {}
 
 export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: string, coachPrimaryColor: string }) {
     const router = useRouter()
-    const [state, formAction] = useActionState(submitCheckinAction, initialState)
+    const [state, formAction, isServerPending] = useActionState(submitCheckinAction, initialState)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -173,22 +173,23 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
                 </div>
             )}
 
-            <SubmitButton color={coachPrimaryColor} />
+            <SubmitButton color={coachPrimaryColor} isServerPending={isServerPending} />
         </form>
     )
 }
 
-function SubmitButton({ color }: { color: string }) {
+function SubmitButton({ color, isServerPending }: { color: string, isServerPending: boolean }) {
     const { pending } = useFormStatus()
+    const isLoading = pending || isServerPending
     return (
         <button
             type="submit"
-            disabled={pending}
+            disabled={isLoading}
             className="w-full h-11 flex items-center justify-center gap-2 rounded-xl font-semibold text-sm transition-all text-white disabled:opacity-50"
             style={{ backgroundColor: color }}
         >
-            {pending ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud className="w-5 h-5" />}
-            {pending ? 'Enviando Reporte...' : 'Enviar Check-in'}
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud className="w-5 h-5" />}
+            {isLoading ? 'Enviando Reporte...' : 'Enviar Check-in'}
         </button>
     )
 }

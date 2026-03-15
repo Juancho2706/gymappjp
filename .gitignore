@@ -59,3 +59,11 @@ node_modules/
 /playwright/.cache/
 /playwright/.auth/
 scripts/rls-policies.sql
+lint_errors_utf8.txt
+lint_errors.txt
+lint_results_utf8.txt
+lint_results.txt
+tsc_errors_utf8.txt
+tsc_errors.txt
+tsc_results_utf8.txt
+tsc_results.txt
