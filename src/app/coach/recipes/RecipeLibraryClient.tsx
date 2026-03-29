@@ -55,7 +55,7 @@ export function RecipeLibraryClient({ recipes, coachId }: RecipeLibraryClientPro
             )}
           </div>
           <div className="w-full md:w-48">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val || 'Todas')}>
               <SelectTrigger>
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Categoría" />
