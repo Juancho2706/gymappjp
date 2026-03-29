@@ -528,6 +528,124 @@ export type Database = {
           },
         ]
       }
+      nutrition_plan_templates: {
+        Row: {
+          carbs_g: number | null
+          coach_id: string
+          created_at: string
+          daily_calories: number | null
+          description: string | null
+          fats_g: number | null
+          id: string
+          instructions: string | null
+          name: string
+          protein_g: number | null
+          updated_at: string
+        }
+        Insert: {
+          carbs_g?: number | null
+          coach_id: string
+          created_at?: string
+          daily_calories?: number | null
+          description?: string | null
+          fats_g?: number | null
+          id?: string
+          instructions?: string | null
+          name: string
+          protein_g?: number | null
+          updated_at?: string
+        }
+        Update: {
+          carbs_g?: number | null
+          coach_id?: string
+          created_at?: string
+          daily_calories?: number | null
+          description?: string | null
+          fats_g?: number | null
+          id?: string
+          instructions?: string | null
+          name?: string
+          protein_g?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plan_templates_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_meals: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          order_index: number
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          order_index?: number
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          order_index?: number
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_meals_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_meal_groups: {
+        Row: {
+          id: string
+          order_index: number
+          saved_meal_id: string
+          template_meal_id: string
+        }
+        Insert: {
+          id?: string
+          order_index?: number
+          saved_meal_id: string
+          template_meal_id: string
+        }
+        Update: {
+          id?: string
+          order_index?: number
+          saved_meal_id?: string
+          template_meal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_meal_groups_saved_meal_id_fkey"
+            columns: ["saved_meal_id"]
+            isOneToOne: false
+            referencedRelation: "saved_meals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_meal_groups_template_meal_id_fkey"
+            columns: ["template_meal_id"]
+            isOneToOne: false
+            referencedRelation: "template_meals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipe_ingredients: {
         Row: {
           created_at: string
