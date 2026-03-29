@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, Suspense } from 'react'
 import { useFormStatus } from 'react-dom'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Lock, Loader2, ShieldCheck } from 'lucide-react'
 import { resetPasswordAction, type ResetPasswordState } from './actions'
@@ -36,8 +37,10 @@ function SubmitButton() {
     )
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
     const [state, formAction] = useActionState(resetPasswordAction, initialState)
+    const searchParams = useSearchParams()
+    const coachSlug = searchParams.get('coach_slug')
 
     return (
         <div className="animate-slide-up">
@@ -58,6 +61,7 @@ export default function ResetPasswordPage() {
 
             <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">
                 <form action={formAction} className="space-y-5">
+                    {coachSlug && <input type="hidden" name="coach_slug" value={coachSlug} />}
                     <div className="space-y-2">
                         <Label htmlFor="password" className="text-muted-foreground text-sm font-medium">
                             Nueva contraseña
@@ -105,12 +109,24 @@ export default function ResetPasswordPage() {
 
             <div className="mt-6 text-center">
                 <Link
-                    href="/login"
+                    href={coachSlug ? `/c/${coachSlug}/login` : "/login"}
                     className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                     Volver al inicio de sesión
                 </Link>
             </div>
         </div>
+    )
+}
+
+export default function ResetPasswordPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center p-12">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+        }>
+            <ResetPasswordForm />
+        </Suspense>
     )
 }

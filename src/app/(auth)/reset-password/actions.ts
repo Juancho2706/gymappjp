@@ -23,6 +23,7 @@ export async function resetPasswordAction(
     const raw = {
         password: formData.get('password') as string,
         confirm_password: formData.get('confirm_password') as string,
+        coach_slug: formData.get('coach_slug') as string | null
     }
 
     const parsed = schema.safeParse(raw)
@@ -37,5 +38,6 @@ export async function resetPasswordAction(
         return { error: 'Error al actualizar la contraseña. El link puede haber expirado.' }
     }
 
-    redirect('/login')
+    const redirectPath = raw.coach_slug ? `/c/${raw.coach_slug}/login` : '/login'
+    redirect(redirectPath)
 }

@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, Suspense } from 'react'
 import { useFormStatus } from 'react-dom'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Mail, Loader2, ArrowLeft, CheckCircle } from 'lucide-react'
 import { forgotPasswordAction, type ForgotPasswordState } from './actions'
@@ -36,8 +37,10 @@ function SubmitButton() {
     )
 }
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordForm() {
     const [state, formAction] = useActionState(forgotPasswordAction, initialState)
+    const searchParams = useSearchParams()
+    const coachSlug = searchParams.get('coach_slug')
 
     return (
         <div className="animate-slide-up">
@@ -61,6 +64,7 @@ export default function ForgotPasswordPage() {
                     </div>
                 ) : (
                     <form action={formAction} className="space-y-5">
+                        {coachSlug && <input type="hidden" name="coach_slug" value={coachSlug} />}
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-foreground text-sm font-semibold">
                                 Email de tu cuenta
@@ -71,7 +75,7 @@ export default function ForgotPasswordPage() {
                                     id="email"
                                     name="email"
                                     type="email"
-                                    placeholder="coach@ejemplo.com"
+                                    placeholder="tu@email.com"
                                     autoComplete="email"
                                     required
                                     className={cn(
@@ -96,7 +100,7 @@ export default function ForgotPasswordPage() {
 
             <div className="mt-6 text-center">
                 <Link
-                    href="/login"
+                    href={coachSlug ? `/c/${coachSlug}/login` : "/login"}
                     className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                     <ArrowLeft className="w-3.5 h-3.5" />
@@ -104,5 +108,17 @@ export default function ForgotPasswordPage() {
                 </Link>
             </div>
         </div>
+    )
+}
+
+export default function ForgotPasswordPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center p-12">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+        }>
+            <ForgotPasswordForm />
+        </Suspense>
     )
 }

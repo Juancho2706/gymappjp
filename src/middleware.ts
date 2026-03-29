@@ -160,8 +160,12 @@ export async function middleware(request: NextRequest) {
 
     // ============================================================
     // 3. Redirect logged-in coaches away from auth pages
+    // EXCEPT for /reset-password which needs the session
     // ============================================================
-    if ((pathname.startsWith('/login') || pathname.startsWith('/register')) && user) {
+    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
+    const isResetPasswordPage = pathname.startsWith('/reset-password')
+
+    if (isAuthPage && user) {
         const { data: coachData } = await supabase
             .from('coaches')
             .select('id')

@@ -17,7 +17,10 @@ export async function forgotPasswordAction(
     _prev: ForgotPasswordState,
     formData: FormData
 ): Promise<ForgotPasswordState> {
-    const raw = { email: formData.get('email') as string }
+    const raw = { 
+        email: formData.get('email') as string,
+        coach_slug: formData.get('coach_slug') as string | null
+    }
     const parsed = schema.safeParse(raw)
 
     if (!parsed.success) {
@@ -31,8 +34,12 @@ export async function forgotPasswordAction(
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const appUrl = `${protocol}://${host}`
 
+    const nextPath = raw.coach_slug 
+        ? `/reset-password?coach_slug=${raw.coach_slug}` 
+        : '/reset-password'
+
     const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-        redirectTo: `${appUrl}/auth/callback?next=/reset-password`,
+        redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`,
     })
 
     if (error) {
