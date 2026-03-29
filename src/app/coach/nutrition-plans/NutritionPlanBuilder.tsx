@@ -206,20 +206,20 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                             <div className="space-y-2">
                                 <Label>Seleccionar Alumnos ({selectedClients.length})</Label>
                                 <Popover open={openPopover} onOpenChange={setOpenPopover}>
-                                    <PopoverTrigger asChild>
+                                    <PopoverTrigger render={
                                         <Button
                                             variant="outline"
                                             role="combobox"
                                             aria-expanded={openPopover}
                                             className="w-full justify-between h-auto py-2 min-h-[44px]"
-                                        >
-                                            <span className="truncate">
-                                                {selectedClients.length > 0 
-                                                    ? `${selectedClients.length} seleccionados`
-                                                    : "Seleccionar alumnos..."}
-                                            </span>
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
+                                        />
+                                    }>
+                                        <span className="truncate">
+                                            {selectedClients.length > 0 
+                                                ? `${selectedClients.length} seleccionados`
+                                                : "Seleccionar alumnos..."}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </PopoverTrigger>
                                     <PopoverContent className="w-full p-0" align="start">
                                         <Command>
@@ -309,11 +309,11 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                         </div>
                                         
                                         <Dialog>
-                                            <DialogTrigger asChild>
-                                                <Button type="button" variant="secondary" className="gap-2 shrink-0">
-                                                    <LayoutGrid className="w-4 h-4" />
-                                                    Añadir Grupo
-                                                </Button>
+                                            <DialogTrigger render={
+                                                <Button type="button" variant="secondary" className="gap-2 shrink-0" />
+                                            }>
+                                                <LayoutGrid className="w-4 h-4" />
+                                                Añadir Grupo
                                             </DialogTrigger>
                                             <DialogContent className="max-w-lg">
                                                 <DialogHeader>
