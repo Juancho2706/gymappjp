@@ -14,6 +14,7 @@ interface FoodItemInput {
     food_id: string;
     name: string;
     quantity: number;
+    serving_size_g: number;
     calories: number;
     protein_g: number;
     carbs_g: number;
@@ -37,16 +38,48 @@ export function NutritionForm({ clientId, coachId }: Props) {
     const [error, setError] = useState('')
 
     // Macros & Config
-    const [name, setName] = useState('Plan de Volumen Diario')
-    const [calories, setCalories] = useState('')
-    const [protein, setProtein] = useState('')
-    const [carbs, setCarbs] = useState('')
-    const [fats, setFats] = useState('')
+    const [name, setName] = useState('Plan Nutricional')
+    const [targetCalories, setTargetCalories] = useState('')
+    const [targetProtein, setTargetProtein] = useState('')
+    const [targetCarbs, setTargetCarbs] = useState('')
+    const [targetFats, setTargetFats] = useState('')
     const [instructions, setInstructions] = useState('')
 
     const [meals, setMeals] = useState<MealInput[]>([
         { id: Date.now(), name: 'Desayuno', food_items: [] }
     ])
+
+    const calculateItemMacros = (item: FoodItemInput) => {
+        const factor = item.quantity / (item.serving_size_g || 100);
+        return {
+            calories: Math.round(item.calories * factor),
+            protein: Math.round(item.protein_g * factor * 10) / 10,
+            carbs: Math.round(item.carbs_g * factor * 10) / 10,
+            fats: Math.round(item.fats_g * factor * 10) / 10,
+        };
+    };
+
+    const calculateMealMacros = (meal: MealInput) => {
+        return meal.food_items.reduce((acc, item) => {
+            const macros = calculateItemMacros(item);
+            return {
+                calories: acc.calories + macros.calories,
+                protein: acc.protein + macros.protein,
+                carbs: acc.carbs + macros.carbs,
+                fats: acc.fats + macros.fats,
+            };
+        }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
+    };
+
+    const totalMacros = meals.reduce((acc, meal) => {
+        const macros = calculateMealMacros(meal);
+        return {
+            calories: acc.calories + macros.calories,
+            protein: acc.protein + macros.protein,
+            carbs: acc.carbs + macros.carbs,
+            fats: acc.fats + macros.fats,
+        };
+    }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
 
     const handleAddMeal = () => {
         setMeals([...meals, { id: Date.now(), name: '', food_items: [] }])
@@ -97,10 +130,10 @@ export function NutritionForm({ clientId, coachId }: Props) {
         startTransition(async () => {
             const formData = new FormData()
             formData.append('name', name)
-            formData.append('daily_calories', calories)
-            formData.append('protein_g', protein)
-            formData.append('carbs_g', carbs)
-            formData.append('fats_g', fats)
+            formData.append('daily_calories', targetCalories)
+            formData.append('protein_g', targetProtein)
+            formData.append('carbs_g', targetCarbs)
+            formData.append('fats_g', targetFats)
             formData.append('instructions', instructions)
 
             meals.forEach((meal, i) => {
@@ -144,19 +177,47 @@ export function NutritionForm({ clientId, coachId }: Props) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="calories">Kcal Diarias</Label>
-                        <Input id="calories" type="number" value={calories} onChange={e => setCalories(e.target.value)} placeholder="0" />
+                        <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="protein">Prot (g)</Label>
-                        <Input id="protein" type="number" value={protein} onChange={e => setProtein(e.target.value)} placeholder="0" />
+                        <Input id="protein" type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} placeholder="0" />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="carbs">Carbs (g)</Label>
-                        <Input id="carbs" type="number" value={carbs} onChange={e => setCarbs(e.target.value)} placeholder="0" />
+                        <Input id="carbs" type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} placeholder="0" />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="fats">Grasas (g)</Label>
-                        <Input id="fats" type="number" value={fats} onChange={e => setFats(e.target.value)} placeholder="0" />
+                        <Input id="fats" type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} placeholder="0" />
+                    </div>
+                </div>
+
+                {/* Real-time Daily Totals vs Targets */}
+                <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 grid grid-cols-4 gap-4">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Total Kcal</span>
+                        <span className={`text-lg font-black ${totalMacros.calories > Number(targetCalories) && targetCalories ? 'text-red-500' : 'text-emerald-600'}`}>
+                            {totalMacros.calories} <span className="text-xs font-normal text-muted-foreground">/ {targetCalories || 0}</span>
+                        </span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Proteína</span>
+                        <span className="text-lg font-black text-emerald-600">
+                            {totalMacros.protein}g <span className="text-xs font-normal text-muted-foreground">/ {targetProtein || 0}g</span>
+                        </span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Carbs</span>
+                        <span className="text-lg font-black text-emerald-600">
+                            {totalMacros.carbs}g <span className="text-xs font-normal text-muted-foreground">/ {targetCarbs || 0}g</span>
+                        </span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Grasas</span>
+                        <span className="text-lg font-black text-emerald-600">
+                            {totalMacros.fats}g <span className="text-xs font-normal text-muted-foreground">/ {targetFats || 0}g</span>
+                        </span>
                     </div>
                 </div>
 
@@ -189,73 +250,109 @@ export function NutritionForm({ clientId, coachId }: Props) {
                     <p className="text-sm text-muted-foreground">No has añadido comidas específicas. Solo macros.</p>
                 ) : (
                     <div className="space-y-4">
-                        {meals.map((meal, index) => (
-                            <div key={meal.id} className="relative p-4 rounded-xl border border-border bg-muted/30 group">
-                                <button 
-                                    type="button" 
-                                    onClick={() => handleRemoveMeal(meal.id)}
-                                    className="absolute -top-3 -right-3 w-7 h-7 bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-red-200 dark:border-red-500/20"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {meals.map((meal, index) => {
+                                    const mealMacros = calculateMealMacros(meal);
+                                    return (
+                                        <div key={meal.id} className="relative p-4 rounded-xl border border-border bg-muted/30 group">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleRemoveMeal(meal.id)}
+                                                className="absolute -top-3 -right-3 w-7 h-7 bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-red-200 dark:border-red-500/20"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
 
-                                <div className="space-y-3">
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs text-muted-foreground">Comida {index + 1}</Label>
-                                        <Input 
-                                            value={meal.name} 
-                                            onChange={e => handleMealChange(meal.id, 'name', e.target.value)} 
-                                            className="h-8 shadow-none" 
-                                            placeholder="Ej. Desayuno, Pre-entreno..."
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="text-xs text-muted-foreground">Alimentos</Label>
-                                            <Button type="button" variant="ghost" size="sm" onClick={() => handleSaveMeal(meal)} className="h-8 gap-1 rounded-lg">
-                                                <Bookmark className="w-3.5 h-3.5" />
-                                                Guardar Comida
-                                            </Button>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {meal.food_items.map((foodItem, foodIndex) => (
-                                                <div key={foodIndex} className="flex items-center gap-2">
-                                                    <Input value={foodItem.name} disabled className="h-8 shadow-none flex-1" />
-                                                    <div className="relative w-28">
-                                                        <Input type="number" value={foodItem.quantity} onChange={(e) => {
-                                                            const newFoodItems = [...meal.food_items]
-                                                            newFoodItems[foodIndex].quantity = Number(e.target.value)
-                                                            handleMealChange(meal.id, 'food_items', newFoodItems)
-                                                        }} className="h-8 shadow-none pr-8" title="Cantidad/Porción" />
-                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">g/u</span>
+                                            <div className="space-y-3">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                    <div className="flex-1 space-y-1.5">
+                                                        <Label className="text-xs text-muted-foreground uppercase tracking-tight font-semibold">Comida {index + 1}</Label>
+                                                        <Input 
+                                                            value={meal.name} 
+                                                            onChange={e => handleMealChange(meal.id, 'name', e.target.value)} 
+                                                            className="h-9 bg-background border-border/50 font-bold" 
+                                                            placeholder="Ej. Desayuno, Pre-entreno..."
+                                                            required
+                                                        />
                                                     </div>
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => {
-                                                        const newFoodItems = meal.food_items.filter((_, i) => i !== foodIndex)
-                                                        handleMealChange(meal.id, 'food_items', newFoodItems)
-                                                    }}>
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </Button>
+                                                    <div className="flex items-center gap-4 bg-background/50 p-2 rounded-lg border border-border/50">
+                                                        <div className="text-center px-2">
+                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">Kcal</div>
+                                                            <div className="text-sm font-black">{mealMacros.calories}</div>
+                                                        </div>
+                                                        <div className="text-center px-2 border-l border-border/30">
+                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">P</div>
+                                                            <div className="text-sm font-black">{mealMacros.protein}g</div>
+                                                        </div>
+                                                        <div className="text-center px-2 border-l border-border/30">
+                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">C</div>
+                                                            <div className="text-sm font-black">{mealMacros.carbs}g</div>
+                                                        </div>
+                                                        <div className="text-center px-2 border-l border-border/30">
+                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">G</div>
+                                                            <div className="text-sm font-black">{mealMacros.fats}g</div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            ))}
+
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <Label className="text-xs text-muted-foreground font-semibold">Alimentos e Ingredientes</Label>
+                                                        <Button type="button" variant="ghost" size="sm" onClick={() => handleSaveMeal(meal)} className="h-7 text-[10px] uppercase tracking-wide gap-1 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600">
+                                                            <Bookmark className="w-3 h-3" />
+                                                            Guardar como Plantilla
+                                                        </Button>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        {meal.food_items.map((foodItem, foodIndex) => {
+                                                            const itemMacros = calculateItemMacros(foodItem);
+                                                            return (
+                                                                <div key={foodIndex} className="flex flex-col gap-2 p-2 rounded-lg bg-background/40 border border-border/40">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="flex-1 text-sm font-medium line-clamp-1">{foodItem.name}</span>
+                                                                        <div className="relative w-24">
+                                                                            <Input type="number" value={foodItem.quantity} onChange={(e) => {
+                                                                                const newFoodItems = [...meal.food_items]
+                                                                                newFoodItems[foodIndex].quantity = Number(e.target.value)
+                                                                                handleMealChange(meal.id, 'food_items', newFoodItems)
+                                                                            }} className="h-7 text-xs shadow-none pr-8 font-bold" title="Cantidad/Porción" />
+                                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold">g/u</span>
+                                                                        </div>
+                                                                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-500 hover:bg-red-500/10" onClick={() => {
+                                                                            const newFoodItems = meal.food_items.filter((_, i) => i !== foodIndex)
+                                                                            handleMealChange(meal.id, 'food_items', newFoodItems)
+                                                                        }}>
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-4 px-1">
+                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.calories}</span> kcal</span>
+                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.protein}g</span> prot</span>
+                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.carbs}g</span> carbs</span>
+                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.fats}g</span> grasas</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <FoodSearchModal onFoodSelected={(food, quantity) => {
+                                                        const newFoodItem: FoodItemInput = {
+                                                            food_id: food.id,
+                                                            name: food.name,
+                                                            quantity: quantity,
+                                                            serving_size_g: food.serving_size_g,
+                                                            calories: food.calories,
+                                                            protein_g: food.protein_g,
+                                                            carbs_g: food.carbs_g,
+                                                            fats_g: food.fats_g,
+                                                        };
+                                                        const newFoodItems = [...meal.food_items, newFoodItem];
+                                                        handleMealChange(meal.id, 'food_items', newFoodItems);
+                                                    }} />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <FoodSearchModal onFoodSelected={(food, quantity) => {
-                                            const newFoodItem: FoodItemInput = {
-                                                food_id: food.id,
-                                                name: food.name,
-                                                quantity: quantity,
-                                                calories: food.calories,
-                                                protein_g: food.protein_g,
-                                                carbs_g: food.carbs_g,
-                                                fats_g: food.fats_g,
-                                            };
-                                            const newFoodItems = [...meal.food_items, newFoodItem];
-                                            handleMealChange(meal.id, 'food_items', newFoodItems);
-                                        }} />
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                                    );
+                                })}
                     </div>
                 )}
             </div>

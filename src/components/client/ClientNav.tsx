@@ -45,7 +45,7 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
         },
         {
             href: `/c/${coachSlug}/nutrition`,
-            label: 'Nutrición',
+            label: 'Plan Alimenticio',
             icon: Apple,
         },
         {

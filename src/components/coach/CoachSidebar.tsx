@@ -9,7 +9,7 @@ import {
     Dumbbell,
     Settings,
     LogOut,
-    ChefHat,
+    Apple,
     ChevronRight,
     PanelLeftClose,
     PanelLeft
@@ -36,9 +36,9 @@ const navItems = [
         icon: Dumbbell,
     },
     {
-        href: '/coach/recipes',
-        label: 'Recetas',
-        icon: ChefHat,
+        href: '/coach/foods',
+        label: 'Alimentos',
+        icon: Apple,
     },
     {
         href: '/coach/settings',

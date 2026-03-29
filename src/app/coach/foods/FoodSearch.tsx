@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Search } from 'lucide-react'
 import { createClient } from "@/lib/supabase/client"
 
 export interface Food {
@@ -46,48 +48,50 @@ export function FoodSearch({ onFoodSelected }: Props) {
 
     return (
         <div>
-            <div className="flex w-full max-w-sm items-center space-x-2">
-                <Input
-                    type="text"
-                    placeholder="Buscar alimento..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+            <div className="flex w-full items-center space-x-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                        type="text"
+                        placeholder="Escribe para buscar (Ej: Pollo, Arroz...)"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9 h-11"
+                        autoFocus
+                    />
+                </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mt-4 space-y-2">
+                {results.length === 0 && searchTerm.length >= 3 && (
+                    <p className="text-center py-8 text-muted-foreground text-sm italic">No se encontraron alimentos con "{searchTerm}"</p>
+                )}
                 {results.map((food) => (
-                    <div key={food.id} className="bg-card border border-border rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div className="flex-1 w-full">
-                            <h3 className="font-bold line-clamp-2">{food.name}</h3>
-                            <p className="text-sm text-muted-foreground mb-2">Porción: {food.serving_size_g}g</p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs bg-muted/50 p-2 rounded-lg w-fit">
-                                <div className="flex flex-col">
-                                    <span className="font-medium text-muted-foreground">Calorías</span>
-                                    <span>{food.calories}</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="font-medium text-muted-foreground">Proteínas</span>
-                                    <span>{food.protein_g}g</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="font-medium text-muted-foreground">Carbs</span>
-                                    <span>{food.carbs_g}g</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="font-medium text-muted-foreground">Grasas</span>
-                                    <span>{food.fats_g}g</span>
+                    <div key={food.id} className="bg-card border border-border/60 hover:border-emerald-500/40 rounded-xl p-3 flex justify-between items-center gap-4 transition-colors group">
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-sm truncate group-hover:text-emerald-600 transition-colors">{food.name}</h3>
+                            <div className="flex gap-3 mt-1">
+                                <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium">100g/u base</span>
+                                <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                    <span>{food.calories}kcal</span>
+                                    <span className="opacity-30">|</span>
+                                    <span>P: {food.protein_g}g</span>
+                                    <span className="opacity-30">|</span>
+                                    <span>C: {food.carbs_g}g</span>
+                                    <span className="opacity-30">|</span>
+                                    <span>G: {food.fats_g}g</span>
                                 </div>
                             </div>
                         </div>
                         {onFoodSelected && (
-                            <button
+                            <Button
                                 type="button"
-                                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shrink-0 w-full sm:w-auto inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 mt-2 sm:mt-0"
+                                size="sm"
+                                className="h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-bold"
                                 onClick={() => onFoodSelected(food)}
                             >
-                                Agregar
-                            </button>
+                                Seleccionar
+                            </Button>
                         )}
                     </div>
                 ))}

@@ -113,34 +113,11 @@ export default async function ClientNutritionPage({ params }: Props) {
             </header>
 
             <main className="px-4 py-6 space-y-8 max-w-2xl mx-auto relative z-0 pb-32">
-                {/* Macros Overview */}
+                {/* Header section with instructions only */}
                 <section>
                     <h2 className="text-2xl font-bold text-foreground mb-1">{plan.name}</h2>
-                    {plan.daily_calories && (
-                        <p className="text-sm font-medium" style={{ color: coachBranding?.primary_color || 'var(--theme-primary)' }}>
-                            Objetivo: {plan.daily_calories} Kcal Diarias
-                        </p>
-                    )}
-
-                    {(plan.protein_g || plan.carbs_g || plan.fats_g) && (
-                        <div className="grid grid-cols-3 gap-3 mt-6">
-                            <div className="bg-card border border-border/50 rounded-2xl p-4 text-center">
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Proteínas</p>
-                                <p className="text-xl font-bold text-foreground">{plan.protein_g || 0}g</p>
-                            </div>
-                            <div className="bg-card border border-border/50 rounded-2xl p-4 text-center">
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Carbs</p>
-                                <p className="text-xl font-bold text-foreground">{plan.carbs_g || 0}g</p>
-                            </div>
-                            <div className="bg-card border border-border/50 rounded-2xl p-4 text-center">
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Grasas</p>
-                                <p className="text-xl font-bold text-foreground">{plan.fats_g || 0}g</p>
-                            </div>
-                        </div>
-                    )}
-
                     {plan.instructions && (
-                        <div className="mt-6 bg-card/50 border border-border rounded-xl p-4">
+                        <div className="mt-4 bg-card/50 border border-border rounded-xl p-4">
                             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Indicaciones Generales</h3>
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{plan.instructions}</p>
                         </div>
@@ -160,6 +137,12 @@ export default async function ClientNutritionPage({ params }: Props) {
                             planId={plan.id}
                             clientId={user.id}
                             coachSlug={coach_slug}
+                            goalMacros={{
+                                calories: plan.daily_calories || 0,
+                                protein: plan.protein_g || 0,
+                                carbs: plan.carbs_g || 0,
+                                fats: plan.fats_g || 0,
+                            }}
                         />
                     ) : (
                         <div className="bg-card border border-border rounded-xl p-6 text-center">

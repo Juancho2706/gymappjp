@@ -1,7 +1,9 @@
 'use client'
 
-import { useTransition } from 'react'
-import { CheckCircle2, Circle } from 'lucide-react'
+import { useTransition, useMemo } from 'react'
+import { CheckCircle2, Circle, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState } from 'react'
+import { Progress } from "@/components/ui/progress"
 
 interface Food {
     name: string;
@@ -28,10 +30,17 @@ interface Props {
     planId: string
     clientId: string
     coachSlug: string
+    goalMacros: {
+        calories: number;
+        protein: number;
+        carbs: number;
+        fats: number;
+    }
 }
 
-export function NutritionTracker({ meals, log, planId, clientId, coachSlug }: Props) {
+export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goalMacros }: Props) {
     const [isPending, startTransition] = useTransition()
+    const [expandedMeals, setExpandedMeals] = useState<Record<string, boolean>>({})
 
     const handleToggleMeal = (mealId: string, currentCompleted: boolean) => {
         startTransition(async () => {
@@ -40,67 +49,149 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug }: Pr
         })
     }
 
+    const toggleExpand = (mealId: string) => {
+        setExpandedMeals(prev => ({ ...prev, [mealId]: !prev[mealId] }))
+    }
+
     const mealLogs = log?.nutrition_meal_logs || []
 
+    const dailyTotals = useMemo(() => {
+        const completedMealIds = new Set(mealLogs.filter((ml: any) => ml.is_completed).map((ml: any) => ml.meal_id))
+        
+        return meals.reduce((acc, meal) => {
+            if (completedMealIds.has(meal.id)) {
+                meal.food_items.forEach(item => {
+                    const ratio = item.quantity / 100
+                    acc.calories += (item.foods?.calories || 0) * ratio
+                    acc.protein += (item.foods?.protein_g || 0) * ratio
+                    acc.carbs += (item.foods?.carbs_g || 0) * ratio
+                    acc.fats += (item.foods?.fats_g || 0) * ratio
+                })
+            }
+            return acc
+        }, { calories: 0, protein: 0, carbs: 0, fats: 0 })
+    }, [meals, mealLogs])
+
     return (
-        <div className="space-y-3">
-            {meals.map((meal) => {
-                const isCompleted = mealLogs.some((ml: any) => ml.meal_id === meal.id && ml.is_completed)
-
-                const totalCalories = meal.food_items.reduce((acc, item) => acc + (item.foods?.calories || 0) * item.quantity / 100, 0)
-                const totalProteins = meal.food_items.reduce((acc, item) => acc + (item.foods?.protein_g || 0) * item.quantity / 100, 0)
-                const totalCarbs = meal.food_items.reduce((acc, item) => acc + (item.foods?.carbs_g || 0) * item.quantity / 100, 0)
-                const totalFats = meal.food_items.reduce((acc, item) => acc + (item.foods?.fats_g || 0) * item.quantity / 100, 0)
-
-                return (
-                    <div key={meal.id} className={`w-full text-left p-4 rounded-2xl border transition-all ${
-                        isCompleted
-                            ? 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20'
-                            : 'bg-card border-border'
-                    }`}>
-                        <div onClick={() => handleToggleMeal(meal.id, isCompleted)} className="flex items-center gap-4 cursor-pointer">
-                            <div className="flex-shrink-0">
-                                {isCompleted ? (
-                                    <CheckCircle2 className="w-6 h-6 text-emerald-500 animate-in zoom-in duration-200" />
-                                ) : (
-                                    <Circle className="w-6 h-6 text-muted-foreground" />
-                                )}
-                            </div>
-                            <div className="flex-1">
-                                <h4 className={`font-bold text-sm ${isCompleted ? 'text-emerald-500 text-opacity-90' : 'text-foreground'}`}>
-                                    {meal.name}
-                                </h4>
-                            </div>
-                            <div className="grid grid-cols-4 gap-2 text-xs w-1/2">
-                                <div>
-                                    <p className="font-bold">Calorías</p>
-                                    <p>{totalCalories.toFixed(0)}</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold">Proteínas</p>
-                                    <p>{totalProteins.toFixed(0)}g</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold">Carbs</p>
-                                    <p>{totalCarbs.toFixed(0)}g</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold">Grasas</p>
-                                    <p>{totalFats.toFixed(0)}g</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="mt-4 space-y-2">
-                            {meal.food_items.map((item, index) => (
-                                <div key={index} className="flex justify-between text-xs">
-                                    <p>{item.foods.name}</p>
-                                    <p>{item.quantity}g</p>
-                                </div>
-                            ))}
-                        </div>
+        <div className="space-y-6">
+            {/* Daily Summary */}
+            <div className="bg-card border border-border rounded-2xl p-5 space-y-4 shadow-sm">
+                <div className="flex justify-between items-end">
+                    <div>
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Resumen Diario</p>
+                        <h4 className="text-2xl font-black">{Math.round(dailyTotals.calories)} <span className="text-sm font-medium text-muted-foreground">/ {goalMacros.calories} kcal</span></h4>
                     </div>
-                )
-            })}
+                    <div className="text-right">
+                        <p className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-1">Completado</p>
+                        <p className="text-xl font-black">{Math.round((dailyTotals.calories / (goalMacros.calories || 1)) * 100)}%</p>
+                    </div>
+                </div>
+                
+                <Progress value={(dailyTotals.calories / (goalMacros.calories || 1)) * 100} className="h-2" />
+
+                <div className="grid grid-cols-3 gap-4 pt-2">
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
+                            <span>Prot</span>
+                            <span>{Math.round(dailyTotals.protein)}g / {goalMacros.protein}g</span>
+                        </div>
+                        <Progress value={(dailyTotals.protein / (goalMacros.protein || 1)) * 100} className="h-1" />
+                    </div>
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
+                            <span>Carbs</span>
+                            <span>{Math.round(dailyTotals.carbs)}g / {goalMacros.carbs}g</span>
+                        </div>
+                        <Progress value={(dailyTotals.carbs / (goalMacros.carbs || 1)) * 100} className="h-1" />
+                    </div>
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
+                            <span>Grasas</span>
+                            <span>{Math.round(dailyTotals.fats)}g / {goalMacros.fats}g</span>
+                        </div>
+                        <Progress value={(dailyTotals.fats / (goalMacros.fats || 1)) * 100} className="h-1" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                {meals.map((meal) => {
+                    const isCompleted = mealLogs.some((ml: any) => ml.meal_id === meal.id && ml.is_completed)
+                    const isExpanded = expandedMeals[meal.id] ?? true
+
+                    const mealMacros = meal.food_items.reduce((acc, item) => {
+                        const ratio = item.quantity / 100
+                        acc.calories += (item.foods?.calories || 0) * ratio
+                        acc.protein += (item.foods?.protein_g || 0) * ratio
+                        acc.carbs += (item.foods?.carbs_g || 0) * ratio
+                        acc.fats += (item.foods?.fats_g || 0) * ratio
+                        return acc
+                    }, { calories: 0, protein: 0, carbs: 0, fats: 0 })
+
+                    return (
+                        <div key={meal.id} className={`w-full rounded-2xl border transition-all overflow-hidden ${
+                            isCompleted
+                                ? 'bg-emerald-500/5 border-emerald-500/20 shadow-inner'
+                                : 'bg-card border-border shadow-sm'
+                        }`}>
+                            {/* Meal Header */}
+                            <div className="p-4 flex items-center gap-3">
+                                <button 
+                                    onClick={() => handleToggleMeal(meal.id, isCompleted)}
+                                    disabled={isPending}
+                                    className="flex-shrink-0 focus:outline-none"
+                                >
+                                    {isCompleted ? (
+                                        <CheckCircle2 className="w-7 h-7 text-emerald-500 animate-in zoom-in duration-200" />
+                                    ) : (
+                                        <Circle className="w-7 h-7 text-muted-foreground/30 hover:text-muted-foreground transition-colors" />
+                                    )}
+                                </button>
+                                
+                                <div className="flex-1 min-w-0" onClick={() => toggleExpand(meal.id)}>
+                                    <div className="flex items-center gap-2">
+                                        <h4 className={`font-bold text-base truncate ${isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
+                                            {meal.name}
+                                        </h4>
+                                        {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                                    </div>
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">
+                                        {Math.round(mealMacros.calories)} kcal • P: {Math.round(mealMacros.protein)}g • C: {Math.round(mealMacros.carbs)}g • G: {Math.round(mealMacros.fats)}g
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Ingredients List */}
+                            {isExpanded && (
+                                <div className="px-4 pb-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="h-px bg-border/50 mb-3" />
+                                    {meal.food_items.map((item, index) => {
+                                        const ratio = item.quantity / 100
+                                        return (
+                                            <div key={index} className="flex flex-col gap-1">
+                                                <div className="flex justify-between items-start">
+                                                    <span className="text-sm font-semibold text-foreground/90 leading-tight">
+                                                        {item.foods.name}
+                                                    </span>
+                                                    <span className="text-sm font-black text-foreground ml-2 whitespace-nowrap">
+                                                        {item.quantity} {item.quantity < 10 ? 'un' : 'gr'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex gap-3 text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
+                                                    <span>{Math.round((item.foods?.calories || 0) * ratio)} kcal</span>
+                                                    <span>P: {Math.round((item.foods?.protein_g || 0) * ratio)}g</span>
+                                                    <span>C: {Math.round((item.foods?.carbs_g || 0) * ratio)}g</span>
+                                                    <span>G: {Math.round((item.foods?.fats_g || 0) * ratio)}g</span>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
+            </div>
         </div>
     )
 }
