@@ -109,16 +109,18 @@ export function RecipeModal({ coachId, recipe, onSuccess }: RecipeModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {recipe ? (
-          <Button variant="outline" size="sm">Editar</Button>
-        ) : (
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Nueva Receta
-          </Button>
-        )}
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          recipe ? (
+            <Button variant="outline" size="sm">Editar</Button>
+          ) : (
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Nueva Receta
+            </Button>
+          )
+        }
+      />
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{recipe ? "Editar Receta" : "Crear Nueva Receta"}</DialogTitle>
