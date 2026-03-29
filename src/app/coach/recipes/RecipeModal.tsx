@@ -39,11 +39,11 @@ const recipeSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres"),
   description: z.string().optional(),
   instructions: z.string().min(10, "Las instrucciones deben tener al menos 10 caracteres"),
-  prep_time_minutes: z.coerce.number().min(1, "El tiempo de preparación es requerido"),
-  calories: z.coerce.number().min(0),
-  protein_g: z.coerce.number().min(0),
-  carbs_g: z.coerce.number().min(0),
-  fats_g: z.coerce.number().min(0),
+  prep_time_minutes: z.number().min(1, "El tiempo de preparación es requerido"),
+  calories: z.number().min(0),
+  protein_g: z.number().min(0),
+  carbs_g: z.number().min(0),
+  fats_g: z.number().min(0),
   category: z.enum(["Desayuno", "Almuerzo", "Cena", "Snack/Merienda", "Postre"]),
   image_url: z.string().url("URL de imagen inválida").optional().or(z.literal("")),
 })
@@ -175,7 +175,11 @@ export function RecipeModal({ coachId, recipe, onSuccess }: RecipeModalProps) {
                   <FormItem>
                     <FormLabel>Tiempo (min)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -223,7 +227,11 @@ export function RecipeModal({ coachId, recipe, onSuccess }: RecipeModalProps) {
                   <FormItem>
                     <FormLabel>Calorías</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -236,7 +244,11 @@ export function RecipeModal({ coachId, recipe, onSuccess }: RecipeModalProps) {
                   <FormItem>
                     <FormLabel>Proteínas (g)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -249,7 +261,11 @@ export function RecipeModal({ coachId, recipe, onSuccess }: RecipeModalProps) {
                   <FormItem>
                     <FormLabel>Carbs (g)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -262,7 +278,11 @@ export function RecipeModal({ coachId, recipe, onSuccess }: RecipeModalProps) {
                   <FormItem>
                     <FormLabel>Grasas (g)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
