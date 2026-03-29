@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress"
 
 interface Food {
     name: string;
+    serving_size_g: number;
     calories: number;
     protein_g: number;
     carbs_g: number;
@@ -61,7 +62,7 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
         return meals.reduce((acc, meal) => {
             if (completedMealIds.has(meal.id)) {
                 meal.food_items.forEach(item => {
-                    const ratio = item.quantity / 100
+                    const ratio = item.quantity / (item.foods?.serving_size_g || 100)
                     acc.calories += (item.foods?.calories || 0) * ratio
                     acc.protein += (item.foods?.protein_g || 0) * ratio
                     acc.carbs += (item.foods?.carbs_g || 0) * ratio
@@ -120,7 +121,7 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
                     const isExpanded = expandedMeals[meal.id] ?? true
 
                     const mealMacros = meal.food_items.reduce((acc, item) => {
-                        const ratio = item.quantity / 100
+                        const ratio = item.quantity / (item.foods?.serving_size_g || 100)
                         acc.calories += (item.foods?.calories || 0) * ratio
                         acc.protein += (item.foods?.protein_g || 0) * ratio
                         acc.carbs += (item.foods?.carbs_g || 0) * ratio
@@ -166,22 +167,34 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
                                 <div className="px-4 pb-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                                     <div className="h-px bg-border/50 mb-3" />
                                     {meal.food_items.map((item, index) => {
-                                        const ratio = item.quantity / 100
+                                        const ratio = item.quantity / (item.foods?.serving_size_g || 100)
                                         return (
-                                            <div key={index} className="flex flex-col gap-1">
+                                            <div key={index} className="flex flex-col gap-1.5 p-2 rounded-lg bg-muted/20 border border-border/5">
                                                 <div className="flex justify-between items-start">
-                                                    <span className="text-sm font-semibold text-foreground/90 leading-tight">
+                                                    <span className="text-sm font-bold text-foreground/90 leading-tight">
                                                         {item.foods.name}
                                                     </span>
-                                                    <span className="text-sm font-black text-foreground ml-2 whitespace-nowrap">
-                                                        {item.quantity} {item.quantity < 10 ? 'un' : 'gr'}
+                                                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 ml-2 whitespace-nowrap">
+                                                        {item.quantity}{item.quantity < 10 ? ' un' : 'g'}
                                                     </span>
                                                 </div>
-                                                <div className="flex gap-3 text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
-                                                    <span>{Math.round((item.foods?.calories || 0) * ratio)} kcal</span>
-                                                    <span>P: {Math.round((item.foods?.protein_g || 0) * ratio)}g</span>
-                                                    <span>C: {Math.round((item.foods?.carbs_g || 0) * ratio)}g</span>
-                                                    <span>G: {Math.round((item.foods?.fats_g || 0) * ratio)}g</span>
+                                                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-1 h-1 rounded-full bg-orange-400" />
+                                                        {Math.round((item.foods?.calories || 0) * ratio)} kcal
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-1 h-1 rounded-full bg-blue-400" />
+                                                        P: {Math.round(((item.foods?.protein_g || 0) * ratio) * 10) / 10}g
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-1 h-1 rounded-full bg-emerald-400" />
+                                                        C: {Math.round(((item.foods?.carbs_g || 0) * ratio) * 10) / 10}g
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-1 h-1 rounded-full bg-yellow-400" />
+                                                        G: {Math.round(((item.foods?.fats_g || 0) * ratio) * 10) / 10}g
+                                                    </span>
                                                 </div>
                                             </div>
                                         )

@@ -14,6 +14,7 @@ interface NutritionMealWithItems extends NutritionMeal {
         quantity: number;
         foods: {
             name: string;
+            serving_size_g: number;
             calories: number;
             protein_g: number;
             carbs_g: number;
@@ -57,7 +58,13 @@ export default async function ClientNutritionPage({ params }: Props) {
         .from('nutrition_plans')
         .select(`
             *,
-            nutrition_meals (*, food_items(*, foods(*)))
+            nutrition_meals (
+                *,
+                food_items (
+                    *,
+                    foods (*)
+                )
+            )
         `)
         .eq('client_id', user.id)
         .eq('is_active', true)

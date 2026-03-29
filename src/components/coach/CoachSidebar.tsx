@@ -12,7 +12,8 @@ import {
     Apple,
     ChevronRight,
     PanelLeftClose,
-    PanelLeft
+    PanelLeft,
+    LayoutGrid
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -38,6 +39,16 @@ const navItems = [
     {
         href: '/coach/foods',
         label: 'Alimentos',
+        icon: Apple,
+    },
+    {
+        href: '/coach/meal-groups',
+        label: 'Grupos',
+        icon: LayoutGrid,
+    },
+    {
+        href: '/coach/nutrition-plans',
+        label: 'Planes Globales',
         icon: Apple,
     },
     {
