@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { cn } from '@/lib/utils'
 import { createPlanAction } from './actions'
 import type { Tables } from '@/lib/database.types'
+import { MUSCLE_GROUPS } from '@/lib/constants'
 
 type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
@@ -60,92 +61,115 @@ function SortableBlock({
     onChange: (uid: string, field: keyof BuilderBlock, value: string | number) => void
     onRemove: (uid: string) => void
 }) {
-    const [expanded, setExpanded] = useState(true)
+    const [expanded, setExpanded] = useState(false)
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: block.uid })
 
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.5 : 1,
     }
 
     return (
         <div ref={setNodeRef} style={style}
             className={cn(
-                'bg-card border rounded-2xl overflow-hidden transition-all shadow-sm',
-                isDragging ? 'border-primary shadow-lg shadow-primary/20' : 'border-border'
+                'bg-card border rounded-xl overflow-hidden transition-all duration-200 group',
+                isDragging ? 'z-50 border-primary ring-2 ring-primary/20 shadow-2xl scale-[1.02] opacity-90' : 'border-border shadow-sm hover:border-muted-foreground/30'
             )}>
             {/* Block header */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <div className={cn(
+                "flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors",
+                expanded ? "border-b border-border bg-muted/20" : "hover:bg-muted/10"
+            )} onClick={() => setExpanded(!expanded)}>
                 <button {...attributes} {...listeners}
-                    className="text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0">
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0">
                     <GripVertical className="w-4 h-4" />
                 </button>
-                <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-primary">{index + 1}</span>
+                
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-bold text-primary">{index + 1}</span>
                 </div>
+
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{block.exercise_name}</p>
-                    <p className="text-xs text-muted-foreground">{block.muscle_group}</p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground truncate">{block.exercise_name}</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium uppercase tracking-wider">
+                            {block.muscle_group}
+                        </span>
+                    </div>
+                    {!expanded && (
+                        <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <span className="font-bold text-foreground/80">{block.sets}</span> series
+                            </span>
+                            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <span className="font-bold text-foreground/80">{block.reps || '–'}</span> reps
+                            </span>
+                            {block.rest_time && (
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                    <span className="font-bold text-foreground/80">{block.rest_time}</span> descanso
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
-                <span className="text-xs text-muted-foreground hidden sm:block">
-                    {block.sets} × {block.reps || '–'}
-                </span>
-                <button onClick={() => setExpanded(e => !e)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                    {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-                <button onClick={() => onRemove(block.uid)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                    <X className="w-4 h-4" />
-                </button>
+
+                <div className="flex items-center gap-1">
+                    <button onClick={(e) => { e.stopPropagation(); onRemove(block.uid); }}
+                        className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
+                        <X className="w-4 h-4" />
+                    </button>
+                    <div className="p-1.5 rounded-lg text-muted-foreground transition-colors">
+                        {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
+                </div>
             </div>
 
             {/* Expanded fields */}
             {expanded && (
-                <div className="px-4 py-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="px-4 py-4 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 bg-card/50">
                     <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">Series</label>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold ml-1">Series</label>
                         <input type="number" min={1} max={20} value={block.sets}
                             onChange={e => onChange(block.uid, 'sets', parseInt(e.target.value) || 1)}
-                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none" />
+                            className="w-full h-9 px-3 text-sm rounded-xl bg-secondary/50 border border-border/50 text-foreground focus:border-primary focus:bg-background focus:outline-none transition-all" />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">Reps</label>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold ml-1">Reps</label>
                         <input type="text" placeholder="8-12" value={block.reps}
                             onChange={e => onChange(block.uid, 'reps', e.target.value)}
-                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                            className="w-full h-9 px-3 text-sm rounded-xl bg-secondary/50 border border-border/50 text-foreground focus:border-primary focus:bg-background focus:outline-none transition-all placeholder:text-muted-foreground/30" />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">Peso Sugerido (Kg)</label>
-                        <input type="number" step="0.5" placeholder="Ej: 50" value={block.target_weight_kg}
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold ml-1">Peso (Kg)</label>
+                        <input type="number" step="0.5" placeholder="Sugerido" value={block.target_weight_kg}
                             onChange={e => onChange(block.uid, 'target_weight_kg', e.target.value)}
-                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                            className="w-full h-9 px-3 text-sm rounded-xl bg-secondary/50 border border-border/50 text-foreground focus:border-primary focus:bg-background focus:outline-none transition-all placeholder:text-muted-foreground/30" />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">Tempo</label>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold ml-1">Tempo</label>
                         <input type="text" placeholder="Ej: 3-0-1-0" value={block.tempo}
                             onChange={e => onChange(block.uid, 'tempo', e.target.value)}
-                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                            className="w-full h-9 px-3 text-sm rounded-xl bg-secondary/50 border border-border/50 text-foreground focus:border-primary focus:bg-background focus:outline-none transition-all placeholder:text-muted-foreground/30" />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">RIR / RPE</label>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold ml-1">RIR / RPE</label>
                         <input type="text" placeholder="2 RIR" value={block.rir}
                             onChange={e => onChange(block.uid, 'rir', e.target.value)}
-                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                            className="w-full h-9 px-3 text-sm rounded-xl bg-secondary/50 border border-border/50 text-foreground focus:border-primary focus:bg-background focus:outline-none transition-all placeholder:text-muted-foreground/30" />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">Descanso</label>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold ml-1">Descanso</label>
                         <input type="text" placeholder="90s" value={block.rest_time}
                             onChange={e => onChange(block.uid, 'rest_time', e.target.value)}
-                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                            className="w-full h-9 px-3 text-sm rounded-xl bg-secondary/50 border border-border/50 text-foreground focus:border-primary focus:bg-background focus:outline-none transition-all placeholder:text-muted-foreground/30" />
                     </div>
-                    <div className="space-y-1 col-span-2 sm:col-span-3">
-                        <label className="text-xs text-muted-foreground font-medium">Notas</label>
-                        <input type="text" placeholder="Ej: Bajar lento en excéntrico" value={block.notes}
+                    <div className="space-y-1 col-span-2 md:col-span-3">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold ml-1">Notas</label>
+                        <input type="text" placeholder="Instrucciones especiales..." value={block.notes}
                             onChange={e => onChange(block.uid, 'notes', e.target.value)}
-                            className="w-full h-8 px-2.5 text-sm rounded-lg bg-secondary border border-border text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50" />
+                            className="w-full h-9 px-3 text-sm rounded-xl bg-secondary/50 border border-border/50 text-foreground focus:border-primary focus:bg-background focus:outline-none transition-all placeholder:text-muted-foreground/30" />
                     </div>
                 </div>
             )}
@@ -196,7 +220,7 @@ export function PlanBuilder({
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     )
 
-    const muscleGroups = ['Todos', ...Array.from(new Set(exercises.map(e => e.muscle_group))).sort()]
+    const muscleGroups = ['Todos', ...MUSCLE_GROUPS]
 
     const filteredExercises = exercises.filter(ex => {
         const isSecondary = ex.secondary_muscles?.includes(selectedMuscle) || false
@@ -372,8 +396,10 @@ export function PlanBuilder({
                 {/* LEFT: Exercise catalog */}
                 <div 
                     className={cn(
-                        "md:w-72 flex-shrink-0 border-t md:border-t-0 md:border-r border-border flex flex-col bg-muted/30 transition-all duration-300 relative z-20",
-                        isCatalogExpanded ? "h-[50vh] md:h-auto" : "h-[48px] md:h-auto overflow-hidden"
+                        "flex-shrink-0 border-t md:border-t-0 md:border-r border-border flex flex-col bg-muted/30 transition-all duration-300 relative z-20",
+                        isCatalogExpanded 
+                            ? "h-[50vh] md:h-auto md:w-80" 
+                            : "h-[48px] md:h-auto md:w-0 md:opacity-0 overflow-hidden"
                     )}
                 >
                     <button 
@@ -383,81 +409,120 @@ export function PlanBuilder({
                         <div className="w-8 h-1 rounded-full bg-border/80" />
                     </button>
 
-                    <div className="p-3 pt-5 space-y-2 border-b border-border">
-                        <div className={cn("relative", !isCatalogExpanded && "md:block hidden")}>
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <div className="p-4 space-y-3 border-b border-border">
+                        <div className="flex items-center justify-between md:mb-1">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Catálogo</h3>
+                            <button 
+                                onClick={() => setIsCatalogExpanded(false)}
+                                className="hidden md:flex p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors"
+                            >
+                                <ChevronUp className="w-4 h-4 -rotate-90" />
+                            </button>
+                        </div>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
                             <input value={search} onChange={e => setSearch(e.target.value)}
                                 placeholder="Buscar ejercicio…"
-                                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none" />
+                                className="w-full h-9 pl-9 pr-3 text-sm rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground/30 focus:border-primary focus:outline-none transition-all" />
                         </div>
-                        <div className={cn("flex overflow-x-auto pb-1 hide-scrollbar", !isCatalogExpanded && "md:flex hidden")}>
+                        <div className="flex overflow-x-auto pb-1 hide-scrollbar">
                             <select 
                                 value={selectedMuscle}
                                 onChange={(e) => setSelectedMuscle(e.target.value)}
-                                className="w-full h-8 px-2 text-xs rounded-lg bg-card border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+                                className="w-full h-9 px-3 text-sm rounded-xl bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer transition-all"
                             >
                                 {muscleGroups.map(m => (
                                     <option key={m} value={m}>{m}</option>
                                 ))}
                             </select>
                         </div>
-                        {!isCatalogExpanded && (
-                            <div className="md:hidden text-center text-xs font-bold text-muted-foreground mt-[-8px]">
-                                Catálogo de Ejercicios
-                            </div>
-                        )}
                     </div>
 
-                    <div className={cn("flex-1 overflow-y-auto p-2 space-y-0.5", !isCatalogExpanded && "md:block hidden")}>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
                         {filteredExercises.length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-8">Sin resultados</p>
+                            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
+                                    <Search className="w-5 h-5 text-muted-foreground/30" />
+                                </div>
+                                <p className="text-xs text-muted-foreground">No encontramos nada con esos filtros</p>
+                            </div>
                         ) : (
                             filteredExercises.map(ex => (
                                 <button key={ex.id} onClick={() => addExercise(ex)}
-                                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-left hover:bg-muted transition-colors group">
-                                    <Dumbbell className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary flex-shrink-0 transition-colors" />
+                                    className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-background hover:shadow-sm border border-transparent hover:border-border transition-all group">
+                                    <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                                        <Dumbbell className="w-4 h-4 text-primary/60 group-hover:text-primary transition-colors" />
+                                    </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-medium text-foreground/70 group-hover:text-foreground truncate transition-colors">
+                                        <p className="text-sm font-medium text-foreground/80 group-hover:text-foreground truncate transition-colors">
                                             {ex.name}
                                         </p>
-                                        <p className="text-xs text-muted-foreground">{ex.muscle_group}</p>
+                                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{ex.muscle_group}</p>
                                     </div>
-                                    <Plus className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
+                                    <Plus className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0" />
                                 </button>
                             ))
                         )}
                     </div>
                 </div>
 
+                {/* Toggle button for desktop (hidden when expanded) */}
+                {!isCatalogExpanded && (
+                    <button 
+                        onClick={() => setIsCatalogExpanded(true)}
+                        className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-primary text-white p-1.5 rounded-r-xl shadow-lg hover:pr-3 transition-all group"
+                    >
+                        <ChevronUp className="w-5 h-5 rotate-90 group-hover:scale-110 transition-transform" />
+                    </button>
+                )}
+
                 {/* RIGHT: Plan canvas */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background pb-32 md:pb-6">
-                    {blocks.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full text-center">
-                            <div className="w-16 h-16 rounded-2xl bg-muted border border-dashed border-border flex items-center justify-center mb-4">
-                                <Dumbbell className="w-7 h-7 text-muted-foreground/40" />
-                            </div>
-                            <p className="text-foreground font-semibold">Canvas vacío</p>
-                            <p className="text-muted-foreground text-sm mt-1">
-                                Haz clic en un ejercicio del panel izquierdo para añadirlo
-                            </p>
-                        </div>
-                    ) : (
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <SortableContext items={blocks.map(b => b.uid)} strategy={verticalListSortingStrategy}>
-                                <div className="space-y-3">
-                                    {blocks.map((block, index) => (
-                                        <SortableBlock
-                                            key={block.uid}
-                                            block={block}
-                                            index={index}
-                                            onChange={handleBlockChange}
-                                            onRemove={removeBlock}
-                                        />
-                                    ))}
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-background/50 pb-32 md:pb-8 transition-all duration-300">
+                    <div className="max-w-4xl mx-auto">
+                        {blocks.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+                                <div className="w-20 h-20 rounded-3xl bg-muted/50 border border-dashed border-border flex items-center justify-center mb-6">
+                                    <Plus className="w-10 h-10 text-muted-foreground/20" />
                                 </div>
-                            </SortableContext>
-                        </DndContext>
-                    )}
+                                <h3 className="text-lg font-bold text-foreground">Tu canvas está esperando</h3>
+                                <p className="text-muted-foreground text-sm mt-2 max-w-xs mx-auto">
+                                    Selecciona ejercicios del catálogo para empezar a construir la rutina de <span className="text-foreground font-medium">{client.full_name}</span>.
+                                </p>
+                                {!isCatalogExpanded && (
+                                    <button 
+                                        onClick={() => setIsCatalogExpanded(true)}
+                                        className="mt-6 px-6 py-2 bg-primary/10 text-primary rounded-xl text-sm font-bold hover:bg-primary/20 transition-colors"
+                                    >
+                                        Abrir Catálogo
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Estructura de la Sesión</h2>
+                                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg">
+                                        {blocks.length} {blocks.length === 1 ? 'ejercicio' : 'ejercicios'}
+                                    </span>
+                                </div>
+                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                    <SortableContext items={blocks.map(b => b.uid)} strategy={verticalListSortingStrategy}>
+                                        <div className="space-y-3">
+                                            {blocks.map((block, index) => (
+                                                <SortableBlock
+                                                    key={block.uid}
+                                                    block={block}
+                                                    index={index}
+                                                    onChange={handleBlockChange}
+                                                    onRemove={removeBlock}
+                                                />
+                                            ))}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

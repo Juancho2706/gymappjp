@@ -97,16 +97,20 @@ export async function updateLogoAction(
     }
 
     const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
+    
+    // Añadir timestamp para evitar problemas de caché del navegador
+    const cacheBusterUrl = `${publicUrl}?t=${Date.now()}`
 
     const adminDb = await createRawAdminClient()
     const { error: dbError } = await adminDb
         .from('coaches')
-        .update({ logo_url: publicUrl })
+        .update({ logo_url: cacheBusterUrl })
         .eq('id', user.id)
 
     if (dbError) return { error: dbError.message }
 
-    revalidatePath('/coach/settings')
-    revalidatePath('/coach/dashboard')
+    revalidatePath('/coach/settings', 'page')
+    revalidatePath('/coach/dashboard', 'layout')
+    revalidatePath('/', 'layout')
     return { success: true }
 }

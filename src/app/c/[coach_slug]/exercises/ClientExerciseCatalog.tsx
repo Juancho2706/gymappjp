@@ -169,10 +169,16 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                     
                     if (isYouTube) {
                       const ytId = getYouTubeId(url!);
+                      const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1${
+                        selectedExercise.video_start_time ? `&start=${selectedExercise.video_start_time}` : ''
+                      }${
+                        selectedExercise.video_end_time ? `&end=${selectedExercise.video_end_time}` : ''
+                      }` : '';
+                      
                       return ytId ? (
                         <iframe
                           className="w-full h-full"
-                          src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`}
+                          src={embedUrl}
                           title={selectedExercise.name}
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                           allowFullScreen

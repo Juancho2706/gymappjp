@@ -273,6 +273,8 @@ export type Database = {
           muscle_group: string
           name: string
           secondary_muscles: string[] | null
+          video_end_time: number | null
+          video_start_time: number | null
           video_url: string | null
         }
         Insert: {
@@ -286,6 +288,8 @@ export type Database = {
           muscle_group: string
           name: string
           secondary_muscles?: string[] | null
+          video_end_time?: number | null
+          video_start_time?: number | null
           video_url?: string | null
         }
         Update: {
@@ -299,6 +303,8 @@ export type Database = {
           muscle_group?: string
           name?: string
           secondary_muscles?: string[] | null
+          video_end_time?: number | null
+          video_start_time?: number | null
           video_url?: string | null
         }
         Relationships: [

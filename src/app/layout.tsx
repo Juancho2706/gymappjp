@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from 'next-themes'
 import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 import { PwaRegister } from '@/components/PwaRegister'
+import { ScrollRestoration } from '@/components/ScrollRestoration'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -95,6 +96,7 @@ export default function RootLayout({
         >
           <LanguageProvider>
             <PwaRegister />
+            <ScrollRestoration />
             {children}
             <Toaster richColors position="top-right" />
           </LanguageProvider>

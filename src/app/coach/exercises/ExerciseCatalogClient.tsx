@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Image from 'next/image'
 import {
     Dialog,
@@ -8,8 +8,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
-import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench } from 'lucide-react'
+import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
+import { MUSCLE_GROUPS } from '@/lib/constants'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 
 type Exercise = Tables<'exercises'>
 
@@ -21,38 +25,122 @@ interface ExerciseCatalogClientProps {
 
 export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle }: ExerciseCatalogClientProps) {
     const [selected, setSelected] = useState<Exercise | null>(null)
+    const [search, setSearch] = useState('')
+    const [muscleFilter, setMuscleFilter] = useState<string>('all')
+
+    const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
+
+    const filteredExercises = useMemo(() => {
+        return allExercises.filter(ex => {
+            const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase())
+            const matchesMuscle = muscleFilter === 'all' || ex.muscle_group === muscleFilter
+            return matchesSearch && matchesMuscle
+        })
+    }, [allExercises, search, muscleFilter])
+
+    const groupedByMuscle = useMemo(() => {
+        const groups: Record<string, Exercise[]> = {}
+        
+        // Use the master list to define order and ensure important groups appear
+        MUSCLE_GROUPS.forEach(m => {
+            groups[m] = []
+        })
+
+        filteredExercises.forEach(ex => {
+            const muscle = ex.muscle_group || 'Otro'
+            if (!groups[muscle]) groups[muscle] = []
+            groups[muscle].push(ex)
+        })
+
+        // Remove empty groups unless it's a filtered view
+        if (search || muscleFilter !== 'all') {
+            return Object.fromEntries(Object.entries(groups).filter(([_, list]) => list.length > 0))
+        }
+        
+        return Object.fromEntries(Object.entries(groups).filter(([_, list]) => list.length > 0))
+    }, [filteredExercises, search, muscleFilter])
 
     return (
-        <>
+        <div className="space-y-6">
+            {/* Filters Section */}
+            <div className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Buscar ejercicio..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-9 bg-muted/50 border-border"
+                    />
+                </div>
+                <div className="w-full md:w-64">
+                    <Select value={muscleFilter} onValueChange={(val) => setMuscleFilter(val || 'all')}>
+                        <SelectTrigger className="bg-muted/50 border-border">
+                            <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                            <SelectValue placeholder="Grupo muscular" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos los músculos</SelectItem>
+                            {MUSCLE_GROUPS.map(m => (
+                                <SelectItem key={m} value={m}>{m}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             {/* Right: global catalog by muscle group */}
             <div className="lg:col-span-2 space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                    <Globe className="w-4 h-4" />
-                    Catálogo global
-                </h2>
-                {Object.entries(byMuscle).map(([muscle, exList]) => (
-                    <div key={muscle} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                        <div className="px-5 py-3 border-b border-border flex items-center gap-2">
-                            <Dumbbell className="w-3.5 h-3.5 text-primary" />
-                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                                {muscle}
-                            </span>
-                            <span className="text-xs text-muted-foreground ml-auto">{exList.length}</span>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                        <Globe className="w-4 h-4" />
+                        Catálogo de ejercicios
+                        <Badge variant="secondary" className="ml-2 font-mono">
+                            {filteredExercises.length}
+                        </Badge>
+                    </h2>
+                </div>
+
+                {Object.keys(groupedByMuscle).length > 0 ? (
+                    Object.entries(groupedByMuscle).map(([muscle, exList]) => (
+                        <div key={muscle} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md">
+                            <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                    {muscle}
+                                </span>
+                                <span className="text-xs text-muted-foreground ml-auto bg-background px-2 py-0.5 rounded-full border border-border">
+                                    {exList.length}
+                                </span>
+                            </div>
+                            <div className="px-5 py-4 flex flex-wrap gap-2">
+                                {exList.map(ex => (
+                                    <button
+                                        key={ex.id}
+                                        onClick={() => setSelected(ex)}
+                                        className="group inline-flex items-center px-4 py-2 rounded-xl text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
+                                    >
+                                        {(ex.video_url || ex.gif_url) && (
+                                            <div className="mr-2 w-2 h-2 rounded-full bg-primary animate-pulse group-hover:animate-none" />
+                                        )}
+                                        {ex.name}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        <div className="px-5 py-3 flex flex-wrap gap-2">
-                            {exList.map(ex => (
-                                <button
-                                    key={ex.id}
-                                    onClick={() => setSelected(ex)}
-                                    className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-150 cursor-pointer"
-                                >
-                                    {(ex.video_url || ex.gif_url) && <span className="mr-1.5 text-primary">●</span>}
-                                    {ex.name}
-                                </button>
-                            ))}
-                        </div>
+                    ))
+                ) : (
+                    <div className="py-20 text-center bg-card border border-dashed border-border rounded-2xl">
+                        <Dumbbell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
+                        <p className="text-muted-foreground font-medium">No se encontraron ejercicios</p>
+                        <button 
+                            onClick={() => { setSearch(''); setMuscleFilter('all'); }}
+                            className="mt-4 text-xs text-primary hover:underline font-bold"
+                        >
+                            Limpiar filtros
+                        </button>
                     </div>
-                ))}
+                )}
             </div>
 
             {/* Exercise Preview Modal */}
@@ -61,7 +149,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                 open={!!selected}
                 onClose={() => setSelected(null)}
             />
-        </>
+        </div>
     )
 }
 
@@ -90,6 +178,24 @@ function ExercisePreviewModal({
     const ytId = isYouTube ? getYouTubeId(displayVideo!) : null
     const hasGif = !isYouTube && !!exercise.gif_url
 
+    // Build YouTube embed URL with trimming parameters
+    const getEmbedUrl = () => {
+        if (!ytId) return ''
+        let url = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`
+        
+        // Add start time if present (assuming video_start_time is in seconds)
+        if (exercise.video_start_time) {
+            url += `&start=${exercise.video_start_time}`
+        }
+        
+        // Add end time if present
+        if (exercise.video_end_time) {
+            url += `&end=${exercise.video_end_time}`
+        }
+        
+        return url
+    }
+
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
             <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col focus:outline-none">
@@ -98,7 +204,7 @@ function ExercisePreviewModal({
                     {isYouTube && ytId ? (
                         <iframe
                             className="w-full h-full"
-                            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`}
+                            src={getEmbedUrl()}
                             title={exercise.name}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen

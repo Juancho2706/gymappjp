@@ -1,9 +1,10 @@
 'use client'
 
-import { useActionState, useRef } from 'react'
+import { useActionState, useRef, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 import Image from 'next/image'
 import { Upload, Loader2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { updateLogoAction, type BrandSettingsState } from './actions'
 
 const initialState: BrandSettingsState = {}
@@ -31,20 +32,29 @@ export function LogoUploadForm({
 }) {
     const [state, formAction] = useActionState(updateLogoAction, initialState)
     const fileRef = useRef<HTMLInputElement>(null)
+    const router = useRouter()
+
+    useEffect(() => {
+        if (state.success) {
+            router.refresh()
+        }
+    }, [state.success, router])
 
     return (
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h2 className="text-base font-bold text-foreground mb-5">Logo de tu marca</h2>
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-                <div className="w-20 h-20 rounded-2xl bg-muted border border-border flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <div className="w-20 h-20 rounded-2xl bg-muted border border-border flex items-center justify-center flex-shrink-0 overflow-hidden relative">
                     {currentLogoUrl ? (
                         <Image
                             src={currentLogoUrl}
                             alt={brandName}
-                            width={80}
-                            height={80}
-                            className="object-contain"
+                            fill
+                            sizes="80px"
+                            className="object-contain p-2"
+                            priority
+                            unoptimized={true}
                         />
                     ) : (
                         <span className="text-3xl font-bold text-muted-foreground">
