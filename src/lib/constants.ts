@@ -13,10 +13,7 @@ export const MUSCLE_GROUPS = [
     'Core',
     'Antebrazo',
     'Trapecio',
-    'Lumbar',
-    'Aductores',
-    'Abductores',
-    'Cuerpo Completo'
+    'Lumbar'
 ] as const;
 
 export type MuscleGroup = typeof MUSCLE_GROUPS[number];
