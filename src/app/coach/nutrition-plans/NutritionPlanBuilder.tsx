@@ -273,27 +273,35 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-full p-0" align="start">
-                                        <Command>
-                                            <CommandInput placeholder="Buscar alumno..." />
-                                            <CommandList>
-                                                <CommandEmpty>No se encontraron alumnos.</CommandEmpty>
-                                                <CommandGroup>
-                                                    {availableClients.map((client) => (
-                                                        <CommandItem
+                                    <PopoverContent className="w-[var(--base-ui-popover-trigger-width)] p-0" align="start">
+                                        <div className="p-1 space-y-1">
+                                            <div className="px-3 py-2 border-b">
+                                                <input 
+                                                    className="w-full bg-transparent outline-none text-sm"
+                                                    placeholder="Buscar alumno..."
+                                                    onChange={(e) => {
+                                                        // Implementar búsqueda simple si es necesario
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="max-h-[300px] overflow-y-auto">
+                                                {availableClients.length === 0 ? (
+                                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                                        No se encontraron alumnos.
+                                                    </div>
+                                                ) : (
+                                                    availableClients.map((client) => (
+                                                        <div
                                                             key={client.id}
-                                                            value={client.full_name}
-                                                            onSelect={() => {
-                                                                console.log('CommandItem selected:', client.full_name);
+                                                            onClick={() => {
+                                                                console.log('Client clicked:', client.full_name);
                                                                 setSelectedClients(prev => 
                                                                     prev.includes(client.id)
                                                                         ? prev.filter(id => id !== client.id)
                                                                         : [...prev, client.id]
                                                                 )
                                                             }}
-                                                            onPointerDown={(e) => {
-                                                                console.log('CommandItem pointer down:', client.full_name);
-                                                            }}
+                                                            className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
                                                         >
                                                             <div className={cn(
                                                                 "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
@@ -306,11 +314,11 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                                                 )}
                                                             </div>
                                                             {client.full_name}
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
                                     </PopoverContent>
                                 </Popover>
                                 <p className="text-[10px] text-muted-foreground mt-1">
