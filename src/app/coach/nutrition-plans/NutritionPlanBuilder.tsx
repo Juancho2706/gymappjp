@@ -263,14 +263,9 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                             <div className="space-y-2">
                                 <Label>Seleccionar Alumnos ({selectedClients.length})</Label>
                                 <Popover open={openPopover} onOpenChange={setOpenPopover}>
-                                    <PopoverTrigger render={
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={openPopover}
-                                            className="w-full justify-between h-auto py-2 min-h-[44px]"
-                                        />
-                                    }>
+                                    <PopoverTrigger
+                                        className="w-full justify-between h-auto py-2 min-h-[44px] flex items-center px-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
                                         <span className="truncate">
                                             {selectedClients.length > 0 
                                                 ? `${selectedClients.length} seleccionados`
@@ -287,6 +282,7 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                                     {availableClients.map((client) => (
                                                         <CommandItem
                                                             key={client.id}
+                                                            value={client.full_name}
                                                             onSelect={() => {
                                                                 setSelectedClients(prev => 
                                                                     prev.includes(client.id)
