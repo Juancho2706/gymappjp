@@ -14,6 +14,8 @@ export async function saveNutritionTemplate(
     prevState: TemplateFormState,
     formData: FormData
 ): Promise<TemplateFormState> {
+    console.log('[saveNutritionTemplate] Action started for coach:', coachId);
+    const startTime = Date.now();
     const supabase = await createClient()
 
     const name = formData.get('name') as string
@@ -24,6 +26,9 @@ export async function saveNutritionTemplate(
     const fatsStr = formData.get('fats_g') as string
     const instructions = formData.get('instructions') as string
     const selectedClientsStr = formData.get('selected_clients') as string // JSON array of client IDs
+
+    console.log('[saveNutritionTemplate] Basic data:', { name, caloriesStr, proteinStr, carbsStr, fatsStr });
+    console.log('[saveNutritionTemplate] Selected clients string length:', selectedClientsStr?.length);
 
     if (!name) {
         return { error: 'El nombre del plan es requerido.' }
@@ -46,14 +51,17 @@ export async function saveNutritionTemplate(
         .single()
 
     if (templateError || !template) {
-        console.error('Save Template Error:', templateError)
+        console.error('[saveNutritionTemplate] Save Template Error:', templateError)
         return { error: 'Error al guardar la plantilla del plan.' }
     }
+
+    console.log('[saveNutritionTemplate] Template created with ID:', template.id);
 
     // 2. Extract and Insert Meals
     let i = 0
     while (formData.has(`meal_name_${i}`)) {
         const mealName = formData.get(`meal_name_${i}`) as string
+        console.log(`[saveNutritionTemplate] Processing meal ${i}: ${mealName}`);
         const { data: meal, error: mealError } = await supabase
             .from('template_meals')
             .insert({
@@ -65,7 +73,7 @@ export async function saveNutritionTemplate(
             .single()
 
         if (mealError || !meal) {
-            console.error('Save Template Meal Error:', mealError)
+            console.error(`[saveNutritionTemplate] Save Template Meal Error (meal ${i}):`, mealError)
             continue
         }
 
@@ -73,12 +81,16 @@ export async function saveNutritionTemplate(
         let j = 0
         while (formData.has(`meal_${i}_group_id_${j}`)) {
             const savedMealId = formData.get(`meal_${i}_group_id_${j}`) as string
+            console.log(`[saveNutritionTemplate] Adding group ${j} (ID: ${savedMealId}) to meal ${i}`);
             if (savedMealId) {
-                await supabase.from('template_meal_groups').insert({
+                const { error: groupError } = await supabase.from('template_meal_groups').insert({
                     template_meal_id: meal.id,
                     saved_meal_id: savedMealId,
                     order_index: j
                 })
+                if (groupError) {
+                    console.error(`[saveNutritionTemplate] Error inserting template_meal_group:`, groupError);
+                }
             }
             j++
         }
@@ -89,7 +101,7 @@ export async function saveNutritionTemplate(
     if (selectedClientsStr) {
         try {
             const clientIds: string[] = JSON.parse(selectedClientsStr)
-            console.log(`Assigning template ${template.id} to ${clientIds.length} clients`)
+            console.log(`[saveNutritionTemplate] Assigning template ${template.id} to ${clientIds.length} clients`)
             if (clientIds.length > 0) {
                 // Get Template Data ONCE
                 const { data: fullTemplate, error: tError } = await supabase
@@ -119,10 +131,13 @@ export async function saveNutritionTemplate(
                 }
 
                 // For each client, we create a real nutrition_plan based on this template
-                for (const clientId of clientIds) {
-                    console.log(`Assigning to client ${clientId}...`)
-                    await assignTemplateToClientWithData(fullTemplate, clientId, coachId)
-                }
+                console.log(`[saveNutritionTemplate] Starting parallel assignment for ${clientIds.length} clients`);
+                const assignmentPromises = clientIds.map(clientId => 
+                    assignTemplateToClientWithData(fullTemplate, clientId, coachId)
+                );
+                
+                await Promise.all(assignmentPromises);
+                console.log(`[saveNutritionTemplate] All assignments completed`);
             }
         } catch (e) {
             console.error('Error parsing selected clients or assigning:', e)
@@ -130,7 +145,7 @@ export async function saveNutritionTemplate(
     }
 
     revalidatePath('/coach/nutrition-plans')
-    console.log('Template saved and assigned successfully')
+    console.log(`[saveNutritionTemplate] Completed in ${Date.now() - startTime}ms`)
     redirect('/coach/nutrition-plans')
 }
 

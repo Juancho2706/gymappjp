@@ -182,31 +182,59 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
             return
         }
 
+        console.log('[NutritionPlanBuilder] Starting handleSubmit');
+        const planDataForLog = {
+            name,
+            description,
+            targetCalories,
+            targetProtein,
+            targetCarbs,
+            targetFats,
+            instructions,
+            selectedClients,
+            meals: meals.map(m => ({
+                name: m.name,
+                groups: m.groups.map(g => ({ id: g.id, name: g.name }))
+            }))
+        };
+        console.log('[NutritionPlanBuilder] Plan Data before sending:', planDataForLog);
+
         startTransition(async () => {
-            const formData = new FormData()
-            formData.append('name', name)
-            formData.append('description', description)
-            formData.append('daily_calories', targetCalories)
-            formData.append('protein_g', targetProtein)
-            formData.append('carbs_g', targetCarbs)
-            formData.append('fats_g', targetFats)
-            formData.append('instructions', instructions)
-            formData.append('selected_clients', JSON.stringify(selectedClients))
+            try {
+                console.log('[NutritionPlanBuilder] Preparing FormData');
+                const formData = new FormData()
+                formData.append('name', name)
+                formData.append('description', description)
+                formData.append('daily_calories', targetCalories)
+                formData.append('protein_g', targetProtein)
+                formData.append('carbs_g', targetCarbs)
+                formData.append('fats_g', targetFats)
+                formData.append('instructions', instructions)
+                formData.append('selected_clients', JSON.stringify(selectedClients))
 
-            meals.forEach((meal, i) => {
-                formData.append(`meal_name_${i}`, meal.name)
-                meal.groups.forEach((group, j) => {
-                    formData.append(`meal_${i}_group_id_${j}`, group.id)
+                meals.forEach((meal, i) => {
+                    formData.append(`meal_name_${i}`, meal.name)
+                    meal.groups.forEach((group, j) => {
+                        formData.append(`meal_${i}_group_id_${j}`, group.id)
+                    })
                 })
-            })
 
-            const result = await saveNutritionTemplate(coachId, {}, formData)
-            if (result?.error) {
-                setError(result.error)
-                toast.error(result.error)
-            } else {
-                toast.success('Plan global creado y asignado exitosamente.')
-                if (onCancel) onCancel()
+                console.log('[NutritionPlanBuilder] Calling saveNutritionTemplate action');
+                const result = await saveNutritionTemplate(coachId, {}, formData)
+                console.log('[NutritionPlanBuilder] Action result:', result);
+
+                if (result?.error) {
+                    setError(result.error)
+                    toast.error(result.error)
+                } else {
+                    toast.success('Plan global creado y asignado exitosamente.')
+                    if (onCancel) onCancel()
+                }
+            } catch (err: any) {
+                console.error('[NutritionPlanBuilder] Catch error during submission:', err);
+                const errorMessage = err?.message || 'Error desconocido al guardar';
+                setError(`Error al guardar: ${errorMessage}`);
+                toast.error(`Error de red o servidor: ${errorMessage}`);
             }
         })
     }

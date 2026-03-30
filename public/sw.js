@@ -41,15 +41,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Ignorar peticiones a la API de Supabase
-  if (event.request.url.includes('supabase.co')) {
+  // Ignorar peticiones a la API de Supabase o rutas internas de Next.js
+  if (
+    event.request.url.includes('supabase.co') || 
+    event.request.url.includes('/_next/') ||
+    event.request.url.includes('/api/')
+  ) {
     return;
   }
 
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        return response || fetch(event.request);
+        return response || fetch(event.request).catch(err => {
+          console.error('[SW] Fetch failed for:', event.request.url, err);
+          // Opcionalmente retornar una respuesta de error o una página offline
+          return null;
+        });
       })
   );
 });
