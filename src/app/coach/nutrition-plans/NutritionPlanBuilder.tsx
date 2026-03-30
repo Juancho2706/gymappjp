@@ -84,13 +84,14 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
         meals.forEach(meal => {
             meal.groups.forEach(group => {
                 group.items?.forEach(item => {
+                    const food = item.food || item; // Fallback to item if food is not nested
                     const quantity = item.quantity || 0
                     const factor = item.unit === 'g' || item.unit === 'ml' ? quantity / 100 : quantity
                     
-                    calories += (item.calories || 0) * factor
-                    protein += (item.protein_g || 0) * factor
-                    carbs += (item.carbs_g || 0) * factor
-                    fats += (item.fats_g || 0) * factor
+                    calories += (food.calories || 0) * factor
+                    protein += (food.protein_g || 0) * factor
+                    carbs += (food.carbs_g || 0) * factor
+                    fats += (food.fats_g || 0) * factor
                 })
             })
         })
@@ -217,19 +218,19 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="calories">Kcal Diarias</Label>
-                                    <Input id="calories" type="number" value={targetCalories} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
+                                    <div className="font-bold text-lg text-primary">{targetCalories || 0}</div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="protein">Prot (g)</Label>
-                                    <Input id="protein" type="number" value={targetProtein} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
+                                    <div className="font-bold text-lg text-primary">{targetProtein || 0}</div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="carbs">Carbs (g)</Label>
-                                    <Input id="carbs" type="number" value={targetCarbs} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
+                                    <div className="font-bold text-lg text-primary">{targetCarbs || 0}</div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="fats">Grasas (g)</Label>
-                                    <Input id="fats" type="number" value={targetFats} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
+                                    <div className="font-bold text-lg text-primary">{targetFats || 0}</div>
                                 </div>
                             </div>
                         </CardContent>
