@@ -51,9 +51,10 @@ interface Props {
     coachId: string
     availableGroups: MealGroup[]
     availableClients: Client[]
+    onCancel?: () => void
 }
 
-export function NutritionPlanBuilder({ coachId, availableGroups, availableClients }: Props) {
+export function NutritionPlanBuilder({ coachId, availableGroups, availableClients, onCancel }: Props) {
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState('')
 
@@ -205,12 +206,20 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                 toast.error(result.error)
             } else {
                 toast.success('Plan global creado y asignado exitosamente.')
+                if (onCancel) onCancel()
             }
         })
     }
 
     return (
         <form onSubmit={handleSubmit} className="space-y-10">
+            {onCancel && (
+                <div className="flex justify-end mb-4">
+                    <Button type="button" variant="ghost" onClick={onCancel}>
+                        Cancelar y Volver
+                    </Button>
+                </div>
+            )}
             {error && (
                 <div className="p-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded-md">
                     {error}

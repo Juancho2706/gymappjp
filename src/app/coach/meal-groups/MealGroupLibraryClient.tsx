@@ -59,7 +59,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                <div className="relative w-full sm:max-w-md">
+                <div className="relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                         placeholder="Buscar grupos..."
@@ -73,7 +73,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
                         setEditingGroup(null)
                         setIsModalOpen(true)
                     }}
-                    className="w-full sm:w-auto h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 px-6"
+                    className="w-full sm:w-auto h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 px-6 shrink-0"
                 >
                     <Plus className="w-5 h-5" />
                     Nuevo Grupo
@@ -89,7 +89,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
                     <p className="text-muted-foreground max-w-xs mx-auto mt-1">Crea tu primer grupo de alimentos para usarlo en tus planes.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                     {filteredGroups.map((group) => {
                         const totals = calculateTotals(group.items || [])
                         return (
@@ -101,7 +101,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
                                                 <h3 className="font-bold text-lg truncate group-hover:text-primary transition-colors">{group.name}</h3>
                                                 <p className="text-xs text-muted-foreground">{group.items?.length || 0} ingredientes</p>
                                             </div>
-                                            <div className="flex gap-1">
+                                            <div className="flex gap-1 shrink-0">
                                                 <Button 
                                                     variant="ghost" 
                                                     size="icon" 
@@ -125,21 +125,21 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
                                         </div>
 
                                         <div className="grid grid-cols-4 gap-2">
-                                            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-2 text-center">
-                                                <p className="text-[10px] font-bold text-orange-600 uppercase">Cal</p>
-                                                <p className="text-sm font-bold text-orange-700">{Math.round(totals.calories)}</p>
+                                            <div className="bg-orange-500/5 border border-orange-500/10 rounded-lg p-1.5 text-center">
+                                                <p className="text-[9px] font-bold text-orange-600 uppercase">Cal</p>
+                                                <p className="text-xs font-bold text-orange-700">{Math.round(totals.calories)}</p>
                                             </div>
-                                            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-2 text-center">
-                                                <p className="text-[10px] font-bold text-blue-600 uppercase">Prot</p>
-                                                <p className="text-sm font-bold text-blue-700">{Math.round(totals.protein)}g</p>
+                                            <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-1.5 text-center">
+                                                <p className="text-[9px] font-bold text-blue-600 uppercase">Prot</p>
+                                                <p className="text-xs font-bold text-blue-700">{Math.round(totals.protein)}g</p>
                                             </div>
-                                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2 text-center">
-                                                <p className="text-[10px] font-bold text-emerald-600 uppercase">Carb</p>
-                                                <p className="text-sm font-bold text-emerald-700">{Math.round(totals.carbs)}g</p>
+                                            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-1.5 text-center">
+                                                <p className="text-[9px] font-bold text-emerald-600 uppercase">Carb</p>
+                                                <p className="text-xs font-bold text-emerald-700">{Math.round(totals.carbs)}g</p>
                                             </div>
-                                            <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-2 text-center">
-                                                <p className="text-[10px] font-bold text-purple-600 uppercase">Fat</p>
-                                                <p className="text-sm font-bold text-purple-700">{Math.round(totals.fats)}g</p>
+                                            <div className="bg-purple-500/5 border border-purple-500/10 rounded-lg p-1.5 text-center">
+                                                <p className="text-[9px] font-bold text-purple-600 uppercase">Fat</p>
+                                                <p className="text-xs font-bold text-purple-700">{Math.round(totals.fats)}g</p>
                                             </div>
                                         </div>
                                     </div>
@@ -148,7 +148,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
                                         <div className="flex flex-wrap gap-1.5">
                                             {group.items?.slice(0, 3).map((item: any) => (
                                                 <span key={item.id} className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground whitespace-nowrap">
-                                                    {item.food.name} ({item.quantity}{item.unit || 'g'})
+                                                    {item.food.name}
                                                 </span>
                                             ))}
                                             {(group.items?.length || 0) > 3 && (

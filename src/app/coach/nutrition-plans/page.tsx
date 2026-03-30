@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { NutritionPlanBuilder } from './NutritionPlanBuilder'
+import { NutritionManagement } from './NutritionManagement'
 
 export default async function NutritionPlansPage() {
     const supabase = await createClient()
@@ -24,7 +24,20 @@ export default async function NutritionPlansPage() {
         .eq('coach_id', user.id)
         .order('name')
 
-    // 3. Get Clients for assignment
+    // 3. Get Nutrition Templates (Global Plans)
+    const { data: templates } = await supabase
+        .from('nutrition_plan_templates')
+        .select(`
+            *,
+            template_meals (
+                id,
+                name
+            )
+        `)
+        .eq('coach_id', user.id)
+        .order('created_at', { ascending: false })
+
+    // 4. Get Clients for assignment
     const { data: clients } = await supabase
         .from('clients')
         .select('id, full_name')
@@ -33,19 +46,11 @@ export default async function NutritionPlansPage() {
         .order('full_name')
 
     return (
-        <div className="space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold">Plan Alimenticio Global</h1>
-                <p className="text-muted-foreground mt-1">
-                    Crea plantillas de planes y asígnalas a múltiples alumnos a la vez.
-                </p>
-            </div>
-
-            <NutritionPlanBuilder 
-                coachId={user.id} 
-                availableGroups={mealGroups || []} 
-                availableClients={clients || []}
-            />
-        </div>
+        <NutritionManagement 
+            coachId={user.id} 
+            initialTemplates={templates || []}
+            initialGroups={mealGroups || []} 
+            availableClients={clients || []}
+        />
     )
 }
