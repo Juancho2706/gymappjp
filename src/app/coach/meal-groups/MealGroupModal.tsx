@@ -113,7 +113,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl flex flex-col max-h-[90vh] p-0 gap-0 border-none sm:rounded-3xl shadow-2xl overflow-hidden">
+            <DialogContent className="sm:max-w-4xl flex flex-col max-h-[90vh] p-0 gap-0 border-none sm:rounded-3xl shadow-2xl overflow-hidden">
                 <DialogHeader className="p-6 pb-0 flex-shrink-0">
                     <DialogTitle className="text-2xl font-bold flex items-center gap-2">
                         <div className="p-2 rounded-xl bg-primary/10">
