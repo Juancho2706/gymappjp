@@ -51,7 +51,7 @@ export function NutritionForm({ clientId, coachId }: Props) {
     ])
 
     const calculateItemMacros = (item: FoodItemInput) => {
-        const factor = item.quantity / (item.serving_size_g || 100);
+        const factor = item.unit === 'u' ? item.quantity : item.quantity / (item.serving_size_g || 100);
         return {
             calories: Math.round(item.calories * factor),
             protein: Math.round(item.protein_g * factor * 10) / 10,

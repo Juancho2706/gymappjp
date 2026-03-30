@@ -43,7 +43,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
 
     const calculateTotals = (items: any[]) => {
         return items.reduce((acc, item) => {
-            const factor = item.quantity / 100
+            const factor = item.unit === 'g' ? item.quantity / 100 : item.quantity
             return {
                 calories: acc.calories + (item.food.calories * factor),
                 protein: acc.protein + (item.food.protein_g * factor),
@@ -145,7 +145,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
                                         <div className="flex flex-wrap gap-1.5">
                                             {group.items?.slice(0, 3).map((item: any) => (
                                                 <span key={item.id} className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground whitespace-nowrap">
-                                                    {item.food.name} ({item.quantity}g)
+                                                    {item.food.name} ({item.quantity}{item.unit || 'g'})
                                                 </span>
                                             ))}
                                             {(group.items?.length || 0) > 3 && (

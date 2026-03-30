@@ -69,7 +69,7 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
             const itemsToInsert = groupData.items.map(item => ({
                 saved_meal_id: groupId!,
                 food_id: item.food_id,
-                quantity: Math.round(item.quantity),
+                quantity: item.quantity,
                 unit: item.unit || 'g'
             }))
             console.log("[saveMealGroup] Intentando insertar items en saved_meal_items:", JSON.stringify(itemsToInsert, null, 2))

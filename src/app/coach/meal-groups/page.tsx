@@ -20,6 +20,7 @@ export default async function CoachMealGroupsPage() {
             items:saved_meal_items(
                 id,
                 quantity,
+                unit,
                 food:foods(*)
             )
         `)
