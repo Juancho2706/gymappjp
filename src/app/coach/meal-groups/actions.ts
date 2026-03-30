@@ -35,10 +35,11 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
 
         // Insert items
         if (groupData.items.length > 0) {
+            console.log("Inserting items for group:", groupId, groupData.items)
             const itemsToInsert = groupData.items.map(item => ({
                 saved_meal_id: groupId!,
                 food_id: item.food_id,
-                quantity: item.quantity,
+                quantity: Math.round(item.quantity),
                 unit: item.unit || 'g'
             }))
 
@@ -46,7 +47,10 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
                 .from('saved_meal_items')
                 .insert(itemsToInsert)
             
-            if (itemsError) throw itemsError
+            if (itemsError) {
+                console.error("Error inserting items:", itemsError)
+                throw itemsError
+            }
         }
 
         // Fetch the full object to return it
