@@ -167,56 +167,53 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
                                 </div>
                             ) : (
                                 items.map((item, index) => (
-                                    <div key={index} className="flex items-center gap-3 bg-card border border-border/60 p-3 rounded-2xl group animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                    <div key={index} className="flex flex-col sm:flex-row sm:items-center gap-4 bg-card border border-border/60 p-4 rounded-2xl group animate-in fade-in slide-in-from-bottom-2 duration-200">
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-bold text-sm truncate">{item.food.name}</p>
-                                            <div className="flex gap-2 text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
+                                            <p className="font-bold text-base sm:text-sm truncate">{item.food.name}</p>
+                                            <div className="flex flex-wrap gap-2 text-[11px] sm:text-[10px] text-muted-foreground font-medium uppercase mt-1">
                                                 {(() => {
                                                     const factor = item.unit === 'g' ? item.quantity / 100 : item.quantity
                                                     return (
                                                         <>
-                                                            <span>{Math.round(item.food.calories * factor)} kcal</span>
-                                                            <span>•</span>
-                                                            <span>P: {Math.round(item.food.protein_g * factor)}g</span>
-                                                            <span>•</span>
-                                                            <span>C: {Math.round(item.food.carbs_g * factor)}g</span>
-                                                            <span>•</span>
-                                                            <span>G: {Math.round(item.food.fats_g * factor)}g</span>
+                                                            <span className="bg-muted/50 px-2 py-0.5 rounded-md">{Math.round(item.food.calories * factor)} kcal</span>
+                                                            <span className="bg-muted/50 px-2 py-0.5 rounded-md">P: {Math.round(item.food.protein_g * factor)}g</span>
+                                                            <span className="bg-muted/50 px-2 py-0.5 rounded-md">C: {Math.round(item.food.carbs_g * factor)}g</span>
+                                                            <span className="bg-muted/50 px-2 py-0.5 rounded-md">G: {Math.round(item.food.fats_g * factor)}g</span>
                                                         </>
                                                     )
                                                 })()}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-3 sm:gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
                                             <div className="flex items-center bg-muted/50 rounded-xl p-1 border border-border/50">
                                                 <button
                                                     onClick={() => handleUpdateUnit(index, 'g')}
-                                                    className={`px-2 py-1 text-[10px] font-bold rounded-lg transition-all ${item.unit === 'g' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                    className={`px-3 py-1.5 sm:px-2 sm:py-1 text-xs sm:text-[10px] font-bold rounded-lg transition-all ${item.unit === 'g' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                                                 >
                                                     G
                                                 </button>
                                                 <button
                                                     onClick={() => handleUpdateUnit(index, 'u')}
-                                                    className={`px-2 py-1 text-[10px] font-bold rounded-lg transition-all ${item.unit === 'u' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                    className={`px-3 py-1.5 sm:px-2 sm:py-1 text-xs sm:text-[10px] font-bold rounded-lg transition-all ${item.unit === 'u' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                                                 >
                                                     U
                                                 </button>
                                             </div>
-                                            <div className="relative w-20">
+                                            <div className="relative w-24 sm:w-20">
                                                 <Input
                                                     type="number"
-                                                    value={item.quantity}
+                                                    value={item.quantity || ''}
                                                     onChange={(e) => handleUpdateQuantity(index, Number(e.target.value))}
-                                                    className="h-9 rounded-xl text-center font-bold pr-1 pl-1"
+                                                    className="h-10 sm:h-9 rounded-xl text-center font-bold px-2 text-base sm:text-sm"
                                                 />
                                             </div>
                                             <Button 
                                                 variant="ghost" 
                                                 size="icon" 
                                                 onClick={() => handleRemoveItem(index)}
-                                                className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                className="h-10 w-10 sm:h-9 sm:w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 ml-auto sm:ml-0"
                                             >
-                                                <Trash2 className="w-4 h-4" />
+                                                <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </Button>
                                         </div>
                                     </div>
