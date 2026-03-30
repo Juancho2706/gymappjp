@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Dumbbell, Search, Play, X, Info } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
+import { normalizeString } from "@/lib/utils";
 
 type Exercise = Tables<"exercises">;
 
@@ -29,9 +30,11 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
   // Flatten and filter exercises
   const allExercises = Object.values(byMuscle).flat();
   const filteredExercises = allExercises.filter((ex) => {
+    const normalizedSearch = normalizeString(search);
     const matchesMuscle =
       selectedMuscle === "Todos" || ex.muscle_group === selectedMuscle;
-    const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = normalizeString(ex.name).includes(normalizedSearch) || 
+                         normalizeString(ex.muscle_group || '').includes(normalizedSearch);
     return matchesMuscle && matchesSearch;
   });
 

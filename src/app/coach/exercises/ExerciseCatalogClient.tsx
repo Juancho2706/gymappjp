@@ -14,6 +14,7 @@ import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { normalizeString } from '@/lib/utils'
 
 type Exercise = Tables<'exercises'>
 
@@ -26,14 +27,16 @@ interface ExerciseCatalogClientProps {
 export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle }: ExerciseCatalogClientProps) {
     const [selected, setSelected] = useState<Exercise | null>(null)
     const [search, setSearch] = useState('')
-    const [muscleFilter, setMuscleFilter] = useState<string>('all')
+    const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
 
     const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
 
     const filteredExercises = useMemo(() => {
+        const normalizedSearch = normalizeString(search)
         return allExercises.filter(ex => {
-            const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase())
-            const matchesMuscle = muscleFilter === 'all' || ex.muscle_group === muscleFilter
+            const matchesSearch = normalizeString(ex.name).includes(normalizedSearch) || 
+                                 normalizeString(ex.muscle_group || '').includes(normalizedSearch)
+            const matchesMuscle = muscleFilter === 'Todos' || ex.muscle_group === muscleFilter
             return matchesSearch && matchesMuscle
         })
     }, [allExercises, search, muscleFilter])
@@ -53,7 +56,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
         })
 
         // Remove empty groups unless it's a filtered view
-        if (search || muscleFilter !== 'all') {
+        if (search || muscleFilter !== 'Todos') {
             return Object.fromEntries(Object.entries(groups).filter(([_, list]) => list.length > 0))
         }
         
@@ -74,13 +77,13 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                     />
                 </div>
                 <div className="w-full md:w-64">
-                    <Select value={muscleFilter} onValueChange={(val) => setMuscleFilter(val || 'all')}>
+                    <Select value={muscleFilter} onValueChange={(val) => setMuscleFilter(val || 'Todos')}>
                         <SelectTrigger className="bg-muted/50 border-border">
                             <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
                             <SelectValue placeholder="Grupo muscular" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">Todos los músculos</SelectItem>
+                            <SelectItem value="Todos">Todos</SelectItem>
                             {MUSCLE_GROUPS.map(m => (
                                 <SelectItem key={m} value={m}>{m}</SelectItem>
                             ))}
@@ -134,7 +137,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         <Dumbbell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
                         <p className="text-muted-foreground font-medium">No se encontraron ejercicios</p>
                         <button 
-                            onClick={() => { setSearch(''); setMuscleFilter('all'); }}
+                            onClick={() => { setSearch(''); setMuscleFilter('Todos'); }}
                             className="mt-4 text-xs text-primary hover:underline font-bold"
                         >
                             Limpiar filtros

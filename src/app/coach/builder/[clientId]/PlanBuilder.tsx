@@ -27,6 +27,7 @@ import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { normalizeString } from '@/lib/utils'
 import { createPlanAction } from './actions'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
@@ -223,9 +224,11 @@ export function PlanBuilder({
     const muscleGroups = ['Todos', ...MUSCLE_GROUPS]
 
     const filteredExercises = exercises.filter(ex => {
-        const isSecondary = ex.secondary_muscles?.includes(selectedMuscle) || false
+        const normalizedSearch = normalizeString(search)
+        const isSecondary = ex.secondary_muscles?.some(m => m === selectedMuscle) || false
         const matchesMuscle = selectedMuscle === 'Todos' || ex.muscle_group === selectedMuscle || isSecondary
-        const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase())
+        const matchesSearch = normalizeString(ex.name).includes(normalizedSearch) || 
+                             normalizeString(ex.muscle_group || '').includes(normalizedSearch)
         return matchesMuscle && matchesSearch
     })
 
