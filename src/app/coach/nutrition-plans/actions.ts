@@ -178,7 +178,8 @@ async function assignTemplateToClient(templateId: string, clientId: string, coac
                 const itemsToInsert = mealGroup.saved_meal_items.map(item => ({
                     meal_id: newMeal.id,
                     food_id: item.food_id,
-                    quantity: item.quantity
+                    quantity: item.quantity,
+                    unit: item.unit || 'g'
                 }))
 
                 if (itemsToInsert.length > 0) {

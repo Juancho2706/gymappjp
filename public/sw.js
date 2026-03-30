@@ -36,6 +36,16 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Ignorar peticiones que no sean GET (como las Server Actions que son POST)
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Ignorar peticiones a la API de Supabase
+  if (event.request.url.includes('supabase.co')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

@@ -12,6 +12,7 @@ export type NutritionFormState = {
 interface FoodItemPayload {
     food_id: string
     quantity: number
+    unit: string
 }
 
 interface MealPayload {
@@ -52,10 +53,12 @@ export async function saveNutritionPlan(
         while (formData.has(`meal_${i}_food_id_${j}`)) {
             const foodId = formData.get(`meal_${i}_food_id_${j}`) as string
             const quantity = formData.get(`meal_${i}_quantity_${j}`) as string
+            const unit = formData.get(`meal_${i}_unit_${j}`) as string
             if (foodId && quantity) {
                 mealItems.push({ 
                     food_id: foodId, 
-                    quantity: parseInt(quantity) || 0 
+                    quantity: parseInt(quantity) || 0,
+                    unit: unit || 'g'
                 })
             }
             j++
@@ -120,7 +123,8 @@ export async function saveNutritionPlan(
             const itemsToInsert = meal.items.map(item => ({
                 meal_id: insertedMeal.id,
                 food_id: item.food_id,
-                quantity: item.quantity
+                quantity: item.quantity,
+                unit: item.unit
             }))
 
             const { error: itemsError } = await supabase

@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 interface Props {
-    onFoodSelected: (food: Food, quantity: number) => void;
+    onFoodSelected: (food: Food, quantity: number, unit?: string) => void;
 }
 
 export function FoodSearchModal({ onFoodSelected }: Props) {

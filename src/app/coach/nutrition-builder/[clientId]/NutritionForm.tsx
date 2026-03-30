@@ -14,6 +14,7 @@ interface FoodItemInput {
     food_id: string;
     name: string;
     quantity: number;
+    unit: string;
     serving_size_g: number;
     calories: number;
     protein_g: number;
@@ -108,7 +109,8 @@ export function NutritionForm({ clientId, coachId }: Props) {
             const mealItems = meal.food_items.map(item => ({
                 saved_meal_id: savedMealId,
                 food_id: item.food_id,
-                quantity: item.quantity
+                quantity: item.quantity,
+                unit: item.unit
             }))
 
             const { error: itemsError } = await supabase.from('saved_meal_items').insert(mealItems)
@@ -141,6 +143,7 @@ export function NutritionForm({ clientId, coachId }: Props) {
                 meal.food_items.forEach((foodItem, j) => {
                     formData.append(`meal_${i}_food_id_${j}`, foodItem.food_id)
                     formData.append(`meal_${i}_quantity_${j}`, foodItem.quantity.toString())
+                    formData.append(`meal_${i}_unit_${j}`, foodItem.unit)
                 })
             })
 
@@ -315,7 +318,7 @@ export function NutritionForm({ clientId, coachId }: Props) {
                                                                                 newFoodItems[foodIndex].quantity = Number(e.target.value)
                                                                                 handleMealChange(meal.id, 'food_items', newFoodItems)
                                                                             }} className="h-7 text-xs shadow-none pr-8 font-bold" title="Cantidad/Porción" />
-                                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold">g/u</span>
+                                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold">{foodItem.unit || 'g/u'}</span>
                                                                         </div>
                                                                         <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-500 hover:bg-red-500/10" onClick={() => {
                                                                             const newFoodItems = meal.food_items.filter((_, i) => i !== foodIndex)
@@ -334,11 +337,12 @@ export function NutritionForm({ clientId, coachId }: Props) {
                                                             );
                                                         })}
                                                     </div>
-                                                    <FoodSearchModal onFoodSelected={(food, quantity) => {
+                                                    <FoodSearchModal onFoodSelected={(food, quantity, unit) => {
                                                         const newFoodItem: FoodItemInput = {
                                                             food_id: food.id,
                                                             name: food.name,
                                                             quantity: quantity,
+                                                            unit: unit || 'g',
                                                             serving_size_g: food.serving_size_g,
                                                             calories: food.calories,
                                                             protein_g: food.protein_g,

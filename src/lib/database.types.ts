@@ -323,18 +323,21 @@ export type Database = {
           id: string
           meal_id: string
           quantity: number
+          unit: string
         }
         Insert: {
           food_id: string
           id?: string
           meal_id: string
           quantity: number
+          unit?: string
         }
         Update: {
           food_id?: string
           id?: string
           meal_id?: string
           quantity?: number
+          unit?: string
         }
         Relationships: [
           {
@@ -759,18 +762,21 @@ export type Database = {
           id: string
           quantity: number
           saved_meal_id: string
+          unit: string
         }
         Insert: {
           food_id: string
           id?: string
           quantity: number
           saved_meal_id: string
+          unit?: string
         }
         Update: {
           food_id?: string
           id?: string
           quantity?: number
           saved_meal_id?: string
+          unit?: string
         }
         Relationships: [
           {
