@@ -83,13 +83,14 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
 
         group.items?.forEach(item => {
             const food = item.food || item;
-            const quantity = item.quantity || 0
-            const factor = item.unit === 'g' || item.unit === 'ml' ? quantity / 100 : quantity
+            const quantity = Number(item.quantity) || 0
+            const unit = item.unit?.toLowerCase() || 'g'
+            const factor = unit === 'g' || unit === 'ml' ? quantity / 100 : quantity
             
-            calories += (food.calories || 0) * factor
-            protein += (food.protein_g || 0) * factor
-            carbs += (food.carbs_g || 0) * factor
-            fats += (food.fats_g || 0) * factor
+            calories += (Number(food.calories) || 0) * factor
+            protein += (Number(food.protein_g) || 0) * factor
+            carbs += (Number(food.carbs_g) || 0) * factor
+            fats += (Number(food.fats_g) || 0) * factor
         })
 
         return {

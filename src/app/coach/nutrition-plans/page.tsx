@@ -16,6 +16,8 @@ export default async function NutritionPlansPage() {
             name,
             items:saved_meal_items(
                 id,
+                quantity,
+                unit,
                 food:foods(*)
             )
         `)

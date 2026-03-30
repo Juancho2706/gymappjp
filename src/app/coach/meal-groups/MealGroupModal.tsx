@@ -28,12 +28,15 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
     const [showFoodSearch, setShowFoodSearch] = useState(false)
 
     const totals = items.reduce((acc, item) => {
-        const factor = item.unit === 'g' ? item.quantity / 100 : item.quantity
+        const quantity = Number(item.quantity) || 0
+        const unit = item.unit?.toLowerCase() || 'g'
+        const factor = unit === 'g' || unit === 'ml' ? quantity / 100 : quantity
+        
         return {
-            calories: acc.calories + (item.food.calories * factor),
-            protein: acc.protein + (item.food.protein_g * factor),
-            carbs: acc.carbs + (item.food.carbs_g * factor),
-            fats: acc.fats + (item.food.fats_g * factor)
+            calories: acc.calories + ((Number(item.food?.calories) || 0) * factor),
+            protein: acc.protein + ((Number(item.food?.protein_g) || 0) * factor),
+            carbs: acc.carbs + ((Number(item.food?.carbs_g) || 0) * factor),
+            fats: acc.fats + ((Number(item.food?.fats_g) || 0) * factor)
         }
     }, { calories: 0, protein: 0, carbs: 0, fats: 0 })
 
