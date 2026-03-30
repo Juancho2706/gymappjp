@@ -9,7 +9,6 @@ import { Trash2, Plus, Search, Scale, Zap, Dumbbell, PieChart, Apple } from 'luc
 import { FoodSearch } from '../foods/FoodSearch'
 import { saveMealGroup } from './actions'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 
 interface Item {
     food_id: string;
@@ -86,27 +85,11 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
         }
 
         const result = await saveMealGroup(groupData, coachId)
-        if (result.success) {
-            // Need to fetch the full saved object to return it back to library
-            const supabase = createClient()
-            const { data: fullGroup } = await supabase
-                .from('saved_meals')
-                .select(`
-                    *,
-                    items:saved_meal_items(
-                        id,
-                        quantity,
-                        unit,
-                        food:foods(*)
-                    )
-                `)
-                .eq('id', result.id)
-                .single()
-            
-            onSave(fullGroup)
+        if (result.success && result.group) {
+            onSave(result.group)
             toast.success('Grupo guardado correctamente')
         } else {
-            toast.error(result.error)
+            toast.error(result.error || 'Error al guardar')
         }
         setIsSaving(false)
     }

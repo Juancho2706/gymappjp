@@ -49,8 +49,25 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
             if (itemsError) throw itemsError
         }
 
+        // Fetch the full object to return it
+        const { data: fullGroup, error: fetchError } = await supabase
+            .from('saved_meals')
+            .select(`
+                *,
+                items:saved_meal_items(
+                    id,
+                    quantity,
+                    unit,
+                    food:foods(*)
+                )
+            `)
+            .eq('id', groupId)
+            .single()
+
+        if (fetchError) throw fetchError
+
         revalidatePath('/coach/meal-groups')
-        return { success: true, id: groupId }
+        return { success: true, group: fullGroup }
     } catch (error) {
         console.error("Error saving meal group:", error)
         return { error: 'Error al guardar el grupo de alimentos.' }
