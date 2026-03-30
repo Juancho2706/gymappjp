@@ -99,6 +99,7 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
                 *,
                 items:saved_meal_items(
                     id,
+                    food_id,
                     quantity,
                     unit,
                     food:foods(*)

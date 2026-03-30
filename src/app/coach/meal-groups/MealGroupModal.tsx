@@ -21,6 +21,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
     const [name, setName] = useState(editingGroup?.name || '')
     const [items, setItems] = useState<Item[]>(editingGroup?.items?.map((item: any) => ({
         ...item,
+        food_id: item.food_id || item.food?.id,
         unit: item.unit || 'g'
     })) || [])
     const [isSaving, setIsSaving] = useState(false)
@@ -78,7 +79,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
             id: editingGroup?.id,
             name,
             items: items.map(item => ({ 
-                food_id: item.food_id, 
+                food_id: item.food_id || item.food?.id, 
                 quantity: item.quantity,
                 unit: item.unit
             }))
