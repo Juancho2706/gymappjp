@@ -169,12 +169,11 @@ export async function saveNutritionTemplate(
 
         revalidatePath('/coach/nutrition-plans')
         console.log(`[saveNutritionTemplate] Completed in ${Date.now() - startTime}ms`)
-        // No redirect inside try/catch if using Next.js redirect which throws
+        return { success: true }
     } catch (error) {
         console.error('[saveNutritionTemplate] Unexpected error:', error)
         return { error: error instanceof Error ? error.message : String(error) }
     }
-    redirect('/coach/nutrition-plans')
 }
 
 async function assignTemplateToClientWithData(template: any, clientId: string, coachId: string): Promise<string | null> {
