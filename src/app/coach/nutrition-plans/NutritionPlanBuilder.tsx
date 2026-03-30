@@ -231,6 +231,9 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                     if (onCancel) onCancel()
                 }
             } catch (err: any) {
+                if (err?.message?.includes('NEXT_REDIRECT')) {
+                    return;
+                }
                 console.error('[NutritionPlanBuilder] Catch error during submission:', err);
                 const errorMessage = err?.message || 'Error desconocido al guardar';
                 setError(`Error al guardar: ${errorMessage}`);
