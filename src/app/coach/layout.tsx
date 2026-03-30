@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import type { Tables } from '@/lib/database.types'
+import { SuccessAnimationProvider } from '@/components/SuccessAnimationProvider'
 
 type Coach = Tables<'coaches'>
 import type { Metadata } from 'next'
@@ -51,6 +52,7 @@ export default async function CoachLayout({
                     {children}
                 </div>
             </main>
+            <SuccessAnimationProvider />
         </div>
     )
 }

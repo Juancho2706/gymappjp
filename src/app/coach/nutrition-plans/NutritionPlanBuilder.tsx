@@ -30,7 +30,7 @@ import {
 import { cn } from "@/lib/utils"
 import { saveNutritionTemplate } from './actions'
 import { toast } from 'sonner'
-import { SuccessWaveOverlay } from './SuccessWaveOverlay'
+import { triggerSuccessAnimation } from '@/components/SuccessAnimationProvider'
 
 interface MealGroup {
     id: string
@@ -60,7 +60,6 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState('')
-    const [showSuccess, setShowSuccess] = useState(false)
 
     // Plan Details
     const [name, setName] = useState('')
@@ -231,7 +230,13 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                     setError(result.error)
                     toast.error(result.error)
                 } else {
-                    setShowSuccess(true)
+                    triggerSuccessAnimation(() => {
+                        if (onCancel) {
+                            onCancel()
+                        } else {
+                            router.push('/coach/nutrition-plans')
+                        }
+                    })
                 }
             } catch (err: any) {
                 if (err?.message?.includes('NEXT_REDIRECT')) {
@@ -531,17 +536,6 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                     </div>
                 </div>
             </div>
-            
-            <SuccessWaveOverlay 
-                show={showSuccess} 
-                onCover={() => {
-                    if (onCancel) {
-                        onCancel()
-                    } else {
-                        router.push('/coach/nutrition-plans')
-                    }
-                }} 
-            />
         </form>
     )
 }
