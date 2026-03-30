@@ -329,6 +329,7 @@ async function main() {
         
     if (delErr) console.error("Error limpiando recetas:", delErr);
 
+    /*
     const { error: delFoodErr } = await adminDb
         .from('foods')
         .delete()
@@ -336,6 +337,7 @@ async function main() {
         .is('coach_id', null);
 
     if (delFoodErr) console.error("Error limpiando alimentos virtuales:", delFoodErr);
+    */
 
     // 2. Insertar nuevas recetas
     console.log(`Insertando ${RECIPES.length} recetas premium...`);
@@ -381,6 +383,8 @@ async function main() {
 
         if (ingErr) console.error(`❌ Error con ingredientes de ${recipe.title}:`, ingErr);
 
+        /* 
+        // COMENTADO: Ya no insertamos recetas en la tabla de alimentos (foods)
         // Insertar el alimento virtual para el Nutrition Builder
         const { error: foodErr } = await adminDb
             .from('foods')
@@ -395,6 +399,7 @@ async function main() {
             });
             
         if (foodErr) console.error(`❌ Error creando alimento virtual de ${recipe.title}:`, foodErr);
+        */
     }
 
     console.log('✅ Catálogo global de recetas creado exitosamente. Ahora todos los coaches pueden acceder a ellas.');
