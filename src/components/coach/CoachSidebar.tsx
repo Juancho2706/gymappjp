@@ -37,13 +37,8 @@ const navItems = [
         icon: Dumbbell,
     },
     {
-        href: '/coach/meal-groups',
-        label: 'Grupos',
-        icon: LayoutGrid,
-    },
-    {
         href: '/coach/nutrition-plans',
-        label: 'Planes Globales',
+        label: 'Planes Nutricionales',
         icon: Apple,
     },
     {
