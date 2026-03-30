@@ -6,10 +6,11 @@ import { useEffect, useState } from 'react'
 
 interface Props {
     show: boolean
-    onComplete: () => void
+    onCover?: () => void
+    onComplete?: () => void
 }
 
-export function SuccessWaveOverlay({ show, onComplete }: Props) {
+export function SuccessWaveOverlay({ show, onCover, onComplete }: Props) {
     const [phase, setPhase] = useState<'hidden' | 'entering' | 'showing_check' | 'exiting'>('hidden')
 
     useEffect(() => {
@@ -17,12 +18,17 @@ export function SuccessWaveOverlay({ show, onComplete }: Props) {
             setPhase('entering')
             
             // Secuencia de animación
-            const t1 = setTimeout(() => setPhase('showing_check'), 600) // Wave sube
-            const t2 = setTimeout(() => setPhase('exiting'), 2000) // Muestra el check por 1.4s
+            const t1 = setTimeout(() => {
+                setPhase('showing_check')
+                if (onCover) onCover() // Navegar cuando está cubierto
+            }, 600) // Wave sube y cubre
+            
+            const t2 = setTimeout(() => setPhase('exiting'), 2200) 
+            
             const t3 = setTimeout(() => {
                 setPhase('hidden')
-                onComplete()
-            }, 2600) // Wave se va hacia arriba
+                if (onComplete) onComplete()
+            }, 2800) 
 
             return () => {
                 clearTimeout(t1)
@@ -30,7 +36,7 @@ export function SuccessWaveOverlay({ show, onComplete }: Props) {
                 clearTimeout(t3)
             }
         }
-    }, [show, onComplete])
+    }, [show, onCover, onComplete])
 
     return (
         <AnimatePresence>
@@ -44,7 +50,7 @@ export function SuccessWaveOverlay({ show, onComplete }: Props) {
                         }}
                         transition={{ 
                             duration: 0.6, 
-                            ease: [0.32, 0.72, 0, 1] // Custom ease-out
+                            ease: [0.32, 0.72, 0, 1]
                         }}
                         className="absolute inset-0 bg-[#22c55e] z-10"
                     />

@@ -231,7 +231,6 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                     setError(result.error)
                     toast.error(result.error)
                 } else {
-                    toast.success('Plan global creado y asignado exitosamente.')
                     setShowSuccess(true)
                 }
             } catch (err: any) {
@@ -535,7 +534,7 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
             
             <SuccessWaveOverlay 
                 show={showSuccess} 
-                onComplete={() => {
+                onCover={() => {
                     if (onCancel) {
                         onCancel()
                     } else {
