@@ -42,27 +42,26 @@ function StatusBadge({ forceChange, isActive }: { forceChange: boolean, isActive
 
 export default async function CoachClientsPage() {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    
+    // Fetch all required data in parallel
+    const [userResponse, coachResponse, clientsResponse, headersList] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from('coaches').select('slug').maybeSingle(),
+        supabase
+            .from('clients')
+            .select('*')
+            .order('created_at', { ascending: false }),
+        headers()
+    ])
+
+    const { user } = userResponse.data
     if (!user) redirect('/login')
 
-    const { data: coachData } = await supabase
-        .from('coaches')
-        .select('slug')
-        .eq('id', user.id)
-        .maybeSingle()
-
-    const coach = coachData as { slug: string } | null
-
-    const { data: rawClients } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('coach_id', user.id)
-        .order('created_at', { ascending: false })
-
+    const coach = coachResponse.data as { slug: string } | null
+    const rawClients = clientsResponse.data
     const clients = (rawClients ?? []) as Client[]
 
     // Generate the correct base URL automatically from the request headers
-    const headersList = await headers()
     const host = headersList.get('host') || 'localhost:3000'
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const appUrl = `${protocol}://${host}`

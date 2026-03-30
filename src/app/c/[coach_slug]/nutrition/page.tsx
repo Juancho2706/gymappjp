@@ -40,36 +40,39 @@ export default async function ClientNutritionPage({ params }: Props) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect(`/c/${coach_slug}/login`)
 
-    // Fetch client and coach branding
-    const { data: client } = await supabase
-        .from('clients')
-        .select(`
-            id,
-            coaches ( brand_name, primary_color )
-        `)
-        .eq('id', user.id)
-        .single()
+    // Fetch client and plan in parallel
+    const [clientResponse, planResponse] = await Promise.all([
+        supabase
+            .from('clients')
+            .select(`
+                id,
+                coaches ( brand_name, primary_color )
+            `)
+            .eq('id', user.id)
+            .single(),
+        supabase
+            .from('nutrition_plans')
+            .select(`
+                *,
+                nutrition_meals (
+                    *,
+                    food_items (
+                        *,
+                        foods (*)
+                    )
+                )
+            `)
+            .eq('client_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle<NutritionPlanWithMeals>()
+    ])
 
+    const client = clientResponse.data
+    const plan = planResponse.data
+    
     if (!client) redirect(`/c/${coach_slug}/login`)
     const coachBranding = Array.isArray(client.coaches) ? client.coaches[0] : client.coaches
 
-    // Fetch active nutrition plan
-    const { data: plan } = await supabase
-        .from('nutrition_plans')
-        .select(`
-            *,
-            nutrition_meals (
-                *,
-                food_items (
-                    *,
-                    foods (*)
-                )
-            )
-        `)
-        .eq('client_id', user.id)
-        .eq('is_active', true)
-        .single<NutritionPlanWithMeals>()
-    
     if (!plan) {
         return (
             <div className="min-h-screen relative overflow-hidden bg-background">
@@ -90,7 +93,7 @@ export default async function ClientNutritionPage({ params }: Props) {
         )
     }
 
-    // Fetch today's log
+    // Fetch today's log (now we have the plan.id)
     const today = new Date().toISOString().split('T')[0]
     const { data: todayLog } = await supabase
         .from('daily_nutrition_logs')
@@ -101,7 +104,7 @@ export default async function ClientNutritionPage({ params }: Props) {
         .eq('client_id', user.id)
         .eq('plan_id', plan.id)
         .eq('log_date', today)
-        .single()
+        .maybeSingle()
 
     return (
         <div className="min-h-screen relative overflow-hidden bg-background">

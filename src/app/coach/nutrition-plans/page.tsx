@@ -8,42 +8,46 @@ export default async function NutritionPlansPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
-    // 2. Get Saved Meal Groups
-    const { data: mealGroups } = await supabase
-        .from('saved_meals')
-        .select(`
-            id,
-            name,
-            items:saved_meal_items(
+    // 2. Get data in parallel
+    const [mealGroupsResponse, templatesResponse, clientsResponse] = await Promise.all([
+        supabase
+            .from('saved_meals')
+            .select(`
                 id,
-                quantity,
-                unit,
-                food:foods(*)
-            )
-        `)
-        .eq('coach_id', user.id)
-        .order('name')
+                name,
+                items:saved_meal_items(
+                    id,
+                    quantity,
+                    unit,
+                    food:foods(*)
+                )
+            `)
+            .eq('coach_id', user.id)
+            .order('name'),
+        
+        supabase
+            .from('nutrition_plan_templates')
+            .select(`
+                *,
+                template_meals (
+                    id,
+                    name
+                )
+            `)
+            .eq('coach_id', user.id)
+            .order('created_at', { ascending: false }),
 
-    // 3. Get Nutrition Templates (Global Plans)
-    const { data: templates } = await supabase
-        .from('nutrition_plan_templates')
-        .select(`
-            *,
-            template_meals (
-                id,
-                name
-            )
-        `)
-        .eq('coach_id', user.id)
-        .order('created_at', { ascending: false })
+        supabase
+            .from('clients')
+            .select('id, full_name')
+            .eq('coach_id', user.id)
+            .eq('is_active', true)
+            .order('full_name')
+    ])
 
-    // 4. Get Clients for assignment
-    const { data: clients } = await supabase
-        .from('clients')
-        .select('id, full_name')
-        .eq('coach_id', user.id)
-        .eq('is_active', true)
-        .order('full_name')
+    const mealGroups = mealGroupsResponse.data
+    const templates = templatesResponse.data
+    const clients = clientsResponse.data
 
     return (
         <NutritionManagement 

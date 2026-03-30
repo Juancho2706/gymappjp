@@ -13,15 +13,20 @@ export const metadata: Metadata = {
 
 export default async function CoachSettingsPage() {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    
+    // Fetch user and coach data in parallel
+    const [userResponse, coachResponse] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase
+            .from('coaches')
+            .select('*')
+            .maybeSingle()
+    ])
+
+    const { user } = userResponse.data
     if (!user) redirect('/login')
 
-    const { data: rawCoach } = await supabase
-        .from('coaches')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle()
-
+    const rawCoach = coachResponse.data
     if (!rawCoach) redirect('/login')
     const coach = rawCoach as Coach
 

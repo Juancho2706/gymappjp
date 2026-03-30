@@ -21,21 +21,21 @@ export default async function CoachLayout({
 }) {
     const supabase = await createClient()
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    // Fetch user and coach data in parallel to avoid layout blocking
+    const [userResponse, coachResponse] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase
+            .from('coaches')
+            .select('full_name, brand_name, subscription_status')
+            .maybeSingle()
+    ])
 
+    const { user } = userResponse.data
     if (!user) {
         redirect('/login')
     }
 
-    const { data: coachData } = await supabase
-        .from('coaches')
-        .select('full_name, brand_name, subscription_status')
-        .eq('id', user.id)
-        .maybeSingle()
-
-    const coach = coachData as Pick<Coach, 'full_name' | 'brand_name' | 'subscription_status'> | null
+    const coach = coachResponse.data as Pick<Coach, 'full_name' | 'brand_name' | 'subscription_status'> | null
 
     if (!coach) {
         redirect('/login')
