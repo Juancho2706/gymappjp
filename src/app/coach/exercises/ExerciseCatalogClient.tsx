@@ -14,7 +14,7 @@ import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { normalizeString } from '@/lib/utils'
+import { filterExercises } from '@/lib/utils'
 
 type Exercise = Tables<'exercises'>
 
@@ -32,13 +32,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
     const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
 
     const filteredExercises = useMemo(() => {
-        const normalizedSearch = normalizeString(search)
-        return allExercises.filter(ex => {
-            const matchesSearch = normalizeString(ex.name).includes(normalizedSearch) || 
-                                 normalizeString(ex.muscle_group || '').includes(normalizedSearch)
-            const matchesMuscle = muscleFilter === 'Todos' || ex.muscle_group === muscleFilter
-            return matchesSearch && matchesMuscle
-        })
+        return filterExercises(allExercises, search, muscleFilter)
     }, [allExercises, search, muscleFilter])
 
     const groupedByMuscle = useMemo(() => {
