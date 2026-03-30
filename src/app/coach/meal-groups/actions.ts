@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function saveMealGroup(groupData: { id?: string, name: string, items: { food_id: string, quantity: number }[] }, coachId: string) {
+export async function saveMealGroup(groupData: { id?: string, name: string, items: { food_id: string, quantity: number, unit?: string }[] }, coachId: string) {
     const supabase = await createClient()
 
     try {
@@ -38,7 +38,8 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
             const itemsToInsert = groupData.items.map(item => ({
                 saved_meal_id: groupId!,
                 food_id: item.food_id,
-                quantity: item.quantity
+                quantity: item.quantity,
+                unit: item.unit || 'g'
             }))
 
             const { error: itemsError } = await supabase

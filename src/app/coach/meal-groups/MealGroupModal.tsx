@@ -14,17 +14,21 @@ import { createClient } from '@/lib/supabase/client'
 interface Item {
     food_id: string;
     quantity: number;
+    unit: 'g' | 'u';
     food: any;
 }
 
 export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId }: any) {
     const [name, setName] = useState(editingGroup?.name || '')
-    const [items, setItems] = useState<Item[]>(editingGroup?.items || [])
+    const [items, setItems] = useState<Item[]>(editingGroup?.items?.map((item: any) => ({
+        ...item,
+        unit: item.unit || 'g'
+    })) || [])
     const [isSaving, setIsSaving] = useState(false)
     const [showFoodSearch, setShowFoodSearch] = useState(false)
 
     const totals = items.reduce((acc, item) => {
-        const factor = item.quantity / 100
+        const factor = item.unit === 'g' ? item.quantity / 100 : item.quantity
         return {
             calories: acc.calories + (item.food.calories * factor),
             protein: acc.protein + (item.food.protein_g * factor),
@@ -34,7 +38,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
     }, { calories: 0, protein: 0, carbs: 0, fats: 0 })
 
     const handleAddFood = (food: any) => {
-        setItems([...items, { food_id: food.id, quantity: 100, food }])
+        setItems([...items, { food_id: food.id, quantity: 100, unit: 'g', food }])
         setShowFoodSearch(false)
     }
 
@@ -45,6 +49,18 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
     const handleUpdateQuantity = (index: number, quantity: number) => {
         const newItems = [...items]
         newItems[index].quantity = quantity
+        setItems(newItems)
+    }
+
+    const handleUpdateUnit = (index: number, unit: 'g' | 'u') => {
+        const newItems = [...items]
+        newItems[index].unit = unit
+        // If switching to units, default to 1, if switching to grams, default to 100
+        if (unit === 'u' && newItems[index].quantity === 100) {
+            newItems[index].quantity = 1
+        } else if (unit === 'g' && newItems[index].quantity === 1) {
+            newItems[index].quantity = 100
+        }
         setItems(newItems)
     }
 
@@ -62,7 +78,11 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
         const groupData = {
             id: editingGroup?.id,
             name,
-            items: items.map(item => ({ food_id: item.food_id, quantity: item.quantity }))
+            items: items.map(item => ({ 
+                food_id: item.food_id, 
+                quantity: item.quantity,
+                unit: item.unit
+            }))
         }
 
         const result = await saveMealGroup(groupData, coachId)
@@ -76,6 +96,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
                     items:saved_meal_items(
                         id,
                         quantity,
+                        unit,
                         food:foods(*)
                     )
                 `)
@@ -92,8 +113,8 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 border-none sm:rounded-3xl shadow-2xl">
-                <DialogHeader className="p-6 pb-0">
+            <DialogContent className="max-w-2xl flex flex-col max-h-[90vh] p-0 gap-0 border-none sm:rounded-3xl shadow-2xl overflow-hidden">
+                <DialogHeader className="p-6 pb-0 flex-shrink-0">
                     <DialogTitle className="text-2xl font-bold flex items-center gap-2">
                         <div className="p-2 rounded-xl bg-primary/10">
                             <Apple className="w-5 h-5 text-primary" />
@@ -102,7 +123,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="p-6 space-y-6">
+                <div className="p-6 space-y-6 overflow-y-auto flex-1 min-h-0">
                     <div className="space-y-2">
                         <Label htmlFor="name" className="text-sm font-bold text-muted-foreground ml-1">Nombre del Grupo</Label>
                         <Input
@@ -150,24 +171,44 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
                                         <div className="flex-1 min-w-0">
                                             <p className="font-bold text-sm truncate">{item.food.name}</p>
                                             <div className="flex gap-2 text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
-                                                <span>{Math.round(item.food.calories * (item.quantity / 100))} kcal</span>
-                                                <span>•</span>
-                                                <span>P: {Math.round(item.food.protein_g * (item.quantity / 100))}g</span>
-                                                <span>•</span>
-                                                <span>C: {Math.round(item.food.carbs_g * (item.quantity / 100))}g</span>
-                                                <span>•</span>
-                                                <span>G: {Math.round(item.food.fats_g * (item.quantity / 100))}g</span>
+                                                {(() => {
+                                                    const factor = item.unit === 'g' ? item.quantity / 100 : item.quantity
+                                                    return (
+                                                        <>
+                                                            <span>{Math.round(item.food.calories * factor)} kcal</span>
+                                                            <span>•</span>
+                                                            <span>P: {Math.round(item.food.protein_g * factor)}g</span>
+                                                            <span>•</span>
+                                                            <span>C: {Math.round(item.food.carbs_g * factor)}g</span>
+                                                            <span>•</span>
+                                                            <span>G: {Math.round(item.food.fats_g * factor)}g</span>
+                                                        </>
+                                                    )
+                                                })()}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <div className="relative w-24">
+                                            <div className="flex items-center bg-muted/50 rounded-xl p-1 border border-border/50">
+                                                <button
+                                                    onClick={() => handleUpdateUnit(index, 'g')}
+                                                    className={`px-2 py-1 text-[10px] font-bold rounded-lg transition-all ${item.unit === 'g' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                >
+                                                    G
+                                                </button>
+                                                <button
+                                                    onClick={() => handleUpdateUnit(index, 'u')}
+                                                    className={`px-2 py-1 text-[10px] font-bold rounded-lg transition-all ${item.unit === 'u' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                >
+                                                    U
+                                                </button>
+                                            </div>
+                                            <div className="relative w-20">
                                                 <Input
                                                     type="number"
                                                     value={item.quantity}
                                                     onChange={(e) => handleUpdateQuantity(index, Number(e.target.value))}
-                                                    className="h-9 rounded-xl pr-6 text-right font-bold"
+                                                    className="h-9 rounded-xl text-center font-bold pr-1 pl-1"
                                                 />
-                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground pointer-events-none">g</span>
                                             </div>
                                             <Button 
                                                 variant="ghost" 
@@ -222,7 +263,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
                     </div>
                 </div>
 
-                <DialogFooter className="p-6 bg-muted/30 border-t border-border sm:rounded-b-3xl">
+                <DialogFooter className="p-6 bg-muted/30 border-t border-border sm:rounded-b-3xl flex-shrink-0">
                     <Button variant="ghost" onClick={onClose} disabled={isSaving} className="rounded-xl font-bold">Cancelar</Button>
                     <Button onClick={handleSave} disabled={isSaving} className="rounded-xl px-8 font-bold bg-primary hover:bg-primary/90 text-primary-foreground min-w-[120px]">
                         {isSaving ? 'Guardando...' : 'Guardar Grupo'}
