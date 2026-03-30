@@ -75,6 +75,31 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
     const [selectedClients, setSelectedClients] = useState<string[]>([])
     const [openPopover, setOpenPopover] = useState(false)
 
+    const calculateGroupTotals = (group: MealGroup) => {
+        let calories = 0
+        let protein = 0
+        let carbs = 0
+        let fats = 0
+
+        group.items?.forEach(item => {
+            const food = item.food || item;
+            const quantity = item.quantity || 0
+            const factor = item.unit === 'g' || item.unit === 'ml' ? quantity / 100 : quantity
+            
+            calories += (food.calories || 0) * factor
+            protein += (food.protein_g || 0) * factor
+            carbs += (food.carbs_g || 0) * factor
+            fats += (food.fats_g || 0) * factor
+        })
+
+        return {
+            calories: Math.round(calories),
+            protein: Math.round(protein),
+            carbs: Math.round(carbs),
+            fats: Math.round(fats)
+        }
+    }
+
     const calculatedTotals = useMemo(() => {
         let calories = 0
         let protein = 0
@@ -83,24 +108,19 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
 
         meals.forEach(meal => {
             meal.groups.forEach(group => {
-                group.items?.forEach(item => {
-                    const food = item.food || item; // Fallback to item if food is not nested
-                    const quantity = item.quantity || 0
-                    const factor = item.unit === 'g' || item.unit === 'ml' ? quantity / 100 : quantity
-                    
-                    calories += (food.calories || 0) * factor
-                    protein += (food.protein_g || 0) * factor
-                    carbs += (food.carbs_g || 0) * factor
-                    fats += (food.fats_g || 0) * factor
-                })
+                const groupTotals = calculateGroupTotals(group)
+                calories += groupTotals.calories
+                protein += groupTotals.protein
+                carbs += groupTotals.carbs
+                fats += groupTotals.fats
             })
         })
 
         return {
-            calories: Math.round(calories),
-            protein: Math.round(protein),
-            carbs: Math.round(carbs),
-            fats: Math.round(fats)
+            calories,
+            protein,
+            carbs,
+            fats
         }
     }, [meals])
 
@@ -367,19 +387,32 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                                             </Button>
                                                         </div>
                                                     ) : (
-                                                        availableGroups.map(group => (
-                                                            <div 
-                                                                key={group.id} 
-                                                                className="flex items-center justify-between p-3 border rounded-xl hover:bg-muted cursor-pointer transition-colors"
-                                                                onClick={() => handleAddGroupToMeal(meal.id, group)}
-                                                            >
-                                                                <div>
-                                                                    <p className="font-bold">{group.name}</p>
-                                                                    <p className="text-xs text-muted-foreground">{group.items?.length || 0} ingredientes</p>
+                                                        availableGroups.map(group => {
+                                                            const totals = calculateGroupTotals(group);
+                                                            return (
+                                                                <div 
+                                                                    key={group.id} 
+                                                                    className="flex items-center justify-between p-3 border rounded-xl hover:bg-muted cursor-pointer transition-colors"
+                                                                    onClick={() => handleAddGroupToMeal(meal.id, group)}
+                                                                >
+                                                                    <div>
+                                                                        <p className="font-bold">{group.name}</p>
+                                                                        <div className="flex gap-2 text-[10px] text-muted-foreground mt-1">
+                                                                            <span>{group.items?.length || 0} ingredientes</span>
+                                                                            <span>•</span>
+                                                                            <span>{totals.calories} kcal</span>
+                                                                            <span>•</span>
+                                                                            <span>P: {totals.protein}g</span>
+                                                                            <span>•</span>
+                                                                            <span>C: {totals.carbs}g</span>
+                                                                            <span>•</span>
+                                                                            <span>G: {totals.fats}g</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <Button size="sm" variant="ghost">Seleccionar</Button>
                                                                 </div>
-                                                                <Button size="sm" variant="ghost">Seleccionar</Button>
-                                                            </div>
-                                                        ))
+                                                            )
+                                                        })
                                                     )}
                                                 </div>
                                             </DialogContent>
@@ -394,23 +427,30 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                             </div>
                                         ) : (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {meal.groups.map((group, groupIndex) => (
-                                                    <div key={groupIndex} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl">
-                                                        <div className="min-w-0">
-                                                            <p className="font-bold text-sm truncate">{group.name}</p>
-                                                            <p className="text-[10px] text-muted-foreground uppercase">Grupo Guardado</p>
+                                                {meal.groups.map((group, groupIndex) => {
+                                                    const totals = calculateGroupTotals(group);
+                                                    return (
+                                                        <div key={groupIndex} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                                                            <div className="min-w-0">
+                                                                <p className="font-bold text-sm truncate">{group.name}</p>
+                                                                <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
+                                                                    <span className="uppercase">Grupo Guardado</span>
+                                                                    <span>•</span>
+                                                                    <span>{totals.calories} kcal | P: {totals.protein}g | C: {totals.carbs}g | G: {totals.fats}g</span>
+                                                                </div>
+                                                            </div>
+                                                            <Button 
+                                                                type="button" 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 ml-2"
+                                                                onClick={() => handleRemoveGroupFromMeal(meal.id, groupIndex)}
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </Button>
                                                         </div>
-                                                        <Button 
-                                                            type="button" 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                                            onClick={() => handleRemoveGroupFromMeal(meal.id, groupIndex)}
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
+                                                    )
+                                                })}
                                             </div>
                                         )}
                                     </div>
