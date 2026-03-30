@@ -37,11 +37,6 @@ const navItems = [
         icon: Dumbbell,
     },
     {
-        href: '/coach/foods',
-        label: 'Alimentos',
-        icon: Apple,
-    },
-    {
         href: '/coach/meal-groups',
         label: 'Grupos',
         icon: LayoutGrid,
