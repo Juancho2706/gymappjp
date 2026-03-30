@@ -43,19 +43,19 @@ function StatusBadge({ forceChange, isActive }: { forceChange: boolean, isActive
 export default async function CoachClientsPage() {
     const supabase = await createClient()
     
-    // Fetch all required data in parallel
-    const [userResponse, coachResponse, clientsResponse, headersList] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.from('coaches').select('slug').maybeSingle(),
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) redirect('/login')
+
+    // Fetch required data in parallel after auth
+    const [coachResponse, clientsResponse, headersList] = await Promise.all([
+        supabase.from('coaches').select('slug').eq('id', user.id).maybeSingle(),
         supabase
             .from('clients')
             .select('*')
+            .eq('coach_id', user.id)
             .order('created_at', { ascending: false }),
         headers()
     ])
-
-    const { user } = userResponse.data
-    if (!user) redirect('/login')
 
     const coach = coachResponse.data as { slug: string } | null
     const rawClients = clientsResponse.data

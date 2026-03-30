@@ -11,21 +11,16 @@ export const metadata: Metadata = { title: 'Ejercicios | OmniCoach OS' }
 export default async function CoachExercisesPage() {
     const supabase = await createClient()
     
-    // Fetch user and exercises in parallel
-    const [userResponse, exercisesResponse] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase
-            .from('exercises')
-            .select('*')
-            .is('coach_id', null)
-            .order('muscle_group')
-            .order('name')
-    ])
-
-    const { user } = userResponse.data
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
 
-    const rawExercises = exercisesResponse.data
+    const { data: rawExercises } = await supabase
+        .from('exercises')
+        .select('*')
+        .is('coach_id', null)
+        .order('muscle_group')
+        .order('name')
+
     const exercises = (rawExercises ?? []) as Exercise[]
 
     const byMuscle = exercises.reduce<Record<string, Exercise[]>>((acc, ex) => {

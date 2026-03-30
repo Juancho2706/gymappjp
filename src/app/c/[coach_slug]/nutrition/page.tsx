@@ -40,7 +40,7 @@ export default async function ClientNutritionPage({ params }: Props) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect(`/c/${coach_slug}/login`)
 
-    // Fetch client and plan in parallel
+    // Fetch client and plan in parallel after auth
     const [clientResponse, planResponse] = await Promise.all([
         supabase
             .from('clients')
