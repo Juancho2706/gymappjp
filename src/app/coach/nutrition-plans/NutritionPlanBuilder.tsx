@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo, useEffect } from 'react'
 import { Plus, Trash2, CalendarHeart, Search, LayoutGrid, Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -74,6 +74,41 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
     // Client Selection
     const [selectedClients, setSelectedClients] = useState<string[]>([])
     const [openPopover, setOpenPopover] = useState(false)
+
+    const calculatedTotals = useMemo(() => {
+        let calories = 0
+        let protein = 0
+        let carbs = 0
+        let fats = 0
+
+        meals.forEach(meal => {
+            meal.groups.forEach(group => {
+                group.items?.forEach(item => {
+                    const quantity = item.quantity || 0
+                    const factor = item.unit === 'g' || item.unit === 'ml' ? quantity / 100 : quantity
+                    
+                    calories += (item.calories || 0) * factor
+                    protein += (item.protein_g || 0) * factor
+                    carbs += (item.carbs_g || 0) * factor
+                    fats += (item.fats_g || 0) * factor
+                })
+            })
+        })
+
+        return {
+            calories: Math.round(calories),
+            protein: Math.round(protein),
+            carbs: Math.round(carbs),
+            fats: Math.round(fats)
+        }
+    }, [meals])
+
+    useEffect(() => {
+        setTargetCalories(calculatedTotals.calories.toString())
+        setTargetProtein(calculatedTotals.protein.toString())
+        setTargetCarbs(calculatedTotals.carbs.toString())
+        setTargetFats(calculatedTotals.fats.toString())
+    }, [calculatedTotals])
 
     const handleAddMeal = () => {
         setMeals([...meals, { id: Date.now(), name: '', groups: [] }])
@@ -182,19 +217,19 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="calories">Kcal Diarias</Label>
-                                    <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" />
+                                    <Input id="calories" type="number" value={targetCalories} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="protein">Prot (g)</Label>
-                                    <Input id="protein" type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} placeholder="0" />
+                                    <Input id="protein" type="number" value={targetProtein} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="carbs">Carbs (g)</Label>
-                                    <Input id="carbs" type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} placeholder="0" />
+                                    <Input id="carbs" type="number" value={targetCarbs} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="fats">Grasas (g)</Label>
-                                    <Input id="fats" type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} placeholder="0" />
+                                    <Input id="fats" type="number" value={targetFats} readOnly className="bg-muted cursor-not-allowed" placeholder="0" />
                                 </div>
                             </div>
                         </CardContent>
