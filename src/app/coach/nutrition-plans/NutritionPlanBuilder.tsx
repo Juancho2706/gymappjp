@@ -284,11 +284,15 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                                             key={client.id}
                                                             value={client.full_name}
                                                             onSelect={() => {
+                                                                console.log('CommandItem selected:', client.full_name);
                                                                 setSelectedClients(prev => 
                                                                     prev.includes(client.id)
                                                                         ? prev.filter(id => id !== client.id)
                                                                         : [...prev, client.id]
                                                                 )
+                                                            }}
+                                                            onPointerDown={(e) => {
+                                                                console.log('CommandItem pointer down:', client.full_name);
                                                             }}
                                                         >
                                                             <div className={cn(
