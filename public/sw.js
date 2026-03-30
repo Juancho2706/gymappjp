@@ -41,11 +41,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Ignorar peticiones a la API de Supabase o rutas internas de Next.js
+  const url = new URL(event.request.url);
+
+  // Ignorar peticiones a la API de Supabase, rutas internas de Next.js o rutas específicas
   if (
-    event.request.url.includes('supabase.co') || 
-    event.request.url.includes('/_next/') ||
-    event.request.url.includes('/api/')
+    url.hostname.includes('supabase.co') || 
+    url.pathname.includes('/_next/') ||
+    url.pathname.includes('/api/') ||
+    url.pathname.includes('/nutrition') ||
+    url.pathname.includes('/nutrition-plans') ||
+    url.pathname.includes('/nutrition-builder')
   ) {
     return;
   }
@@ -55,8 +60,11 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         return response || fetch(event.request).catch(err => {
           console.error('[SW] Fetch failed for:', event.request.url, err);
-          // Opcionalmente retornar una respuesta de error o una página offline
-          return null;
+          // Retornar una respuesta vacía válida en lugar de null para evitar TypeError
+          return new Response('', {
+            status: 408,
+            statusText: 'Request Timeout'
+          });
         });
       })
   );
