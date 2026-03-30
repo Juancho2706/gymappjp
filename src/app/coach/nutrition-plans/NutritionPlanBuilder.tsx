@@ -75,6 +75,14 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
     const [selectedClients, setSelectedClients] = useState<string[]>([])
     const [openPopover, setOpenPopover] = useState(false)
 
+    const [searchTerm, setSearchTerm] = useState('')
+
+    const filteredClients = useMemo(() => {
+        return availableClients.filter(client => 
+            client.full_name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+    }, [availableClients, searchTerm])
+
     const calculateGroupTotals = (group: MealGroup) => {
         let calories = 0
         let protein = 0
@@ -274,34 +282,33 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </PopoverTrigger>
                                     <PopoverContent className="w-[var(--base-ui-popover-trigger-width)] p-0" align="start">
-                                        <div className="p-1 space-y-1">
-                                            <div className="px-3 py-2 border-b">
+                                        <div className="p-1 space-y-1 bg-popover rounded-lg border shadow-md">
+                                            <div className="px-3 py-2 border-b flex items-center gap-2">
+                                                <Search className="h-4 w-4 shrink-0 opacity-50" />
                                                 <input 
-                                                    className="w-full bg-transparent outline-none text-sm"
+                                                    className="w-full bg-transparent outline-none text-sm h-8"
                                                     placeholder="Buscar alumno..."
-                                                    onChange={(e) => {
-                                                        // Implementar búsqueda simple si es necesario
-                                                    }}
+                                                    value={searchTerm}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
                                                 />
                                             </div>
                                             <div className="max-h-[300px] overflow-y-auto">
-                                                {availableClients.length === 0 ? (
+                                                {filteredClients.length === 0 ? (
                                                     <div className="py-6 text-center text-sm text-muted-foreground">
                                                         No se encontraron alumnos.
                                                     </div>
                                                 ) : (
-                                                    availableClients.map((client) => (
+                                                    filteredClients.map((client) => (
                                                         <div
                                                             key={client.id}
                                                             onClick={() => {
-                                                                console.log('Client clicked:', client.full_name);
                                                                 setSelectedClients(prev => 
                                                                     prev.includes(client.id)
                                                                         ? prev.filter(id => id !== client.id)
                                                                         : [...prev, client.id]
                                                                 )
                                                             }}
-                                                            className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                                                            className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground transition-colors"
                                                         >
                                                             <div className={cn(
                                                                 "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
