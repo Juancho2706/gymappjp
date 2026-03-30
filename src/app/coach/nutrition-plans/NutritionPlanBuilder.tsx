@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Trash2, CalendarHeart, Search, LayoutGrid, Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +56,7 @@ interface Props {
 }
 
 export function NutritionPlanBuilder({ coachId, availableGroups, availableClients, onCancel }: Props) {
+    const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState('')
 
@@ -228,7 +230,11 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                     toast.error(result.error)
                 } else {
                     toast.success('Plan global creado y asignado exitosamente.')
-                    if (onCancel) onCancel()
+                    if (onCancel) {
+                        onCancel()
+                    } else {
+                        router.push('/coach/nutrition-plans')
+                    }
                 }
             } catch (err: any) {
                 if (err?.message?.includes('NEXT_REDIRECT')) {
