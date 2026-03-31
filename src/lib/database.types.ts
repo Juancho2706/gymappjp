@@ -935,8 +935,10 @@ export type Database = {
           client_id: string
           coach_id: string
           created_at: string
+          day_of_week: number | null
           group_name: string | null
           id: string
+          program_id: string | null
           title: string
           updated_at: string
         }
@@ -945,8 +947,10 @@ export type Database = {
           client_id: string
           coach_id: string
           created_at?: string
+          day_of_week?: number | null
           group_name?: string | null
           id?: string
+          program_id?: string | null
           title: string
           updated_at?: string
         }
@@ -955,8 +959,10 @@ export type Database = {
           client_id?: string
           coach_id?: string
           created_at?: string
+          day_of_week?: number | null
           group_name?: string | null
           id?: string
+          program_id?: string | null
           title?: string
           updated_at?: string
         }
@@ -970,6 +976,67 @@ export type Database = {
           },
           {
             foreignKeyName: "workout_plans_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_plans_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "workout_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_programs: {
+        Row: {
+          client_id: string
+          coach_id: string
+          created_at: string
+          end_date: string | null
+          id: string
+          is_active: boolean
+          name: string
+          start_date: string | null
+          updated_at: string
+          weeks_to_repeat: number
+        }
+        Insert: {
+          client_id: string
+          coach_id: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          start_date?: string | null
+          updated_at?: string
+          weeks_to_repeat?: number
+        }
+        Update: {
+          client_id?: string
+          coach_id?: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          start_date?: string | null
+          updated_at?: string
+          weeks_to_repeat?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_programs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_programs_coach_id_fkey"
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"

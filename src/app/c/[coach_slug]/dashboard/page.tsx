@@ -70,7 +70,7 @@ export default async function ClientDashboardPage({ params }: Props) {
             .eq('client_id', user.id)
             .gte('logged_at', thirtyDaysAgo.toISOString()),
         supabase
-            .from('workout_programs' as any)
+            .from('workout_programs')
             .select('*')
             .eq('client_id', user.id)
             .eq('is_active', true)
