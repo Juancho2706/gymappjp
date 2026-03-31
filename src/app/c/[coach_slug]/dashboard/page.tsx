@@ -49,7 +49,7 @@ export default async function ClientDashboardPage({ params }: Props) {
             .maybeSingle(),
         supabase
             .from('workout_plans')
-            .select('id, title, assigned_date, group_name, day_of_week, program_id')
+            .select('id, title, assigned_date, group_name, day_of_week, program_id, created_at')
             .eq('client_id', user.id)
             .order('assigned_date', { ascending: false }),
         supabase
@@ -81,7 +81,7 @@ export default async function ClientDashboardPage({ params }: Props) {
     if (!client) redirect(`/c/${coach_slug}/login`)
 
     const activeProgram = programResponse?.data
-    const allPlans = (plansResponse.data || []) as (Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name'> & { day_of_week?: number | null, program_id?: string | null })[]
+    const allPlans = (plansResponse.data || []) as (Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name' | 'created_at'> & { day_of_week?: number | null, program_id?: string | null })[]
     
     // Find today's workout:
     // 1. Check for specific date match (old system or one-off)
@@ -352,9 +352,17 @@ export default async function ClientDashboardPage({ params }: Props) {
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-sm font-medium text-foreground truncate">{plan.title}</p>
                                                 <p className="text-[10px] text-muted-foreground">
-                                                    {new Date(plan.assigned_date).toLocaleDateString('es-AR', {
-                                                        weekday: 'long', day: 'numeric', month: 'short'
-                                                    })}
+                                                    {plan.assigned_date ? (
+                                                        new Date(plan.assigned_date).toLocaleDateString('es-AR', {
+                                                            weekday: 'long', day: 'numeric', month: 'short'
+                                                        })
+                                                    ) : plan.day_of_week ? (
+                                                        ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][plan.day_of_week - 1]
+                                                    ) : (
+                                                        new Date(plan.created_at).toLocaleDateString('es-AR', {
+                                                            day: 'numeric', month: 'short', year: 'numeric'
+                                                        })
+                                                    )}
                                                 </p>
                                             </div>
                                             <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-muted-foreground transition-colors" />
