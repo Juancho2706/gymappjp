@@ -39,6 +39,7 @@ const navItems = [
     {
         href: '/coach/nutrition-plans',
         label: 'Planes Nutricionales',
+        shortLabel: 'Nutri',
         icon: Apple,
     },
     {
@@ -141,7 +142,10 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                                         isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
                                     )}
                                 />
-                                <span className={cn("truncate", isCollapsed && "md:hidden")}>{item.label}</span>
+                                <span className={cn("truncate", isCollapsed && "md:hidden")}>
+                                    <span className="hidden md:inline">{item.label}</span>
+                                    <span className="md:hidden inline">{(item as any).shortLabel || item.label}</span>
+                                </span>
                                 {isActive && !isCollapsed && (
                                     <ChevronRight className="hidden md:block w-3 h-3 ml-auto text-primary/60" />
                                 )}
