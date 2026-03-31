@@ -290,10 +290,9 @@ export default async function ClientDashboardPage({ params }: Props) {
                                         href={`/c/${coach_slug}/workout/${plan.id}`}
                                         className={`flex items-center gap-4 bg-card border shadow-sm rounded-2xl p-4 transition-all duration-200 group ${
                                             isPlanToday 
-                                                ? 'ring-2 ring-offset-2 border-transparent' 
+                                                ? 'ring-2 ring-offset-2 border-transparent ring-[var(--theme-primary)]' 
                                                 : 'border-border hover:border-accent'
                                         }`}
-                                        style={isPlanToday ? { ringColor: 'var(--theme-primary)', border: 'none', boxShadow: '0 0 0 2px var(--theme-primary)' } : {}}
                                     >
                                         <div
                                             className="w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0 border"
