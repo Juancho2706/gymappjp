@@ -13,7 +13,8 @@ import {
     ChevronRight,
     PanelLeftClose,
     PanelLeft,
-    LayoutGrid
+    LayoutGrid,
+    ClipboardList
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -30,6 +31,11 @@ const navItems = [
         href: '/coach/clients',
         label: 'Alumnos',
         icon: Users,
+    },
+    {
+        href: '/coach/workout-programs',
+        label: 'Programas',
+        icon: ClipboardList,
     },
     {
         href: '/coach/exercises',

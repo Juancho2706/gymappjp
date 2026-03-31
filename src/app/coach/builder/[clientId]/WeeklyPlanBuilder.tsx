@@ -259,14 +259,14 @@ export function WeeklyPlanBuilder({
     exercises,
     initialProgram,
 }: {
-    client: Pick<Client, 'id' | 'full_name' | 'email'>
+    client?: Pick<Client, 'id' | 'full_name' | 'email'>
     exercises: Exercise[]
     initialProgram?: any
 }) {
     const router = useRouter()
     const [programName, setProgramName] = useState(initialProgram?.name || '')
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
-    const [startDate, setStartDate] = useState(initialProgram?.start_date || new Date().toISOString().split('T')[0])
+    const [startDate, setStartDate] = useState(initialProgram?.start_date || (client ? new Date().toISOString().split('T')[0] : ''))
     
     // Initialize days 1-7
     const [days, setDays] = useState<DayState[]>(() => {
@@ -429,7 +429,7 @@ export function WeeklyPlanBuilder({
 
     const handleSave = () => {
         if (!programName.trim()) { toast.error('Ingresa el nombre del programa'); return }
-        if (!startDate) { toast.error('Selecciona una fecha de inicio'); return }
+        if (client && !startDate) { toast.error('Selecciona una fecha de inicio'); return }
         
         const hasExercises = days.some(d => d.blocks.length > 0)
         if (!hasExercises) { toast.error('Agrega al menos un ejercicio en algún día'); return }
@@ -437,10 +437,10 @@ export function WeeklyPlanBuilder({
         startTransition(async () => {
             const payload: WorkoutProgramInput = {
                 programId: initialProgram?.id,
-                clientId: client.id,
+                clientId: client?.id || null,
                 programName: programName.trim(),
                 weeksToRepeat,
-                startDate,
+                startDate: startDate || null,
                 days: days
                     .filter(d => d.blocks.length > 0)
                     .map(d => ({
@@ -463,7 +463,11 @@ export function WeeklyPlanBuilder({
                 toast.error(result.error)
             } else {
                 toast.success('Programa guardado con éxito')
-                router.push(`/coach/clients/${client.id}`)
+                if (client) {
+                    router.push(`/coach/clients/${client.id}`)
+                } else {
+                    router.push('/coach/workout-programs')
+                }
                 router.refresh()
             }
         })
@@ -483,13 +487,15 @@ export function WeeklyPlanBuilder({
             {/* Header Area */}
             <div className="flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0">
                 <div className="flex items-center gap-4">
-                    <Link href={`/coach/clients/${client.id}`}
+                    <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
                         className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                         <ArrowLeft className="w-4 h-4" />
                     </Link>
                     <div className="flex-1 min-w-0">
                         <h1 className="text-lg font-bold truncate">Planificación Semanal</h1>
-                        <p className="text-xs text-muted-foreground">Alumno: {client.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {client ? `Alumno: ${client.full_name}` : 'Modo Plantilla'}
+                        </p>
                     </div>
                     <button 
                         onClick={handleSave} 

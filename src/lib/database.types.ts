@@ -931,8 +931,8 @@ export type Database = {
       }
       workout_plans: {
         Row: {
-          assigned_date: string
-          client_id: string
+          assigned_date: string | null
+          client_id: string | null
           coach_id: string
           created_at: string
           day_of_week: number | null
@@ -943,8 +943,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          assigned_date?: string
-          client_id: string
+          assigned_date?: string | null
+          client_id?: string | null
           coach_id: string
           created_at?: string
           day_of_week?: number | null
@@ -955,8 +955,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          assigned_date?: string
-          client_id?: string
+          assigned_date?: string | null
+          client_id?: string | null
           coach_id?: string
           created_at?: string
           day_of_week?: number | null
@@ -992,7 +992,7 @@ export type Database = {
       }
       workout_programs: {
         Row: {
-          client_id: string
+          client_id: string | null
           coach_id: string
           created_at: string
           end_date: string | null
@@ -1004,7 +1004,7 @@ export type Database = {
           weeks_to_repeat: number
         }
         Insert: {
-          client_id: string
+          client_id?: string | null
           coach_id: string
           created_at?: string
           end_date?: string | null
@@ -1016,7 +1016,7 @@ export type Database = {
           weeks_to_repeat?: number
         }
         Update: {
-          client_id?: string
+          client_id?: string | null
           coach_id?: string
           created_at?: string
           end_date?: string | null

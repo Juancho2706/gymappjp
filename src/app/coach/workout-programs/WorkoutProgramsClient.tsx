@@ -1,0 +1,432 @@
+'use client'
+
+'use client'
+
+import { useState, useTransition } from 'react'
+import { Plus, Search, Dumbbell, User, Calendar, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, Loader2, ArrowRight, Eye, Filter, Check } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter
+} from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { assignProgramToClientsAction, deleteWorkoutProgramAction, duplicateWorkoutProgramAction } from '../builder/[clientId]/actions'
+
+interface Program {
+    id: string
+    name: string
+    client_id: string | null
+    weeks_to_repeat: number
+    start_date: string | null
+    created_at: string
+    client?: {
+        id: string
+        full_name: string
+    } | null
+    workout_plans?: {
+        id: string
+        day_of_week: number
+        title: string
+        workout_blocks: {
+            id: string
+            exercise: { name: string }
+            sets: number
+            reps: string
+        }[]
+    }[]
+}
+
+interface Client {
+    id: string
+    full_name: string
+}
+
+interface WorkoutProgramsClientProps {
+    initialPrograms: any[]
+    availableClients: Client[]
+}
+
+export function WorkoutProgramsClient({ initialPrograms, availableClients }: WorkoutProgramsClientProps) {
+    const router = useRouter()
+    const [search, setSearch] = useState('')
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+    const [filterType, setFilterType] = useState<'all' | 'templates' | 'assigned'>('all')
+    const [programs, setPrograms] = useState<Program[]>(initialPrograms)
+    const [isAssignOpen, setIsAssignOpen] = useState(false)
+    const [selectedProgram, setSelectedProgram] = useState<Program | null>(null)
+    const [selectedClients, setSelectedClients] = useState<string[]>([])
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+    const [isPending, startTransition] = useTransition()
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+    const [programToPreview, setProgramToPreview] = useState<Program | null>(null)
+
+    const filtered = programs.filter((p: Program) => {
+        const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+            p.client?.full_name?.toLowerCase().includes(search.toLowerCase())
+        
+        if (filterType === 'templates') return matchesSearch && !p.client_id
+        if (filterType === 'assigned') return matchesSearch && p.client_id
+        return matchesSearch
+    })
+
+    const handleAssign = () => {
+        if (!selectedProgram || selectedClients.length === 0 || !startDate) {
+            toast.error('Selecciona al menos un alumno y la fecha')
+            return
+        }
+
+        startTransition(async () => {
+            const result = await assignProgramToClientsAction(selectedProgram.id, selectedClients, startDate)
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success('Programa asignado correctamente')
+                setIsAssignOpen(false)
+                setSelectedClients([])
+                router.refresh()
+            }
+        })
+    }
+
+    const handleDuplicate = (program: Program) => {
+        startTransition(async () => {
+            const result = await duplicateWorkoutProgramAction(program.id)
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success('Programa duplicado correctamente')
+                router.refresh()
+            }
+        })
+    }
+
+    const handleDelete = (program: Program) => {
+        if (!confirm(`¿Estás seguro de que quieres eliminar el programa "${program.name}"?`)) return
+
+        startTransition(async () => {
+            const result = await deleteWorkoutProgramAction(program.id, program.client_id || '')
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success('Programa eliminado')
+                setPrograms(prev => prev.filter(p => p.id !== program.id))
+                router.refresh()
+            }
+        })
+    }
+
+    const toggleClient = (clientId: string) => {
+        setSelectedClients(prev => 
+            prev.includes(clientId) 
+                ? prev.filter(id => id !== clientId)
+                : [...prev, clientId]
+        )
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">Biblioteca de Programas</h1>
+                    <p className="text-muted-foreground">Gestiona tus plantillas y programas asignados.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={() => router.push('/coach/workout-programs/builder')} className="gap-2">
+                        <Plus className="w-4 h-4" />
+                        Nueva Plantilla
+                    </Button>
+                </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
+                <div className="flex flex-1 items-center gap-4 w-full">
+                    <div className="relative flex-1 md:max-w-96">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Buscar programas..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="pl-9 bg-background/50"
+                        />
+                    </div>
+                    
+                    <Tabs value={filterType} onValueChange={(val: any) => setFilterType(val)} className="hidden sm:block">
+                        <TabsList className="bg-background/50 border">
+                            <TabsTrigger value="all">Todos</TabsTrigger>
+                            <TabsTrigger value="templates">Plantillas</TabsTrigger>
+                            <TabsTrigger value="assigned">Asignados</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                </div>
+
+                <div className="flex items-center gap-2 border rounded-lg p-1 bg-background/50">
+                    <Button 
+                        variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                        size="sm" 
+                        onClick={() => setViewMode('grid')}
+                        className="h-8 w-8 p-0"
+                    >
+                        <LayoutGrid className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                        variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
+                        size="sm" 
+                        onClick={() => setViewMode('list')}
+                        className="h-8 w-8 p-0"
+                    >
+                        <ListIcon className="w-4 h-4" />
+                    </Button>
+                </div>
+            </div>
+
+            {/* Program Sections */}
+            <div className="space-y-4">
+                {filtered.length === 0 ? (
+                    <div className="text-center py-12 bg-muted/20 rounded-xl border border-dashed">
+                        <p className="text-muted-foreground">No se encontraron programas.</p>
+                    </div>
+                ) : (
+                    <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-2"}>
+                        {filtered.map(program => (
+                            <ProgramCard 
+                                key={program.id} 
+                                program={program} 
+                                viewMode={viewMode}
+                                onAssign={() => {
+                                    setSelectedProgram(program)
+                                    setIsAssignOpen(true)
+                                }}
+                                onDuplicate={() => handleDuplicate(program)}
+                                onDelete={() => handleDelete(program)}
+                                onPreview={() => {
+                                    setProgramToPreview(program)
+                                    setIsPreviewOpen(true)
+                                }}
+                                isPending={isPending}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Assign Dialog */}
+            <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Asignar Programa</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Programa: <span className="text-primary font-bold">{selectedProgram?.name}</span></label>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Alumnos ({selectedClients.length})</label>
+                            <Popover>
+                                <PopoverTrigger>
+                                    <Button variant="outline" className="w-full justify-between font-normal h-10">
+                                        {selectedClients.length === 0 
+                                            ? "Selecciona alumnos..." 
+                                            : `${selectedClients.length} seleccionados`}
+                                        <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[350px] p-0" align="start">
+                                    <Command>
+                                        <CommandInput placeholder="Buscar alumno..." />
+                                        <CommandList>
+                                            <CommandEmpty>No se encontraron alumnos.</CommandEmpty>
+                                            <CommandGroup className="max-h-64 overflow-auto">
+                                                {availableClients.map((client) => (
+                                                    <CommandItem
+                                                        key={client.id}
+                                                        onSelect={() => toggleClient(client.id)}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <div className={cn(
+                                                            "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                                            selectedClients.includes(client.id)
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "opacity-50 [&_svg]:invisible"
+                                                        )}>
+                                                            <Check className={cn("h-4 w-4")} />
+                                                        </div>
+                                                        {client.full_name}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Fecha de Inicio</label>
+                            <Input 
+                                type="date" 
+                                value={startDate} 
+                                onChange={e => setStartDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAssignOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleAssign} disabled={isPending || selectedClients.length === 0}>
+                            {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            Asignar a {selectedClients.length} Alumnos
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Preview Dialog */}
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Eye className="w-5 h-5 text-primary" />
+                            Vista Previa: {programToPreview?.name}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-6 py-4">
+                        {programToPreview?.workout_plans?.sort((a,b) => a.day_of_week - b.day_of_week).map((plan) => (
+                            <div key={plan.id} className="space-y-2">
+                                <h3 className="font-bold text-sm bg-muted p-2 rounded flex justify-between">
+                                    <span>Día {plan.day_of_week}: {plan.title}</span>
+                                    <span className="text-muted-foreground font-normal">{plan.workout_blocks.length} ejercicios</span>
+                                </h3>
+                                <div className="grid grid-cols-1 gap-1 pl-2">
+                                    {plan.workout_blocks.map((block) => (
+                                        <div key={block.id} className="text-sm flex justify-between border-b border-border/50 py-1 last:border-0">
+                                            <span className="font-medium">{block.exercise.name}</span>
+                                            <span className="text-muted-foreground">{block.sets}x{block.reps}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                        {(!programToPreview?.workout_plans || programToPreview.workout_plans.length === 0) && (
+                            <p className="text-center text-muted-foreground">Este programa no tiene ejercicios configurados.</p>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    )
+}
+
+function ProgramCard({ program, viewMode, onAssign, onDuplicate, onDelete, onPreview, isPending }: { 
+    program: Program, 
+    viewMode: 'grid' | 'list',
+    onAssign: () => void,
+    onDuplicate: () => void,
+    onDelete: () => void,
+    onPreview: () => void,
+    isPending: boolean
+}) {
+    if (viewMode === 'list') {
+        return (
+            <div className="flex items-center justify-between p-4 bg-card border rounded-xl hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Dumbbell className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold">{program.name}</h3>
+                        <p className="text-xs text-muted-foreground">
+                            {program.weeks_to_repeat} semanas • 
+                            {program.client ? ` Alumno: ${program.client.full_name}` : ' Plantilla'}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={onPreview} title="Vista previa">
+                        <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={onDuplicate} title="Duplicar">
+                        <Copy className="w-4 h-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={onAssign} className="gap-2">
+                        <User className="w-4 h-4" />
+                        Asignar
+                    </Button>
+                    <Link href={program.client_id ? `/coach/builder/${program.client_id}?programId=${program.id}` : `/coach/workout-programs/builder?programId=${program.id}`}>
+                        <Button variant="ghost" size="sm">Editar</Button>
+                    </Link>
+                    <Button variant="ghost" size="sm" onClick={onDelete} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <Card className="hover:shadow-md transition-shadow overflow-hidden group">
+            <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                    <div className="flex gap-2">
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-2">
+                            <Dumbbell className="w-6 h-6 text-primary" />
+                        </div>
+                    </div>
+                    <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPreview} title="Vista previa">
+                            <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDuplicate} title="Duplicar">
+                            <Copy className="w-4 h-4" />
+                        </Button>
+                        <Badge variant={program.client_id ? "secondary" : "default"} className="font-bold">
+                            {program.client_id ? 'Asignado' : 'Plantilla'}
+                        </Badge>
+                    </div>
+                </div>
+                <CardTitle className="line-clamp-1">{program.name}</CardTitle>
+                <CardDescription className="flex flex-col gap-1 mt-2">
+                    <span className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {program.weeks_to_repeat} semanas
+                    </span>
+                    <span className="flex items-center gap-2 truncate">
+                        <User className="w-3.5 h-3.5" />
+                        {program.client?.full_name || 'Sin asignar'}
+                    </span>
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex gap-2">
+                    <Button onClick={onAssign} className="flex-1 gap-2" size="sm">
+                        <User className="w-4 h-4" />
+                        {program.client_id ? 'Re-asignar' : 'Asignar'}
+                    </Button>
+                    <Link href={program.client_id ? `/coach/builder/${program.client_id}?programId=${program.id}` : `/coach/workout-programs/builder?programId=${program.id}`} className="flex-1">
+                        <Button variant="secondary" className="w-full" size="sm">Editar</Button>
+                    </Link>
+                    <Button variant="ghost" size="icon" onClick={onDelete} className="text-muted-foreground hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
