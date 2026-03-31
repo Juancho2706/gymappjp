@@ -8,11 +8,14 @@ import {
     ArrowRight,
     CheckCircle,
     UserPlus,
-    Clock
+    Clock,
+    TriangleAlert,
+    CalendarClock
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import type { Tables } from '@/lib/database.types'
+import { Badge } from '@/components/ui/badge'
 
 type Client = Tables<'clients'>
 
@@ -35,7 +38,7 @@ export default async function CoachDashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
 
-    const [{ count: totalClients }, { count: activePlans }, { data: rawRecentClients }, { data: rawRecentCheckins }] =
+    const [{ count: totalClients }, { count: activePlans }, { data: rawRecentClients }, { data: rawRecentCheckins }, { data: rawExpiringPrograms }] =
         await Promise.all([
             supabase
                 .from('clients')
@@ -57,9 +60,46 @@ export default async function CoachDashboardPage() {
                 .eq('clients.coach_id', user.id)
                 .order('created_at', { ascending: false })
                 .limit(5),
+            supabase
+                .from('workout_programs')
+                .select(`
+                    id, 
+                    name, 
+                    end_date, 
+                    client_id, 
+                    clients:client_id (
+                        id,
+                        full_name
+                    )
+                `)
+                .eq('coach_id', user.id)
+                .eq('is_active', true)
+                .not('end_date', 'is', null)
+                .order('end_date', { ascending: true })
         ])
 
     const recentClients = rawRecentClients as Pick<Client, 'id' | 'full_name' | 'email' | 'onboarding_completed' | 'created_at'>[] | null
+    
+    // Process expiring programs
+    const nowUTC = new Date()
+    const todayMidnight = new Date(nowUTC.getFullYear(), nowUTC.getMonth(), nowUTC.getDate())
+
+    const expiringPrograms = (rawExpiringPrograms as any[] || [])
+        .map(p => {
+            const endDateParts = p.end_date.split('-')
+            const endDate = new Date(parseInt(endDateParts[0]), parseInt(endDateParts[1]) - 1, parseInt(endDateParts[2]))
+            const diffTime = endDate.getTime() - todayMidnight.getTime()
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24))
+            return {
+                id: p.id,
+                name: p.name,
+                endDate: p.end_date,
+                clientId: p.clients?.id,
+                clientName: p.clients?.full_name,
+                daysLeft: diffDays
+            }
+        })
+        .filter(p => p.daysLeft <= 3)
     
     // Process Check-ins
     const typedCheckins = rawRecentCheckins as { id: string, created_at: string, clients: { id: string, full_name: string } }[] | null
@@ -194,6 +234,52 @@ export default async function CoachDashboardPage() {
                     )
                 })}
             </div>
+
+            {/* Expiring Programs Alerts */}
+            {expiringPrograms.length > 0 && (
+                <div className="bg-card border border-rose-200 dark:border-rose-500/20 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 border-b border-rose-100 dark:border-rose-500/10 bg-rose-50/30 dark:bg-rose-500/5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <TriangleAlert className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                            <h2 className="text-base font-bold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
+                                Alertas de Vencimiento
+                            </h2>
+                        </div>
+                        <Badge variant="destructive" className="rounded-full">
+                            {expiringPrograms.length} {expiringPrograms.length === 1 ? 'pendiente' : 'pendientes'}
+                        </Badge>
+                    </div>
+                    <div className="divide-y divide-rose-100 dark:divide-rose-500/10">
+                        {expiringPrograms.map((program) => (
+                            <div key={program.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-rose-50/20 dark:hover:bg-rose-500/5 transition-colors">
+                                <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center flex-shrink-0">
+                                        <CalendarClock className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold text-foreground">
+                                            {program.clientName}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                            <span className="font-medium text-rose-600 dark:text-rose-400">
+                                                {program.name}
+                                            </span>
+                                            • Vence {program.daysLeft < 0 ? 'hace ' + Math.abs(program.daysLeft) + ' días' : program.daysLeft === 0 ? 'hoy' : 'en ' + program.daysLeft + ' días'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Link 
+                                    href={`/coach/builder/${program.clientId}`}
+                                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all w-full sm:w-auto"
+                                >
+                                    Renovar Plan
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </Link>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Recent Activity Feed */}
             <div className="bg-card border border-border rounded-2xl shadow-sm">

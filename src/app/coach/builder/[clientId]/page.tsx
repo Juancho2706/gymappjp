@@ -5,20 +5,20 @@ import type { Tables } from '@/lib/database.types'
 type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
 import type { Metadata } from 'next'
-import { PlanBuilder } from './PlanBuilder'
+import { WeeklyPlanBuilder } from './WeeklyPlanBuilder'
 
-export const metadata: Metadata = { title: 'Constructor de Rutina | OmniCoach OS' }
+export const metadata: Metadata = { title: 'Planificador Semanal | OmniCoach OS' }
 
 export default async function BuilderPage(
     props: {
         params: Promise<{ clientId: string }>
-        searchParams: Promise<{ planId?: string }>
+        searchParams: Promise<{ planId?: string; programId?: string }>
     }
 ) {
     const searchParams = await props.searchParams;
     const params = await props.params;
     const { clientId } = params
-    const { planId } = searchParams
+    const { planId, programId } = searchParams
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
@@ -44,59 +44,40 @@ export default async function BuilderPage(
 
     const exercises = (rawExercises ?? []) as Exercise[]
 
-    let initialPlanData = null
-    if (planId) {
-        const { data: rawPlan } = await supabase
-            .from('workout_plans')
+    let initialProgramData = null
+
+    if (programId) {
+        const { data: program } = await supabase
+            .from('workout_programs')
             .select(`
-                id, title, group_name,
-                workout_blocks (
-                    id, exercise_id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes,
-                    exercises ( name, muscle_group )
+                *,
+                workout_plans (
+                    *,
+                    workout_blocks (
+                        *,
+                        exercises ( name, muscle_group )
+                    )
                 )
             `)
-            .eq('id', planId)
+            .eq('id', programId)
             .eq('coach_id', user.id)
-            .maybeSingle()
+            .single()
         
-        if (rawPlan) {
-            initialPlanData = rawPlan
+        if (program) {
+            initialProgramData = program
         }
+    } else if (planId) {
+        // Fallback or conversion: if we only have a planId, we could wrap it in a pseudo-program 
+        // but for now let's just fetch it to see if we can use it as a template or something.
+        // However, the WeeklyPlanBuilder expects a full program structure.
+        // For simplicity, let's just support programId for now as the "Weekly" path.
     }
 
-    const { data: groupsData } = await supabase
-        .from('workout_plans')
-        .select('group_name')
-        .eq('coach_id', user.id)
-        .not('group_name', 'is', null) as { data: { group_name: string | null }[] | null }
-
-    const existingGroups = Array.from(new Set(groupsData?.map(g => g.group_name).filter(Boolean) as string[]))
-
-    // Fetch previous plans as templates (deduplicated by title for simplicity)
-    const { data: rawTemplates } = await supabase
-        .from('workout_plans')
-        .select(`
-            id, title, group_name,
-            workout_blocks (
-                id, exercise_id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes,
-                exercises ( name, muscle_group )
-            )
-        `)
-        .eq('coach_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(100)
-
-    // Deduplicate templates by title to avoid clutter
-    const templates: any[] = []
-    const seenTitles = new Set<string>()
-    if (rawTemplates) {
-        for (const t of rawTemplates as any[]) {
-            if (!seenTitles.has(t.title)) {
-                seenTitles.add(t.title)
-                templates.push(t)
-            }
-        }
-    }
-
-    return <PlanBuilder client={client} exercises={exercises} initialPlan={initialPlanData} existingGroups={existingGroups} templates={templates} />
+    return (
+        <WeeklyPlanBuilder 
+            client={client} 
+            exercises={exercises} 
+            initialProgram={initialProgramData} 
+        />
+    )
 }

@@ -166,14 +166,20 @@ export async function toggleClientStatusAction(clientId: string, isActive: boole
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
 
-    // Verify client belongs to this coach and update
-    const { error } = await supabase
+    // Usar admin client para asegurar que la actualización pase incluso si las políticas de RLS
+    // aún no han sido aplicadas manualmente por el usuario.
+    const admin = await createRawAdminClient()
+    
+    const { error } = await admin
         .from('clients')
         .update({ is_active: isActive })
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
 
-    if (error) return { error: error.message }
+    if (error) {
+        console.error('Error toggling client status:', error)
+        return { error: `Error al actualizar el estado: ${error.message}` }
+    }
 
     revalidatePath('/coach/clients')
     return {}

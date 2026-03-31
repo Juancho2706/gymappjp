@@ -1,0 +1,1 @@
+-Si vas a darme un archivo para ejecutar en mi base de datos sql de supabase tienes QUE AVISARME PARA EJECUTARLO MANUALMENTE

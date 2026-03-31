@@ -62,16 +62,21 @@ export async function clientLoginAction(
 
     const { data: clientData } = await supabase
         .from('clients')
-        .select('id, force_password_change')
+        .select('id, force_password_change, is_active')
         .eq('id', user.id)
         .eq('coach_id', coach.id)
         .maybeSingle()
 
-    const client = clientData as Pick<Client, 'id' | 'force_password_change'> | null
+    const client = clientData as Pick<Client, 'id' | 'force_password_change' | 'is_active'> | null
 
     if (!client) {
         await supabase.auth.signOut()
         return { error: 'No tienes acceso a esta plataforma.' }
+    }
+
+    if (client.is_active === false) {
+        await supabase.auth.signOut()
+        return { error: 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.' }
     }
 
     if (client.force_password_change) {

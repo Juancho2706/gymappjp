@@ -8,6 +8,7 @@ import type { Tables } from '@/lib/database.types'
 type Client = Tables<'clients'>
 type WorkoutPlan = Tables<'workout_plans'>
 type Coach = Tables<'coaches'>
+type WorkoutProgram = Tables<'workout_programs'>
 import { WeightProgressChart } from './WeightProgressChart'
 
 export const metadata: Metadata = { title: 'Dashboard' }
@@ -38,7 +39,8 @@ export default async function ClientDashboardPage({ params }: Props) {
         plansResponse,
         nutritionResponse,
         checkinsResponse,
-        logsResponse
+        logsResponse,
+        programResponse
     ] = await Promise.all([
         supabase
             .from('clients')
@@ -47,10 +49,9 @@ export default async function ClientDashboardPage({ params }: Props) {
             .maybeSingle(),
         supabase
             .from('workout_plans')
-            .select('id, title, assigned_date, group_name')
+            .select('id, title, assigned_date, group_name, day_of_week, program_id')
             .eq('client_id', user.id)
-            .order('assigned_date', { ascending: false })
-            .limit(10),
+            .order('assigned_date', { ascending: false }),
         supabase
             .from('nutrition_plans')
             .select('*')
@@ -67,14 +68,32 @@ export default async function ClientDashboardPage({ params }: Props) {
             .from('workout_logs')
             .select('logged_at')
             .eq('client_id', user.id)
-            .gte('logged_at', thirtyDaysAgo.toISOString())
+            .gte('logged_at', thirtyDaysAgo.toISOString()),
+        supabase
+            .from('workout_programs' as any)
+            .select('*')
+            .eq('client_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle()
     ])
 
     const client = clientResponse.data as ClientWithCoach | null
     if (!client) redirect(`/c/${coach_slug}/login`)
 
-    const todayPlans = (plansResponse.data || []) as Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name'>[]
-    const todayPlan = todayPlans.find((p) => p.assigned_date === today)
+    const activeProgram = programResponse?.data
+    const allPlans = (plansResponse.data || []) as (Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name'> & { day_of_week?: number | null, program_id?: string | null })[]
+    
+    // Find today's workout:
+    // 1. Check for specific date match (old system or one-off)
+    // 2. Check for day of week match (if program is active)
+    const d = new Date()
+    const todayDayOfWeek = d.getDay() === 0 ? 7 : d.getDay() // 1: Mon, ..., 7: Sun
+
+    let todayPlan = allPlans.find((p) => p.assigned_date === today)
+    if (!todayPlan && activeProgram) {
+        todayPlan = allPlans.find((p) => p.program_id === activeProgram.id && p.day_of_week === todayDayOfWeek)
+    }
+
     const coachBranding = Array.isArray(client.coaches) ? client.coaches[0] : client.coaches
     
     const activeNutrition = nutritionResponse.data
@@ -89,7 +108,10 @@ export default async function ClientDashboardPage({ params }: Props) {
     const workoutsLast30Days = uniqueWorkoutDays.size
 
     // Group history plans by group_name
-    const historyPlans = todayPlans.filter((p) => p.id !== todayPlan?.id)
+    // Exclude todayPlan and program-based plans (they go into the program section)
+    const historyPlans = allPlans.filter((p) => p.id !== todayPlan?.id && !p.program_id)
+    const programPlans = allPlans.filter((p) => p.program_id === activeProgram?.id).sort((a, b) => (a.day_of_week || 0) - (b.day_of_week || 0))
+
     const groupedHistory = historyPlans.reduce<Record<string, typeof historyPlans>>((acc, plan) => {
         const group = plan.group_name || 'Anteriores'
         if (!acc[group]) acc[group] = []
@@ -103,12 +125,17 @@ export default async function ClientDashboardPage({ params }: Props) {
     const weekDays = Array.from({ length: 7 }).map((_, i) => {
         const d = new Date(new Date().setDate(firstDay + i))
         const dStr = d.toISOString().split('T')[0]
+        const dDayOfWeek = d.getDay() === 0 ? 7 : d.getDay()
+
+        const hasAssignedWorkout = allPlans.some(p => p.assigned_date === dStr)
+        const hasProgramWorkout = activeProgram && allPlans.some(p => p.program_id === activeProgram.id && p.day_of_week === dDayOfWeek)
+
         return {
             dateStr: dStr,
             dayName: d.toLocaleDateString('es-ES', { weekday: 'narrow' }).toUpperCase(),
             dayNum: d.getDate(),
             isToday: dStr === today,
-            hasWorkout: todayPlans.some(p => p.assigned_date === dStr)
+            hasWorkout: hasAssignedWorkout || hasProgramWorkout
         }
     })
 
@@ -239,6 +266,68 @@ export default async function ClientDashboardPage({ params }: Props) {
                         </div>
                     )}
                 </div>
+
+                {/* Active Program Section */}
+                {activeProgram && programPlans.length > 0 && (
+                    <div className="mt-8 space-y-4">
+                        <div className="flex items-center justify-between px-1">
+                            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
+                                {activeProgram.name}
+                            </h2>
+                            <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                                Programa Activo
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3">
+                            {programPlans.map((plan) => {
+                                const isPlanToday = plan.id === todayPlan?.id
+                                const dayName = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][(plan.day_of_week || 1) - 1]
+                                
+                                return (
+                                    <Link
+                                        key={plan.id}
+                                        href={`/c/${coach_slug}/workout/${plan.id}`}
+                                        className={`flex items-center gap-4 bg-card border shadow-sm rounded-2xl p-4 transition-all duration-200 group ${
+                                            isPlanToday 
+                                                ? 'ring-2 ring-offset-2 border-transparent' 
+                                                : 'border-border hover:border-accent'
+                                        }`}
+                                        style={isPlanToday ? { ringColor: 'var(--theme-primary)', border: 'none', boxShadow: '0 0 0 2px var(--theme-primary)' } : {}}
+                                    >
+                                        <div
+                                            className="w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0 border"
+                                            style={{ 
+                                                backgroundColor: isPlanToday ? 'var(--theme-primary)' : 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
+                                                borderColor: isPlanToday ? 'var(--theme-primary)' : 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+                                                color: isPlanToday ? 'white' : 'var(--theme-primary)'
+                                            }}
+                                        >
+                                            <span className="text-[10px] font-bold uppercase leading-none">{dayName.substring(0, 3)}</span>
+                                            <span className="text-lg font-bold leading-none mt-0.5">{plan.day_of_week}</span>
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className={`text-sm font-bold truncate ${isPlanToday ? 'text-foreground' : 'text-foreground/80'}`}>
+                                                {plan.title}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {isPlanToday ? '¡Tu entrenamiento para hoy!' : `Día ${plan.day_of_week} de tu programa`}
+                                            </p>
+                                        </div>
+                                        <div 
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                                isPlanToday ? 'bg-primary text-white' : 'bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-accent-foreground'
+                                            }`}
+                                            style={isPlanToday ? { backgroundColor: 'var(--theme-primary)' } : {}}
+                                        >
+                                            <ChevronRight className="w-5 h-5" />
+                                        </div>
+                                    </Link>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* Recent plans */}
                 {historyPlans.length > 0 && (

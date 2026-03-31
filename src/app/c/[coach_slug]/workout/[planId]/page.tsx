@@ -42,13 +42,14 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         id: string
         title: string
         assigned_date: string
+        day_of_week: number | null
         workout_blocks: BlockType[]
     }
 
     const { data: rawPlan } = await supabase
         .from('workout_plans')
         .select(`
-            id, title, assigned_date,
+            id, title, assigned_date, day_of_week,
             workout_blocks (
                 id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes,
                 exercises ( id, name, muscle_group, video_url, gif_url, instructions )

@@ -39,6 +39,7 @@ interface PlanType {
     id: string
     title: string
     assigned_date: string
+    day_of_week: number | null
     workout_blocks: BlockType[]
 }
 
