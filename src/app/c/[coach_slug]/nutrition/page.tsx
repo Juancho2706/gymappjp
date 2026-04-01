@@ -8,19 +8,13 @@ import type { Tables } from '@/lib/database.types'
 
 type NutritionPlan = Tables<'nutrition_plans'>
 type NutritionMeal = Tables<'nutrition_meals'>
+type FoodItem = Tables<'food_items'>
+type Food = Tables<'foods'>
 
 interface NutritionMealWithItems extends NutritionMeal {
-    food_items: {
-        quantity: number;
-        foods: {
-            name: string;
-            serving_size_g: number;
-            calories: number;
-            protein_g: number;
-            carbs_g: number;
-            fats_g: number;
-        }
-    }[]
+    food_items: (FoodItem & {
+        foods: Food
+    })[]
 }
 
 interface NutritionPlanWithMeals extends NutritionPlan {
