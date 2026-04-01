@@ -44,6 +44,7 @@ type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 
 // ─── Types ──────────────────────────────────────────────────────
 interface BuilderBlock {
@@ -299,6 +300,8 @@ export function WeeklyPlanBuilder({
 
     const [editingBlock, setEditingBlock] = useState<BuilderBlock | null>(null)
     const [activeId, setActiveId] = useState<string | null>(null)
+    const [activeData, setActiveData] = useState<any>(null)
+    const [isCatalogOpen, setIsCatalogOpen] = useState(false)
     const [isPending, startTransition] = useTransition()
 
     const sensors = useSensors(
@@ -338,7 +341,9 @@ export function WeeklyPlanBuilder({
 
     // DnD Handlers
     function handleDragStart(event: DragStartEvent) {
-        setActiveId(event.active.id as string)
+        const { active } = event
+        setActiveId(active.id as string)
+        setActiveData(active.data.current)
     }
 
     function handleDragOver(event: DragOverEvent) {
@@ -401,14 +406,23 @@ export function WeeklyPlanBuilder({
         const { active, over } = event
         if (!over) {
             setActiveId(null)
+            setActiveData(null)
             return
         }
 
         const activeId = active.id as string
         const overId = over.id as string
+        const activeData = active.data.current
+        const overData = over.data.current
 
-        if (activeId !== overId) {
-            const activeData = active.data.current
+        // Handle dropping a new exercise from the catalog
+        if (activeData?.type === 'new-exercise') {
+            const dayId = overData?.dayId
+            if (dayId) {
+                addExercise(dayId, activeData.exercise)
+            }
+        } else if (activeId !== overId) {
+            // Existing logic for blocks
             const dayId = activeData?.dayId
 
             if (dayId) {
@@ -424,6 +438,7 @@ export function WeeklyPlanBuilder({
         }
         
         setActiveId(null)
+        setActiveData(null)
     }
 
     const handleSave = () => {
@@ -470,19 +485,33 @@ export function WeeklyPlanBuilder({
         })
     }
 
-    const activeBlock = useMemo(() => {
-        if (!activeId) return null
-        for (const day of days) {
-            const block = day.blocks.find(b => b.uid === activeId)
-            if (block) return block
+    const activeOverlayItem = useMemo(() => {
+        if (!activeId || !activeData) return null
+        
+        if (activeData.type === 'new-exercise') {
+            return {
+                name: activeData.exercise.name,
+                muscle: activeData.exercise.muscle_group
+            }
         }
+        
+        if (activeData.type === 'block') {
+            return {
+                name: activeData.block.exercise_name,
+                muscle: activeData.block.muscle_group
+            }
+        }
+        
         return null
-    }, [activeId, days])
+    }, [activeId, activeData])
 
     return (
         <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-background">
             {/* Header Area */}
-            <div className="flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0">
+            <div className={cn(
+                "flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0 transition-all duration-300",
+                isCatalogOpen && "h-0 p-0 overflow-hidden md:h-auto md:p-6 md:flex"
+            )}>
                 <div className="flex items-center gap-4">
                     <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
                         className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
@@ -549,42 +578,18 @@ export function WeeklyPlanBuilder({
                     onDragOver={handleDragOver}
                     onDragEnd={handleDragEnd}
                 >
-                    {/* Desktop View: Horizontal Scroll Board */}
-                    <div className="hidden md:flex gap-4 h-full p-6 overflow-x-auto">
-                        {DAYS_OF_WEEK.map(day => (
-                            <DayColumn
-                                key={day.id}
-                                day={day}
-                                blocks={days.find(d => d.id === day.id)?.blocks || []}
-                                exercises={exercises}
-                                onAddExercise={addExercise}
-                                onEditBlock={setEditingBlock}
-                                onRemoveBlock={removeBlock}
-                            />
-                        ))}
-                    </div>
+                    <div className="flex h-full">
+                        {/* Sidebar Catalog (Desktop) */}
+                        <aside className="hidden md:block w-[300px] border-r bg-card p-4 h-full overflow-hidden">
+                            <DraggableExerciseCatalog exercises={exercises} />
+                        </aside>
 
-                    {/* Mobile View: Tabs */}
-                    <div className="flex md:hidden flex-col h-full">
-                        <Tabs defaultValue="1" className="flex-1 flex flex-col">
-                            <TabsList className="flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2">
+                        <div className="flex-1 overflow-hidden flex flex-col">
+                            {/* Desktop View: Horizontal Scroll Board */}
+                            <div className="hidden md:flex gap-4 h-full p-6 overflow-x-auto">
                                 {DAYS_OF_WEEK.map(day => (
-                                    <TabsTrigger 
-                                        key={day.id} 
-                                        value={day.id.toString()}
-                                        className="px-4 text-xs font-bold uppercase tracking-widest"
-                                    >
-                                        {day.name.substring(0, 3)}
-                                    </TabsTrigger>
-                                ))}
-                            </TabsList>
-                            {DAYS_OF_WEEK.map(day => (
-                                <TabsContent 
-                                    key={day.id} 
-                                    value={day.id.toString()} 
-                                    className="flex-1 overflow-y-auto p-4 mt-0"
-                                >
                                     <DayColumn
+                                        key={day.id}
                                         day={day}
                                         blocks={days.find(d => d.id === day.id)?.blocks || []}
                                         exercises={exercises}
@@ -592,19 +597,85 @@ export function WeeklyPlanBuilder({
                                         onEditBlock={setEditingBlock}
                                         onRemoveBlock={removeBlock}
                                     />
-                                </TabsContent>
-                            ))}
-                        </Tabs>
+                                ))}
+                            </div>
+
+                            {/* Mobile View: Tabs + Catalog Trigger */}
+                            <div className="flex md:hidden flex-col h-full relative">
+                                <Tabs defaultValue="1" className="flex-1 flex flex-col">
+                                    <TabsList className="flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2">
+                                        {DAYS_OF_WEEK.map(day => (
+                                            <TabsTrigger 
+                                                key={day.id} 
+                                                value={day.id.toString()}
+                                                className="px-4 text-xs font-bold uppercase tracking-widest"
+                                            >
+                                                {day.name.substring(0, 3)}
+                                            </TabsTrigger>
+                                        ))}
+                                    </TabsList>
+                                    {DAYS_OF_WEEK.map(day => (
+                                        <TabsContent 
+                                            key={day.id} 
+                                            value={day.id.toString()} 
+                                            className="flex-1 overflow-y-auto p-4 mt-0"
+                                        >
+                                            <DayColumn
+                                                day={day}
+                                                blocks={days.find(d => d.id === day.id)?.blocks || []}
+                                                exercises={exercises}
+                                                onAddExercise={addExercise}
+                                                onEditBlock={setEditingBlock}
+                                                onRemoveBlock={removeBlock}
+                                            />
+                                        </TabsContent>
+                                    ))}
+                                </Tabs>
+
+                                {/* Mobile Floating Button to Open Catalog */}
+                                {!isCatalogOpen && (
+                                    <button
+                                        onClick={() => setIsCatalogOpen(true)}
+                                        className="absolute bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-primary-foreground shadow-2xl hover:scale-105 active:scale-95 transition-all z-20"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                        <span className="text-sm font-bold">Ver Ejercicios</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                     </div>
 
                     <DragOverlay dropAnimation={null}>
-                        {activeId && activeBlock ? (
-                            <div className="bg-primary text-primary-foreground border border-primary p-3 rounded-lg shadow-2xl min-w-[200px] opacity-90 scale-105">
-                                <p className="text-sm font-bold">{activeBlock.exercise_name}</p>
-                                <p className="text-[10px] opacity-80">{activeBlock.muscle_group}</p>
+                        {activeId && activeOverlayItem ? (
+                            <div className="bg-primary text-primary-foreground border border-primary p-3 rounded-lg shadow-2xl min-w-[200px] opacity-90 scale-105 pointer-events-none z-[100]">
+                                <p className="text-sm font-bold">{activeOverlayItem.name}</p>
+                                <p className="text-[10px] opacity-80 uppercase font-bold tracking-widest">{activeOverlayItem.muscle}</p>
                             </div>
                         ) : null}
                     </DragOverlay>
+
+                    {/* Mobile Exercise Catalog Sheet */}
+                    <Sheet open={isCatalogOpen} onOpenChange={setIsCatalogOpen} modal={false}>
+                        <SheetContent 
+                            side="bottom" 
+                            className="h-[75vh] p-0 rounded-t-3xl overflow-hidden border-none shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] z-50 flex flex-col" 
+                            hideOverlay
+                            showCloseButton={false}
+                        >
+                            <div className="w-12 h-1.5 bg-muted rounded-full mx-auto my-4 shrink-0" />
+                            <div className="flex-1 overflow-hidden px-4 pb-8">
+                                <DraggableExerciseCatalog exercises={exercises} className="border-none shadow-none h-full" />
+                            </div>
+                            {/* Floating close button inside the sheet */}
+                            <button 
+                                onClick={() => setIsCatalogOpen(false)}
+                                className="absolute top-4 right-4 p-2 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </SheetContent>
+                    </Sheet>
                 </DndContext>
             </div>
 
