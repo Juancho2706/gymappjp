@@ -17,6 +17,8 @@ const clientLoginSchema = z.object({
 
 export type ClientLoginState = {
     error?: string
+    success?: boolean
+    redirectUrl?: string
 }
 
 export async function clientLoginAction(
@@ -79,11 +81,11 @@ export async function clientLoginAction(
         return { error: 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.' }
     }
 
-    if (client.force_password_change) {
-        redirect(`/c/${coach_slug}/change-password`)
-    }
+    const redirectUrl = client.force_password_change 
+        ? `/c/${coach_slug}/change-password`
+        : `/c/${coach_slug}/dashboard`
 
-    redirect(`/c/${coach_slug}/dashboard`)
+    return { success: true, redirectUrl }
 }
 
 // ----------------------------------------------------------------

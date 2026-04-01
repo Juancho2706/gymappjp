@@ -2,14 +2,15 @@
 
 import Link from 'next/link'
 import { useRef, useState, useEffect } from 'react'
+import Image from 'next/image'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
-import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring } from 'framer-motion'
+import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring, AnimatePresence } from 'framer-motion'
 import {
     Dumbbell, Users, BarChart3, Camera, Sparkles, ArrowRight, Check,
     Zap, Shield, Smartphone, ChevronDown, Star, Play, Palette,
-    ClipboardList, Apple, Utensils, Menu
+    ClipboardList, Apple, Utensils, Menu, X
 } from 'lucide-react'
 import {
     Sheet,
@@ -274,6 +275,85 @@ function PillNav() {
     )
 }
 
+/* ─── Component: Sticky Branding Card (Intelligent Redirect) ─── */
+function StickyBrandingCard() {
+    const [coach, setCoach] = useState<{ slug: string; name: string; logo: string | null } | null>(null)
+    const [isVisible, setIsVisible] = useState(false)
+
+    useEffect(() => {
+        const slug = localStorage.getItem('last_coach_slug')
+        const name = localStorage.getItem('coach_brand_name')
+        const logo = localStorage.getItem('coach_logo_url')
+        if (slug && name) {
+            setCoach({ slug, name, logo })
+            // Show with a slight delay for effect
+            const timer = setTimeout(() => setIsVisible(true), 1000)
+            return () => clearTimeout(timer)
+        }
+    }, [])
+
+    if (!coach) return null
+
+    return (
+        <AnimatePresence>
+            {isVisible && (
+                <motion.div
+                    initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                    className="fixed bottom-6 left-6 right-6 md:left-auto md:right-8 z-[60] md:w-[320px]"
+                >
+                    <div className="bg-card/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-5 relative overflow-hidden group">
+                        {/* Background Decoration */}
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-emerald-500/20 transition-colors" />
+                        
+                        <button 
+                            onClick={() => setIsVisible(false)}
+                            className="absolute top-3 right-3 p-1 rounded-full hover:bg-white/5 text-foreground/30 hover:text-foreground transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+
+                        <div className="flex items-start gap-4">
+                            <div className="shrink-0">
+                                {coach.logo ? (
+                                    <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-white/5 bg-background">
+                                        <Image 
+                                            src={coach.logo} 
+                                            alt={coach.name} 
+                                            fill 
+                                            className="object-contain p-1"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                                        <Dumbbell className="w-6 h-6 text-emerald-400" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0 pr-4">
+                                <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
+                                    Bienvenido de nuevo
+                                </p>
+                                <h4 className="text-sm font-bold text-foreground truncate mb-3">
+                                    {coach.name}
+                                </h4>
+                                <Link
+                                    href={`/c/${coach.slug}/login`}
+                                    className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-background text-xs font-bold px-4 py-2 rounded-full transition-all group/btn"
+                                >
+                                    Ir a mi entrenamiento
+                                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    )
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Main Landing Page
    ═══════════════════════════════════════════════════════════════ */
@@ -291,6 +371,7 @@ export default function LandingPage() {
     return (
         <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
             <PillNav />
+            <StickyBrandingCard />
 
             {/* ── HERO ── */}
             <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-20 pb-32">

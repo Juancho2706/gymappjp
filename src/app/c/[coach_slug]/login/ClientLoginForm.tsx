@@ -1,8 +1,9 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Mail, Lock, Loader2 } from 'lucide-react'
 import { clientLoginAction, type ClientLoginState } from './actions'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,8 @@ const initialState: ClientLoginState = {}
 interface Props {
     coachSlug: string
     primaryColor: string
+    brandName: string
+    logoUrl: string | null
 }
 
 function SubmitButton({ primaryColor }: { primaryColor: string }) {
@@ -37,8 +40,25 @@ function SubmitButton({ primaryColor }: { primaryColor: string }) {
     )
 }
 
-export default function ClientLoginForm({ coachSlug, primaryColor }: Props) {
+export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl }: Props) {
     const [state, formAction] = useActionState(clientLoginAction, initialState)
+    const router = useRouter()
+
+    useEffect(() => {
+        if (state.success && state.redirectUrl) {
+            // Store sticky branding for the "Intelligent Redirect"
+            localStorage.setItem('last_coach_slug', coachSlug)
+            localStorage.setItem('coach_brand_name', brandName)
+            if (logoUrl) {
+                localStorage.setItem('coach_logo_url', logoUrl)
+            } else {
+                localStorage.removeItem('coach_logo_url')
+            }
+            
+            // Redirect to the appropriate page
+            router.push(state.redirectUrl)
+        }
+    }, [state, coachSlug, brandName, logoUrl, router])
 
     return (
         <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">

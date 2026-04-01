@@ -1,67 +1,80 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Download } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { X, Download, Share, PlusSquare } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { usePathname } from 'next/navigation';
 
-export default function InstallPrompt() {
-  const [isInstallable, setIsInstallable] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isIOS, setIsIOS] = useState(false);
+interface InstallPromptProps {
+  brandName?: string;
+}
+
+export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
-    // Verificar si ya está en modo standalone (instalado)
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      console.log('App is already installed (standalone mode).');
-      return;
-    }
+    // 1. Detect if already in standalone mode
+    const checkStandalone = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      (window.navigator as any).standalone === true;
+    
+    setIsStandalone(checkStandalone);
 
-    // Sólo mostrar en móviles
-    const mobile = /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
-    setIsMobile(mobile);
-    if (!mobile) {
-      console.log('InstallPrompt blocked: Not a mobile device.');
-      return; 
-    }
+    // 2. Detect OS
+    const ua = window.navigator.userAgent;
+    const isIosDevice = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    setIsIOS(isIosDevice);
 
-    // Verificar si es iOS
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    setIsIOS(isIOSDevice);
-
-    if (isIOSDevice) {
-      // En iOS no hay evento beforeinstallprompt, mostramos la guía si queremos
-      const hasDismissed = localStorage.getItem('pwa_prompt_dismissed');
-      if (!hasDismissed) {
-        setIsVisible(true);
-      } else {
-        console.log('InstallPrompt blocked (iOS): User previously dismissed it.');
-      }
-    }
-
-    // Escuchar el evento en Android/Chrome
+    // 3. Android beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
-      console.log('beforeinstallprompt event fired!');
       e.preventDefault();
       setDeferredPrompt(e);
-      setIsInstallable(true);
-      
-      const hasDismissed = localStorage.getItem('pwa_prompt_dismissed');
-      if (!hasDismissed) {
-        setIsVisible(true);
-      } else {
-        console.log('InstallPrompt blocked (Android): User previously dismissed it.');
+      checkAndShow();
+    };
+
+    const checkAndShow = () => {
+      const dismissedUntil = localStorage.getItem('pwa_prompt_dismissed_until');
+      const now = new Date().getTime();
+
+      if (dismissedUntil && parseInt(dismissedUntil) > now) {
+        return;
       }
+
+      // Don't show on onboarding, login or other exempt pages
+      const isExemptPage = pathname.includes('/onboarding') || 
+                          pathname.includes('/login') || 
+                          pathname.includes('/register') || 
+                          pathname.includes('/suspended');
+      
+      if (isExemptPage) return;
+
+      // Show after a delay to be non-intrusive and after page load
+      const timer = setTimeout(() => {
+        // Double check standalone state to avoid flicker
+        const stillNotStandalone = !(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
+        if (stillNotStandalone) {
+          setIsVisible(true);
+        }
+      }, 10000); // 10 seconds delay
+
+      return () => clearTimeout(timer);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
+    // For iOS, we check manually since there's no event
+    if (isIosDevice) {
+      checkAndShow();
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [pathname]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -77,63 +90,113 @@ export default function InstallPrompt() {
 
   const handleDismiss = () => {
     setIsVisible(false);
-    localStorage.setItem('pwa_prompt_dismissed', 'true');
+    // Persist for 7 days
+    const sevenDaysFromNow = new Date().getTime() + (7 * 24 * 60 * 60 * 1000);
+    localStorage.setItem('pwa_prompt_dismissed_until', sevenDaysFromNow.toString());
   };
 
-  if (!isVisible) return null;
-
-  // floating action button (FAB) for installation
-  const card = (
-    <div
-      className="fixed bottom-24 right-4 z-50 transform transition-all animate-in slide-in-from-bottom-5 fade-in duration-500"
-    >
-      <div className="relative">
-        <button
-          onClick={() => isIOS ? setExpanded(true) : handleInstallClick()}
-          className="flex items-center gap-2 px-5 py-3.5 bg-primary text-primary-foreground font-bold text-sm rounded-full shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all"
-        >
-          <Download className="w-5 h-5 animate-bounce" />
-          Instalar App
-        </button>
-        <button 
-          onClick={handleDismiss}
-          className="absolute -top-2 -right-2 p-1 bg-muted text-muted-foreground border border-border rounded-full shadow-sm hover:text-foreground transition-colors"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  );
+  if (isStandalone || !isVisible) return null;
 
   return (
-    <>
-      {card}
-      <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Instala la App</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-            {isIOS
-              ? 'Para instalar en iOS toca el botón de compartir y luego "Añadir a inicio". Después podrás abrir la app desde tu pantalla de inicio.'
-              : 'Pulsa "Instalar ahora" abajo para añadir la aplicación a tu pantalla de inicio. Esto ofrece una experiencia sin navegador y más rápida.'}
-          </p>
-          {!isIOS && isInstallable && (
-            <button
-              onClick={handleInstallClick}
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium py-2 px-4 rounded-xl transition-colors"
+    <AnimatePresence>
+      {isVisible && (
+        <div className="fixed inset-x-0 bottom-0 z-[100] p-4 pointer-events-none flex flex-col items-center">
+          {isIOS ? (
+            /* iOS Tooltip / Overlay - Mimics Safari's Tooltip */
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.9 }}
+              animate={{ 
+                opacity: 1, 
+                y: 0, 
+                scale: 1,
+                transition: { type: "spring", damping: 25, stiffness: 300 }
+              }}
+              exit={{ opacity: 0, y: 40, scale: 0.9 }}
+              className="relative w-full max-w-[340px] bg-card/95 backdrop-blur-xl border border-border rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-6 pointer-events-auto mb-20"
             >
-              Instalar ahora
-            </button>
+              <button 
+                onClick={handleDismiss}
+                className="absolute top-5 right-5 p-1.5 hover:bg-muted rounded-full transition-colors"
+                aria-label="Cerrar"
+              >
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 bg-theme-subtle rounded-2xl flex items-center justify-center shrink-0">
+                  <Download className="w-7 h-7 text-theme" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-foreground leading-tight truncate">Instalar {brandName}</h3>
+                  <p className="text-xs text-muted-foreground">Úsala como una aplicación nativa</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 px-1">
+                <div className="flex items-start gap-4 text-sm">
+                  <div className="w-8 h-8 flex items-center justify-center bg-muted rounded-xl shrink-0">
+                    <Share className="w-5 h-5 text-foreground" />
+                  </div>
+                  <p className="pt-1.5 text-foreground/80 leading-snug">1. Toca el botón <strong>Compartir</strong> en la barra inferior de Safari.</p>
+                </div>
+                <div className="flex items-start gap-4 text-sm">
+                  <div className="w-8 h-8 flex items-center justify-center bg-muted rounded-xl shrink-0">
+                    <PlusSquare className="w-5 h-5 text-foreground" />
+                  </div>
+                  <p className="pt-1.5 text-foreground/80 leading-snug">2. Desliza hacia abajo y selecciona <strong>"Añadir a inicio"</strong>.</p>
+                </div>
+              </div>
+
+              {/* Arrow pointing down to Safari's Share button */}
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-card border-r border-b border-border rotate-45" />
+              
+              <motion.div 
+                animate={{ y: [0, 5, 0] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                className="absolute -bottom-10 left-1/2 -translate-x-1/2"
+              >
+                <div className="w-1 bg-white/30 h-6 rounded-full mx-auto" />
+              </motion.div>
+            </motion.div>
+          ) : (
+            /* Android Modern Banner */
+            <motion.div
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ 
+                opacity: 1, 
+                y: 0,
+                transition: { type: "spring", damping: 20, stiffness: 200 }
+              }}
+              exit={{ opacity: 0, y: 100 }}
+              className="w-full max-w-md bg-card/95 backdrop-blur-md border border-border rounded-3xl shadow-2xl p-5 pointer-events-auto flex items-center gap-5"
+            >
+              <div className="w-14 h-14 bg-theme-subtle rounded-2xl flex items-center justify-center shrink-0">
+                <Download className="w-7 h-7 text-theme" />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-base text-foreground truncate italic">¿Instalar {brandName}?</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">Disfruta de una experiencia más fluida y rápida.</p>
+              </div>
+
+              <div className="flex flex-col gap-2 shrink-0">
+                <button
+                  onClick={handleInstallClick}
+                  className="px-6 py-2.5 bg-theme text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:opacity-90 transition-all active:scale-95 btn-theme"
+                >
+                  Instalar
+                </button>
+                <button
+                  onClick={handleDismiss}
+                  className="px-6 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Luego
+                </button>
+              </div>
+            </motion.div>
           )}
-          <button
-            onClick={handleDismiss}
-            className="mt-3 w-full text-center text-sm text-zinc-500 dark:text-zinc-400"
-          >
-            Cerrar
-          </button>
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }

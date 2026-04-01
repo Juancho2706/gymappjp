@@ -6,6 +6,7 @@ import type { Tables } from '@/lib/database.types'
 
 type Coach = Tables<'coaches'>
 import { ClientNav } from '@/components/client/ClientNav'
+import InstallPrompt from '@/components/InstallPrompt'
 
 interface Props {
     children: React.ReactNode
@@ -79,6 +80,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
             data-brand-name={brandName}
         >
             <ClientNav coachSlug={coach_slug} coachBrand={brandName} />
+            <InstallPrompt brandName={brandName} />
 
             <main className="flex-1 overflow-auto relative z-0 bg-muted/20 dark:bg-background pb-[80px] md:pb-0 has-[.is-workout-page]:pb-0">
                 {children}

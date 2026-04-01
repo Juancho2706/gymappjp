@@ -88,6 +88,8 @@ export default async function ClientLoginPage({ params }: Props) {
                 <ClientLoginForm
                     coachSlug={coach_slug}
                     primaryColor={coach.primary_color}
+                    brandName={coach.brand_name}
+                    logoUrl={coach.logo_url}
                 />
             </div>
         </div>

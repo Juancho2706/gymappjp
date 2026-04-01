@@ -159,7 +159,39 @@ export async function middleware(request: NextRequest) {
     }
 
     // ============================================================
-    // 3. Redirect logged-in coaches away from auth pages
+    // 3. AUTO-REDIRECT authenticated users away from root /
+    // ============================================================
+    if (pathname === '/' && user) {
+        // Is it a coach?
+        const { data: coachData } = await supabase
+            .from('coaches')
+            .select('id')
+            .eq('id', user.id)
+            .maybeSingle()
+
+        if (coachData) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/coach/dashboard'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        // Is it a client?
+        const { data: clientData } = await supabase
+            .from('clients')
+            .select('id, coach_id, coaches(slug)')
+            .eq('id', user.id)
+            .maybeSingle()
+
+        if (clientData?.coaches) {
+            const coach = clientData.coaches as unknown as Pick<Coach, 'slug'>
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = `/c/${coach.slug}/dashboard`
+            return NextResponse.redirect(redirectUrl)
+        }
+    }
+
+    // ============================================================
+    // 4. Redirect logged-in coaches away from auth pages
     // EXCEPT for /reset-password which needs the session
     // ============================================================
     const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
