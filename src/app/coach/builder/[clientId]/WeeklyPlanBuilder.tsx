@@ -524,7 +524,7 @@ export function WeeklyPlanBuilder({
             {/* Header Area */}
             <div className={cn(
                 "flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0 transition-all duration-500 ease-in-out",
-                isCatalogOpen && "md:mt-0 -mt-[200px] opacity-0 pointer-events-none md:pointer-events-auto md:opacity-100"
+                isCatalogOpen && "md:opacity-100 md:h-auto md:p-4 md:pointer-events-auto h-0 p-0 opacity-0 overflow-hidden pointer-events-none"
             )}>
                 <div className="flex items-center gap-4">
                     <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
@@ -632,7 +632,7 @@ export function WeeklyPlanBuilder({
                                     </TabsList>
                                     <div className={cn(
                                         "flex-1 overflow-hidden transition-all duration-500 ease-in-out",
-                                        isCatalogOpen ? "pb-[50dvh]" : "pb-20"
+                                        isCatalogOpen ? "pb-[50vh]" : "pb-20"
                                     )}>
                                         {mounted && isMobile && DAYS_OF_WEEK.map(day => (
                                             <TabsContent 
@@ -680,7 +680,7 @@ export function WeeklyPlanBuilder({
                     <Sheet open={isCatalogOpen} onOpenChange={setIsCatalogOpen} modal={false}>
                         <SheetContent 
                             side="bottom" 
-                            className="h-[50dvh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-card" 
+                            className="h-[50vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-card" 
                             hideOverlay
                             showCloseButton={false}
                         >

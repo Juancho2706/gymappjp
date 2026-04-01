@@ -70,7 +70,7 @@ export function DraggableExerciseCatalog({ exercises, className }: DraggableExer
 
     return (
         <div className={cn("flex flex-col h-full bg-card border rounded-xl overflow-hidden shadow-sm", className)}>
-            <div className="p-4 border-b space-y-4 bg-muted/20">
+            <div className="p-3 md:p-4 border-b space-y-3 md:space-y-4 bg-muted/20">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-bold flex items-center gap-2">
                         <Dumbbell className="w-4 h-4 text-primary" />
@@ -78,7 +78,7 @@ export function DraggableExerciseCatalog({ exercises, className }: DraggableExer
                     </h2>
                 </div>
                 
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
                         <Input 
@@ -106,7 +106,7 @@ export function DraggableExerciseCatalog({ exercises, className }: DraggableExer
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-[25vh] md:max-h-none">
                 {filteredExercises.length > 0 ? (
                     filteredExercises.map(ex => (
                         <DraggableExerciseItem key={ex.id} exercise={ex} />
