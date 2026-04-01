@@ -29,6 +29,10 @@ export default async function NutritionPlansPage() {
             .from('nutrition_plan_templates')
             .select(`
                 *,
+                assigned_clients:nutrition_plans(
+                    client:clients(id, full_name),
+                    is_active
+                ),
                 template_meals (
                     id,
                     name,
@@ -54,15 +58,29 @@ export default async function NutritionPlansPage() {
 
         supabase
             .from('clients')
-            .select('id, full_name')
+            .select(`
+                id, 
+                full_name,
+                active_plans:nutrition_plans(id, name, template_id, is_active)
+            `)
             .eq('coach_id', user.id)
             .eq('is_active', true)
+            .eq('active_plans.is_active', true)
             .order('full_name')
     ])
 
     const mealGroups = mealGroupsResponse.data
-    const templates = templatesResponse.data
-    const clients = clientsResponse.data
+    const templates = (templatesResponse.data || []).map(t => ({
+        ...t,
+        assigned_clients: t.assigned_clients
+            ?.filter((p: any) => p.is_active)
+            .map((p: any) => p.client) || []
+    }))
+    const clients = (clientsResponse.data || []).map(c => ({
+        id: c.id,
+        full_name: c.full_name,
+        active_plan: c.active_plans?.[0] || null
+    }))
 
     return (
         <NutritionManagement 

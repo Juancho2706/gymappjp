@@ -141,9 +141,33 @@ export async function saveNutritionTemplate(
             }
         }
 
-        // 3. Propagation or Mass Assignment
+        // 3. Propagation and Mass Assignment
+        const clientIdsToAssign = new Set<string>();
+
+        // Add manually selected clients
+        if (selectedClientsStr) {
+            try {
+                const selectedIds: string[] = JSON.parse(selectedClientsStr);
+                selectedIds.forEach(id => clientIdsToAssign.add(id));
+            } catch (e) {
+                console.error('Error parsing selected clients:', e);
+            }
+        }
+
+        // Add clients already using this template (Propagation)
         if (templateId) {
-            // PROPAGATION: Update all active nutrition_plans linked to this template
+            const { data: linkedPlans } = await supabase
+                .from('nutrition_plans')
+                .select('client_id')
+                .eq('template_id', templateId)
+                .eq('is_active', true);
+            
+            if (linkedPlans) {
+                linkedPlans.forEach(p => clientIdsToAssign.add(p.client_id));
+            }
+        }
+
+        if (clientIdsToAssign.size > 0) {
             const { data: fullTemplate, error: tError } = await supabase
                 .from('nutrition_plan_templates')
                 .select(`
@@ -162,58 +186,16 @@ export async function saveNutritionTemplate(
                         )
                     )
                 `)
-                .eq('id', templateId)
-                .single()
+                .eq('id', currentTemplateId!)
+                .single();
 
             if (!tError && fullTemplate) {
-                const { data: linkedPlans } = await supabase
-                    .from('nutrition_plans')
-                    .select('client_id')
-                    .eq('template_id', templateId)
-                    .eq('is_active', true)
-
-                if (linkedPlans && linkedPlans.length > 0) {
-                    console.log(`[saveNutritionTemplate] Propagating changes to ${linkedPlans.length} active plans`);
-                    await Promise.all(
-                        linkedPlans.map(p => assignTemplateToClientWithData(fullTemplate, p.client_id, coachId))
-                    );
-                }
-            }
-        }
-
-        if (selectedClientsStr) {
-            try {
-                const clientIds: string[] = JSON.parse(selectedClientsStr)
-                if (clientIds.length > 0) {
-                    const { data: fullTemplate } = await supabase
-                        .from('nutrition_plan_templates')
-                        .select(`
-                            *,
-                            template_meals (
-                                *,
-                                template_meal_groups (
-                                    saved_meal_id,
-                                    saved_meals (
-                                        *,
-                                        saved_meal_items (
-                                            *,
-                                            foods (*)
-                                        )
-                                    )
-                                )
-                            )
-                        `)
-                        .eq('id', currentTemplateId!)
-                        .single()
-
-                    if (fullTemplate) {
-                        await Promise.all(
-                            clientIds.map(clientId => assignTemplateToClientWithData(fullTemplate, clientId, coachId))
-                        );
-                    }
-                }
-            } catch (e) {
-                console.error('Error parsing selected clients or assigning:', e)
+                console.log(`[saveNutritionTemplate] Assigning/Updating template for ${clientIdsToAssign.size} clients`);
+                await Promise.all(
+                    Array.from(clientIdsToAssign).map(clientId => 
+                        assignTemplateToClientWithData(fullTemplate, clientId, coachId)
+                    )
+                );
             }
         }
 

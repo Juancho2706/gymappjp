@@ -31,6 +31,16 @@ import { cn } from "@/lib/utils"
 import { saveNutritionTemplate } from './actions'
 import { toast } from 'sonner'
 import { triggerSuccessAnimation } from '@/components/SuccessAnimationProvider'
+import { 
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface MealGroup {
     id: string
@@ -47,6 +57,11 @@ interface TemplateMealInput {
 interface Client {
     id: string
     full_name: string
+    active_plan?: {
+        id: string
+        name: string
+        template_id?: string
+    } | null
 }
 
 interface Props {
@@ -90,8 +105,12 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
     )
 
     // Client Selection
-    const [selectedClients, setSelectedClients] = useState<string[]>([])
+    const [selectedClients, setSelectedClients] = useState<string[]>(
+        initialData?.assigned_clients?.map((c: any) => c.id) || []
+    )
     const [openPopover, setOpenPopover] = useState(false)
+    const [showConfirmOverwrite, setShowConfirmOverwrite] = useState(false)
+    const [clientsWithExistingPlans, setClientsWithExistingPlans] = useState<Client[]>([])
 
     const [searchTerm, setSearchTerm] = useState('')
 
@@ -190,8 +209,8 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
         }))
     }
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault()
         setError('')
 
         if (meals.length === 0) {
@@ -199,6 +218,20 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
             return
         }
 
+        // Check for clients with other active plans (not this one)
+        const clientsToOverwrite = availableClients.filter(c => 
+            selectedClients.includes(c.id) && 
+            c.active_plan && 
+            c.active_plan.template_id !== initialData?.id
+        )
+
+        if (clientsToOverwrite.length > 0 && !showConfirmOverwrite) {
+            setClientsWithExistingPlans(clientsToOverwrite)
+            setShowConfirmOverwrite(true)
+            return
+        }
+
+        setShowConfirmOverwrite(false)
         console.log('[NutritionPlanBuilder] Starting handleSubmit');
         const planDataForLog = {
             name,
@@ -268,7 +301,41 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-10">
+        <>
+            <AlertDialog open={showConfirmOverwrite} onOpenChange={setShowConfirmOverwrite}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Sobreescribir planes nutricionales?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Los siguientes alumnos ya tienen un plan nutricional activo:
+                            <ul className="mt-2 list-disc list-inside font-medium text-foreground">
+                                {clientsWithExistingPlans.map(c => (
+                                    <li key={c.id}>
+                                        {c.full_name} ({c.active_plan?.name})
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="mt-4">
+                                Si continúas, se les desactivará su plan actual y se les asignará este nuevo plan. ¿Deseas continuar?
+                            </p>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => {
+                                setShowConfirmOverwrite(false)
+                                handleSubmit()
+                            }}
+                            className="bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                            Continuar y Sobreescribir
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <form onSubmit={handleSubmit} className="space-y-10">
             {onCancel && (
                 <div className="flex justify-end mb-4">
                     <Button type="button" variant="ghost" onClick={onCancel}>
@@ -386,6 +453,11 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                                                 )}
                                                             </div>
                                                             {client.full_name}
+                                                            {client.active_plan && (
+                                                                <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">
+                                                                    Plan: {client.active_plan.name}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     ))
                                                 )}
@@ -556,5 +628,6 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                 </div>
             </div>
         </form>
+    </>
     )
 }

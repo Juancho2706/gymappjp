@@ -20,6 +20,10 @@ interface Template {
         id: string
         name: string
     }[]
+    assigned_clients?: {
+        id: string
+        full_name: string
+    }[]
 }
 
 interface Props {
@@ -140,7 +144,7 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                                     <div className="flex items-center gap-1">
                                         <Utensils className="w-3 h-3" />
                                         <span>{template.template_meals?.length || 0} Comidas</span>
@@ -151,6 +155,18 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
                                             {template.template_meals?.map(m => m.name).join(', ')}
                                         </span>
                                     </div>
+                                    {template.assigned_clients && template.assigned_clients.length > 0 && (
+                                        <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                            <Users className="w-3 h-3" />
+                                            <span className="font-medium">
+                                                {template.assigned_clients.length} {template.assigned_clients.length === 1 ? 'Alumno' : 'Alumnos'}
+                                            </span>
+                                            <span className="text-[10px] ml-1 opacity-80 hidden sm:inline">
+                                                ({template.assigned_clients.slice(0, 2).map(c => c.full_name.split(' ')[0]).join(', ')}
+                                                {template.assigned_clients.length > 2 ? '...' : ''})
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
