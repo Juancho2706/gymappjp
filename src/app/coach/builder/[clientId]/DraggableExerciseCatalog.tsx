@@ -70,34 +70,36 @@ export function DraggableExerciseCatalog({ exercises, className }: DraggableExer
 
     return (
         <div className={cn("flex flex-col h-full bg-card border rounded-xl overflow-hidden shadow-sm", className)}>
-            <div className="p-4 border-b space-y-3 bg-muted/20">
-                <h2 className="text-sm font-bold flex items-center gap-2">
-                    <Dumbbell className="w-4 h-4" />
-                    Catálogo de Ejercicios
-                </h2>
+            <div className="p-4 border-b space-y-4 bg-muted/20">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-bold flex items-center gap-2">
+                        <Dumbbell className="w-4 h-4 text-primary" />
+                        Catálogo de Ejercicios
+                    </h2>
+                </div>
                 
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2.5">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
                         <Input 
-                            placeholder="Buscar ejercicio..."
+                            placeholder="Buscar por nombre..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 h-9 text-xs bg-background"
+                            className="pl-9 h-10 text-xs bg-background border-border/50 rounded-xl focus:border-primary focus:ring-primary/20 transition-all"
                         />
                     </div>
                     
                     <Select value={selectedMuscle} onValueChange={(val) => setSelectedMuscle(val || 'Todos')}>
-                        <SelectTrigger className="h-9 text-xs bg-background">
+                        <SelectTrigger className="h-10 text-xs bg-background border-border/50 rounded-xl focus:border-primary focus:ring-primary/20 transition-all">
                             <div className="flex items-center gap-2">
-                                <Filter className="w-3 h-3 text-muted-foreground" />
-                                <SelectValue placeholder="Músculo" />
+                                <Filter className="w-3 h-3 text-muted-foreground/60" />
+                                <SelectValue placeholder="Filtrar por músculo" />
                             </div>
                         </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Todos">Todos los músculos</SelectItem>
+                        <SelectContent className="rounded-xl">
+                            <SelectItem value="Todos" className="text-xs">Todos los músculos</SelectItem>
                             {MUSCLE_GROUPS.map(mg => (
-                                <SelectItem key={mg} value={mg}>{mg}</SelectItem>
+                                <SelectItem key={mg} value={mg} className="text-xs">{mg}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>

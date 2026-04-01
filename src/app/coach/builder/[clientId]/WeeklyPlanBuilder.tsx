@@ -188,8 +188,8 @@ function DayColumn({
                     </span>
                 </h3>
                 
-                {/* Quick Search */}
-                <div className="relative mt-2">
+                {/* Quick Search - Solo Desktop */}
+                <div className="relative mt-2 hidden md:block">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
                     <input 
                         value={search}
@@ -520,14 +520,11 @@ export function WeeklyPlanBuilder({
     }, [activeId, activeData])
 
     return (
-        <div className={cn(
-            "flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-background transition-transform duration-500 ease-in-out",
-            isCatalogOpen && "-translate-y-[160px] md:translate-y-0"
-        )}>
+        <div className="flex flex-col h-[calc(100vh-130px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-background overflow-hidden relative">
             {/* Header Area */}
             <div className={cn(
-                "flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0 transition-opacity duration-500 ease-in-out",
-                isCatalogOpen && "md:opacity-100 opacity-0 pointer-events-none md:pointer-events-auto"
+                "flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0 transition-all duration-500 ease-in-out",
+                isCatalogOpen && "md:mt-0 -mt-[200px] opacity-0 pointer-events-none md:pointer-events-auto md:opacity-100"
             )}>
                 <div className="flex items-center gap-4">
                     <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
@@ -619,46 +616,51 @@ export function WeeklyPlanBuilder({
 
                             {/* Mobile View: Tabs + Catalog Trigger */}
                             <div className="flex md:hidden flex-col h-full relative">
-                                <Tabs defaultValue="1" className="flex-1 flex flex-col">
+                                <Tabs defaultValue="1" className="flex-1 flex flex-col overflow-hidden">
                                     <TabsList className={cn(
-                                        "flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2 transition-transform duration-500 ease-in-out z-10 sticky top-0",
-                                        isCatalogOpen && "translate-y-0"
+                                        "flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2 z-10 sticky top-0 shrink-0 shadow-sm",
                                     )}>
                                         {DAYS_OF_WEEK.map(day => (
                                             <TabsTrigger 
                                                 key={day.id} 
                                                 value={day.id.toString()}
-                                                className="px-4 text-xs font-bold uppercase tracking-widest"
+                                                className="px-4 text-[10px] font-bold uppercase tracking-widest data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none transition-all"
                                             >
                                                 {day.name.substring(0, 3)}
                                             </TabsTrigger>
                                         ))}
                                     </TabsList>
-                                    {mounted && isMobile && DAYS_OF_WEEK.map(day => (
-                                        <TabsContent 
-                                            key={day.id} 
-                                            value={day.id.toString()} 
-                                            className="flex-1 overflow-y-auto p-4 mt-0"
-                                        >
-                                            <DayColumn
-                                                day={day}
-                                                blocks={days.find(d => d.id === day.id)?.blocks || []}
-                                                exercises={exercises}
-                                                onAddExercise={addExercise}
-                                                onEditBlock={setEditingBlock}
-                                                onRemoveBlock={removeBlock}
-                                            />
-                                        </TabsContent>
-                                    ))}
+                                    <div className={cn(
+                                        "flex-1 overflow-hidden transition-all duration-500 ease-in-out",
+                                        isCatalogOpen ? "pb-[50dvh]" : "pb-20"
+                                    )}>
+                                        {mounted && isMobile && DAYS_OF_WEEK.map(day => (
+                                            <TabsContent 
+                                                key={day.id} 
+                                                value={day.id.toString()} 
+                                                className="h-full overflow-y-auto p-4 mt-0"
+                                            >
+                                                <DayColumn
+                                                    day={day}
+                                                    blocks={days.find(d => d.id === day.id)?.blocks || []}
+                                                    exercises={exercises}
+                                                    onAddExercise={addExercise}
+                                                    onEditBlock={setEditingBlock}
+                                                    onRemoveBlock={removeBlock}
+                                                />
+                                            </TabsContent>
+                                        ))}
+                                    </div>
                                 </Tabs>
 
                                 {/* Mobile Floating Button to Open Catalog */}
                                 {!isCatalogOpen && (
                                     <button
                                         onClick={() => setIsCatalogOpen(true)}
-                                        className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center justify-center w-14 h-14 rounded-full bg-green-500 text-white shadow-[0_10px_40px_-10px_rgba(34,197,94,0.5)] hover:scale-110 active:scale-90 transition-all z-40"
+                                        className="fixed bottom-24 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 px-6 h-12 rounded-full bg-green-500 text-white shadow-xl hover:scale-105 active:scale-95 transition-all z-40"
                                     >
-                                        <Plus className="w-8 h-8" />
+                                        <Plus className="w-5 h-5" />
+                                        <span className="text-sm font-bold uppercase tracking-wider">Añadir Ejercicios</span>
                                     </button>
                                 )}
                             </div>
@@ -678,18 +680,21 @@ export function WeeklyPlanBuilder({
                     <Sheet open={isCatalogOpen} onOpenChange={setIsCatalogOpen} modal={false}>
                         <SheetContent 
                             side="bottom" 
-                            className="h-[50dvh] p-0 rounded-t-[2.5rem] overflow-hidden border-none shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out" 
+                            className="h-[50dvh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-card" 
                             hideOverlay
                             showCloseButton={false}
                         >
-                            <div className="w-12 h-1.5 bg-muted rounded-full mx-auto my-4 shrink-0" />
-                            <div className="flex-1 overflow-hidden px-4 pb-4">
-                                <DraggableExerciseCatalog exercises={exercises} className="border-none shadow-none h-full" />
+                            {/* Handle visual */}
+                            <div className="w-12 h-1 bg-muted-foreground/20 rounded-full mx-auto my-3 shrink-0" />
+                            
+                            <div className="flex-1 overflow-hidden">
+                                <DraggableExerciseCatalog exercises={exercises} className="border-none shadow-none h-full rounded-none bg-transparent" />
                             </div>
-                            {/* Floating close button inside the sheet */}
+
+                            {/* Botón de cerrar (X) flotante */}
                             <button 
                                 onClick={() => setIsCatalogOpen(false)}
-                                className="absolute top-4 right-6 p-2.5 rounded-full bg-card border border-border text-foreground shadow-lg hover:bg-muted transition-all active:scale-95 z-[60]"
+                                className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-background border border-border text-foreground shadow-xl hover:bg-muted transition-all active:scale-90 z-[60]"
                                 aria-label="Cerrar catálogo"
                             >
                                 <X className="w-5 h-5" />
