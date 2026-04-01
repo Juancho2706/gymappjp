@@ -8,6 +8,7 @@ import {
     closestCorners,
     KeyboardSensor,
     PointerSensor,
+    TouchSensor,
     useSensor,
     useSensors,
     type DragEndEvent,
@@ -319,7 +320,8 @@ export function WeeklyPlanBuilder({
     }, [])
 
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(PointerSensor, { activationConstraint: { distance: 10 } }),
+        useSensor(TouchSensor, { activationConstraint: { distance: 10 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     )
 
@@ -677,11 +679,11 @@ export function WeeklyPlanBuilder({
                     </DragOverlay>
 
                     {/* Mobile Exercise Catalog Sheet */}
-                    <Sheet open={isCatalogOpen} onOpenChange={setIsCatalogOpen} modal={false}>
+                    <Sheet open={isCatalogOpen} onOpenChange={setIsCatalogOpen}>
                         <SheetContent 
                             side="bottom" 
                             className="h-[50vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-card" 
-                            hideOverlay
+                            onPointerDownOutside={(e) => e.preventDefault()}
                             showCloseButton={false}
                         >
                             {/* Handle visual */}
