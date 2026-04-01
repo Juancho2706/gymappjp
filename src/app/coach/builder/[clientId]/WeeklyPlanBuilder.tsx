@@ -138,9 +138,13 @@ function SortableBlock({
                     </div>
                 </div>
 
-                <button onClick={() => onRemove(dayId, block.uid)}
-                    className="p-1 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
-                    <X className="w-3.5 h-3.5" />
+                <button onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(dayId, block.uid);
+                }}
+                    className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                    title="Quitar ejercicio">
+                    <X className="w-5 h-5 stroke-[3px]" />
                 </button>
             </div>
         </div>
@@ -463,6 +467,16 @@ export function WeeklyPlanBuilder({
         const hasExercises = days.some(d => d.blocks.length > 0)
         if (!hasExercises) { toast.error('Agrega al menos un ejercicio en algún día'); return }
 
+        // Validar que todos los ejercicios tengan series y reps válidas
+        for (const day of days) {
+            for (const block of day.blocks) {
+                if (!block.sets || block.sets < 1 || !block.reps?.trim()) {
+                    toast.error(`El ejercicio "${block.exercise_name}" en el día ${DAYS_OF_WEEK.find(d => d.id === day.id)?.name} necesita series y reps válidas`);
+                    return;
+                }
+            }
+        }
+
         startTransition(async () => {
             const payload: WorkoutProgramInput = {
                 programId: initialProgram?.id,
@@ -727,8 +741,8 @@ export function WeeklyPlanBuilder({
                                     <label className="text-[11px] font-bold uppercase text-muted-foreground">Series</label>
                                     <Input 
                                         type="number" 
-                                        value={editingBlock.sets}
-                                        onChange={e => setEditingBlock({...editingBlock, sets: parseInt(e.target.value) || 1})}
+                                        value={editingBlock.sets || ''}
+                                        onChange={e => setEditingBlock({...editingBlock, sets: e.target.value === '' ? 0 : parseInt(e.target.value) || 0})}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -791,9 +805,12 @@ export function WeeklyPlanBuilder({
 
                             <button 
                                 onClick={() => handleBlockUpdate(editingBlock)}
-                                className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity"
+                                disabled={!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()}
+                                className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Aplicar Cambios
+                                {(!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()) 
+                                    ? 'Completa los campos (Series y Reps)' 
+                                    : 'Aplicar Cambios'}
                             </button>
                         </div>
                     )}
