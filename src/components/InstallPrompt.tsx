@@ -44,11 +44,8 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
         return;
       }
 
-      // Don't show on onboarding, login or other exempt pages
-      const isExemptPage = pathname.includes('/onboarding') || 
-                          pathname.includes('/login') || 
-                          pathname.includes('/register') || 
-                          pathname.includes('/suspended');
+      // Don't show on onboarding (keep onboarding clean)
+      const isExemptPage = pathname.includes('/onboarding');
       
       if (isExemptPage) return;
 
@@ -59,7 +56,7 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
         if (stillNotStandalone) {
           setIsVisible(true);
         }
-      }, 10000); // 10 seconds delay
+      }, 2000); // 2 seconds delay (reduced from 10s for login visibility)
 
       return () => clearTimeout(timer);
     };

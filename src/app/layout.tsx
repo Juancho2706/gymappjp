@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes'
 import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 import { PwaRegister } from '@/components/PwaRegister'
 import { ScrollRestoration } from '@/components/ScrollRestoration'
+import InstallPrompt from '@/components/InstallPrompt'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -97,6 +98,7 @@ export default function RootLayout({
           <LanguageProvider>
             <PwaRegister />
             <ScrollRestoration />
+            <InstallPrompt brandName="OmniCoach" />
             {children}
             <Toaster richColors position="top-right" />
           </LanguageProvider>
