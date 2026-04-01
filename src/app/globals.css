@@ -414,28 +414,28 @@ body, main, div, nav, header, aside, section, article, p, h1, h2, h3, h4, h5, h6
    ============================================================ */
 @layer utilities {
   .pt-safe {
-    padding-top: var(--safe-area-inset-top, 0px);
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .pb-safe {
-    padding-bottom: var(--safe-area-inset-bottom, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .pl-safe {
-    padding-left: var(--safe-area-inset-left, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
   .pr-safe {
-    padding-right: var(--safe-area-inset-right, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
   .mt-safe {
-    margin-top: var(--safe-area-inset-top, 0px);
+    margin-top: env(safe-area-inset-top, 0px);
   }
   .mb-safe {
-    margin-bottom: var(--safe-area-inset-bottom, 0px);
+    margin-bottom: env(safe-area-inset-bottom, 0px);
   }
   .top-safe {
-    top: var(--safe-area-inset-top, 0px);
+    top: env(safe-area-inset-top, 0px);
   }
   .bottom-safe {
-    bottom: var(--safe-area-inset-bottom, 0px);
+    bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 
