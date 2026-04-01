@@ -9,6 +9,8 @@ export const MUSCLE_GROUPS = [
     'Cuádriceps',
     'Isquios',
     'Glúteo',
+    'Abductores',
+    'Aductores',
     'Gemelos',
     'Core',
     'Antebrazo',
