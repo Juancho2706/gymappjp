@@ -37,17 +37,11 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
     };
 
     const checkAndShow = () => {
-      const dismissedUntil = localStorage.getItem('pwa_prompt_dismissed_until');
-      const now = new Date().getTime();
+      const isDismissed = localStorage.getItem('pwa_prompt_dismissed') === 'true';
 
-      if (dismissedUntil && parseInt(dismissedUntil) > now) {
+      if (isDismissed) {
         return;
       }
-
-      // Don't show on onboarding (keep onboarding clean)
-      const isExemptPage = pathname.includes('/onboarding');
-      
-      if (isExemptPage) return;
 
       // Show after a delay to be non-intrusive and after page load
       const timer = setTimeout(() => {
@@ -87,9 +81,7 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
 
   const handleDismiss = () => {
     setIsVisible(false);
-    // Persist for 7 days
-    const sevenDaysFromNow = new Date().getTime() + (7 * 24 * 60 * 60 * 1000);
-    localStorage.setItem('pwa_prompt_dismissed_until', sevenDaysFromNow.toString());
+    localStorage.setItem('pwa_prompt_dismissed', 'true');
   };
 
   if (isStandalone || !isVisible) return null;
@@ -185,9 +177,9 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
                 </button>
                 <button
                   onClick={handleDismiss}
-                  className="px-6 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  className="px-6 py-1.5 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground transition-colors uppercase tracking-wider"
                 >
-                  Luego
+                  No volver a mostrar
                 </button>
               </div>
             </motion.div>
