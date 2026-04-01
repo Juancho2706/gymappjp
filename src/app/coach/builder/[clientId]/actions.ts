@@ -28,7 +28,7 @@ const workoutProgramSchema = z.object({
     clientId: z.string().uuid().nullable().optional(),
     programName: z.string().min(2, 'El nombre del programa es requerido').max(100),
     weeksToRepeat: z.coerce.number().int().min(1).max(52),
-    startDate: z.string().min(10, 'La fecha de inicio es requerida').nullable().optional(),
+    startDate: z.string().nullable().optional(),
     days: z.array(workoutDaySchema).min(1, 'Agrega al menos un día de entrenamiento'),
 })
 
@@ -61,6 +61,26 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
+    let startDateToUse = startDate
+
+    if (clientId) {
+        if (!startDateToUse) {
+            if (programId) {
+                // Si es un programa existente para un cliente, mantenemos su fecha o usamos hoy
+                const { data: existing } = await supabase
+                    .from('workout_programs')
+                    .select('start_date')
+                    .eq('id', programId)
+                    .maybeSingle()
+                startDateToUse = existing?.start_date || new Date().toISOString().split('T')[0]
+            } else {
+                startDateToUse = new Date().toISOString().split('T')[0]
+            }
+        }
+    } else {
+        startDateToUse = null // Plantillas no tienen fecha de inicio
+    }
+
     // Verificar que el alumno pertenezca al coach (si se proporcionó clientId)
     if (clientId) {
         const { data: client } = await supabase
@@ -77,8 +97,8 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
     // Calcular end_date si hay startDate
     let endDate = null
-    if (startDate) {
-        const start = new Date(startDate)
+    if (startDateToUse) {
+        const start = new Date(startDateToUse)
         const end = new Date(start)
         end.setDate(start.getDate() + (weeksToRepeat * 7) - 1)
         endDate = end.toISOString().split('T')[0]
@@ -94,7 +114,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                 .update({
                     name: programName,
                     weeks_to_repeat: weeksToRepeat,
-                    start_date: startDate,
+                    start_date: startDateToUse,
                     end_date: endDate,
                     updated_at: new Date().toISOString()
                 })
@@ -119,7 +139,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                     coach_id: user.id,
                     name: programName,
                     weeks_to_repeat: weeksToRepeat,
-                    start_date: startDate || null,
+                    start_date: startDateToUse,
                     end_date: endDate,
                 })
                 .select('id')
@@ -144,7 +164,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                     day_of_week: day.day_of_week,
                     title: `${programName} - Día ${day.day_of_week}`,
                     group_name: 'Programa de Entrenamiento',
-                    assigned_date: startDate || null,
+                    assigned_date: startDateToUse,
                 })
                 .select('id')
                 .single()
@@ -328,7 +348,7 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
 /**
  * Duplica una plantilla de programa y la asigna a varios clientes.
  */
-export async function assignProgramToClientsAction(templateId: string, clientIds: string[], startDate: string): Promise<{ error?: string }> {
+export async function assignProgramToClientsAction(templateId: string, clientIds: string[], startDate?: string): Promise<{ error?: string }> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
@@ -336,6 +356,8 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
     if (!clientIds.length) return { error: 'Selecciona al menos un alumno.' }
 
     const adminDb = await createRawAdminClient()
+
+    const dateToUse = startDate || new Date().toISOString().split('T')[0]
 
     try {
         // 1. Obtener plantilla
@@ -354,7 +376,7 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
 
         if (templateError || !template) throw new Error('Plantilla no encontrada.')
 
-        const start = new Date(startDate)
+        const start = new Date(dateToUse)
         const end = new Date(start)
         end.setDate(start.getDate() + (template.weeks_to_repeat * 7) - 1)
         const endDate = end.toISOString().split('T')[0]
@@ -369,7 +391,7 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
                     coach_id: user.id,
                     name: template.name,
                     weeks_to_repeat: template.weeks_to_repeat,
-                    start_date: startDate,
+                    start_date: dateToUse,
                     end_date: endDate,
                 })
                 .select('id')
@@ -388,7 +410,7 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
                         day_of_week: plan.day_of_week,
                         title: plan.title,
                         group_name: plan.group_name,
-                        assigned_date: startDate,
+                        assigned_date: dateToUse,
                     })
                     .select('id')
                     .single()

@@ -1,14 +1,20 @@
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Users, CheckCircle, Clock, Link as LinkIcon } from 'lucide-react'
+import { Users, CheckCircle, Clock, Link as LinkIcon, Calendar } from 'lucide-react'
 import { ClientsHeader } from './ClientsHeader'
 import { DeleteClientButton } from './DeleteClientButton'
 import { ToggleStatusButton } from './ToggleStatusButton'
 import { ResetPasswordButton } from './ResetPasswordButton'
 import type { Tables } from '@/lib/database.types'
+import { calculateRemainingDays } from '@/lib/utils'
 
 type Client = Tables<'clients'>
+type WorkoutProgram = Tables<'workout_programs'>
+
+interface ClientWithProgram extends Client {
+    workout_programs: Pick<WorkoutProgram, 'name' | 'start_date' | 'weeks_to_repeat' | 'is_active'>[]
+}
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -51,15 +57,14 @@ export default async function CoachClientsPage() {
         supabase.from('coaches').select('slug').eq('id', user.id).maybeSingle(),
         supabase
             .from('clients')
-            .select('*')
+            .select('*, workout_programs(name, start_date, weeks_to_repeat, is_active)')
             .eq('coach_id', user.id)
             .order('created_at', { ascending: false }),
         headers()
     ])
 
     const coach = coachResponse.data as { slug: string } | null
-    const rawClients = clientsResponse.data
-    const clients = (rawClients ?? []) as Client[]
+    const clients = (clientsResponse.data ?? []) as ClientWithProgram[]
 
     // Generate the correct base URL automatically from the request headers
     const host = headersList.get('host') || 'localhost:3000'
@@ -176,6 +181,22 @@ export default async function CoachClientsPage() {
                                                     <p className="text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-xs">
                                                         {client.email}
                                                     </p>
+                                                    {(() => {
+                                                        const activeProgram = client.workout_programs?.find(p => p.is_active);
+                                                        if (!activeProgram) return null;
+                                                        
+                                                        const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
+                                                        if (remainingDays === null) return null;
+
+                                                        return (
+                                                            <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary bg-primary/5 border border-primary/10 w-fit px-2 py-0.5 rounded-full">
+                                                                <Calendar className="w-3 h-3" />
+                                                                {remainingDays > 0 
+                                                                    ? `Quedan ${remainingDays} días de "${activeProgram.name}"`
+                                                                    : remainingDays === 0 ? 'Último día de plan' : 'Plan finalizado'}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                     <div className="mt-1.5 md:hidden">
                                                         <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
                                                     </div>

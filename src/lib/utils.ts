@@ -53,3 +53,27 @@ export function filterExercises<T extends {
     );
   });
 }
+
+/**
+ * Calcula los días restantes de un plan de entrenamiento.
+ * @param startDate Fecha de inicio (string o Date)
+ * @param weeksToRepeat Semanas de duración
+ * @returns Número de días restantes o null si no hay datos suficientes
+ */
+export function calculateRemainingDays(startDate: string | Date | null, weeksToRepeat: number): number | null {
+  if (!startDate || !weeksToRepeat) return null;
+  
+  const start = new Date(startDate);
+  const totalDays = weeksToRepeat * 7;
+  const endDate = new Date(start.getTime() + totalDays * 24 * 60 * 60 * 1000);
+  const today = new Date();
+  
+  // Resetear horas para cálculo de días exactos
+  endDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  
+  const diffTime = endDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays;
+}

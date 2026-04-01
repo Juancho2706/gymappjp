@@ -27,7 +27,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
     GripVertical, Plus, X, Save, ArrowLeft, Search,
-    Loader2, ChevronDown, ChevronUp, Dumbbell, Copy, Calendar, Repeat, Edit2, Trash2
+    Loader2, ChevronDown, ChevronUp, Dumbbell, Copy, Repeat, Edit2, Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
@@ -266,7 +266,6 @@ export function WeeklyPlanBuilder({
     const router = useRouter()
     const [programName, setProgramName] = useState(initialProgram?.name || '')
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
-    const [startDate, setStartDate] = useState(initialProgram?.start_date || (client ? new Date().toISOString().split('T')[0] : ''))
     
     // Initialize days 1-7
     const [days, setDays] = useState<DayState[]>(() => {
@@ -429,7 +428,6 @@ export function WeeklyPlanBuilder({
 
     const handleSave = () => {
         if (!programName.trim()) { toast.error('Ingresa el nombre del programa'); return }
-        if (client && !startDate) { toast.error('Selecciona una fecha de inicio'); return }
         
         const hasExercises = days.some(d => d.blocks.length > 0)
         if (!hasExercises) { toast.error('Agrega al menos un ejercicio en algún día'); return }
@@ -440,7 +438,6 @@ export function WeeklyPlanBuilder({
                 clientId: client?.id || null,
                 programName: programName.trim(),
                 weeksToRepeat,
-                startDate: startDate || null,
                 days: days
                     .filter(d => d.blocks.length > 0)
                     .map(d => ({
@@ -520,18 +517,6 @@ export function WeeklyPlanBuilder({
                                 value={programName}
                                 onChange={e => setProgramName(e.target.value)}
                                 placeholder="Ej. Hipertrofia Funcional"
-                                className="h-10 pl-9 rounded-xl border-border/50 focus:border-primary transition-all"
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1">Fecha de Inicio</label>
-                        <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40" />
-                            <Input 
-                                type="date"
-                                value={startDate}
-                                onChange={e => setStartDate(e.target.value)}
                                 className="h-10 pl-9 rounded-xl border-border/50 focus:border-primary transition-all"
                             />
                         </div>

@@ -11,6 +11,7 @@ type NutritionPlan = Tables<'nutrition_plans'>
 import type { Metadata } from 'next'
 import { DeletePlanButton } from './DeletePlanButton'
 import { CheckInCard } from '@/components/coach/CheckInCard'
+import { calculateRemainingDays } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Alumno | OmniCoach OS' }
 
@@ -33,6 +34,13 @@ export default async function ClientDetailPage({
 
     if (!rawClient) redirect('/coach/clients')
     const client = rawClient as Client
+
+    const { data: activeProgram } = await supabase
+        .from('workout_programs')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+        .maybeSingle()
 
     const { data: rawPlans } = await supabase
         .from('workout_plans')
@@ -183,6 +191,29 @@ export default async function ClientDetailPage({
                     </Link>
                 </div>
             </div>
+
+            {/* Plan Duration Badge */}
+            {activeProgram && (() => {
+                const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
+                if (remainingDays === null) return null;
+                
+                return (
+                    <div className="mb-8 p-4 rounded-2xl bg-primary/5 border border-primary/10 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <Calendar className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-primary">
+                                {remainingDays > 0 
+                                    ? `A ${client.full_name} le quedan ${remainingDays} días de su plan "${activeProgram.name}"`
+                                    : remainingDays === 0 
+                                        ? `Hoy es el último día del plan "${activeProgram.name}" de ${client.full_name}`
+                                        : `El plan "${activeProgram.name}" de ${client.full_name} ha finalizado`}
+                            </p>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Intake Profile Card */}
             {(() => {

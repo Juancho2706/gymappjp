@@ -3,7 +3,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Search, Dumbbell, User, Calendar, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, Loader2, ArrowRight, Eye, Filter, Check } from 'lucide-react'
+import { Plus, Search, Dumbbell, User, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, Loader2, ArrowRight, Eye, Filter, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -75,7 +75,6 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     const [isAssignOpen, setIsAssignOpen] = useState(false)
     const [selectedProgram, setSelectedProgram] = useState<Program | null>(null)
     const [selectedClients, setSelectedClients] = useState<string[]>([])
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
     const [isPending, startTransition] = useTransition()
     const [isPreviewOpen, setIsPreviewOpen] = useState(false)
     const [programToPreview, setProgramToPreview] = useState<Program | null>(null)
@@ -90,13 +89,13 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     })
 
     const handleAssign = () => {
-        if (!selectedProgram || selectedClients.length === 0 || !startDate) {
-            toast.error('Selecciona al menos un alumno y la fecha')
+        if (!selectedProgram || selectedClients.length === 0) {
+            toast.error('Selecciona al menos un alumno')
             return
         }
 
         startTransition(async () => {
-            const result = await assignProgramToClientsAction(selectedProgram.id, selectedClients, startDate)
+            const result = await assignProgramToClientsAction(selectedProgram.id, selectedClients)
             if (result.error) {
                 toast.error(result.error)
             } else {
@@ -279,14 +278,6 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Fecha de Inicio</label>
-                            <Input 
-                                type="date" 
-                                value={startDate} 
-                                onChange={e => setStartDate(e.target.value)}
-                            />
-                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsAssignOpen(false)}>Cancelar</Button>
@@ -404,7 +395,6 @@ function ProgramCard({ program, viewMode, onAssign, onDuplicate, onDelete, onPre
                 <CardTitle className="line-clamp-1">{program.name}</CardTitle>
                 <CardDescription className="flex flex-col gap-1 mt-2">
                     <span className="flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5" />
                         {program.weeks_to_repeat} semanas
                     </span>
                     <span className="flex items-center gap-2 truncate">
