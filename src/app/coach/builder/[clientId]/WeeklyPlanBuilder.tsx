@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useCallback, useTransition, useMemo } from 'react'
+import { useState, useCallback, useTransition, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     DndContext,
     closestCenter,
+    closestCorners,
     KeyboardSensor,
     PointerSensor,
     useSensor,
@@ -27,7 +28,9 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
     GripVertical, Plus, X, Save, ArrowLeft, Search,
-    Loader2, ChevronDown, ChevronUp, Dumbbell, Copy, Repeat, Edit2, Trash2
+    Loader2, ChevronDown, ChevronUp, Dumbbell, Copy, Repeat, Edit2, Trash2,
+    LayoutGrid,
+    List
 } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
@@ -39,6 +42,7 @@ import { saveWorkoutProgramAction, type WorkoutProgramInput } from './actions'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { toast } from 'sonner'
+import { AnimatePresence, motion } from 'framer-motion'
 
 type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
@@ -303,6 +307,16 @@ export function WeeklyPlanBuilder({
     const [activeData, setActiveData] = useState<any>(null)
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
     const [isPending, startTransition] = useTransition()
+    const [isMobile, setIsMobile] = useState<boolean>(false)
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+        const checkMobile = () => setIsMobile(window.innerWidth < 768)
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -506,11 +520,14 @@ export function WeeklyPlanBuilder({
     }, [activeId, activeData])
 
     return (
-        <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-background">
+        <div className={cn(
+            "flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-background transition-transform duration-500 ease-in-out",
+            isCatalogOpen && "-translate-y-[180px] md:translate-y-0"
+        )}>
             {/* Header Area */}
             <div className={cn(
-                "flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0 transition-all duration-300",
-                isCatalogOpen && "h-0 p-0 overflow-hidden md:h-auto md:p-6 md:flex"
+                "flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0 transition-opacity duration-500 ease-in-out",
+                isCatalogOpen && "md:opacity-100 opacity-0 pointer-events-none md:pointer-events-auto"
             )}>
                 <div className="flex items-center gap-4">
                     <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
@@ -573,7 +590,7 @@ export function WeeklyPlanBuilder({
             <div className="flex-1 overflow-hidden bg-muted/10">
                 <DndContext 
                     sensors={sensors} 
-                    collisionDetection={closestCenter} 
+                    collisionDetection={closestCorners} 
                     onDragStart={handleDragStart}
                     onDragOver={handleDragOver}
                     onDragEnd={handleDragEnd}
@@ -587,7 +604,7 @@ export function WeeklyPlanBuilder({
                         <div className="flex-1 overflow-hidden flex flex-col">
                             {/* Desktop View: Horizontal Scroll Board */}
                             <div className="hidden md:flex gap-4 h-full p-6 overflow-x-auto">
-                                {DAYS_OF_WEEK.map(day => (
+                                {mounted && !isMobile && DAYS_OF_WEEK.map(day => (
                                     <DayColumn
                                         key={day.id}
                                         day={day}
@@ -603,7 +620,10 @@ export function WeeklyPlanBuilder({
                             {/* Mobile View: Tabs + Catalog Trigger */}
                             <div className="flex md:hidden flex-col h-full relative">
                                 <Tabs defaultValue="1" className="flex-1 flex flex-col">
-                                    <TabsList className="flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2">
+                                    <TabsList className={cn(
+                                        "flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2 transition-transform duration-500 ease-in-out z-10",
+                                        isCatalogOpen && "translate-y-0"
+                                    )}>
                                         {DAYS_OF_WEEK.map(day => (
                                             <TabsTrigger 
                                                 key={day.id} 
@@ -614,7 +634,7 @@ export function WeeklyPlanBuilder({
                                             </TabsTrigger>
                                         ))}
                                     </TabsList>
-                                    {DAYS_OF_WEEK.map(day => (
+                                    {mounted && isMobile && DAYS_OF_WEEK.map(day => (
                                         <TabsContent 
                                             key={day.id} 
                                             value={day.id.toString()} 
@@ -636,10 +656,9 @@ export function WeeklyPlanBuilder({
                                 {!isCatalogOpen && (
                                     <button
                                         onClick={() => setIsCatalogOpen(true)}
-                                        className="absolute bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-primary-foreground shadow-2xl hover:scale-105 active:scale-95 transition-all z-20"
+                                        className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center justify-center w-14 h-14 rounded-full bg-green-500 text-white shadow-[0_10px_40px_-10px_rgba(34,197,94,0.5)] hover:scale-110 active:scale-90 transition-all z-40"
                                     >
-                                        <Plus className="w-5 h-5" />
-                                        <span className="text-sm font-bold">Ver Ejercicios</span>
+                                        <Plus className="w-8 h-8" />
                                     </button>
                                 )}
                             </div>
@@ -659,18 +678,18 @@ export function WeeklyPlanBuilder({
                     <Sheet open={isCatalogOpen} onOpenChange={setIsCatalogOpen} modal={false}>
                         <SheetContent 
                             side="bottom" 
-                            className="h-[75vh] p-0 rounded-t-3xl overflow-hidden border-none shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] z-50 flex flex-col" 
+                            className="h-[50vh] p-0 rounded-t-[2.5rem] overflow-hidden border-none shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out" 
                             hideOverlay
                             showCloseButton={false}
                         >
                             <div className="w-12 h-1.5 bg-muted rounded-full mx-auto my-4 shrink-0" />
-                            <div className="flex-1 overflow-hidden px-4 pb-8">
+                            <div className="flex-1 overflow-hidden px-4 pb-4">
                                 <DraggableExerciseCatalog exercises={exercises} className="border-none shadow-none h-full" />
                             </div>
                             {/* Floating close button inside the sheet */}
                             <button 
                                 onClick={() => setIsCatalogOpen(false)}
-                                className="absolute top-4 right-4 p-2 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
+                                className="absolute top-4 right-6 p-2 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
                             >
                                 <X className="w-5 h-5" />
                             </button>
