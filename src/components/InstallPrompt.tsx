@@ -45,11 +45,7 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
 
       // Show after a delay to be non-intrusive and after page load
       const timer = setTimeout(() => {
-        // Double check standalone state to avoid flicker
-        const stillNotStandalone = !(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
-        if (stillNotStandalone) {
-          setIsVisible(true);
-        }
+        setIsVisible(true);
       }, 2000); // 2 seconds delay (reduced from 10s for login visibility)
 
       return () => clearTimeout(timer);
@@ -84,7 +80,7 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
     localStorage.setItem('pwa_prompt_dismissed', 'true');
   };
 
-  if (isStandalone || !isVisible) return null;
+  if (!isVisible) return null;
 
   return (
     <AnimatePresence>
@@ -169,12 +165,18 @@ export default function InstallPrompt({ brandName = 'App' }: InstallPromptProps)
               </div>
 
               <div className="flex flex-col gap-2 shrink-0">
-                <button
-                  onClick={handleInstallClick}
-                  className="px-6 py-2.5 bg-theme text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:opacity-90 transition-all active:scale-95 btn-theme"
-                >
-                  Instalar
-                </button>
+                {deferredPrompt ? (
+                  <button
+                    onClick={handleInstallClick}
+                    className="px-6 py-2.5 bg-theme text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:opacity-90 transition-all active:scale-95 btn-theme"
+                  >
+                    Instalar
+                  </button>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground/60 text-center max-w-[120px] font-medium italic">
+                    {isStandalone ? 'Ya instalada' : 'No disponible'}
+                  </p>
+                )}
                 <button
                   onClick={handleDismiss}
                   className="px-6 py-1.5 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground transition-colors uppercase tracking-wider"
