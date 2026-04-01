@@ -340,7 +340,12 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                                 {availableClients.map((client) => (
                                                     <CommandItem
                                                         key={client.id}
+                                                        value={client.full_name}
                                                         onSelect={() => toggleClient(client.id)}
+                                                        onPointerDown={(e) => {
+                                                            e.preventDefault();
+                                                            toggleClient(client.id);
+                                                        }}
                                                         className="cursor-pointer"
                                                     >
                                                         <div className={cn(

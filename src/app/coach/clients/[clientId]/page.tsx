@@ -5,11 +5,9 @@ import { ArrowLeft, Plus, Calendar, Dumbbell, Apple, Pencil } from 'lucide-react
 import type { Tables } from '@/lib/database.types'
 
 type Client = Tables<'clients'>
-type WorkoutPlan = Tables<'workout_plans'>
 type CheckIn = Tables<'check_ins'>
 type NutritionPlan = Tables<'nutrition_plans'>
 import type { Metadata } from 'next'
-import { DeletePlanButton } from './DeletePlanButton'
 import { CheckInCard } from '@/components/coach/CheckInCard'
 import { calculateRemainingDays } from '@/lib/utils'
 
@@ -37,26 +35,14 @@ export default async function ClientDetailPage({
 
     const { data: activeProgram } = await supabase
         .from('workout_programs')
-        .select('*')
+        .select(`
+            *,
+            workout_plans (id)
+        `)
         .eq('client_id', clientId)
         .eq('is_active', true)
         .maybeSingle()
 
-    const { data: rawPlans } = await supabase
-        .from('workout_plans')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('assigned_date', { ascending: false })
-
-    const plans = (rawPlans ?? []) as WorkoutPlan[]
-
-    // Group plans by group_name
-    const groupedPlans = plans.reduce<Record<string, WorkoutPlan[]>>((acc, plan) => {
-        const group = plan.group_name || 'Sin grupo'
-        if (!acc[group]) acc[group] = []
-        acc[group].push(plan)
-        return acc
-    }, {})
 
     const { data: rawNutrition } = await supabase
         .from('nutrition_plans')
@@ -407,52 +393,53 @@ export default async function ClientDetailPage({
                         )}
                     </div>
 
-                    {/* Workout Plans */}
+                    {/* Workout Programs */}
                     <div>
                         <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
-                            <span>Rutinas ({plans.length})</span>
+                            <span>Rutinas</span>
                             <Link href={`/coach/builder/${clientId}`} className="text-xs text-primary hover:opacity-80 flex items-center gap-1">
                                 <Plus className="w-3 h-3" /> Nueva
                             </Link>
                         </h2>
 
-                        {plans.length === 0 ? (
+                        {!activeProgram ? (
                             <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
                                 <Dumbbell className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
-                                <p className="text-muted-foreground text-sm mb-4">Sin rutinas asignadas</p>
+                                <p className="text-muted-foreground text-sm mb-4">Sin programa activo</p>
                             </div>
                         ) : (
-                            <div className="space-y-6">
-                                {Object.entries(groupedPlans).map(([groupName, plansInGroup]) => (
-                                    <div key={groupName} className="space-y-3">
-                                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">
-                                            {groupName}
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {plansInGroup.map(plan => (
-                                                <div key={plan.id}
-                                                    className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/20 transition-colors shadow-sm">
-                                                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
-                                                        <Dumbbell className="w-5 h-5 text-primary" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-foreground truncate">{plan.title}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <Link 
-                                                            href={`/coach/builder/${clientId}?planId=${plan.id}`}
-                                                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                                            title="Editar rutina"
-                                                        >
-                                                            <Pencil className="w-4 h-4" />
-                                                        </Link>
-                                                        <DeletePlanButton planId={plan.id} clientId={clientId} planTitle={plan.title} />
-                                                    </div>
-                                                </div>
-                                            ))}
+                            <div className="bg-card border border-primary/20 rounded-2xl p-5 shadow-sm">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                            <Dumbbell className="w-5 h-5 text-primary" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold">{activeProgram.name}</h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                Programa de Entrenamiento
+                                            </p>
                                         </div>
                                     </div>
-                                ))}
+                                    <Link 
+                                        href={`/coach/builder/${clientId}?programId=${activeProgram.id}`}
+                                        className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                        title="Editar programa"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </Link>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-2 text-center">
+                                    <div className="bg-muted rounded-lg p-2">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Duración</p>
+                                        <p className="font-bold text-sm">{activeProgram.weeks_to_repeat} Semanas</p>
+                                    </div>
+                                    <div className="bg-muted rounded-lg p-2">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Entrenamientos</p>
+                                        <p className="font-bold text-sm">{(activeProgram as any).workout_plans?.length || 0} Días</p>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
