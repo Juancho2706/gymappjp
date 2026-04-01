@@ -484,6 +484,7 @@ export type Database = {
           is_active: boolean
           name: string
           protein_g: number | null
+          template_id: string | null
           updated_at: string
         }
         Insert: {
@@ -498,6 +499,7 @@ export type Database = {
           is_active?: boolean
           name: string
           protein_g?: number | null
+          template_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -512,6 +514,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           protein_g?: number | null
+          template_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -527,6 +530,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plans_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_templates"
             referencedColumns: ["id"]
           },
         ]

@@ -92,13 +92,14 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
             id: m.id,
             name: m.name,
             groups: m.template_meal_groups?.map((tg: any) => {
-                const group = tg.saved_meals;
+                const group = Array.isArray(tg.saved_meals) ? tg.saved_meals[0] : tg.saved_meals;
+                if (!group) return null;
                 return {
                     id: group.id,
                     name: group.name,
                     items: group.saved_meal_items
                 };
-            }) || []
+            }).filter(Boolean) || []
         })) || [
             { id: Date.now(), name: 'Desayuno', groups: [] }
         ]
@@ -127,7 +128,8 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
         let fats = 0
 
         group.items?.forEach(item => {
-            const food = item.food || item;
+            // Buscamos la data del alimento de forma robusta
+            const food = item.food || (Array.isArray(item.foods) ? item.foods[0] : item.foods) || item;
             const quantity = Number(item.quantity) || 0
             const unit = item.unit?.toLowerCase() || 'g'
             const factor = unit === 'g' || unit === 'ml' ? quantity / 100 : quantity

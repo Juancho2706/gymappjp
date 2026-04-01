@@ -47,7 +47,7 @@ export default async function NutritionPlansPage() {
                                 id,
                                 quantity,
                                 unit,
-                                foods (*)
+                                food:foods (*)
                             )
                         )
                     )
