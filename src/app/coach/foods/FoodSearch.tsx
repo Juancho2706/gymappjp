@@ -67,19 +67,23 @@ export function FoodSearch({ onFoodSelected }: Props) {
                     <p className="text-center py-8 text-muted-foreground text-sm italic">No se encontraron alimentos con "{searchTerm}"</p>
                 )}
                 {results.map((food) => (
-                    <div key={food.id} className="bg-card border border-border/60 hover:border-emerald-500/40 rounded-xl p-3 flex justify-between items-center gap-4 transition-colors group">
+                    <div key={food.id} className="bg-card border border-border/60 hover:border-emerald-500/40 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors group">
                         <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-sm truncate group-hover:text-emerald-600 transition-colors">{food.name}</h3>
-                            <div className="flex gap-3 mt-1">
-                                <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium">100g/u base</span>
-                                <div className="flex gap-2 text-[10px] text-muted-foreground">
-                                    <span>{food.calories}kcal</span>
+                            <h3 className="font-bold text-sm sm:text-base group-hover:text-emerald-600 transition-colors line-clamp-2 sm:line-clamp-1 leading-tight">
+                                {food.name}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5">
+                                <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium whitespace-nowrap">
+                                    100g/u base
+                                </span>
+                                <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground/80">
+                                    <span className="font-bold text-foreground/90">{food.calories} kcal</span>
                                     <span className="opacity-30">|</span>
-                                    <span>P: {food.protein_g}g</span>
+                                    <span className="whitespace-nowrap">P: <span className="font-medium text-foreground/80">{food.protein_g}g</span></span>
                                     <span className="opacity-30">|</span>
-                                    <span>C: {food.carbs_g}g</span>
+                                    <span className="whitespace-nowrap">C: <span className="font-medium text-foreground/80">{food.carbs_g}g</span></span>
                                     <span className="opacity-30">|</span>
-                                    <span>G: {food.fats_g}g</span>
+                                    <span className="whitespace-nowrap">G: <span className="font-medium text-foreground/80">{food.fats_g}g</span></span>
                                 </div>
                             </div>
                         </div>
@@ -87,7 +91,7 @@ export function FoodSearch({ onFoodSelected }: Props) {
                             <Button
                                 type="button"
                                 size="sm"
-                                className="h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-bold"
+                                className="w-full sm:w-auto h-9 sm:h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-bold shadow-sm"
                                 onClick={() => onFoodSelected(food)}
                             >
                                 Seleccionar
