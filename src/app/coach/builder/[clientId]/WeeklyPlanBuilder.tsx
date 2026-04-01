@@ -522,7 +522,7 @@ export function WeeklyPlanBuilder({
     return (
         <div className={cn(
             "flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-background transition-transform duration-500 ease-in-out",
-            isCatalogOpen && "-translate-y-[180px] md:translate-y-0"
+            isCatalogOpen && "-translate-y-[160px] md:translate-y-0"
         )}>
             {/* Header Area */}
             <div className={cn(
@@ -621,7 +621,7 @@ export function WeeklyPlanBuilder({
                             <div className="flex md:hidden flex-col h-full relative">
                                 <Tabs defaultValue="1" className="flex-1 flex flex-col">
                                     <TabsList className={cn(
-                                        "flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2 transition-transform duration-500 ease-in-out z-10",
+                                        "flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2 transition-transform duration-500 ease-in-out z-10 sticky top-0",
                                         isCatalogOpen && "translate-y-0"
                                     )}>
                                         {DAYS_OF_WEEK.map(day => (
@@ -678,7 +678,7 @@ export function WeeklyPlanBuilder({
                     <Sheet open={isCatalogOpen} onOpenChange={setIsCatalogOpen} modal={false}>
                         <SheetContent 
                             side="bottom" 
-                            className="h-[50vh] p-0 rounded-t-[2.5rem] overflow-hidden border-none shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out" 
+                            className="h-[50dvh] p-0 rounded-t-[2.5rem] overflow-hidden border-none shadow-[0_-10px_50px_-15px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out" 
                             hideOverlay
                             showCloseButton={false}
                         >
@@ -689,7 +689,8 @@ export function WeeklyPlanBuilder({
                             {/* Floating close button inside the sheet */}
                             <button 
                                 onClick={() => setIsCatalogOpen(false)}
-                                className="absolute top-4 right-6 p-2 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
+                                className="absolute top-4 right-6 p-2.5 rounded-full bg-card border border-border text-foreground shadow-lg hover:bg-muted transition-all active:scale-95 z-[60]"
+                                aria-label="Cerrar catálogo"
                             >
                                 <X className="w-5 h-5" />
                             </button>
