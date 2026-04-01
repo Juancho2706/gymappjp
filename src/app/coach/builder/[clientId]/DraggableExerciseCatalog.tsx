@@ -106,7 +106,7 @@ export function DraggableExerciseCatalog({ exercises, className }: DraggableExer
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar md:max-h-none">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-[25vh] md:max-h-none">
                 {filteredExercises.length > 0 ? (
                     filteredExercises.map(ex => (
                         <DraggableExerciseItem key={ex.id} exercise={ex} />
