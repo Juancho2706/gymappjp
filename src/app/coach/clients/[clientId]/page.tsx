@@ -165,7 +165,7 @@ export default async function ClientDetailPage({
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-3">
-                    <Link href={`/coach/nutrition-builder/${clientId}`}
+                    <Link href="/coach/nutrition-plans"
                         className="flex items-center gap-2 px-5 py-2.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm font-bold rounded-xl transition-all shadow-md">
                         <Apple className="w-4 h-4" />
                         Plan Nutricional
