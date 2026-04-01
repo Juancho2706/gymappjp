@@ -1,9 +1,10 @@
 'use client'
 
-import { useTransition, useMemo } from 'react'
+import { useTransition, useMemo, useOptimistic } from 'react'
 import { CheckCircle2, Circle, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import { Progress } from "@/components/ui/progress"
+import { toggleMealCompletion } from './actions'
 
 interface Food {
     name: string;
@@ -16,6 +17,7 @@ interface Food {
 
 interface FoodItem {
     quantity: number;
+    unit: string;
     foods: Food;
 }
 
@@ -43,10 +45,30 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
     const [isPending, startTransition] = useTransition()
     const [expandedMeals, setExpandedMeals] = useState<Record<string, boolean>>({})
 
+    const mealLogs = log?.nutrition_meal_logs || []
+    const initialCompletedIds = mealLogs.filter((ml: any) => ml.is_completed).map((ml: any) => ml.meal_id)
+
+    const [optimisticCompletedIds, addOptimisticMeal] = useOptimistic(
+        initialCompletedIds,
+        (state: string[], { mealId, isCompleted }: { mealId: string, isCompleted: boolean }) => {
+            if (isCompleted) {
+                return [...state, mealId]
+            } else {
+                return state.filter(id => id !== mealId)
+            }
+        }
+    )
+
     const handleToggleMeal = (mealId: string, currentCompleted: boolean) => {
+        const nextCompleted = !currentCompleted
+        
         startTransition(async () => {
-            const { toggleMealCompletion } = await import('./actions')
-            await toggleMealCompletion(clientId, planId, mealId, !currentCompleted, log?.id, coachSlug)
+            addOptimisticMeal({ mealId, isCompleted: nextCompleted })
+            try {
+                await toggleMealCompletion(clientId, planId, mealId, nextCompleted, log?.id, coachSlug)
+            } catch (error) {
+                console.error("Error toggling meal:", error)
+            }
         })
     }
 
@@ -54,24 +76,35 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
         setExpandedMeals(prev => ({ ...prev, [mealId]: !prev[mealId] }))
     }
 
-    const mealLogs = log?.nutrition_meal_logs || []
+    const calculateItemMacros = (item: FoodItem) => {
+        const quantity = Number(item.quantity) || 0
+        const unit = item.unit?.toLowerCase() || 'g'
+        const factor = (unit === 'g' || unit === 'ml') ? quantity / 100 : quantity
+        
+        return {
+            calories: (item.foods?.calories || 0) * factor,
+            protein: (item.foods?.protein_g || 0) * factor,
+            carbs: (item.foods?.carbs_g || 0) * factor,
+            fats: (item.foods?.fats_g || 0) * factor
+        }
+    }
 
     const dailyTotals = useMemo(() => {
-        const completedMealIds = new Set(mealLogs.filter((ml: any) => ml.is_completed).map((ml: any) => ml.meal_id))
+        const completedMealIdsSet = new Set(optimisticCompletedIds)
         
         return meals.reduce((acc, meal) => {
-            if (completedMealIds.has(meal.id)) {
+            if (completedMealIdsSet.has(meal.id)) {
                 meal.food_items.forEach(item => {
-                    const ratio = item.quantity / (item.foods?.serving_size_g || 100)
-                    acc.calories += (item.foods?.calories || 0) * ratio
-                    acc.protein += (item.foods?.protein_g || 0) * ratio
-                    acc.carbs += (item.foods?.carbs_g || 0) * ratio
-                    acc.fats += (item.foods?.fats_g || 0) * ratio
+                    const macros = calculateItemMacros(item)
+                    acc.calories += macros.calories
+                    acc.protein += macros.protein
+                    acc.carbs += macros.carbs
+                    acc.fats += macros.fats
                 })
             }
             return acc
         }, { calories: 0, protein: 0, carbs: 0, fats: 0 })
-    }, [meals, mealLogs])
+    }, [meals, optimisticCompletedIds])
 
     return (
         <div className="space-y-6">
@@ -117,15 +150,15 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
 
             <div className="space-y-3">
                 {meals.map((meal) => {
-                    const isCompleted = mealLogs.some((ml: any) => ml.meal_id === meal.id && ml.is_completed)
+                    const isCompleted = optimisticCompletedIds.includes(meal.id)
                     const isExpanded = expandedMeals[meal.id] ?? true
 
                     const mealMacros = meal.food_items.reduce((acc, item) => {
-                        const ratio = item.quantity / (item.foods?.serving_size_g || 100)
-                        acc.calories += (item.foods?.calories || 0) * ratio
-                        acc.protein += (item.foods?.protein_g || 0) * ratio
-                        acc.carbs += (item.foods?.carbs_g || 0) * ratio
-                        acc.fats += (item.foods?.fats_g || 0) * ratio
+                        const macros = calculateItemMacros(item)
+                        acc.calories += macros.calories
+                        acc.protein += macros.protein
+                        acc.carbs += macros.carbs
+                        acc.fats += macros.fats
                         return acc
                     }, { calories: 0, protein: 0, carbs: 0, fats: 0 })
 
@@ -139,7 +172,6 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
                             <div className="p-4 flex items-center gap-3">
                                 <button 
                                     onClick={() => handleToggleMeal(meal.id, isCompleted)}
-                                    disabled={isPending}
                                     className="flex-shrink-0 focus:outline-none"
                                 >
                                     {isCompleted ? (
@@ -167,7 +199,7 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
                                 <div className="px-4 pb-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                                     <div className="h-px bg-border/50 mb-3" />
                                     {meal.food_items.map((item, index) => {
-                                        const ratio = item.quantity / (item.foods?.serving_size_g || 100)
+                                        const macros = calculateItemMacros(item)
                                         return (
                                             <div key={index} className="flex flex-col gap-1.5 p-2 rounded-lg bg-muted/20 border border-border/5">
                                                 <div className="flex justify-between items-start">
@@ -175,25 +207,25 @@ export function NutritionTracker({ meals, log, planId, clientId, coachSlug, goal
                                                         {item.foods.name}
                                                     </span>
                                                     <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 ml-2 whitespace-nowrap">
-                                                        {item.quantity}{item.quantity < 10 ? ' un' : 'g'}
+                                                        {item.quantity} {item.unit || (item.quantity < 10 ? 'un' : 'g')}
                                                     </span>
                                                 </div>
                                                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
                                                     <span className="flex items-center gap-1">
                                                         <span className="w-1 h-1 rounded-full bg-orange-400" />
-                                                        {Math.round((item.foods?.calories || 0) * ratio)} kcal
+                                                        {Math.round(macros.calories)} kcal
                                                     </span>
                                                     <span className="flex items-center gap-1">
                                                         <span className="w-1 h-1 rounded-full bg-blue-400" />
-                                                        P: {Math.round(((item.foods?.protein_g || 0) * ratio) * 10) / 10}g
+                                                        P: {Math.round(macros.protein * 10) / 10}g
                                                     </span>
                                                     <span className="flex items-center gap-1">
                                                         <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                                                        C: {Math.round(((item.foods?.carbs_g || 0) * ratio) * 10) / 10}g
+                                                        C: {Math.round(macros.carbs * 10) / 10}g
                                                     </span>
                                                     <span className="flex items-center gap-1">
                                                         <span className="w-1 h-1 rounded-full bg-yellow-400" />
-                                                        G: {Math.round(((item.foods?.fats_g || 0) * ratio) * 10) / 10}g
+                                                        G: {Math.round(macros.fats * 10) / 10}g
                                                     </span>
                                                 </div>
                                             </div>
