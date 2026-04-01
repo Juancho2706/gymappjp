@@ -281,7 +281,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                         </div>
                         <div className="grid grid-cols-1 gap-3">
                             {programPlans.map((plan) => {
-                                const isPlanToday = plan.id === todayPlan?.id
+                                const isPlanToday = plan.day_of_week === todayDayOfWeek
                                 const dayName = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][(plan.day_of_week || 1) - 1]
                                 
                                 return (
