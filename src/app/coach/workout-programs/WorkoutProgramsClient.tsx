@@ -3,7 +3,10 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Search, Dumbbell, User, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, Loader2, ArrowRight, Eye, Filter, Check } from 'lucide-react'
+import { 
+    Plus, Search, Dumbbell, User, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, 
+    Loader2, ArrowRight, Eye, Filter, Check, Folder, ChevronRight, ChevronDown, Repeat
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +34,7 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { assignProgramToClientsAction, deleteWorkoutProgramAction, duplicateWorkoutProgramAction } from '../builder/[clientId]/actions'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface Program {
     id: string
@@ -72,6 +76,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [filterType, setFilterType] = useState<'all' | 'templates' | 'assigned'>('all')
     const [programs, setPrograms] = useState<Program[]>(initialPrograms)
+    const [isTemplatesOpen, setIsTemplatesOpen] = useState(true)
     const [isAssignOpen, setIsAssignOpen] = useState(false)
     const [selectedProgram, setSelectedProgram] = useState<Program | null>(null)
     const [selectedClients, setSelectedClients] = useState<string[]>([])
@@ -199,31 +204,108 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
             </div>
 
             {/* Program Sections */}
-            <div className="space-y-4">
+            <div className="space-y-8">
                 {filtered.length === 0 ? (
                     <div className="text-center py-12 bg-muted/20 rounded-xl border border-dashed">
                         <p className="text-muted-foreground">No se encontraron programas.</p>
                     </div>
                 ) : (
-                    <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-2"}>
-                        {filtered.map(program => (
-                            <ProgramCard 
-                                key={program.id} 
-                                program={program} 
-                                viewMode={viewMode}
-                                onAssign={() => {
-                                    setSelectedProgram(program)
-                                    setIsAssignOpen(true)
-                                }}
-                                onDuplicate={() => handleDuplicate(program)}
-                                onDelete={() => handleDelete(program)}
-                                onPreview={() => {
-                                    setProgramToPreview(program)
-                                    setIsPreviewOpen(true)
-                                }}
-                                isPending={isPending}
-                            />
-                        ))}
+                    <div className="space-y-8">
+                        {/* Templates Folder Section */}
+                        {(filterType === 'all' || filterType === 'templates') && (
+                            <div className="space-y-4">
+                                <button 
+                                    onClick={() => setIsTemplatesOpen(!isTemplatesOpen)}
+                                    className="flex items-center gap-3 w-full p-4 bg-primary/5 hover:bg-primary/10 rounded-xl border border-primary/20 transition-all group"
+                                >
+                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <Folder className={cn("w-5 h-5 text-primary", isTemplatesOpen ? "fill-primary/20" : "")} />
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <h3 className="font-bold text-lg">Biblioteca de Plantillas</h3>
+                                        <p className="text-xs text-muted-foreground">
+                                            {filtered.filter(p => !p.client_id).length} plantillas guardadas
+                                        </p>
+                                    </div>
+                                    {isTemplatesOpen ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
+                                </button>
+
+                                <AnimatePresence initial={false}>
+                                    {isTemplatesOpen && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2" : "space-y-2 pt-2"}>
+                                                {filtered.filter(p => !p.client_id).map(program => (
+                                                    <ProgramCard 
+                                                        key={program.id} 
+                                                        program={program} 
+                                                        viewMode={viewMode}
+                                                        onAssign={() => {
+                                                            setSelectedProgram(program)
+                                                            setIsAssignOpen(true)
+                                                        }}
+                                                        onDuplicate={() => handleDuplicate(program)}
+                                                        onDelete={() => handleDelete(program)}
+                                                        onPreview={() => {
+                                                            setProgramToPreview(program)
+                                                            setIsPreviewOpen(true)
+                                                        }}
+                                                        isPending={isPending}
+                                                    />
+                                                ))}
+                                                {filtered.filter(p => !p.client_id).length === 0 && (
+                                                    <p className="text-sm text-muted-foreground italic p-4">No hay plantillas que coincidan con la búsqueda.</p>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        )}
+
+                        {/* Active Plans Section */}
+                        {(filterType === 'all' || filterType === 'assigned') && (
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3 px-2">
+                                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                    <h3 className="font-bold text-lg">Planes Activos (Asignados)</h3>
+                                    <Badge variant="outline" className="ml-auto">
+                                        {filtered.filter(p => p.client_id).length} alumnos
+                                    </Badge>
+                                </div>
+                                
+                                <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-2"}>
+                                    {filtered.filter(p => p.client_id).map(program => (
+                                        <ProgramCard 
+                                            key={program.id} 
+                                            program={program} 
+                                            viewMode={viewMode}
+                                            onAssign={() => {
+                                                setSelectedProgram(program)
+                                                setIsAssignOpen(true)
+                                            }}
+                                            onDuplicate={() => handleDuplicate(program)}
+                                            onDelete={() => handleDelete(program)}
+                                            onPreview={() => {
+                                                setProgramToPreview(program)
+                                                setIsPreviewOpen(true)
+                                            }}
+                                            isPending={isPending}
+                                        />
+                                    ))}
+                                    {filtered.filter(p => p.client_id).length === 0 && (
+                                        <div className="col-span-full py-8 text-center bg-muted/10 rounded-xl border border-dashed">
+                                            <p className="text-sm text-muted-foreground">No hay alumnos con planes activos que coincidan con la búsqueda.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -372,12 +454,18 @@ function ProgramCard({ program, viewMode, onAssign, onDuplicate, onDelete, onPre
     }
 
     return (
-        <Card className="hover:shadow-md transition-shadow overflow-hidden group">
+        <Card className={cn(
+            "hover:shadow-md transition-all overflow-hidden group relative border-l-4",
+            program.client_id ? "border-l-green-500" : "border-l-primary"
+        )}>
             <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
                     <div className="flex gap-2">
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-2">
-                            <Dumbbell className="w-6 h-6 text-primary" />
+                        <div className={cn(
+                            "w-12 h-12 rounded-xl flex items-center justify-center mb-2",
+                            program.client_id ? "bg-green-500/10" : "bg-primary/10"
+                        )}>
+                            <Dumbbell className={cn("w-6 h-6", program.client_id ? "text-green-600" : "text-primary")} />
                         </div>
                     </div>
                     <div className="flex gap-1">
@@ -387,32 +475,39 @@ function ProgramCard({ program, viewMode, onAssign, onDuplicate, onDelete, onPre
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDuplicate} title="Duplicar">
                             <Copy className="w-4 h-4" />
                         </Button>
-                        <Badge variant={program.client_id ? "secondary" : "default"} className="font-bold">
+                        <Badge 
+                            variant={program.client_id ? "secondary" : "default"} 
+                            className={cn(
+                                "font-bold",
+                                program.client_id && "bg-green-100 text-green-700 hover:bg-green-100"
+                            )}
+                        >
                             {program.client_id ? 'Asignado' : 'Plantilla'}
                         </Badge>
                     </div>
                 </div>
-                <CardTitle className="line-clamp-1">{program.name}</CardTitle>
+                <CardTitle className="line-clamp-1 text-base">{program.name}</CardTitle>
                 <CardDescription className="flex flex-col gap-1 mt-2">
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 text-xs">
+                        <Repeat className="w-3 h-3" />
                         {program.weeks_to_repeat} semanas
                     </span>
-                    <span className="flex items-center gap-2 truncate">
-                        <User className="w-3.5 h-3.5" />
+                    <span className="flex items-center gap-2 truncate text-xs font-medium">
+                        <User className={cn("w-3.5 h-3.5", program.client_id ? "text-green-600" : "text-muted-foreground")} />
                         {program.client?.full_name || 'Sin asignar'}
                     </span>
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="flex gap-2">
-                    <Button onClick={onAssign} className="flex-1 gap-2" size="sm">
+                    <Button onClick={onAssign} className={cn("flex-1 gap-2", program.client_id && "bg-green-600 hover:bg-green-700")} size="sm">
                         <User className="w-4 h-4" />
                         {program.client_id ? 'Re-asignar' : 'Asignar'}
                     </Button>
                     <Link href={program.client_id ? `/coach/builder/${program.client_id}?programId=${program.id}` : `/coach/workout-programs/builder?programId=${program.id}`} className="flex-1">
                         <Button variant="secondary" className="w-full" size="sm">Editar</Button>
                     </Link>
-                    <Button variant="ghost" size="icon" onClick={onDelete} className="text-muted-foreground hover:text-destructive">
+                    <Button variant="ghost" size="icon" onClick={onDelete} className="text-muted-foreground hover:text-destructive h-9 w-9 shrink-0">
                         <Trash2 className="w-4 h-4" />
                     </Button>
                 </div>

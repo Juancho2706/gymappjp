@@ -108,6 +108,36 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
         let finalProgramId = programId
 
         if (finalProgramId) {
+            // Obtener estado actual del programa para validaciones
+            const { data: currentProgram } = await adminDb
+                .from('workout_programs')
+                .select('name, client_id')
+                .eq('id', finalProgramId)
+                .single()
+
+            if (currentProgram) {
+                // 1. Validar que no se cambie el nombre si ya está asignado
+                if (currentProgram.client_id && currentProgram.name !== programName) {
+                    return { error: 'No se puede cambiar el nombre de un programa ya asignado a un alumno.' }
+                }
+
+                // 2. Validar unicidad de nombre si es una plantilla (ahora o antes)
+                if (!clientId) {
+                    const { data: existingName } = await adminDb
+                        .from('workout_programs')
+                        .select('id')
+                        .eq('coach_id', user.id)
+                        .eq('name', programName)
+                        .is('client_id', null)
+                        .neq('id', finalProgramId)
+                        .maybeSingle()
+
+                    if (existingName) {
+                        return { error: `Ya tienes una plantilla guardada con el nombre "${programName}".` }
+                    }
+                }
+            }
+
             // Actualizar programa existente
             const { error: updateError } = await adminDb
                 .from('workout_programs')
@@ -131,6 +161,21 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
             if (deleteError) throw new Error('Error al limpiar planes antiguos.')
         } else {
+            // Validar unicidad de nombre si es una nueva plantilla
+            if (!clientId) {
+                const { data: existingName } = await adminDb
+                    .from('workout_programs')
+                    .select('id')
+                    .eq('coach_id', user.id)
+                    .eq('name', programName)
+                    .is('client_id', null)
+                    .maybeSingle()
+
+                if (existingName) {
+                    return { error: `Ya tienes una plantilla guardada con el nombre "${programName}".` }
+                }
+            }
+
             // Insertar nuevo programa
             const { data: program, error: programError } = await adminDb
                 .from('workout_programs')

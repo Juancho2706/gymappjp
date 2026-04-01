@@ -278,6 +278,8 @@ export function WeeklyPlanBuilder({
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
     const [activeTab, setActiveTab] = useState('1')
     
+    const isAssigned = !!initialProgram?.client_id
+    
     // Initialize days 1-7
     const [days, setDays] = useState<DayState[]>(() => {
         const baseDays = DAYS_OF_WEEK.map(d => ({ id: d.id, blocks: [] as BuilderBlock[] }))
@@ -570,14 +572,23 @@ export function WeeklyPlanBuilder({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1">Nombre del Programa</label>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1 flex items-center justify-between">
+                            Nombre del Programa
+                            {isAssigned && (
+                                <span className="text-primary normal-case font-medium">Bloqueado para planes activos</span>
+                            )}
+                        </label>
                         <div className="relative">
                             <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40" />
                             <Input 
                                 value={programName}
                                 onChange={e => setProgramName(e.target.value)}
+                                disabled={isAssigned}
                                 placeholder="Ej. Hipertrofia Funcional"
-                                className="h-10 pl-9 rounded-xl border-border/50 focus:border-primary transition-all"
+                                className={cn(
+                                    "h-10 pl-9 rounded-xl border-border/50 focus:border-primary transition-all",
+                                    isAssigned && "bg-muted/50 cursor-not-allowed opacity-80"
+                                )}
                             />
                         </div>
                     </div>
