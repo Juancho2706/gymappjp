@@ -13,9 +13,10 @@ type Exercise = Tables<'exercises'>
 
 interface DraggableExerciseItemProps {
     exercise: Exercise
+    onSelect?: (exercise: Exercise) => void
 }
 
-function DraggableExerciseItem({ exercise }: DraggableExerciseItemProps) {
+function DraggableExerciseItem({ exercise, onSelect }: DraggableExerciseItemProps) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: `catalog-${exercise.id}`,
         data: {
@@ -37,9 +38,11 @@ function DraggableExerciseItem({ exercise }: DraggableExerciseItemProps) {
             style={style}
             {...listeners}
             {...attributes}
+            onClick={() => onSelect?.(exercise)}
             className={cn(
                 "p-3 rounded-lg border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group",
-                isDragging && "opacity-50 ring-2 ring-primary border-primary"
+                isDragging && "opacity-50 ring-2 ring-primary border-primary",
+                onSelect && "cursor-pointer active:scale-95 transition-transform"
             )}
         >
             <div className="flex items-center gap-3">
@@ -58,9 +61,10 @@ function DraggableExerciseItem({ exercise }: DraggableExerciseItemProps) {
 interface DraggableExerciseCatalogProps {
     exercises: Exercise[]
     className?: string
+    onSelect?: (exercise: Exercise) => void
 }
 
-export function DraggableExerciseCatalog({ exercises, className }: DraggableExerciseCatalogProps) {
+export function DraggableExerciseCatalog({ exercises, className, onSelect }: DraggableExerciseCatalogProps) {
     const [search, setSearch] = useState('')
     const [selectedMuscle, setSelectedMuscle] = useState<string>('Todos')
 
@@ -109,7 +113,7 @@ export function DraggableExerciseCatalog({ exercises, className }: DraggableExer
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-[25vh] md:max-h-none">
                 {filteredExercises.length > 0 ? (
                     filteredExercises.map(ex => (
-                        <DraggableExerciseItem key={ex.id} exercise={ex} />
+                        <DraggableExerciseItem key={ex.id} exercise={ex} onSelect={onSelect} />
                     ))
                 ) : (
                     <div className="flex flex-col items-center justify-center py-12 text-center opacity-40">

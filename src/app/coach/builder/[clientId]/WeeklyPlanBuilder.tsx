@@ -276,6 +276,7 @@ export function WeeklyPlanBuilder({
     const router = useRouter()
     const [programName, setProgramName] = useState(initialProgram?.name || '')
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
+    const [activeTab, setActiveTab] = useState('1')
     
     // Initialize days 1-7
     const [days, setDays] = useState<DayState[]>(() => {
@@ -632,7 +633,7 @@ export function WeeklyPlanBuilder({
 
                             {/* Mobile View: Tabs + Catalog Trigger */}
                             <div className="flex md:hidden flex-col h-full relative">
-                                <Tabs defaultValue="1" className="flex-1 flex flex-col overflow-hidden">
+                                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
                                     <TabsList className={cn(
                                         "flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2 z-10 sticky top-0 shrink-0 shadow-sm",
                                     )}>
@@ -703,7 +704,11 @@ export function WeeklyPlanBuilder({
                             <div className="w-12 h-1 bg-muted-foreground/20 rounded-full mx-auto my-3 shrink-0" />
                             
                             <div className="flex-1 overflow-hidden">
-                                <DraggableExerciseCatalog exercises={exercises} className="border-none shadow-none h-full rounded-none bg-transparent" />
+                                <DraggableExerciseCatalog 
+                                    exercises={exercises} 
+                                    onSelect={(ex) => addExercise(parseInt(activeTab), ex)}
+                                    className="border-none shadow-none h-full rounded-none bg-transparent" 
+                                />
                             </div>
 
                             {/* Botón de cerrar (X) flotante */}
