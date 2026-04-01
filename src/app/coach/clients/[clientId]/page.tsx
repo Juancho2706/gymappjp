@@ -337,18 +337,27 @@ export default async function ClientDetailPage({
                             <div className="space-y-3">
                                 {nutritionPlans.map(plan => (
                                     <div key={plan.id} className="bg-card border border-emerald-500/20 rounded-2xl p-5 shadow-sm">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                                                <Apple className="w-5 h-5 text-emerald-500" />
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                                                    <Apple className="w-5 h-5 text-emerald-500" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold">{plan.name}</h3>
+                                                    {plan.daily_calories && (
+                                                        <p className="text-xs font-semibold text-emerald-500">
+                                                            {plan.daily_calories} Kcal Diarias
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h3 className="font-bold">{plan.name}</h3>
-                                                {plan.daily_calories && (
-                                                    <p className="text-xs font-semibold text-emerald-500">
-                                                        {plan.daily_calories} Kcal Diarias
-                                                    </p>
-                                                )}
-                                            </div>
+                                            <Link 
+                                                href={`/coach/nutrition-builder/${clientId}?planId=${plan.id}`}
+                                                className="p-2 rounded-lg text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors"
+                                                title="Editar plan nutricional"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </Link>
                                         </div>
                                         
                                         {(plan.protein_g || plan.carbs_g || plan.fats_g) && (

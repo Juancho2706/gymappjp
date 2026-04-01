@@ -20,27 +20,37 @@ export function NutritionManagement({
     initialGroups, 
     availableClients 
 }: Props) {
-    const [view, setView] = useState<'management' | 'create-plan'>('management')
+    const [view, setView] = useState<'management' | 'create-plan' | 'edit-plan'>('management')
+    const [editingTemplate, setEditingTemplate] = useState<any>(null)
 
-    if (view === 'create-plan') {
+    if (view === 'create-plan' || view === 'edit-plan') {
         return (
             <div className="space-y-6">
                 <div className="flex items-center gap-4">
                     <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => setView('management')}
+                        onClick={() => {
+                            setView('management')
+                            setEditingTemplate(null)
+                        }}
                         className="rounded-full"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </Button>
-                    <h1 className="text-2xl font-bold">Crear Plan Global</h1>
+                    <h1 className="text-2xl font-bold">
+                        {view === 'create-plan' ? 'Crear Plan Global' : `Editar: ${editingTemplate?.name}`}
+                    </h1>
                 </div>
                 <NutritionPlanBuilder 
                     coachId={coachId} 
                     availableGroups={initialGroups} 
                     availableClients={availableClients}
-                    onCancel={() => setView('management')}
+                    initialData={editingTemplate}
+                    onCancel={() => {
+                        setView('management')
+                        setEditingTemplate(null)
+                    }}
                 />
             </div>
         )
@@ -66,6 +76,10 @@ export function NutritionManagement({
                         templates={initialTemplates} 
                         coachId={coachId}
                         onCreateClick={() => setView('create-plan')}
+                        onEditClick={(template) => {
+                            setEditingTemplate(template)
+                            setView('edit-plan')
+                        }}
                     />
                 </div>
 

@@ -53,27 +53,41 @@ interface Props {
     coachId: string
     availableGroups: MealGroup[]
     availableClients: Client[]
+    initialData?: any
     onCancel?: () => void
 }
 
-export function NutritionPlanBuilder({ coachId, availableGroups, availableClients, onCancel }: Props) {
+export function NutritionPlanBuilder({ coachId, availableGroups, availableClients, initialData, onCancel }: Props) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState('')
 
     // Plan Details
-    const [name, setName] = useState('')
-    const [description, setDescription] = useState('')
-    const [targetCalories, setTargetCalories] = useState('')
-    const [targetProtein, setTargetProtein] = useState('')
-    const [targetCarbs, setTargetCarbs] = useState('')
-    const [targetFats, setTargetFats] = useState('')
-    const [instructions, setInstructions] = useState('')
+    const [name, setName] = useState(initialData?.name || '')
+    const [description, setDescription] = useState(initialData?.description || '')
+    const [targetCalories, setTargetCalories] = useState(initialData?.daily_calories?.toString() || '')
+    const [targetProtein, setTargetProtein] = useState(initialData?.protein_g?.toString() || '')
+    const [targetCarbs, setTargetCarbs] = useState(initialData?.carbs_g?.toString() || '')
+    const [targetFats, setTargetFats] = useState(initialData?.fats_g?.toString() || '')
+    const [instructions, setInstructions] = useState(initialData?.instructions || '')
 
     // Meals & Groups
-    const [meals, setMeals] = useState<TemplateMealInput[]>([
-        { id: Date.now(), name: 'Desayuno', groups: [] }
-    ])
+    const [meals, setMeals] = useState<TemplateMealInput[]>(
+        initialData?.template_meals?.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            groups: m.template_meal_groups?.map((tg: any) => {
+                const group = tg.saved_meals;
+                return {
+                    id: group.id,
+                    name: group.name,
+                    items: group.saved_meal_items
+                };
+            }) || []
+        })) || [
+            { id: Date.now(), name: 'Desayuno', groups: [] }
+        ]
+    )
 
     // Client Selection
     const [selectedClients, setSelectedClients] = useState<string[]>([])
@@ -206,6 +220,9 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
             try {
                 console.log('[NutritionPlanBuilder] Preparing FormData');
                 const formData = new FormData()
+                if (initialData?.id) {
+                    formData.append('template_id', initialData.id)
+                }
                 formData.append('name', name)
                 formData.append('description', description)
                 formData.append('daily_calories', targetCalories)
@@ -388,7 +405,9 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                         className="w-full font-bold h-12 shadow-lg" 
                         disabled={isPending}
                     >
-                        {isPending ? 'Creando y Asignando...' : 'Crear y Asignar Plan'}
+                        {isPending 
+                            ? (initialData?.id ? 'Guardando Cambios...' : 'Creando y Asignando...') 
+                            : (initialData?.id ? 'Guardar Cambios' : 'Crear y Asignar Plan')}
                     </Button>
                 </div>
 

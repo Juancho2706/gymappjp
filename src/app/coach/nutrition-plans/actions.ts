@@ -21,7 +21,8 @@ export async function saveNutritionTemplate(
     formData: FormData
 ): Promise<TemplateFormState> {
     try {
-        console.log('[saveNutritionTemplate] Action started for coach:', coachId);
+        const templateId = formData.get('template_id') as string | null;
+        console.log('[saveNutritionTemplate] Action started for coach:', coachId, 'templateId:', templateId);
         const startTime = Date.now();
         const supabase = await createClient()
 
@@ -34,35 +35,69 @@ export async function saveNutritionTemplate(
         const instructions = formData.get('instructions') as string
         const selectedClientsStr = formData.get('selected_clients') as string // JSON array of client IDs
 
-        console.log('[saveNutritionTemplate] Basic data:', { name, caloriesStr, proteinStr, carbsStr, fatsStr });
-        console.log('[saveNutritionTemplate] Selected clients string length:', selectedClientsStr?.length);
-
         if (!name) {
             return { error: 'El nombre del plan es requerido.' }
         }
 
-        // 1. Insert Template
-        const { data: template, error: templateError } = await supabase
-            .from('nutrition_plan_templates')
-            .insert({
-                coach_id: coachId,
-                name,
-                description: description || null,
-                daily_calories: safeParseInt(caloriesStr),
-                protein_g: safeParseInt(proteinStr),
-                carbs_g: safeParseInt(carbsStr),
-                fats_g: safeParseInt(fatsStr),
-                instructions: instructions || null,
-            })
-            .select('id')
-            .single()
+        let currentTemplateId = templateId;
 
-        if (templateError || !template) {
-            console.error('[saveNutritionTemplate] Save Template Error:', templateError)
-            return { error: templateError ? (templateError.message || 'Error al guardar la plantilla del plan.') : 'Error al guardar la plantilla del plan.' }
+        if (templateId) {
+            // 1a. Update Existing Template
+            const { error: updateError } = await supabase
+                .from('nutrition_plan_templates')
+                .update({
+                    name,
+                    description: description || null,
+                    daily_calories: safeParseInt(caloriesStr),
+                    protein_g: safeParseInt(proteinStr),
+                    carbs_g: safeParseInt(carbsStr),
+                    fats_g: safeParseInt(fatsStr),
+                    instructions: instructions || null,
+                })
+                .eq('id', templateId)
+                .eq('coach_id', coachId)
+
+            if (updateError) {
+                console.error('[saveNutritionTemplate] Update Template Error:', updateError)
+                return { error: 'Error al actualizar la plantilla del plan.' }
+            }
+
+            // Clean up old meals and groups for this template
+            // We'll delete and re-insert to simplify logic
+            const { error: deleteError } = await supabase
+                .from('template_meals')
+                .delete()
+                .eq('template_id', templateId)
+
+            if (deleteError) {
+                console.error('[saveNutritionTemplate] Error cleaning up old meals:', deleteError)
+                return { error: 'Error al limpiar datos antiguos de la plantilla.' }
+            }
+        } else {
+            // 1b. Insert New Template
+            const { data: template, error: templateError } = await supabase
+                .from('nutrition_plan_templates')
+                .insert({
+                    coach_id: coachId,
+                    name,
+                    description: description || null,
+                    daily_calories: safeParseInt(caloriesStr),
+                    protein_g: safeParseInt(proteinStr),
+                    carbs_g: safeParseInt(carbsStr),
+                    fats_g: safeParseInt(fatsStr),
+                    instructions: instructions || null,
+                })
+                .select('id')
+                .single()
+
+            if (templateError || !template) {
+                console.error('[saveNutritionTemplate] Save Template Error:', templateError)
+                return { error: templateError ? (templateError.message || 'Error al guardar la plantilla del plan.') : 'Error al guardar la plantilla del plan.' }
+            }
+            currentTemplateId = template.id;
         }
 
-        console.log('[saveNutritionTemplate] Template created with ID:', template.id);
+        console.log('[saveNutritionTemplate] Template ID to use:', currentTemplateId);
 
         // 2. Extract and Insert Meals
         let i = 0
@@ -79,15 +114,13 @@ export async function saveNutritionTemplate(
             mealsToProcess.push({ name: mealName, groups });
             i++
         }
-        console.log('[saveNutritionTemplate] Meals to process:', JSON.stringify(mealsToProcess, null, 2));
 
         for (let i = 0; i < mealsToProcess.length; i++) {
             const mealData = mealsToProcess[i];
-            console.log(`[saveNutritionTemplate] Inserting meal ${i}: ${mealData.name}`);
             const { data: meal, error: mealError } = await supabase
                 .from('template_meals')
                 .insert({
-                    template_id: template.id,
+                    template_id: currentTemplateId!,
                     name: mealData.name,
                     order_index: i
                 })
@@ -95,33 +128,64 @@ export async function saveNutritionTemplate(
                 .single()
 
             if (mealError || !meal) {
-                console.error(`[saveNutritionTemplate] Save Template Meal Error (meal ${i}):`, mealError)
                 return { error: `Error al guardar la comida ${mealData.name}: ${mealError?.message || 'Error desconocido'}` }
             }
 
             for (let j = 0; j < mealData.groups.length; j++) {
                 const savedMealId = mealData.groups[j];
-                console.log(`[saveNutritionTemplate] Adding group ${j} (ID: ${savedMealId}) to meal ${i}`);
-                const { error: groupError } = await supabase.from('template_meal_groups').insert({
+                await supabase.from('template_meal_groups').insert({
                     template_meal_id: meal.id,
                     saved_meal_id: savedMealId,
                     order_index: j
                 })
-                if (groupError) {
-                    console.error(`[saveNutritionTemplate] Error inserting template_meal_group:`, groupError);
-                    return { error: `Error al asignar grupo a la comida ${mealData.name}: ${groupError.message}` }
+            }
+        }
+
+        // 3. Propagation or Mass Assignment
+        if (templateId) {
+            // PROPAGATION: Update all active nutrition_plans linked to this template
+            const { data: fullTemplate, error: tError } = await supabase
+                .from('nutrition_plan_templates')
+                .select(`
+                    *,
+                    template_meals (
+                        *,
+                        template_meal_groups (
+                            saved_meal_id,
+                            saved_meals (
+                                *,
+                                saved_meal_items (
+                                    *,
+                                    foods (*)
+                                )
+                            )
+                        )
+                    )
+                `)
+                .eq('id', templateId)
+                .single()
+
+            if (!tError && fullTemplate) {
+                const { data: linkedPlans } = await supabase
+                    .from('nutrition_plans')
+                    .select('client_id')
+                    .eq('template_id', templateId)
+                    .eq('is_active', true)
+
+                if (linkedPlans && linkedPlans.length > 0) {
+                    console.log(`[saveNutritionTemplate] Propagating changes to ${linkedPlans.length} active plans`);
+                    await Promise.all(
+                        linkedPlans.map(p => assignTemplateToClientWithData(fullTemplate, p.client_id, coachId))
+                    );
                 }
             }
         }
 
-        // 3. Mass Assignment to Clients
         if (selectedClientsStr) {
             try {
                 const clientIds: string[] = JSON.parse(selectedClientsStr)
-                console.log(`[saveNutritionTemplate] Assigning template ${template.id} to ${clientIds.length} clients`)
                 if (clientIds.length > 0) {
-                    // Get Template Data ONCE
-                    const { data: fullTemplate, error: tError } = await supabase
+                    const { data: fullTemplate } = await supabase
                         .from('nutrition_plan_templates')
                         .select(`
                             *,
@@ -139,36 +203,26 @@ export async function saveNutritionTemplate(
                                 )
                             )
                         `)
-                        .eq('id', template.id)
+                        .eq('id', currentTemplateId!)
                         .single()
 
-                    if (tError || !fullTemplate) {
-                        console.error('Error fetching full template for assignment:', tError)
-                        return { error: 'Plantilla creada pero hubo un error al obtenerla para asignación.' }
+                    if (fullTemplate) {
+                        await Promise.all(
+                            clientIds.map(clientId => assignTemplateToClientWithData(fullTemplate, clientId, coachId))
+                        );
                     }
-
-                    // For each client, we create a real nutrition_plan based on this template
-                    console.log(`[saveNutritionTemplate] Starting parallel assignment for ${clientIds.length} clients`);
-                    const assignmentResults = await Promise.all(
-                        clientIds.map(clientId => assignTemplateToClientWithData(fullTemplate, clientId, coachId))
-                    );
-                    
-                    const errors = assignmentResults.filter(r => r !== null);
-                    if (errors.length > 0) {
-                        console.error(`[saveNutritionTemplate] Some assignments failed:`, errors);
-                        // No retornamos error aquí porque el template y las comidas ya se crearon,
-                        // pero avisamos en el log. Podríamos devolver un success parcial si quisiéramos.
-                    }
-                    console.log(`[saveNutritionTemplate] All assignments completed`);
                 }
             } catch (e) {
                 console.error('Error parsing selected clients or assigning:', e)
-                return { error: 'Error en el proceso de asignación a alumnos.' }
             }
         }
 
+        const { data: coach } = await supabase.from('coaches').select('slug').eq('id', coachId).single()
+        if (coach?.slug) {
+            revalidatePath(`/c/${coach.slug}/nutrition`)
+        }
+
         revalidatePath('/coach/nutrition-plans')
-        console.log(`[saveNutritionTemplate] Completed in ${Date.now() - startTime}ms`)
         return { success: true }
     } catch (error) {
         console.error('[saveNutritionTemplate] Unexpected error:', error)
@@ -194,6 +248,7 @@ async function assignTemplateToClientWithData(template: any, clientId: string, c
             .insert({
                 client_id: clientId,
                 coach_id: coachId,
+                template_id: template.id,
                 name: template.name,
                 daily_calories: template.daily_calories,
                 protein_g: template.protein_g,

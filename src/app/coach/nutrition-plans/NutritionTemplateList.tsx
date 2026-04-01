@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, CalendarHeart, Search, Users, Utensils, Info } from 'lucide-react'
+import { Plus, Trash2, CalendarHeart, Search, Users, Utensils, Info, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -26,9 +26,10 @@ interface Props {
     templates: Template[]
     coachId: string
     onCreateClick: () => void
+    onEditClick: (template: Template) => void
 }
 
-export function NutritionTemplateList({ templates, coachId, onCreateClick }: Props) {
+export function NutritionTemplateList({ templates, coachId, onCreateClick, onEditClick }: Props) {
     const [searchTerm, setSearchTerm] = useState('')
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
 
@@ -99,15 +100,25 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick }: Pro
                                             <p className="text-sm text-muted-foreground line-clamp-1">{template.description}</p>
                                         )}
                                     </div>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive shrink-0"
-                                        onClick={() => handleDelete(template.id)}
-                                        disabled={isDeleting === template.id}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary"
+                                            onClick={() => onEditClick(template)}
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </Button>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive"
+                                            onClick={() => handleDelete(template.id)}
+                                            disabled={isDeleting === template.id}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-4 gap-2 mb-4">

@@ -31,24 +31,41 @@ interface MealInput {
 interface Props {
     clientId: string
     coachId: string
+    initialData?: any
 }
 
-export function NutritionForm({ clientId, coachId }: Props) {
+export function NutritionForm({ clientId, coachId, initialData }: Props) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState('')
 
     // Macros & Config
-    const [name, setName] = useState('Plan Nutricional')
-    const [targetCalories, setTargetCalories] = useState('')
-    const [targetProtein, setTargetProtein] = useState('')
-    const [targetCarbs, setTargetCarbs] = useState('')
-    const [targetFats, setTargetFats] = useState('')
-    const [instructions, setInstructions] = useState('')
+    const [name, setName] = useState(initialData?.name || 'Plan Nutricional')
+    const [targetCalories, setTargetCalories] = useState(initialData?.daily_calories?.toString() || '')
+    const [targetProtein, setTargetProtein] = useState(initialData?.protein_g?.toString() || '')
+    const [targetCarbs, setTargetCarbs] = useState(initialData?.carbs_g?.toString() || '')
+    const [targetFats, setTargetFats] = useState(initialData?.fats_g?.toString() || '')
+    const [instructions, setInstructions] = useState(initialData?.instructions || '')
 
-    const [meals, setMeals] = useState<MealInput[]>([
-        { id: Date.now(), name: 'Desayuno', food_items: [] }
-    ])
+    const [meals, setMeals] = useState<MealInput[]>(
+        initialData?.nutrition_meals?.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            food_items: m.food_items?.map((fi: any) => ({
+                food_id: fi.food_id,
+                name: fi.foods?.name,
+                quantity: fi.quantity,
+                unit: fi.unit,
+                serving_size_g: fi.foods?.serving_size_g,
+                calories: fi.foods?.calories,
+                protein_g: fi.foods?.protein_g,
+                carbs_g: fi.foods?.carbs_g,
+                fats_g: fi.foods?.fats_g,
+            })) || []
+        })) || [
+            { id: Date.now(), name: 'Desayuno', food_items: [] }
+        ]
+    )
 
     const calculateItemMacros = (item: FoodItemInput) => {
         const factor = item.unit === 'u' ? item.quantity : item.quantity / (item.serving_size_g || 100);
@@ -131,6 +148,9 @@ export function NutritionForm({ clientId, coachId }: Props) {
 
         startTransition(async () => {
             const formData = new FormData()
+            if (initialData?.id) {
+                formData.append('plan_id', initialData.id)
+            }
             formData.append('name', name)
             formData.append('daily_calories', targetCalories)
             formData.append('protein_g', targetProtein)
@@ -362,7 +382,9 @@ export function NutritionForm({ clientId, coachId }: Props) {
             </div>
 
             <Button type="submit" className="w-full text-sm sm:text-base font-bold shadow-xl h-auto py-3 whitespace-normal" disabled={isPending}>
-                {isPending ? 'Guardando Plan...' : 'Asignar Plan Nutricional al Alumno'}
+                {isPending 
+                    ? (initialData?.id ? 'Guardando Cambios...' : 'Guardando Plan...') 
+                    : (initialData?.id ? 'Guardar Cambios en el Plan' : 'Asignar Plan Nutricional al Alumno')}
             </Button>
         </form>
     )

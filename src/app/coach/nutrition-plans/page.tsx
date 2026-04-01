@@ -31,7 +31,22 @@ export default async function NutritionPlansPage() {
                 *,
                 template_meals (
                     id,
-                    name
+                    name,
+                    order_index,
+                    template_meal_groups (
+                        id,
+                        order_index,
+                        saved_meals (
+                            id,
+                            name,
+                            saved_meal_items (
+                                id,
+                                quantity,
+                                unit,
+                                foods (*)
+                            )
+                        )
+                    )
                 )
             `)
             .eq('coach_id', user.id)

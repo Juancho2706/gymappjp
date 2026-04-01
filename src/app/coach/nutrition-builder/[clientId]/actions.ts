@@ -30,6 +30,8 @@ export async function saveNutritionPlan(
 ): Promise<NutritionFormState> {
     const supabase = await createClient()
 
+    const planId = formData.get('plan_id') as string | null
+
     // Extract Plan Details
     const name = formData.get('name') as string
     const caloriesStr = formData.get('daily_calories') as string
@@ -66,39 +68,66 @@ export async function saveNutritionPlan(
 
         meals.push({ 
             name: mealName, 
-            description: "", // Default empty as per current UI
+            description: "", 
             order_index: i,
             items: mealItems
         })
         i++
     }
 
-    // 1. Invalidate previous active plans
-    await supabase
-        .from('nutrition_plans')
-        .update({ is_active: false })
-        .eq('client_id', clientId)
+    let currentPlanId = planId;
 
-    // 2. Insert new plan
-    const { data: newPlan, error: planError } = await supabase
-        .from('nutrition_plans')
-        .insert({
-            client_id: clientId,
-            coach_id: coachId,
-            name,
-            daily_calories: caloriesStr ? parseInt(caloriesStr) : null,
-            protein_g: proteinStr ? parseInt(proteinStr) : null,
-            carbs_g: carbsStr ? parseInt(carbsStr) : null,
-            fats_g: fatsStr ? parseInt(fatsStr) : null,
-            instructions: instructions || null,
-            is_active: true
-        })
-        .select('id')
-        .single()
+    if (planId) {
+        // Update existing plan
+        const { error: updateError } = await supabase
+            .from('nutrition_plans')
+            .update({
+                name,
+                daily_calories: caloriesStr ? parseInt(caloriesStr) : null,
+                protein_g: proteinStr ? parseInt(proteinStr) : null,
+                carbs_g: carbsStr ? parseInt(carbsStr) : null,
+                fats_g: fatsStr ? parseInt(fatsStr) : null,
+                instructions: instructions || null,
+            })
+            .eq('id', planId)
+            .eq('coach_id', coachId)
 
-    if (planError || !newPlan) {
-        console.error('Save Nutrition Plan Error:', planError)
-        return { error: 'Error al guardar el plan nutricional.' }
+        if (updateError) {
+            console.error('Update Nutrition Plan Error:', updateError)
+            return { error: 'Error al actualizar el plan nutricional.' }
+        }
+
+        // Clean up old meals
+        await supabase.from('nutrition_meals').delete().eq('plan_id', planId)
+    } else {
+        // 1. Invalidate previous active plans
+        await supabase
+            .from('nutrition_plans')
+            .update({ is_active: false })
+            .eq('client_id', clientId)
+
+        // 2. Insert new plan
+        const { data: newPlan, error: planError } = await supabase
+            .from('nutrition_plans')
+            .insert({
+                client_id: clientId,
+                coach_id: coachId,
+                name,
+                daily_calories: caloriesStr ? parseInt(caloriesStr) : null,
+                protein_g: proteinStr ? parseInt(proteinStr) : null,
+                carbs_g: carbsStr ? parseInt(carbsStr) : null,
+                fats_g: fatsStr ? parseInt(fatsStr) : null,
+                instructions: instructions || null,
+                is_active: true
+            })
+            .select('id')
+            .single()
+
+        if (planError || !newPlan) {
+            console.error('Save Nutrition Plan Error:', planError)
+            return { error: 'Error al guardar el plan nutricional.' }
+        }
+        currentPlanId = newPlan.id;
     }
 
     // 3. Insert meals and their items
@@ -106,7 +135,7 @@ export async function saveNutritionPlan(
         const { data: insertedMeal, error: mealError } = await supabase
             .from('nutrition_meals')
             .insert({
-                plan_id: newPlan.id,
+                plan_id: currentPlanId!,
                 name: meal.name,
                 description: meal.description,
                 order_index: meal.order_index
@@ -114,10 +143,7 @@ export async function saveNutritionPlan(
             .select('id')
             .single()
 
-        if (mealError || !insertedMeal) {
-            console.error('Save Meal Error:', mealError)
-            continue // Or handle error more strictly
-        }
+        if (mealError || !insertedMeal) continue
 
         if (meal.items.length > 0) {
             const itemsToInsert = meal.items.map(item => ({
@@ -127,16 +153,15 @@ export async function saveNutritionPlan(
                 unit: item.unit
             }))
 
-            const { error: itemsError } = await supabase
-                .from('food_items')
-                .insert(itemsToInsert)
-
-            if (itemsError) {
-                console.error('Save Food Items Error:', itemsError)
-            }
+            await supabase.from('food_items').insert(itemsToInsert)
         }
     }
 
+    const { data: coach } = await supabase.from('coaches').select('slug').eq('id', coachId).single()
+    
     revalidatePath(`/coach/clients/${clientId}`)
+    if (coach?.slug) {
+        revalidatePath(`/c/${coach.slug}/nutrition`)
+    }
     redirect(`/coach/clients/${clientId}`)
 }
