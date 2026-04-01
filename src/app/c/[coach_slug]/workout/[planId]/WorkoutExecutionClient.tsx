@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, ChevronLeft, ChevronRight, Zap, Info, Dumbbell, Timer, Play, X, Settings } from 'lucide-react'
 import { LogSetForm } from './LogSetForm'
 import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
@@ -519,7 +519,10 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
 
                 {/* Technique Modal */}
                 <Dialog open={showTechnique} onOpenChange={setShowTechnique}>
-                    <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col">
+                    <DialogContent 
+                        showCloseButton={false}
+                        className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col focus:outline-none"
+                    >
                         {currentExercise.gif_url && (
                             <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center">
                                 <Image 
@@ -541,7 +544,12 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                         )}
                         <div className="p-6 pt-6 flex-1 overflow-y-auto custom-scrollbar">
                             <DialogHeader className="mb-4">
-                                <DialogTitle className="text-xl font-bold pr-8">{currentExercise.name}</DialogTitle>
+                                <div className="flex items-start justify-between gap-4">
+                                    <DialogTitle className="text-xl font-bold">{currentExercise.name}</DialogTitle>
+                                    <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors shrink-0">
+                                        <X className="w-5 h-5 text-muted-foreground" />
+                                    </DialogClose>
+                                </div>
                             </DialogHeader>
                             {currentExercise.instructions && currentExercise.instructions.length > 0 ? (
                                 <ol className="space-y-3">

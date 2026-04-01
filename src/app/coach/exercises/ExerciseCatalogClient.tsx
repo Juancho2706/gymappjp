@@ -7,8 +7,9 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogClose,
 } from '@/components/ui/dialog'
-import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter } from 'lucide-react'
+import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter, X } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
@@ -195,7 +196,10 @@ function ExercisePreviewModal({
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-            <DialogContent className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col focus:outline-none">
+            <DialogContent 
+                showCloseButton={false}
+                className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col focus:outline-none"
+            >
                 {/* Media demonstration area */}
                 <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-0">
                     {isYouTube && ytId ? (
@@ -224,9 +228,14 @@ function ExercisePreviewModal({
 
                 <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-extrabold text-foreground pr-6">
-                            {exercise.name}
-                        </DialogTitle>
+                        <div className="flex items-start justify-between gap-4">
+                            <DialogTitle className="text-xl font-extrabold text-foreground">
+                                {exercise.name}
+                            </DialogTitle>
+                            <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors shrink-0">
+                                <X className="w-5 h-5 text-muted-foreground" />
+                            </DialogClose>
+                        </div>
                     </DialogHeader>
 
                     {/* Badges row */}

@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Dumbbell, Search, Play, X, Info } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
@@ -150,7 +151,10 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         open={!!selectedExercise}
         onOpenChange={(open) => !open && setSelectedExercise(null)}
       >
-        <DialogContent className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col focus:outline-none">
+        <DialogContent 
+          showCloseButton={false}
+          className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col focus:outline-none"
+        >
           {selectedExercise && (
             <>
               {(selectedExercise.gif_url || selectedExercise.video_url) && (
@@ -209,9 +213,14 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
               )}
               <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
                 <DialogHeader className="mb-4">
-                  <DialogTitle className="text-xl font-bold pr-6">
-                    {selectedExercise.name}
-                  </DialogTitle>
+                  <div className="flex items-start justify-between gap-4">
+                    <DialogTitle className="text-xl font-bold">
+                      {selectedExercise.name}
+                    </DialogTitle>
+                    <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors shrink-0">
+                      <X className="w-5 h-5 text-muted-foreground" />
+                    </DialogClose>
+                  </div>
                   <p
                     className="text-sm font-bold uppercase tracking-widest mt-1"
                     style={{ color: primaryColor }}
