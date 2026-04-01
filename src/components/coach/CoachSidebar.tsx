@@ -75,7 +75,7 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
     return (
         <>
             {/* Mobile Top Header */}
-            <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
+            <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40 pt-safe">
                 <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center">
                         <Dumbbell className="w-4 h-4 text-primary" />
@@ -94,7 +94,7 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
 
             {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
             <aside className={cn(
-                "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-sidebar border-t md:border-t-0 md:border-r border-sidebar-border flex flex-col transition-all duration-300",
+                "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-sidebar border-t md:border-t-0 md:border-r border-sidebar-border flex flex-col transition-all duration-300 pb-safe",
                 isCollapsed ? "md:w-20" : "md:w-64"
             )}>
                 

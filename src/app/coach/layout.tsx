@@ -42,7 +42,7 @@ export default async function CoachLayout({
     }
 
     return (
-        <div className="flex flex-col md:flex-row min-h-screen bg-background transition-colors">
+        <div className="flex flex-col md:flex-row min-h-screen bg-background transition-colors pt-safe">
             <CoachSidebar
                 coachName={coach.full_name}
                 coachBrand={coach.brand_name}

@@ -74,7 +74,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     return (
         <div
-            className="flex flex-col md:flex-row min-h-screen antialiased bg-background text-foreground"
+            className="flex flex-col md:flex-row min-h-screen antialiased bg-background text-foreground pt-safe"
             style={{ '--theme-primary': primaryColor } as React.CSSProperties}
             data-coach-slug={coach_slug}
             data-brand-name={brandName}

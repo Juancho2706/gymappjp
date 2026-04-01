@@ -173,7 +173,7 @@ function PillNav() {
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${scrolled
+            className={`fixed top-[calc(1rem+var(--safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${scrolled
                 ? 'bg-background/80 backdrop-blur-xl border border-border shadow-2xl shadow-foreground/5'
                 : 'bg-transparent'
                 } rounded-full px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 w-[95%] sm:w-auto justify-between sm:justify-center`}
@@ -374,7 +374,7 @@ export default function LandingPage() {
             <StickyBrandingCard />
 
             {/* ── HERO ── */}
-            <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-20 pb-32">
+            <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-[calc(5rem+var(--safe-area-inset-top,0px))] pb-32">
                 {/* Background glow orbs */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
                     <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full bg-emerald-500/8 blur-[150px]" />

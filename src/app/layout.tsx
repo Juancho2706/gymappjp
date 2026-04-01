@@ -78,16 +78,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <head>
-        <meta charSet="UTF-8" />
-        <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="theme-color" content="#10B981" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="OmniCoach" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
-      </head>
       <body className={`${inter.variable} ${outfit.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"

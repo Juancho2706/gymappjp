@@ -54,6 +54,11 @@
    LIGHT MODE (Default)
    ============================================================ */
 :root {
+  --safe-area-inset-top: env(safe-area-inset-top);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom);
+  --safe-area-inset-left: env(safe-area-inset-left);
+  --safe-area-inset-right: env(safe-area-inset-right);
+
   /* Backgrounds */
   --background: #F8FAFC;
   /* slate-50 */
@@ -402,6 +407,36 @@ body, main, div, nav, header, aside, section, article, p, h1, h2, h3, h4, h5, h6
   transition-property: background-color, border-color, color, fill, stroke, box-shadow;
   transition-duration: 300ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================
+   Safe Area Utilities (Notch support)
+   ============================================================ */
+@layer utilities {
+  .pt-safe {
+    padding-top: var(--safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: var(--safe-area-inset-bottom, 0px);
+  }
+  .pl-safe {
+    padding-left: var(--safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: var(--safe-area-inset-right, 0px);
+  }
+  .mt-safe {
+    margin-top: var(--safe-area-inset-top, 0px);
+  }
+  .mb-safe {
+    margin-bottom: var(--safe-area-inset-bottom, 0px);
+  }
+  .top-safe {
+    top: var(--safe-area-inset-top, 0px);
+  }
+  .bottom-safe {
+    bottom: var(--safe-area-inset-bottom, 0px);
+  }
 }
 
 /* Immersive Workout Mode */
