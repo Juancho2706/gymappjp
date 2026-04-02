@@ -1,7 +1,5 @@
 'use client'
 
-'use client'
-
 import { useState, useTransition, useMemo } from 'react'
 import { 
     Plus, Search, Dumbbell, User, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, 
@@ -73,6 +71,10 @@ interface Program {
 interface Client {
     id: string
     full_name: string
+    workout_programs?: {
+        id: string
+        name: string
+    }[] | null
 }
 
 interface WorkoutProgramsClientProps {
@@ -95,12 +97,13 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     const [programToPreview, setProgramToPreview] = useState<Program | null>(null)
     const [clientSearch, setClientSearch] = useState('')
 
+    const [showConfirmOverwrite, setShowConfirmOverwrite] = useState(false)
+    const [clientsWithExistingPlans, setClientsWithExistingPlans] = useState<Client[]>([])
+
+    const [openPopover, setOpenPopover] = useState(false)
+
     const activeAssignedPrograms = useMemo(() => {
-        // En la sección de asignados solo queremos mostrar el programa ACTIVO de cada cliente.
-        // Asumimos que los programas asignados más recientes son los activos.
         const assigned = programs.filter(p => p.client_id)
-        
-        // Agrupar por cliente
         const programsByClient = assigned.reduce((acc, curr) => {
             if (!curr.client_id) return acc
             if (!acc[curr.client_id]) {
@@ -110,7 +113,6 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
             return acc
         }, {} as Record<string, Program[]>)
         
-        // Devolver solo el programa más reciente para cada cliente
         return Object.values(programsByClient).map(clientPrograms => {
             return clientPrograms.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
         })
@@ -125,11 +127,28 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
         return matchesSearch
     })
 
-    const handleAssign = () => {
+    const handleAssign = (force = false) => {
         if (!selectedProgram || selectedClients.length === 0) {
             toast.error('Selecciona al menos un alumno')
             return
         }
+
+        if (!force) {
+            const clientsToOverwrite = availableClients.filter(c => 
+                selectedClients.includes(c.id) && 
+                c.workout_programs && 
+                c.workout_programs.length > 0 &&
+                c.workout_programs[0].id !== selectedProgram.id
+            )
+
+            if (clientsToOverwrite.length > 0) {
+                setClientsWithExistingPlans(clientsToOverwrite)
+                setShowConfirmOverwrite(true)
+                return
+            }
+        }
+
+        setShowConfirmOverwrite(false)
 
         startTransition(async () => {
             const result = await assignProgramToClientsAction(selectedProgram.id, selectedClients)
@@ -181,6 +200,36 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
 
     return (
         <div className="space-y-6">
+            <AlertDialog open={showConfirmOverwrite} onOpenChange={setShowConfirmOverwrite}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Sobreescribir programas de entrenamiento?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Los siguientes alumnos ya tienen un programa activo:
+                            <ul className="mt-2 list-disc list-inside font-medium text-foreground">
+                                {clientsWithExistingPlans.map(c => (
+                                    <li key={c.id}>
+                                        {c.full_name} ({c.workout_programs?.[0]?.name})
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="mt-4">
+                                Si continúas, se les desactivará su programa actual y se les asignará este nuevo programa. ¿Deseas continuar?
+                            </p>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => handleAssign(true)}
+                            className="bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                            Continuar y Sobreescribir
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Biblioteca de Programas</h1>
@@ -354,16 +403,18 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Alumnos ({selectedClients.length})</label>
-                            <Popover>
-                                <PopoverTrigger>
-                                    <Button variant="outline" className="w-full justify-between font-normal h-10">
-                                        {selectedClients.length === 0 
-                                            ? "Selecciona alumnos..." 
-                                            : `${selectedClients.length} seleccionados`}
-                                        <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
+                            <Popover open={openPopover} onOpenChange={setOpenPopover}>
+                                <PopoverTrigger
+                                    className="w-full justify-between h-auto py-2 min-h-[44px] flex items-center px-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <span className="truncate">
+                                        {selectedClients.length > 0 
+                                            ? `${selectedClients.length} seleccionados`
+                                            : "Seleccionar alumnos..."}
+                                    </span>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[350px] p-0" align="start">
+                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                                     <div className="p-1 space-y-1 bg-popover rounded-lg border shadow-md">
                                         <div className="px-3 py-2 border-b flex items-center gap-2">
                                             <Search className="h-4 w-4 shrink-0 opacity-50" />
@@ -397,6 +448,11 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                                             )}
                                                         </div>
                                                         {client.full_name}
+                                                        {client.workout_programs && client.workout_programs.length > 0 && (
+                                                            <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">
+                                                                Plan: {client.workout_programs[0].name}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 ))
                                             )}
@@ -408,7 +464,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsAssignOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleAssign} disabled={isPending || selectedClients.length === 0}>
+                        <Button onClick={() => handleAssign(false)} disabled={isPending || selectedClients.length === 0}>
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                             Asignar a {selectedClients.length} Alumnos
                         </Button>
