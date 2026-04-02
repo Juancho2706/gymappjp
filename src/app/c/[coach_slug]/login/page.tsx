@@ -5,6 +5,7 @@ import Image from 'next/image'
 import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
 import type { Tables } from '@/lib/database.types'
+import InstallPrompt from '@/components/InstallPrompt'
 
 type Coach = Tables<'coaches'>
 
@@ -17,11 +18,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const supabase = await createClient()
     const { data } = await supabase
         .from('coaches')
-        .select('brand_name')
+        .select('brand_name, logo_url')
         .eq('slug', coach_slug)
         .maybeSingle()
-    const coach = data as Pick<Coach, 'brand_name'> | null
-    return { title: `Ingresar | ${coach?.brand_name ?? 'Mi Coach'}` }
+    const coach = data as Pick<Coach, 'brand_name' | 'logo_url'> | null
+    const brandName = coach?.brand_name ?? 'Mi Coach'
+
+    return {
+        title: `Ingresar | ${brandName}`,
+        manifest: `/api/manifest/${coach_slug}`,
+        appleWebApp: {
+            capable: true,
+            statusBarStyle: 'black-translucent',
+            title: brandName,
+        },
+        icons: coach?.logo_url ? {
+            apple: coach.logo_url,
+        } : undefined,
+    }
 }
 
 export default async function ClientLoginPage({ params }: Props) {
@@ -92,6 +106,8 @@ export default async function ClientLoginPage({ params }: Props) {
                     logoUrl={coach.logo_url}
                 />
             </div>
+
+            <InstallPrompt brandName={coach.brand_name} />
         </div>
     )
 }
