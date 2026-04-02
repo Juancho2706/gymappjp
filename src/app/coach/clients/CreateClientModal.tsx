@@ -109,6 +109,33 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                         )}
                     </div>
 
+                    {/* Teléfono */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="phone" className="text-sm text-foreground font-semibold">
+                            Teléfono (WhatsApp)
+                        </Label>
+                        <Input
+                            id="phone"
+                            name="phone"
+                            type="tel"
+                            placeholder="+56xxxxxxxxx"
+                            className="h-10 bg-secondary border-border text-foreground rounded-xl placeholder:text-muted-foreground/50 focus:border-primary"
+                        />
+                    </div>
+
+                    {/* Fecha de Inicio */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="subscription_start_date" className="text-sm text-foreground font-semibold">
+                            Inicio de mensualidad
+                        </Label>
+                        <Input
+                            id="subscription_start_date"
+                            name="subscription_start_date"
+                            type="date"
+                            className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary"
+                        />
+                    </div>
+
                     {/* Temp Password */}
                     <div className="space-y-1.5">
                         <Label htmlFor="temp_password" className="text-sm text-foreground font-semibold">

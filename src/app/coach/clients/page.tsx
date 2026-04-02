@@ -73,7 +73,7 @@ export default async function CoachClientsPage() {
 
     return (
         <div className="max-w-6xl animate-fade-in mb-24 md:mb-0">
-            <ClientsHeader />
+            <ClientsHeader coachSlug={coach?.slug} appUrl={appUrl} />
 
             {/* Stats bar */}
             <div className="flex overflow-x-auto pb-4 mb-4 md:grid md:grid-cols-3 md:gap-4 md:mb-8 md:overflow-visible hide-scrollbar snap-x">
@@ -136,117 +136,114 @@ export default async function CoachClientsPage() {
                         </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-border">
-                                    <th className="px-4 md:px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                        Alumno
-                                    </th>
-                                    <th className="hidden md:table-cell px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                        Estado
-                                    </th>
-                                    <th className="hidden md:table-cell px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                        Miembro desde
-                                    </th>
-                                    {coach && (
-                                        <th className="hidden lg:table-cell px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                            Link de acceso
-                                        </th>
-                                    )}
-                                    <th className="px-4 md:px-6 py-4 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                        Acciones
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {clients.map((client) => (
-                                    <tr
-                                        key={client.id}
-                                        className="hover:bg-muted/50 transition-colors group"
-                                    >
-                                        <td className="px-4 md:px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-sm font-bold text-primary">
-                                                        {client.full_name[0].toUpperCase()}
-                                                    </span>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <a href={`/coach/clients/${client.id}`} className="block hover:underline">
-                                                        <p className="text-sm font-semibold text-foreground truncate max-w-[120px] sm:max-w-xs">
-                                                            {client.full_name}
-                                                        </p>
-                                                    </a>
-                                                    <p className="text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-xs">
-                                                        {client.email}
-                                                    </p>
-                                                    {(() => {
-                                                        const activeProgram = client.workout_programs?.find(p => p.is_active);
-                                                        if (!activeProgram) return null;
-                                                        
-                                                        const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
-                                                        if (remainingDays === null) return null;
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 md:p-6 bg-transparent md:bg-card border-none md:border md:border-border rounded-2xl shadow-none md:shadow-sm">
+                        {clients.map((client) => {
+                            let subscriptionDaysRemaining = null
+                            if (client.subscription_start_date) {
+                                const start = new Date(client.subscription_start_date)
+                                const end = new Date(start)
+                                end.setMonth(end.getMonth() + 1)
+                                const diff = Math.ceil((end.getTime() - new Date().getTime()) / (1000 * 3600 * 24))
+                                subscriptionDaysRemaining = diff
+                            }
 
-                                                        return (
-                                                            <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary bg-primary/5 border border-primary/10 w-fit px-2 py-0.5 rounded-full">
-                                                                <Calendar className="w-3 h-3" />
-                                                                {remainingDays > 0 
-                                                                    ? `Quedan ${remainingDays} días de "${activeProgram.name}"`
-                                                                    : remainingDays === 0 ? 'Último día de plan' : 'Plan finalizado'}
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                    <div className="mt-1.5 md:hidden">
-                                                        <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
-                                                    </div>
-                                                </div>
+                            const loginUrl = coach && appUrl ? `${appUrl}/c/${coach.slug}/login` : ''
+                            const whatsappLink = client.phone 
+                                ? `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}, aquí tienes tu link de acceso a la app: ${loginUrl}`)}`
+                                : '#'
+
+                            return (
+                                <div
+                                    key={client.id}
+                                    className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-4 shadow-sm hover:shadow-md transition-shadow group relative"
+                                >
+                                    {/* Cabecera Tarjeta: Avatar y Nombre */}
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-lg font-bold text-primary">
+                                                    {client.full_name[0].toUpperCase()}
+                                                </span>
                                             </div>
-                                        </td>
-                                        <td className="hidden md:table-cell px-6 py-4">
-                                            <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
-                                        </td>
-                                        <td className="hidden md:table-cell px-6 py-4 text-sm text-muted-foreground">
-                                            {new Date(client.created_at).toLocaleDateString('es-AR', {
-                                                day: '2-digit',
-                                                month: 'short',
-                                                year: 'numeric',
-                                            })}
-                                        </td>
-                                        {coach && (
-                                            <td className="hidden lg:table-cell px-6 py-4">
-                                                <a
-                                                    href={`${appUrl}/c/${coach.slug}/login`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1.5 text-xs text-primary hover:opacity-80 transition-opacity"
-                                                >
-                                                    <LinkIcon className="w-3 h-3" />
-                                                    /c/{coach.slug}/login
+                                            <div className="min-w-0">
+                                                <a href={`/coach/clients/${client.id}`} className="block hover:underline truncate">
+                                                    <h3 className="text-base font-bold text-foreground truncate">
+                                                        {client.full_name}
+                                                    </h3>
                                                 </a>
-                                            </td>
-                                        )}
-                                        <td className="px-4 md:px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <ResetPasswordButton
-                                                    clientId={client.id}
-                                                    clientName={client.full_name}
-                                                />
-                                                <ToggleStatusButton
-                                                    clientId={client.id}
-                                                    clientName={client.full_name}
-                                                    isActive={client.is_active !== false}
-                                                />
-                                                <DeleteClientButton
-                                                    clientId={client.id}
-                                                    clientName={client.full_name}
-                                                />
+                                                <p className="text-xs text-muted-foreground truncate">
+                                                    {client.email}
+                                                </p>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    </div>
+
+                                    {/* Indicadores: Estado y Suscripción */}
+                                    <div className="flex flex-col gap-2 mt-1">
+                                        <div className="flex items-center gap-2">
+                                            <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
+                                            {subscriptionDaysRemaining !== null && (
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${subscriptionDaysRemaining <= 5 ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'}`}>
+                                                    {subscriptionDaysRemaining > 0 ? `${subscriptionDaysRemaining} días de mensualidad` : 'Mensualidad vencida'}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {(() => {
+                                            const activeProgram = client.workout_programs?.find(p => p.is_active);
+                                            if (!activeProgram) return null;
+                                            
+                                            const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
+                                            if (remainingDays === null) return null;
+
+                                            return (
+                                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-primary bg-primary/5 border border-primary/10 w-fit px-2 py-0.5 rounded-full mt-1">
+                                                    <Calendar className="w-3 h-3" />
+                                                    {remainingDays > 0 
+                                                        ? `Quedan ${remainingDays} días de "${activeProgram.name}"`
+                                                        : remainingDays === 0 ? 'Último día de plan' : 'Plan finalizado'}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Separador */}
+                                    <div className="h-px bg-border w-full mt-1 mb-1"></div>
+
+                                    {/* Acciones */}
+                                    <div className="flex items-center justify-between gap-2">
+                                        {client.phone && loginUrl ? (
+                                            <a
+                                                href={whatsappLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20 rounded-lg text-xs font-semibold transition-colors"
+                                            >
+                                                <span>💬</span> Enviar link
+                                            </a>
+                                        ) : (
+                                            <span className="text-[10px] text-muted-foreground/50 italic px-2">Sin WhatsApp</span>
+                                        )}
+
+                                        <div className="flex items-center gap-1 ml-auto">
+                                            <ResetPasswordButton
+                                                clientId={client.id}
+                                                clientName={client.full_name}
+                                            />
+                                            <ToggleStatusButton
+                                                clientId={client.id}
+                                                clientName={client.full_name}
+                                                isActive={client.is_active !== false}
+                                            />
+                                            <DeleteClientButton
+                                                clientId={client.id}
+                                                clientName={client.full_name}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 )}
             </div>

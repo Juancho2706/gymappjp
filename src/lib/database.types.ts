@@ -140,6 +140,8 @@ export type Database = {
           id: string
           is_active: boolean | null
           onboarding_completed: boolean
+          phone: string | null
+          subscription_start_date: string | null
           updated_at: string
         }
         Insert: {

@@ -14,6 +14,8 @@ import { z } from 'zod'
 const createClientSchema = z.object({
     full_name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
     email: z.string().email('Email inválido'),
+    phone: z.string().optional(),
+    subscription_start_date: z.string().optional(),
     temp_password: z
         .string()
         .min(8, 'La contraseña temporal debe tener al menos 8 caracteres'),
@@ -32,6 +34,8 @@ export async function createClientAction(
     const raw = {
         full_name: formData.get('full_name') as string,
         email: formData.get('email') as string,
+        phone: formData.get('phone') as string,
+        subscription_start_date: formData.get('subscription_start_date') as string,
         temp_password: formData.get('temp_password') as string,
     }
 
@@ -77,6 +81,8 @@ export async function createClientAction(
         coach_id: coach.id,
         full_name: parsed.data.full_name,
         email: parsed.data.email,
+        phone: parsed.data.phone || null,
+        subscription_start_date: parsed.data.subscription_start_date || null,
         force_password_change: true,
     })
 
