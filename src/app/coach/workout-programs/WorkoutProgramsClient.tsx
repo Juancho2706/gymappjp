@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import { 
     Plus, Search, Dumbbell, User, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, 
     Loader2, ArrowRight, Eye, Filter, Check, Folder, ChevronRight, ChevronDown, Repeat
