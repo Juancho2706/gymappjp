@@ -498,7 +498,7 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
         }
 
         revalidatePath('/coach/workout-programs')
-        return {}
+        return { success: true }
     } catch (error: any) {
         console.error('Error en assignProgramToClientsAction:', error)
         return { error: error.message }

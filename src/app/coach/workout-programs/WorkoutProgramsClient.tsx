@@ -158,7 +158,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                 toast.success('Programa asignado correctamente')
                 setIsAssignOpen(false)
                 setSelectedClients([])
-                router.refresh()
+                window.location.reload()
             }
         })
     }
