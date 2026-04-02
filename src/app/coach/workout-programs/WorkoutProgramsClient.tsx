@@ -84,12 +84,33 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     const [isPreviewOpen, setIsPreviewOpen] = useState(false)
     const [programToPreview, setProgramToPreview] = useState<Program | null>(null)
 
+    const activeAssignedPrograms = useMemo(() => {
+        // En la sección de asignados solo queremos mostrar el programa ACTIVO de cada cliente.
+        // Asumimos que los programas asignados más recientes son los activos.
+        const assigned = programs.filter(p => p.client_id)
+        
+        // Agrupar por cliente
+        const programsByClient = assigned.reduce((acc, curr) => {
+            if (!curr.client_id) return acc
+            if (!acc[curr.client_id]) {
+                acc[curr.client_id] = []
+            }
+            acc[curr.client_id].push(curr)
+            return acc
+        }, {} as Record<string, Program[]>)
+        
+        // Devolver solo el programa más reciente para cada cliente
+        return Object.values(programsByClient).map(clientPrograms => {
+            return clientPrograms.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+        })
+    }, [programs])
+
     const filtered = programs.filter((p: Program) => {
         const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
             p.client?.full_name?.toLowerCase().includes(search.toLowerCase())
         
         if (filterType === 'templates') return matchesSearch && !p.client_id
-        if (filterType === 'assigned') return matchesSearch && p.client_id
+        if (filterType === 'assigned') return matchesSearch && p.client_id && activeAssignedPrograms.some(ap => ap.id === p.id)
         return matchesSearch
     })
 
