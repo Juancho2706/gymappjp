@@ -393,7 +393,7 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
 /**
  * Duplica una plantilla de programa y la asigna a varios clientes.
  */
-export async function assignProgramToClientsAction(templateId: string, clientIds: string[], startDate?: string): Promise<{ error?: string }> {
+export async function assignProgramToClientsAction(templateId: string, clientIds: string[], startDate?: string): Promise<{ error?: string, success?: boolean }> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
