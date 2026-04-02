@@ -69,6 +69,10 @@ export const metadata: Metadata = {
   },
   metadataBase: new URL('https://omnicoach.app'),
   manifest: '/api/manifest/default',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon.svg',
+  },
 }
 
 export default function RootLayout({

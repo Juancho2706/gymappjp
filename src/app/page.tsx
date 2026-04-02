@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRef, useState, useEffect } from 'react'
 import Image from 'next/image'
+import { GymAppLogo } from '@/components/ui/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
@@ -179,9 +180,7 @@ function PillNav() {
                 } rounded-full px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 w-[95%] sm:w-auto justify-between sm:justify-center`}
         >
             <Link href="/" className="flex items-center gap-2">
-                <div className="hidden sm:flex w-8 h-8 rounded-xl bg-emerald-500/20 items-center justify-center shrink-0">
-                    <Dumbbell className="w-4 h-4 text-emerald-400" />
-                </div>
+                <GymAppLogo className="w-8 h-8" />
                 <span className="text-foreground font-bold text-sm tracking-tight">OmniCoach OS</span>
             </Link>
 
@@ -855,9 +854,7 @@ export default function LandingPage() {
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                                <Dumbbell className="w-4 h-4 text-emerald-400" />
-                            </div>
+                            <GymAppLogo className="w-8 h-8" />
                             <span className="text-foreground font-bold text-sm">OmniCoach OS</span>
                         </div>
 
