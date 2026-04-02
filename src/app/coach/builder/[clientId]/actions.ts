@@ -428,6 +428,17 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
 
         // Iterar por cada cliente
         for (const clientId of clientIds) {
+            // 2.a Eliminar programas anteriores del cliente para que solo tenga uno activo
+            const { error: deleteOldError } = await adminDb
+                .from('workout_programs')
+                .delete()
+                .eq('client_id', clientId)
+                
+            if (deleteOldError) {
+                console.error(`Error eliminando programas antiguos para el cliente ${clientId}:`, deleteOldError)
+                // Continuamos de todas formas, pero logueamos el error
+            }
+
             // 2. Duplicar programa para el cliente
             const { data: newProgram, error: newProgramError } = await adminDb
                 .from('workout_programs')

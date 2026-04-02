@@ -275,12 +275,12 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                     <h3 className="font-bold text-lg">Planes Activos (Asignados)</h3>
                                     <Badge variant="outline" className="ml-auto">
-                                        {filtered.filter(p => p.client_id).length} alumnos
+                                        {activeAssignedPrograms.length} alumnos
                                     </Badge>
                                 </div>
                                 
                                 <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-2"}>
-                                    {filtered.filter(p => p.client_id).map(program => (
+                                    {activeAssignedPrograms.map(program => (
                                         <ProgramCard 
                                             key={program.id} 
                                             program={program} 
@@ -298,7 +298,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                             isPending={isPending}
                                         />
                                     ))}
-                                    {filtered.filter(p => p.client_id).length === 0 && (
+                                    {activeAssignedPrograms.length === 0 && (
                                         <div className="col-span-full py-8 text-center bg-muted/10 rounded-xl border border-dashed">
                                             <p className="text-sm text-muted-foreground">No hay alumnos con planes activos que coincidan con la búsqueda.</p>
                                         </div>

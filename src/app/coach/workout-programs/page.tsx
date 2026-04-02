@@ -30,7 +30,14 @@ export default async function WorkoutProgramsPage() {
         
         supabase
             .from('clients')
-            .select('id, full_name')
+            .select(`
+                id, 
+                full_name,
+                workout_programs (
+                    id,
+                    name
+                )
+            `)
             .eq('coach_id', user.id)
             .eq('is_active', true)
             .order('full_name')
