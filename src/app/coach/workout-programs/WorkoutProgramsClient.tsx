@@ -83,6 +83,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     const [isPending, startTransition] = useTransition()
     const [isPreviewOpen, setIsPreviewOpen] = useState(false)
     const [programToPreview, setProgramToPreview] = useState<Program | null>(null)
+    const [clientSearch, setClientSearch] = useState('')
 
     const activeAssignedPrograms = useMemo(() => {
         // En la sección de asignados solo queremos mostrar el programa ACTIVO de cada cliente.
@@ -353,36 +354,44 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[350px] p-0" align="start">
-                                    <Command>
-                                        <CommandInput placeholder="Buscar alumno..." />
-                                        <CommandList>
-                                            <CommandEmpty>No se encontraron alumnos.</CommandEmpty>
-                                            <CommandGroup className="max-h-64 overflow-auto">
-                                                {availableClients.map((client) => (
-                                                    <CommandItem
+                                    <div className="p-1 space-y-1 bg-popover rounded-lg border shadow-md">
+                                        <div className="px-3 py-2 border-b flex items-center gap-2">
+                                            <Search className="h-4 w-4 shrink-0 opacity-50" />
+                                            <input 
+                                                className="w-full bg-transparent outline-none text-sm h-8"
+                                                placeholder="Buscar alumno..."
+                                                value={clientSearch}
+                                                onChange={(e) => setClientSearch(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="max-h-[300px] overflow-y-auto">
+                                            {availableClients.filter(c => c.full_name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 ? (
+                                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                                    No se encontraron alumnos.
+                                                </div>
+                                            ) : (
+                                                availableClients.filter(c => c.full_name.toLowerCase().includes(clientSearch.toLowerCase())).map((client) => (
+                                                    <div
                                                         key={client.id}
-                                                        value={client.full_name}
-                                                        onSelect={() => toggleClient(client.id)}
-                                                        onPointerDown={(e) => {
-                                                            e.preventDefault();
-                                                            toggleClient(client.id);
-                                                        }}
-                                                        className="cursor-pointer"
+                                                        onClick={() => toggleClient(client.id)}
+                                                        className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground transition-colors"
                                                     >
                                                         <div className={cn(
                                                             "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
                                                             selectedClients.includes(client.id)
                                                                 ? "bg-primary text-primary-foreground"
-                                                                : "opacity-50 [&_svg]:invisible"
+                                                                : "opacity-50"
                                                         )}>
-                                                            <Check className={cn("h-4 w-4")} />
+                                                            {selectedClients.includes(client.id) && (
+                                                                <Check className="h-3 w-3" />
+                                                            )}
                                                         </div>
                                                         {client.full_name}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
                                 </PopoverContent>
                             </Popover>
                         </div>
