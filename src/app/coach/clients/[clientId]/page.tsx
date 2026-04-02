@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Calendar, Dumbbell, Apple, Pencil } from 'lucide-react'
+import { ArrowLeft, Plus, Calendar, Dumbbell, Apple, Pencil, Activity } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
+import { Badge } from '@/components/ui/badge'
 
 type Client = Tables<'clients'>
 type CheckIn = Tables<'check_ins'>
@@ -140,40 +141,42 @@ export default async function ClientDetailPage({
     }).filter(p => p.hasInteracted)
 
     return (
-        <div className="max-w-5xl animate-fade-in mx-auto mb-24 md:mb-0">
+        <div className="max-w-7xl animate-fade-in mx-auto mb-24 md:mb-0 space-y-8">
             {/* Back nav */}
             <Link href="/coach/clients"
-                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
+                className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-colors mb-2 bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10">
                 <ArrowLeft className="w-3.5 h-3.5" />
-                Volver a Alumnos
+                Terminal Central
             </Link>
 
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                        <span className="text-2xl font-bold text-primary">
-                            {client.full_name[0].toUpperCase()}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-3xl rounded-full -z-10 pointer-events-none" />
+                
+                <div className="flex items-center gap-5 relative z-10">
+                    <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(0,122,255,0.2)]">
+                        <span className="text-3xl font-bold text-white uppercase" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            {client.full_name[0]}
                         </span>
                     </div>
                     <div>
-                        <h1 className="text-2xl font-extrabold text-foreground">
+                        <h1 className="text-3xl font-bold text-white uppercase tracking-tighter" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                             {client.full_name}
                         </h1>
-                        <p className="text-muted-foreground text-sm">{client.email}</p>
+                        <p className="text-primary text-[10px] font-bold uppercase tracking-[0.2em] mt-1">{client.email}</p>
                     </div>
                 </div>
                 
-                <div className="flex flex-wrap items-center gap-3">
-                    <Link href="/coach/nutrition-plans"
-                        className="flex items-center gap-2 px-5 py-2.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm font-bold rounded-xl transition-all shadow-md">
-                        <Apple className="w-4 h-4" />
+                <div className="flex flex-wrap items-center gap-3 relative z-10">
+                    <Link href={`/coach/nutrition-builder/${clientId}`}
+                        className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-md border border-white/10">
+                        <Apple className="w-4 h-4 text-emerald-400" />
                         Plan Nutricional
                     </Link>
                     <Link href={`/coach/builder/${clientId}`}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:opacity-90 text-primary-foreground text-sm font-bold rounded-xl transition-all shadow-lg shadow-primary/20">
+                        className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(0,122,255,0.4)] border border-primary">
                         <Plus className="w-4 h-4" />
-                        Nueva Rutina
+                        Nuevo Protocolo
                     </Link>
                 </div>
             </div>
@@ -184,17 +187,20 @@ export default async function ClientDetailPage({
                 if (remainingDays === null) return null;
                 
                 return (
-                    <div className="mb-8 p-4 rounded-2xl bg-primary/5 border border-primary/10 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500 shadow-[0_0_15px_rgba(0,122,255,0.1)]">
+                        <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30">
                             <Calendar className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                            <p className="text-sm font-semibold text-primary">
+                            <p className="text-xs font-bold text-white uppercase tracking-widest">
                                 {remainingDays > 0 
-                                    ? `A ${client.full_name} le quedan ${remainingDays} días de su plan "${activeProgram.name}"`
+                                    ? `Ciclo Activo: ${remainingDays} días restantes`
                                     : remainingDays === 0 
-                                        ? `Hoy es el último día del plan "${activeProgram.name}" de ${client.full_name}`
-                                        : `El plan "${activeProgram.name}" de ${client.full_name} ha finalizado`}
+                                        ? `Último Día de Protocolo`
+                                        : `Protocolo Finalizado`}
+                            </p>
+                            <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-0.5">
+                                {activeProgram.name}
                             </p>
                         </div>
                     </div>
@@ -213,38 +219,41 @@ export default async function ClientDetailPage({
                 }
                 return fetchIntake()
             })().then(intake => intake && (
-                <div className="bg-card border border-border rounded-2xl p-6 mb-12 shadow-sm">
-                    <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">Perfil del Alumno</h2>
+                <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-primary" />
+                        Biometría Base
+                    </h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        <div>
-                            <p className="text-xs text-muted-foreground mb-1">Peso</p>
-                            <p className="font-semibold">{intake.weight_kg} kg</p>
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Masa</p>
+                            <p className="text-lg font-bold text-white">{intake.weight_kg} <span className="text-xs text-zinc-500">kg</span></p>
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground mb-1">Estatura</p>
-                            <p className="font-semibold">{intake.height_cm} cm</p>
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Estatura</p>
+                            <p className="text-lg font-bold text-white">{intake.height_cm} <span className="text-xs text-zinc-500">cm</span></p>
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground mb-1">Objetivo</p>
-                            <p className="font-semibold">{intake.goals}</p>
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Target</p>
+                            <p className="text-sm font-bold text-white uppercase truncate">{intake.goals}</p>
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground mb-1">Nivel</p>
-                            <p className="font-semibold">{intake.experience_level}</p>
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Nivel</p>
+                            <p className="text-sm font-bold text-white uppercase truncate">{intake.experience_level}</p>
                         </div>
                     </div>
                     {(intake.injuries || intake.medical_conditions) && (
-                        <div className="mt-6 pt-6 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-6">
                             {intake.injuries && (
                                 <div>
-                                    <p className="text-xs text-muted-foreground mb-1">Lesiones</p>
-                                    <p className="text-sm">{intake.injuries}</p>
+                                    <p className="text-[10px] text-rose-500 font-bold uppercase tracking-[0.2em] mb-2">Lesiones Reportadas</p>
+                                    <p className="text-xs text-zinc-300 font-medium leading-relaxed">{intake.injuries}</p>
                                 </div>
                             )}
                             {intake.medical_conditions && (
                                 <div>
-                                    <p className="text-xs text-muted-foreground mb-1">Condiciones Médicas</p>
-                                    <p className="text-sm">{intake.medical_conditions}</p>
+                                    <p className="text-[10px] text-rose-500 font-bold uppercase tracking-[0.2em] mb-2">Condiciones Médicas</p>
+                                    <p className="text-xs text-zinc-300 font-medium leading-relaxed">{intake.medical_conditions}</p>
                                 </div>
                             )}
                         </div>
@@ -252,233 +261,235 @@ export default async function ClientDetailPage({
                 </div>
             ))}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mt-12">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Column 1: Routines & Nutrition */}
-                <div className="space-y-10">
+                <div className="space-y-8">
                     
-                    {/* Resumen de Actividad Reciente (Coach View) */}
-                    <div>
-                        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
-                            <span>Actividad Reciente (Workouts)</span>
-                        </h2>
-                        {workoutHistory.length === 0 ? (
-                            <div className="bg-card border border-dashed border-border rounded-2xl p-6 text-center">
-                                <p className="text-muted-foreground text-sm">El alumno aún no ha registrado entrenamientos.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {workoutHistory.slice(0, 5).map((log: any) => (
-                                    <div key={log.id} className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                    <Dumbbell className="w-5 h-5 text-primary" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold text-sm">{log.title}</p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {new Date(log.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border 
-                                                    ${log.logCount >= log.totalSets ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'}`}>
-                                                    {log.logCount} / {log.totalSets} series
-                                                </span>
-                                            </div>
-                                        </div>
+                    {/* Workout Programs */}
+                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="p-6 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Dumbbell className="w-4 h-4 text-primary" />
+                                Módulo de Entrenamiento
+                            </h2>
+                        </div>
 
-                                        {/* Detalle de pesos levantados */}
-                                        {log.exerciseLogs.length > 0 && (
-                                            <div className="bg-muted/30 rounded-lg p-3 space-y-2 border border-border/50">
-                                                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">Desempeño Destacado</p>
-                                                {log.exerciseLogs.slice(0, 3).map((exLog: any, i: number) => (
-                                                    <div key={i} className="flex items-center justify-between text-xs">
-                                                        <span className="font-medium text-foreground truncate pr-4">{exLog.exerciseName}</span>
-                                                        <div className="flex items-center gap-3 flex-shrink-0">
-                                                            <span className="text-muted-foreground">
-                                                                Sugerido: {exLog.targetWeight || '-'}kg
-                                                            </span>
-                                                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                                                                Real: {exLog.actualWeight || '-'}kg × {exLog.actualReps || '-'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {log.exerciseLogs.length > 3 && (
-                                                    <p className="text-[10px] text-muted-foreground text-center mt-2 pt-2 border-t border-border/50">
-                                                        + {log.exerciseLogs.length - 3} ejercicios más
-                                                    </p>
-                                                )}
-                                            </div>
-                                        )}
+                        <div className="p-6">
+                            {!activeProgram ? (
+                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
+                                    <Dumbbell className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin protocolo activo</p>
+                                </div>
+                            ) : (
+                                <div className="border border-primary/20 bg-primary/5 rounded-xl p-6 relative overflow-hidden group hover:border-primary/40 transition-colors">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-2xl rounded-full -z-10" />
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div>
+                                            <h3 className="font-bold text-white text-lg uppercase tracking-tight">{activeProgram.name}</h3>
+                                            <p className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mt-1">
+                                                Protocolo Maestro
+                                            </p>
+                                        </div>
+                                        <Link 
+                                            href={`/coach/builder/${clientId}?programId=${activeProgram.id}`}
+                                            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-primary hover:border-primary/30 transition-all"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </Link>
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-black/50 border border-white/5 rounded-lg p-3">
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Duración</p>
+                                            <p className="font-bold text-white text-sm">{activeProgram.weeks_to_repeat} Semanas</p>
+                                        </div>
+                                        <div className="bg-black/50 border border-white/5 rounded-lg p-3">
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Volumen</p>
+                                            <p className="font-bold text-white text-sm">{(activeProgram as any).workout_plans?.length || 0} Sesiones</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Nutrition Section */}
-                    <div>
-                        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
-                            <span>Plan Nutricional</span>
-                            <Link href={`/coach/nutrition-builder/${clientId}`} className="text-xs text-secondary hover:opacity-80 flex items-center gap-1">
-                                <Plus className="w-3 h-3" /> Nuevo
-                            </Link>
-                        </h2>
+                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="p-6 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Apple className="w-4 h-4 text-emerald-500" />
+                                Módulo Nutricional
+                            </h2>
+                        </div>
 
-                        {nutritionPlans.length === 0 ? (
-                            <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
-                                <Apple className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
-                                <p className="text-muted-foreground text-sm mb-4">Sin plan nutricional activo</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {nutritionPlans.map(plan => (
-                                    <div key={plan.id} className="bg-card border border-emerald-500/20 rounded-2xl p-5 shadow-sm">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                                                    <Apple className="w-5 h-5 text-emerald-500" />
-                                                </div>
+                        <div className="p-6">
+                            {nutritionPlans.length === 0 ? (
+                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
+                                    <Apple className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin plan nutricional</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {nutritionPlans.map(plan => (
+                                        <div key={plan.id} className="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-6 relative overflow-hidden group hover:border-emerald-500/40 transition-colors">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-2xl rounded-full -z-10" />
+                                            <div className="flex items-start justify-between mb-6">
                                                 <div>
-                                                    <h3 className="font-bold">{plan.name}</h3>
+                                                    <h3 className="font-bold text-white text-lg uppercase tracking-tight">{plan.name}</h3>
                                                     {plan.daily_calories && (
-                                                        <p className="text-xs font-semibold text-emerald-500">
-                                                            {plan.daily_calories} Kcal Diarias
+                                                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.2em] mt-1">
+                                                            Target: {plan.daily_calories} Kcal
                                                         </p>
                                                     )}
                                                 </div>
+                                                <Link 
+                                                    href={`/coach/nutrition-builder/${clientId}?planId=${plan.id}`}
+                                                    className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </Link>
                                             </div>
-                                            <Link 
-                                                href={`/coach/nutrition-builder/${clientId}?planId=${plan.id}`}
-                                                className="p-2 rounded-lg text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors"
-                                                title="Editar plan nutricional"
-                                            >
-                                                <Pencil className="w-4 h-4" />
-                                            </Link>
-                                        </div>
-                                        
-                                        {(plan.protein_g || plan.carbs_g || plan.fats_g) && (
-                                            <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                                                <div className="bg-muted rounded-lg p-2">
-                                                    <p className="text-[10px] text-muted-foreground uppercase">Protes</p>
-                                                    <p className="font-bold text-sm">{plan.protein_g || 0}g</p>
+                                            
+                                            {(plan.protein_g || plan.carbs_g || plan.fats_g) && (
+                                                <div className="grid grid-cols-3 gap-3 mb-4">
+                                                    <div className="bg-black/50 border border-white/5 rounded-lg p-3 flex flex-col items-center">
+                                                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">PRO</p>
+                                                        <p className="font-bold text-white text-sm">{plan.protein_g || 0}g</p>
+                                                    </div>
+                                                    <div className="bg-black/50 border border-white/5 rounded-lg p-3 flex flex-col items-center">
+                                                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">CAR</p>
+                                                        <p className="font-bold text-white text-sm">{plan.carbs_g || 0}g</p>
+                                                    </div>
+                                                    <div className="bg-black/50 border border-white/5 rounded-lg p-3 flex flex-col items-center">
+                                                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">FAT</p>
+                                                        <p className="font-bold text-white text-sm">{plan.fats_g || 0}g</p>
+                                                    </div>
                                                 </div>
-                                                <div className="bg-muted rounded-lg p-2">
-                                                    <p className="text-[10px] text-muted-foreground uppercase">Carbs</p>
-                                                    <p className="font-bold text-sm">{plan.carbs_g || 0}g</p>
+                                            )}
+                                            
+                                            {plan.instructions && (
+                                                <div className="text-xs text-zinc-400 bg-black/40 border border-white/5 p-4 rounded-lg font-medium leading-relaxed">
+                                                    <span className="text-emerald-500 font-bold uppercase tracking-widest text-[10px] block mb-1">Notas</span>
+                                                    {plan.instructions}
                                                 </div>
-                                                <div className="bg-muted rounded-lg p-2">
-                                                    <p className="text-[10px] text-muted-foreground uppercase">Grasas</p>
-                                                    <p className="font-bold text-sm">{plan.fats_g || 0}g</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                        
-                                        {plan.instructions && (
-                                            <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
-                                                <strong>Notas:</strong> {plan.instructions}
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {todayLog && todayLog.plan_id === plan.id && (
-                                            <div className="mt-4 pt-4 border-t border-emerald-500/10">
-                                                <h4 className="text-xs font-bold text-muted-foreground uppercase mb-2">Registro de Hoy</h4>
-                                                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
-                                                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                                                        {todayLog.nutrition_meal_logs?.filter((l: any) => l.is_completed).length || 0} comidas completadas
-                                                    </span>
-                                                    <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-500 bg-emerald-500/20 px-2 py-1 rounded-md">
-                                                        Al día
-                                                    </span>
+                                            {todayLog && todayLog.plan_id === plan.id && (
+                                                <div className="mt-4 pt-4 border-t border-emerald-500/10">
+                                                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                                                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
+                                                            {todayLog.nutrition_meal_logs?.filter((l: any) => l.is_completed).length || 0} Meals
+                                                        </span>
+                                                        <span className="text-[10px] uppercase font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 rounded">
+                                                            Tracking OK
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Workout Programs */}
-                    <div>
-                        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center justify-between">
-                            <span>Rutinas</span>
-                            <Link href={`/coach/builder/${clientId}`} className="text-xs text-primary hover:opacity-80 flex items-center gap-1">
-                                <Plus className="w-3 h-3" /> Nueva
-                            </Link>
-                        </h2>
-
-                        {!activeProgram ? (
-                            <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
-                                <Dumbbell className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
-                                <p className="text-muted-foreground text-sm mb-4">Sin programa activo</p>
-                            </div>
-                        ) : (
-                            <div className="bg-card border border-primary/20 rounded-2xl p-5 shadow-sm">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                            <Dumbbell className="w-5 h-5 text-primary" />
+                                            )}
                                         </div>
-                                        <div>
-                                            <h3 className="font-bold">{activeProgram.name}</h3>
-                                            <p className="text-xs text-muted-foreground">
-                                                Programa de Entrenamiento
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Link 
-                                        href={`/coach/builder/${clientId}?programId=${activeProgram.id}`}
-                                        className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                        title="Editar programa"
-                                    >
-                                        <Pencil className="w-4 h-4" />
-                                    </Link>
+                                    ))}
                                 </div>
-                                
-                                <div className="grid grid-cols-2 gap-2 text-center">
-                                    <div className="bg-muted rounded-lg p-2">
-                                        <p className="text-[10px] text-muted-foreground uppercase">Duración</p>
-                                        <p className="font-bold text-sm">{activeProgram.weeks_to_repeat} Semanas</p>
-                                    </div>
-                                    <div className="bg-muted rounded-lg p-2">
-                                        <p className="text-[10px] text-muted-foreground uppercase">Entrenamientos</p>
-                                        <p className="font-bold text-sm">{(activeProgram as any).workout_plans?.length || 0} Días</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                {/* Column 2: Check-ins */}
-                <div>
-                    <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">
-                        Historial de Check-ins ({checkIns?.length || 0})
-                    </h2>
+                {/* Column 2: Logs & Check-ins */}
+                <div className="space-y-8">
+                    {/* Workout History */}
+                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="p-6 border-b border-white/10 bg-white/[0.02]">
+                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Activity className="w-4 h-4 text-primary" />
+                                Logs de Entrenamiento
+                            </h2>
+                        </div>
+                        
+                        <div className="p-6">
+                            {workoutHistory.length === 0 ? (
+                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin registros recientes</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {workoutHistory.slice(0, 5).map((log: any) => (
+                                        <div key={log.id} className="bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-colors">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                        <Dumbbell className="w-4 h-4 text-primary" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-white text-sm uppercase tracking-tight">{log.title}</p>
+                                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+                                                            {new Date(log.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className={`px-3 py-1 rounded border text-[10px] font-bold uppercase tracking-widest
+                                                    ${log.logCount >= log.totalSets ? 'bg-primary/10 text-primary border-primary/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                                    {log.logCount}/{log.totalSets} SETS
+                                                </div>
+                                            </div>
 
-                    {!checkIns || checkIns.length === 0 ? (
-                        <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
-                            <Calendar className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
-                            <p className="text-muted-foreground text-sm">El alumno aún no ha enviado reportes.</p>
+                                            {log.exerciseLogs.length > 0 && (
+                                                <div className="bg-black/50 rounded-lg p-4 border border-white/5 space-y-3">
+                                                    {log.exerciseLogs.slice(0, 3).map((exLog: any, i: number) => (
+                                                        <div key={i} className="flex items-center justify-between">
+                                                            <span className="text-xs font-bold text-zinc-300 truncate pr-4">{exLog.exerciseName}</span>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[10px] font-bold text-zinc-600">
+                                                                    T: {exLog.targetWeight || '-'}kg
+                                                                </span>
+                                                                <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                                                                    {exLog.actualWeight || '-'}kg × {exLog.actualReps || '-'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {checkIns.map(checkIn => (
-                                <CheckInCard
-                                    key={checkIn.id}
-                                    date={checkIn.created_at}
-                                    weight={checkIn.weight}
-                                    energyLevel={checkIn.energy_level}
-                                    notes={checkIn.notes}
-                                    photoUrl={checkIn.front_photo_url}
-                                />
-                            ))}
+                    </div>
+
+                    {/* Check-ins */}
+                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="p-6 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-primary" />
+                                Base de Datos: Check-ins
+                            </h2>
+                            <Badge variant="outline" className="bg-white/5 text-zinc-500 border-white/10 font-bold">{checkIns?.length || 0}</Badge>
                         </div>
-                    )}
+
+                        <div className="p-6">
+                            {!checkIns || checkIns.length === 0 ? (
+                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
+                                    <Calendar className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin reportes registrados</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {checkIns.map(checkIn => (
+                                        <div key={checkIn.id} className="relative group">
+                                            <div className="absolute inset-0 bg-primary/5 blur-xl rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            <CheckInCard
+                                                date={checkIn.created_at}
+                                                weight={checkIn.weight}
+                                                energyLevel={checkIn.energy_level}
+                                                notes={checkIn.notes}
+                                                photoUrl={checkIn.front_photo_url}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

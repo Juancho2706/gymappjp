@@ -1,14 +1,89 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, CalendarHeart, Search, Bookmark } from 'lucide-react'
+import { Plus, Trash2, CalendarHeart, Search, Bookmark, Target, Flame } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { FoodSearchModal } from './FoodSearchModal'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+// Ring Chart Helper
+function MacroRing({ 
+    value, 
+    target, 
+    label, 
+    color, 
+    unit = 'g' 
+}: { 
+    value: number, 
+    target: number, 
+    label: string, 
+    color: string,
+    unit?: string 
+}) {
+    const percentage = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
+    const isOver = value > target && target > 0;
+    
+    // SVG values
+    const size = 120;
+    const strokeWidth = 8;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+
+    return (
+        <div className="flex flex-col items-center justify-center relative group">
+            <div className="relative" style={{ width: size, height: size }}>
+                {/* Background Ring */}
+                <svg className="absolute top-0 left-0 w-full h-full -rotate-90">
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        stroke="rgba(255,255,255,0.05)"
+                        strokeWidth={strokeWidth}
+                        fill="none"
+                    />
+                    {/* Progress Ring */}
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        stroke={isOver ? '#EF4444' : color}
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={circumference}
+                        strokeDashoffset={mounted ? strokeDashoffset : circumference}
+                        strokeLinecap="round"
+                        fill="none"
+                        className="transition-all duration-1000 ease-out"
+                    />
+                </svg>
+                {/* Center Content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 mb-1">{label}</span>
+                    <span className={cn("text-xl font-bold tracking-tighter", isOver ? "text-red-500" : "text-white")}>
+                        {value}
+                    </span>
+                    <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                        / {target || 0}{unit}
+                    </span>
+                </div>
+            </div>
+            {/* Glow effect on hover */}
+            <div 
+                className="absolute inset-0 rounded-full blur-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-500 -z-10"
+                style={{ backgroundColor: isOver ? '#EF4444' : color }}
+            />
+        </div>
+    )
+}
 
 interface FoodItemInput {
     food_id: string;
@@ -182,82 +257,87 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-10">
+        <form onSubmit={handleSubmit} className="space-y-12 pb-24">
             {error && (
-                <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-md">
+                <div className="p-4 text-sm font-bold text-red-500 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3">
+                    <Flame className="w-5 h-5" />
                     {error}
                 </div>
             )}
 
             {/* Basic Info */}
-            <div className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="name">Nombre del Plan</Label>
+            <div className="space-y-6">
+                <div className="space-y-3">
+                    <Label htmlFor="name" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Designación del Plan</Label>
                     <Input 
                         id="name" 
                         value={name} 
                         onChange={e => setName(e.target.value)} 
                         required 
-                        placeholder="Ej. Definición Extrema Verano"
+                        placeholder="EJ. PROTOCOLO 1"
+                        className="h-12 bg-black/50 border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-sm uppercase tracking-widest placeholder:text-zinc-700"
                     />
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="calories">Kcal Diarias</Label>
-                        <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div className="space-y-3">
+                        <Label htmlFor="calories" className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary px-1">Target Kcal</Label>
+                        <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" className="h-12 bg-primary/5 border-primary/20 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="protein">Prot (g)</Label>
-                        <Input id="protein" type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} placeholder="0" />
+                    <div className="space-y-3">
+                        <Label htmlFor="protein" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Prot (g)</Label>
+                        <Input id="protein" type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} placeholder="0" className="h-12 bg-black/50 border-white/10 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="carbs">Carbs (g)</Label>
-                        <Input id="carbs" type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} placeholder="0" />
+                    <div className="space-y-3">
+                        <Label htmlFor="carbs" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Carbs (g)</Label>
+                        <Input id="carbs" type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} placeholder="0" className="h-12 bg-black/50 border-white/10 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="fats">Grasas (g)</Label>
-                        <Input id="fats" type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} placeholder="0" />
-                    </div>
-                </div>
-
-                {/* Real-time Daily Totals vs Targets */}
-                <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 grid grid-cols-4 gap-4">
-                    <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Total Kcal</span>
-                        <span className={`text-lg font-black ${totalMacros.calories > Number(targetCalories) && targetCalories ? 'text-red-500' : 'text-emerald-600'}`}>
-                            {totalMacros.calories} <span className="text-xs font-normal text-muted-foreground">/ {targetCalories || 0}</span>
-                        </span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Proteína</span>
-                        <span className="text-lg font-black text-emerald-600">
-                            {totalMacros.protein}g <span className="text-xs font-normal text-muted-foreground">/ {targetProtein || 0}g</span>
-                        </span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Carbs</span>
-                        <span className="text-lg font-black text-emerald-600">
-                            {totalMacros.carbs}g <span className="text-xs font-normal text-muted-foreground">/ {targetCarbs || 0}g</span>
-                        </span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Grasas</span>
-                        <span className="text-lg font-black text-emerald-600">
-                            {totalMacros.fats}g <span className="text-xs font-normal text-muted-foreground">/ {targetFats || 0}g</span>
-                        </span>
+                    <div className="space-y-3">
+                        <Label htmlFor="fats" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Grasas (g)</Label>
+                        <Input id="fats" type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} placeholder="0" className="h-12 bg-black/50 border-white/10 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="instructions">Notas o Indicaciones Generales</Label>
+                {/* Real-time Daily Totals vs Targets using Ring Charts */}
+                <div className="p-8 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl shadow-2xl flex flex-wrap justify-center sm:justify-around items-center gap-8 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none" />
+                    
+                    <MacroRing 
+                        value={totalMacros.calories} 
+                        target={Number(targetCalories) || 0} 
+                        label="Kcal" 
+                        color="#007AFF" 
+                        unit=""
+                    />
+                    <MacroRing 
+                        value={totalMacros.protein} 
+                        target={Number(targetProtein) || 0} 
+                        label="Prot" 
+                        color="#32ADE6" 
+                    />
+                    <MacroRing 
+                        value={totalMacros.carbs} 
+                        target={Number(targetCarbs) || 0} 
+                        label="Carbs" 
+                        color="#5856D6" 
+                    />
+                    <MacroRing 
+                        value={totalMacros.fats} 
+                        target={Number(targetFats) || 0} 
+                        label="Fats" 
+                        color="#00C7BE" 
+                    />
+                </div>
+
+                <div className="space-y-3">
+                    <Label htmlFor="instructions" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Notas del Protocolo</Label>
                     <textarea 
                         id="instructions"
-                        rows={2}
+                        rows={3}
                         value={instructions}
                         onChange={e => setInstructions(e.target.value)}
-                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        placeholder="Ej. Tomar 3 litros de agua diarios, no omitir el post-entreno."
+                        className="w-full p-4 rounded-xl bg-black/50 border border-white/10 text-white text-sm font-medium focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all resize-none placeholder:text-zinc-700"
+                        placeholder="Instrucciones biométricas o directrices..."
                     />
                 </div>
             </div>

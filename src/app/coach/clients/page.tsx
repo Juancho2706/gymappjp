@@ -24,24 +24,21 @@ export const metadata: Metadata = {
 function StatusBadge({ forceChange, isActive }: { forceChange: boolean, isActive?: boolean | null }) {
     if (isActive === false) {
         return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20">
-                <Clock className="w-3 h-3" />
-                Pausado
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                PAUSADO
             </span>
         )
     }
     if (forceChange) {
         return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
-                <Clock className="w-3 h-3" />
-                Pendiente de acceso
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                PENDIENTE
             </span>
         )
     }
     return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-            <CheckCircle className="w-3 h-3" />
-            Activo
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
+            ACTIVO
         </span>
     )
 }
@@ -72,71 +69,75 @@ export default async function CoachClientsPage() {
     const appUrl = `${protocol}://${host}`
 
     return (
-        <div className="max-w-6xl animate-fade-in mb-24 md:mb-0">
+        <div className="max-w-[1600px] animate-fade-in mb-24 md:mb-0 space-y-8">
             <ClientsHeader coachSlug={coach?.slug} appUrl={appUrl} />
 
             {/* Stats bar */}
-            <div className="flex overflow-x-auto pb-4 mb-4 md:grid md:grid-cols-3 md:gap-4 md:mb-8 md:overflow-visible hide-scrollbar snap-x">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[
                     {
-                        label: 'Total alumnos',
+                        label: 'Total Alumnos',
                         value: clients.length,
                         icon: Users,
+                        color: 'text-zinc-400',
+                        bg: 'bg-white/5',
+                    },
+                    {
+                        label: 'Despliegues Activos',
+                        value: clients.filter((c) => !c.force_password_change).length,
+                        icon: CheckCircle,
                         color: 'text-primary',
                         bg: 'bg-primary/10',
                     },
                     {
-                        label: 'Activos',
-                        value: clients.filter((c) => !c.force_password_change).length,
-                        icon: CheckCircle,
-                        color: 'text-emerald-600 dark:text-emerald-400',
-                        bg: 'bg-emerald-100 dark:bg-emerald-500/10',
-                    },
-                    {
-                        label: 'Pendientes de acceso',
+                        label: 'Pendientes Sync',
                         value: clients.filter((c) => c.force_password_change).length,
                         icon: Clock,
-                        color: 'text-amber-600 dark:text-amber-400',
-                        bg: 'bg-amber-100 dark:bg-amber-500/10',
+                        color: 'text-amber-500',
+                        bg: 'bg-amber-500/10',
                     },
                 ].map(({ label, value, icon: Icon, color, bg }) => (
                     <div
                         key={label}
-                        className="bg-card border border-border rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center gap-4 shadow-sm min-w-[160px] flex-shrink-0 snap-start mr-4 md:mr-0 last:mr-0"
+                        className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 flex items-center gap-6 shadow-2xl relative overflow-hidden group"
                     >
-                        <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
-                            <Icon className={`w-5 h-5 ${color}`} />
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-white/[0.02] blur-2xl rounded-full -z-10" />
+                        <div className={`w-12 h-12 rounded-xl ${bg} border border-white/5 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                            <Icon className={`w-6 h-6 ${color}`} />
                         </div>
                         <div>
-                            <p
-                                className="text-2xl font-extrabold text-foreground leading-none mb-1"
-                                style={{ fontFamily: 'var(--font-outfit)' }}
-                            >
+                            <p className="text-3xl font-bold text-white tracking-tighter" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                                 {value}
                             </p>
-                            <p className="text-xs text-muted-foreground whitespace-nowrap">{label}</p>
+                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-1">{label}</p>
                         </div>
                     </div>
                 ))}
             </div>
 
             {/* Clients list/table */}
-            <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="px-8 py-6 border-b border-white/10 bg-white/[0.02]">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-primary" />
+                        Directorio de Unidades
+                    </h2>
+                </div>
+
                 {clients.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                        <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                            <Users className="w-7 h-7 text-muted-foreground" />
+                    <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6">
+                            <Users className="w-8 h-8 text-zinc-700" />
                         </div>
-                        <h3 className="text-foreground font-medium mb-1">
-                            Aún no tienes alumnos
+                        <h3 className="text-white font-bold uppercase tracking-widest text-sm mb-2">
+                            Base de Datos Vacía
                         </h3>
-                        <p className="text-muted-foreground text-sm max-w-xs">
-                            Haz clic en &quot;Nuevo Alumno&quot; para crear tu primer cliente. Se
-                            generará una cuenta que podrá acceder a tu app personalizada.
+                        <p className="text-zinc-500 text-xs max-w-xs font-medium">
+                            No se han detectado alumnos en el sistema. Inicie una nueva alta para comenzar.
                         </p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 md:p-6 bg-transparent md:bg-card border-none md:border md:border-border rounded-2xl shadow-none md:shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-8">
                         {clients.map((client) => {
                             let subscriptionDaysRemaining = null
                             if (client.subscription_start_date) {
@@ -155,77 +156,78 @@ export default async function CoachClientsPage() {
                             return (
                                 <div
                                     key={client.id}
-                                    className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-4 shadow-sm hover:shadow-md transition-shadow group relative"
+                                    className="bg-zinc-900/50 border border-white/5 rounded-2xl p-6 flex flex-col gap-6 hover:border-primary/30 transition-all group relative overflow-hidden"
                                 >
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    
                                     {/* Cabecera Tarjeta: Avatar y Nombre */}
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                                                <span className="text-lg font-bold text-primary">
-                                                    {client.full_name[0].toUpperCase()}
-                                                </span>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <a href={`/coach/clients/${client.id}`} className="block hover:underline truncate">
-                                                    <h3 className="text-base font-bold text-foreground truncate">
-                                                        {client.full_name}
-                                                    </h3>
-                                                </a>
-                                                <p className="text-xs text-muted-foreground truncate">
-                                                    {client.email}
-                                                </p>
-                                            </div>
+                                    <div className="flex items-center gap-4 relative z-10">
+                                        <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:border-primary/20 transition-colors">
+                                            <span className="text-xl font-bold text-white uppercase" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                                {client.full_name[0]}
+                                            </span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <a href={`/coach/clients/${client.id}`} className="block group-hover:text-primary transition-colors">
+                                                <h3 className="text-base font-bold text-white uppercase tracking-tight truncate">
+                                                    {client.full_name}
+                                                </h3>
+                                            </a>
+                                            <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest truncate mt-0.5">
+                                                {client.email}
+                                            </p>
                                         </div>
                                     </div>
 
                                     {/* Indicadores: Estado y Suscripción */}
-                                    <div className="flex flex-col gap-2 mt-1">
+                                    <div className="space-y-3 relative z-10">
                                         <div className="flex items-center gap-2">
                                             <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
                                             {subscriptionDaysRemaining !== null && (
-                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${subscriptionDaysRemaining <= 5 ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'}`}>
-                                                    {subscriptionDaysRemaining > 0 ? `${subscriptionDaysRemaining} días de mensualidad` : 'Mensualidad vencida'}
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest ${subscriptionDaysRemaining <= 5 ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'}`}>
+                                                    {subscriptionDaysRemaining > 0 ? `${subscriptionDaysRemaining} DÍAS` : 'VENCIDO'}
                                                 </span>
                                             )}
                                         </div>
 
                                         {(() => {
                                             const activeProgram = client.workout_programs?.find(p => p.is_active);
-                                            if (!activeProgram) return null;
+                                            if (!activeProgram) return (
+                                                <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-700 uppercase tracking-[0.2em] bg-white/[0.02] border border-white/5 w-fit px-3 py-1 rounded-md">
+                                                    Sin Protocolo
+                                                </div>
+                                            );
                                             
                                             const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
                                             if (remainingDays === null) return null;
 
                                             return (
-                                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-primary bg-primary/5 border border-primary/10 w-fit px-2 py-0.5 rounded-full mt-1">
-                                                    <Calendar className="w-3 h-3" />
+                                                <div className="flex items-center gap-2 text-[10px] font-bold text-primary bg-primary/5 border border-primary/10 w-fit px-3 py-1 rounded-md">
+                                                    <Calendar className="w-3.5 h-3.5" />
                                                     {remainingDays > 0 
-                                                        ? `Quedan ${remainingDays} días de "${activeProgram.name}"`
-                                                        : remainingDays === 0 ? 'Último día de plan' : 'Plan finalizado'}
+                                                        ? `${remainingDays} DÍAS RESTANTES`
+                                                        : remainingDays === 0 ? 'ÚLTIMO DÍA' : 'CICLO FINALIZADO'}
                                                 </div>
                                             );
                                         })()}
                                     </div>
 
-                                    {/* Separador */}
-                                    <div className="h-px bg-border w-full mt-1 mb-1"></div>
-
                                     {/* Acciones */}
-                                    <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center justify-between gap-3 mt-auto pt-4 border-t border-white/5 relative z-10">
                                         {client.phone && loginUrl ? (
                                             <a
                                                 href={whatsappLink}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20 rounded-lg text-xs font-semibold transition-colors"
+                                                className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all"
                                             >
-                                                <span>💬</span> Enviar link
+                                                SYNC PWA
                                             </a>
                                         ) : (
-                                            <span className="text-[10px] text-muted-foreground/50 italic px-2">Sin WhatsApp</span>
+                                            <span className="text-[9px] text-zinc-700 font-bold uppercase tracking-widest px-2">NO PHONE</span>
                                         )}
 
-                                        <div className="flex items-center gap-1 ml-auto">
+                                        <div className="flex items-center gap-2 ml-auto">
                                             <ResetPasswordButton
                                                 clientId={client.id}
                                                 clientName={client.full_name}

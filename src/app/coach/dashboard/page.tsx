@@ -183,142 +183,169 @@ export default async function CoachDashboardPage() {
     ]
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-10 animate-fade-in">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
                 <div>
                     <h1
-                        className="text-3xl font-extrabold text-foreground"
-                        style={{ fontFamily: 'var(--font-outfit)' }}
+                        className="text-4xl font-bold text-white uppercase tracking-tighter"
+                        style={{ fontFamily: 'Montserrat, sans-serif' }}
                     >
-                        Dashboard
+                        Centro de Control
                     </h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        Resumen de tu actividad como coach
-                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">System Online</Badge>
+                        <p className="text-zinc-500 text-sm font-medium">
+                            Análisis de rendimiento y gestión de alumnos
+                        </p>
+                    </div>
                 </div>
                 
                 <Link 
                     href="/coach/clients"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 hover:shadow-lg hover:-translate-y-0.5 transition-all w-full sm:w-auto"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-white font-bold text-sm hover:opacity-90 glow-primary hover:-translate-y-0.5 transition-all w-full sm:w-auto uppercase tracking-widest"
                 >
-                    <Users className="w-4 h-4" />
-                    Nuevo Alumno
+                    <UserPlus className="w-4 h-4" />
+                    Alta de Alumno
                 </Link>
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
                 {stats.map((stat) => {
                     const Icon = stat.icon
                     return (
                         <Link
                             key={stat.label}
                             href={stat.href}
-                            className={`group bg-card border ${stat.border} rounded-2xl p-5 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5`}
+                            className="group relative overflow-hidden bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-primary/40 transition-all duration-300"
                         >
-                            <div className="flex items-start justify-between mb-3">
-                                <div className={`w-10 h-10 rounded-xl ${stat.bg} border ${stat.border} flex items-center justify-center`}>
-                                    <Icon className={`w-5 h-5 ${stat.color}`} />
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 blur-3xl -z-10 group-hover:bg-primary/10 transition-colors" />
+                            <div className="flex items-start justify-between mb-6">
+                                <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+                                    <Icon className="w-6 h-6 text-zinc-400 group-hover:text-primary transition-colors" />
                                 </div>
-                                <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors -rotate-45" />
+                                <div className="p-2 rounded-lg bg-white/5 text-zinc-500 group-hover:text-primary transition-colors">
+                                    <ArrowRight className="w-4 h-4 -rotate-45" />
+                                </div>
                             </div>
                             <p
-                                className="text-3xl font-extrabold text-foreground"
-                                style={{ fontFamily: 'var(--font-outfit)' }}
+                                className="text-4xl font-bold text-white tracking-tighter"
+                                style={{ fontFamily: 'Montserrat, sans-serif' }}
                             >
                                 {stat.value}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1 font-medium">{stat.label}</p>
+                            <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-zinc-500 mt-2 group-hover:text-zinc-300 transition-colors">{stat.label}</p>
                         </Link>
                     )
                 })}
             </div>
 
-            {/* Expiring Programs Alerts */}
-            {expiringPrograms.length > 0 && (
-                <div className="bg-card border border-rose-200 dark:border-rose-500/20 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="px-6 py-4 border-b border-rose-100 dark:border-rose-500/10 bg-rose-50/30 dark:bg-rose-500/5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <TriangleAlert className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-                            <h2 className="text-base font-bold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-                                Alertas de Vencimiento
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Recent Activity Feed */}
+                <div className="lg:col-span-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="px-8 py-6 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+                        <div className="flex items-center gap-3">
+                            <Activity className="w-5 h-5 text-primary" />
+                            <h2 className="text-sm font-bold text-white uppercase tracking-[0.2em]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                Registro de Actividad
                             </h2>
                         </div>
-                        <Badge variant="destructive" className="rounded-full">
-                            {expiringPrograms.length} {expiringPrograms.length === 1 ? 'pendiente' : 'pendientes'}
-                        </Badge>
                     </div>
-                    <div className="divide-y divide-rose-100 dark:divide-rose-500/10">
-                        {expiringPrograms.map((program) => (
-                            <div key={program.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-rose-50/20 dark:hover:bg-rose-500/5 transition-colors">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center flex-shrink-0">
-                                        <CalendarClock className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-bold text-foreground">
-                                            {program.clientName}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                            <span className="font-medium text-rose-600 dark:text-rose-400">
-                                                {program.name}
-                                            </span>
-                                            • Vence {program.daysLeft < 0 ? 'hace ' + Math.abs(program.daysLeft) + ' días' : program.daysLeft === 0 ? 'hoy' : 'en ' + program.daysLeft + ' días'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <Link 
-                                    href={`/coach/builder/${program.clientId}`}
-                                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all w-full sm:w-auto"
-                                >
-                                    Renovar Plan
-                                    <ArrowRight className="w-3.5 h-3.5" />
-                                </Link>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
 
-            {/* Recent Activity Feed */}
-            <div className="bg-card border border-border rounded-2xl shadow-sm">
-                <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                    <h2 className="text-base font-bold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
-                        Actividad Reciente
-                    </h2>
-                </div>
-
-                {!recentActivities || recentActivities.length === 0 ? (
-                    <div className="px-6 py-12 text-center">
-                        <Activity className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-                        <p className="text-muted-foreground text-sm">No hay actividad reciente</p>
-                    </div>
-                ) : (
-                    <ul className="divide-y divide-border">
-                        {recentActivities.map((activity) => {
-                            const Icon = activity.icon
-                            return (
-                                <li key={activity.id}>
-                                    <Link href={activity.href} className="flex items-start gap-4 px-6 py-4 hover:bg-muted/50 transition-colors group">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${activity.iconBg} ${activity.iconColor}`}>
-                                            <Icon className="w-5 h-5" />
+                    {!recentActivities || recentActivities.length === 0 ? (
+                        <div className="px-8 py-20 text-center">
+                            <Activity className="w-12 h-12 text-zinc-800 mx-auto mb-4" />
+                            <p className="text-zinc-500 text-sm font-medium">No hay registros en la terminal</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-white/5">
+                            {recentActivities.map((activity) => {
+                                const Icon = activity.icon
+                                return (
+                                    <Link key={activity.id} href={activity.href} className="flex items-center gap-6 px-8 py-5 hover:bg-white/[0.03] transition-all group">
+                                        <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+                                            <Icon className="w-5 h-5 text-zinc-500 group-hover:text-primary transition-colors" />
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                                            <p className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">
                                                 {activity.title}
                                             </p>
-                                            <p className="text-xs text-muted-foreground mt-0.5">{activity.subtitle}</p>
+                                            <p className="text-xs text-zinc-500 mt-1 font-medium">{activity.subtitle}</p>
                                         </div>
-                                        <div className="flex-shrink-0 text-xs text-muted-foreground font-medium">
-                                            {activity.date.toLocaleDateString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        <div className="flex-shrink-0 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                                            {activity.date.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
                                         </div>
                                     </Link>
-                                </li>
-                            )
-                        })}
-                    </ul>
-                )}
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Sidebar Alerts / Secondary column */}
+                <div className="space-y-8">
+                    {/* Expiring Programs Alerts */}
+                    {expiringPrograms.length > 0 && (
+                        <div className="bg-black/40 backdrop-blur-xl border border-rose-500/20 rounded-2xl overflow-hidden shadow-2xl">
+                            <div className="px-6 py-5 border-b border-rose-500/10 bg-rose-500/5 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <TriangleAlert className="w-5 h-5 text-rose-500" />
+                                    <h2 className="text-xs font-bold text-rose-500 uppercase tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                        Vencimientos
+                                    </h2>
+                                </div>
+                                <Badge variant="destructive" className="bg-rose-500/20 text-rose-500 border-rose-500/30 font-bold">
+                                    {expiringPrograms.length}
+                                </Badge>
+                            </div>
+                            <div className="divide-y divide-white/5">
+                                {expiringPrograms.map((program) => (
+                                    <div key={program.id} className="px-6 py-5 space-y-4 hover:bg-white/[0.02] transition-colors">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                                                <CalendarClock className="w-5 h-5 text-zinc-500" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-white leading-tight">
+                                                    {program.clientName}
+                                                </p>
+                                                <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mt-1">
+                                                    {program.daysLeft === 0 ? 'Expira Hoy' : `En ${program.daysLeft} Días`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Link 
+                                            href={`/coach/builder/${program.clientId}`}
+                                            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all w-full"
+                                        >
+                                            Actualizar Protocolo
+                                        </Link>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Quick Access or System Status */}
+                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+                        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-4">Estado del Sistema</h2>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-zinc-400 font-medium">Bases de Datos</span>
+                                <div className="w-1.5 h-1.5 rounded-full bg-primary glow-primary" />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-zinc-400 font-medium">Motor de IA Nutricional</span>
+                                <div className="w-1.5 h-1.5 rounded-full bg-primary glow-primary" />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-zinc-400 font-medium">Sincronización PWA</span>
+                                <div className="w-1.5 h-1.5 rounded-full bg-primary glow-primary" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     )

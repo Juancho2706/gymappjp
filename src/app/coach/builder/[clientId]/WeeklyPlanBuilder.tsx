@@ -31,10 +31,12 @@ import {
     GripVertical, Plus, X, Save, ArrowLeft, Search,
     Loader2, ChevronDown, ChevronUp, Dumbbell, Copy, Repeat, Edit2, Trash2,
     LayoutGrid,
-    List
+    List,
+    Activity
 } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -113,27 +115,33 @@ function SortableBlock({
     return (
         <div ref={setNodeRef} style={style}
             className={cn(
-                'bg-card border rounded-lg overflow-hidden transition-all duration-200 group relative',
-                isDragging ? 'z-50 border-primary ring-2 ring-primary/20 shadow-xl opacity-50' : 'border-border shadow-sm hover:border-muted-foreground/30'
+                'group relative flex flex-col bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl overflow-hidden transition-all duration-300',
+                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-white/20 hover:bg-white/[0.05]'
             )}>
-            <div className="flex items-center gap-2 px-2 py-2">
+            <div className="flex items-center gap-3 p-3">
                 <button {...attributes} {...listeners}
-                    className="text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing p-1 rounded transition-colors flex-shrink-0">
-                    <GripVertical className="w-3.5 h-3.5" />
+                    className="text-zinc-600 hover:text-primary cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-white/5 transition-colors flex-shrink-0">
+                    <GripVertical className="w-4 h-4" />
                 </button>
                 
                 <div className="flex-1 min-w-0" onClick={() => onEdit(block)}>
-                    <p className="text-[13px] font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors">
+                    <p className="text-sm font-bold text-white truncate cursor-pointer group-hover:text-primary transition-colors">
                         {block.exercise_name}
                     </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground">
-                            {block.sets}x{block.reps || '–'}
-                        </span>
+                    <div className="flex items-center gap-3 mt-1">
+                        <div className="flex items-center gap-1.5 bg-black/40 px-2 py-0.5 rounded-md border border-white/5">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Sets</span>
+                            <span className="text-[11px] font-bold text-white">{block.sets}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-black/40 px-2 py-0.5 rounded-md border border-white/5">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Reps</span>
+                            <span className="text-[11px] font-bold text-white">{block.reps || '–'}</span>
+                        </div>
                         {block.target_weight_kg && (
-                            <span className="text-[10px] text-primary font-medium">
-                                {block.target_weight_kg}kg
-                            </span>
+                            <div className="flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                                <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">Load</span>
+                                <span className="text-[11px] font-bold text-primary">{block.target_weight_kg}kg</span>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -142,9 +150,9 @@ function SortableBlock({
                     e.stopPropagation();
                     onRemove(dayId, block.uid);
                 }}
-                    className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                    title="Quitar ejercicio">
-                    <X className="w-5 h-5 stroke-[3px]" />
+                    className="p-2.5 rounded-xl text-zinc-600 hover:text-rose-500 hover:bg-rose-500/10 transition-all flex-shrink-0"
+                    title="Remover Unidad">
+                    <X className="w-5 h-5 stroke-[2.5px]" />
                 </button>
             </div>
         </div>
@@ -184,18 +192,20 @@ function DayColumn({
     })
 
     return (
-        <div className="flex flex-col h-full bg-muted/20 border border-border rounded-xl min-w-[280px] w-full md:w-auto overflow-hidden">
-            <div className="p-3 border-b border-border bg-card/50">
-                <h3 className="text-sm font-bold flex items-center justify-between">
-                    {day.name}
-                    <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-normal">
-                        {blocks.length} ej.
-                    </span>
-                </h3>
+        <div className="flex flex-col h-full bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl min-w-[320px] w-full md:w-auto overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-white/10 bg-white/[0.02]">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                        {day.name}
+                    </h3>
+                    <Badge variant="outline" className="bg-white/5 text-zinc-500 border-white/10 font-bold">
+                        {blocks.length} UNITS
+                    </Badge>
+                </div>
                 
-                {/* Quick Search - Solo Desktop */}
-                <div className="relative mt-2 hidden md:block">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
+                {/* Quick Search - Professional look */}
+                <div className="relative hidden md:block">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
                     <input 
                         value={search}
                         onChange={(e) => {
@@ -203,12 +213,12 @@ function DayColumn({
                             setIsSearchOpen(true)
                         }}
                         onFocus={() => setIsSearchOpen(true)}
-                        placeholder="Añadir ejercicio..."
-                        className="w-full h-8 pl-8 pr-2 text-xs rounded-lg bg-background border border-border focus:border-primary focus:outline-none transition-all"
+                        placeholder="BUSCAR PROTOCOLO..."
+                        className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-xl bg-black/40 border border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-zinc-700"
                     />
                     
                     {isSearchOpen && search && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
                             {filtered.length > 0 ? (
                                 filtered.map(ex => (
                                     <button 
@@ -218,27 +228,27 @@ function DayColumn({
                                             setSearch('')
                                             setIsSearchOpen(false)
                                         }}
-                                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-0"
+                                        className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group"
                                     >
-                                        <p className="font-medium truncate">{ex.name}</p>
-                                        <p className="text-[9px] text-muted-foreground uppercase">{ex.muscle_group}</p>
+                                        <p className="text-xs font-bold text-zinc-300 group-hover:text-primary transition-colors">{ex.name}</p>
+                                        <p className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5 font-bold">{ex.muscle_group}</p>
                                     </button>
                                 ))
                             ) : (
-                                <p className="p-3 text-[10px] text-muted-foreground text-center">No se encontraron resultados</p>
+                                <p className="p-4 text-[10px] text-zinc-600 text-center font-bold uppercase tracking-widest">Sin Coincidencias</p>
                             )}
                             <button 
                                 onClick={() => setIsSearchOpen(false)}
-                                className="w-full py-1.5 text-[10px] text-primary bg-primary/5 hover:bg-primary/10 transition-colors font-medium"
+                                className="w-full py-3 text-[10px] text-primary bg-primary/5 hover:bg-primary/10 transition-colors font-bold uppercase tracking-[0.2em] border-t border-white/5"
                             >
-                                Cerrar
+                                Cerrar Terminal
                             </button>
                         </div>
                     )}
                 </div>
             </div>
 
-            <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px]">
+            <div ref={setNodeRef} className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[400px]">
                 <SortableContext items={blocks.map(b => b.uid)} strategy={verticalListSortingStrategy}>
                     {blocks.map((block, index) => (
                         <SortableBlock
@@ -253,9 +263,9 @@ function DayColumn({
                 </SortableContext>
                 
                 {blocks.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-10 opacity-20">
-                        <Dumbbell className="w-8 h-8 mb-2" />
-                        <p className="text-[10px] font-medium uppercase tracking-widest">Descanso</p>
+                    <div className="flex flex-col items-center justify-center py-20 opacity-10">
+                        <Activity className="w-12 h-12 mb-4" />
+                        <p className="text-[11px] font-bold uppercase tracking-[0.3em]">No Data</p>
                     </div>
                 )}
             </div>
@@ -539,80 +549,82 @@ export function WeeklyPlanBuilder({
     }, [activeId, activeData])
 
     return (
-        <div className="flex flex-col h-[calc(100vh-130px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-background overflow-hidden relative">
+        <div className="flex flex-col h-[calc(100vh-130px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-transparent overflow-hidden relative">
             {/* Header Area */}
             <div className={cn(
-                "flex flex-col border-b border-border bg-card p-4 md:px-6 md:py-4 gap-4 flex-shrink-0 transition-all duration-500 ease-in-out",
+                "flex flex-col border-b border-white/10 bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-6 gap-6 flex-shrink-0 transition-all duration-500 ease-in-out shadow-2xl",
                 isCatalogOpen && "md:opacity-100 md:h-auto md:p-4 md:pointer-events-auto h-0 p-0 opacity-0 overflow-hidden pointer-events-none"
             )}>
                 <div className="flex items-center gap-4">
                     <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
-                        className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                        <ArrowLeft className="w-4 h-4" />
+                        className="p-2.5 rounded-xl text-zinc-500 hover:text-white border border-white/5 hover:border-white/20 hover:bg-white/5 transition-all">
+                        <ArrowLeft className="w-5 h-5" />
                     </Link>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-lg font-bold truncate">Planificación Semanal</h1>
-                        <p className="text-xs text-muted-foreground">
-                            {client ? `Alumno: ${client.full_name}` : 'Modo Plantilla'}
+                        <h1 className="text-xl font-bold text-white uppercase tracking-tighter" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            Diseño de Protocolo
+                        </h1>
+                        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-1">
+                            {client ? `TARGET: ${client.full_name}` : 'MODO: PLANTILLA MAESTRA'}
                         </p>
                     </div>
                     <button 
                         onClick={handleSave} 
                         disabled={isPending}
                         className={cn(
-                            'flex items-center gap-2 px-6 py-2.5 text-sm font-bold rounded-xl transition-all shadow-lg',
-                            'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:opacity-90',
-                            'disabled:opacity-50'
+                            'flex items-center gap-2 px-8 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all shadow-[0_0_20px_-5px_rgba(0,122,255,0.4)]',
+                            'bg-primary text-white hover:bg-primary/90 hover:scale-[1.02]',
+                            'disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none'
                         )}
                     >
                         {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        {isPending ? 'Guardando...' : 'Guardar Programa'}
+                        {isPending ? 'Ejecutando...' : 'Desplegar Protocolo'}
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1 flex items-center justify-between">
-                            Nombre del Programa
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1 flex items-center justify-between">
+                            Designación
                             {isAssigned && (
-                                <span className="text-primary normal-case font-medium">Bloqueado para planes activos</span>
+                                <span className="text-primary normal-case font-medium">Bloqueado (Activo)</span>
                             )}
                         </label>
                         <div className="relative">
-                            <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40" />
+                            <Edit2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
                             <Input 
                                 value={programName}
                                 onChange={e => setProgramName(e.target.value)}
                                 disabled={isAssigned}
-                                placeholder="Ej. Hipertrofia Funcional"
+                                placeholder="EJ: HYPERTROPHY BLOCK 1"
                                 className={cn(
-                                    "h-10 pl-9 rounded-xl border-border/50 focus:border-primary transition-all",
-                                    isAssigned && "bg-muted/50 cursor-not-allowed opacity-80"
+                                    "h-12 pl-11 rounded-xl bg-black/50 border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-xs uppercase tracking-widest placeholder:text-zinc-700",
+                                    isAssigned && "bg-white/5 cursor-not-allowed opacity-50"
                                 )}
                             />
                         </div>
                     </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1">Ciclo (Semanas)</label>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Duración del Ciclo</label>
                         <div className="relative">
-                            <Repeat className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40" />
+                            <Repeat className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
                             <select 
                                 value={weeksToRepeat}
                                 onChange={e => setWeeksToRepeat(parseInt(e.target.value))}
-                                className="w-full h-10 pl-9 pr-4 rounded-xl border border-border/50 bg-background text-sm focus:border-primary focus:outline-none transition-all appearance-none"
+                                className="w-full h-12 pl-11 pr-10 rounded-xl bg-black/50 border border-white/10 text-white font-bold text-xs uppercase tracking-widest focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all appearance-none outline-none"
                             >
                                 {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(w => (
-                                    <option key={w} value={w}>{w} {w === 1 ? 'semana' : 'semanas'}</option>
+                                    <option key={w} value={w} className="bg-zinc-900">{w} {w === 1 ? 'SEMANA' : 'SEMANAS'}</option>
                                 ))}
                             </select>
-                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40 pointer-events-none" />
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Scrollable Board (Desktop) / Tabs (Mobile) */}
-            <div className="flex-1 overflow-hidden bg-muted/10">
+            <div className="flex-1 overflow-hidden bg-transparent">
                 <DndContext 
                     sensors={sensors} 
                     collisionDetection={closestCorners} 
@@ -622,13 +634,16 @@ export function WeeklyPlanBuilder({
                 >
                     <div className="flex h-full">
                         {/* Sidebar Catalog (Desktop) */}
-                        <aside className="hidden md:block w-[300px] border-r bg-card p-4 h-full overflow-hidden">
+                        <aside className="hidden md:block w-[320px] border-r border-white/10 bg-black/40 backdrop-blur-xl h-full overflow-hidden shadow-2xl relative z-10">
                             <DraggableExerciseCatalog exercises={exercises} />
                         </aside>
 
-                        <div className="flex-1 overflow-hidden flex flex-col">
+                        <div className="flex-1 overflow-hidden flex flex-col relative">
+                            {/* Background ambient light for builder area */}
+                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none" />
+
                             {/* Desktop View: Horizontal Scroll Board */}
-                            <div className="hidden md:flex gap-4 h-full p-6 overflow-x-auto">
+                            <div className="hidden md:flex gap-6 h-full p-8 overflow-x-auto relative z-10">
                                 {mounted && !isMobile && DAYS_OF_WEEK.map(day => (
                                     <DayColumn
                                         key={day.id}
@@ -643,16 +658,16 @@ export function WeeklyPlanBuilder({
                             </div>
 
                             {/* Mobile View: Tabs + Catalog Trigger */}
-                            <div className="flex md:hidden flex-col h-full relative">
+                            <div className="flex md:hidden flex-col h-full relative z-10">
                                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
                                     <TabsList className={cn(
-                                        "flex w-full overflow-x-auto justify-start bg-card border-b border-border rounded-none h-12 px-2 z-10 sticky top-0 shrink-0 shadow-sm",
+                                        "flex w-full overflow-x-auto justify-start bg-black/80 backdrop-blur-md border-b border-white/10 rounded-none h-14 px-2 z-10 sticky top-0 shrink-0 shadow-xl",
                                     )}>
                                         {DAYS_OF_WEEK.map(day => (
                                             <TabsTrigger 
                                                 key={day.id} 
                                                 value={day.id.toString()}
-                                                className="px-4 text-[10px] font-bold uppercase tracking-widest data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none transition-all"
+                                                className="px-5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 data-[state=active]:text-primary data-[state=active]:bg-primary/10 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-t-lg transition-all"
                                             >
                                                 {day.name.substring(0, 3)}
                                             </TabsTrigger>
@@ -660,7 +675,7 @@ export function WeeklyPlanBuilder({
                                     </TabsList>
                                     <div className={cn(
                                         "flex-1 overflow-hidden transition-all duration-500 ease-in-out",
-                                        isCatalogOpen ? "pb-[50vh]" : "pb-20"
+                                        isCatalogOpen ? "pb-[50vh]" : "pb-24"
                                     )}>
                                         {mounted && isMobile && DAYS_OF_WEEK.map(day => (
                                             <TabsContent 
@@ -685,10 +700,10 @@ export function WeeklyPlanBuilder({
                                 {!isCatalogOpen && (
                                     <button
                                         onClick={() => setIsCatalogOpen(true)}
-                                        className="fixed bottom-24 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 px-6 h-12 rounded-full bg-green-500 text-white shadow-xl hover:scale-105 active:scale-95 transition-all z-40"
+                                        className="fixed bottom-24 left-1/2 -translate-x-1/2 flex items-center justify-center gap-3 px-8 h-14 rounded-full bg-primary text-white shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95 transition-all z-40 border border-white/20"
                                     >
                                         <Plus className="w-5 h-5" />
-                                        <span className="text-sm font-bold uppercase tracking-wider">Añadir Ejercicios</span>
+                                        <span className="text-xs font-bold uppercase tracking-[0.2em]">Data Base</span>
                                     </button>
                                 )}
                             </div>
@@ -697,9 +712,12 @@ export function WeeklyPlanBuilder({
 
                     <DragOverlay dropAnimation={null}>
                         {activeId && activeOverlayItem ? (
-                            <div className="bg-primary text-primary-foreground border border-primary p-3 rounded-lg shadow-2xl min-w-[200px] opacity-90 scale-105 pointer-events-none z-[100]">
-                                <p className="text-sm font-bold">{activeOverlayItem.name}</p>
-                                <p className="text-[10px] opacity-80 uppercase font-bold tracking-widest">{activeOverlayItem.muscle}</p>
+                            <div className="bg-primary/20 backdrop-blur-xl border border-primary text-white p-4 rounded-xl shadow-[0_0_30px_rgba(0,122,255,0.5)] min-w-[240px] opacity-100 scale-105 pointer-events-none z-[100] flex items-center gap-3">
+                                <Activity className="w-5 h-5 text-primary" />
+                                <div>
+                                    <p className="text-sm font-bold truncate">{activeOverlayItem.name}</p>
+                                    <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{activeOverlayItem.muscle}</p>
+                                </div>
                             </div>
                         ) : null}
                     </DragOverlay>
@@ -708,11 +726,11 @@ export function WeeklyPlanBuilder({
                     <Sheet open={isCatalogOpen} onOpenChange={(open) => { if (open) setIsCatalogOpen(true) }}>
                         <SheetContent 
                             side="bottom" 
-                            className="h-[50vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-card" 
+                            className="h-[60vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-black/90 backdrop-blur-2xl" 
                             showCloseButton={false}
                         >
                             {/* Handle visual */}
-                            <div className="w-12 h-1 bg-muted-foreground/20 rounded-full mx-auto my-3 shrink-0" />
+                            <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto my-4 shrink-0" />
                             
                             <div className="flex-1 overflow-hidden">
                                 <DraggableExerciseCatalog 
@@ -725,7 +743,7 @@ export function WeeklyPlanBuilder({
                             {/* Botón de cerrar (X) flotante */}
                             <button 
                                 onClick={() => setIsCatalogOpen(false)}
-                                className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-background border border-border text-foreground shadow-xl hover:bg-muted transition-all active:scale-90 z-[60]"
+                                className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 border border-white/20 text-white shadow-xl hover:bg-white/20 transition-all active:scale-90 z-[60]"
                                 aria-label="Cerrar catálogo"
                             >
                                 <X className="w-5 h-5" />
@@ -737,96 +755,102 @@ export function WeeklyPlanBuilder({
 
             {/* Block Edit Drawer (Mobile) / Sheet (Desktop) */}
             <Sheet open={!!editingBlock} onOpenChange={() => setEditingBlock(null)}>
-                <SheetContent side="right" className="w-full sm:max-w-md p-0 gap-0 overflow-y-auto">
-                    <SheetHeader className="p-6 border-b border-border sticky top-0 bg-background z-10">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                <Dumbbell className="w-5 h-5 text-primary" />
+                <SheetContent side="right" className="w-full sm:max-w-md p-0 gap-0 overflow-y-auto bg-black/95 backdrop-blur-3xl border-l border-white/10">
+                    <SheetHeader className="p-8 border-b border-white/10 sticky top-0 bg-black/50 backdrop-blur-md z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)]">
+                                <Dumbbell className="w-6 h-6 text-primary" />
                             </div>
                             <div>
-                                <SheetTitle className="text-left">{editingBlock?.exercise_name}</SheetTitle>
-                                <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">{editingBlock?.muscle_group}</p>
+                                <SheetTitle className="text-left text-lg font-bold text-white leading-tight">{editingBlock?.exercise_name}</SheetTitle>
+                                <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-1">{editingBlock?.muscle_group}</p>
                             </div>
                         </div>
                     </SheetHeader>
                     
                     {editingBlock && (
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">Series</label>
+                        <div className="p-8 space-y-8">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Series Target</label>
                                     <Input 
                                         type="number" 
                                         value={editingBlock.sets || ''}
                                         onChange={e => setEditingBlock({...editingBlock, sets: e.target.value === '' ? 0 : parseInt(e.target.value) || 0})}
+                                        className="h-12 bg-white/5 border-white/10 text-white text-center text-lg font-bold focus:border-primary"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">Reps</label>
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Repeticiones</label>
                                     <Input 
                                         value={editingBlock.reps}
                                         onChange={e => setEditingBlock({...editingBlock, reps: e.target.value})}
-                                        placeholder="Ej. 8-12 o 15"
+                                        placeholder="Ej. 8-12"
+                                        className="h-12 bg-white/5 border-white/10 text-white text-center text-lg font-bold focus:border-primary"
                                     />
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">Peso (kg)</label>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Carga (KG)</label>
                                     <Input 
                                         value={editingBlock.target_weight_kg}
                                         onChange={e => setEditingBlock({...editingBlock, target_weight_kg: e.target.value})}
                                         placeholder="Opcional"
+                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">RIR / RPE</label>
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RIR / RPE</label>
                                     <Input 
                                         value={editingBlock.rir}
                                         onChange={e => setEditingBlock({...editingBlock, rir: e.target.value})}
-                                        placeholder="Ej. 2 RIR"
+                                        placeholder="Ej. RIR 2"
+                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
                                     />
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">Tempo</label>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Tempo</label>
                                     <Input 
                                         value={editingBlock.tempo}
                                         onChange={e => setEditingBlock({...editingBlock, tempo: e.target.value})}
-                                        placeholder="Ej. 3-0-1-0"
+                                        placeholder="Ej. 3-1-X-1"
+                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">Descanso</label>
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Recuperación</label>
                                     <Input 
                                         value={editingBlock.rest_time}
                                         onChange={e => setEditingBlock({...editingBlock, rest_time: e.target.value})}
-                                        placeholder="Ej. 90s"
+                                        placeholder="Ej. 120s"
+                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
                                     />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-bold uppercase text-muted-foreground">Notas / Instrucciones</label>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Instrucciones de Protocolo</label>
                                 <textarea 
-                                    className="w-full h-24 p-3 text-sm rounded-xl bg-background border border-border focus:border-primary focus:outline-none transition-all resize-none"
+                                    className="w-full h-32 p-4 text-sm rounded-xl bg-white/5 border border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-zinc-700"
                                     value={editingBlock.notes}
                                     onChange={e => setEditingBlock({...editingBlock, notes: e.target.value})}
-                                    placeholder="Detalles sobre la ejecución..."
+                                    placeholder="Detalles biomécanicos o notas..."
                                 />
                             </div>
 
                             <button 
                                 onClick={() => handleBlockUpdate(editingBlock)}
                                 disabled={!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()}
-                                className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full py-4 mt-4 bg-primary text-white font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                             >
                                 {(!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()) 
-                                    ? 'Completa los campos (Series y Reps)' 
-                                    : 'Aplicar Cambios'}
+                                    ? 'DATA INCOMPLETA' 
+                                    : 'SINCRONIZAR BLOQUE'}
                             </button>
                         </div>
                     )}
