@@ -8,7 +8,8 @@ import { FoodSearch } from './FoodSearch'
 interface Food {
     id: string;
     name: string;
-    serving_size_g: number;
+    serving_size: number;
+    serving_unit: string;
     calories: number;
     protein_g: number;
     carbs_g: number;
@@ -57,7 +58,7 @@ export default async function CoachFoodsPage() {
                     {(foods as Food[])?.map((food) => (
                         <div key={food.id} className="bg-card border border-border rounded-xl p-4">
                             <h3 className="font-bold">{food.name}</h3>
-                            <p className="text-sm text-muted-foreground">Serving: {food.serving_size_g}g</p>
+                            <p className="text-sm text-muted-foreground">Serving: {food.serving_size}{food.serving_unit}</p>
                             <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
                                 <div>
                                     <p className="font-bold">Calorías</p>

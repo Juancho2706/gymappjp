@@ -365,7 +365,8 @@ export type Database = {
           id: string
           name: string
           protein_g: number
-          serving_size_g: number
+          serving_size: number
+          serving_unit: string
         }
         Insert: {
           calories: number
@@ -375,7 +376,8 @@ export type Database = {
           id?: string
           name: string
           protein_g: number
-          serving_size_g: number
+          serving_size: number
+          serving_unit: string
         }
         Update: {
           calories?: number
@@ -385,7 +387,8 @@ export type Database = {
           id?: string
           name?: string
           protein_g?: number
-          serving_size_g?: number
+          serving_size?: number
+          serving_unit?: string
         }
         Relationships: [
           {
@@ -1069,7 +1072,8 @@ export type Database = {
           id: string
           name: string
           protein_g: number
-          serving_size_g: number
+          serving_size: number
+          serving_unit: string
         }[]
         SetofOptions: {
           from: "*"

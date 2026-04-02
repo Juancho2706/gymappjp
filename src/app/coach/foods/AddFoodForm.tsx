@@ -11,7 +11,8 @@ import { createClient } from "@/lib/supabase/client"
 
 const formSchema = z.object({
     name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-    serving_size_g: z.number().min(1, { message: "Serving size must be at least 1." }),
+    serving_size: z.number().min(1, { message: "Serving size must be at least 1." }),
+    serving_unit: z.string().min(1, { message: "Serving unit is required." }),
     calories: z.number().min(0, { message: "Calories must be a positive number." }),
     protein_g: z.number().min(0, { message: "Protein must be a positive number." }),
     carbs_g: z.number().min(0, { message: "Carbs must be a positive number." }),
@@ -24,7 +25,8 @@ export function AddFoodForm({ coachId }: { coachId: string }) {
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: "",
-            serving_size_g: 100,
+            serving_size: 100,
+            serving_unit: "g",
             calories: 0,
             protein_g: 0,
             carbs_g: 0,
@@ -53,9 +55,14 @@ export function AddFoodForm({ coachId }: { coachId: string }) {
                     {form.formState.errors.name && <p className="text-red-500 text-xs">{form.formState.errors.name.message}</p>}
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="serving_size_g">Serving Size (g)</Label>
-                    <Input id="serving_size_g" type="number" {...form.register("serving_size_g", { valueAsNumber: true })} />
-                    {form.formState.errors.serving_size_g && <p className="text-red-500 text-xs">{form.formState.errors.serving_size_g.message}</p>}
+                    <Label htmlFor="serving_size">Serving Size</Label>
+                    <Input id="serving_size" type="number" {...form.register("serving_size", { valueAsNumber: true })} />
+                    {form.formState.errors.serving_size && <p className="text-red-500 text-xs">{form.formState.errors.serving_size.message}</p>}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="serving_unit">Serving Unit</Label>
+                    <Input id="serving_unit" type="text" {...form.register("serving_unit")} />
+                    {form.formState.errors.serving_unit && <p className="text-red-500 text-xs">{form.formState.errors.serving_unit.message}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="calories">Calories</Label>

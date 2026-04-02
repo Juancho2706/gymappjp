@@ -78,7 +78,8 @@ export async function saveRecipe(recipeData: any, coachId: string) {
         const foodPayload = {
             coach_id: coachId,
             name: `[Receta] ${recipeData.title || recipeData.name}`,
-            serving_size_g: 100,
+            serving_size: 100,
+            serving_unit: "g",
             calories: recipeData.calories,
             protein_g: recipeData.protein || recipeData.protein_g,
             carbs_g: recipeData.carbs || recipeData.carbs_g,

@@ -7,7 +7,8 @@ import { FoodSearch } from '@/app/coach/foods/FoodSearch'
 interface Food {
     id: string;
     name: string;
-    serving_size_g: number;
+    serving_size: number;
+    serving_unit: string;
     calories: number;
     protein_g: number;
     carbs_g: number;
@@ -27,7 +28,7 @@ export function FoodSearchModal({ onFoodSelected }: Props) {
     const [quantity, setQuantity] = useState<number>(100)
 
     const handleFoodSelected = (food: Food) => {
-        onFoodSelected(food, quantity)
+        onFoodSelected(food, quantity, food.serving_unit)
         setIsOpen(false)
     }
 
@@ -60,6 +61,7 @@ export function FoodSearchModal({ onFoodSelected }: Props) {
                                     <Input 
                                         id="modal-quantity"
                                         type="number" 
+                                        step="any"
                                         value={quantity} 
                                         onChange={(e) => setQuantity(Number(e.target.value))}
                                         className="h-10 bg-white border-emerald-200 focus:ring-emerald-500 font-bold text-lg"

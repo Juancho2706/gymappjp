@@ -9,7 +9,8 @@ import { createClient } from "@/lib/supabase/client"
 export interface Food {
     id: string;
     name: string;
-    serving_size_g: number;
+    serving_size: number;
+    serving_unit: string;
     calories: number;
     protein_g: number;
     carbs_g: number;
@@ -74,7 +75,7 @@ export function FoodSearch({ onFoodSelected }: Props) {
                             </h3>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5">
                                 <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium whitespace-nowrap">
-                                    100g/u base
+                                    {food.serving_size}{food.serving_unit} base
                                 </span>
                                 <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground/80">
                                     <span className="font-bold text-foreground/90">{food.calories} kcal</span>

@@ -15,7 +15,8 @@ interface FoodItemInput {
     name: string;
     quantity: number;
     unit: string;
-    serving_size_g: number;
+    serving_size: number;
+    serving_unit: string;
     calories: number;
     protein_g: number;
     carbs_g: number;
@@ -56,7 +57,8 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                 name: fi.foods?.name,
                 quantity: fi.quantity,
                 unit: fi.unit,
-                serving_size_g: fi.foods?.serving_size_g,
+                serving_size: fi.foods?.serving_size,
+                serving_unit: fi.foods?.serving_unit,
                 calories: fi.foods?.calories,
                 protein_g: fi.foods?.protein_g,
                 carbs_g: fi.foods?.carbs_g,
@@ -68,7 +70,10 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
     )
 
     const calculateItemMacros = (item: FoodItemInput) => {
-        const factor = item.unit === 'u' ? item.quantity : item.quantity / (item.serving_size_g || 100);
+        // Si el alimento está medido en unidades o gramos
+        // El unit de la BD es el que manda, pero la cantidad ingresada puede ser cualquier número (ej. 0.5 unidades)
+        // Calculamos el factor: si el alimento en DB es 'u', y se sirve 1u con X calorias. Si pido 2, el factor es 2 / 1 = 2
+        const factor = item.quantity / (item.serving_size || 100);
         return {
             calories: Math.round(item.calories * factor),
             protein: Math.round(item.protein_g * factor * 10) / 10,
@@ -333,7 +338,7 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="flex-1 text-sm font-medium line-clamp-1">{foodItem.name}</span>
                                                                         <div className="relative w-24">
-                                                                            <Input type="number" value={foodItem.quantity} onChange={(e) => {
+                                                                            <Input type="number" step="any" value={foodItem.quantity} onChange={(e) => {
                                                                                 const newFoodItems = [...meal.food_items]
                                                                                 newFoodItems[foodIndex].quantity = Number(e.target.value)
                                                                                 handleMealChange(meal.id, 'food_items', newFoodItems)
@@ -362,8 +367,9 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                                                             food_id: food.id,
                                                             name: food.name,
                                                             quantity: quantity,
-                                                            unit: unit || 'g',
-                                                            serving_size_g: food.serving_size_g,
+                                                            unit: unit || food.serving_unit || 'g',
+                                                            serving_size: food.serving_size,
+                                                            serving_unit: food.serving_unit,
                                                             calories: food.calories,
                                                             protein_g: food.protein_g,
                                                             carbs_g: food.carbs_g,

@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils'
 
 interface Food {
     name: string;
-    serving_size_g: number;
+    serving_size: number;
+    serving_unit: string;
     calories: number;
     protein_g: number;
     carbs_g: number;

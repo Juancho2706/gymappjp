@@ -59,7 +59,7 @@ export async function saveNutritionPlan(
             if (foodId && quantity) {
                 mealItems.push({ 
                     food_id: foodId, 
-                    quantity: parseInt(quantity) || 0,
+                    quantity: parseFloat(quantity) || 0,
                     unit: unit || 'g'
                 })
             }
