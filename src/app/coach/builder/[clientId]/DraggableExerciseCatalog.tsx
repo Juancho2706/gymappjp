@@ -40,7 +40,7 @@ function DraggableExerciseItem({ exercise, onSelect }: DraggableExerciseItemProp
             {...attributes}
             onClick={() => onSelect?.(exercise)}
             className={cn(
-                "p-3 rounded-lg border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group",
+                "p-3 rounded-lg border bg-card dark:bg-white/5 dark:border-white/10 dark:hover:bg-white/10 hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group",
                 isDragging && "opacity-50 ring-2 ring-primary border-primary",
                 onSelect && "cursor-pointer active:scale-95 transition-transform"
             )}
@@ -73,8 +73,8 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
     }, [exercises, search, selectedMuscle])
 
     return (
-        <div className={cn("flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm", className)}>
-            <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20">
+        <div className={cn("flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm relative", className)}>
+            <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-xl">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
                         <Dumbbell className="w-4 h-4 text-primary" />

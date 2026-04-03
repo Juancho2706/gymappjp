@@ -116,8 +116,8 @@ function SortableBlock({
     return (
         <div ref={setNodeRef} style={style}
             className={cn(
-                'group relative flex flex-col bg-background dark:bg-white/[0.03] backdrop-blur-md border border-border dark:border-white/10 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none',
-                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-primary/10'
+                'group relative flex flex-col bg-background dark:bg-[#0f172a] backdrop-blur-md border border-border dark:border-blue-900/30 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none',
+                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-blue-900/40'
             )}>
             <div className="flex items-center gap-3 p-3">
                 <button {...attributes} {...listeners}
@@ -197,7 +197,7 @@ function DayColumn({
     })
 
     return (
-        <div className="flex flex-col h-full bg-card dark:bg-black/40 backdrop-blur-xl border border-border dark:border-white/10 rounded-2xl min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
+        <div className="flex flex-col h-full bg-card dark:bg-blue-950/10 backdrop-blur-xl border border-border dark:border-blue-900/20 rounded-2xl min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
             <div className="p-4 border-b border-border dark:border-white/10 bg-muted/50 dark:bg-white/[0.02]">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
@@ -718,7 +718,10 @@ export function WeeklyPlanBuilder({
                                 onWheel={(e) => {
                                     if (horizontalScrollRef.current) {
                                         // Allow horizontal scroll with mouse wheel
-                                        if (e.deltaY !== 0) {
+                                        const target = e.target as HTMLElement;
+                                        const isScrollableVertical = target.closest('.overflow-y-auto');
+                                        
+                                        if (e.deltaY !== 0 && !isScrollableVertical) {
                                             e.preventDefault();
                                             horizontalScrollRef.current.scrollLeft += e.deltaY;
                                         }
