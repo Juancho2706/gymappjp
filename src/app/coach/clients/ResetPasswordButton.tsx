@@ -81,7 +81,7 @@ export function ResetPasswordButton({ clientId, clientName }: ResetPasswordButto
                     </p>
 
                     <AlertDialogFooter className="mt-4">
-                        <AlertDialogAction className="bg-primary hover:opacity-90 text-white rounded-xl w-full">
+                        <AlertDialogAction onClick={() => setTempPassword(undefined)} className="bg-primary hover:opacity-90 text-white rounded-xl w-full">
                             Entendido
                         </AlertDialogAction>
                     </AlertDialogFooter>

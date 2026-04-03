@@ -1,9 +1,7 @@
 export const MUSCLE_GROUPS = [
     'Pectoral',
     'Dorsal',
-    'Deltoides Frontal',
-    'Deltoides Lateral',
-    'Deltoides Posterior',
+    'Hombros',
     'Bíceps',
     'Tríceps',
     'Cuádriceps',

@@ -179,7 +179,7 @@ export function ClientCard({
                                 className="flex-1 flex items-center justify-center gap-2 px-4 h-11 bg-emerald-500 text-white hover:bg-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
                             >
                                 <Smartphone className="w-3.5 h-3.5" />
-                                Sync PWA
+                                Enviar Link Login
                             </a>
                         ) : (
                             <div className="flex-1 h-11 flex items-center justify-center bg-muted/50 rounded-xl text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
