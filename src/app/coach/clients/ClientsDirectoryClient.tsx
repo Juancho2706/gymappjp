@@ -1,19 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, Filter, TrendingUp, Users } from 'lucide-react'
+import { Search, TrendingUp, Users } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { ClientCard } from '@/components/coach/ClientCard'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuCheckboxItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 
 interface ClientsDirectoryClientProps {
     clients: any[]
@@ -23,12 +15,6 @@ interface ClientsDirectoryClientProps {
 
 export function ClientsDirectoryClient({ clients, coach, appUrl }: ClientsDirectoryClientProps) {
     const [search, setSearch] = useState('')
-    const [filters, setFilters] = useState({
-        active: true,
-        paused: true,
-        pending: true,
-        criticalAdherence: false,
-    })
 
     const filteredClients = useMemo(() => {
         return clients.filter(client => {
@@ -36,20 +22,12 @@ export function ClientsDirectoryClient({ clients, coach, appUrl }: ClientsDirect
                 client.full_name.toLowerCase().includes(search.toLowerCase()) ||
                 client.email.toLowerCase().includes(search.toLowerCase())
             
-            const isActive = client.is_active !== false
-            const isPaused = client.is_active === false
-            const isPending = client.force_password_change
-
-            if (!filters.active && isActive && !isPending) return false
-            if (!filters.paused && isPaused) return false
-            if (!filters.pending && isPending) return false
-            
             return matchesSearch
         })
-    }, [clients, search, filters])
+    }, [clients, search])
 
     return (
-        <div className="space-y-12">
+        <div className="space-y-6 md:space-y-12">
             {/* List Controls */}
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
                 <div className="relative w-full md:w-96">
@@ -62,47 +40,8 @@ export function ClientsDirectoryClient({ clients, coach, appUrl }: ClientsDirect
                     />
                 </div>
                 
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger className="flex-1 md:flex-none border-primary/10">
-                            <Filter className="w-4 h-4 mr-2" />
-                            <span className="font-bold uppercase tracking-widest text-[10px]">Filtros</span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 bg-white/80 dark:bg-zinc-950 backdrop-blur-xl border-border/50 dark:border-white/10 rounded-2xl p-2 shadow-2xl">
-                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest p-2 opacity-50">Estado</DropdownMenuLabel>
-                            <DropdownMenuCheckboxItem 
-                                checked={filters.active} 
-                                onCheckedChange={(v: boolean) => setFilters(f => ({ ...f, active: v }))}
-                                className="rounded-lg text-xs font-bold uppercase tracking-wider"
-                            >
-                                Activos
-                            </DropdownMenuCheckboxItem>
-                            <DropdownMenuCheckboxItem 
-                                checked={filters.pending} 
-                                onCheckedChange={(v: boolean) => setFilters(f => ({ ...f, pending: v }))}
-                                className="rounded-lg text-xs font-bold uppercase tracking-wider"
-                            >
-                                Pendientes Sync
-                            </DropdownMenuCheckboxItem>
-                            <DropdownMenuCheckboxItem 
-                                checked={filters.paused} 
-                                onCheckedChange={(v: boolean) => setFilters(f => ({ ...f, paused: v }))}
-                                className="rounded-lg text-xs font-bold uppercase tracking-wider"
-                            >
-                                Pausados
-                            </DropdownMenuCheckboxItem>
-                            <DropdownMenuSeparator className="bg-border/50 dark:bg-white/5" />
-                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest p-2 opacity-50">Alertas</DropdownMenuLabel>
-                            <DropdownMenuCheckboxItem 
-                                checked={filters.criticalAdherence} 
-                                onCheckedChange={(v: boolean) => setFilters(f => ({ ...f, criticalAdherence: v }))}
-                                className="rounded-lg text-xs font-bold uppercase tracking-wider text-rose-500 focus:text-rose-500"
-                            >
-                                Adherencia Baja (70%)
-                            </DropdownMenuCheckboxItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
+                {/* Oculto en móvil, visible en md */}
+                <div className="hidden md:flex items-center gap-3 w-full md:w-auto">
                     <GlassButton className="flex-1 md:flex-none h-12 px-6 border border-primary/10">
                         <TrendingUp className="w-4 h-4 mr-2" />
                         <span className="font-bold uppercase tracking-widest text-[10px]">Ordenar</span>
@@ -112,19 +51,19 @@ export function ClientsDirectoryClient({ clients, coach, appUrl }: ClientsDirect
 
             {/* Main Directory */}
             {filteredClients.length === 0 ? (
-                <GlassCard className="flex flex-col items-center justify-center py-32 text-center">
-                    <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-2xl">
-                        <Users className="w-10 h-10 text-muted-foreground opacity-20" />
+                <GlassCard className="flex flex-col items-center justify-center py-20 md:py-32 text-center mx-4 md:mx-0">
+                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-2xl">
+                        <Users className="w-8 h-8 md:w-10 md:h-10 text-muted-foreground opacity-20" />
                     </div>
-                    <h3 className="text-xl font-black text-foreground uppercase tracking-tighter mb-2 font-display">
+                    <h3 className="text-lg md:text-xl font-black text-foreground uppercase tracking-tighter mb-2 font-display">
                         Sin resultados
                     </h3>
-                    <p className="text-muted-foreground text-sm max-w-xs font-medium leading-relaxed">
-                        No se han encontrado alumnos que coincidan con los filtros aplicados.
+                    <p className="text-muted-foreground text-xs md:text-sm max-w-xs font-medium leading-relaxed px-4">
+                        No se han encontrado alumnos que coincidan con la búsqueda.
                     </p>
                 </GlassCard>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8 relative z-10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-8 relative z-10 px-4 md:px-0 pb-20 md:pb-0">
                     {filteredClients.map((client) => {
                         let subscriptionDaysRemaining = null
                         if (client.subscription_start_date) {
@@ -159,3 +98,4 @@ export function ClientsDirectoryClient({ clients, coach, appUrl }: ClientsDirect
         </div>
     )
 }
+

@@ -552,27 +552,29 @@ export function WeeklyPlanBuilder({
         <div className="flex flex-col h-[calc(100vh-130px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-transparent overflow-hidden relative">
             {/* Header Area */}
             <div className={cn(
-                "flex flex-col border-b border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-6 gap-6 flex-shrink-0 transition-all duration-500 ease-in-out shadow-sm dark:shadow-2xl",
+                "flex flex-col border-b border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-6 gap-4 md:gap-6 flex-shrink-0 transition-all duration-500 ease-in-out shadow-sm dark:shadow-2xl",
                 isCatalogOpen && "md:opacity-100 md:h-auto md:p-4 md:pointer-events-auto h-0 p-0 opacity-0 overflow-hidden pointer-events-none"
             )}>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 md:gap-4">
                     <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
-                        className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground/30 hover:bg-secondary dark:border-white/5 dark:hover:border-white/20 dark:hover:bg-white/5 transition-all">
-                        <ArrowLeft className="w-5 h-5" />
+                        className="p-2 md:p-2.5 rounded-xl text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground/30 hover:bg-secondary dark:border-white/5 dark:hover:border-white/20 dark:hover:bg-white/5 transition-all">
+                        <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
                     </Link>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-xl font-bold text-foreground uppercase tracking-tighter font-display">
+                        <h1 className="text-lg md:text-xl font-bold text-foreground uppercase tracking-tighter font-display truncate">
                             Diseño de Protocolo
                         </h1>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">
+                        <p className="text-[9px] md:text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-0.5 md:mt-1 truncate">
                             {client ? `TARGET: ${client.full_name}` : 'MODO: PLANTILLA MAESTRA'}
                         </p>
                     </div>
+                    
+                    {/* Botón Guardar en Desktop */}
                     <button 
                         onClick={handleSave} 
                         disabled={isPending}
                         className={cn(
-                            'flex items-center gap-2 px-8 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all shadow-[0_0_20px_-5px_rgba(0,122,255,0.4)]',
+                            'hidden md:flex items-center gap-2 px-8 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all shadow-[0_0_20px_-5px_rgba(0,122,255,0.4)]',
                             'bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-[1.02]',
                             'disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none'
                         )}
@@ -582,7 +584,8 @@ export function WeeklyPlanBuilder({
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Desktop and Tablet config inputs */}
+                <div className="hidden md:grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1 flex items-center justify-between">
                             Designación
@@ -620,6 +623,50 @@ export function WeeklyPlanBuilder({
                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
                     </div>
+                </div>
+
+                {/* Mobile: Compact Config Toggle */}
+                <div className="md:hidden flex items-center gap-2">
+                    <Popover>
+                        <PopoverTrigger className="flex-1 flex items-center justify-between h-10 px-4 rounded-lg bg-secondary/50 dark:bg-white/5 border border-border dark:border-white/10 text-[10px] font-bold uppercase tracking-widest overflow-hidden">
+                            <span className="truncate">{programName || 'Configurar Plan'}</span>
+                            <ChevronDown className="w-3 h-3 ml-2 flex-shrink-0" />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] p-4 bg-background/95 backdrop-blur-xl border-border dark:border-white/10 shadow-2xl rounded-2xl">
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground px-1">Designación</label>
+                                    <Input 
+                                        value={programName}
+                                        onChange={e => setProgramName(e.target.value)}
+                                        disabled={isAssigned}
+                                        placeholder="EJ: BLOQUE 1"
+                                        className="h-10 text-xs font-bold uppercase tracking-widest"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground px-1">Duración</label>
+                                    <select 
+                                        value={weeksToRepeat}
+                                        onChange={e => setWeeksToRepeat(parseInt(e.target.value))}
+                                        className="w-full h-10 px-3 rounded-md bg-secondary dark:bg-white/5 border border-border text-xs font-bold uppercase tracking-widest outline-none"
+                                    >
+                                        {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(w => (
+                                            <option key={w} value={w}>{w} {w === 1 ? 'SEMANA' : 'SEMANAS'}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                    
+                    <button 
+                        onClick={handleSave} 
+                        disabled={isPending}
+                        className="w-12 h-10 flex items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg active:scale-95 transition-all"
+                    >
+                        {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    </button>
                 </div>
             </div>
 
@@ -661,21 +708,20 @@ export function WeeklyPlanBuilder({
                             <div className="flex md:hidden flex-col h-full relative z-10">
                                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
                                     <TabsList className={cn(
-                                        "flex w-full overflow-x-auto justify-start bg-black/80 backdrop-blur-md border-b border-white/10 rounded-none h-14 px-2 z-10 sticky top-0 shrink-0 shadow-xl",
+                                        "flex w-full overflow-x-auto justify-start bg-background dark:bg-black/90 backdrop-blur-md border-b border-border dark:border-white/10 rounded-none h-12 px-2 z-10 sticky top-0 shrink-0",
                                     )}>
                                         {DAYS_OF_WEEK.map(day => (
                                             <TabsTrigger 
                                                 key={day.id} 
                                                 value={day.id.toString()}
-                                                className="px-5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 data-[state=active]:text-primary data-[state=active]:bg-primary/10 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-t-lg transition-all"
+                                                className="px-4 text-[9px] font-bold uppercase tracking-widest text-muted-foreground data-[state=active]:text-primary data-[state=active]:bg-primary/5 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none transition-all flex-shrink-0"
                                             >
                                                 {day.name.substring(0, 3)}
                                             </TabsTrigger>
                                         ))}
                                     </TabsList>
                                     <div className={cn(
-                                        "flex-1 overflow-hidden transition-all duration-500 ease-in-out",
-                                        isCatalogOpen ? "pb-[50vh]" : "pb-24"
+                                        "flex-1 overflow-hidden transition-all duration-500 ease-in-out pb-20",
                                     )}>
                                         {mounted && isMobile && DAYS_OF_WEEK.map(day => (
                                             <TabsContent 
@@ -696,14 +742,13 @@ export function WeeklyPlanBuilder({
                                     </div>
                                 </Tabs>
 
-                                {/* Mobile Floating Button to Open Catalog */}
+                                {/* Mobile Floating Button (FAB) - Repositioned to bottom right */}
                                 {!isCatalogOpen && (
                                     <button
                                         onClick={() => setIsCatalogOpen(true)}
-                                        className="fixed bottom-24 left-1/2 -translate-x-1/2 flex items-center justify-center gap-3 px-8 h-14 rounded-full bg-primary text-white shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95 transition-all z-40 border border-white/20"
+                                        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-white shadow-[0_8px_25px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-90 transition-all z-40 border border-white/20 flex items-center justify-center"
                                     >
-                                        <Plus className="w-5 h-5" />
-                                        <span className="text-xs font-bold uppercase tracking-[0.2em]">Data Base</span>
+                                        <Plus className="w-6 h-6" />
                                     </button>
                                 )}
                             </div>
