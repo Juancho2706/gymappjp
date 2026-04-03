@@ -68,7 +68,7 @@ export function SuccessWaveOverlay({ show, onCover, onComplete }: Props) {
                                 <div className="bg-white rounded-full p-4 mb-4 shadow-xl flex items-center justify-center w-24 h-24">
                                     <Check className="w-14 h-14 text-[#22c55e]" strokeWidth={4} />
                                 </div>
-                                <h2 className="text-4xl font-black tracking-tight text-white drop-shadow-md text-center">
+                                <h2 className="text-4xl font-black tracking-tight text-foreground dark:text-white drop-shadow-md text-center">
                                     Plan guardado
                                 </h2>
                             </motion.div>

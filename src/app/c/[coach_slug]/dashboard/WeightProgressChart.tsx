@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { TrendingUp, Scale, Plus } from 'lucide-react'
@@ -17,6 +18,26 @@ interface Props {
 }
 
 export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug }: Props) {
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!mounted) {
+        return (
+            <Card className="bg-card border-border shadow-sm">
+                <CardHeader className="pb-4">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-muted-foreground" style={{ color: primaryColor }} />
+                        Evolución de Peso
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="h-64 animate-pulse bg-muted/20" />
+            </Card>
+        )
+    }
+
     if (!data || data.length === 0) {
         return (
             <Card className="bg-card border-border shadow-sm transition-all hover:shadow-md">

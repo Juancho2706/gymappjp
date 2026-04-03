@@ -205,17 +205,17 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Sobreescribir programas de entrenamiento?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Los siguientes alumnos ya tienen un programa activo:
-                            <ul className="mt-2 list-disc list-inside font-medium text-foreground">
+                            <span className="block mt-2">Los siguientes alumnos ya tienen un programa activo:</span>
+                            <span className="block mt-2 font-medium text-foreground">
                                 {clientsWithExistingPlans.map(c => (
-                                    <li key={c.id}>
-                                        {c.full_name} ({c.workout_programs?.[0]?.name})
-                                    </li>
+                                    <span key={c.id} className="block ml-4">
+                                        • {c.full_name} ({c.workout_programs?.[0]?.name})
+                                    </span>
                                 ))}
-                            </ul>
-                            <p className="mt-4">
+                            </span>
+                            <span className="block mt-4">
                                 Si continúas, se les desactivará su programa actual y se les asignará este nuevo programa. ¿Deseas continuar?
-                            </p>
+                            </span>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

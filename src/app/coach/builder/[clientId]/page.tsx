@@ -7,7 +7,7 @@ type Exercise = Tables<'exercises'>
 import type { Metadata } from 'next'
 import { WeeklyPlanBuilder } from './WeeklyPlanBuilder'
 
-export const metadata: Metadata = { title: 'Planificador Semanal | OmniCoach OS' }
+export const metadata: Metadata = { title: 'Planificador Semanal | COACH OP' }
 
 export default async function BuilderPage(
     props: {

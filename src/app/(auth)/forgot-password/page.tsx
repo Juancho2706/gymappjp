@@ -20,8 +20,8 @@ function SubmitButton() {
             disabled={pending}
             className={cn(
                 'w-full h-12 text-base font-bold rounded-xl transition-all duration-200',
-                'bg-gradient-to-r from-emerald-500 to-teal-600 text-white',
-                'hover:shadow-lg hover:shadow-emerald-500/25 hover:-translate-y-0.5',
+                'bg-gradient-to-r from-blue-500 to-cyan-600 text-white',
+                'hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5',
                 'disabled:opacity-60 disabled:cursor-not-allowed'
             )}
         >
@@ -44,8 +44,8 @@ function ForgotPasswordForm() {
 
     return (
         <div className="animate-slide-up">
-            <div className="text-center mb-8">
-                <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
+            <div className="text-center mb-8 flex flex-col items-center">
+                <h1 className="text-2xl font-extrabold tracking-tight text-foreground font-display">
                     Recuperar contraseña
                 </h1>
                 <p className="mt-2 text-muted-foreground text-sm">
@@ -56,7 +56,7 @@ function ForgotPasswordForm() {
             <div className="bg-card border border-border rounded-2xl p-8 shadow-xl">
                 {state?.success ? (
                     <div className="text-center py-4">
-                        <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                        <CheckCircle className="w-12 h-12 text-blue-500 mx-auto mb-4" />
                         <h2 className="text-lg font-bold text-foreground mb-2">¡Email enviado!</h2>
                         <p className="text-muted-foreground text-sm">
                             Revisa tu bandeja de entrada. El link expira en 1 hora.

@@ -67,11 +67,11 @@ function MacroRing({
                 </svg>
                 {/* Center Content */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 mb-1">{label}</span>
-                    <span className={cn("text-xl font-bold tracking-tighter", isOver ? "text-red-500" : "text-white")}>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">{label}</span>
+                    <span className={cn("text-xl font-bold tracking-tighter", isOver ? "text-red-500" : "text-foreground")}>
                         {value}
                     </span>
-                    <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
                         / {target || 0}{unit}
                     </span>
                 </div>
@@ -268,38 +268,38 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
             {/* Basic Info */}
             <div className="space-y-6">
                 <div className="space-y-3">
-                    <Label htmlFor="name" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Designación del Plan</Label>
+                    <Label htmlFor="name" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Designación del Plan</Label>
                     <Input 
                         id="name" 
                         value={name} 
                         onChange={e => setName(e.target.value)} 
                         required 
                         placeholder="EJ. PROTOCOLO 1"
-                        className="h-12 bg-black/50 border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-sm uppercase tracking-widest placeholder:text-zinc-700"
+                        className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-sm uppercase tracking-widest placeholder:text-muted-foreground"
                     />
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-3">
                         <Label htmlFor="calories" className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary px-1">Target Kcal</Label>
-                        <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" className="h-12 bg-primary/5 border-primary/20 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
+                        <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" className="h-12 bg-primary/5 border-primary/20 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
                     <div className="space-y-3">
-                        <Label htmlFor="protein" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Prot (g)</Label>
-                        <Input id="protein" type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} placeholder="0" className="h-12 bg-black/50 border-white/10 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
+                        <Label htmlFor="protein" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Prot (g)</Label>
+                        <Input id="protein" type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} placeholder="0" className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
                     <div className="space-y-3">
-                        <Label htmlFor="carbs" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Carbs (g)</Label>
-                        <Input id="carbs" type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} placeholder="0" className="h-12 bg-black/50 border-white/10 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
+                        <Label htmlFor="carbs" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Carbs (g)</Label>
+                        <Input id="carbs" type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} placeholder="0" className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
                     <div className="space-y-3">
-                        <Label htmlFor="fats" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Grasas (g)</Label>
-                        <Input id="fats" type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} placeholder="0" className="h-12 bg-black/50 border-white/10 text-white font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
+                        <Label htmlFor="fats" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Grasas (g)</Label>
+                        <Input id="fats" type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} placeholder="0" className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
                     </div>
                 </div>
 
                 {/* Real-time Daily Totals vs Targets using Ring Charts */}
-                <div className="p-8 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl shadow-2xl flex flex-wrap justify-center sm:justify-around items-center gap-8 relative overflow-hidden">
+                <div className="p-8 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl shadow-sm dark:shadow-2xl flex flex-wrap justify-center sm:justify-around items-center gap-8 relative overflow-hidden">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none" />
                     
                     <MacroRing 
@@ -330,13 +330,13 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                 </div>
 
                 <div className="space-y-3">
-                    <Label htmlFor="instructions" className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Notas del Protocolo</Label>
+                    <Label htmlFor="instructions" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Notas del Protocolo</Label>
                     <textarea 
                         id="instructions"
                         rows={3}
                         value={instructions}
                         onChange={e => setInstructions(e.target.value)}
-                        className="w-full p-4 rounded-xl bg-black/50 border border-white/10 text-white text-sm font-medium focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all resize-none placeholder:text-zinc-700"
+                        className="w-full p-4 rounded-xl bg-secondary/50 dark:bg-black/50 border border-border dark:border-white/10 text-foreground text-sm font-medium focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all resize-none placeholder:text-muted-foreground"
                         placeholder="Instrucciones biométricas o directrices..."
                     />
                 </div>

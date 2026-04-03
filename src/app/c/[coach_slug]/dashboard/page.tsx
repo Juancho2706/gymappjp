@@ -149,8 +149,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                     </p>
                     <div className="flex items-center gap-2">
                         <h1
-                            className="text-xl font-bold text-foreground"
-                            style={{ fontFamily: 'var(--font-outfit)' }}
+                            className="text-xl font-bold text-foreground font-display"
                         >
                             Hola, {client.full_name.split(' ')[0]} 👋
                         </h1>

@@ -305,13 +305,14 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                                 <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
                                     <div className="flex items-start justify-between gap-4 mb-4">
                                         <div>
-                                            <p className="text-xs font-bold text-primary mb-1 uppercase tracking-wider">{currentExercise.muscle_group}</p>
+                                            <p className="text-xs font-bold mb-1 uppercase tracking-wider" style={{ color: 'var(--theme-primary)' }}>{currentExercise.muscle_group}</p>
                                             <h2 className="text-2xl font-black text-foreground leading-tight">{currentExercise.name}</h2>
                                         </div>
                                         {(currentExercise.gif_url || currentExercise.video_url) && (
                                             <button 
                                                 onClick={() => setShowTechnique(true)}
-                                                className="flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-2xl bg-secondary/50 text-primary hover:bg-secondary transition-colors flex-shrink-0 border border-border"
+                                                className="flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-2xl bg-secondary/50 hover:bg-secondary transition-colors flex-shrink-0 border border-border"
+                                                style={{ color: 'var(--theme-primary)' }}
                                             >
                                                 <Info className="w-5 h-5" />
                                                 <span className="text-[9px] font-bold uppercase">Técnica</span>
@@ -551,18 +552,24 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                                     </DialogClose>
                                 </div>
                             </DialogHeader>
-                            {currentExercise.instructions && currentExercise.instructions.length > 0 ? (
-                                <ol className="space-y-3">
-                                    {currentExercise.instructions.map((step, i) => (
-                                        <li key={i} className="flex gap-3 text-sm text-muted-foreground">
-                                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-xs mt-0.5">
-                                                {i + 1}
-                                            </span>
-                                            <span className="leading-relaxed">{step.replace(/^Step:\d+\s*/i, '')}</span>
-                                        </li>
-                                    ))}
-                                </ol>
-                            ) : (
+                                    {currentExercise.instructions && currentExercise.instructions.length > 0 ? (
+                                        <ol className="space-y-3">
+                                            {currentExercise.instructions.map((step, i) => (
+                                                <li key={i} className="flex gap-3 text-sm text-muted-foreground">
+                                                    <span 
+                                                        className="flex-shrink-0 w-6 h-6 rounded-full font-bold flex items-center justify-center text-xs mt-0.5"
+                                                        style={{ 
+                                                            backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
+                                                            color: 'var(--theme-primary)'
+                                                        }}
+                                                    >
+                                                        {i + 1}
+                                                    </span>
+                                                    <span className="leading-relaxed">{step.replace(/^Step:\d+\s*/i, '')}</span>
+                                                </li>
+                                            ))}
+                                        </ol>
+                                    ) : (
                                 <p className="text-muted-foreground text-sm">No hay instrucciones detalladas disponibles para este ejercicio.</p>
                             )}
                             <button 

@@ -44,13 +44,12 @@ function ResetPasswordForm() {
 
     return (
         <div className="animate-slide-up">
-            <div className="text-center mb-8">
+            <div className="text-center mb-8 flex flex-col items-center">
                 <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-violet-500/10 border border-violet-500/20 mb-4">
                     <ShieldCheck className="w-7 h-7 text-violet-400" />
                 </div>
                 <h1
-                    className="text-2xl font-bold tracking-tight text-zinc-50"
-                    style={{ fontFamily: 'var(--font-outfit)' }}
+                    className="text-2xl font-bold tracking-tight text-zinc-50 font-display"
                 >
                     Nueva contraseña
                 </h1>

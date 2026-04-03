@@ -157,10 +157,10 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         >
           {selectedExercise && (
             <>
-              {(selectedExercise.gif_url || selectedExercise.video_url) && (
+              {(selectedExercise.video_url || selectedExercise.gif_url) && (
                 <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50 z-0">
                   {(() => {
-                    const url = selectedExercise.gif_url || selectedExercise.video_url;
+                    const url = selectedExercise.video_url || selectedExercise.gif_url;
                     const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
                     const getYouTubeId = (u: string) => {
                       const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
@@ -198,7 +198,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   })()}
                 </div>
               )}
-              {!(selectedExercise.gif_url || selectedExercise.video_url) && selectedExercise.video_url && (
+              {!(selectedExercise.video_url || selectedExercise.gif_url) && selectedExercise.video_url && (
                 <div className="p-8 text-center bg-muted border-b border-border/50 shrink-0">
                   <a
                     href={selectedExercise.video_url}

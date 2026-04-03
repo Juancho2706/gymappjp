@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { GymAppLogo } from '@/components/ui/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
+import { DashboardMockup } from '@/components/landing/DashboardMockup'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring, AnimatePresence } from 'framer-motion'
 import {
@@ -30,8 +31,8 @@ const clientTiers = [
 ]
 
 const premiumFeatures = [
-    'Rutinas ilimitadas con GIFs animados',
-    'Catálogo de 230+ ejercicios',
+    'Rutinas ilimitadas con videos',
+    'Catálogo de 129 ejercicios',
     'Planes de nutrición',
     'Check-ins de progreso con fotos',
     'App White-Label con tu marca',
@@ -42,14 +43,14 @@ const features = [
     {
         icon: Dumbbell,
         title: 'Constructor de rutinas',
-        desc: 'Crea rutinas profesionales con 230+ ejercicios, cada uno con GIF animado e instrucciones.',
-        color: '#10B981',
+        desc: 'Crea rutinas profesionales con 129 ejercicios, cada uno con video de demostración e instrucciones.',
+        color: '#00e5ff',
     },
     {
         icon: Utensils,
         title: 'Planes de nutrición',
         desc: 'Asigna planes alimenticios a cada alumno. Ellos anotan lo que comen día a día.',
-        color: '#F59E0B',
+        color: '#007AFF',
     },
     {
         icon: Camera,
@@ -61,13 +62,13 @@ const features = [
         icon: Smartphone,
         title: 'App White-Label',
         desc: 'Tu propia app con tu logo, colores y URL. Instálala como PWA en cualquier celular.',
-        color: '#8B5CF6',
+        color: '#00BFFF',
     },
     {
         icon: ClipboardList,
         title: 'Ficha del alumno',
         desc: 'Recoge datos clave: peso, altura, objetivos, lesiones, nivel. Todo en un solo lugar.',
-        color: '#EC4899',
+        color: '#2563EB',
     },
     {
         icon: BarChart3,
@@ -78,10 +79,10 @@ const features = [
 ]
 
 const stats = [
-    { value: '230+', label: 'Ejercicios con GIF' },
+    { value: '129', label: 'Ejercicios con video' },
     { value: '10', label: 'Grupos musculares' },
-    { value: '30', label: 'Días gratis' },
     { value: '100%', label: 'Tu marca' },
+    { value: '24/7', label: 'Soporte' },
 ]
 
 /* ─── Animations ─── */
@@ -174,18 +175,18 @@ function PillNav() {
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className={`fixed top-[calc(1rem+var(--safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-50 transition-all duration-500 ${scrolled
-                ? 'bg-background/80 backdrop-blur-xl border border-border shadow-2xl shadow-foreground/5'
-                : 'bg-transparent'
-                } rounded-full px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 w-[95%] sm:w-auto justify-between sm:justify-center`}
+            className={`fixed top-[calc(1rem+var(--safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-50 transition-all duration-500 bg-background/60 dark:bg-black/10 backdrop-blur-2xl border ${scrolled
+                ? 'border-border shadow-2xl shadow-black/5'
+                : 'border-border/50'
+                } rounded-full px-4 sm:px-6 py-3 flex items-center w-[95%] max-w-5xl justify-between`}
         >
             <Link href="/" className="flex items-center gap-2">
                 <GymAppLogo className="w-8 h-8" />
-                <span className="text-foreground font-bold text-sm tracking-tight">OmniCoach OS</span>
+                <span className="text-foreground font-bold text-sm tracking-tight font-display">COACH OP</span>
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2">
                 {[
                     { key: 'landing.nav.features', id: 'funciones' },
                     { key: 'landing.nav.pricing', id: 'precios' },
@@ -194,7 +195,7 @@ function PillNav() {
                     <a
                         key={item.id}
                         href={`#${item.id}`}
-                        className="text-foreground/60 hover:text-foreground text-xs font-medium px-3 py-1.5 rounded-full hover:bg-accent transition-all"
+                        className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
                     >
                         {t(item.key)}
                     </a>
@@ -202,18 +203,17 @@ function PillNav() {
             </div>
 
             {/* Desktop Actions */}
-            <div className="hidden md:flex items-center gap-2 ml-2">
-                <LanguageToggle />
+            <div className="hidden md:flex items-center gap-4">
                 <ThemeToggle />
                 <Link
                     href="/login"
-                    className="text-foreground/70 hover:text-foreground text-xs font-medium px-3 py-1.5 transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
                 >
                     {t('landing.nav.login')}
                 </Link>
                 <Link
                     href="/register"
-                    className="bg-emerald-500 hover:bg-emerald-400 text-background text-xs font-bold px-4 py-2 rounded-full transition-all hover:shadow-lg hover:shadow-emerald-500/25"
+                    className="bg-[#007AFF] text-white hover:bg-[#007AFF]/90 text-xs font-bold px-5 py-2.5 rounded-full transition-all glow-primary shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)]"
                 >
                     {t('landing.nav.register')}
                 </Link>
@@ -223,7 +223,7 @@ function PillNav() {
             <div className="md:hidden flex items-center gap-2">
                 <Link
                     href="/login"
-                    className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 text-sm font-bold px-2 py-1.5 transition-colors"
+                    className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 text-sm font-bold px-2 py-1.5 transition-colors"
                 >
                     {t('landing.nav.login')}
                 </Link>
@@ -242,7 +242,7 @@ function PillNav() {
                                 <a
                                     key={item.id}
                                     href={`#${item.id}`}
-                                    className="text-xl font-bold text-foreground/90 hover:text-emerald-500 transition-colors py-3 border-b border-border/40"
+                                    className="text-xl font-bold text-foreground/90 hover:text-cyan-500 transition-colors py-3 border-b border-border/40"
                                 >
                                     {t(item.key)}
                                 </a>
@@ -261,7 +261,7 @@ function PillNav() {
                             <div className="flex flex-col gap-3">
                                 <Link
                                     href="/register"
-                                    className="text-center w-full py-3 rounded-xl bg-emerald-500 text-background font-bold hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/25 transition-all"
+                                    className="text-center w-full py-3 rounded-xl bg-cyan-500 text-background font-bold hover:bg-cyan-400 hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
                                 >
                                     {t('landing.nav.register')}
                                 </Link>
@@ -304,7 +304,7 @@ function StickyBrandingCard() {
                 >
                     <div className="bg-card/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-5 relative overflow-hidden group">
                         {/* Background Decoration */}
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-emerald-500/20 transition-colors" />
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/10 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-cyan-500/20 transition-colors" />
                         
                         <button 
                             onClick={() => setIsVisible(false)}
@@ -325,13 +325,13 @@ function StickyBrandingCard() {
                                         />
                                     </div>
                                 ) : (
-                                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                                        <Dumbbell className="w-6 h-6 text-emerald-400" />
+                                    <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                                        <Dumbbell className="w-6 h-6 text-cyan-400" />
                                     </div>
                                 )}
                             </div>
                             <div className="flex-1 min-w-0 pr-4">
-                                <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
+                                <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1">
                                     Bienvenido de nuevo
                                 </p>
                                 <h4 className="text-sm font-bold text-foreground truncate mb-3">
@@ -339,7 +339,7 @@ function StickyBrandingCard() {
                                 </h4>
                                 <Link
                                     href={`/c/${coach.slug}/login`}
-                                    className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-background text-xs font-bold px-4 py-2 rounded-full transition-all group/btn"
+                                    className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background text-xs font-bold px-4 py-2 rounded-full transition-all group/btn"
                                 >
                                     Ir a mi entrenamiento
                                     <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -362,7 +362,6 @@ export default function LandingPage() {
     const { t } = useTranslation()
 
     const heroScale = useTransform(scrollYProgress, [0, 1], [1, 0.9])
-    const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0])
     const heroY = useTransform(scrollYProgress, [0, 1], [0, 100])
 
     const [selectedTier, setSelectedTier] = useState(0)
@@ -373,36 +372,36 @@ export default function LandingPage() {
             <StickyBrandingCard />
 
             {/* ── HERO ── */}
-            <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-[calc(5rem+var(--safe-area-inset-top,0px))] pb-32">
+            <section ref={heroRef} className="relative min-h-screen flex flex-col items-center justify-center pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-32 bg-background">
                 {/* Background glow orbs */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full bg-emerald-500/8 blur-[150px]" />
-                    <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-emerald-600/5 blur-[120px]" />
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-emerald-500/3 blur-[200px]" />
+                <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                    <div className="absolute top-1/4 left-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-[#007AFF]/10 blur-[100px] md:blur-[150px]" />
+                    <div className="absolute bottom-1/4 right-1/4 w-[200px] md:w-[400px] h-[200px] md:h-[400px] rounded-full bg-[#00E5FF]/5 blur-[80px] md:blur-[120px]" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] md:w-[800px] h-[400px] md:h-[800px] rounded-full bg-[#007AFF]/5 blur-[120px] md:blur-[200px]" />
                 </div>
 
                 {/* Subtle grid pattern */}
                 <div
-                    className="absolute inset-0 opacity-[0.03]"
+                    className="absolute inset-0 opacity-[0.02]"
                     style={{
                         backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
-                        backgroundSize: '60px 60px',
+                        backgroundSize: '40px 40px',
                     }}
                 />
 
                 <motion.div
-                    style={{ scale: heroScale, opacity: heroOpacity, y: heroY }}
-                    className="relative z-10 max-w-5xl mx-auto px-6 text-center"
+                    style={{ scale: heroScale, y: heroY }}
+                    className="relative z-10 w-full max-w-[1200px] mx-auto px-6 text-center flex flex-col items-center"
                 >
                     {/* Badge */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.3 }}
-                        className="inline-flex items-center gap-2 bg-secondary border border-border rounded-full px-4 py-1.5 mb-8"
+                        className="inline-flex items-center gap-2 bg-zinc-900/40 dark:bg-black/40 backdrop-blur-md border border-white/10 rounded-full px-4 py-1.5 mb-8 shadow-xl"
                     >
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-xs text-foreground/70 font-medium">{t('landing.hero.badge')}</span>
+                        <Sparkles className="w-3.5 h-3.5 text-[#00E5FF]" />
+                        <span className="text-xs text-zinc-100 dark:text-zinc-300 font-medium">{t('landing.hero.badge')}</span>
                     </motion.div>
 
                     {/* Main headline */}
@@ -410,15 +409,12 @@ export default function LandingPage() {
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4, duration: 0.8 }}
-                        className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[0.9] mb-6"
+                        className="text-4xl sm:text-5xl md:text-6xl lg:text-[5rem] font-black tracking-tighter leading-[1.1] mb-6 font-display text-foreground max-w-5xl mx-auto"
                     >
-                        <span className="text-foreground">{t('landing.hero.title1')}</span>
-                        <br />
-                        <span className="bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent">
+                        <span className="text-foreground block">{t('landing.hero.title1')}</span>
+                        <span className="bg-gradient-to-r from-foreground via-zinc-400 to-zinc-500 bg-clip-text text-transparent block mt-2">
                             {t('landing.hero.title2')}
                         </span>
-                        <br />
-                        <span className="text-foreground/40">{t('landing.hero.title3')}</span>
                     </motion.h1>
 
                     {/* Subheadline */}
@@ -426,7 +422,7 @@ export default function LandingPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.6 }}
-                        className="text-lg md:text-xl text-foreground/40 max-w-2xl mx-auto mb-10 leading-relaxed"
+                        className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10 leading-relaxed font-sans"
                     >
                         {t('landing.hero.subtitle')}
                     </motion.p>
@@ -436,38 +432,27 @@ export default function LandingPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.7 }}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-4"
+                        className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
                     >
                         <Link
                             href="/register"
-                            className="group relative bg-emerald-500 hover:bg-emerald-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/25 flex items-center gap-2"
+                            className="w-full sm:w-auto bg-[#007AFF] text-white hover:bg-[#007AFF]/90 font-bold px-8 py-4 rounded-full text-base transition-all duration-300 flex items-center justify-center gap-2 glow-primary shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)] group/btn"
                         >
                             {t('landing.hero.cta')}
-                            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
                         </Link>
                         <a
                             href="#funciones"
-                            className="text-foreground/50 hover:text-foreground text-sm font-medium px-6 py-4 rounded-full border border-border hover:border-border transition-all flex items-center gap-2"
+                            className="w-full sm:w-auto text-zinc-400 hover:text-white text-sm font-medium px-8 py-4 rounded-full border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 backdrop-blur-md transition-all flex items-center justify-center gap-2"
                         >
-                            <Play className="w-3.5 h-3.5" />
+                            <Play className="w-4 h-4" />
                             Ver funciones
                         </a>
                     </motion.div>
 
-                    {/* Scroll indicator */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 1.2 }}
-                        className="mt-20"
-                    >
-                        <motion.div
-                            animate={{ y: [0, 8, 0] }}
-                            transition={{ duration: 1.5, repeat: Infinity }}
-                        >
-                            <ChevronDown className="w-5 h-5 text-foreground/20 mx-auto" />
-                        </motion.div>
-                    </motion.div>
+                    {/* Dashboard Mockup */}
+                    <DashboardMockup />
+
                 </motion.div>
             </section>
 
@@ -480,10 +465,106 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            {/* ── CORE FEATURES (NEW) ── */}
+            <section className="relative py-28 z-10">
+                <div className="max-w-[1200px] mx-auto px-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        
+                        {/* 1. Creador de Rutinas Drag & Drop */}
+                        <motion.div
+                            variants={scaleIn}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-50px' }}
+                            className="bg-card dark:bg-white/[0.05] backdrop-blur-2xl border border-border dark:border-white/10 rounded-xl p-8 hover:bg-accent/50 dark:hover:bg-white/[0.08] transition-all duration-300 group shadow-lg shadow-black/5 dark:shadow-black/20"
+                        >
+                            <div className="w-12 h-12 rounded-xl bg-[#007AFF]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                <Menu className="w-6 h-6 text-[#007AFF]" />
+                            </div>
+                            <h3 className="text-xl font-bold text-foreground mb-6">Creador de Rutinas Drag & Drop</h3>
+                            <div className="bg-secondary dark:bg-black/20 backdrop-blur-xl rounded-lg p-4 border border-border dark:border-white/5 space-y-3">
+                                {[
+                                    { name: 'Sentadilla Libre', reps: '4 x 10' },
+                                    { name: 'Press de Banca', reps: '4 x 8' },
+                                    { name: 'Peso Muerto', reps: '3 x 12' }
+                                ].map((ex, i) => (
+                                    <div key={i} className="flex items-center gap-3 bg-background dark:bg-white/10 backdrop-blur-md p-3 rounded-md cursor-grab active:cursor-grabbing border border-border dark:border-white/5 hover:border-muted-foreground/20 dark:hover:border-white/10 transition-colors">
+                                        <Menu className="w-4 h-4 text-muted-foreground" />
+                                        <span className="text-xs font-semibold text-foreground/90">{ex.name}</span>
+                                        <span className="text-[10px] text-muted-foreground ml-auto bg-muted dark:bg-white/5 px-2 py-1 rounded-md">{ex.reps}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+
+                        {/* 2. Calculadora de Macros Visual */}
+                        <motion.div
+                            variants={scaleIn}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-50px' }}
+                            transition={{ delay: 0.1 }}
+                            className="bg-card dark:bg-white/[0.05] backdrop-blur-2xl border border-border dark:border-white/10 rounded-xl p-8 hover:bg-accent/50 dark:hover:bg-white/[0.08] transition-all duration-300 group shadow-lg shadow-black/5 dark:shadow-black/20"
+                        >
+                            <div className="w-12 h-12 rounded-xl bg-[#00E5FF]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                <BarChart3 className="w-6 h-6 text-[#00E5FF]" />
+                            </div>
+                            <h3 className="text-xl font-bold text-foreground mb-6">Calculadora de Macros Visual</h3>
+                            <div className="bg-secondary dark:bg-black/20 backdrop-blur-xl rounded-lg p-6 border border-border dark:border-white/5 flex items-center justify-center gap-6">
+                                {/* Simulated Donut Charts */}
+                                {[
+                                    { label: 'Prot', val: '36g', color: '#007AFF' },
+                                    { label: 'Carb', val: '20g', color: '#00E5FF' },
+                                    { label: 'Grasa', val: '15g', color: '#3B82F6' },
+                                ].map((macro, i) => (
+                                    <div key={i} className="flex flex-col items-center gap-2">
+                                        <div className="w-14 h-14 rounded-full border-4 flex items-center justify-center" style={{ borderColor: `${macro.color}40`, borderTopColor: macro.color }}>
+                                            <span className="text-xs font-bold text-foreground">{macro.val}</span>
+                                        </div>
+                                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{macro.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+
+                        {/* 3. Sistema de Plantillas Inteligentes */}
+                        <motion.div
+                            variants={scaleIn}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-50px' }}
+                            transition={{ delay: 0.2 }}
+                            className="bg-card dark:bg-white/[0.05] backdrop-blur-2xl border border-border dark:border-white/10 rounded-xl p-8 hover:bg-accent/50 dark:hover:bg-white/[0.08] transition-all duration-300 group flex flex-col shadow-lg shadow-black/5 dark:shadow-black/20"
+                        >
+                            <div className="w-12 h-12 rounded-xl bg-[#00BFFF]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                <Zap className="w-6 h-6 text-[#00BFFF]" />
+                            </div>
+                            <h3 className="text-xl font-bold text-foreground mb-6">Sistema de Plantillas Inteligentes</h3>
+                            <div className="bg-secondary dark:bg-black/20 backdrop-blur-xl rounded-lg p-4 border border-border dark:border-white/5 flex-1 flex flex-col gap-3">
+                                <div className="flex items-center justify-between bg-background dark:bg-white/10 backdrop-blur-md p-3 rounded-md border border-border dark:border-white/5">
+                                    <span className="text-sm text-foreground/90 font-medium">Volumen Nivel Intermedio</span>
+                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                </div>
+                                <div className="flex items-center justify-between bg-muted dark:bg-white/5 backdrop-blur-md p-3 rounded-md border border-border dark:border-white/5 opacity-70">
+                                    <span className="text-sm text-muted-foreground font-medium">Definición Principiante</span>
+                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                </div>
+                                <div className="mt-auto pt-4">
+                                    <button className="w-full bg-[#007AFF] hover:bg-[#007AFF]/90 text-white text-sm font-bold py-2.5 rounded-md transition-colors shadow-lg shadow-[#007AFF]/20">
+                                        Aplicar a Cliente
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                    </div>
+                </div>
+            </section>
+
             {/* ── FEATURES GRID ── */}
             <section id="funciones" className="relative py-28">
                 {/* Background glow */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-emerald-500/[0.03] blur-[200px] pointer-events-none" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-cyan-500/[0.03] blur-[200px] pointer-events-none" />
 
                 <div className="max-w-6xl mx-auto px-6">
                     <motion.div
@@ -493,7 +574,7 @@ export default function LandingPage() {
                         viewport={{ once: true, margin: '-80px' }}
                         className="text-center mb-16"
                     >
-                        <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                        <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
                             Funciones
                         </span>
                         <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
@@ -514,7 +595,7 @@ export default function LandingPage() {
 
             {/* ── EXERCISE SHOWCASE ── */}
             <section className="relative py-28 overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/[0.02] to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/[0.02] to-transparent pointer-events-none" />
 
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="grid lg:grid-cols-2 gap-16 items-center">
@@ -525,13 +606,13 @@ export default function LandingPage() {
                             whileInView="visible"
                             viewport={{ once: true, margin: '-80px' }}
                         >
-                            <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                            <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
                                 Ejercicios
                             </span>
                             <h2 className="text-3xl md:text-5xl font-black text-foreground mb-6 leading-tight">
-                                230+ ejercicios
+                                129 ejercicios
                                 <br />
-                                <span className="text-foreground/30">con GIF animado</span>
+                                <span className="text-foreground/30">con video de demostración</span>
                             </h2>
                             <p className="text-foreground/40 text-base leading-relaxed mb-8 max-w-md">
                                 Cada ejercicio incluye demostración visual, instrucciones paso a paso,
@@ -539,10 +620,10 @@ export default function LandingPage() {
                             </p>
 
                             <div className="space-y-3">
-                                {['GIF animado de demostración', 'Instrucciones en español', '10 grupos musculares', 'Agrega ejercicios propios'].map(item => (
+                                {['Video de demostración', 'Instrucciones en español', '10 grupos musculares', 'Agrega ejercicios propios'].map(item => (
                                     <div key={item} className="flex items-center gap-3">
-                                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                                            <Check className="w-3 h-3 text-emerald-400" />
+                                        <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
+                                            <Check className="w-3 h-3 text-cyan-400" />
                                         </div>
                                         <span className="text-sm text-foreground/60">{item}</span>
                                     </div>
@@ -558,14 +639,14 @@ export default function LandingPage() {
                             viewport={{ once: true, margin: '-80px' }}
                             className="relative"
                         >
-                            <div className="absolute inset-0 bg-emerald-500/5 blur-[100px] rounded-full" />
-                            <div className="relative bg-white/[0.03] border border-border rounded-3xl p-6 space-y-3">
+                            <div className="absolute inset-0 bg-cyan-500/5 blur-[100px] rounded-full" />
+                            <div className="relative bg-white/[0.05] backdrop-blur-2xl border border-white/10 rounded-3xl p-6 space-y-3 shadow-2xl shadow-black/40">
                                 {/* Mock exercise cards - Fitonist style */}
                                 {[
-                                    { name: 'Squat Jumps', muscle: 'Piernas', reps: '10 reps', color: '#F59E0B' },
+                                    { name: 'Squat Jumps', muscle: 'Piernas', reps: '10 reps', color: '#007AFF' },
                                     { name: 'Pull Ups', muscle: 'Espalda', reps: '12 reps', color: '#3B82F6' },
-                                    { name: 'Bench Press', muscle: 'Pecho', reps: '8 reps', color: '#10B981' },
-                                    { name: 'Plank', muscle: 'Core', reps: '60 seg', color: '#8B5CF6' },
+                                    { name: 'Bench Press', muscle: 'Pecho', reps: '8 reps', color: '#00e5ff' },
+                                    { name: 'Plank', muscle: 'Core', reps: '60 seg', color: '#00BFFF' },
                                 ].map((ex, i) => (
                                     <motion.div
                                         key={i}
@@ -573,7 +654,7 @@ export default function LandingPage() {
                                         whileInView={{ opacity: 1, x: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.2 + i * 0.1 }}
-                                        className="flex items-center gap-4 bg-white/[0.03] border border-border rounded-2xl p-4 hover:bg-white/[0.06] transition-colors"
+                                        className="flex items-center gap-4 bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 hover:bg-white/[0.08] transition-colors"
                                     >
                                         <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
                                             <Dumbbell className="w-6 h-6 text-foreground/30" />
@@ -608,7 +689,7 @@ export default function LandingPage() {
                         whileInView="visible"
                         viewport={{ once: true, margin: '-80px' }}
                     >
-                        <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                        <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
                             White-Label
                         </span>
                         <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
@@ -628,14 +709,14 @@ export default function LandingPage() {
                             viewport={{ once: true }}
                             className="md:col-span-2 bg-card border border-border rounded-3xl p-8 text-left"
                         >
-                            <Palette className="w-8 h-8 text-emerald-400 mb-4" />
+                            <Palette className="w-8 h-8 text-cyan-400 mb-4" />
                             <h3 className="text-xl font-bold text-foreground mb-2">Personalización total</h3>
                             <p className="text-foreground/40 text-sm leading-relaxed">
                                 Elige tu color de marca, sube tu logo y configura tu URL personalizada.
-                                Tu alumno accede a <code className="text-emerald-400/70 font-mono text-xs">omnicoach.app/c/tu-marca</code> y ve TU identidad.
+                                Tu alumno accede a <code className="text-cyan-400/70 font-mono text-xs">omnicoach.app/c/tu-marca</code> y ve TU identidad.
                             </p>
                             <div className="mt-6 flex gap-3">
-                                {['#10B981', '#3B82F6', '#F59E0B', '#EC4899', '#8B5CF6'].map(color => (
+                                {['#00e5ff', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6'].map(color => (
                                     <div
                                         key={color}
                                         className="w-8 h-8 rounded-full border-2 border-border"
@@ -653,7 +734,7 @@ export default function LandingPage() {
                             transition={{ delay: 0.1 }}
                             className="bg-card border border-border rounded-3xl p-8 text-left"
                         >
-                            <Smartphone className="w-8 h-8 text-emerald-400 mb-4" />
+                            <Smartphone className="w-8 h-8 text-cyan-400 mb-4" />
                             <h3 className="text-xl font-bold text-foreground mb-2">Instalable</h3>
                             <p className="text-foreground/40 text-sm leading-relaxed">
                                 PWA que se instala como app nativa en cualquier celular. Sin App Store.
@@ -665,7 +746,7 @@ export default function LandingPage() {
 
             {/* ── PRICING ── */}
             <section id="precios" className="relative py-28">
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/[0.02] to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/[0.02] to-transparent pointer-events-none" />
 
                 <div className="max-w-4xl mx-auto px-6">
                     <motion.div
@@ -675,7 +756,7 @@ export default function LandingPage() {
                         viewport={{ once: true, margin: '-80px' }}
                         className="text-center mb-16"
                     >
-                        <span className="text-emerald-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
+                        <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
                             Precios
                         </span>
                         <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
@@ -694,7 +775,7 @@ export default function LandingPage() {
                         className="relative bg-card border border-border rounded-3xl overflow-hidden"
                     >
                         {/* Glow */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-emerald-500/10 blur-[120px] pointer-events-none" />
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-cyan-500/10 blur-[120px] pointer-events-none" />
 
                         <div className="relative p-8 md:p-12">
                             {/* Tier selector */}
@@ -704,7 +785,7 @@ export default function LandingPage() {
                                         key={i}
                                         onClick={() => setSelectedTier(i)}
                                         className={`px-4 py-2 rounded-full text-xs font-bold transition-all duration-300 ${selectedTier === i
-                                            ? 'bg-emerald-500 text-background shadow-lg shadow-emerald-500/25'
+                                            ? 'bg-cyan-500 text-background shadow-lg shadow-cyan-500/25'
                                             : 'bg-secondary text-foreground/50 hover:bg-white/[0.08] hover:text-foreground/70'
                                             }`}
                                     >
@@ -728,7 +809,7 @@ export default function LandingPage() {
                                     <span className="text-foreground/30 text-lg mb-2">/mes CLP</span>
                                 </motion.div>
                                 <p className="text-foreground/30 text-sm mt-3">
-                                    30 días gratis · Cancela cuando quieras
+                                    Cancela cuando quieras
                                 </p>
                             </div>
 
@@ -736,8 +817,8 @@ export default function LandingPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto mb-10">
                                 {premiumFeatures.map((feat, i) => (
                                     <div key={i} className="flex items-center gap-2.5">
-                                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                                            <Check className="w-3 h-3 text-emerald-400" />
+                                        <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
+                                            <Check className="w-3 h-3 text-cyan-400" />
                                         </div>
                                         <span className="text-sm text-foreground/60">{feat}</span>
                                     </div>
@@ -748,9 +829,9 @@ export default function LandingPage() {
                             <div className="text-center">
                                 <Link
                                     href="/register"
-                                    className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/25"
+                                    className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/25"
                                 >
-                                    Empieza 30 días gratis
+                                    Empieza ahora
                                     <ArrowRight className="w-4 h-4" />
                                 </Link>
                             </div>
@@ -761,66 +842,50 @@ export default function LandingPage() {
 
             {/* ── TRUST / TESTIMONIALS ── */}
             <section className="relative py-28">
-                <div className="max-w-5xl mx-auto px-6 text-center">
+                <div className="max-w-4xl mx-auto px-6">
                     <motion.div
                         variants={fadeUp}
                         initial="hidden"
                         whileInView="visible"
                         viewport={{ once: true, margin: '-80px' }}
+                        className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 md:p-12 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none"
                     >
-                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-16">
-                            Diseñado para coaches
-                            <br />
-                            <span className="text-foreground/30">que quieren crecer</span>
-                        </h2>
-                    </motion.div>
+                        {/* Glow effect */}
+                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/20 blur-[60px] rounded-full pointer-events-none" />
+                        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/20 blur-[60px] rounded-full pointer-events-none" />
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[
-                            {
-                                quote: 'Por fin una plataforma que entiende lo que necesito como coach. La app white-label es un game changer.',
-                                name: 'Carlos M.',
-                                role: 'Coach Personal',
-                            },
-                            {
-                                quote: 'Mis alumnos aman los GIFs de los ejercicios. Ya no tengo que mandar videos por WhatsApp.',
-                                name: 'Andrea L.',
-                                role: 'Entrenadora Fitness',
-                            },
-                            {
-                                quote: 'Pasé de una hoja de Excel a una plataforma profesional en 5 minutos. Increíble.',
-                                name: 'Diego R.',
-                                role: 'Preparador Físico',
-                            },
-                        ].map((t, i) => (
-                            <motion.div
-                                key={i}
-                                variants={fadeUp}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true }}
-                                transition={{ delay: i * 0.1 }}
-                                className="bg-card border border-border rounded-3xl p-7 text-left"
-                            >
-                                <div className="flex gap-1 mb-4">
+                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+                            <div className="shrink-0">
+                                <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-white/10 shadow-2xl">
+                                    <Image
+                                        src="/model.png"
+                                        alt="Coach Alex Ramírez"
+                                        fill
+                                        className="object-cover bg-zinc-800"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex-1 text-center md:text-left">
+                                <div className="flex justify-center md:justify-start gap-1 mb-4">
                                     {[...Array(5)].map((_, j) => (
-                                        <Star key={j} className="w-3.5 h-3.5 fill-emerald-400 text-emerald-400" />
+                                        <Star key={j} className="w-5 h-5 fill-cyan-400 text-cyan-400" />
                                     ))}
                                 </div>
-                                <p className="text-sm text-foreground/50 leading-relaxed mb-6">&ldquo;{t.quote}&rdquo;</p>
+                                <p className="text-xl md:text-2xl font-medium text-foreground leading-relaxed italic mb-6">
+                                    "COACH OP revolucionó mi negocio. Pasé de Excels caóticos a gestionar 50 clientes sin esfuerzo."
+                                </p>
                                 <div>
-                                    <p className="text-sm font-bold text-foreground">{t.name}</p>
-                                    <p className="text-xs text-foreground/30">{t.role}</p>
+                                    <p className="text-base font-bold text-muted-foreground">— Coach Alex Ramírez.</p>
                                 </div>
-                            </motion.div>
-                        ))}
-                    </div>
+                            </div>
+                        </div>
+                    </motion.div>
                 </div>
             </section>
 
             {/* ── FINAL CTA ── */}
             <section className="relative py-28">
-                <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/[0.04] to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/[0.04] to-transparent pointer-events-none" />
 
                 <motion.div
                     variants={fadeUp}
@@ -832,41 +897,36 @@ export default function LandingPage() {
                     <h2 className="text-4xl md:text-6xl font-black text-foreground mb-6 leading-tight">
                         Empieza hoy.
                         <br />
-                        <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                            30 días gratis.
+                        <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">
+                            Únete ahora.
                         </span>
                     </h2>
                     <p className="text-foreground/40 text-base md:text-lg mb-10 max-w-lg mx-auto">
-                        Sin tarjeta de crédito. Sin compromisos. Configura tu plataforma en minutos.
+                        Configura tu plataforma en minutos y empieza a escalar tu negocio.
                     </p>
                     <Link
                         href="/register"
-                        className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-background font-bold px-10 py-5 rounded-full text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-500/30"
+                        className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background font-bold px-10 py-5 rounded-full text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-cyan-500/30"
                     >
-                        Crear cuenta gratis
+                        Crear cuenta
                         <ArrowRight className="w-5 h-5" />
                     </Link>
                 </motion.div>
             </section>
 
             {/* ── FOOTER ── */}
-            <footer className="border-t border-white/[0.04] py-12">
+            <footer className="border-t border-border bg-transparent py-12">
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                         <div className="flex items-center gap-2">
                             <GymAppLogo className="w-8 h-8" />
-                            <span className="text-foreground font-bold text-sm">OmniCoach OS</span>
+                            <span className="text-foreground font-bold text-sm tracking-tight font-display">COACH OP</span>
                         </div>
 
-                        <div className="flex items-center gap-6 text-xs text-foreground/30">
-                            <Link href="/pricing" className="hover:text-foreground/60 transition-colors">Precios</Link>
-                            <Link href="/login" className="hover:text-foreground/60 transition-colors">Iniciar sesión</Link>
-                            <Link href="/register" className="hover:text-foreground/60 transition-colors">Registrarse</Link>
+                        <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">
+                            <Link href="/legal" className="hover:text-foreground transition-colors">Aviso Legal</Link>
+                            <Link href="/privacidad" className="hover:text-foreground transition-colors">Privacidad</Link>
                         </div>
-
-                        <p className="text-xs text-foreground/20">
-                            Ejercicios: <a href="https://exercisedb-api.vercel.app" target="_blank" rel="noopener noreferrer" className="hover:text-foreground/40 underline">ExerciseDB API</a>
-                        </p>
                     </div>
                 </div>
             </footer>

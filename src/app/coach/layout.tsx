@@ -10,7 +10,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
     title: {
         default: 'Panel Coach',
-        template: '%s | OmniCoach OS',
+        template: '%s | COACH OP',
     },
 }
 
@@ -42,7 +42,7 @@ export default async function CoachLayout({
     }
 
     return (
-        <div className="flex flex-col md:flex-row min-h-screen bg-black transition-colors pt-safe selection:bg-primary/30 selection:text-primary">
+        <div className="flex flex-col md:flex-row min-h-screen bg-white dark:bg-black transition-colors pt-safe selection:bg-primary/30 selection:text-primary">
             <CoachSidebar
                 coachName={coach.full_name}
                 coachBrand={coach.brand_name}

@@ -18,12 +18,12 @@ export async function GET(
     .single();
 
   const manifest = {
-    name: coach?.brand_name || "OmniCoach OS",
-    short_name: coach?.brand_name || "OmniCoach",
+    name: coach?.brand_name || "COACH OP",
+    short_name: coach?.brand_name || "COACH OP",
     description: `Entrena con ${coach?.brand_name || 'tu coach'}`,
     start_url: `/c/${slug}/dashboard`,
     display: "standalone",
-    background_color: "#ffffff",
+    background_color: "#000000",
     theme_color: coach?.primary_color || "#000000",
     icons: [
       {

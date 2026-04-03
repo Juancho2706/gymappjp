@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { GymAppLogo } from '@/components/ui/Logo'
 
 const navItems = [
     {
@@ -77,10 +78,8 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
             {/* Mobile Top Header */}
             <div className="md:hidden flex items-center justify-between px-4 pt-5 pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40 pt-safe">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center">
-                        <Dumbbell className="w-4 h-4 text-primary" />
-                    </div>
-                    <span className="font-bold text-base truncate max-w-[150px]" style={{ fontFamily: 'var(--font-outfit)' }}>
+                    <GymAppLogo className="w-8 h-8 flex-shrink-0" />
+                    <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
                         {coachBrand || coachName}
                     </span>
                 </div>
@@ -94,22 +93,20 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
 
             {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
             <aside className={cn(
-                "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-black border-t md:border-t-0 md:border-r border-white/5 flex flex-col transition-all duration-300 pb-safe shadow-2xl",
+                "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-sidebar border-t md:border-t-0 md:border-r border-sidebar-border flex flex-col transition-all duration-300 pb-safe shadow-2xl md:shadow-none",
                 isCollapsed ? "md:w-20" : "md:w-64"
             )}>
                 
                 {/* Logo area (Desktop only) */}
-                <div className={cn("hidden md:flex py-8 border-b border-white/5 items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
+                <div className={cn("hidden md:flex py-8 border-b border-sidebar-border items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
                     <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 glow-primary">
-                            <Dumbbell className="w-5 h-5 text-primary" />
-                        </div>
+                        <GymAppLogo className="w-10 h-10 flex-shrink-0" />
                         {!isCollapsed && (
                             <div className="min-w-0">
                                 <p className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mb-0.5">
-                                    OMNICOACH OS
+                                    COACH OP
                                 </p>
-                                <p className="text-sm font-bold text-white truncate uppercase tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                <p className="text-sm font-bold text-sidebar-foreground truncate uppercase tracking-tight font-display">
                                     {coachBrand || coachName}
                                 </p>
                             </div>
@@ -131,14 +128,14 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                                     'flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-xl text-[10px] md:text-sm font-semibold transition-all duration-300 group flex-1 md:flex-none border border-transparent',
                                     isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start md:px-4',
                                     isActive
-                                        ? 'text-white bg-primary/10 border-primary/20 shadow-[0_0_15px_-5px_rgba(0,122,255,0.4)]'
-                                        : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(0,122,255,0.4)]'
+                                        : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
                                 )}
                             >
                                 <Icon
                                     className={cn(
                                         'w-5 h-5 md:w-5 md:h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
-                                        isActive ? 'text-primary' : 'text-zinc-500 group-hover:text-white'
+                                        isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-sidebar-foreground'
                                     )}
                                 />
                                 <span className={cn("truncate tracking-wide", isCollapsed && "md:hidden")}>
@@ -151,12 +148,12 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                 </nav>
 
                 {/* Bottom area (Desktop only) */}
-                <div className={cn("hidden md:flex flex-col border-t border-white/5 bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-6 space-y-4")}>
+                <div className={cn("hidden md:flex flex-col border-t border-sidebar-border bg-sidebar-accent/50 dark:bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-6 space-y-4")}>
                     <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between px-2")}>
                         {!isCollapsed && (
                             <div className="flex flex-col">
-                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Terminal</p>
-                                <p className="text-xs text-white font-medium truncate max-w-[120px]">{coachName}</p>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Terminal</p>
+                                <p className="text-xs text-sidebar-foreground font-medium truncate max-w-[120px]">{coachName}</p>
                             </div>
                         )}
                         <ThemeToggle />
@@ -166,7 +163,7 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                         onClick={handleSignOut}
                         title={isCollapsed ? "Cerrar sesión" : undefined}
                         className={cn(
-                            "flex items-center rounded-xl text-[11px] uppercase tracking-widest font-bold text-zinc-500 hover:text-destructive hover:bg-destructive/10 transition-all duration-300 group border border-transparent hover:border-destructive/20",
+                            "flex items-center rounded-xl text-[11px] uppercase tracking-widest font-bold text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-300 group border border-transparent hover:border-destructive/20",
                             isCollapsed ? "justify-center w-12 h-12 p-0" : "w-full px-4 py-3 gap-3"
                         )}
                     >

@@ -6,7 +6,7 @@ import type { Tables } from '@/lib/database.types'
 type Exercise = Tables<'exercises'>
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Ejercicios | OmniCoach OS' }
+export const metadata: Metadata = { title: 'Ejercicios | COACH OP' }
 
 export default async function CoachExercisesPage() {
     const supabase = await createClient()

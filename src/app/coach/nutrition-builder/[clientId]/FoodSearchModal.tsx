@@ -53,18 +53,18 @@ export function FoodSearchModal({ onFoodSelected }: Props) {
                         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex items-start gap-3">
                             <Info className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                             <div className="space-y-3 flex-1">
-                                <p className="text-sm text-emerald-800 leading-tight">
+                                <p className="text-sm text-emerald-800 dark:text-emerald-200 leading-tight">
                                     Define la cantidad antes de seleccionar el alimento. Por defecto: <span className="font-bold">100g/u</span>.
                                 </p>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="modal-quantity" className="text-[10px] uppercase font-bold text-emerald-700">Cantidad (g o unidades)</Label>
+                                    <Label htmlFor="modal-quantity" className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">Cantidad (g o unidades)</Label>
                                     <Input 
                                         id="modal-quantity"
                                         type="number" 
                                         step="any"
                                         value={quantity} 
                                         onChange={(e) => setQuantity(Number(e.target.value))}
-                                        className="h-10 bg-white border-emerald-200 focus:ring-emerald-500 font-bold text-lg"
+                                        className="h-10 bg-background border-emerald-200 dark:border-emerald-500/20 focus:ring-emerald-500 font-bold text-lg text-foreground"
                                     />
                                 </div>
                             </div>

@@ -125,17 +125,17 @@ function SortableBlock({
                 </button>
                 
                 <div className="flex-1 min-w-0" onClick={() => onEdit(block)}>
-                    <p className="text-sm font-bold text-white truncate cursor-pointer group-hover:text-primary transition-colors">
+                    <p className="text-sm font-bold text-foreground truncate cursor-pointer group-hover:text-primary transition-colors">
                         {block.exercise_name}
                     </p>
                     <div className="flex items-center gap-3 mt-1">
-                        <div className="flex items-center gap-1.5 bg-black/40 px-2 py-0.5 rounded-md border border-white/5">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Sets</span>
-                            <span className="text-[11px] font-bold text-white">{block.sets}</span>
+                        <div className="flex items-center gap-1.5 bg-secondary dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Sets</span>
+                            <span className="text-[11px] font-bold text-foreground">{block.sets}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 bg-black/40 px-2 py-0.5 rounded-md border border-white/5">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Reps</span>
-                            <span className="text-[11px] font-bold text-white">{block.reps || '–'}</span>
+                        <div className="flex items-center gap-1.5 bg-secondary dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Reps</span>
+                            <span className="text-[11px] font-bold text-foreground">{block.reps || '–'}</span>
                         </div>
                         {block.target_weight_kg && (
                             <div className="flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
@@ -192,8 +192,8 @@ function DayColumn({
     })
 
     return (
-        <div className="flex flex-col h-full bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl min-w-[320px] w-full md:w-auto overflow-hidden shadow-2xl">
-            <div className="p-4 border-b border-white/10 bg-white/[0.02]">
+        <div className="flex flex-col h-full bg-card dark:bg-black/40 backdrop-blur-xl border border-border dark:border-white/10 rounded-2xl min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
+            <div className="p-4 border-b border-border dark:border-white/10 bg-muted/50 dark:bg-white/[0.02]">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                         {day.name}
@@ -552,19 +552,19 @@ export function WeeklyPlanBuilder({
         <div className="flex flex-col h-[calc(100vh-130px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-transparent overflow-hidden relative">
             {/* Header Area */}
             <div className={cn(
-                "flex flex-col border-b border-white/10 bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-6 gap-6 flex-shrink-0 transition-all duration-500 ease-in-out shadow-2xl",
+                "flex flex-col border-b border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-6 gap-6 flex-shrink-0 transition-all duration-500 ease-in-out shadow-sm dark:shadow-2xl",
                 isCatalogOpen && "md:opacity-100 md:h-auto md:p-4 md:pointer-events-auto h-0 p-0 opacity-0 overflow-hidden pointer-events-none"
             )}>
                 <div className="flex items-center gap-4">
                     <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
-                        className="p-2.5 rounded-xl text-zinc-500 hover:text-white border border-white/5 hover:border-white/20 hover:bg-white/5 transition-all">
+                        className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground/30 hover:bg-secondary dark:border-white/5 dark:hover:border-white/20 dark:hover:bg-white/5 transition-all">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-xl font-bold text-white uppercase tracking-tighter" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        <h1 className="text-xl font-bold text-foreground uppercase tracking-tighter font-display">
                             Diseño de Protocolo
                         </h1>
-                        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-1">
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">
                             {client ? `TARGET: ${client.full_name}` : 'MODO: PLANTILLA MAESTRA'}
                         </p>
                     </div>
@@ -573,7 +573,7 @@ export function WeeklyPlanBuilder({
                         disabled={isPending}
                         className={cn(
                             'flex items-center gap-2 px-8 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all shadow-[0_0_20px_-5px_rgba(0,122,255,0.4)]',
-                            'bg-primary text-white hover:bg-primary/90 hover:scale-[1.02]',
+                            'bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-[1.02]',
                             'disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none'
                         )}
                     >
@@ -584,40 +584,40 @@ export function WeeklyPlanBuilder({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1 flex items-center justify-between">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1 flex items-center justify-between">
                             Designación
                             {isAssigned && (
                                 <span className="text-primary normal-case font-medium">Bloqueado (Activo)</span>
                             )}
                         </label>
                         <div className="relative">
-                            <Edit2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                            <Edit2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input 
                                 value={programName}
                                 onChange={e => setProgramName(e.target.value)}
                                 disabled={isAssigned}
                                 placeholder="EJ: HYPERTROPHY BLOCK 1"
                                 className={cn(
-                                    "h-12 pl-11 rounded-xl bg-black/50 border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-xs uppercase tracking-widest placeholder:text-zinc-700",
-                                    isAssigned && "bg-white/5 cursor-not-allowed opacity-50"
+                                    "h-12 pl-11 rounded-xl bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-xs uppercase tracking-widest placeholder:text-muted-foreground",
+                                    isAssigned && "bg-muted dark:bg-white/5 cursor-not-allowed opacity-50"
                                 )}
                             />
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Duración del Ciclo</label>
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Duración del Ciclo</label>
                         <div className="relative">
-                            <Repeat className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                            <Repeat className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <select 
                                 value={weeksToRepeat}
                                 onChange={e => setWeeksToRepeat(parseInt(e.target.value))}
-                                className="w-full h-12 pl-11 pr-10 rounded-xl bg-black/50 border border-white/10 text-white font-bold text-xs uppercase tracking-widest focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all appearance-none outline-none"
+                                className="w-full h-12 pl-11 pr-10 rounded-xl bg-secondary/50 dark:bg-black/50 border border-border dark:border-white/10 text-foreground font-bold text-xs uppercase tracking-widest focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all appearance-none outline-none"
                             >
                                 {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(w => (
-                                    <option key={w} value={w} className="bg-zinc-900">{w} {w === 1 ? 'SEMANA' : 'SEMANAS'}</option>
+                                    <option key={w} value={w} className="bg-background dark:bg-zinc-900">{w} {w === 1 ? 'SEMANA' : 'SEMANAS'}</option>
                                 ))}
                             </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
                     </div>
                 </div>
@@ -634,7 +634,7 @@ export function WeeklyPlanBuilder({
                 >
                     <div className="flex h-full">
                         {/* Sidebar Catalog (Desktop) */}
-                        <aside className="hidden md:block w-[320px] border-r border-white/10 bg-black/40 backdrop-blur-xl h-full overflow-hidden shadow-2xl relative z-10">
+                        <aside className="hidden md:block w-[320px] border-r border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl h-full overflow-hidden shadow-sm dark:shadow-2xl relative z-10">
                             <DraggableExerciseCatalog exercises={exercises} />
                         </aside>
 
@@ -743,7 +743,7 @@ export function WeeklyPlanBuilder({
                             {/* Botón de cerrar (X) flotante */}
                             <button 
                                 onClick={() => setIsCatalogOpen(false)}
-                                className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 border border-white/20 text-white shadow-xl hover:bg-white/20 transition-all active:scale-90 z-[60]"
+                                className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-secondary/80 dark:bg-white/10 border border-border dark:border-white/20 text-foreground dark:text-white shadow-xl hover:bg-secondary dark:hover:bg-white/20 transition-all active:scale-90 z-[60]"
                                 aria-label="Cerrar catálogo"
                             >
                                 <X className="w-5 h-5" />
@@ -755,14 +755,14 @@ export function WeeklyPlanBuilder({
 
             {/* Block Edit Drawer (Mobile) / Sheet (Desktop) */}
             <Sheet open={!!editingBlock} onOpenChange={() => setEditingBlock(null)}>
-                <SheetContent side="right" className="w-full sm:max-w-md p-0 gap-0 overflow-y-auto bg-black/95 backdrop-blur-3xl border-l border-white/10">
-                    <SheetHeader className="p-8 border-b border-white/10 sticky top-0 bg-black/50 backdrop-blur-md z-10">
+                <SheetContent side="right" className="w-full sm:max-w-md p-0 gap-0 overflow-y-auto bg-background/95 backdrop-blur-3xl border-l border-border dark:border-white/10">
+                    <SheetHeader className="p-8 border-b border-border dark:border-white/10 sticky top-0 bg-background/50 dark:bg-black/50 backdrop-blur-md z-10">
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)]">
                                 <Dumbbell className="w-6 h-6 text-primary" />
                             </div>
                             <div>
-                                <SheetTitle className="text-left text-lg font-bold text-white leading-tight">{editingBlock?.exercise_name}</SheetTitle>
+                                <SheetTitle className="text-left text-lg font-bold text-foreground leading-tight font-display">{editingBlock?.exercise_name}</SheetTitle>
                                 <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-1">{editingBlock?.muscle_group}</p>
                             </div>
                         </div>
@@ -772,71 +772,71 @@ export function WeeklyPlanBuilder({
                         <div className="p-8 space-y-8">
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Series Target</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Series Target</label>
                                     <Input 
                                         type="number" 
                                         value={editingBlock.sets || ''}
                                         onChange={e => setEditingBlock({...editingBlock, sets: e.target.value === '' ? 0 : parseInt(e.target.value) || 0})}
-                                        className="h-12 bg-white/5 border-white/10 text-white text-center text-lg font-bold focus:border-primary"
+                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground text-center text-lg font-bold focus:border-primary"
                                     />
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Repeticiones</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Repeticiones</label>
                                     <Input 
                                         value={editingBlock.reps}
                                         onChange={e => setEditingBlock({...editingBlock, reps: e.target.value})}
                                         placeholder="Ej. 8-12"
-                                        className="h-12 bg-white/5 border-white/10 text-white text-center text-lg font-bold focus:border-primary"
+                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground text-center text-lg font-bold focus:border-primary"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Carga (KG)</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Carga (KG)</label>
                                     <Input 
                                         value={editingBlock.target_weight_kg}
                                         onChange={e => setEditingBlock({...editingBlock, target_weight_kg: e.target.value})}
                                         placeholder="Opcional"
-                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
+                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                                     />
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RIR / RPE</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">RIR / RPE</label>
                                     <Input 
                                         value={editingBlock.rir}
                                         onChange={e => setEditingBlock({...editingBlock, rir: e.target.value})}
                                         placeholder="Ej. RIR 2"
-                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
+                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Tempo</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Tempo</label>
                                     <Input 
                                         value={editingBlock.tempo}
                                         onChange={e => setEditingBlock({...editingBlock, tempo: e.target.value})}
                                         placeholder="Ej. 3-1-X-1"
-                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
+                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                                     />
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Recuperación</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Recuperación</label>
                                     <Input 
                                         value={editingBlock.rest_time}
                                         onChange={e => setEditingBlock({...editingBlock, rest_time: e.target.value})}
                                         placeholder="Ej. 120s"
-                                        className="h-12 bg-white/5 border-white/10 text-white font-bold focus:border-primary placeholder:text-zinc-700"
+                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-3">
-                                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Instrucciones de Protocolo</label>
+                                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Instrucciones de Protocolo</label>
                                 <textarea 
-                                    className="w-full h-32 p-4 text-sm rounded-xl bg-white/5 border border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-zinc-700"
+                                    className="w-full h-32 p-4 text-sm rounded-xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-muted-foreground"
                                     value={editingBlock.notes}
                                     onChange={e => setEditingBlock({...editingBlock, notes: e.target.value})}
                                     placeholder="Detalles biomécanicos o notas..."
@@ -846,7 +846,7 @@ export function WeeklyPlanBuilder({
                             <button 
                                 onClick={() => handleBlockUpdate(editingBlock)}
                                 disabled={!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()}
-                                className="w-full py-4 mt-4 bg-primary text-white font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                             >
                                 {(!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()) 
                                     ? 'DATA INCOMPLETA' 

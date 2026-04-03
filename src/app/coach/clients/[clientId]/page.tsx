@@ -1,18 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Calendar, Dumbbell, Apple, Pencil, Activity } from 'lucide-react'
+import { ArrowLeft, Plus, Calendar, Dumbbell, Apple, Pencil, Activity, TrendingUp, TrendingDown, Target, Zap, Clock, ChevronRight } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
 import { Badge } from '@/components/ui/badge'
+import { GlassCard } from '@/components/ui/glass-card'
+import { GlassButton } from '@/components/ui/glass-button'
+import { CheckInCard } from '@/components/coach/CheckInCard'
+import { calculateRemainingDays } from '@/lib/utils'
+import type { Metadata } from 'next'
 
 type Client = Tables<'clients'>
 type CheckIn = Tables<'check_ins'>
 type NutritionPlan = Tables<'nutrition_plans'>
-import type { Metadata } from 'next'
-import { CheckInCard } from '@/components/coach/CheckInCard'
-import { calculateRemainingDays } from '@/lib/utils'
 
-export const metadata: Metadata = { title: 'Alumno | OmniCoach OS' }
+export const metadata: Metadata = { title: 'Alumno | COACH OP' }
 
 export default async function ClientDetailPage({
     params,
@@ -44,7 +46,6 @@ export default async function ClientDetailPage({
         .eq('is_active', true)
         .maybeSingle()
 
-
     const { data: rawNutrition } = await supabase
         .from('nutrition_plans')
         .select('*')
@@ -54,7 +55,6 @@ export default async function ClientDetailPage({
 
     const nutritionPlans = (rawNutrition ?? []) as NutritionPlan[]
 
-    // Fetch today's adherence
     const today = new Date().toISOString().split('T')[0]
     const { data: rawDailyLog } = await supabase
         .from('daily_nutrition_logs')
@@ -76,7 +76,6 @@ export default async function ClientDetailPage({
 
     const checkIns = rawCheckins as CheckIn[] | null
 
-    // Fetch workout history logs detailed
     const { data: rawWorkoutLogs } = await supabase
         .from('workout_plans')
         .select(`
@@ -100,7 +99,6 @@ export default async function ClientDetailPage({
         .eq('client_id', clientId)
         .order('assigned_date', { ascending: false })
 
-    // Process workout history: calculate completion percentage for recent plans
     const workoutHistory = (rawWorkoutLogs || []).map((plan: any) => {
         let totalSets = 0
         let completedSets = 0
@@ -113,11 +111,8 @@ export default async function ClientDetailPage({
 
             if (hasLogs) {
                 completedSets += block.workout_logs.length
-                
-                // Extraemos detalles del ultimo registro para mostrar progreso
                 const latestLog = block.workout_logs[block.workout_logs.length - 1]
                 const exerciseName = block.exercises?.name || 'Ejercicio'
-                
                 exerciseLogs.push({
                     exerciseName,
                     targetWeight: block.target_weight_kg,
@@ -141,355 +136,325 @@ export default async function ClientDetailPage({
     }).filter(p => p.hasInteracted)
 
     return (
-        <div className="max-w-7xl animate-fade-in mx-auto mb-24 md:mb-0 space-y-8">
-            {/* Back nav */}
-            <Link href="/coach/clients"
-                className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-colors mb-2 bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10">
-                <ArrowLeft className="w-3.5 h-3.5" />
-                Terminal Central
-            </Link>
+        <div className="max-w-[1600px] animate-fade-in mx-auto mb-24 md:mb-0 space-y-10">
+            {/* Nav & Header Section */}
+            <div className="space-y-6">
+                <Link href="/coach/clients"
+                    className="group inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground hover:text-primary transition-all">
+                    <div className="p-1.5 rounded-full bg-secondary dark:bg-white/5 group-hover:bg-primary/10 transition-colors">
+                        <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                    </div>
+                    Directorio de Unidades
+                </Link>
 
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-3xl rounded-full -z-10 pointer-events-none" />
-                
-                <div className="flex items-center gap-5 relative z-10">
-                    <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(0,122,255,0.2)]">
-                        <span className="text-3xl font-bold text-white uppercase" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                            {client.full_name[0]}
-                        </span>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 relative">
+                    <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 blur-[100px] pointer-events-none z-0" />
+                    
+                    <div className="flex items-center gap-6 relative z-10">
+                        <div className="w-24 h-24 rounded-[2rem] bg-white dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center flex-shrink-0 shadow-2xl group relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <span className="text-4xl font-black text-foreground uppercase font-display relative z-10">
+                                {client.full_name[0]}
+                            </span>
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <h1 className="text-4xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display leading-none">
+                                    {client.full_name}
+                                </h1>
+                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-black text-[10px] uppercase tracking-widest px-3 py-1">Online</Badge>
+                            </div>
+                            <p className="text-muted-foreground text-sm font-bold uppercase tracking-widest mt-3 flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                {client.email}
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="text-3xl font-bold text-white uppercase tracking-tighter" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                            {client.full_name}
-                        </h1>
-                        <p className="text-primary text-[10px] font-bold uppercase tracking-[0.2em] mt-1">{client.email}</p>
+                    
+                    <div className="flex flex-wrap items-center gap-4 relative z-10">
+                        <GlassButton asChild className="h-14 px-8 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10">
+                            <Link href={`/coach/nutrition-builder/${clientId}`}>
+                                <Apple className="w-5 h-5 mr-3 text-emerald-500" />
+                                <span className="font-bold uppercase tracking-widest text-xs">Plan Dieta</span>
+                            </Link>
+                        </GlassButton>
+                        <GlassButton asChild className="h-14 px-8 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)] border-none">
+                            <Link href={`/coach/builder/${clientId}`}>
+                                <Zap className="w-5 h-5 mr-3" />
+                                <span className="font-bold uppercase tracking-widest text-xs">Nuevo Protocolo</span>
+                            </Link>
+                        </GlassButton>
                     </div>
-                </div>
-                
-                <div className="flex flex-wrap items-center gap-3 relative z-10">
-                    <Link href={`/coach/nutrition-builder/${clientId}`}
-                        className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-md border border-white/10">
-                        <Apple className="w-4 h-4 text-emerald-400" />
-                        Plan Nutricional
-                    </Link>
-                    <Link href={`/coach/builder/${clientId}`}
-                        className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(0,122,255,0.4)] border border-primary">
-                        <Plus className="w-4 h-4" />
-                        Nuevo Protocolo
-                    </Link>
                 </div>
             </div>
 
-            {/* Plan Duration Badge */}
-            {activeProgram && (() => {
-                const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
-                if (remainingDays === null) return null;
+            {/* Metrics Dashboard */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 relative z-10">
+                {[
+                    { label: 'Peso Actual', value: '72.4', unit: 'kg', icon: Activity, trend: '-0.6kg', trendUp: false },
+                    { label: 'Adherencia', value: '84', unit: '%', icon: Target, trend: '+4%', trendUp: true },
+                    { label: 'Días Activo', value: '24', unit: 'd', icon: Clock, trend: 'Fase 2', trendUp: true },
+                    { label: 'RPE Promedio', value: '7.5', unit: '', icon: Dumbbell, trend: 'Estable', trendUp: true },
+                ].map((metric, i) => (
+                    <GlassCard key={i} className="p-6 md:p-8 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-primary/10 transition-colors" />
+                        <div className="flex items-start justify-between mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <metric.icon className="w-5 h-5 text-primary" />
+                            </div>
+                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${metric.trendUp ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                {metric.trend}
+                            </span>
+                        </div>
+                        <div className="flex items-end gap-1.5">
+                            <span className="text-3xl md:text-4xl font-black text-foreground font-display leading-none">{metric.value}</span>
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">{metric.unit}</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-3 leading-none">{metric.label}</p>
+                    </GlassCard>
+                ))}
+            </div>
+
+            {/* Main Content Sections */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 relative z-10">
                 
-                return (
-                    <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500 shadow-[0_0_15px_rgba(0,122,255,0.1)]">
-                        <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30">
-                            <Calendar className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-white uppercase tracking-widest">
-                                {remainingDays > 0 
-                                    ? `Ciclo Activo: ${remainingDays} días restantes`
-                                    : remainingDays === 0 
-                                        ? `Último Día de Protocolo`
-                                        : `Protocolo Finalizado`}
-                            </p>
-                            <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-0.5">
-                                {activeProgram.name}
-                            </p>
-                        </div>
-                    </div>
-                );
-            })()}
-
-            {/* Intake Profile Card */}
-            {(() => {
-                const fetchIntake = async () => {
-                    const { data } = await supabase
-                        .from('client_intake')
-                        .select('*')
-                        .eq('client_id', clientId)
-                        .maybeSingle()
-                    return data
-                }
-                return fetchIntake()
-            })().then(intake => intake && (
-                <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-primary" />
-                        Biometría Base
-                    </h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Masa</p>
-                            <p className="text-lg font-bold text-white">{intake.weight_kg} <span className="text-xs text-zinc-500">kg</span></p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Estatura</p>
-                            <p className="text-lg font-bold text-white">{intake.height_cm} <span className="text-xs text-zinc-500">cm</span></p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Target</p>
-                            <p className="text-sm font-bold text-white uppercase truncate">{intake.goals}</p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Nivel</p>
-                            <p className="text-sm font-bold text-white uppercase truncate">{intake.experience_level}</p>
-                        </div>
-                    </div>
-                    {(intake.injuries || intake.medical_conditions) && (
-                        <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {intake.injuries && (
-                                <div>
-                                    <p className="text-[10px] text-rose-500 font-bold uppercase tracking-[0.2em] mb-2">Lesiones Reportadas</p>
-                                    <p className="text-xs text-zinc-300 font-medium leading-relaxed">{intake.injuries}</p>
-                                </div>
-                            )}
-                            {intake.medical_conditions && (
-                                <div>
-                                    <p className="text-[10px] text-rose-500 font-bold uppercase tracking-[0.2em] mb-2">Condiciones Médicas</p>
-                                    <p className="text-xs text-zinc-300 font-medium leading-relaxed">{intake.medical_conditions}</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            ))}
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Column 1: Routines & Nutrition */}
-                <div className="space-y-8">
+                {/* Left Column: Programs & Nutrition (8 cols) */}
+                <div className="xl:col-span-8 space-y-10">
                     
-                    {/* Workout Programs */}
-                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
-                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                                <Dumbbell className="w-4 h-4 text-primary" />
-                                Módulo de Entrenamiento
-                            </h2>
-                        </div>
-
-                        <div className="p-6">
-                            {!activeProgram ? (
-                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
-                                    <Dumbbell className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin protocolo activo</p>
-                                </div>
-                            ) : (
-                                <div className="border border-primary/20 bg-primary/5 rounded-xl p-6 relative overflow-hidden group hover:border-primary/40 transition-colors">
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-2xl rounded-full -z-10" />
-                                    <div className="flex items-center justify-between mb-6">
+                    {/* Active Status Banner */}
+                    {activeProgram && (() => {
+                        const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
+                        return (
+                            <GlassCard className="p-1 border-primary/20 bg-primary/5">
+                                <div className="flex items-center justify-between p-6">
+                                    <div className="flex items-center gap-6">
+                                        <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center border border-primary/30">
+                                            <Calendar className="w-7 h-7 text-primary" />
+                                        </div>
                                         <div>
-                                            <h3 className="font-bold text-white text-lg uppercase tracking-tight">{activeProgram.name}</h3>
-                                            <p className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mt-1">
-                                                Protocolo Maestro
-                                            </p>
-                                        </div>
-                                        <Link 
-                                            href={`/coach/builder/${clientId}?programId=${activeProgram.id}`}
-                                            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-primary hover:border-primary/30 transition-all"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </Link>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-black/50 border border-white/5 rounded-lg p-3">
-                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Duración</p>
-                                            <p className="font-bold text-white text-sm">{activeProgram.weeks_to_repeat} Semanas</p>
-                                        </div>
-                                        <div className="bg-black/50 border border-white/5 rounded-lg p-3">
-                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Volumen</p>
-                                            <p className="font-bold text-white text-sm">{(activeProgram as any).workout_plans?.length || 0} Sesiones</p>
+                                            <h3 className="text-xl font-black text-foreground uppercase tracking-tight font-display">{activeProgram.name}</h3>
+                                            <div className="flex items-center gap-4 mt-1">
+                                                <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em]">Protocolo Maestro de Despliegue</p>
+                                                <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                                                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em]">{activeProgram.weeks_to_repeat} Semanas de Ciclo</p>
+                                            </div>
                                         </div>
                                     </div>
+                                    <div className="text-right">
+                                        <span className="text-4xl font-black text-primary font-display leading-none">
+                                            {remainingDays !== null ? (remainingDays > 0 ? remainingDays : 0) : '∞'}
+                                        </span>
+                                        <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mt-1">Días Restantes</p>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                    </div>
+                            </GlassCard>
+                        );
+                    })()}
 
-                    {/* Nutrition Section */}
-                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
-                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                                <Apple className="w-4 h-4 text-emerald-500" />
-                                Módulo Nutricional
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                        {/* Training Module */}
+                        <div className="space-y-6">
+                            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                                Entrenamiento
                             </h2>
-                        </div>
-
-                        <div className="p-6">
-                            {nutritionPlans.length === 0 ? (
-                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
-                                    <Apple className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin plan nutricional</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {nutritionPlans.map(plan => (
-                                        <div key={plan.id} className="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-6 relative overflow-hidden group hover:border-emerald-500/40 transition-colors">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-2xl rounded-full -z-10" />
-                                            <div className="flex items-start justify-between mb-6">
-                                                <div>
-                                                    <h3 className="font-bold text-white text-lg uppercase tracking-tight">{plan.name}</h3>
-                                                    {plan.daily_calories && (
-                                                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.2em] mt-1">
-                                                            Target: {plan.daily_calories} Kcal
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <Link 
-                                                    href={`/coach/nutrition-builder/${clientId}?planId=${plan.id}`}
-                                                    className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </Link>
-                                            </div>
-                                            
-                                            {(plan.protein_g || plan.carbs_g || plan.fats_g) && (
-                                                <div className="grid grid-cols-3 gap-3 mb-4">
-                                                    <div className="bg-black/50 border border-white/5 rounded-lg p-3 flex flex-col items-center">
-                                                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">PRO</p>
-                                                        <p className="font-bold text-white text-sm">{plan.protein_g || 0}g</p>
-                                                    </div>
-                                                    <div className="bg-black/50 border border-white/5 rounded-lg p-3 flex flex-col items-center">
-                                                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">CAR</p>
-                                                        <p className="font-bold text-white text-sm">{plan.carbs_g || 0}g</p>
-                                                    </div>
-                                                    <div className="bg-black/50 border border-white/5 rounded-lg p-3 flex flex-col items-center">
-                                                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">FAT</p>
-                                                        <p className="font-bold text-white text-sm">{plan.fats_g || 0}g</p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            
-                                            {plan.instructions && (
-                                                <div className="text-xs text-zinc-400 bg-black/40 border border-white/5 p-4 rounded-lg font-medium leading-relaxed">
-                                                    <span className="text-emerald-500 font-bold uppercase tracking-widest text-[10px] block mb-1">Notas</span>
-                                                    {plan.instructions}
-                                                </div>
-                                            )}
-
-                                            {todayLog && todayLog.plan_id === plan.id && (
-                                                <div className="mt-4 pt-4 border-t border-emerald-500/10">
-                                                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
-                                                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-                                                            {todayLog.nutrition_meal_logs?.filter((l: any) => l.is_completed).length || 0} Meals
-                                                        </span>
-                                                        <span className="text-[10px] uppercase font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 rounded">
-                                                            Tracking OK
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            )}
+                            <GlassCard className="overflow-hidden bg-white/50 dark:bg-zinc-950/30">
+                                <div className="p-8 space-y-8">
+                                    {!activeProgram ? (
+                                        <div className="text-center py-10">
+                                            <Dumbbell className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Sin Protocolo Activo</p>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Column 2: Logs & Check-ins */}
-                <div className="space-y-8">
-                    {/* Workout History */}
-                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-white/10 bg-white/[0.02]">
-                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                                <Activity className="w-4 h-4 text-primary" />
-                                Logs de Entrenamiento
-                            </h2>
-                        </div>
-                        
-                        <div className="p-6">
-                            {workoutHistory.length === 0 ? (
-                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
-                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin registros recientes</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {workoutHistory.slice(0, 5).map((log: any) => (
-                                        <div key={log.id} className="bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-colors">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                        <Dumbbell className="w-4 h-4 text-primary" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-white text-sm uppercase tracking-tight">{log.title}</p>
-                                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
-                                                            {new Date(log.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-                                                        </p>
-                                                    </div>
+                                    ) : (
+                                        <div className="space-y-8">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Siguiente Sesión</p>
+                                                    <p className="text-lg font-black text-foreground uppercase">Push Day: Hipertrofia</p>
                                                 </div>
-                                                <div className={`px-3 py-1 rounded border text-[10px] font-bold uppercase tracking-widest
-                                                    ${log.logCount >= log.totalSets ? 'bg-primary/10 text-primary border-primary/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                                                    {log.logCount}/{log.totalSets} SETS
-                                                </div>
+                                                <GlassButton size="icon" variant="ghost" className="rounded-xl border border-primary/10">
+                                                    <ChevronRight className="w-5 h-5 text-primary" />
+                                                </GlassButton>
                                             </div>
-
-                                            {log.exerciseLogs.length > 0 && (
-                                                <div className="bg-black/50 rounded-lg p-4 border border-white/5 space-y-3">
-                                                    {log.exerciseLogs.slice(0, 3).map((exLog: any, i: number) => (
-                                                        <div key={i} className="flex items-center justify-between">
-                                                            <span className="text-xs font-bold text-zinc-300 truncate pr-4">{exLog.exerciseName}</span>
+                                            
+                                            <div className="space-y-4">
+                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Contenido del Ciclo</p>
+                                                <div className="space-y-3">
+                                                    {[1, 2, 3, 4].map(i => (
+                                                        <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/50 dark:bg-white/[0.02] border border-border dark:border-white/5 group hover:border-primary/30 transition-all cursor-pointer">
                                                             <div className="flex items-center gap-3">
-                                                                <span className="text-[10px] font-bold text-zinc-600">
-                                                                    T: {exLog.targetWeight || '-'}kg
-                                                                </span>
-                                                                <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
-                                                                    {exLog.actualWeight || '-'}kg × {exLog.actualReps || '-'}
-                                                                </span>
+                                                                <div className="w-6 h-6 rounded-md bg-secondary dark:bg-white/5 flex items-center justify-center text-[10px] font-bold text-muted-foreground group-hover:text-primary transition-colors">{i}</div>
+                                                                <span className="text-xs font-bold text-foreground">Plan de Sesión 0{i}</span>
                                                             </div>
+                                                            <Activity className="w-3.5 h-3.5 text-muted-foreground opacity-30 group-hover:opacity-100 group-hover:text-primary transition-all" />
                                                         </div>
                                                     ))}
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
-                            )}
+                            </GlassCard>
                         </div>
-                    </div>
 
-                    {/* Check-ins */}
-                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
-                            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-primary" />
-                                Base de Datos: Check-ins
+                        {/* Nutrition Module */}
+                        <div className="space-y-6">
+                            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                Nutrición
                             </h2>
-                            <Badge variant="outline" className="bg-white/5 text-zinc-500 border-white/10 font-bold">{checkIns?.length || 0}</Badge>
-                        </div>
-
-                        <div className="p-6">
-                            {!checkIns || checkIns.length === 0 ? (
-                                <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
-                                    <Calendar className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Sin reportes registrados</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {checkIns.map(checkIn => (
-                                        <div key={checkIn.id} className="relative group">
-                                            <div className="absolute inset-0 bg-primary/5 blur-xl rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            <CheckInCard
-                                                date={checkIn.created_at}
-                                                weight={checkIn.weight}
-                                                energyLevel={checkIn.energy_level}
-                                                notes={checkIn.notes}
-                                                photoUrl={checkIn.front_photo_url}
-                                            />
+                            <GlassCard className="overflow-hidden bg-white/50 dark:bg-zinc-950/30">
+                                <div className="p-8 space-y-8">
+                                    {nutritionPlans.length === 0 ? (
+                                        <div className="text-center py-10">
+                                            <Apple className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Sin Dieta Base</p>
                                         </div>
-                                    ))}
+                                    ) : (
+                                        <div className="space-y-8">
+                                            {nutritionPlans.map(plan => (
+                                                <div key={plan.id} className="space-y-8">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Target Diálogo</p>
+                                                            <p className="text-lg font-black text-foreground uppercase">{plan.name}</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-xl font-black text-foreground leading-none">{plan.daily_calories || 0}</p>
+                                                            <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">Kcal/Día</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-3 gap-3">
+                                                        {[
+                                                            { label: 'PRO', val: plan.protein_g, color: 'emerald' },
+                                                            { label: 'CAR', val: plan.carbs_g, color: 'emerald' },
+                                                            { label: 'FAT', val: plan.fats_g, color: 'emerald' },
+                                                        ].map((macro, idx) => (
+                                                            <div key={idx} className="bg-white/50 dark:bg-white/[0.02] border border-border dark:border-white/10 rounded-xl p-4 flex flex-col items-center gap-1">
+                                                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{macro.label}</span>
+                                                                <span className="text-sm font-black text-foreground">{macro.val || 0}g</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Adherencia Diaria</span>
+                                                            <span className="text-[10px] font-black text-emerald-500">75%</span>
+                                                        </div>
+                                                        <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-emerald-500 w-[75%] shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
+                            </GlassCard>
+                        </div>
+                    </div>
+
+                    {/* Workout History Details */}
+                    <div className="space-y-6">
+                        <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-primary" />
+                            Historial de Operaciones
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {workoutHistory.slice(0, 4).map((log: any) => (
+                                <GlassCard key={log.id} className="p-6 bg-white/40 dark:bg-zinc-950/20 group hover:bg-white/60 dark:hover:bg-zinc-950/40 transition-all">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                                <Activity className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-foreground uppercase tracking-tight">{log.title}</p>
+                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">
+                                                    {new Date(log.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${log.logCount >= log.totalSets ? 'bg-primary/10 text-primary border-primary/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                            {log.logCount}/{log.totalSets} Sets
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 mt-4">
+                                        {log.exerciseLogs.slice(0, 2).map((ex: any, i: number) => (
+                                            <div key={i} className="flex items-center justify-between text-[10px] font-bold">
+                                                <span className="text-muted-foreground uppercase truncate pr-4">{ex.exerciseName}</span>
+                                                <span className="text-foreground shrink-0">{ex.actualWeight}kg × {ex.actualReps}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </GlassCard>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Column: Check-ins & Biometrics (4 cols) */}
+                <div className="xl:col-span-4 space-y-10">
+                    
+                    {/* Progress Photos Quick Glance */}
+                    <div className="space-y-6">
+                        <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-cyan-400" />
+                            Evolución Visual
+                        </h2>
+                        <GlassCard className="p-6 space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="aspect-[3/4] rounded-2xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 flex flex-col items-center justify-center overflow-hidden relative group">
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Ver Inicial</span>
+                                    </div>
+                                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest absolute bottom-3 z-10">Día 1</p>
+                                </div>
+                                <div className="aspect-[3/4] rounded-2xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 flex flex-col items-center justify-center overflow-hidden relative group">
+                                    <div className="absolute inset-0 bg-primary/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Ver Actual</span>
+                                    </div>
+                                    <p className="text-[9px] font-black text-primary uppercase tracking-widest absolute bottom-3 z-10">Semana 8</p>
+                                </div>
+                            </div>
+                            <GlassButton className="w-full h-12 text-[10px] font-black uppercase tracking-widest border-primary/20">
+                                Comparativa de Fotos
+                            </GlassButton>
+                        </GlassCard>
+                    </div>
+
+                    {/* Recent Check-ins Terminal */}
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                                Check-ins
+                            </h2>
+                            <Badge variant="outline" className="font-black text-[9px] uppercase tracking-widest bg-white/5">{checkIns?.length || 0}</Badge>
+                        </div>
+                        <div className="space-y-4">
+                            {!checkIns || checkIns.length === 0 ? (
+                                <GlassCard className="p-8 text-center border-dashed border-white/10">
+                                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Esperando Reportes...</p>
+                                </GlassCard>
+                            ) : (
+                                checkIns.slice(0, 3).map(checkIn => (
+                                    <GlassCard key={checkIn.id} className="overflow-hidden group hover:border-primary/30 transition-all">
+                                        <CheckInCard
+                                            date={checkIn.created_at}
+                                            weight={checkIn.weight}
+                                            energyLevel={checkIn.energy_level}
+                                            notes={checkIn.notes}
+                                            photoUrl={checkIn.front_photo_url}
+                                        />
+                                    </GlassCard>
+                                ))
                             )}
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>

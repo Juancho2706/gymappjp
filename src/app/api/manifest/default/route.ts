@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const manifest = {
-    name: "OmniCoach OS",
-    short_name: "OmniCoach",
+    name: "COACH OP",
+    short_name: "COACH OP",
     description: "Plataforma de entrenamiento inteligente y gestión para coaches",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#ffffff",
+    background_color: "#000000",
     theme_color: "#10B981",
     icons: [
       {

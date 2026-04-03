@@ -309,17 +309,17 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Sobreescribir planes nutricionales?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Los siguientes alumnos ya tienen un plan nutricional activo:
-                            <ul className="mt-2 list-disc list-inside font-medium text-foreground">
+                            <span className="block mt-2">Los siguientes alumnos ya tienen un plan nutricional activo:</span>
+                            <span className="block mt-2 font-medium text-foreground">
                                 {clientsWithExistingPlans.map(c => (
-                                    <li key={c.id}>
-                                        {c.full_name} ({c.active_plan?.name})
-                                    </li>
+                                    <span key={c.id} className="block ml-4">
+                                        • {c.full_name} ({c.active_plan?.name})
+                                    </span>
                                 ))}
-                            </ul>
-                            <p className="mt-4">
+                            </span>
+                            <span className="block mt-4">
                                 Si continúas, se les desactivará su plan actual y se les asignará este nuevo plan. ¿Deseas continuar?
-                            </p>
+                            </span>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

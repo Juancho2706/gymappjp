@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import type { Metadata } from 'next'
 import { CheckInForm } from './CheckInForm'
 
-export const metadata: Metadata = { title: 'Check-in Semanal | OmniCoach OS' }
+export const metadata: Metadata = { title: 'Check-in Semanal | COACH OP' }
 
 interface Props {
     params: Promise<{ coach_slug: string }>

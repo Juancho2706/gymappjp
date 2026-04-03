@@ -5,7 +5,7 @@ import { ClientExerciseCatalog } from "./ClientExerciseCatalog";
 import { Dumbbell } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Catálogo de Ejercicios | OmniCoach OS",
+  title: "Catálogo de Ejercicios | COACH OP",
 };
 
 interface Props {

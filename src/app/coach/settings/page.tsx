@@ -8,7 +8,7 @@ type Coach = Tables<'coaches'>
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Mi Marca | OmniCoach OS',
+    title: 'Mi Marca | COACH OP',
 }
 
 export default async function CoachSettingsPage() {

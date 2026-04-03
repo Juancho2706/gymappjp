@@ -11,6 +11,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90 glow-primary",
+        electric: "bg-[#007AFF] text-white hover:bg-[#007AFF]/90 glow-primary shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)]",
+        glass: "bg-white/10 backdrop-blur-md border border-white/20 text-foreground hover:bg-white/20",
         outline:
           "border-white/10 bg-white/5 backdrop-blur-md text-foreground hover:bg-white/10 hover:border-white/20",
         secondary:

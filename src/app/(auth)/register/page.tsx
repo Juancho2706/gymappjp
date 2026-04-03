@@ -28,7 +28,7 @@ function SubmitButton() {
                     Creando tu cuenta...
                 </span>
             ) : (
-                'Crear Cuenta Gratis'
+                'Crear Cuenta'
             )}
         </button>
     )
@@ -40,15 +40,14 @@ export default function RegisterPage() {
     return (
         <div className="animate-slide-up">
             {/* Header */}
-            <div className="text-center mb-8">
+            <div className="text-center mb-8 flex flex-col items-center">
                 <h1
-                    className="text-3xl font-extrabold tracking-tight text-foreground"
-                    style={{ fontFamily: 'var(--font-outfit)' }}
+                    className="text-3xl font-extrabold tracking-tight text-foreground font-display"
                 >
                     Crea tu cuenta
                 </h1>
                 <p className="mt-2 text-muted-foreground text-sm">
-                    30 días gratis para probar todas las funciones
+                    Únete a COACH OP y empieza a escalar tu negocio hoy
                 </p>
             </div>
 

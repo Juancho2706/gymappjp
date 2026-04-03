@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Outfit } from 'next/font/google'
+import { Inter, Montserrat } from 'next/font/google'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from 'next-themes'
@@ -14,8 +14,8 @@ const inter = Inter({
   display: 'swap',
 })
 
-const outfit = Outfit({
-  variable: '--font-outfit',
+const montserrat = Montserrat({
+  variable: '--font-montserrat',
   subsets: ['latin'],
   display: 'swap',
 })
@@ -30,32 +30,32 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'OmniCoach OS | Plataforma Todo-en-Uno para Entrenadores',
-    template: '%s | OmniCoach OS',
+    default: 'COACH OP | Escala tu Negocio de Personal Training y Coaching',
+    template: '%s | COACH OP',
   },
-  description: 'La plataforma definitiva para coaches y personal trainers que quieren escalar su negocio. Crea rutinas, planes nutricionales, gestiona alumnos y ten tu propia app white-label.',
-  keywords: ['fitness', 'coaching', 'entrenamiento', 'SaaS', 'personal trainer', 'gym', 'rutinas', 'nutrición', 'white label'],
-  authors: [{ name: 'OmniCoach OS' }],
-  applicationName: 'OmniCoach OS',
+  description: 'COACH OP es la plataforma definitiva para Personal Trainers y Coaches. Crea rutinas profesionales, planes de nutrición, gestiona alumnos, automatiza check-ins y ten tu propia app móvil white-label.',
+  keywords: ['fitness', 'coaching', 'entrenamiento', 'SaaS', 'personal trainer', 'gym', 'rutinas', 'nutrición', 'white label', 'software entrenadores'],
+  authors: [{ name: 'COACH OP' }],
+  applicationName: 'COACH OP',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'OmniCoach',
+    title: 'COACH OP',
   },
   formatDetection: {
     telephone: false,
   },
   openGraph: {
-    title: 'OmniCoach OS | Plataforma Todo-en-Uno para Entrenadores',
-    description: 'Escala tu negocio de fitness con herramientas profesionales para rutinas, nutrición y seguimiento de alumnos.',
-    url: 'https://omnicoach.app',
-    siteName: 'OmniCoach OS',
+    title: 'COACH OP | La plataforma definitiva para Personal Trainers',
+    description: 'Transforma y escala tu negocio de fitness. Herramientas premium para crear rutinas, asignar planes de nutrición y llevar el control de tus alumnos en tu propia app white-label.',
+    url: 'https://coachop.app',
+    siteName: 'COACH OP',
     images: [
       {
         url: '/og-image.jpg',
         width: 1200,
         height: 630,
-        alt: 'OmniCoach OS Dashboard',
+        alt: 'COACH OP Dashboard',
       },
     ],
     locale: 'es_ES',
@@ -63,15 +63,15 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'OmniCoach OS | Plataforma Todo-en-Uno para Entrenadores',
-    description: 'La plataforma definitiva para coaches que quieren escalar. Rutinas, nutrición y app propia.',
+    title: 'COACH OP | Escala tu Negocio de Fitness',
+    description: 'Rutinas, nutrición y app propia. Todo lo que necesitas para profesionalizar tu servicio de coaching.',
     images: ['/og-image.jpg'],
   },
-  metadataBase: new URL('https://omnicoach.app'),
+  metadataBase: new URL('https://coachop.app'),
   manifest: '/api/manifest/default',
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/favicon.ico',
+    apple: '/apple-icon.png',
   },
 }
 
@@ -82,17 +82,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={`${inter.variable} ${outfit.variable} antialiased`} suppressHydrationWarning>
+      <body className={`${inter.variable} ${montserrat.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange={false}
         >
           <LanguageProvider>
             <PwaRegister />
             <ScrollRestoration />
-            <InstallPrompt brandName="OmniCoach" />
+            <InstallPrompt brandName="COACH OP" />
             {children}
             <Toaster richColors position="top-right" />
           </LanguageProvider>

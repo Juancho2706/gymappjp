@@ -19,6 +19,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
+import { GymAppLogo } from '@/components/ui/Logo'
 
 interface Props {
     coachSlug: string
@@ -85,12 +86,13 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
                 {/* Logo area (Desktop only) */}
                 <div className={cn("hidden md:flex py-6 border-b border-border/10 items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
                     <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
+                        <GymAppLogo className="w-10 h-10 flex-shrink-0" />
                         {!isCollapsed && (
                             <div>
                                 <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">
                                     Mi Coach
                                 </p>
-                                <p className="text-sm font-bold text-foreground truncate" style={{ fontFamily: 'var(--font-outfit)', color: 'var(--theme-primary)' }}>
+                                <p className="text-sm font-bold text-foreground truncate font-display" style={{ color: 'var(--theme-primary)' }}>
                                     {coachBrand}
                                 </p>
                             </div>

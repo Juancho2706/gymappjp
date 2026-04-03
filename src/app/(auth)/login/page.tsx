@@ -40,10 +40,9 @@ export default function CoachLoginPage() {
     return (
         <div className="animate-slide-up">
             {/* Header */}
-            <div className="text-center mb-8">
+            <div className="text-center mb-8 flex flex-col items-center">
                 <h1
-                    className="text-3xl font-extrabold tracking-tight text-foreground"
-                    style={{ fontFamily: 'var(--font-outfit)' }}
+                    className="text-3xl font-extrabold tracking-tight text-foreground font-display"
                 >
                     Bienvenido de vuelta
                 </h1>
@@ -116,7 +115,7 @@ export default function CoachLoginPage() {
                 {/* Divider */}
                 <div className="mt-6 flex items-center gap-3">
                     <div className="flex-1 h-px bg-border" />
-                    <span className="text-xs text-muted-foreground">¿Nuevo en OmniCoach?</span>
+                    <span className="text-xs text-muted-foreground">¿Nuevo en COACH OP?</span>
                     <div className="flex-1 h-px bg-border" />
                 </div>
 
@@ -125,14 +124,14 @@ export default function CoachLoginPage() {
                         href="/register"
                         className="text-sm text-primary hover:opacity-80 transition-opacity font-medium"
                     >
-                        Crear cuenta gratis →
+                        Crear cuenta →
                     </Link>
                 </div>
             </div>
 
             {/* Footer */}
             <p className="mt-6 text-center text-xs text-muted-foreground">
-                &copy; {new Date().getFullYear()} OmniCoach OS. Todos los derechos reservados.
+                &copy; {new Date().getFullYear()} COACH OP. Todos los derechos reservados.
             </p>
         </div>
     )
