@@ -346,6 +346,7 @@ export function WeeklyPlanBuilder({
     const [isPending, startTransition] = useTransition()
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
+    const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false)
 
     const touchStartY = useRef(0)
     const initialSheetHeight = useRef(60)
@@ -607,7 +608,7 @@ export function WeeklyPlanBuilder({
         <div className="flex flex-col h-[calc(100vh-130px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-transparent overflow-hidden relative">
             {/* Header Area */}
             <div className={cn(
-                "flex flex-col border-b border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-6 gap-4 md:gap-6 flex-shrink-0 transition-all duration-500 ease-in-out shadow-sm dark:shadow-2xl",
+                "flex flex-col border-b border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-4 gap-4 flex-shrink-0 transition-all duration-500 ease-in-out shadow-sm dark:shadow-2xl relative",
                 isCatalogOpen && "md:opacity-100 md:h-auto md:p-4 md:pointer-events-auto h-0 p-0 opacity-0 overflow-hidden pointer-events-none"
             )}>
                 <div className="flex items-center gap-3 md:gap-4">
@@ -640,7 +641,10 @@ export function WeeklyPlanBuilder({
                 </div>
 
                 {/* Desktop and Tablet config inputs */}
-                <div className="hidden md:grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className={cn(
+                    "hidden md:grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden transition-all duration-300 ease-in-out",
+                    isHeaderCollapsed ? "h-0 opacity-0 mt-0" : "h-auto opacity-100 mt-2"
+                )}>
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1 flex items-center justify-between">
                             Designación
@@ -679,6 +683,15 @@ export function WeeklyPlanBuilder({
                         </div>
                     </div>
                 </div>
+
+                {/* Toggle Button for Desktop Header */}
+                <button
+                    onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
+                    className="hidden md:flex absolute -bottom-3 left-1/2 -translate-x-1/2 bg-card border border-border dark:border-white/10 rounded-full p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-all shadow-sm z-20"
+                    title={isHeaderCollapsed ? "Expandir configuración" : "Colapsar configuración"}
+                >
+                    {isHeaderCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                </button>
 
                 {/* Mobile: Compact Config Toggle */}
                 <div className="md:hidden flex items-center gap-2">
