@@ -129,7 +129,7 @@ function SortableBlock({
                 </button>
                 
                 <div className="flex-1 min-w-0" onClick={() => onEdit(block)}>
-                    <p className="text-sm font-bold text-foreground truncate cursor-pointer group-hover:text-primary transition-colors">
+                    <p className="text-sm font-bold text-foreground leading-tight cursor-pointer group-hover:text-primary transition-colors">
                         {block.exercise_name}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5">
@@ -909,11 +909,11 @@ export function WeeklyPlanBuilder({
             <Sheet open={!!editingBlock} onOpenChange={() => setEditingBlock(null)}>
                 <SheetContent side="right" className="w-full sm:max-w-md p-0 gap-0 overflow-y-auto bg-background/95 backdrop-blur-3xl border-l border-border dark:border-white/10">
                     <SheetHeader className="p-8 border-b border-border dark:border-white/10 sticky top-0 bg-background/50 dark:bg-black/50 backdrop-blur-md z-10">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)]">
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)] shrink-0">
                                 <Dumbbell className="w-6 h-6 text-primary" />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                                 <SheetTitle className="text-left text-lg font-bold text-foreground leading-tight font-display">{editingBlock?.exercise_name}</SheetTitle>
                                 <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-1">{editingBlock?.muscle_group}</p>
                             </div>
