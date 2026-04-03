@@ -13,7 +13,6 @@ export const MUSCLE_GROUPS = [
     'Aductores',
     'Gemelos',
     'Core',
-    'Antebrazo',
     'Trapecio',
     'Lumbar'
 ] as const;
@@ -37,7 +36,6 @@ export const MUSCLE_MAPPING: Record<string, string[]> = {
     'gemelos': ['calves', 'gemelos'],
     'trapecio': ['traps', 'trapecio'],
     'lumbar': ['lower back', 'lumbar'],
-    'antebrazo': ['forearm', 'antebrazo'],
     'aductores': ['adductors', 'aductores'],
     'abductores': ['abductors', 'abductores']
 };

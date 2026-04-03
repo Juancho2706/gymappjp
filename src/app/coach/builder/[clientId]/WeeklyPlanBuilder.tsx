@@ -340,31 +340,38 @@ export function WeeklyPlanBuilder({
     const [activeId, setActiveId] = useState<string | null>(null)
     const [activeData, setActiveData] = useState<any>(null)
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
-    const [isCatalogExpanded, setIsCatalogExpanded] = useState(false)
+    const [sheetHeight, setSheetHeight] = useState(60)
+    const [isDraggingSheet, setIsDraggingSheet] = useState(false)
     const [isPending, startTransition] = useTransition()
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
 
     const touchStartY = useRef(0)
+    const initialSheetHeight = useRef(60)
 
     const handleTouchStart = (e: React.TouchEvent) => {
         touchStartY.current = e.touches[0].clientY
+        initialSheetHeight.current = sheetHeight
+        setIsDraggingSheet(true)
+    }
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!isDraggingSheet) return
+        const deltaY = e.touches[0].clientY - touchStartY.current
+        const deltaVh = (deltaY / window.innerHeight) * 100
+        const newHeight = Math.max(30, Math.min(85, initialSheetHeight.current - deltaVh))
+        setSheetHeight(newHeight)
     }
 
     const handleTouchEnd = (e: React.TouchEvent) => {
-        const touchEndY = e.changedTouches[0].clientY
-        const delta = touchEndY - touchStartY.current
-        
-        if (delta < -30) {
-            // swipe up
-            setIsCatalogExpanded(true)
-        } else if (delta > 30) {
-            // swipe down
-            if (isCatalogExpanded) {
-                setIsCatalogExpanded(false)
-            } else {
-                setIsCatalogOpen(false) // Close if already collapsed
-            }
+        setIsDraggingSheet(false)
+        if (sheetHeight > 70) {
+            setSheetHeight(80)
+        } else if (sheetHeight < 50) {
+            setIsCatalogOpen(false)
+            setTimeout(() => setSheetHeight(60), 300)
+        } else {
+            setSheetHeight(60)
         }
     }
 
@@ -837,23 +844,25 @@ export function WeeklyPlanBuilder({
                     <Sheet open={isCatalogOpen} onOpenChange={(open) => { 
                         if (!open) {
                             setIsCatalogOpen(false)
-                            setTimeout(() => setIsCatalogExpanded(false), 300)
+                            setTimeout(() => setSheetHeight(60), 300)
                         }
                     }}>
                         <SheetContent 
                             side="bottom" 
                             className={cn(
-                                "p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border dark:border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-300 ease-out bg-background/95 backdrop-blur-2xl",
-                                isCatalogExpanded ? "h-[92vh]" : "h-[60vh]"
+                                "p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border dark:border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col bg-background/95 backdrop-blur-2xl",
+                                !isDraggingSheet && "transition-all duration-300 ease-out"
                             )}
+                            style={{ height: `${sheetHeight}vh` }}
                             showCloseButton={false}
                         >
                             {/* Handle visual */}
                             <div 
                                 className="w-full pt-4 pb-2 cursor-grab active:cursor-grabbing flex justify-center"
                                 onTouchStart={handleTouchStart}
+                                onTouchMove={handleTouchMove}
                                 onTouchEnd={handleTouchEnd}
-                                onClick={() => setIsCatalogExpanded(!isCatalogExpanded)}
+                                onClick={() => setSheetHeight(sheetHeight === 80 ? 60 : 80)}
                             >
                                 <div className="w-12 h-1.5 bg-muted-foreground/20 dark:bg-white/20 rounded-full shrink-0" />
                             </div>

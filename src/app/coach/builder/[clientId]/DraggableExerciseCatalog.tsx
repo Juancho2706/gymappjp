@@ -25,10 +25,7 @@ function DraggableExerciseItem({ exercise, onSelect }: DraggableExerciseItemProp
         }
     })
 
-    const style = transform ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        touchAction: 'none'
-    } : {
+    const style = {
         touchAction: 'pan-y'
     }
 

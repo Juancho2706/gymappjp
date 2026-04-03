@@ -1,6 +1,6 @@
 # Catálogo Global de Ejercicios
 
-Total de ejercicios: **493**
+Total de ejercicios: **511**
 
 --- 
 
@@ -545,9 +545,25 @@ Total de ejercicios: **493**
 
 ## Trapecio
 
-*(Sin ejercicios en esta categoría aún)*
+- **Encogimientos con barra** (Barra) - *Principiante*
+- **Encogimientos con mancuernas** (Mancuerna) - *Principiante*
+- **Encogimientos en máquina Smith** (Multipower) - *Principiante*
+- **Face Pulls** (Polea) - *Principiante*
+- **Paseo del granjero** (Mancuerna) - *Intermedio*
+- **Power Clean** (Barra) - *Avanzado*
+- **Remo al mentón (agarre ancho)** (Barra) - *Intermedio*
+- **Remo con soporte al pecho** (Máquina) - *Principiante*
+- **Vuelos posteriores (Pájaros)** (Mancuerna) - *Principiante*
+- **Y-Raises** (Mancuerna) - *Intermedio*
 
 ## Lumbar
 
-*(Sin ejercicios en esta categoría aún)*
+- **Bird-Dog** (Peso Corporal) - *Principiante*
+- **Buenos días** (Barra) - *Avanzado*
+- **Hiperextensiones a 45 grados** (Máquina) - *Principiante*
+- **Peso muerto con barra hexagonal** (Barra) - *Intermedio*
+- **Peso muerto convencional** (Barra) - *Avanzado*
+- **Peso muerto rumano** (Barra) - *Intermedio*
+- **Reverse Hyper** (Máquina) - *Intermedio*
+- **Superman** (Peso Corporal) - *Principiante*
 
