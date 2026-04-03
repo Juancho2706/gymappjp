@@ -14,5 +14,12 @@
     "common.clients": "Alumnos",
     "common.exercises": "Ejercicios",
     "common.settings": "Mi Marca",
-    "common.logout": "Cerrar sesión"
+    "common.logout": "Cerrar sesión",
+    "tooltip.sets": "Cantidad total de series a realizar.",
+    "tooltip.reps": "Rango de repeticiones objetivo (ej. 8-12).",
+    "tooltip.weight": "Peso sugerido o historial previo.",
+    "tooltip.rir": "RIR (Reps In Reserve): cuántas te faltaron para fallar. RPE (Rate of Perceived Exertion): esfuerzo del 1 al 10.",
+    "tooltip.tempo": "Velocidad de cada fase del ejercicio (ej. 3s bajada, 1s pausa, explosivo al subir).",
+    "tooltip.rest": "Tiempo de descanso entre series.",
+    "tooltip.notes": "Instrucciones técnicas específicas del coach."
 }

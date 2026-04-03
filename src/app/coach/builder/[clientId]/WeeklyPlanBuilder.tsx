@@ -53,6 +53,8 @@ type Exercise = Tables<'exercises'>
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 // ─── Types ──────────────────────────────────────────────────────
 interface BuilderBlock {
@@ -300,6 +302,7 @@ export function WeeklyPlanBuilder({
     initialProgram?: any
 }) {
     const router = useRouter()
+    const { t } = useTranslation()
     const [programName, setProgramName] = useState(initialProgram?.name || '')
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
     const [activeTab, setActiveTab] = useState('1')
@@ -921,7 +924,10 @@ export function WeeklyPlanBuilder({
                         <div className="p-8 space-y-8">
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Series Target</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                                        Series Target
+                                        <InfoTooltip content={t('tooltip.sets')} />
+                                    </label>
                                     <Input 
                                         type="number" 
                                         value={editingBlock.sets || ''}
@@ -930,7 +936,10 @@ export function WeeklyPlanBuilder({
                                     />
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Repeticiones</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                                        Repeticiones
+                                        <InfoTooltip content={t('tooltip.reps')} />
+                                    </label>
                                     <Input 
                                         value={editingBlock.reps}
                                         onChange={e => setEditingBlock({...editingBlock, reps: e.target.value})}
@@ -942,7 +951,10 @@ export function WeeklyPlanBuilder({
 
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Carga (KG)</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                                        Carga (KG)
+                                        <InfoTooltip content={t('tooltip.weight')} />
+                                    </label>
                                     <Input 
                                         value={editingBlock.target_weight_kg}
                                         onChange={e => setEditingBlock({...editingBlock, target_weight_kg: e.target.value})}
@@ -951,7 +963,10 @@ export function WeeklyPlanBuilder({
                                     />
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">RIR / RPE</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                                        RIR / RPE
+                                        <InfoTooltip content={t('tooltip.rir')} />
+                                    </label>
                                     <Input 
                                         value={editingBlock.rir}
                                         onChange={e => setEditingBlock({...editingBlock, rir: e.target.value})}
@@ -963,7 +978,10 @@ export function WeeklyPlanBuilder({
 
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Tempo</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                                        Tempo
+                                        <InfoTooltip content={t('tooltip.tempo')} />
+                                    </label>
                                     <Input 
                                         value={editingBlock.tempo}
                                         onChange={e => setEditingBlock({...editingBlock, tempo: e.target.value})}
@@ -972,7 +990,10 @@ export function WeeklyPlanBuilder({
                                     />
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Recuperación</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                                        Recuperación
+                                        <InfoTooltip content={t('tooltip.rest')} />
+                                    </label>
                                     <Input 
                                         value={editingBlock.rest_time}
                                         onChange={e => setEditingBlock({...editingBlock, rest_time: e.target.value})}
@@ -983,7 +1004,10 @@ export function WeeklyPlanBuilder({
                             </div>
 
                             <div className="space-y-3">
-                                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Instrucciones de Protocolo</label>
+                                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                                    Instrucciones de Protocolo
+                                    <InfoTooltip content={t('tooltip.notes')} />
+                                </label>
                                 <textarea 
                                     className="w-full h-32 p-4 text-sm rounded-xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-muted-foreground"
                                     value={editingBlock.notes}

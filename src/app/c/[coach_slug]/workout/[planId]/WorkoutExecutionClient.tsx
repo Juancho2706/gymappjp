@@ -12,6 +12,8 @@ import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 interface ExerciseType {
     id: string
@@ -80,6 +82,7 @@ function ManualTimerButton({ defaultTime, onSettingsClick }: { defaultTime: stri
 
 export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coachSlug }: Props) {
     const router = useRouter()
+    const { t } = useTranslation()
     const blocks = plan.workout_blocks.sort((a, b) => a.order_index - b.order_index)
     const [currentIndex, setCurrentIndex] = useState(0)
     const [direction, setDirection] = useState(0) // 1 for next, -1 for prev
@@ -323,24 +326,32 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                                     {/* Target Details Grid */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                                         <div className="bg-muted/50 rounded-xl p-2.5 text-center border border-border/50">
-                                            <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5">Series x Reps</p>
+                                            <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5 flex items-center justify-center gap-1">
+                                                Series x Reps <InfoTooltip content={t('tooltip.reps')} />
+                                            </p>
                                             <p className="font-bold text-sm text-foreground">{currentBlock.sets} × {currentBlock.reps}</p>
                                         </div>
                                         {currentBlock.target_weight_kg && (
                                             <div className="bg-emerald-500/10 rounded-xl p-2.5 text-center border border-emerald-500/20">
-                                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase mb-0.5">Sugerido</p>
+                                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase mb-0.5 flex items-center justify-center gap-1">
+                                                    Sugerido <InfoTooltip content={t('tooltip.weight')} />
+                                                </p>
                                                 <p className="font-bold text-sm text-emerald-700 dark:text-emerald-300">{currentBlock.target_weight_kg} Kg</p>
                                             </div>
                                         )}
                                         {currentBlock.rest_time && (
                                             <div className="bg-muted/50 rounded-xl p-2.5 text-center border border-border/50">
-                                                <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5">Descanso</p>
+                                                <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5 flex items-center justify-center gap-1">
+                                                    Descanso <InfoTooltip content={t('tooltip.rest')} />
+                                                </p>
                                                 <p className="font-bold text-sm text-foreground">{currentBlock.rest_time}</p>
                                             </div>
                                         )}
                                         {currentBlock.tempo && (
                                             <div className="bg-muted/50 rounded-xl p-2.5 text-center border border-border/50">
-                                                <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5">Tempo</p>
+                                                <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5 flex items-center justify-center gap-1">
+                                                    Tempo <InfoTooltip content={t('tooltip.tempo')} />
+                                                </p>
                                                 <p className="font-bold text-sm text-foreground">{currentBlock.tempo}</p>
                                             </div>
                                         )}
@@ -349,7 +360,7 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                                     {currentBlock.notes && (
                                         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
                                             <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1.5">
-                                                <Zap className="w-3.5 h-3.5" /> Nota del Coach
+                                                <Zap className="w-3.5 h-3.5" /> Nota del Coach <InfoTooltip content={t('tooltip.notes')} />
                                             </p>
                                             <p className="text-sm text-amber-900/80 dark:text-amber-200/80 leading-relaxed">
                                                 {currentBlock.notes}
