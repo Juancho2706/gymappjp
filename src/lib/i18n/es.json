@@ -15,11 +15,11 @@
     "common.exercises": "Ejercicios",
     "common.settings": "Mi Marca",
     "common.logout": "Cerrar sesión",
-    "tooltip.sets": "Cantidad total de series a realizar.",
-    "tooltip.reps": "Rango de repeticiones objetivo (ej. 8-12).",
-    "tooltip.weight": "Peso sugerido o historial previo.",
-    "tooltip.rir": "RIR (Reps In Reserve): cuántas te faltaron para fallar. RPE (Rate of Perceived Exertion): esfuerzo del 1 al 10.",
-    "tooltip.tempo": "Velocidad de cada fase del ejercicio (ej. 3s bajada, 1s pausa, explosivo al subir).",
-    "tooltip.rest": "Tiempo de descanso entre series.",
-    "tooltip.notes": "Instrucciones técnicas específicas del coach."
+    "tooltip.sets": "Cantidad de rondas o 'series' que debes completar de este ejercicio. Cada serie está compuesta por un número determinado de repeticiones.",
+    "tooltip.reps": "El número de veces que debes repetir el movimiento en cada serie. Si ves un rango (ej. 8-12), intenta mantenerte dentro de esos números.",
+    "tooltip.weight": "El peso en kilogramos que te sugiere tu coach para este ejercicio. Puedes usarlo como guía o basarte en lo que levantaste la sesión anterior.",
+    "tooltip.rir": "RIR (Repeticiones en Reserva): Significa cuántas repeticiones extra sentías que podías hacer antes del fallo muscular. Ej: RIR 2 es detenerse cuando aún podías hacer 2 más. RPE: Escala de esfuerzo percibido del 1 al 10, donde 1 es reposo total, 7-8 es un esfuerzo exigente pero controlable, y 10 es tu máximo esfuerzo físico (llegar al fallo).",
+    "tooltip.tempo": "El ritmo o velocidad del ejercicio (bajada - pausa abajo - subida - pausa arriba). Ej: 3-1-X-1 significa 3s bajando, 1s de pausa, subida eXplosiva, y 1s de pausa arriba.",
+    "tooltip.rest": "El tiempo exacto que debes descansar entre cada serie. Respetar este tiempo es fundamental para recuperarte bien y mantener el rendimiento.",
+    "tooltip.notes": "Indicaciones adicionales, detalles de postura, enfoque o cualquier corrección técnica que tu coach considera vital para tu progreso en este ejercicio."
 }
