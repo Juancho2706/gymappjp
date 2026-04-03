@@ -850,7 +850,7 @@ export function WeeklyPlanBuilder({
                             <div className="bg-primary/20 backdrop-blur-xl border border-primary text-white p-4 rounded-xl shadow-[0_0_30px_rgba(0,122,255,0.5)] min-w-[240px] opacity-100 scale-105 pointer-events-none z-[100] flex items-center gap-3">
                                 <Activity className="w-5 h-5 text-primary" />
                                 <div>
-                                    <p className="text-sm font-bold truncate">{activeOverlayItem.name}</p>
+                                    <p className="text-sm font-bold leading-tight">{activeOverlayItem.name}</p>
                                     <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{activeOverlayItem.muscle}</p>
                                 </div>
                             </div>

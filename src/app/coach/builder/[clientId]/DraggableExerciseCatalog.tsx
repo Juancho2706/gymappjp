@@ -47,7 +47,7 @@ function DraggableExerciseItem({ exercise, onSelect }: DraggableExerciseItemProp
                     <Dumbbell className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{exercise.name}</p>
+                    <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors">{exercise.name}</p>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">{exercise.muscle_group}</p>
                 </div>
             </div>

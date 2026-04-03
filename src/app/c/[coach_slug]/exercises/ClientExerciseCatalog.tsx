@@ -126,7 +126,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
               >
                 {ex.muscle_group}
               </p>
-              <h3 className="font-semibold text-foreground truncate">
+              <h3 className="font-semibold text-foreground leading-tight">
                 {ex.name}
               </h3>
             </div>
