@@ -17,6 +17,7 @@ import {
     defaultDropAnimationSideEffects,
     type DropAnimation,
     DragOverlay,
+    useDroppable,
 } from '@dnd-kit/core'
 import {
     arrayMove,
@@ -188,7 +189,7 @@ function DayColumn({
         return filterExercises(exercises, search, 'Todos').slice(0, 5)
     }, [exercises, search])
 
-    const { setNodeRef } = useSortable({
+    const { setNodeRef } = useDroppable({
         id: `day-${day.id}`,
         data: {
             type: 'day',
