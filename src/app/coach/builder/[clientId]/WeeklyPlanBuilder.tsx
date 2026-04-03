@@ -263,7 +263,7 @@ function DayColumn({
                 </div>
             </div>
 
-            <div ref={setNodeRef} className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[400px]">
+            <div ref={setNodeRef} className="flex-1 overflow-y-auto p-3 pb-32 space-y-3 min-h-[400px]">
                 <SortableContext items={blocks.map(b => b.uid)} strategy={verticalListSortingStrategy}>
                     {blocks.map((block, index) => (
                         <SortableBlock
@@ -761,13 +761,13 @@ export function WeeklyPlanBuilder({
                                         ))}
                                     </TabsList>
                                     <div className={cn(
-                                        "flex-1 overflow-hidden transition-all duration-500 ease-in-out pb-20",
+                                        "flex-1 overflow-hidden transition-all duration-500 ease-in-out",
                                     )}>
                                         {mounted && isMobile && DAYS_OF_WEEK.map(day => (
                                             <TabsContent 
                                                 key={day.id} 
                                                 value={day.id.toString()} 
-                                                className="h-full overflow-y-auto p-4 mt-0"
+                                                className="h-full p-4 mt-0"
                                             >
                                                 <DayColumn
                                                     day={day}
@@ -810,10 +810,10 @@ export function WeeklyPlanBuilder({
                     </DragOverlay>
 
                     {/* Mobile Exercise Catalog Sheet */}
-                    <Sheet open={isCatalogOpen} onOpenChange={(open) => { if (open) setIsCatalogOpen(true) }}>
+                    <Sheet open={isCatalogOpen} onOpenChange={(open) => { if (!open) setIsCatalogOpen(false) }}>
                         <SheetContent 
                             side="bottom" 
-                            className="h-[60vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border dark:border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-background/95 backdrop-blur-2xl" 
+                            className="h-[85vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border dark:border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-background/95 backdrop-blur-2xl" 
                             showCloseButton={false}
                         >
                             {/* Handle visual */}

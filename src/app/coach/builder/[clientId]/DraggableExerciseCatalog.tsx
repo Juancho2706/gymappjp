@@ -123,7 +123,7 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
                 )}
             </div>
             
-            <div className="p-3 bg-muted/10 border-t border-border">
+            <div className="hidden md:block p-3 bg-muted/10 border-t border-border">
                 <p className="text-[10px] text-muted-foreground text-center">
                     Arrastra un ejercicio al día deseado
                 </p>
