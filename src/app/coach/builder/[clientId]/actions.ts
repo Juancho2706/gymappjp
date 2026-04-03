@@ -20,6 +20,7 @@ const blockSchema = z.object({
 
 const workoutDaySchema = z.object({
     day_of_week: z.number().int().min(1).max(7),
+    title: z.string().max(100).optional(),
     blocks: z.array(blockSchema).min(1, 'Agrega al menos un ejercicio'),
 })
 
@@ -207,7 +208,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                     coach_id: user.id,
                     program_id: finalProgramId,
                     day_of_week: day.day_of_week,
-                    title: `${programName} - Día ${day.day_of_week}`,
+                    title: day.title || `${programName} - Día ${day.day_of_week}`,
                     group_name: 'Programa de Entrenamiento',
                     assigned_date: startDateToUse,
                 })

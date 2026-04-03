@@ -70,6 +70,7 @@ interface BuilderBlock {
 
 interface DayState {
     id: number // 1 to 7
+    title: string
     blocks: BuilderBlock[]
 }
 
@@ -162,18 +163,22 @@ function SortableBlock({
 // ─── Day Column Component ────────────────────────────────────────
 function DayColumn({
     day,
+    title,
     blocks,
     exercises,
     onAddExercise,
     onEditBlock,
     onRemoveBlock,
+    onUpdateTitle,
 }: {
     day: { id: number; name: string }
+    title: string
     blocks: BuilderBlock[]
     exercises: Exercise[]
     onAddExercise: (dayId: number, exercise: Exercise) => void
     onEditBlock: (block: BuilderBlock) => void
     onRemoveBlock: (dayId: number, uid: string) => void
+    onUpdateTitle: (dayId: number, title: string) => void
 }) {
     const [search, setSearch] = useState('')
     const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -201,6 +206,16 @@ function DayColumn({
                     <Badge variant="outline" className="bg-white/5 text-zinc-500 border-white/10 font-bold">
                         {blocks.length} UNITS
                     </Badge>
+                </div>
+
+                <div className="relative mb-4 group">
+                    <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" />
+                    <input 
+                        value={title}
+                        onChange={(e) => onUpdateTitle(day.id, e.target.value)}
+                        placeholder="TITULO DEL DIA (EJ: EMPUJE)"
+                        className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/20 border border-white/5 text-white focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-zinc-700"
+                    />
                 </div>
                 
                 {/* Quick Search - Professional look */}
@@ -292,12 +307,13 @@ export function WeeklyPlanBuilder({
     
     // Initialize days 1-7
     const [days, setDays] = useState<DayState[]>(() => {
-        const baseDays = DAYS_OF_WEEK.map(d => ({ id: d.id, blocks: [] as BuilderBlock[] }))
+        const baseDays: DayState[] = DAYS_OF_WEEK.map(d => ({ id: d.id, title: '', blocks: [] as BuilderBlock[] }))
         
         if (initialProgram?.workout_plans) {
             initialProgram.workout_plans.forEach((plan: any) => {
                 const dayIndex = baseDays.findIndex(d => d.id === plan.day_of_week)
                 if (dayIndex !== -1) {
+                    baseDays[dayIndex].title = plan.title || ''
                     baseDays[dayIndex].blocks = plan.workout_blocks
                         ?.sort((a: any, b: any) => a.order_index - b.order_index)
                         .map((b: any) => ({
@@ -358,6 +374,10 @@ export function WeeklyPlanBuilder({
         }
         setDays(prev => prev.map(d => d.id === dayId ? { ...d, blocks: [...d.blocks, newBlock] } : d))
         toast.success(`Añadido: ${exercise.name}`)
+    }, [])
+
+    const updateDayTitle = useCallback((dayId: number, title: string) => {
+        setDays(prev => prev.map(d => d.id === dayId ? { ...d, title } : d))
     }, [])
 
     const removeBlock = useCallback((dayId: number, uid: string) => {
@@ -490,7 +510,7 @@ export function WeeklyPlanBuilder({
             }
         }
 
-        startTransition(async () => {
+                startTransition(async () => {
             const payload: WorkoutProgramInput = {
                 programId: initialProgram?.id,
                 clientId: client?.id || null,
@@ -500,6 +520,7 @@ export function WeeklyPlanBuilder({
                     .filter(d => d.blocks.length > 0)
                     .map(d => ({
                         day_of_week: d.id,
+                        title: d.title || `${programName} - Día ${d.id}`,
                         blocks: d.blocks.map(b => ({
                             exercise_id: b.exercise_id,
                             sets: b.sets,
@@ -695,11 +716,13 @@ export function WeeklyPlanBuilder({
                                     <DayColumn
                                         key={day.id}
                                         day={day}
+                                        title={days.find(d => d.id === day.id)?.title || ''}
                                         blocks={days.find(d => d.id === day.id)?.blocks || []}
                                         exercises={exercises}
                                         onAddExercise={addExercise}
                                         onEditBlock={setEditingBlock}
                                         onRemoveBlock={removeBlock}
+                                        onUpdateTitle={updateDayTitle}
                                     />
                                 ))}
                             </div>
@@ -731,22 +754,24 @@ export function WeeklyPlanBuilder({
                                             >
                                                 <DayColumn
                                                     day={day}
+                                                    title={days.find(d => d.id === day.id)?.title || ''}
                                                     blocks={days.find(d => d.id === day.id)?.blocks || []}
                                                     exercises={exercises}
                                                     onAddExercise={addExercise}
                                                     onEditBlock={setEditingBlock}
                                                     onRemoveBlock={removeBlock}
+                                                    onUpdateTitle={updateDayTitle}
                                                 />
                                             </TabsContent>
                                         ))}
                                     </div>
                                 </Tabs>
 
-                                {/* Mobile Floating Button (FAB) - Repositioned to bottom right */}
+                                {/* Mobile Floating Button (FAB) - Elevated to avoid Bottom Nav */}
                                 {!isCatalogOpen && (
                                     <button
                                         onClick={() => setIsCatalogOpen(true)}
-                                        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-white shadow-[0_8px_25px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-90 transition-all z-40 border border-white/20 flex items-center justify-center"
+                                        className="fixed bottom-[110px] right-6 w-14 h-14 rounded-full bg-primary text-white shadow-[0_8px_25px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-90 transition-all z-40 border border-white/20 flex items-center justify-center"
                                     >
                                         <Plus className="w-6 h-6" />
                                     </button>

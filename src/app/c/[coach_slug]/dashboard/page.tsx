@@ -309,7 +309,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                                                 {plan.title}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
-                                                {isPlanToday ? '¡Tu entrenamiento para hoy!' : `Día ${plan.day_of_week} de tu programa`}
+                                                {dayName} • {isPlanToday ? '¡Tu entrenamiento para hoy!' : `Día ${plan.day_of_week} de tu programa`}
                                             </p>
                                         </div>
                                         <div 
