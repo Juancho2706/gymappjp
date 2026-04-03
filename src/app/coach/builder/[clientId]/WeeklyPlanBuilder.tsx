@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useTransition, useMemo, useEffect } from 'react'
+import { useState, useCallback, useTransition, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     DndContext,
@@ -116,12 +116,12 @@ function SortableBlock({
     return (
         <div ref={setNodeRef} style={style}
             className={cn(
-                'group relative flex flex-col bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl overflow-hidden transition-all duration-300',
-                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-white/20 hover:bg-white/[0.05]'
+                'group relative flex flex-col bg-background dark:bg-white/[0.03] backdrop-blur-md border border-border dark:border-white/10 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none',
+                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-primary/10'
             )}>
             <div className="flex items-center gap-3 p-3">
                 <button {...attributes} {...listeners}
-                    className="text-zinc-600 hover:text-primary cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-white/5 transition-colors flex-shrink-0">
+                    className="text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-muted dark:hover:bg-white/5 transition-colors flex-shrink-0">
                     <GripVertical className="w-4 h-4" />
                 </button>
                 
@@ -129,17 +129,17 @@ function SortableBlock({
                     <p className="text-sm font-bold text-foreground truncate cursor-pointer group-hover:text-primary transition-colors">
                         {block.exercise_name}
                     </p>
-                    <div className="flex items-center gap-3 mt-1">
-                        <div className="flex items-center gap-1.5 bg-secondary dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5">
+                    <div className="flex items-center gap-3 mt-1.5">
+                        <div className="flex items-center gap-1.5 bg-muted dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5 shadow-sm">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Sets</span>
                             <span className="text-[11px] font-bold text-foreground">{block.sets}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 bg-secondary dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5">
+                        <div className="flex items-center gap-1.5 bg-muted dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5 shadow-sm">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Reps</span>
                             <span className="text-[11px] font-bold text-foreground">{block.reps || '–'}</span>
                         </div>
                         {block.target_weight_kg && (
-                            <div className="flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                            <div className="flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 shadow-sm">
                                 <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">Load</span>
                                 <span className="text-[11px] font-bold text-primary">{block.target_weight_kg}kg</span>
                             </div>
@@ -151,7 +151,7 @@ function SortableBlock({
                     e.stopPropagation();
                     onRemove(dayId, block.uid);
                 }}
-                    className="p-2.5 rounded-xl text-zinc-600 hover:text-rose-500 hover:bg-rose-500/10 transition-all flex-shrink-0"
+                    className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0"
                     title="Remover Unidad">
                     <X className="w-5 h-5 stroke-[2.5px]" />
                 </button>
@@ -214,7 +214,7 @@ function DayColumn({
                         value={title}
                         onChange={(e) => onUpdateTitle(day.id, e.target.value)}
                         placeholder="TITULO DEL DIA (EJ: EMPUJE)"
-                        className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/20 border border-white/5 text-white focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-zinc-700"
+                        className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/5 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
                     />
                 </div>
                 
@@ -229,7 +229,7 @@ function DayColumn({
                         }}
                         onFocus={() => setIsSearchOpen(true)}
                         placeholder="BUSCAR PROTOCOLO..."
-                        className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-xl bg-black/40 border border-white/10 text-white focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-zinc-700"
+                        className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-xl bg-black/10 dark:bg-black/40 border border-black/10 dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
                     />
                     
                     {isSearchOpen && search && (
@@ -343,6 +343,8 @@ export function WeeklyPlanBuilder({
     const [isPending, startTransition] = useTransition()
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
+
+    const horizontalScrollRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         setMounted(true)
@@ -711,7 +713,19 @@ export function WeeklyPlanBuilder({
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none" />
 
                             {/* Desktop View: Horizontal Scroll Board */}
-                            <div className="hidden md:flex gap-6 h-full p-8 overflow-x-auto relative z-10">
+                            <div 
+                                ref={horizontalScrollRef}
+                                onWheel={(e) => {
+                                    if (horizontalScrollRef.current) {
+                                        // Allow horizontal scroll with mouse wheel
+                                        if (e.deltaY !== 0) {
+                                            e.preventDefault();
+                                            horizontalScrollRef.current.scrollLeft += e.deltaY;
+                                        }
+                                    }
+                                }}
+                                className="hidden md:flex gap-6 h-full p-8 overflow-x-auto relative z-10 custom-scrollbar"
+                            >
                                 {mounted && !isMobile && DAYS_OF_WEEK.map(day => (
                                     <DayColumn
                                         key={day.id}

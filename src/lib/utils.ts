@@ -32,8 +32,8 @@ export function filterExercises<T extends {
     const matchesGroup = 
       normalizedSelectedGroup === "todos" || 
       normalizedSelectedGroup === "all" ||
-      muscleGroup === normalizedSelectedGroup ||
-      secondaryMuscles.includes(normalizedSelectedGroup);
+      normalizedSelectedGroup === "todos los músculos" ||
+      muscleGroup === normalizedSelectedGroup;
 
     if (!matchesGroup) return false;
 
