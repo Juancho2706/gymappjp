@@ -9,7 +9,7 @@ import {
     DialogTitle,
     DialogClose,
 } from '@/components/ui/dialog'
-import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter, X } from 'lucide-react'
+import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter, X, Copy } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
@@ -218,6 +218,13 @@ function ExercisePreviewModal({
                             className="object-cover"
                             unoptimized
                         />
+                    ) : exercise.video_url ? (
+                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-60">
+                            <a href={exercise.video_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-2 hover:text-primary transition-colors">
+                                <Play className="w-12 h-12" />
+                                <p className="text-xs font-bold">Ver Video Externo</p>
+                            </a>
+                        </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
                             <Dumbbell className="w-12 h-12" />
@@ -337,6 +344,19 @@ function ExercisePreviewModal({
                                 Catálogo global · ExerciseDB
                             </>
                         )}
+                        {/* Clone button */}
+                        <div className="ml-auto">
+                            <button
+                                onClick={() => {
+                                    // TODO: Implement clone logic
+                                    alert("Clonar ejercicio próximamente...");
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
+                            >
+                                <Copy className="w-3 h-3" />
+                                Clonar y Editar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </DialogContent>

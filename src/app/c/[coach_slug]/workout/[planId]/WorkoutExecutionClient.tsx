@@ -524,25 +524,57 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                         showCloseButton={false}
                         className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col focus:outline-none"
                     >
-                        {currentExercise.gif_url && (
-                            <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center">
-                                <Image 
-                                    src={currentExercise.gif_url} 
-                                    alt={currentExercise.name}
-                                    fill
-                                    className="object-contain p-4"
-                                    unoptimized
-                                />
-                            </div>
-                        )}
-                        {!currentExercise.gif_url && currentExercise.video_url && (
-                            <div className="p-8 text-center bg-muted shrink-0">
-                                <a href={currentExercise.video_url} target="_blank" rel="noopener noreferrer" 
-                                   className="inline-flex items-center gap-2 text-primary font-bold">
-                                    <Play className="w-5 h-5" /> Ver Video Externo
-                                </a>
-                            </div>
-                        )}
+                        {(() => {
+                            const isYouTube = currentExercise.video_url?.includes('youtube.com') || currentExercise.video_url?.includes('youtu.be');
+                            
+                            const getYouTubeId = (url: string) => {
+                                const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+                                return match ? match[1] : null;
+                            };
+                            
+                            const ytId = isYouTube && currentExercise.video_url ? getYouTubeId(currentExercise.video_url) : null;
+                            
+                            if (isYouTube && ytId) {
+                                return (
+                                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center">
+                                        <iframe
+                                            className="w-full h-full"
+                                            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`}
+                                            title={currentExercise.name}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                        />
+                                    </div>
+                                );
+                            }
+                            
+                            if (currentExercise.gif_url) {
+                                return (
+                                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center">
+                                        <Image 
+                                            src={currentExercise.gif_url} 
+                                            alt={currentExercise.name}
+                                            fill
+                                            className="object-contain p-4"
+                                            unoptimized
+                                        />
+                                    </div>
+                                );
+                            }
+                            
+                            if (currentExercise.video_url) {
+                                return (
+                                    <div className="p-8 text-center bg-muted shrink-0">
+                                        <a href={currentExercise.video_url} target="_blank" rel="noopener noreferrer" 
+                                           className="inline-flex items-center gap-2 text-primary font-bold">
+                                            <Play className="w-5 h-5" /> Ver Video Externo
+                                        </a>
+                                    </div>
+                                );
+                            }
+                            
+                            return null;
+                        })()}
                         <div className="p-6 pt-6 flex-1 overflow-y-auto custom-scrollbar">
                             <DialogHeader className="mb-4">
                                 <div className="flex items-start justify-between gap-4">

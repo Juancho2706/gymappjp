@@ -157,60 +157,67 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         >
           {selectedExercise && (
             <>
-              {(selectedExercise.video_url || selectedExercise.gif_url) && (
-                <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50 z-0">
-                  {(() => {
-                    const url = selectedExercise.video_url || selectedExercise.gif_url;
-                    const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                    const getYouTubeId = (u: string) => {
-                      const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                      return match ? match[1] : null;
-                    };
-                    
-                    if (isYouTube) {
-                      const ytId = getYouTubeId(url!);
-                      const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1${
-                        selectedExercise.video_start_time ? `&start=${selectedExercise.video_start_time}` : ''
-                      }${
-                        selectedExercise.video_end_time ? `&end=${selectedExercise.video_end_time}` : ''
-                      }` : '';
-                      
-                      return ytId ? (
-                        <iframe
-                          className="w-full h-full"
-                          src={embedUrl}
-                          title={selectedExercise.name}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowFullScreen
-                        />
-                      ) : null;
-                    }
+              {(() => {
+                const url = selectedExercise.video_url || selectedExercise.gif_url;
+                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
+                const getYouTubeId = (u: string) => {
+                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+                  return match ? match[1] : null;
+                };
 
-                    return (
+                if (isYouTube) {
+                  const ytId = getYouTubeId(url!);
+                  const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1${
+                    selectedExercise.video_start_time ? `&start=${selectedExercise.video_start_time}` : ''
+                  }${
+                    selectedExercise.video_end_time ? `&end=${selectedExercise.video_end_time}` : ''
+                  }` : '';
+
+                  return ytId ? (
+                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border/50 z-0">
+                      <iframe
+                        className="w-full h-full"
+                        src={embedUrl}
+                        title={selectedExercise.name}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    </div>
+                  ) : null;
+                }
+
+                if (selectedExercise.gif_url) {
+                  return (
+                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50 z-0">
                       <Image
-                        src={url!}
+                        src={selectedExercise.gif_url}
                         alt={selectedExercise.name}
                         fill
                         className="object-contain p-4"
                         unoptimized
                       />
-                    );
-                  })()}
-                </div>
-              )}
-              {!(selectedExercise.video_url || selectedExercise.gif_url) && selectedExercise.video_url && (
-                <div className="p-8 text-center bg-muted border-b border-border/50 shrink-0">
-                  <a
-                    href={selectedExercise.video_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 font-bold"
-                    style={{ color: primaryColor }}
-                  >
-                    <Play className="w-5 h-5" /> Ver Video de Referencia
-                  </a>
-                </div>
-              )}
+                    </div>
+                  );
+                }
+
+                if (selectedExercise.video_url) {
+                  return (
+                    <div className="p-8 text-center bg-muted border-b border-border/50 shrink-0">
+                      <a
+                        href={selectedExercise.video_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 font-bold"
+                        style={{ color: primaryColor }}
+                      >
+                        <Play className="w-5 h-5" /> Ver Video de Referencia
+                      </a>
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
               <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
                 <DialogHeader className="mb-4">
                   <div className="flex items-start justify-between gap-4">

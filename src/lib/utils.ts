@@ -14,7 +14,8 @@ export function filterExercises<T extends {
   name: string; 
   muscle_group: string; 
   secondary_muscles?: string[] | null; 
-  body_part?: string | null 
+  body_part?: string | null;
+  equipment?: string | null;
 }>(
   exercises: T[],
   searchTerm: string,
@@ -41,6 +42,7 @@ export function filterExercises<T extends {
 
     const name = normalizeString(exercise.name);
     const bodyPart = normalizeString(exercise.body_part || "");
+    const equipment = normalizeString(exercise.equipment || "");
 
     // Términos expandidos por el diccionario
     const searchTerms = [normalizedSearch, ...(MUSCLE_MAPPING[normalizedSearch] || [])];
@@ -49,6 +51,7 @@ export function filterExercises<T extends {
       name.includes(term) ||
       muscleGroup.includes(term) ||
       bodyPart.includes(term) ||
+      equipment.includes(term) ||
       secondaryMuscles.some(sm => sm.includes(term))
     );
   });

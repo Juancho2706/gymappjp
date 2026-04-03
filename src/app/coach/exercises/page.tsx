@@ -17,13 +17,16 @@ export default async function CoachExercisesPage() {
     const { data: rawExercises } = await supabase
         .from('exercises')
         .select('*')
-        .is('coach_id', null)
+        .or(`coach_id.is.null,coach_id.eq.${user.id}`)
         .order('muscle_group')
         .order('name')
 
-    const exercises = (rawExercises ?? []) as Exercise[]
+    const allExercises = (rawExercises ?? []) as Exercise[]
+    
+    const globalExercises = allExercises.filter(ex => ex.coach_id === null)
+    const customExercises = allExercises.filter(ex => ex.coach_id === user.id)
 
-    const byMuscle = exercises.reduce<Record<string, Exercise[]>>((acc, ex) => {
+    const byMuscle = globalExercises.reduce<Record<string, Exercise[]>>((acc, ex) => {
         if (!acc[ex.muscle_group]) acc[ex.muscle_group] = []
         acc[ex.muscle_group].push(ex)
         return acc
@@ -37,15 +40,15 @@ export default async function CoachExercisesPage() {
                         Catálogo de Ejercicios
                     </h1>
                     <p className="text-muted-foreground text-sm mt-1">
-                        {exercises.length} ejercicios globales disponibles
+                        {globalExercises.length} globales · {customExercises.length} personalizados
                     </p>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 gap-6">
                 <ExerciseCatalogClient
-                    globalExercises={exercises}
-                    customExercises={[]}
+                    globalExercises={globalExercises}
+                    customExercises={customExercises}
                     byMuscle={byMuscle}
                 />
             </div>
