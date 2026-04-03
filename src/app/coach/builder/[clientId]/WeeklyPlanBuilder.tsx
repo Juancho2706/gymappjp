@@ -796,11 +796,11 @@ export function WeeklyPlanBuilder({
                     <Sheet open={isCatalogOpen} onOpenChange={(open) => { if (open) setIsCatalogOpen(true) }}>
                         <SheetContent 
                             side="bottom" 
-                            className="h-[60vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-black/90 backdrop-blur-2xl" 
+                            className="h-[60vh] p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border dark:border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-500 ease-in-out bg-background/95 backdrop-blur-2xl" 
                             showCloseButton={false}
                         >
                             {/* Handle visual */}
-                            <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto my-4 shrink-0" />
+                            <div className="w-12 h-1.5 bg-muted-foreground/20 dark:bg-white/20 rounded-full mx-auto my-4 shrink-0" />
                             
                             <div className="flex-1 overflow-hidden">
                                 <DraggableExerciseCatalog 

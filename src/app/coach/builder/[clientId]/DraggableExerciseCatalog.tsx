@@ -73,10 +73,10 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
     }, [exercises, search, selectedMuscle])
 
     return (
-        <div className={cn("flex flex-col h-full bg-card border rounded-xl overflow-hidden shadow-sm", className)}>
-            <div className="p-3 md:p-4 border-b space-y-3 md:space-y-4 bg-muted/20">
+        <div className={cn("flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm", className)}>
+            <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-bold flex items-center gap-2">
+                    <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
                         <Dumbbell className="w-4 h-4 text-primary" />
                         Catálogo de Ejercicios
                     </h2>
@@ -84,23 +84,23 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
                 
                 <div className="flex flex-col gap-2">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input 
                             placeholder="Buscar por nombre..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 h-10 text-xs bg-background border-border/50 rounded-xl focus:border-primary focus:ring-primary/20 transition-all"
+                            className="pl-9 h-10 text-xs bg-background border-border rounded-xl focus:border-primary focus:ring-primary/20 transition-all text-foreground"
                         />
                     </div>
                     
                     <Select value={selectedMuscle} onValueChange={(val) => setSelectedMuscle(val || 'Todos')}>
-                        <SelectTrigger className="h-10 text-xs bg-background border-border/50 rounded-xl focus:border-primary focus:ring-primary/20 transition-all">
+                        <SelectTrigger className="h-10 text-xs bg-background border-border rounded-xl focus:border-primary focus:ring-primary/20 transition-all text-foreground">
                             <div className="flex items-center gap-2">
-                                <Filter className="w-3 h-3 text-muted-foreground/60" />
+                                <Filter className="w-3 h-3 text-muted-foreground" />
                                 <SelectValue placeholder="Filtrar por músculo" />
                             </div>
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl">
+                        <SelectContent className="rounded-xl border-border bg-background text-foreground">
                             <SelectItem value="Todos" className="text-xs">Todos los músculos</SelectItem>
                             {MUSCLE_GROUPS.map(mg => (
                                 <SelectItem key={mg} value={mg} className="text-xs">{mg}</SelectItem>
@@ -116,14 +116,14 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
                         <DraggableExerciseItem key={ex.id} exercise={ex} onSelect={onSelect} />
                     ))
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center opacity-40">
+                    <div className="flex flex-col items-center justify-center py-12 text-center opacity-40 text-foreground">
                         <Search className="w-8 h-8 mb-2" />
                         <p className="text-xs font-medium">No se encontraron<br/>ejercicios</p>
                     </div>
                 )}
             </div>
             
-            <div className="p-3 bg-muted/10 border-t">
+            <div className="p-3 bg-muted/10 border-t border-border">
                 <p className="text-[10px] text-muted-foreground text-center">
                     Arrastra un ejercicio al día deseado
                 </p>
