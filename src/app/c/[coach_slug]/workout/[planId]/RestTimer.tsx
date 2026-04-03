@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Timer, X, Play, Pause, RotateCcw, Settings, Pencil, TriangleAlert, BellRing } from "lucide-react";
+import { Timer, X, Play, Pause, RotateCcw, Settings, Pencil, TriangleAlert, BellRing, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { playTimerSound, TimerSound } from "@/lib/audioUtils";
 
@@ -20,17 +20,49 @@ export function RestTimer({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(initialSeconds.toString());
   const [soundType, setSoundType] = useState<TimerSound>("digital");
+  const [volume, setVolume] = useState<number>(1.0);
   const [showSettings, setShowSettings] = useState(false);
   const [notificationsGranted, setNotificationsGranted] = useState<boolean | null>(true);
+  const [isAlarmRinging, setIsAlarmRinging] = useState(false);
+  const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const alarmCountRef = useRef(0);
   
   // Timer state for SW sync
   const endTimeRef = useRef<number | null>(null);
+
+  const stopAlarm = () => {
+      if (alarmIntervalRef.current) {
+          clearInterval(alarmIntervalRef.current);
+          alarmIntervalRef.current = null;
+      }
+      setIsAlarmRinging(false);
+      alarmCountRef.current = 0;
+  };
+
+  // Stop alarm on any user interaction with the document if ringing
+  useEffect(() => {
+      if (!isAlarmRinging) return;
+      
+      const handleInteraction = () => stopAlarm();
+      document.addEventListener('click', handleInteraction);
+      document.addEventListener('touchstart', handleInteraction);
+      
+      return () => {
+          document.removeEventListener('click', handleInteraction);
+          document.removeEventListener('touchstart', handleInteraction);
+      };
+  }, [isAlarmRinging]);
 
   // Load saved sound preference
   useEffect(() => {
     const saved = localStorage.getItem("restTimerSound");
     if (saved) {
       setSoundType(saved as TimerSound);
+    }
+    
+    const savedVol = localStorage.getItem("restTimerVolume");
+    if (savedVol !== null) {
+        setVolume(parseFloat(savedVol));
     }
     
     // Check notification permissions for background alerts
@@ -44,7 +76,13 @@ export function RestTimer({
   const handleSoundChange = (type: TimerSound) => {
     setSoundType(type);
     localStorage.setItem("restTimerSound", type);
-    playTimerSound(type); // Preview
+    playTimerSound(type, volume); // Preview
+  };
+
+  const handleVolumeChange = (newVolume: number) => {
+      setVolume(newVolume);
+      localStorage.setItem("restTimerVolume", newVolume.toString());
+      playTimerSound(soundType, newVolume); // Preview
   };
 
   const requestNotificationPermission = async () => {
@@ -123,21 +161,40 @@ export function RestTimer({
   }, [isActive, timeLeft, soundType]);
 
   const triggerAlarm = () => {
-    playTimerSound(soundType);
+    // Si ya está sonando, no reiniciar el ciclo
+    if (isAlarmRinging) return;
+    
+    setIsAlarmRinging(true);
+    alarmCountRef.current = 1;
+    playTimerSound(soundType, volume);
+
+    // Iniciar loop de alarma (se repite hasta 5 veces)
+    alarmIntervalRef.current = setInterval(() => {
+        alarmCountRef.current += 1;
+        if (alarmCountRef.current > 5) {
+            stopAlarm();
+        } else {
+            playTimerSound(soundType, volume);
+            if ("vibrate" in navigator) {
+                navigator.vibrate([200, 100, 200, 100, 400]);
+            }
+        }
+    }, 3000); // 3 segundos entre repeticiones
 
     // Notificación en background si es posible
     if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
         navigator.serviceWorker.ready.then(registration => {
             registration.showNotification("¡Tiempo de Descanso Terminado!", {
-                body: "Prepárate para la siguiente serie.",
+                body: "Prepárate para la siguiente serie. (Toca para detener)",
                 icon: "/icon-192x192.png",
                 vibrate: [200, 100, 200, 100, 400],
-                tag: "rest-timer"
+                tag: "rest-timer",
+                requireInteraction: true // Hace que actúe más como alarma
             } as any);
         });
     }
 
-    // Vibración para móviles
+    // Vibración inicial para móviles
     if ("vibrate" in navigator) {
       navigator.vibrate([200, 100, 200, 100, 400]);
     }
@@ -338,6 +395,22 @@ export function RestTimer({
                                 <option value="classic">Clásico</option>
                                 <option value="boxing">Boxeo</option>
                             </select>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                <Volume2 className="w-3 h-3" />
+                                Volumen
+                            </label>
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max="1" 
+                                step="0.1" 
+                                value={volume} 
+                                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                                className="w-24 accent-primary"
+                            />
                         </div>
                         
                         {notificationsGranted === false && (

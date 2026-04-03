@@ -1,6 +1,6 @@
 export type TimerSound = 'digital' | 'bell' | 'classic' | 'boxing';
 
-export function playTimerSound(soundType: TimerSound = 'digital') {
+export function playTimerSound(soundType: TimerSound = 'digital', volume: number = 1.0) {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -13,6 +13,7 @@ export function playTimerSound(soundType: TimerSound = 'digital') {
     }
 
     const t = ctx.currentTime;
+    const baseVolume = Math.max(0, Math.min(1, volume)); // Ensure between 0 and 1
 
     if (soundType === 'digital') {
       // 3 short high-pitched beeps
@@ -24,8 +25,8 @@ export function playTimerSound(soundType: TimerSound = 'digital') {
         
         osc.type = 'square';
         osc.frequency.setValueAtTime(1000, t + i * 0.2); // 1000Hz
-        gain.gain.setValueAtTime(0.1, t + i * 0.2);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.2 + 0.1);
+        gain.gain.setValueAtTime(0.1 * baseVolume, t + i * 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.01 * baseVolume, t + i * 0.2 + 0.1);
         
         osc.start(t + i * 0.2);
         osc.stop(t + i * 0.2 + 0.1);
@@ -40,8 +41,8 @@ export function playTimerSound(soundType: TimerSound = 'digital') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(800, t);
       
-      gain.gain.setValueAtTime(0.3, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+      gain.gain.setValueAtTime(0.3 * baseVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001 * baseVolume, t + 1.5);
       
       osc.start(t);
       osc.stop(t + 1.5);
@@ -55,8 +56,8 @@ export function playTimerSound(soundType: TimerSound = 'digital') {
         
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(2000, t + i * 0.15); 
-        gain.gain.setValueAtTime(0.1, t + i * 0.15);
-        gain.gain.linearRampToValueAtTime(0.01, t + i * 0.15 + 0.05);
+        gain.gain.setValueAtTime(0.1 * baseVolume, t + i * 0.15);
+        gain.gain.linearRampToValueAtTime(0.01 * baseVolume, t + i * 0.15 + 0.05);
         
         osc.start(t + i * 0.15);
         osc.stop(t + i * 0.15 + 0.1);
@@ -77,8 +78,8 @@ export function playTimerSound(soundType: TimerSound = 'digital') {
       osc1.frequency.setValueAtTime(600, t);
       osc2.frequency.setValueAtTime(1200, t);
       
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.01, t + 1.0);
+      gain.gain.setValueAtTime(0.2 * baseVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.01 * baseVolume, t + 1.0);
       
       osc1.start(t);
       osc2.start(t);
