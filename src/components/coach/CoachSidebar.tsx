@@ -65,7 +65,19 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
-    const [isCollapsed, setIsCollapsed] = useState(false)
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('sidebar-collapsed')
+            return saved === 'true'
+        }
+        return false
+    })
+
+    const toggleSidebar = () => {
+        const newState = !isCollapsed
+        setIsCollapsed(newState)
+        localStorage.setItem('sidebar-collapsed', String(newState))
+    }
 
     async function handleSignOut() {
         await supabase.auth.signOut()
@@ -102,7 +114,7 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                     <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
                         <GymAppLogo className="w-10 h-10 flex-shrink-0" />
                         {!isCollapsed && (
-                            <div className="min-w-0">
+                            <div className="min-w-0 animate-in fade-in duration-300">
                                 <p className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mb-0.5">
                                     COACH OP
                                 </p>
@@ -112,7 +124,26 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                             </div>
                         )}
                     </div>
+                    {!isCollapsed && (
+                        <button 
+                            onClick={toggleSidebar}
+                            className="p-1.5 rounded-lg hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
+                        >
+                            <PanelLeftClose className="w-5 h-5" />
+                        </button>
+                    )}
                 </div>
+
+                {isCollapsed && (
+                    <div className="hidden md:flex justify-center py-4 border-b border-sidebar-border">
+                        <button 
+                            onClick={toggleSidebar}
+                            className="p-1.5 rounded-lg hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
+                        >
+                            <PanelLeft className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
 
                 {/* Navigation Links */}
                 <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 py-2 md:px-4 md:py-6 gap-2 md:space-y-2 overflow-x-auto overflow-y-auto custom-scrollbar">

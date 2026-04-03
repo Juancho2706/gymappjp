@@ -198,7 +198,7 @@ function DayColumn({
     })
 
     return (
-        <div className="flex flex-col h-full bg-card dark:bg-blue-950/10 backdrop-blur-xl border border-border dark:border-blue-900/20 rounded-2xl min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
+        <div className="flex flex-col h-full bg-card dark:bg-blue-950/10 backdrop-blur-xl border border-border dark:border-blue-900/20 rounded-2xl min-w-[280px] xl:min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
             <div className="p-4 border-b border-border dark:border-white/10 bg-muted/50 dark:bg-white/[0.02]">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
@@ -736,7 +736,7 @@ export function WeeklyPlanBuilder({
                 >
                     <div className="flex h-full">
                         {/* Sidebar Catalog (Desktop) */}
-                        <aside className="hidden md:block w-[320px] border-r border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl h-full overflow-hidden shadow-sm dark:shadow-2xl relative z-10">
+                        <aside className="hidden md:block w-[280px] xl:w-[320px] border-r border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl h-full overflow-hidden shadow-sm dark:shadow-2xl relative z-10 flex-shrink-0">
                             <DraggableExerciseCatalog exercises={exercises} />
                         </aside>
 
