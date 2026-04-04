@@ -9,13 +9,14 @@ import {
     DialogTitle,
     DialogClose,
 } from '@/components/ui/dialog'
-import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter, X, Copy } from 'lucide-react'
+import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter, X, Copy, ChevronDown, ChevronUp } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { filterExercises } from '@/lib/utils'
+import { motion, AnimatePresence } from 'framer-motion'
 
 type Exercise = Tables<'exercises'>
 
@@ -29,6 +30,14 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
     const [selected, setSelected] = useState<Exercise | null>(null)
     const [search, setSearch] = useState('')
     const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
+    const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+
+    const toggleGroup = (muscle: string) => {
+        setCollapsedGroups(prev => ({
+            ...prev,
+            [muscle]: !prev[muscle]
+        }))
+    }
 
     const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
 
@@ -100,33 +109,54 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                 </div>
 
                 {Object.keys(groupedByMuscle).length > 0 ? (
-                    Object.entries(groupedByMuscle).map(([muscle, exList]) => (
-                        <div key={muscle} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md">
-                            <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-primary" />
-                                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                                    {muscle}
-                                </span>
-                                <span className="text-xs text-muted-foreground ml-auto bg-background px-2 py-0.5 rounded-full border border-border">
-                                    {exList.length}
-                                </span>
+                    Object.entries(groupedByMuscle).map(([muscle, exList]) => {
+                        const isCollapsed = collapsedGroups[muscle]
+                        return (
+                            <div key={muscle} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md">
+                                <button 
+                                    onClick={() => toggleGroup(muscle)}
+                                    className="w-full px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                                >
+                                    <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                        {muscle}
+                                    </span>
+                                    <div className="ml-auto flex items-center gap-3">
+                                        <span className="text-xs text-muted-foreground bg-background px-2 py-0.5 rounded-full border border-border">
+                                            {exList.length}
+                                        </span>
+                                        <div className="text-muted-foreground">
+                                            {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                                        </div>
+                                    </div>
+                                </button>
+                                <AnimatePresence initial={false}>
+                                    {!isCollapsed && (
+                                        <motion.div 
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="px-5 py-4 flex flex-wrap gap-2"
+                                        >
+                                            {exList.map(ex => (
+                                                <button
+                                                    key={ex.id}
+                                                    onClick={() => setSelected(ex)}
+                                                    className="group inline-flex items-center px-4 py-2 rounded-xl text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
+                                                >
+                                                    {(ex.video_url || ex.gif_url) && (
+                                                        <div className="mr-2 w-2 h-2 rounded-full bg-primary animate-pulse group-hover:animate-none" />
+                                                    )}
+                                                    {ex.name}
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
-                            <div className="px-5 py-4 flex flex-wrap gap-2">
-                                {exList.map(ex => (
-                                    <button
-                                        key={ex.id}
-                                        onClick={() => setSelected(ex)}
-                                        className="group inline-flex items-center px-4 py-2 rounded-xl text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
-                                    >
-                                        {(ex.video_url || ex.gif_url) && (
-                                            <div className="mr-2 w-2 h-2 rounded-full bg-primary animate-pulse group-hover:animate-none" />
-                                        )}
-                                        {ex.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ))
+                        )
+                    })
                 ) : (
                     <div className="py-20 text-center bg-card border border-dashed border-border rounded-2xl">
                         <Dumbbell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />

@@ -842,44 +842,82 @@ export default function LandingPage() {
 
             {/* ── TRUST / TESTIMONIALS ── */}
             <section className="relative py-28">
-                <div className="max-w-4xl mx-auto px-6">
-                    <motion.div
-                        variants={fadeUp}
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true, margin: '-80px' }}
-                        className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 md:p-12 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none"
-                    >
-                        {/* Glow effect */}
-                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/20 blur-[60px] rounded-full pointer-events-none" />
-                        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/20 blur-[60px] rounded-full pointer-events-none" />
-
-                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 md:gap-12">
-                            <div className="shrink-0">
-                                <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-white/10 shadow-2xl">
-                                    <Image
-                                        src="/model.png"
-                                        alt="Coach Alex Ramírez"
-                                        fill
-                                        className="object-cover bg-zinc-800"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex-1 text-center md:text-left">
-                                <div className="flex justify-center md:justify-start gap-1 mb-4">
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {/* Testimonial 1 */}
+                        <motion.div
+                            variants={fadeUp}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-80px' }}
+                            className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none h-full flex flex-col justify-between"
+                        >
+                            <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/20 blur-[60px] rounded-full pointer-events-none" />
+                            <div className="relative z-10">
+                                <div className="flex justify-start gap-1 mb-6">
                                     {[...Array(5)].map((_, j) => (
                                         <Star key={j} className="w-5 h-5 fill-cyan-400 text-cyan-400" />
                                     ))}
                                 </div>
-                                <p className="text-xl md:text-2xl font-medium text-foreground leading-relaxed italic mb-6">
+                                <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
                                     "COACH OP revolucionó mi negocio. Pasé de Excels caóticos a gestionar 50 clientes sin esfuerzo."
                                 </p>
-                                <div>
-                                    <p className="text-base font-bold text-muted-foreground">— Coach Alex Ramírez.</p>
-                                </div>
                             </div>
-                        </div>
-                    </motion.div>
+                            <div className="relative z-10 border-t border-border pt-6 mt-auto">
+                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">— Coach Alex Ramírez.</p>
+                            </div>
+                        </motion.div>
+
+                        {/* Testimonial 2 */}
+                        <motion.div
+                            variants={fadeUp}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-80px' }}
+                            className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none h-full flex flex-col justify-between"
+                            transition={{ delay: 0.1 }}
+                        >
+                            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/20 blur-[60px] rounded-full pointer-events-none" />
+                            <div className="relative z-10">
+                                <div className="flex justify-start gap-1 mb-6">
+                                    {[...Array(5)].map((_, j) => (
+                                        <Star key={j} className="w-5 h-5 fill-cyan-400 text-cyan-400" />
+                                    ))}
+                                </div>
+                                <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
+                                    "La mejor inversión para mi servicio de asesorías. Mis clientes aman la app y yo ahorro horas de trabajo."
+                                </p>
+                            </div>
+                            <div className="relative z-10 border-t border-border pt-6 mt-auto">
+                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">— Coach Laura Mendoza.</p>
+                            </div>
+                        </motion.div>
+
+                        {/* Testimonial 3 */}
+                        <motion.div
+                            variants={fadeUp}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-80px' }}
+                            className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none h-full flex flex-col justify-between"
+                            transition={{ delay: 0.2 }}
+                        >
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-emerald-500/20 blur-[60px] rounded-full pointer-events-none" />
+                            <div className="relative z-10">
+                                <div className="flex justify-start gap-1 mb-6">
+                                    {[...Array(5)].map((_, j) => (
+                                        <Star key={j} className="w-5 h-5 fill-cyan-400 text-cyan-400" />
+                                    ))}
+                                </div>
+                                <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
+                                    "Increíblemente fácil de usar. El constructor de rutinas y dietas es exactamente lo que necesitaba."
+                                </p>
+                            </div>
+                            <div className="relative z-10 border-t border-border pt-6 mt-auto">
+                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">— Coach Diego Silva.</p>
+                            </div>
+                        </motion.div>
+                    </div>
                 </div>
             </section>
 
