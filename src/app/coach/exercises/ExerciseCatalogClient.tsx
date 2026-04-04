@@ -68,7 +68,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         placeholder="Buscar ejercicio..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9 bg-muted/50 border-border"
+                        className="pl-9 bg-background border-border text-foreground"
                     />
                 </div>
                 <div className="w-full md:w-64">

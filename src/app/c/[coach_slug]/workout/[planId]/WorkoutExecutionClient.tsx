@@ -589,7 +589,7 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                         <div className="p-6 pt-6 flex-1 overflow-y-auto custom-scrollbar">
                             <DialogHeader className="mb-4">
                                 <div className="flex items-start justify-between gap-4">
-                                    <DialogTitle className="text-xl font-bold">{currentExercise.name}</DialogTitle>
+                                    <DialogTitle className="text-xl font-extrabold text-foreground">{currentExercise.name}</DialogTitle>
                                     <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors shrink-0">
                                         <X className="w-5 h-5 text-muted-foreground" />
                                     </DialogClose>
