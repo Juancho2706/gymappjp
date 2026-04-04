@@ -231,13 +231,13 @@ function ExercisePreviewModal({
                 className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col focus:outline-none"
             >
                 {/* Media demonstration area */}
-                <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-0">
+                <div className="relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-0">
                     {hasGif ? (
                         <Image
                             src={exercise.gif_url!}
                             alt={`Demostración: ${exercise.name}`}
                             fill
-                            className="object-cover"
+                            className="object-contain"
                             unoptimized
                         />
                     ) : isYouTube && ytId ? (
