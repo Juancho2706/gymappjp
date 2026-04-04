@@ -354,7 +354,7 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left Column: Basic Info & Assignment */}
                 <div className="lg:col-span-1 space-y-6">
-                    <Card>
+                    <Card className="bg-blue-50/30 dark:bg-blue-950/20 border-blue-100/50 dark:border-blue-900/30">
                         <CardContent className="pt-6 space-y-4">
                             <h3 className="font-bold text-lg border-b pb-2">Información General</h3>
                             <div className="space-y-2">
@@ -399,14 +399,14 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="bg-blue-50/30 dark:bg-blue-950/20 border-blue-100/50 dark:border-blue-900/30">
                         <CardContent className="pt-6 space-y-4">
                             <h3 className="font-bold text-lg border-b pb-2">Asignación Masiva</h3>
                             <div className="space-y-2">
                                 <Label>Seleccionar Alumnos ({selectedClients.length})</Label>
                                 <Popover open={openPopover} onOpenChange={setOpenPopover}>
                                     <PopoverTrigger
-                                        className="w-full justify-between h-auto py-2 min-h-[44px] flex items-center px-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="w-full justify-between h-auto py-2 min-h-[44px] flex items-center px-3 rounded-md border border-input bg-transparent dark:bg-slate-900/50 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         <span className="truncate">
                                             {selectedClients.length > 0 
@@ -499,7 +499,7 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
 
                     <div className="space-y-6">
                         {meals.map((meal, index) => (
-                            <Card key={meal.id} className="relative overflow-visible">
+                            <Card key={meal.id} className="relative overflow-visible bg-blue-50/30 dark:bg-blue-950/20 border-blue-100/50 dark:border-blue-900/30 transition-all duration-300">
                                 <button 
                                     type="button" 
                                     onClick={() => handleRemoveMeal(meal.id)}
@@ -579,7 +579,7 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                     <div className="space-y-3">
                                         <Label className="text-xs text-muted-foreground font-bold">Grupos en esta comida:</Label>
                                         {meal.groups.length === 0 ? (
-                                            <div className="text-center py-6 bg-muted/30 rounded-xl border border-dashed">
+                                            <div className="text-center py-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-dashed border-blue-200 dark:border-blue-900/50">
                                                 <p className="text-sm text-muted-foreground">Usa el botón para añadir grupos de alimentos.</p>
                                             </div>
                                         ) : (
@@ -587,7 +587,7 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                                                 {meal.groups.map((group, groupIndex) => {
                                                     const totals = calculateGroupTotals(group);
                                                     return (
-                                                        <div key={groupIndex} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                                                        <div key={groupIndex} className="flex items-center justify-between p-3 bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30 rounded-xl">
                                                             <div className="min-w-0">
                                                                 <p className="font-bold text-sm truncate">{group.name}</p>
                                                                 <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
@@ -623,7 +623,7 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
                             rows={4}
                             value={instructions}
                             onChange={e => setInstructions(e.target.value)}
-                            className="flex w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="flex w-full rounded-xl border border-input bg-transparent dark:bg-slate-900/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             placeholder="Ej. Instrucciones generales que verán todos los alumnos asignados..."
                         />
                     </div>

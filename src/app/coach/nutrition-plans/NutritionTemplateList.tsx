@@ -83,7 +83,7 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
             </div>
 
             {filteredTemplates.length === 0 ? (
-                <div className="text-center py-20 bg-card border border-dashed border-border rounded-2xl">
+                <div className="text-center py-20 bg-blue-50/30 dark:bg-blue-950/20 border border-dashed border-blue-200 dark:border-blue-900/50 rounded-2xl">
                     <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                         <CalendarHeart className="w-8 h-8 text-muted-foreground" />
                     </div>
@@ -93,7 +93,7 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
             ) : (
                 <div className="grid grid-cols-1 gap-4">
                     {filteredTemplates.map((template) => (
-                        <Card key={template.id} className="overflow-hidden border-border/60 hover:border-primary/40 transition-all group">
+                        <Card key={template.id} className="overflow-hidden border-blue-100/50 dark:border-blue-900/30 bg-blue-50/30 dark:bg-blue-950/20 hover:border-primary/40 dark:hover:border-blue-500/30 hover:shadow-md transition-all duration-300 group">
                             <CardContent className="p-5">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="min-w-0">
@@ -126,21 +126,21 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
                                 </div>
 
                                 <div className="grid grid-cols-4 gap-2 mb-4">
-                                    <div className="bg-orange-500/5 border border-orange-500/10 rounded-lg p-1.5 text-center">
-                                        <p className="text-[9px] font-bold text-orange-600 uppercase">Kcal</p>
-                                        <p className="text-xs font-bold text-orange-700">{template.daily_calories || 0}</p>
+                                    <div className="bg-orange-500/10 dark:bg-orange-500/20 border border-orange-500/20 dark:border-orange-500/30 rounded-lg p-1.5 text-center">
+                                        <p className="text-[9px] font-bold text-orange-600 dark:text-orange-400 uppercase">Kcal</p>
+                                        <p className="text-xs font-bold text-orange-700 dark:text-orange-300">{template.daily_calories || 0}</p>
                                     </div>
-                                    <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-1.5 text-center">
-                                        <p className="text-[9px] font-bold text-blue-600 uppercase">P</p>
-                                        <p className="text-xs font-bold text-blue-700">{template.protein_g || 0}g</p>
+                                    <div className="bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30 rounded-lg p-1.5 text-center">
+                                        <p className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase">P</p>
+                                        <p className="text-xs font-bold text-blue-700 dark:text-blue-300">{template.protein_g || 0}g</p>
                                     </div>
-                                    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-1.5 text-center">
-                                        <p className="text-[9px] font-bold text-emerald-600 uppercase">C</p>
-                                        <p className="text-xs font-bold text-emerald-700">{template.carbs_g || 0}g</p>
+                                    <div className="bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 dark:border-emerald-500/30 rounded-lg p-1.5 text-center">
+                                        <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">C</p>
+                                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{template.carbs_g || 0}g</p>
                                     </div>
-                                    <div className="bg-purple-500/5 border border-purple-500/10 rounded-lg p-1.5 text-center">
-                                        <p className="text-[9px] font-bold text-purple-600 uppercase">G</p>
-                                        <p className="text-xs font-bold text-purple-700">{template.fats_g || 0}g</p>
+                                    <div className="bg-purple-500/10 dark:bg-purple-500/20 border border-purple-500/20 dark:border-purple-500/30 rounded-lg p-1.5 text-center">
+                                        <p className="text-[9px] font-bold text-purple-600 dark:text-purple-400 uppercase">G</p>
+                                        <p className="text-xs font-bold text-purple-700 dark:text-purple-300">{template.fats_g || 0}g</p>
                                     </div>
                                 </div>
 
