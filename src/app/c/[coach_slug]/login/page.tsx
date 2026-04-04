@@ -5,7 +5,7 @@ import Image from 'next/image'
 import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
 import type { Tables } from '@/lib/database.types'
-import InstallPrompt from '@/components/InstallPrompt'
+import { InstallPrompt } from '@/components/InstallPrompt'
 
 type Coach = Tables<'coaches'>
 
