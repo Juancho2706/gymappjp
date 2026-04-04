@@ -12,19 +12,19 @@ export async function GET() {
     theme_color: "#10B981",
     icons: [
       {
-        src: "/icon-192x192.png",
+        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any"
       },
       {
-        src: "/icon-512x512.png",
+        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "any"
       },
       {
-        src: "/icon-512x512.png",
+        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable"

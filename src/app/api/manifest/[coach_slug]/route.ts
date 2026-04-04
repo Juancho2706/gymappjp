@@ -27,25 +27,25 @@ export async function GET(
     theme_color: coach?.primary_color || "#000000",
     icons: [
       {
-        src: coach?.logo_url || "/icon-192x192.png",
+        src: coach?.logo_url || "/LOGO CUADRADO FINAL FONDO NEGRO.png",
         sizes: "192x192",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "any"
       },
       {
-        src: coach?.logo_url || "/icon-512x512.png",
+        src: coach?.logo_url || "/LOGO CUADRADO FINAL FONDO NEGRO.png",
         sizes: "512x512",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "any"
       },
       {
-        src: "/icon-192x192.png",
+        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable"
       },
       {
-        src: "/icon-512x512.png",
+        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable"
