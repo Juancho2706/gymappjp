@@ -48,7 +48,6 @@ export function NutritionManagement({
                 
                 <NutritionPlanBuilder 
                     coachId={coachId} 
-                    availableGroups={initialGroups} 
                     availableClients={availableClients}
                     initialData={editingTemplate}
                     onCancel={() => {
