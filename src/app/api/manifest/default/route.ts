@@ -24,7 +24,7 @@ export async function GET() {
         purpose: "any"
       },
       {
-        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
+        src: "/icon-maskable.png", // Requiere un icono con 20% de padding para Android
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable"

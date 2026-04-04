@@ -39,15 +39,15 @@ export async function GET(
         purpose: "any"
       },
       {
-        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
+        src: coach?.logo_url ? coach.logo_url : "/icon-maskable.png", // Para coaches, asume que el logo subido tiene padding, sino cae al maskable por defecto
         sizes: "192x192",
-        type: "image/png",
+        type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "maskable"
       },
       {
-        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
+        src: coach?.logo_url ? coach.logo_url : "/icon-maskable.png",
         sizes: "512x512",
-        type: "image/png",
+        type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "maskable"
       }
     ]
