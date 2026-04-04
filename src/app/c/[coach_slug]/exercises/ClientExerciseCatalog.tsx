@@ -84,7 +84,20 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
           >
             <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
               {(() => {
-                const url = ex.video_url || ex.gif_url;
+                // If it has a gif, show it immediately without checking youtube logic
+                if (ex.gif_url) {
+                  return (
+                    <Image
+                      src={ex.gif_url}
+                      alt={ex.name}
+                      fill
+                      className="object-cover group-hover:scale-110 transition-transform duration-500"
+                      unoptimized
+                    />
+                  );
+                }
+
+                const url = ex.video_url;
                 const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
                 const getYouTubeId = (u: string) => {
                   const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
@@ -165,6 +178,20 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   return match ? match[1] : null;
                 };
 
+                if (selectedExercise.gif_url) {
+                  return (
+                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50 z-0">
+                      <Image
+                        src={selectedExercise.gif_url}
+                        alt={selectedExercise.name}
+                        fill
+                        className="object-contain p-4"
+                        unoptimized
+                      />
+                    </div>
+                  );
+                }
+
                 if (isYouTube) {
                   const ytId = getYouTubeId(url!);
                   const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1${
@@ -184,20 +211,6 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                       />
                     </div>
                   ) : null;
-                }
-
-                if (selectedExercise.gif_url) {
-                  return (
-                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50 z-0">
-                      <Image
-                        src={selectedExercise.gif_url}
-                        alt={selectedExercise.name}
-                        fill
-                        className="object-contain p-4"
-                        unoptimized
-                      />
-                    </div>
-                  );
                 }
 
                 if (selectedExercise.video_url) {

@@ -232,21 +232,21 @@ function ExercisePreviewModal({
             >
                 {/* Media demonstration area */}
                 <div className="relative w-full bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-0">
-                    {isYouTube && ytId ? (
-                        <iframe
-                            className="w-full h-full"
-                            src={getEmbedUrl()}
-                            title={exercise.name}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            allowFullScreen
-                        />
-                    ) : hasGif ? (
+                    {hasGif ? (
                         <Image
                             src={exercise.gif_url!}
                             alt={`Demostración: ${exercise.name}`}
                             fill
                             className="object-cover"
                             unoptimized
+                        />
+                    ) : isYouTube && ytId ? (
+                        <iframe
+                            className="w-full h-full"
+                            src={getEmbedUrl()}
+                            title={exercise.name}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
                         />
                     ) : exercise.video_url ? (
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-60">
