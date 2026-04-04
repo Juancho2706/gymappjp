@@ -166,14 +166,14 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       >
         <DialogContent 
           showCloseButton={false}
-          className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col focus:outline-none"
+          className="bg-card border-border rounded-3xl overflow-y-auto custom-scrollbar p-0 max-w-md w-[90vw] max-h-[85vh] focus:outline-none"
         >
           {selectedExercise && (
             <>
               {(() => {
                 if (selectedExercise.gif_url) {
                   return (
-                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50 z-0">
+                    <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
                       <Image
                         src={selectedExercise.gif_url}
                         alt={selectedExercise.name}
@@ -201,7 +201,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   }` : '';
 
                   return ytId ? (
-                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border/50 z-0">
+                    <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border/50">
                       <iframe
                         className="w-full h-full"
                         src={embedUrl}
@@ -231,7 +231,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
                 return null;
               })()}
-              <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="p-6 flex-1">
                 <DialogHeader className="mb-4">
                   <div className="flex items-start justify-between gap-4">
                     <DialogTitle className="text-xl font-bold">

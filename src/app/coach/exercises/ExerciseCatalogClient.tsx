@@ -228,10 +228,10 @@ function ExercisePreviewModal({
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
             <DialogContent 
                 showCloseButton={false}
-                className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col focus:outline-none"
+                className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-y-auto custom-scrollbar max-h-[85vh] focus:outline-none"
             >
                 {/* Media demonstration area */}
-                <div className="relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-0">
+                <div className="sticky top-0 relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-10">
                     {hasGif ? (
                         <Image
                             src={exercise.gif_url!}
@@ -263,7 +263,7 @@ function ExercisePreviewModal({
                     )}
                 </div>
 
-                <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="p-6 space-y-5 flex-1">
                     <DialogHeader>
                         <div className="flex items-start justify-between gap-4">
                             <DialogTitle className="text-xl font-extrabold text-foreground">
