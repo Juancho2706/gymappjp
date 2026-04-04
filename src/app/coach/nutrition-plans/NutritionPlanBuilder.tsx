@@ -292,7 +292,7 @@ export function NutritionPlanBuilder({ coachId, availableClients, initialData, o
                             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">Asignar a Alumnos</Label>
                             <Popover open={openPopover} onOpenChange={setOpenPopover}>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full h-12 justify-between bg-secondary/30 border-border dark:border-white/10 font-bold">
+                                    <Button type="button" variant="outline" className="w-full h-12 justify-between bg-secondary/30 border-border dark:border-white/10 font-bold">
                                         <span className="truncate">
                                             {selectedClients.length > 0 ? `${selectedClients.length} Alumnos` : "Seleccionar..."}
                                         </span>
