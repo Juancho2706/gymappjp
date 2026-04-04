@@ -13,12 +13,11 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-export function InstallPrompt() {
+export function InstallPrompt({ brandName = 'COACH OP' }: { brandName?: string }) {
   const [isIOS, setIsIOS] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [brandName, setBrandName] = useState('COACH OP')
 
   useEffect(() => {
     // Check if it's already installed

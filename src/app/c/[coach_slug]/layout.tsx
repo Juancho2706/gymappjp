@@ -6,7 +6,7 @@ import type { Tables } from '@/lib/database.types'
 
 type Coach = Tables<'coaches'>
 import { ClientNav } from '@/components/client/ClientNav'
-import InstallPrompt from '@/components/InstallPrompt'
+import { InstallPrompt } from '@/components/InstallPrompt'
 
 interface Props {
     children: React.ReactNode
