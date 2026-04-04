@@ -4,6 +4,7 @@ export const MUSCLE_GROUPS = [
     'Hombros',
     'Bíceps',
     'Tríceps',
+    'Antebrazos',
     'Cuádriceps',
     'Isquios',
     'Glúteos',
@@ -36,5 +37,6 @@ export const MUSCLE_MAPPING: Record<string, string[]> = {
     'lumbar': ['lower back', 'lumbar'],
     'aductores': ['adductors', 'aductores'],
     'abductores': ['abductors', 'abductores'],
-    'core': ['abs', 'core', 'abdomen']
+    'core': ['abs', 'core', 'abdomen'],
+    'antebrazos': ['forearms', 'antebrazos']
 };
