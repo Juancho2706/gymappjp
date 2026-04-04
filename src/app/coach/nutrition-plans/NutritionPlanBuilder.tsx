@@ -2,118 +2,215 @@
 
 import { useState, useTransition, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, CalendarHeart, Search, LayoutGrid, Check, ChevronsUpDown } from 'lucide-react'
+import { Plus, Trash2, CalendarHeart, Search, Bookmark, Target, Flame, Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent } from '@/components/ui/card'
-import { 
-    Dialog, 
-    DialogContent, 
-    DialogHeader, 
-    DialogTitle, 
-    DialogTrigger 
-} from '@/components/ui/dialog'
-import { 
-    Command, 
-    CommandEmpty, 
-    CommandGroup, 
-    CommandInput, 
-    CommandItem,
-    CommandList
-} from '@/components/ui/command'
+import { FoodSearchModal } from '../nutrition-builder/[clientId]/FoodSearchModal'
+import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
-import { saveNutritionTemplate } from './actions'
-import { toast } from 'sonner'
 import { triggerSuccessAnimation } from '@/components/SuccessAnimationProvider'
-import { 
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { saveNutritionTemplate } from './actions'
 
-interface MealGroup {
-    id: string
-    name: string
-    items?: any[]
+// Ring Chart Helper
+function MacroRing({ 
+    value, 
+    target, 
+    label, 
+    color, 
+    unit = 'g' 
+}: { 
+    value: number, 
+    target: number, 
+    label: string, 
+    color: string,
+    unit?: string 
+}) {
+    const percentage = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
+    const isOver = value > target && target > 0;
+    
+    const size = 100;
+    const strokeWidth = 6;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+
+    return (
+        <div className="flex flex-col items-center justify-center relative group">
+            <div className="relative" style={{ width: size, height: size }}>
+                <svg className="absolute top-0 left-0 w-full h-full -rotate-90">
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        stroke="rgba(255,255,255,0.05)"
+                        strokeWidth={strokeWidth}
+                        fill="none"
+                    />
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        stroke={isOver ? '#EF4444' : color}
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={circumference}
+                        strokeDashoffset={mounted ? strokeDashoffset : circumference}
+                        strokeLinecap="round"
+                        fill="none"
+                        className="transition-all duration-1000 ease-out"
+                    />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-0.5">{label}</span>
+                    <span className={cn("text-lg font-black tracking-tighter", isOver ? "text-red-500" : "text-foreground")}>
+                        {Math.round(value)}
+                    </span>
+                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest">
+                        / {target || 0}{unit}
+                    </span>
+                </div>
+            </div>
+        </div>
+    )
 }
 
-interface TemplateMealInput {
-    id: number
+interface FoodItemInput {
+    food_id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    serving_size: number;
+    serving_unit: string;
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fats_g: number;
+}
+
+interface MealInput {
+    id: number | string
     name: string
-    groups: MealGroup[]
+    food_items: FoodItemInput[]
 }
 
 interface Client {
     id: string
     full_name: string
-    active_plan?: {
-        id: string
-        name: string
-        template_id?: string
-    } | null
+    active_plan?: any
 }
 
 interface Props {
     coachId: string
-    availableGroups: MealGroup[]
     availableClients: Client[]
     initialData?: any
     onCancel?: () => void
 }
 
-export function NutritionPlanBuilder({ coachId, availableGroups, availableClients, initialData, onCancel }: Props) {
+export function NutritionPlanBuilder({ coachId, availableClients, initialData, onCancel }: Props) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState('')
 
-    // Plan Details
     const [name, setName] = useState(initialData?.name || '')
-    const [description, setDescription] = useState(initialData?.description || '')
     const [targetCalories, setTargetCalories] = useState(initialData?.daily_calories?.toString() || '')
     const [targetProtein, setTargetProtein] = useState(initialData?.protein_g?.toString() || '')
     const [targetCarbs, setTargetCarbs] = useState(initialData?.carbs_g?.toString() || '')
     const [targetFats, setTargetFats] = useState(initialData?.fats_g?.toString() || '')
     const [instructions, setInstructions] = useState(initialData?.instructions || '')
 
-    // Meals & Groups
-    const [meals, setMeals] = useState<TemplateMealInput[]>(
-        initialData?.template_meals?.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            groups: m.template_meal_groups?.map((tg: any) => {
-                const group = Array.isArray(tg.saved_meals) ? tg.saved_meals[0] : tg.saved_meals;
-                if (!group) return null;
-                return {
-                    id: group.id,
-                    name: group.name,
-                    items: group.saved_meal_items
-                };
-            }).filter(Boolean) || []
-        })) || [
-            { id: Date.now(), name: 'Desayuno', groups: [] }
-        ]
-    )
-
-    // Client Selection
     const [selectedClients, setSelectedClients] = useState<string[]>(
         initialData?.assigned_clients?.map((c: any) => c.id) || []
     )
-    const [openPopover, setOpenPopover] = useState(false)
-    const [showConfirmOverwrite, setShowConfirmOverwrite] = useState(false)
-    const [clientsWithExistingPlans, setClientsWithExistingPlans] = useState<Client[]>([])
-
     const [searchTerm, setSearchTerm] = useState('')
+    const [openPopover, setOpenPopover] = useState(false)
+
+    const [meals, setMeals] = useState<MealInput[]>(
+        initialData?.template_meals?.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            food_items: m.template_meal_groups?.flatMap((tg: any) => {
+                const group = Array.isArray(tg.saved_meals) ? tg.saved_meals[0] : tg.saved_meals;
+                return group?.saved_meal_items?.map((fi: any) => ({
+                    food_id: fi.food_id,
+                    name: fi.food?.name,
+                    quantity: fi.quantity,
+                    unit: fi.unit,
+                    serving_size: fi.food?.serving_size,
+                    serving_unit: fi.food?.serving_unit,
+                    calories: fi.food?.calories,
+                    protein_g: fi.food?.protein_g,
+                    carbs_g: fi.food?.carbs_g,
+                    fats_g: fi.food?.fats_g,
+                })) || []
+            }) || []
+        })) || [
+            { id: Date.now(), name: 'Desayuno', food_items: [] }
+        ]
+    )
+
+    const calculateItemMacros = (item: FoodItemInput) => {
+        const factor = item.quantity / (item.serving_size || 100);
+        return {
+            calories: Math.round(item.calories * factor),
+            protein: Math.round(item.protein_g * factor * 10) / 10,
+            carbs: Math.round(item.carbs_g * factor * 10) / 10,
+            fats: Math.round(item.fats_g * factor * 10) / 10,
+        };
+    };
+
+    const calculateMealMacros = (meal: MealInput) => {
+        return meal.food_items.reduce((acc, item) => {
+            const macros = calculateItemMacros(item);
+            return {
+                calories: acc.calories + macros.calories,
+                protein: acc.protein + macros.protein,
+                carbs: acc.carbs + macros.carbs,
+                fats: acc.fats + macros.fats,
+            };
+        }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
+    };
+
+    const totalMacros = useMemo(() => {
+        return meals.reduce((acc, meal) => {
+            const macros = calculateMealMacros(meal);
+            return {
+                calories: acc.calories + macros.calories,
+                protein: acc.protein + macros.protein,
+                carbs: acc.carbs + macros.carbs,
+                fats: acc.fats + macros.fats,
+            };
+        }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
+    }, [meals]);
+
+    useEffect(() => {
+        if (totalMacros.calories > 0) {
+            setTargetCalories(Math.round(totalMacros.calories).toString())
+            setTargetProtein(Math.round(totalMacros.protein).toString())
+            setTargetCarbs(Math.round(totalMacros.carbs).toString())
+            setTargetFats(Math.round(totalMacros.fats).toString())
+        }
+    }, [totalMacros]);
+
+    const handleAddMeal = () => {
+        setMeals([...meals, { id: Date.now(), name: '', food_items: [] }])
+    }
+
+    const handleRemoveMeal = (id: number | string) => {
+        setMeals(meals.filter(m => m.id !== id))
+    }
+
+    const handleMealChange = (id: number | string, field: keyof MealInput, value: any) => {
+        setMeals(meals.map(m => m.id === id ? { ...m, [field]: value } : m))
+    }
 
     const filteredClients = useMemo(() => {
         return availableClients.filter(client => 
@@ -121,145 +218,17 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
         )
     }, [availableClients, searchTerm])
 
-    const calculateGroupTotals = (group: MealGroup) => {
-        let calories = 0
-        let protein = 0
-        let carbs = 0
-        let fats = 0
-
-        group.items?.forEach(item => {
-            // Buscamos la data del alimento de forma robusta
-            const food = item.food || (Array.isArray(item.foods) ? item.foods[0] : item.foods) || item;
-            const quantity = Number(item.quantity) || 0
-            const unit = item.unit?.toLowerCase() || 'g'
-            const factor = unit === 'g' || unit === 'ml' ? quantity / 100 : quantity
-            
-            calories += (Number(food.calories) || 0) * factor
-            protein += (Number(food.protein_g) || 0) * factor
-            carbs += (Number(food.carbs_g) || 0) * factor
-            fats += (Number(food.fats_g) || 0) * factor
-        })
-
-        return {
-            calories: Math.round(calories),
-            protein: Math.round(protein),
-            carbs: Math.round(carbs),
-            fats: Math.round(fats)
-        }
-    }
-
-    const calculatedTotals = useMemo(() => {
-        let calories = 0
-        let protein = 0
-        let carbs = 0
-        let fats = 0
-
-        meals.forEach(meal => {
-            meal.groups.forEach(group => {
-                const groupTotals = calculateGroupTotals(group)
-                calories += groupTotals.calories
-                protein += groupTotals.protein
-                carbs += groupTotals.carbs
-                fats += groupTotals.fats
-            })
-        })
-
-        return {
-            calories,
-            protein,
-            carbs,
-            fats
-        }
-    }, [meals])
-
-    useEffect(() => {
-        setTargetCalories(calculatedTotals.calories.toString())
-        setTargetProtein(calculatedTotals.protein.toString())
-        setTargetCarbs(calculatedTotals.carbs.toString())
-        setTargetFats(calculatedTotals.fats.toString())
-    }, [calculatedTotals])
-
-    const handleAddMeal = () => {
-        setMeals([...meals, { id: Date.now(), name: '', groups: [] }])
-    }
-
-    const handleRemoveMeal = (id: number) => {
-        setMeals(meals.filter(m => m.id !== id))
-    }
-
-    const handleMealChange = (id: number, field: keyof TemplateMealInput, value: any) => {
-        setMeals(meals.map(m => m.id === id ? { ...m, [field]: value } : m))
-    }
-
-    const handleAddGroupToMeal = (mealId: number, group: MealGroup) => {
-        setMeals(meals.map(m => {
-            if (m.id === mealId) {
-                return { ...m, groups: [...m.groups, group] }
-            }
-            return m
-        }))
-    }
-
-    const handleRemoveGroupFromMeal = (mealId: number, groupIndex: number) => {
-        setMeals(meals.map(m => {
-            if (m.id === mealId) {
-                const newGroups = [...m.groups]
-                newGroups.splice(groupIndex, 1)
-                return { ...m, groups: newGroups }
-            }
-            return m
-        }))
-    }
-
-    const handleSubmit = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault()
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
         setError('')
-
-        if (meals.length === 0) {
-            setError('Agrega al menos una comida al plan.')
-            return
-        }
-
-        // Check for clients with other active plans (not this one)
-        const clientsToOverwrite = availableClients.filter(c => 
-            selectedClients.includes(c.id) && 
-            c.active_plan && 
-            c.active_plan.template_id !== initialData?.id
-        )
-
-        if (clientsToOverwrite.length > 0 && !showConfirmOverwrite) {
-            setClientsWithExistingPlans(clientsToOverwrite)
-            setShowConfirmOverwrite(true)
-            return
-        }
-
-        setShowConfirmOverwrite(false)
-        console.log('[NutritionPlanBuilder] Starting handleSubmit');
-        const planDataForLog = {
-            name,
-            description,
-            targetCalories,
-            targetProtein,
-            targetCarbs,
-            targetFats,
-            instructions,
-            selectedClients,
-            meals: meals.map(m => ({
-                name: m.name,
-                groups: m.groups.map(g => ({ id: g.id, name: g.name }))
-            }))
-        };
-        console.log('[NutritionPlanBuilder] Plan Data before sending:', planDataForLog);
 
         startTransition(async () => {
             try {
-                console.log('[NutritionPlanBuilder] Preparing FormData');
                 const formData = new FormData()
                 if (initialData?.id) {
                     formData.append('template_id', initialData.id)
                 }
                 formData.append('name', name)
-                formData.append('description', description)
                 formData.append('daily_calories', targetCalories)
                 formData.append('protein_g', targetProtein)
                 formData.append('carbs_g', targetCarbs)
@@ -269,367 +238,274 @@ export function NutritionPlanBuilder({ coachId, availableGroups, availableClient
 
                 meals.forEach((meal, i) => {
                     formData.append(`meal_name_${i}`, meal.name)
-                    meal.groups.forEach((group, j) => {
-                        formData.append(`meal_${i}_group_id_${j}`, group.id)
+                    meal.food_items.forEach((item, j) => {
+                        // En la acción saveNutritionTemplate, esto se mapea a grupos o items directos
+                        // Para simplificar y unificar, usaremos un formato compatible
+                        formData.append(`meal_${i}_food_${j}`, JSON.stringify({
+                            food_id: item.food_id,
+                            quantity: item.quantity,
+                            unit: item.unit
+                        }))
                     })
                 })
 
-                console.log('[NutritionPlanBuilder] Calling saveNutritionTemplate action');
                 const result = await saveNutritionTemplate(coachId, {}, formData)
-                console.log('[NutritionPlanBuilder] Action result:', result);
 
                 if (result?.error) {
                     setError(result.error)
-                    toast.error(result.error)
                 } else {
                     triggerSuccessAnimation(() => {
-                        if (onCancel) {
-                            onCancel()
-                        } else {
-                            router.push('/coach/nutrition-plans')
-                        }
+                        if (onCancel) onCancel()
+                        else router.push('/coach/nutrition-plans')
                     })
                 }
             } catch (err: any) {
-                if (err?.message?.includes('NEXT_REDIRECT')) {
-                    return;
-                }
-                console.error('[NutritionPlanBuilder] Catch error during submission:', err);
-                const errorMessage = err?.message || 'Error desconocido al guardar';
-                setError(`Error al guardar: ${errorMessage}`);
-                toast.error(`Error de red o servidor: ${errorMessage}`);
+                setError(err.message || 'Error al guardar')
             }
         })
     }
 
     return (
-        <>
-            <AlertDialog open={showConfirmOverwrite} onOpenChange={setShowConfirmOverwrite}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Sobreescribir planes nutricionales?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            <span className="block mt-2">Los siguientes alumnos ya tienen un plan nutricional activo:</span>
-                            <span className="block mt-2 font-medium text-foreground">
-                                {clientsWithExistingPlans.map(c => (
-                                    <span key={c.id} className="block ml-4">
-                                        • {c.full_name} ({c.active_plan?.name})
-                                    </span>
-                                ))}
-                            </span>
-                            <span className="block mt-4">
-                                Si continúas, se les desactivará su plan actual y se les asignará este nuevo plan. ¿Deseas continuar?
-                            </span>
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction 
-                            onClick={() => {
-                                setShowConfirmOverwrite(false)
-                                handleSubmit()
-                            }}
-                            className="bg-primary text-primary-foreground hover:bg-primary/90"
-                        >
-                            Continuar y Sobreescribir
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            <form onSubmit={handleSubmit} className="space-y-10">
-            {onCancel && (
-                <div className="flex justify-end mb-4">
-                    <Button type="button" variant="ghost" onClick={onCancel}>
-                        Cancelar y Volver
-                    </Button>
-                </div>
-            )}
+        <form onSubmit={handleSubmit} className="space-y-12 pb-24">
             {error && (
-                <div className="p-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded-md">
+                <div className="p-4 text-sm font-bold text-red-500 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3">
+                    <Flame className="w-5 h-5" />
                     {error}
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Basic Info & Assignment */}
-                <div className="lg:col-span-1 space-y-6">
-                    <Card className="bg-blue-50/30 dark:bg-blue-950/20 border-blue-100/50 dark:border-blue-900/30">
-                        <CardContent className="pt-6 space-y-4">
-                            <h3 className="font-bold text-lg border-b pb-2">Información General</h3>
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Nombre del Plan Template</Label>
-                                <Input 
-                                    id="name" 
-                                    value={name} 
-                                    onChange={e => setName(e.target.value)} 
-                                    required 
-                                    placeholder="Ej. Plan Definición Estándar"
-                                />
-                            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                <div className="lg:col-span-1 space-y-8">
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">Designación de Plantilla</Label>
+                            <Input 
+                                value={name} 
+                                onChange={e => setName(e.target.value)} 
+                                required 
+                                placeholder="EJ. PROTOCOLO HIPERTROFIA"
+                                className="h-12 bg-secondary/30 border-border dark:border-white/10 font-bold uppercase tracking-widest"
+                            />
+                        </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="description">Descripción Corta</Label>
-                                <Input 
-                                    id="description" 
-                                    value={description} 
-                                    onChange={e => setDescription(e.target.value)} 
-                                    placeholder="Ej. Ideal para alumnos intermedios"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="calories">Kcal Diarias</Label>
-                                    <div className="font-bold text-lg text-primary">{targetCalories || 0}</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="protein">Prot (g)</Label>
-                                    <div className="font-bold text-lg text-primary">{targetProtein || 0}</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="carbs">Carbs (g)</Label>
-                                    <div className="font-bold text-lg text-primary">{targetCarbs || 0}</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="fats">Grasas (g)</Label>
-                                    <div className="font-bold text-lg text-primary">{targetFats || 0}</div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="bg-blue-50/30 dark:bg-blue-950/20 border-blue-100/50 dark:border-blue-900/30">
-                        <CardContent className="pt-6 space-y-4">
-                            <h3 className="font-bold text-lg border-b pb-2">Asignación Masiva</h3>
-                            <div className="space-y-2">
-                                <Label>Seleccionar Alumnos ({selectedClients.length})</Label>
-                                <Popover open={openPopover} onOpenChange={setOpenPopover}>
-                                    <PopoverTrigger
-                                        className="w-full justify-between h-auto py-2 min-h-[44px] flex items-center px-3 rounded-md border border-input bg-transparent dark:bg-slate-900/50 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
+                        <div className="space-y-3">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">Asignar a Alumnos</Label>
+                            <Popover open={openPopover} onOpenChange={setOpenPopover}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full h-12 justify-between bg-secondary/30 border-border dark:border-white/10 font-bold">
                                         <span className="truncate">
-                                            {selectedClients.length > 0 
-                                                ? `${selectedClients.length} seleccionados`
-                                                : "Seleccionar alumnos..."}
+                                            {selectedClients.length > 0 ? `${selectedClients.length} Alumnos` : "Seleccionar..."}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[var(--base-ui-popover-trigger-width)] p-0" align="start">
-                                        <div className="p-1 space-y-1 bg-popover rounded-lg border shadow-md">
-                                            <div className="px-3 py-2 border-b flex items-center gap-2">
-                                                <Search className="h-4 w-4 shrink-0 opacity-50" />
-                                                <input 
-                                                    className="w-full bg-transparent outline-none text-sm h-8"
-                                                    placeholder="Buscar alumno..."
-                                                    value={searchTerm}
-                                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="max-h-[300px] overflow-y-auto">
-                                                {filteredClients.length === 0 ? (
-                                                    <div className="py-6 text-center text-sm text-muted-foreground">
-                                                        No se encontraron alumnos.
-                                                    </div>
-                                                ) : (
-                                                    filteredClients.map((client) => (
-                                                        <div
-                                                            key={client.id}
-                                                            onClick={() => {
-                                                                setSelectedClients(prev => 
-                                                                    prev.includes(client.id)
-                                                                        ? prev.filter(id => id !== client.id)
-                                                                        : [...prev, client.id]
-                                                                )
-                                                            }}
-                                                            className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                                                        >
-                                                            <div className={cn(
-                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                                                selectedClients.includes(client.id)
-                                                                    ? "bg-primary text-primary-foreground"
-                                                                    : "opacity-50"
-                                                            )}>
-                                                                {selectedClients.includes(client.id) && (
-                                                                    <Check className="h-3 w-3" />
-                                                                )}
-                                                            </div>
-                                                            {client.full_name}
-                                                            {client.active_plan && (
-                                                                <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">
-                                                                    Plan: {client.active_plan.name}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[300px] p-0" align="start">
+                                    <div className="p-2 border-b">
+                                        <div className="flex items-center gap-2 px-2 bg-secondary/50 rounded-lg">
+                                            <Search className="w-4 h-4 text-muted-foreground" />
+                                            <input 
+                                                className="w-full h-9 bg-transparent text-sm outline-none"
+                                                placeholder="Buscar..."
+                                                value={searchTerm}
+                                                onChange={e => setSearchTerm(e.target.value)}
+                                            />
                                         </div>
-                                    </PopoverContent>
-                                </Popover>
-                                <p className="text-[10px] text-muted-foreground mt-1">
-                                    El plan se creará y se activará automáticamente para todos los alumnos seleccionados.
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    </div>
+                                    <div className="max-h-[300px] overflow-y-auto p-1">
+                                        {filteredClients.map(client => (
+                                            <div 
+                                                key={client.id}
+                                                onClick={() => {
+                                                    setSelectedClients(prev => 
+                                                        prev.includes(client.id) ? prev.filter(id => id !== client.id) : [...prev, client.id]
+                                                    )
+                                                }}
+                                                className="flex items-center gap-2 p-2 rounded-lg hover:bg-secondary cursor-pointer"
+                                            >
+                                                <div className={cn(
+                                                    "w-4 h-4 rounded border border-primary flex items-center justify-center",
+                                                    selectedClients.includes(client.id) ? "bg-primary text-primary-foreground" : "opacity-50"
+                                                )}>
+                                                    {selectedClients.includes(client.id) && <Check className="w-3 h-3" />}
+                                                </div>
+                                                <span className="text-sm font-bold">{client.full_name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
 
-                    <Button 
-                        type="submit" 
-                        className="w-full font-bold h-12 shadow-lg" 
-                        disabled={isPending}
-                    >
-                        {isPending 
-                            ? (initialData?.id ? 'Guardando Cambios...' : 'Creando y Asignando...') 
-                            : (initialData?.id ? 'Guardar Cambios' : 'Crear y Asignar Plan')}
-                    </Button>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-primary px-1">Kcal</Label>
+                                <Input type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} className="h-10 text-center font-black" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground px-1">Prot</Label>
+                                <Input type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} className="h-10 text-center font-black" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground px-1">Carbs</Label>
+                                <Input type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} className="h-10 text-center font-black" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground px-1">Fats</Label>
+                                <Input type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} className="h-10 text-center font-black" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 rounded-2xl border border-border bg-card dark:bg-black/40 grid grid-cols-2 gap-6 justify-items-center">
+                        <MacroRing value={totalMacros.calories} target={Number(targetCalories) || 0} label="Kcal" color="#007AFF" unit="" />
+                        <MacroRing value={totalMacros.protein} target={Number(targetProtein) || 0} label="Prot" color="#32ADE6" />
+                        <MacroRing value={totalMacros.carbs} target={Number(targetCarbs) || 0} label="Carbs" color="#5856D6" />
+                        <MacroRing value={totalMacros.fats} target={Number(targetFats) || 0} label="Fats" color="#00C7BE" />
+                    </div>
                 </div>
 
-                {/* Right Column: Meals Builder */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-bold flex items-center gap-2">
-                            <CalendarHeart className="w-5 h-5 text-primary" />
-                            Estructura de Comidas
+                <div className="lg:col-span-2 space-y-8">
+                    <div className="flex items-center justify-between border-b border-border pb-4">
+                        <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+                            <CalendarHeart className="w-5 h-5 text-emerald-500" />
+                            Estructura Diaria
                         </h3>
-                        <Button type="button" variant="outline" size="sm" onClick={handleAddMeal} className="gap-1">
+                        <Button type="button" variant="outline" size="sm" onClick={handleAddMeal} className="h-9 gap-2 font-black uppercase text-[10px] tracking-widest rounded-xl">
                             <Plus className="w-4 h-4" /> Agregar Comida
                         </Button>
                     </div>
 
                     <div className="space-y-6">
-                        {meals.map((meal, index) => (
-                            <Card key={meal.id} className="relative overflow-visible bg-blue-50/30 dark:bg-blue-950/20 border-blue-100/50 dark:border-blue-900/30 transition-all duration-300">
-                                <button 
-                                    type="button" 
-                                    onClick={() => handleRemoveMeal(meal.id)}
-                                    className="absolute -top-2 -right-2 w-8 h-8 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center shadow-md z-10 hover:bg-destructive/90 transition-colors"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                        {meals.map((meal, index) => {
+                            const mealMacros = calculateMealMacros(meal);
+                            return (
+                                <div key={meal.id} className="relative p-4 md:p-6 rounded-2xl border border-border bg-secondary/10 group animate-in slide-in-from-bottom-2">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleRemoveMeal(meal.id)}
+                                        className="absolute -top-3 -right-3 w-8 h-8 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg md:opacity-0 md:group-hover:opacity-100 transition-all z-10"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
 
-                                <CardContent className="p-6 space-y-4">
-                                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                                        <div className="flex-1 space-y-1.5 w-full">
-                                            <Label className="text-xs text-muted-foreground font-bold uppercase">Comida {index + 1}</Label>
-                                            <Input 
-                                                value={meal.name} 
-                                                onChange={e => handleMealChange(meal.id, 'name', e.target.value)} 
-                                                className="font-bold text-lg" 
-                                                placeholder="Nombre de la comida (ej. Almuerzo)"
-                                                required
-                                            />
-                                        </div>
-                                        
-                                        <Dialog>
-                                            <DialogTrigger render={
-                                                <Button type="button" variant="secondary" className="gap-2 shrink-0" />
-                                            }>
-                                                <LayoutGrid className="w-4 h-4" />
-                                                Añadir Grupo
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-lg">
-                                                <DialogHeader>
-                                                    <DialogTitle>Tus Grupos de Alimentos</DialogTitle>
-                                                </DialogHeader>
-                                                <div className="max-h-[400px] overflow-y-auto space-y-2 p-1">
-                                                    {availableGroups.length === 0 ? (
-                                                        <div className="text-center py-8">
-                                                            <p className="text-muted-foreground">No tienes grupos creados.</p>
-                                                            <Button 
-                                                                variant="link" 
-                                                                onClick={() => window.open('/coach/meal-groups', '_blank')}
-                                                            >
-                                                                Ir a Grupos de Alimentos
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        availableGroups.map(group => {
-                                                            const totals = calculateGroupTotals(group);
-                                                            return (
-                                                                <div 
-                                                                    key={group.id} 
-                                                                    className="flex items-center justify-between p-3 border rounded-xl hover:bg-muted cursor-pointer transition-colors"
-                                                                    onClick={() => handleAddGroupToMeal(meal.id, group)}
-                                                                >
-                                                                    <div>
-                                                                        <p className="font-bold">{group.name}</p>
-                                                                        <div className="flex gap-2 text-[10px] text-muted-foreground mt-1">
-                                                                            <span>{group.items?.length || 0} ingredientes</span>
-                                                                            <span>•</span>
-                                                                            <span>{totals.calories} kcal</span>
-                                                                            <span>•</span>
-                                                                            <span>P: {totals.protein}g</span>
-                                                                            <span>•</span>
-                                                                            <span>C: {totals.carbs}g</span>
-                                                                            <span>•</span>
-                                                                            <span>G: {totals.fats}g</span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <Button size="sm" variant="ghost">Seleccionar</Button>
-                                                                </div>
-                                                            )
-                                                        })
-                                                    )}
-                                                </div>
-                                            </DialogContent>
-                                        </Dialog>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <Label className="text-xs text-muted-foreground font-bold">Grupos en esta comida:</Label>
-                                        {meal.groups.length === 0 ? (
-                                            <div className="text-center py-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-dashed border-blue-200 dark:border-blue-900/50">
-                                                <p className="text-sm text-muted-foreground">Usa el botón para añadir grupos de alimentos.</p>
+                                    <div className="space-y-6">
+                                        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                                            <div className="flex-1 space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Comida {index + 1}</Label>
+                                                <Input 
+                                                    value={meal.name} 
+                                                    onChange={e => handleMealChange(meal.id, 'name', e.target.value)} 
+                                                    className="h-12 bg-background border-border/50 font-black text-lg" 
+                                                    placeholder="Ej. Comida Post-Entreno"
+                                                    required
+                                                />
                                             </div>
-                                        ) : (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {meal.groups.map((group, groupIndex) => {
-                                                    const totals = calculateGroupTotals(group);
+                                            <div className="flex items-center gap-4 bg-background/50 p-3 rounded-xl border border-border/50 shrink-0">
+                                                <div className="text-center px-2">
+                                                    <div className="text-[9px] text-muted-foreground uppercase font-black">Kcal</div>
+                                                    <div className="text-sm font-black">{Math.round(mealMacros.calories)}</div>
+                                                </div>
+                                                <div className="text-center px-2 border-l border-border/30">
+                                                    <div className="text-[9px] text-muted-foreground uppercase font-black">P</div>
+                                                    <div className="text-sm font-black">{Math.round(mealMacros.protein)}g</div>
+                                                </div>
+                                                <div className="text-center px-2 border-l border-border/30">
+                                                    <div className="text-[9px] text-muted-foreground uppercase font-black">C</div>
+                                                    <div className="text-sm font-black">{Math.round(mealMacros.carbs)}g</div>
+                                                </div>
+                                                <div className="text-center px-2 border-l border-border/30">
+                                                    <div className="text-[9px] text-muted-foreground uppercase font-black">G</div>
+                                                    <div className="text-sm font-black">{Math.round(mealMacros.fats)}g</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-3">
+                                                {meal.food_items.map((foodItem, foodIndex) => {
+                                                    const itemMacros = calculateItemMacros(foodItem);
                                                     return (
-                                                        <div key={groupIndex} className="flex items-center justify-between p-3 bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30 rounded-xl">
-                                                            <div className="min-w-0">
-                                                                <p className="font-bold text-sm truncate">{group.name}</p>
-                                                                <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
-                                                                    <span className="uppercase">Grupo Guardado</span>
-                                                                    <span>•</span>
-                                                                    <span>{totals.calories} kcal | P: {totals.protein}g | C: {totals.carbs}g | G: {totals.fats}g</span>
+                                                        <div key={foodIndex} className="flex flex-col gap-3 p-4 rounded-xl bg-background border border-border/50 group/item relative">
+                                                            <div className="flex items-center gap-4">
+                                                                <span className="flex-1 text-sm font-black uppercase tracking-tight truncate">{foodItem.name}</span>
+                                                                <div className="relative w-24 shrink-0">
+                                                                    <Input type="number" step="any" value={foodItem.quantity} onChange={(e) => {
+                                                                        const newFoodItems = [...meal.food_items]
+                                                                        newFoodItems[foodIndex].quantity = Number(e.target.value)
+                                                                        handleMealChange(meal.id, 'food_items', newFoodItems)
+                                                                    }} className="h-9 text-xs font-black text-center pr-8" />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground uppercase">{foodItem.unit}</span>
                                                                 </div>
+                                                                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-rose-400 hover:text-rose-500 hover:bg-rose-500/10 shrink-0 rounded-lg" onClick={() => {
+                                                                    const newFoodItems = meal.food_items.filter((_, i) => i !== foodIndex)
+                                                                    handleMealChange(meal.id, 'food_items', newFoodItems)
+                                                                }}>
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
                                                             </div>
-                                                            <Button 
-                                                                type="button" 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0 ml-2"
-                                                                onClick={() => handleRemoveGroupFromMeal(meal.id, groupIndex)}
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </Button>
+                                                            <div className="flex flex-wrap items-center gap-4 px-1 border-t border-border/30 pt-2">
+                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                                    <span className="text-foreground">{Math.round(itemMacros.calories)}</span> Kcal
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                                    P: <span className="text-foreground">{itemMacros.protein}g</span>
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                                    C: <span className="text-foreground">{itemMacros.carbs}g</span>
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                                    G: <span className="text-foreground">{itemMacros.fats}g</span>
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                    )
+                                                    );
                                                 })}
                                             </div>
-                                        )}
+                                            <FoodSearchModal onFoodSelected={(food, quantity, unit) => {
+                                                const newFoodItem: FoodItemInput = {
+                                                    food_id: food.id,
+                                                    name: food.name,
+                                                    quantity: quantity,
+                                                    unit: unit || food.serving_unit || 'g',
+                                                    serving_size: food.serving_size,
+                                                    serving_unit: food.serving_unit,
+                                                    calories: food.calories,
+                                                    protein_g: food.protein_g,
+                                                    carbs_g: food.carbs_g,
+                                                    fats_g: food.fats_g,
+                                                };
+                                                const newFoodItems = [...meal.food_items, newFoodItem];
+                                                handleMealChange(meal.id, 'food_items', newFoodItems);
+                                            }} />
+                                        </div>
                                     </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                </div>
+                            );
+                        })}
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="instructions">Notas o Indicaciones Globales</Label>
+                    <div className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">Instrucciones Especiales</Label>
                         <textarea 
-                            id="instructions"
                             rows={4}
                             value={instructions}
                             onChange={e => setInstructions(e.target.value)}
-                            className="flex w-full rounded-xl border border-input bg-transparent dark:bg-slate-900/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            placeholder="Ej. Instrucciones generales que verán todos los alumnos asignados..."
+                            className="w-full p-6 rounded-2xl bg-secondary/30 border border-border dark:border-white/10 text-sm font-bold focus:border-primary transition-all resize-none placeholder:text-muted-foreground/50"
+                            placeholder="Ej. Tomar 5g de Creatina después de la comida 3..."
                         />
                     </div>
                 </div>
             </div>
+
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-[1200px] z-50">
+                <Button 
+                    type="submit" 
+                    className="w-full h-16 text-sm font-black uppercase tracking-[0.3em] shadow-2xl rounded-2xl border-t border-white/10" 
+                    disabled={isPending}
+                >
+                    {isPending ? 'Procesando Protocolo...' : (initialData?.id ? 'Actualizar Plantilla Maestra' : 'Guardar y Desplegar Plantilla')}
+                </Button>
+            </div>
         </form>
-    </>
     )
 }

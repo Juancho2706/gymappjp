@@ -147,41 +147,41 @@ export default async function ClientDetailPage({
                     Directorio de Unidades
                 </Link>
 
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 relative">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-8 relative">
                     <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 blur-[100px] pointer-events-none z-0" />
                     
-                    <div className="flex items-center gap-6 relative z-10">
-                        <div className="w-24 h-24 rounded-[2rem] bg-white dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center flex-shrink-0 shadow-2xl group relative overflow-hidden">
+                    <div className="flex items-center gap-4 md:gap-6 relative z-10">
+                        <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl md:rounded-[2rem] bg-white dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center flex-shrink-0 shadow-2xl group relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <span className="text-4xl font-black text-foreground uppercase font-display relative z-10">
+                            <span className="text-2xl md:text-4xl font-black text-foreground uppercase font-display relative z-10">
                                 {client.full_name[0]}
                             </span>
                         </div>
-                        <div>
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-4xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display leading-none">
+                        <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                                <h1 className="text-2xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display leading-none truncate">
                                     {client.full_name}
                                 </h1>
-                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-black text-[10px] uppercase tracking-widest px-3 py-1">Online</Badge>
+                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-black text-[10px] uppercase tracking-widest px-2 md:px-3 py-0.5 md:py-1">Online</Badge>
                             </div>
-                            <p className="text-muted-foreground text-sm font-bold uppercase tracking-widest mt-3 flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                {client.email}
+                            <p className="text-muted-foreground text-[10px] md:text-sm font-bold uppercase tracking-widest mt-1 md:mt-3 flex items-center gap-2 truncate">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                                <span className="truncate">{client.email}</span>
                             </p>
                         </div>
                     </div>
                     
-                    <div className="flex flex-wrap items-center gap-4 relative z-10">
-                        <GlassButton asChild className="h-14 px-8 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10">
+                    <div className="flex flex-row items-center gap-3 md:gap-4 relative z-10">
+                        <GlassButton asChild className="flex-1 md:flex-none h-12 md:h-14 px-4 md:px-8 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10">
                             <Link href={`/coach/nutrition-builder/${clientId}`}>
-                                <Apple className="w-5 h-5 mr-3 text-emerald-500" />
-                                <span className="font-bold uppercase tracking-widest text-xs">Plan Dieta</span>
+                                <Apple className="w-4 h-4 md:w-5 md:h-5 mr-2 md:mr-3 text-emerald-500" />
+                                <span className="font-bold uppercase tracking-widest text-[10px] md:text-xs">Plan Dieta</span>
                             </Link>
                         </GlassButton>
-                        <GlassButton asChild className="h-14 px-8 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)] border-none">
+                        <GlassButton asChild className="flex-1 md:flex-none h-12 md:h-14 px-4 md:px-8 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)] border-none">
                             <Link href={`/coach/builder/${clientId}`}>
-                                <Zap className="w-5 h-5 mr-3" />
-                                <span className="font-bold uppercase tracking-widest text-xs">Nuevo Protocolo</span>
+                                <Zap className="w-4 h-4 md:w-5 md:h-5 mr-2 md:mr-3" />
+                                <span className="font-bold uppercase tracking-widest text-[10px] md:text-xs">Nuevo Protocolo</span>
                             </Link>
                         </GlassButton>
                     </div>
@@ -189,104 +189,104 @@ export default async function ClientDetailPage({
             </div>
 
             {/* Metrics Dashboard */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 relative z-10">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 relative z-10">
                 {[
                     { label: 'Peso Actual', value: '72.4', unit: 'kg', icon: Activity, trend: '-0.6kg', trendUp: false },
                     { label: 'Adherencia', value: '84', unit: '%', icon: Target, trend: '+4%', trendUp: true },
                     { label: 'Días Activo', value: '24', unit: 'd', icon: Clock, trend: 'Fase 2', trendUp: true },
                     { label: 'RPE Promedio', value: '7.5', unit: '', icon: Dumbbell, trend: 'Estable', trendUp: true },
                 ].map((metric, i) => (
-                    <GlassCard key={i} className="p-6 md:p-8 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-primary/10 transition-colors" />
-                        <div className="flex items-start justify-between mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <metric.icon className="w-5 h-5 text-primary" />
+                    <GlassCard key={i} className="p-4 md:p-8 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-16 md:w-24 h-16 md:h-24 bg-primary/5 blur-2xl rounded-full -mr-8 md:-mr-12 -mt-8 md:-mt-12 group-hover:bg-primary/10 transition-colors" />
+                        <div className="flex items-start justify-between mb-4 md:mb-6">
+                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-white dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <metric.icon className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                             </div>
-                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${metric.trendUp ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                            <span className={`text-[8px] md:text-[10px] font-black uppercase tracking-widest px-1.5 md:px-2 py-0.5 md:py-1 rounded-md ${metric.trendUp ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
                                 {metric.trend}
                             </span>
                         </div>
-                        <div className="flex items-end gap-1.5">
-                            <span className="text-3xl md:text-4xl font-black text-foreground font-display leading-none">{metric.value}</span>
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">{metric.unit}</span>
+                        <div className="flex items-end gap-1 md:gap-1.5">
+                            <span className="text-2xl md:text-4xl font-black text-foreground font-display leading-none">{metric.value}</span>
+                            <span className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest mb-0.5 md:mb-1">{metric.unit}</span>
                         </div>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-3 leading-none">{metric.label}</p>
+                        <p className="text-[8px] md:text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2 md:mt-3 leading-none">{metric.label}</p>
                     </GlassCard>
                 ))}
             </div>
 
             {/* Main Content Sections */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 relative z-10">
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-10 relative z-10">
                 
                 {/* Left Column: Programs & Nutrition (8 cols) */}
-                <div className="xl:col-span-8 space-y-10">
+                <div className="xl:col-span-8 space-y-6 md:space-y-10">
                     
                     {/* Active Status Banner */}
                     {activeProgram && (() => {
                         const remainingDays = calculateRemainingDays(activeProgram.start_date, activeProgram.weeks_to_repeat);
                         return (
                             <GlassCard className="p-1 border-primary/20 bg-primary/5">
-                                <div className="flex items-center justify-between p-6">
-                                    <div className="flex items-center gap-6">
-                                        <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center border border-primary/30">
-                                            <Calendar className="w-7 h-7 text-primary" />
+                                <div className="flex flex-col sm:flex-row items-center justify-between p-4 md:p-6 gap-4">
+                                    <div className="flex items-center gap-4 md:gap-6 w-full sm:w-auto">
+                                        <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
+                                            <Calendar className="w-6 h-6 md:w-7 md:h-7 text-primary" />
                                         </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-foreground uppercase tracking-tight font-display">{activeProgram.name}</h3>
-                                            <div className="flex items-center gap-4 mt-1">
-                                                <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em]">Protocolo Maestro de Despliegue</p>
-                                                <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em]">{activeProgram.weeks_to_repeat} Semanas de Ciclo</p>
+                                        <div className="min-w-0">
+                                            <h3 className="text-lg md:text-xl font-black text-foreground uppercase tracking-tight font-display truncate">{activeProgram.name}</h3>
+                                            <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-1">
+                                                <p className="text-[8px] md:text-[10px] text-primary font-black uppercase tracking-[0.2em]">Protocolo Activo</p>
+                                                <span className="hidden md:block w-1 h-1 rounded-full bg-muted-foreground/30" />
+                                                <p className="text-[8px] md:text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em]">{activeProgram.weeks_to_repeat} Semanas de Ciclo</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="text-4xl font-black text-primary font-display leading-none">
+                                    <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto px-2 sm:px-0">
+                                        <span className="text-3xl md:text-4xl font-black text-primary font-display leading-none">
                                             {remainingDays !== null ? (remainingDays > 0 ? remainingDays : 0) : '∞'}
                                         </span>
-                                        <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mt-1">Días Restantes</p>
+                                        <p className="text-[8px] md:text-[10px] font-black text-primary uppercase tracking-[0.2em] mt-1">Días Restantes</p>
                                     </div>
                                 </div>
                             </GlassCard>
                         );
                     })()}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
                         {/* Training Module */}
-                        <div className="space-y-6">
-                            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                        <div className="space-y-4 md:space-y-6">
+                            <h2 className="text-[10px] md:text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
                                 <div className="w-2 h-2 rounded-full bg-primary" />
                                 Entrenamiento
                             </h2>
                             <GlassCard className="overflow-hidden bg-white/50 dark:bg-zinc-950/30">
-                                <div className="p-8 space-y-8">
+                                <div className="p-6 md:p-8 space-y-6 md:space-y-8">
                                     {!activeProgram ? (
-                                        <div className="text-center py-10">
-                                            <Dumbbell className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
-                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Sin Protocolo Activo</p>
+                                        <div className="text-center py-6 md:py-10">
+                                            <Dumbbell className="w-10 h-10 md:w-12 md:h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                                            <p className="text-[9px] md:text-[10px] font-black text-muted-foreground uppercase tracking-widest">Sin Protocolo Activo</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-8">
+                                        <div className="space-y-6 md:space-y-8">
                                             <div className="flex items-center justify-between">
                                                 <div className="space-y-1">
-                                                    <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Siguiente Sesión</p>
-                                                    <p className="text-lg font-black text-foreground uppercase">Push Day: Hipertrofia</p>
+                                                    <p className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-[0.2em]">Siguiente Sesión</p>
+                                                    <p className="text-base md:text-lg font-black text-foreground uppercase">Push Day: Hipertrofia</p>
                                                 </div>
-                                                <GlassButton size="icon" variant="ghost" className="rounded-xl border border-primary/10">
-                                                    <ChevronRight className="w-5 h-5 text-primary" />
+                                                <GlassButton size="icon" variant="ghost" className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl border border-primary/10">
+                                                    <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                                                 </GlassButton>
                                             </div>
                                             
-                                            <div className="space-y-4">
-                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Contenido del Ciclo</p>
-                                                <div className="space-y-3">
+                                            <div className="space-y-3 md:space-y-4">
+                                                <p className="text-[9px] md:text-[10px] font-black text-muted-foreground uppercase tracking-widest">Contenido del Ciclo</p>
+                                                <div className="space-y-2 md:space-y-3">
                                                     {[1, 2, 3, 4].map(i => (
-                                                        <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/50 dark:bg-white/[0.02] border border-border dark:border-white/5 group hover:border-primary/30 transition-all cursor-pointer">
+                                                        <div key={i} className="flex items-center justify-between p-3 md:p-4 rounded-lg md:rounded-xl bg-white/50 dark:bg-white/[0.02] border border-border dark:border-white/5 group hover:border-primary/30 transition-all cursor-pointer">
                                                             <div className="flex items-center gap-3">
-                                                                <div className="w-6 h-6 rounded-md bg-secondary dark:bg-white/5 flex items-center justify-center text-[10px] font-bold text-muted-foreground group-hover:text-primary transition-colors">{i}</div>
-                                                                <span className="text-xs font-bold text-foreground">Plan de Sesión 0{i}</span>
+                                                                <div className="w-5 h-5 md:w-6 md:h-6 rounded bg-secondary dark:bg-white/5 flex items-center justify-center text-[9px] md:text-[10px] font-bold text-muted-foreground group-hover:text-primary transition-colors">{i}</div>
+                                                                <span className="text-[10px] md:text-xs font-bold text-foreground">Plan de Sesión 0{i}</span>
                                                             </div>
-                                                            <Activity className="w-3.5 h-3.5 text-muted-foreground opacity-30 group-hover:opacity-100 group-hover:text-primary transition-all" />
+                                                            <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 text-muted-foreground opacity-30 group-hover:opacity-100 group-hover:text-primary transition-all" />
                                                         </div>
                                                     ))}
                                                 </div>
@@ -298,50 +298,50 @@ export default async function ClientDetailPage({
                         </div>
 
                         {/* Nutrition Module */}
-                        <div className="space-y-6">
-                            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                        <div className="space-y-4 md:space-y-6">
+                            <h2 className="text-[10px] md:text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
                                 Nutrición
                             </h2>
                             <GlassCard className="overflow-hidden bg-white/50 dark:bg-zinc-950/30">
-                                <div className="p-8 space-y-8">
+                                <div className="p-6 md:p-8 space-y-6 md:space-y-8">
                                     {nutritionPlans.length === 0 ? (
-                                        <div className="text-center py-10">
-                                            <Apple className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
-                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Sin Dieta Base</p>
+                                        <div className="text-center py-6 md:py-10">
+                                            <Apple className="w-10 h-10 md:w-12 md:h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                                            <p className="text-[9px] md:text-[10px] font-black text-muted-foreground uppercase tracking-widest">Sin Dieta Base</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-8">
+                                        <div className="space-y-6 md:space-y-8">
                                             {nutritionPlans.map(plan => (
-                                                <div key={plan.id} className="space-y-8">
+                                                <div key={plan.id} className="space-y-6 md:space-y-8">
                                                     <div className="flex items-center justify-between">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Target Diálogo</p>
-                                                            <p className="text-lg font-black text-foreground uppercase">{plan.name}</p>
+                                                        <div className="space-y-1 min-w-0">
+                                                            <p className="text-[9px] md:text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Protocolo Actual</p>
+                                                            <p className="text-base md:text-lg font-black text-foreground uppercase truncate">{plan.name}</p>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <p className="text-xl font-black text-foreground leading-none">{plan.daily_calories || 0}</p>
-                                                            <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">Kcal/Día</p>
+                                                        <div className="text-right shrink-0">
+                                                            <p className="text-lg md:text-xl font-black text-foreground leading-none">{plan.daily_calories || 0}</p>
+                                                            <p className="text-[8px] md:text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">Kcal/Día</p>
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-3 gap-3">
+                                                    <div className="grid grid-cols-3 gap-2 md:gap-3">
                                                         {[
                                                             { label: 'PRO', val: plan.protein_g, color: 'emerald' },
                                                             { label: 'CAR', val: plan.carbs_g, color: 'emerald' },
                                                             { label: 'FAT', val: plan.fats_g, color: 'emerald' },
                                                         ].map((macro, idx) => (
-                                                            <div key={idx} className="bg-white/50 dark:bg-white/[0.02] border border-border dark:border-white/10 rounded-xl p-4 flex flex-col items-center gap-1">
-                                                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{macro.label}</span>
-                                                                <span className="text-sm font-black text-foreground">{macro.val || 0}g</span>
+                                                            <div key={idx} className="bg-white/50 dark:bg-white/[0.02] border border-border dark:border-white/10 rounded-lg md:rounded-xl p-3 md:p-4 flex flex-col items-center gap-1">
+                                                                <span className="text-[8px] md:text-[9px] font-black text-muted-foreground uppercase tracking-widest">{macro.label}</span>
+                                                                <span className="text-xs md:text-sm font-black text-foreground">{macro.val || 0}g</span>
                                                             </div>
                                                         ))}
                                                     </div>
 
-                                                    <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
-                                                        <div className="flex items-center justify-between mb-3">
-                                                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Adherencia Diaria</span>
-                                                            <span className="text-[10px] font-black text-emerald-500">75%</span>
+                                                    <div className="p-3 md:p-4 rounded-lg md:rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                                                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                                                            <span className="text-[9px] md:text-[10px] font-black text-emerald-500 uppercase tracking-widest">Adherencia</span>
+                                                            <span className="text-[9px] md:text-[10px] font-black text-emerald-500">75%</span>
                                                         </div>
                                                         <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                                                             <div className="h-full bg-emerald-500 w-[75%] shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
@@ -357,33 +357,33 @@ export default async function ClientDetailPage({
                     </div>
 
                     {/* Workout History Details */}
-                    <div className="space-y-6">
-                        <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                    <div className="space-y-4 md:space-y-6">
+                        <h2 className="text-[10px] md:text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full bg-primary" />
                             Historial de Operaciones
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                             {workoutHistory.slice(0, 4).map((log: any) => (
-                                <GlassCard key={log.id} className="p-6 bg-white/40 dark:bg-zinc-950/20 group hover:bg-white/60 dark:hover:bg-zinc-950/40 transition-all">
+                                <GlassCard key={log.id} className="p-5 md:p-6 bg-white/40 dark:bg-zinc-950/20 group hover:bg-white/60 dark:hover:bg-zinc-950/40 transition-all">
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                                                <Activity className="w-5 h-5" />
+                                        <div className="flex items-center gap-3 md:gap-4">
+                                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                                <Activity className="w-4 h-4 md:w-5 md:h-5" />
                                             </div>
-                                            <div>
-                                                <p className="text-xs font-black text-foreground uppercase tracking-tight">{log.title}</p>
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] md:text-xs font-black text-foreground uppercase tracking-tight truncate">{log.title}</p>
+                                                <p className="text-[8px] md:text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">
                                                     {new Date(log.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${log.logCount >= log.totalSets ? 'bg-primary/10 text-primary border-primary/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                        <div className={`px-1.5 md:px-2 py-0.5 md:py-1 rounded text-[8px] md:text-[9px] font-black uppercase tracking-widest border shrink-0 ${log.logCount >= log.totalSets ? 'bg-primary/10 text-primary border-primary/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
                                             {log.logCount}/{log.totalSets} Sets
                                         </div>
                                     </div>
-                                    <div className="space-y-2 mt-4">
+                                    <div className="space-y-1.5 md:space-y-2 mt-4">
                                         {log.exerciseLogs.slice(0, 2).map((ex: any, i: number) => (
-                                            <div key={i} className="flex items-center justify-between text-[10px] font-bold">
+                                            <div key={i} className="flex items-center justify-between text-[9px] md:text-[10px] font-bold">
                                                 <span className="text-muted-foreground uppercase truncate pr-4">{ex.exerciseName}</span>
                                                 <span className="text-foreground shrink-0">{ex.actualWeight}kg × {ex.actualReps}</span>
                                             </div>
@@ -396,48 +396,48 @@ export default async function ClientDetailPage({
                 </div>
 
                 {/* Right Column: Check-ins & Biometrics (4 cols) */}
-                <div className="xl:col-span-4 space-y-10">
+                <div className="xl:col-span-4 space-y-6 md:space-y-10">
                     
                     {/* Progress Photos Quick Glance */}
-                    <div className="space-y-6">
-                        <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                    <div className="space-y-4 md:space-y-6">
+                        <h2 className="text-[10px] md:text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full bg-cyan-400" />
                             Evolución Visual
                         </h2>
-                        <GlassCard className="p-6 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="aspect-[3/4] rounded-2xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 flex flex-col items-center justify-center overflow-hidden relative group">
+                        <GlassCard className="p-4 md:p-6 space-y-4 md:space-y-6">
+                            <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                <div className="aspect-[3/4] rounded-xl md:rounded-2xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 flex flex-col items-center justify-center overflow-hidden relative group">
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
-                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Ver Inicial</span>
+                                        <span className="text-[8px] md:text-[10px] font-black text-white uppercase tracking-widest">Ver Inicial</span>
                                     </div>
-                                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest absolute bottom-3 z-10">Día 1</p>
+                                    <p className="text-[8px] md:text-[9px] font-black text-muted-foreground uppercase tracking-widest absolute bottom-3 z-10">Día 1</p>
                                 </div>
-                                <div className="aspect-[3/4] rounded-2xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 flex flex-col items-center justify-center overflow-hidden relative group">
+                                <div className="aspect-[3/4] rounded-xl md:rounded-2xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 flex flex-col items-center justify-center overflow-hidden relative group">
                                     <div className="absolute inset-0 bg-primary/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
-                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Ver Actual</span>
+                                        <span className="text-[8px] md:text-[10px] font-black text-white uppercase tracking-widest">Ver Actual</span>
                                     </div>
-                                    <p className="text-[9px] font-black text-primary uppercase tracking-widest absolute bottom-3 z-10">Semana 8</p>
+                                    <p className="text-[8px] md:text-[9px] font-black text-primary uppercase tracking-widest absolute bottom-3 z-10">Semana 8</p>
                                 </div>
                             </div>
-                            <GlassButton className="w-full h-12 text-[10px] font-black uppercase tracking-widest border-primary/20">
+                            <GlassButton className="w-full h-10 md:h-12 text-[8px] md:text-[10px] font-black uppercase tracking-widest border-primary/20">
                                 Comparativa de Fotos
                             </GlassButton>
                         </GlassCard>
                     </div>
 
                     {/* Recent Check-ins Terminal */}
-                    <div className="space-y-6">
+                    <div className="space-y-4 md:space-y-6">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
+                            <h2 className="text-[10px] md:text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3">
                                 <div className="w-2 h-2 rounded-full bg-amber-500" />
                                 Check-ins
                             </h2>
-                            <Badge variant="outline" className="font-black text-[9px] uppercase tracking-widest bg-white/5">{checkIns?.length || 0}</Badge>
+                            <Badge variant="outline" className="font-black text-[8px] md:text-[9px] uppercase tracking-widest bg-white/5">{checkIns?.length || 0}</Badge>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-3 md:space-y-4">
                             {!checkIns || checkIns.length === 0 ? (
-                                <GlassCard className="p-8 text-center border-dashed border-white/10">
-                                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Esperando Reportes...</p>
+                                <GlassCard className="p-6 md:p-8 text-center border-dashed border-white/10">
+                                    <p className="text-[9px] md:text-[10px] font-black text-muted-foreground uppercase tracking-widest">Esperando Reportes...</p>
                                 </GlassCard>
                             ) : (
                                 checkIns.slice(0, 3).map(checkIn => (

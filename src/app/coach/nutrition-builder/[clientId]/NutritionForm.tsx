@@ -279,7 +279,7 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                     />
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                     <div className="space-y-3">
                         <Label htmlFor="calories" className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary px-1">Target Kcal</Label>
                         <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" className="h-12 bg-primary/5 border-primary/20 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
@@ -299,7 +299,7 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                 </div>
 
                 {/* Real-time Daily Totals vs Targets using Ring Charts */}
-                <div className="p-8 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl shadow-sm dark:shadow-2xl flex flex-wrap justify-center sm:justify-around items-center gap-8 relative overflow-hidden">
+                <div className="p-4 md:p-8 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl shadow-sm dark:shadow-2xl grid grid-cols-2 sm:flex sm:flex-wrap justify-items-center sm:justify-around items-center gap-6 md:gap-8 relative overflow-hidden">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none" />
                     
                     <MacroRing 
@@ -361,78 +361,79 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                                 {meals.map((meal, index) => {
                                     const mealMacros = calculateMealMacros(meal);
                                     return (
-                                        <div key={meal.id} className="relative p-4 rounded-xl border border-border bg-muted/30 group">
+                                        <div key={meal.id} className="relative p-3 md:p-4 rounded-xl border border-border bg-muted/30 group">
                                             <button 
                                                 type="button" 
                                                 onClick={() => handleRemoveMeal(meal.id)}
-                                                className="absolute -top-3 -right-3 w-7 h-7 bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-red-200 dark:border-red-500/20"
+                                                className="absolute -top-3 -right-3 w-7 h-7 bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400 rounded-full flex items-center justify-center md:opacity-0 md:group-hover:opacity-100 transition-opacity border border-red-200 dark:border-red-500/20 z-10"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
 
-                                            <div className="space-y-3">
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="space-y-4">
+                                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                                     <div className="flex-1 space-y-1.5">
-                                                        <Label className="text-xs text-muted-foreground uppercase tracking-tight font-semibold">Comida {index + 1}</Label>
+                                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-tight font-black">Comida {index + 1}</Label>
                                                         <Input 
                                                             value={meal.name} 
                                                             onChange={e => handleMealChange(meal.id, 'name', e.target.value)} 
-                                                            className="h-9 bg-background border-border/50 font-bold" 
+                                                            className="h-10 bg-background border-border/50 font-bold text-sm" 
                                                             placeholder="Ej. Desayuno, Pre-entreno..."
                                                             required
                                                         />
                                                     </div>
-                                                    <div className="flex items-center gap-4 bg-background/50 p-2 rounded-lg border border-border/50">
-                                                        <div className="text-center px-2">
-                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">Kcal</div>
-                                                            <div className="text-sm font-black">{mealMacros.calories}</div>
+                                                    <div className="flex items-center justify-between sm:justify-start gap-2 md:gap-4 bg-background/50 p-2 rounded-lg border border-border/50">
+                                                        <div className="text-center px-1 md:px-2 min-w-[50px]">
+                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">Kcal</div>
+                                                            <div className="text-xs md:text-sm font-black">{mealMacros.calories}</div>
                                                         </div>
-                                                        <div className="text-center px-2 border-l border-border/30">
-                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">P</div>
-                                                            <div className="text-sm font-black">{mealMacros.protein}g</div>
+                                                        <div className="text-center px-1 md:px-2 border-l border-border/30 min-w-[40px]">
+                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">P</div>
+                                                            <div className="text-xs md:text-sm font-black">{mealMacros.protein}g</div>
                                                         </div>
-                                                        <div className="text-center px-2 border-l border-border/30">
-                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">C</div>
-                                                            <div className="text-sm font-black">{mealMacros.carbs}g</div>
+                                                        <div className="text-center px-1 md:px-2 border-l border-border/30 min-w-[40px]">
+                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">C</div>
+                                                            <div className="text-xs md:text-sm font-black">{mealMacros.carbs}g</div>
                                                         </div>
-                                                        <div className="text-center px-2 border-l border-border/30">
-                                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">G</div>
-                                                            <div className="text-sm font-black">{mealMacros.fats}g</div>
+                                                        <div className="text-center px-1 md:px-2 border-l border-border/30 min-w-[40px]">
+                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">G</div>
+                                                            <div className="text-xs md:text-sm font-black">{mealMacros.fats}g</div>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <div className="space-y-1.5">
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <Label className="text-xs text-muted-foreground font-semibold">Alimentos e Ingredientes</Label>
-                                                        <Button type="button" variant="ghost" size="sm" onClick={() => handleSaveMeal(meal)} className="h-7 text-[10px] uppercase tracking-wide gap-1 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600">
+                                                        <Label className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Alimentos e Ingredientes</Label>
+                                                        <Button type="button" variant="ghost" size="sm" onClick={() => handleSaveMeal(meal)} className="h-7 text-[9px] uppercase tracking-wide gap-1 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600">
                                                             <Bookmark className="w-3 h-3" />
-                                                            Guardar como Plantilla
+                                                            <span className="hidden sm:inline">Guardar como Plantilla</span>
+                                                            <span className="sm:hidden">Guardar</span>
                                                         </Button>
                                                     </div>
                                                     <div className="space-y-2">
                                                         {meal.food_items.map((foodItem, foodIndex) => {
                                                             const itemMacros = calculateItemMacros(foodItem);
                                                             return (
-                                                                <div key={foodIndex} className="flex flex-col gap-2 p-2 rounded-lg bg-background/40 border border-border/40">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="flex-1 text-sm font-medium line-clamp-1">{foodItem.name}</span>
-                                                                        <div className="relative w-24">
+                                                                <div key={foodIndex} className="flex flex-col gap-2 p-3 rounded-lg bg-background/40 border border-border/40">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className="flex-1 text-xs md:text-sm font-bold line-clamp-1">{foodItem.name}</span>
+                                                                        <div className="relative w-20 md:w-24 shrink-0">
                                                                             <Input type="number" step="any" value={foodItem.quantity} onChange={(e) => {
                                                                                 const newFoodItems = [...meal.food_items]
                                                                                 newFoodItems[foodIndex].quantity = Number(e.target.value)
                                                                                 handleMealChange(meal.id, 'food_items', newFoodItems)
-                                                                            }} className="h-7 text-xs shadow-none pr-8 font-bold" title="Cantidad/Porción" />
-                                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold">{foodItem.unit || 'g/u'}</span>
+                                                                            }} className="h-8 text-xs shadow-none pr-7 font-bold text-center" title="Cantidad/Porción" />
+                                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground font-bold">{foodItem.unit || 'g/u'}</span>
                                                                         </div>
-                                                                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-500 hover:bg-red-500/10" onClick={() => {
+                                                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-500 hover:bg-red-500/10 shrink-0" onClick={() => {
                                                                             const newFoodItems = meal.food_items.filter((_, i) => i !== foodIndex)
                                                                             handleMealChange(meal.id, 'food_items', newFoodItems)
                                                                         }}>
                                                                             <Trash2 className="w-3.5 h-3.5" />
                                                                         </Button>
                                                                     </div>
-                                                                    <div className="flex items-center gap-4 px-1">
+                                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1">
                                                                         <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.calories}</span> kcal</span>
                                                                         <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.protein}g</span> prot</span>
                                                                         <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.carbs}g</span> carbs</span>

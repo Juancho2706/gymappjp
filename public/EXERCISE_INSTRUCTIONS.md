@@ -1,5 +1,47 @@
 # Base Exercises Instructions
 
+## Abductores
+
+### Abducción de Cadera en Máquina Sentado (Máquina de Abductores)
+1. Ajusta la altura del asiento para que tus rodillas queden en un ángulo de 90 grados.
+2. Siéntate en la máquina apoyando bien la espalda en el respaldo y pon los pies en los apoyapiés.
+3. Afírmate de las manillas laterales para tener estabilidad.
+4. Aprieta los abductores (parte externa de la pierna) y abre lentamente las piernas, alejándolas del centro de tu cuerpo.
+5. Haz una pausa al final del movimiento y luego junta las piernas de a poco para volver a la posición inicial.
+6. Repite la cantidad de veces indicada.
+
+## Aductores
+
+### Aducción de Cadera en Máquina Sentado (Máquina de Aductores)
+1. Step:1 Adjust the seat height and position yourself on the machine with your back against the backrest.
+2. Step:2 Place your feet on the footrests and grasp the handles for stability.
+3. Step:3 Engage your adductor muscles and slowly bring your legs together, squeezing your inner thighs.
+4. Step:4 Pause for a moment at the peak contraction, then slowly return to the starting position.
+5. Step:5 Repeat for the desired number of repetitions.
+
+### Aducción de Cadera en Máquina Sentado (Máquina de Aductores)
+1. Ajusta la altura del asiento y acomódate en la máquina apoyando la espalda en el respaldo.
+2. Pon los pies en los apoyapiés y agárrate de las manillas para mayor estabilidad.
+3. Aprieta los músculos aductores y junta las piernas lentamente, contrayendo la parte interna de los muslos.
+4. Haz una pausa cuando el músculo esté contraído al máximo (al centro), y luego vuelve lentamente a la posición inicial.
+5. Repite el número de veces indicado.
+
+### Aducción de Cadera en Polea
+1. Step:1 Attach the ankle cuff to your ankle and stand facing the cable machine.
+2. Step:2 Position yourself far enough away from the machine so that there is tension on the cable.
+3. Step:3 Place your hands on the machine for support.
+4. Step:4 Keeping your leg straight, slowly move your leg across your body towards the midline.
+5. Step:5 Pause for a moment at the end of the movement, then slowly return to the starting position.
+6. Step:6 Repeat for the desired number of repetitions.
+
+### Aducción de Cadera en Polea
+1. Engancha la tobillera a tu tobillo y párate frente a la máquina de poleas.
+2. Aléjate lo suficiente de la máquina para que el cable quede con tensión.
+3. Apoya las manos en la máquina para no perder el equilibrio.
+4. Manteniendo la pierna estirada, muévela lentamente cruzando tu cuerpo hacia el centro (hacia tu línea media).
+5. Haz una pausa al final del movimiento y luego vuelve de a poco a la posición inicial.
+6. Repite la cantidad de veces indicada.
+
 ## Antebrazos
 
 ### Curl de Muñeca con Barra
@@ -46,39 +88,6 @@
 5. Haz una pausa arriba, inhala y baja lentamente a la posición inicial.
 6. Repite el número de veces indicado.
 
-### Curl Invertido con Barra
-1. Siéntate en una banca Scott (predicador) con el pecho apoyado en el cojín y los brazos estirados hacia abajo, agarrando una barra con agarre prono (palmas hacia abajo).
-2. Sin mover la parte superior de los brazos, exhala y sube la barra contrayendo los bíceps.
-3. Sigue subiendo hasta que los bíceps estén completamente apretados y la barra llegue a la altura de los hombros.
-4. Mantén esa posición un segundo apretando los bíceps.
-5. Inhala y baja lentamente la barra a la posición inicial.
-6. Repite el número de veces indicado.
-
-### Curl Martillo
-1. Párate derecho con una mancuerna en cada mano, con las palmas mirando hacia tu cuerpo.
-2. Mantén los codos pegados al cuerpo y gira las palmas hasta que miren hacia el frente.
-3. Esta será tu posición inicial.
-4. Ahora, sin mover la parte superior del brazo, exhala y sube las pesas contrayendo los bíceps.
-5. Sigue subiendo las pesas hasta que tus bíceps estén totalmente contraídos y las mancuernas lleguen a la altura de los hombros.
-6. Aguanta esa posición un segundo apretando bien los bíceps.
-7. Luego, inhala y empieza a bajar lentamente las mancuernas a la posición inicial.
-8. Repite la cantidad de veces recomendada.
-9. Párate derecho con una mancuerna en cada mano, con las palmas mirando hacia ti.
-10. Mantén los codos pegados al cuerpo y gira las palmas hasta que miren hacia adelante.
-11. Esta es tu posición inicial.
-12. Ahora, sin mover la parte superior del brazo, exhala y sube las pesas contrayendo los bíceps.
-13. Sigue subiendo hasta que las mancuernas lleguen a la altura de los hombros.
-14. Mantén la contracción un segundo apretando los bíceps.
-15. Luego, inhala y comienza a bajar las mancuernas de a poco a la posición inicial.
-16. Repite las repeticiones recomendadas.
-
-### Paseo del Granjero (Farmer's Walk)
-1. Párate derecho con una mancuerna en cada mano y las palmas mirando hacia tus costados.
-2. Mantén la espalda recta y los hombros hacia atrás.
-3. Da pasos cortos y controlados hacia adelante, manteniendo una postura derecha.
-4. Sigue caminando por la distancia o el tiempo que corresponda.
-5. Para terminar, deja de caminar y baja las mancuernas con cuidado a tus lados.
-
 ### Rodillo de Muñeca (Wrist Roller)
 1. Amarra un peso a un extremo de una cuerda o barra de rodillo.
 2. Sostén el otro extremo con ambas manos, con las palmas hacia abajo.
@@ -88,43 +97,6 @@
 6. Repite el número de veces indicado.
 
 ## Bíceps
-
-### Curl Araña (Spider Curl)
-1. Párate (o apóyate en la banca) con una mancuerna en la mano, la palma hacia abajo y el brazo totalmente estirado.
-2. Sin mover la parte superior del brazo, sube la mancuerna hacia tu hombro doblando el codo.
-3. Haz una breve pausa arriba y baja lentamente la mancuerna a la posición inicial.
-4. Repite las repeticiones necesarias y cambia de brazo.
-
-### Curl con Barra
-1. Párate derecho con los pies separados al ancho de los hombros y toma una barra con agarre supino (palmas hacia adelante).
-2. Mantén los codos pegados al cuerpo, exhala y sube la barra contrayendo los bíceps.
-3. Sigue subiendo hasta que los bíceps se contraigan al máximo y la barra llegue a la altura de los hombros.
-4. Mantén la posición arriba un segundo apretando bien los bíceps.
-5. Inhala mientras bajas de a poco la barra a la posición original.
-6. Repite la cantidad de veces indicada.
-
-### Curl con Barra EZ
-1. Párate derecho con los pies al ancho de los hombros y toma la barra EZ con las palmas hacia arriba, con un agarre un poco más ancho que tus hombros.
-2. Mantén los codos pegados al cuerpo y la parte superior de los brazos quieta en todo momento.
-3. Sube la barra hacia tus hombros apretando los bíceps.
-4. Haz una pausa arriba y luego baja la barra lentamente a la posición inicial.
-5. Repite la cantidad de veces indicada.
-
-### Curl con Mancuernas Inclinado
-1. Siéntate en una banca inclinada con una mancuerna en cada mano, las palmas hacia adelante y los brazos completamente estirados.
-2. Sin mover la parte superior de los brazos, exhala y sube las pesas contrayendo los bíceps.
-3. Sigue subiendo hasta que las mancuernas lleguen a la altura de los hombros.
-4. Mantén la posición un segundo apretando bien el músculo.
-5. Inhala y baja lentamente a la posición inicial.
-6. Repite el número de veces indicado.
-
-### Curl Concentrado
-1. Siéntate en una banca con los pies en el suelo y toma una mancuerna con una mano, palma hacia arriba.
-2. Apoya el codo en la parte interna de tu muslo, justo por encima de la rodilla.
-3. Sin mover la parte superior del brazo, exhala y sube la mancuerna hacia tu hombro.
-4. Haz una pausa arriba, apretando el bíceps.
-5. Inhala y baja lentamente la mancuerna a la posición inicial.
-6. Repite las veces necesarias y cambia de brazo.
 
 ### Curl de Bíceps Alterno con Mancuernas
 1. Párate derecho con los pies al ancho de los hombros y toma una mancuerna en cada mano, palmas hacia el frente.
@@ -146,7 +118,7 @@
 7. Inhala y baja la barra de a poco a la posición inicial.
 8. Repite la cantidad de veces indicada.
 
-### Curl de Bíceps en Polea
+### Curl de bíceps en polea alta con barra tras nuca
 1. Engancha una barra recta a la máquina de poleas en la posición más alta.
 2. Párate mirando la máquina con los pies al ancho de los hombros.
 3. Toma la barra con agarre supino (palmas arriba) y las manos separadas al ancho de los hombros.
@@ -156,57 +128,40 @@
 7. Inhala y vuelve de a poco a la posición inicial estirando los brazos por completo.
 8. Repite el número de veces indicado.
 
-### Curl Drag (De arrastre)
-1. Párate con los pies al ancho de los hombros y toma una barra con las palmas hacia arriba.
-2. Deja que la barra cuelgue con los brazos estirados frente a tus muslos.
-3. Manteniendo la parte superior de los brazos fija, sube la barra hacia tu pecho rozando el cuerpo y contrayendo los bíceps (llevando los codos hacia atrás).
-4. Haz una pausa arriba y luego baja lentamente la barra a la posición original.
-5. Repite el número de veces indicado.
-
-### Curl Zottman
-1. Párate derecho con una mancuerna en cada mano, las palmas mirando hacia tu cuerpo.
-2. Mantén los codos pegados al cuerpo y gira las manos para que las palmas miren hacia adelante.
-3. Sube las mancuernas hacia los hombros manteniendo la parte superior de los brazos quieta.
-4. Arriba, gira las muñecas para que las palmas queden mirando hacia adelante (lejos de ti).
-5. Baja lentamente las mancuernas y vuelve a girar las palmas hacia tu cuerpo al llegar abajo.
-6. Repite el número de veces indicado.
+### Curl spider unilateral con mancuerna
+1. Párate (o apóyate en la banca) con una mancuerna en la mano, la palma hacia abajo y el brazo totalmente estirado.
+2. Sin mover la parte superior del brazo, sube la mancuerna hacia tu hombro doblando el codo.
+3. Haz una breve pausa arriba y baja lentamente la mancuerna a la posición inicial.
+4. Repite las repeticiones necesarias y cambia de brazo.
 
 ## Core
 
-### Aleteo de Piernas (Flutter Kicks)
-1. Acuéstate de espalda con las piernas estiradas y los brazos a los lados.
-2. Aprieta el core y levanta las piernas a unos 15 centímetros del suelo.
-3. Manteniendo las piernas estiradas, alterna levantando una un poco más que la otra (como aleteando).
-4. Sigue con este movimiento por el número de repeticiones indicado.
-
-### Crunches (Abdominales cortos)
-1. Acuéstate de espalda con las rodillas dobladas y los pies planos en el piso.
-2. Pon las manos detrás de la cabeza o crúzalas sobre tu pecho.
-3. Aprieta el core y levanta las escápulas (omóplatos) del piso, girando el torso hacia un lado.
-4. Haz una pausa y vuelve a bajar los omóplatos al suelo.
-5. Repite hacia el otro lado, alternando en cada repetición.
-
-### Giros Rusos (Russian Twists)
-1. Siéntate en un balón suizo (fitball) con los pies en el piso y las rodillas en un ángulo de 90 grados.
-2. Sostén un agarre de polea con ambas manos y estira los brazos hacia el frente.
-3. Échate un poco hacia atrás manteniendo la espalda recta y el core apretado.
-4. Gira el torso a la derecha, llevando el agarre hacia tu cadera derecha.
-5. Haz una pausa y luego gira a la izquierda, llevando el agarre hacia tu cadera izquierda.
-6. Sigue alternando los giros hasta completar las repeticiones.
+### Flutter Kicks (Aleteo de Piernas)
+1. Step:1 Lie flat on your back with your legs extended and your hands by your sides.
+2. Step:2 Engage your core and lift your legs off the ground about 6 inches.
+3. Step:3 Keeping your legs straight, alternate lifting one leg slightly higher than the other.
+4. Step:4 Continue this fluttering motion for the desired number of repetitions.
 
 ### Plancha
-1. Acuéstate boca abajo en el piso.
-2. Apoya los antebrazos en el suelo, con los codos justo debajo de los hombros.
-3. Estira las piernas hacia atrás, apoyándote en las puntas de los pies.
-4. Aprieta tu core y levanta el cuerpo, equilibrándote sobre los antebrazos y las puntas de los pies.
-5. Mantén tu cuerpo en línea recta desde la cabeza hasta los talones.
-6. Aguanta esta posición el tiempo que sea necesario.
-7. Baja el cuerpo para volver a la posición inicial.
-8. Repite las veces que te toque.
+1. Step:1 Start by lying face down on the floor.
+2. Step:2 Place your forearms on the ground, with your elbows directly under your shoulders.
+3. Step:3 Extend your legs straight out behind you, with your toes on the ground.
+4. Step:4 Engage your core and lift your body off the ground, balancing on your forearms and toes.
+5. Step:5 Keep your body in a straight line from your head to your heels.
+6. Step:6 Hold this position for the desired amount of time.
+7. Step:7 Lower your body back down to the starting position.
+8. Step:8 Repeat for the desired number of repetitions.
 
 ## Cuádriceps
 
-### Extensión de Piernas
+### Extensión de piernas (con banda elástica)
+1. Engancha una banda elástica (o usa la máquina) a un punto fijo y asegúrala a tu tobillo.
+2. Párate mirando al punto de anclaje con los pies al ancho de los hombros.
+3. Con el core apretado y el torso firme, estira la pierna hacia adelante.
+4. Haz una pausa arriba y vuelve lentamente a la posición inicial.
+5. Repite las veces indicadas y cambia de pierna.
+
+### Extensión de piernas (con banda elástica)
 1. Engancha una banda elástica (o usa la máquina) a un punto fijo y asegúrala a tu tobillo.
 2. Párate mirando al punto de anclaje con los pies al ancho de los hombros.
 3. Con el core apretado y el torso firme, estira la pierna hacia adelante.
@@ -235,42 +190,6 @@
 3. Sigue bajando hasta que los muslos estén paralelos al suelo o lo más profundo que te sea cómodo.
 4. Haz una pausa abajo y empuja con los talones para pararte.
 5. Repite la cantidad de veces indicada.
-
-### Sentadilla Hack
-1. Ajusta la máquina a una posición cómoda para tu altura.
-2. Párate con los pies al ancho de los hombros sobre la plataforma, con las puntas ligeramente hacia afuera.
-3. Afírmate de las manillas o seguros para tener estabilidad.
-4. Baja doblando rodillas y cadera, manteniendo la espalda pegada al cojín y el pecho arriba.
-5. Sigue bajando hasta que los muslos estén paralelos a la plataforma o un poco más.
-6. Haz una pausa y empuja desde los talones para subir a la posición inicial.
-7. Repite la cantidad de veces necesaria.
-
-### Sentadilla Pistol (A una pierna)
-1. Párate con los pies al ancho de los hombros y los brazos estirados al frente.
-2. Levanta el pie derecho del suelo y estíralo hacia adelante.
-3. Baja tu cuerpo lentamente doblando la rodilla izquierda y tirando la cadera hacia atrás.
-4. Mantén el pecho arriba y la espalda recta mientras bajas.
-5. Baja hasta que el muslo izquierdo quede paralelo al suelo, o hasta donde llegues con comodidad.
-6. Haz una pausa abajo y empuja con el talón izquierdo para volver a pararte.
-7. Repite las repeticiones correspondientes y cambia de pierna.
-
-### Sentadilla Sissy
-1. Párate con los pies al ancho de los hombros y las puntas mirando un poco hacia afuera.
-2. Afírmate de algo estable para no perder el equilibrio.
-3. Baja lentamente doblando las rodillas y echándote hacia atrás, manteniendo el torso derecho (en línea con los muslos).
-4. Sigue bajando hasta que los muslos estén paralelos al suelo o lo que puedas bajar.
-5. Haz una pausa y empuja desde los talones para subir.
-6. Repite el número de veces indicado.
-
-### Sentadilla Trasera con Barra
-1. Párate con los pies al ancho de los hombros, con las puntas de los pies mirando un poco hacia afuera.
-2. Sostén la barra apoyada en tu espalda alta (sobre los trapecios o deltoides posteriores).
-3. Aprieta el core y mantén el pecho arriba mientras empiezas a bajar.
-4. Dobla las rodillas y caderas, tirando la cadera hacia atrás y hacia abajo, como si te fueras a sentar en una silla.
-5. Baja hasta que tus muslos estén paralelos al suelo o un poco más abajo.
-6. Mantén las rodillas alineadas con las puntas de los pies y el peso en los talones.
-7. Empuja con los talones para volver a pararte, estirando las caderas y rodillas.
-8. Repite la cantidad de veces indicada.
 
 ### Sentadilla Zercher
 1. Párate con los pies al ancho de los hombros y las puntas hacia afuera.
@@ -306,6 +225,14 @@
 5. Aprieta los músculos de la espalda cuando el agarre esté abajo.
 6. Vuelve lentamente a la posición inicial y repite las veces necesarias.
 
+### Jalón al Pecho con Agarre V
+1. Siéntate en la máquina de polea alta y toma el agarre en "V" (palmas enfrentadas).
+2. Ajusta el cojín de las rodillas para que tus muslos queden firmes.
+3. Mantén la espalda derecha e inclínate solo un poquito hacia atrás.
+4. Tira el agarre en V hacia la parte alta de tu pecho, manteniendo los codos pegados al cuerpo.
+5. Aprieta los músculos de la espalda cuando el agarre esté abajo.
+6. Vuelve lentamente a la posición inicial y repite las veces necesarias.
+
 ### Pulldown (Jalón) con Brazos Rectos
 1. Pon una barra recta en la polea alta.
 2. Párate frente a la máquina con los pies al ancho de los hombros.
@@ -314,25 +241,13 @@
 5. Haz una pausa abajo y vuelve la barra lentamente hacia arriba.
 6. Repite la cantidad de veces indicada.
 
-### Remo Alto en Polea
-1. Pon un agarre en la máquina de poleas a la altura de tu cintura.
-2. Arrodíllate mirando la máquina y toma el agarre con una mano.
-3. Mantén la espalda recta y el abdomen firme.
-4. Tira del agarre hacia tu pecho, apretando los omóplatos.
-5. Haz una pausa arriba.
-6. Suelta de a poco el agarre hasta la posición original.
-7. Repite la cantidad de veces indicada.
-8. Cambia de lado y repite con el otro brazo.
-
-### Remo con Barra
-1. Paso 1: Ajusta una banca a 45 grados.
-2. Paso 2: Siéntate apoyando el pecho contra el respaldo.
-3. Paso 3: Agarra la barra con agarre prono (palmas hacia abajo) y las manos un poco más separadas que los hombros.
-4. Paso 4: Mantén la espalda recta y el core firme.
-5. Paso 5: Tira de la barra hacia la parte alta de tu abdomen, juntando los omóplatos (escápulas).
-6. Paso 6: Haz una pequeña pausa arriba.
-7. Paso 7: Baja lentamente la barra a la posición inicial.
-8. Paso 8: Repite las repeticiones que te toquen.
+### Pulldown (Jalón) con Brazos Rectos
+1. Pon una barra recta en la polea alta.
+2. Párate frente a la máquina con los pies al ancho de los hombros.
+3. Agarra la barra con las palmas hacia abajo, brazos estirados.
+4. Aprieta los dorsales y tira la barra hacia tus muslos sin doblar los brazos.
+5. Haz una pausa abajo y vuelve la barra lentamente hacia arriba.
+6. Repite la cantidad de veces indicada.
 
 ### Remo en Barra T
 1. Ajusta la altura, apoya el pecho en el cojín y pon los pies firmes en el suelo (o plataforma).
@@ -369,7 +284,7 @@
 
 ## Glúteos
 
-### Peso Muerto Sumo
+### Peso muerto sumo (con barra)
 1. Párate con los pies más abiertos que el ancho de los hombros y las puntas hacia afuera.
 2. Deja la barra en el piso frente a ti, justo al medio.
 3. Dobla las rodillas y baja la cadera con la espalda recta y el pecho levantado, y toma la barra con agarre prono.
@@ -385,7 +300,14 @@
 4. Haz una pausa arriba y luego baja la cadera de a poco a la posición original.
 5. Repite el número de veces indicado.
 
-### Sentadilla Sumo
+### Puente de Glúteos (Glute Bridge)
+1. Siéntate en el borde de una banca apoyando la espalda alta en ella y los pies planos en el piso.
+2. Apoya las manos en la banca a los lados de tu cadera.
+3. Aprieta los glúteos e isquios y levanta la cadera hasta que tu cuerpo forme una línea recta desde las rodillas a los hombros.
+4. Haz una pausa arriba y luego baja la cadera de a poco a la posición original.
+5. Repite el número de veces indicado.
+
+### Sentadilla sumo con barra en Smith
 1. Ajusta la máquina Smith dejando la barra a la altura de la cadera (o acomódate bajo ella).
 2. Párate con los pies bien separados, puntas hacia afuera.
 3. Métete bajo la barra apoyándola en los trapecios.
@@ -395,6 +317,23 @@
 7. Repite el número de veces indicado.
 
 ## Hombros
+
+### Curl + press sentado con mancuerna
+1. Siéntate en una banca con la espalda recta y los pies firmes en el suelo.
+2. Sostén las mancuernas con las palmas hacia adelante, a la altura de los hombros.
+3. (Si partes desde abajo) Sube las mancuernas hacia tus hombros doblando los codos.
+4. Asegúrate de que las palmas miren hacia adelante.
+5. Empuja (haz press) las mancuernas sobre la cabeza hasta estirar los brazos.
+6. Baja las mancuernas de a poco hasta la posición inicial de los hombros.
+7. Repite la cantidad de veces indicada.
+
+### Elevación Frontal con Barra
+1. Párate con los pies al ancho de los hombros y toma una barra con agarre prono (palmas hacia abajo).
+2. Manteniendo los brazos casi estirados, sube la barra por el frente hasta la altura de los hombros.
+3. Haz una pausa arriba y baja la barra lentamente.
+4. (Si haces la variante sobre la cabeza), bájala por detrás de tu cabeza.
+5. Haz una pausa y súbela nuevamente.
+6. Repite el número de veces indicado.
 
 ### Elevación Frontal con Barra
 1. Párate con los pies al ancho de los hombros y toma una barra con agarre prono (palmas hacia abajo).
@@ -413,6 +352,22 @@
 6. Haz pausa arriba y baja lentamente.
 7. Repite toda la secuencia por las repeticiones que correspondan.
 
+### Elevación Frontal con Mancuernas
+1. Párate con los pies al ancho de los hombros con una mancuerna en cada mano apoyada en tus muslos (palmas mirando a tu cuerpo).
+2. Mantén la espalda recta y el core firme.
+3. (Versión combinada): Levanta los brazos hacia los lados (lateral) hasta quedar paralelos al suelo, codos apenas flectados.
+4. Haz pausa arriba y baja lentamente.
+5. Luego, levanta los brazos hacia el frente hasta que queden paralelos al piso (frontal).
+6. Haz pausa arriba y baja lentamente.
+7. Repite toda la secuencia por las repeticiones que correspondan.
+
+### Elevación Lateral con Mancuernas
+1. Párate con los pies al ancho de los hombros sosteniendo una mancuerna en cada mano a los costados del cuerpo.
+2. Mantén la espalda recta y aprieta el core.
+3. Levanta los brazos hacia los lados hasta que queden paralelos al piso, con una leve flexión en los codos.
+4. Haz una pausa arriba y luego bájalos de a poco.
+5. Repite la cantidad de repeticiones necesarias.
+
 ### Elevación Lateral con Mancuernas
 1. Párate con los pies al ancho de los hombros sosteniendo una mancuerna en cada mano a los costados del cuerpo.
 2. Mantén la espalda recta y aprieta el core.
@@ -427,21 +382,12 @@
 4. Haz una pausa arriba y baja los brazos lentamente a la posición inicial.
 5. Repite el número de veces indicado.
 
-### Press Arnold
-1. Siéntate en una banca con respaldo. Sostén una mancuerna en cada mano a la altura de los hombros, con las palmas mirándote a ti y los codos doblados.
-2. Empuja (haz press) las mancuernas hacia arriba hasta estirar los brazos, girando las manos para que las palmas miren hacia adelante al final.
-3. Anda rotando las muñecas a medida que subes.
-4. Haz una pausa arriba y baja lentamente rotando las muñecas para volver a la posición inicial.
-5. Repite la cantidad de veces indicada.
-
-### Press de Hombros Sentado con Mancuernas
-1. Siéntate en una banca con la espalda recta y los pies firmes en el suelo.
-2. Sostén las mancuernas con las palmas hacia adelante, a la altura de los hombros.
-3. (Si partes desde abajo) Sube las mancuernas hacia tus hombros doblando los codos.
-4. Asegúrate de que las palmas miren hacia adelante.
-5. Empuja (haz press) las mancuernas sobre la cabeza hasta estirar los brazos.
-6. Baja las mancuernas de a poco hasta la posición inicial de los hombros.
-7. Repite la cantidad de veces indicada.
+### Elevación Lateral en Polea
+1. Párate con los pies al ancho de los hombros y toma los agarres de las poleas cruzadas con las palmas hacia abajo.
+2. Mantén los brazos estirados (o con una micro flexión) y el abdomen firme.
+3. Levanta los brazos hacia los lados hasta que queden paralelos al piso.
+4. Haz una pausa arriba y baja los brazos lentamente a la posición inicial.
+5. Repite el número de veces indicado.
 
 ### Push Press (Press con Impulso)
 1. Párate con los pies al ancho de los hombros, con una mancuerna en cada mano a la altura de los hombros.
@@ -467,13 +413,13 @@
 5. Haz una pausa arriba y baja las piernas controladamente.
 6. Repite la cantidad de veces indicada.
 
-### Superman
-1. Empieza en posición de plancha alta (o recostado boca abajo en el suelo).
-2. Si estás recostado, estira brazos y piernas.
-3. Levanta simultáneamente tu brazo derecho y tu pierna izquierda despegándolos del suelo.
-4. Haz una pausa arriba y bájalo lentamente.
-5. Repite el movimiento con el brazo izquierdo y la pierna derecha.
-6. Sigue alternando lados por el número de repeticiones necesario.
+### Hiperextensión Invertida
+1. Ajusta la máquina de hiperextensión invertida y acomoda tus pies en los rodillos o correas.
+2. Acuéstate boca abajo apoyando la cadera y abdomen en la almohadilla, dejando el tren inferior colgando.
+3. Afírmate fuerte de las manillas de la máquina.
+4. Aprieta los glúteos e isquios para levantar las piernas juntas hacia arriba hasta que queden paralelas al piso.
+5. Haz una pausa arriba y baja las piernas controladamente.
+6. Repite la cantidad de veces indicada.
 
 ## Pantorrillas
 
@@ -483,21 +429,11 @@
 3. Baja los talones lentamente a la posición inicial.
 4. Repite el número de repeticiones necesario.
 
-### Elevación de Talones en Polea
-1. Párate mirando la máquina de poleas con los pies al ancho de los hombros.
-2. Afírmate de la máquina, con un cinturón o correa de polea enganchada a la cintura o tobillos.
-3. Levanta los talones despegándolos del suelo lo más alto que puedas (poniéndote de puntillas).
-4. Haz una pausa arriba y baja los talones lentamente al piso.
-5. Repite la cantidad de veces indicada.
-
-### Elevación de Talones en Prensa (Leg Press Calf Raise)
-1. Ajusta la máquina de prensa para que tus rodillas queden casi estiradas cuando empujes.
-2. Siéntate apoyando bien la espalda.
-3. Pon solo las puntas de los pies en el borde inferior de la plataforma, dejando los talones en el aire.
-4. Saca el seguro y empuja la plataforma estirando las piernas.
-5. Baja los talones hacia ti flexionando las pantorrillas para estirarlas.
-6. Empuja con las puntas de los pies para subir el peso contrayendo el músculo.
-7. Repite la cantidad de veces indicada.
+### Elevación de Talones de Pie con Barra
+1. Párate con los pies al ancho de los hombros, apoyando una barra en la parte alta de la espalda (como en una sentadilla).
+2. Levanta los talones despegándolos del suelo lo más alto posible.
+3. Baja los talones lentamente a la posición inicial.
+4. Repite el número de repeticiones necesario.
 
 ### Elevación de Talones Tipo Burro (Donkey Calf Raise)
 1. Párate apoyando las puntas de los pies en una superficie elevada (como un cajón, step o bloque).
@@ -505,13 +441,6 @@
 3. Levanta los talones lo más alto que puedas, dejando el peso en la punta (bola) del pie.
 4. Haz pausa arriba y baja lentamente sintiendo el estiramiento.
 5. Repite el número de veces indicado.
-
-### Saltar la Cuerda (Jump Rope)
-1. Agarra los mangos de la cuerda, uno en cada mano.
-2. Párate con los pies al ancho de los hombros y rodillas semiflectadas.
-3. Gira la cuerda por encima de tu cabeza y salta cuando vaya llegando a tus pies.
-4. Cae suavemente en las puntas de los pies y sigue saltando al ritmo.
-5. Continúa por el tiempo o cantidad de saltos que te toque hacer.
 
 ## Pecho
 
@@ -539,12 +468,12 @@
 6. Empuja la barra con fuerza hasta la posición inicial estirando los brazos.
 7. Repite el número de veces indicado.
 
-### Press de Banca con Mancuernas
-1. Acuéstate en una banca plana con los pies en el suelo.
-2. Sostén una mancuerna en cada mano, con las palmas hacia el frente y los brazos estirados sobre el pecho.
-3. Baja las mancuernas lentamente a los lados de tu pecho, manteniendo los codos en un ángulo de unos 45-90 grados.
-4. Haz una pausa y empuja las mancuernas de vuelta arriba hasta estirar los brazos.
-5. Repite el número de repeticiones indicado.
+### Press de Banca con Mancuerna
+1. Step:1 Lie flat on a bench with your feet flat on the ground and your back pressed against the bench.
+2. Step:2 Hold a dumbbell in each hand, with your palms facing forward and your arms extended above your chest.
+3. Step:3 Lower the dumbbells slowly to the sides of your chest, keeping your elbows at a 90-degree angle.
+4. Step:4 Pause for a moment, then push the dumbbells back up to the starting position, fully extending your arms.
+5. Step:5 Repeat for the desired number of repetitions.
 
 ### Press de Banca Declinado con Barra
 1. Acuéstate en una banca declinada, trabando las piernas en los rodillos. Tu cabeza debe quedar más baja que tus caderas.
@@ -552,6 +481,15 @@
 3. Saca la barra y bájala lentamente a la parte baja de tu pecho, codos controlados.
 4. Haz una pausa abajo y empuja la barra de vuelta a la posición inicial.
 5. Repite las veces necesarias.
+
+### Press de Banca en Máquina Smith
+1. Ajusta una banca (plana, inclinada o declinada, según tu rutina) en el medio de la máquina Smith.
+2. Acuéstate plantando bien los pies en el piso.
+3. Agarra la barra (si quieres énfasis en tríceps, agarre más cerrado).
+4. Destraba la barra y bájala lentamente hacia el pecho, con los codos controlados.
+5. Haz una pausa poco antes de rebotar en el pecho.
+6. Empuja de vuelta hasta estirar los brazos.
+7. Repite el número de repeticiones necesario.
 
 ### Press de Banca en Máquina Smith
 1. Ajusta una banca (plana, inclinada o declinada, según tu rutina) en el medio de la máquina Smith.
@@ -570,14 +508,12 @@
 5. Haz pausa abajo y empuja con fuerza de vuelta arriba.
 6. Repite las veces indicadas.
 
-### Press de Banca Inclinado con Mancuernas
-1. Ajusta la banca inclinada a 45 grados.
-2. Siéntate apoyando bien la espalda y con los pies en el piso.
-3. Sostén las mancuernas con las palmas hacia adelante (o ligeramente hacia adentro).
-4. Estira los brazos sobre la parte alta de tu pecho con los codos casi estirados.
-5. Baja las mancuernas de a poco hacia los lados de tus hombros.
-6. Haz pausa abajo y empújalas de vuelta arriba.
-7. Repite el número de veces indicado.
+### Press de Pecho en Máquina
+1. Ajusta la altura del asiento para que las manillas queden alineadas con el medio de tu pecho.
+2. Toma las manillas con agarre prono (palmas abajo), codos aproximadamente en 90 grados.
+3. Empuja hacia adelante estirando los brazos y botando el aire (exhalando).
+4. Haz una pausa arriba y vuelve lentamente a la posición inicial tomando aire.
+5. Repite la cantidad de veces indicada.
 
 ### Press de Pecho en Máquina
 1. Ajusta la altura del asiento para que las manillas queden alineadas con el medio de tu pecho.
@@ -595,7 +531,15 @@
 
 ## Trapecio
 
-### Remo al Mentón (Upright Row)
+### Remo al mentón con barra en polea baja
+1. Párate con los pies al ancho de los hombros, rodillas semi flectadas. Agarra la barra (o polea) con palmas hacia tu cuerpo (agarre prono).
+2. Mantén la espalda recta y el abdomen contraído.
+3. Tira la barra/polea directo hacia arriba, hacia tu mentón, guiando el movimiento con los codos hacia el techo.
+4. Haz una pausa arriba, apretando la parte alta de la espalda y trapecios.
+5. Baja de a poco el peso a la posición inicial.
+6. Repite las veces indicadas.
+
+### Remo al mentón con barra en polea baja
 1. Párate con los pies al ancho de los hombros, rodillas semi flectadas. Agarra la barra (o polea) con palmas hacia tu cuerpo (agarre prono).
 2. Mantén la espalda recta y el abdomen contraído.
 3. Tira la barra/polea directo hacia arriba, hacia tu mentón, guiando el movimiento con los codos hacia el techo.
@@ -628,24 +572,4 @@
 3. Baja tu cuerpo doblando los codos hacia atrás, manteniendo la espalda muy cerca (casi rozando) la banca.
 4. Haz pausa abajo y empuja con fuerza para volver arriba.
 5. Repite la cantidad de veces indicada.
-
-### Patada de Tríceps con Mancuerna (Kickbacks)
-1. Apoya una rodilla y una mano en una banca plana (o párate inclinado), manteniendo la espalda recta.
-2. Sostén una mancuerna con la palma hacia adentro. Pega el codo a tus costillas en un ángulo de 90 grados.
-3. Estira el brazo hacia atrás moviendo solo el antebrazo, apretando el tríceps arriba.
-4. Haz una pequeña pausa y baja la mancuerna lentamente de vuelta a los 90 grados.
-5. Repite las veces indicadas.
-
-### Press de Banca con Agarre Cerrado
-1. Acuéstate en la banca plana con los pies en el piso.
-2. Agarra la barra con un agarre estrecho (al ancho de los hombros o un poco menos).
-3. Baja la barra a la parte baja de tu pecho, manteniendo los codos muy pegados a tus costillas.
-4. Haz una pausa abajo y empuja fuerte hacia arriba estirando los tríceps.
-5. Repite el número de repeticiones necesario.
-
-### Press JM
-1. Acuéstate en una banca plana o declinada y toma la barra con un agarre estrecho.
-2. Baja la barra en dirección hacia tu cuello/frente bajando y doblando los codos hacia adelante (una mezcla entre press cerrado y press francés).
-3. Haz una pausa y luego extiende los tríceps para empujar la barra de regreso a la posición inicial.
-4. Repite la cantidad de repeticiones indicada.
 
