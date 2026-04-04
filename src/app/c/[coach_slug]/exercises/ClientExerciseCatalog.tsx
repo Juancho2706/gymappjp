@@ -171,26 +171,26 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
           {selectedExercise && (
             <>
               {(() => {
-                const url = selectedExercise.video_url || selectedExercise.gif_url;
-                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                const getYouTubeId = (u: string) => {
-                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                  return match ? match[1] : null;
-                };
-
                 if (selectedExercise.gif_url) {
                   return (
-                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center border-b border-border/50 z-0">
+                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50 z-0">
                       <Image
                         src={selectedExercise.gif_url}
                         alt={selectedExercise.name}
                         fill
-                        className="object-contain p-4"
+                        className="object-contain"
                         unoptimized
                       />
                     </div>
                   );
                 }
+
+                const url = selectedExercise.video_url;
+                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
+                const getYouTubeId = (u: string) => {
+                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+                  return match ? match[1] : null;
+                };
 
                 if (isYouTube) {
                   const ytId = getYouTubeId(url!);
