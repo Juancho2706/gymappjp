@@ -40,7 +40,7 @@ export default async function CoachExercisesPage() {
                         Catálogo de Ejercicios
                     </h1>
                     <p className="text-muted-foreground text-sm mt-1">
-                        {globalExercises.length} globales · {customExercises.length} personalizados
+                        {globalExercises.length + customExercises.length} ejercicios disponibles
                     </p>
                 </div>
             </div>

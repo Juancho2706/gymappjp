@@ -1,13 +1,14 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Smartphone, Calendar, Activity, MoreHorizontal } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { TrendingUp, TrendingDown, Smartphone, Calendar, Activity, ChevronDown, ChevronUp } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { GlassButton } from '@/components/ui/glass-button'
 import { MiniSparkline } from './MiniSparkline'
 import { ResetPasswordButton } from '@/app/coach/clients/ResetPasswordButton'
 import { ToggleStatusButton } from '@/app/coach/clients/ToggleStatusButton'
 import { DeleteClientButton } from '@/app/coach/clients/DeleteClientButton'
+import { useState } from 'react'
 
 interface ClientCardProps {
     client: any
@@ -62,6 +63,8 @@ export function ClientCard({
         )
     }
 
+    const [isExpanded, setIsExpanded] = useState(false)
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -79,13 +82,13 @@ export function ClientCard({
                 <div className="p-6 md:p-8 space-y-8 relative z-10">
                     {/* Header */}
                     <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-5">
+                        <div className="flex items-center gap-5 w-full">
                             <div className="w-16 h-16 rounded-2xl bg-white dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center flex-shrink-0 group-hover:border-primary/30 transition-all duration-500 shadow-inner group-hover:scale-110">
                                 <span className="text-2xl font-black text-foreground uppercase font-display">
                                     {client.full_name[0]}
                                 </span>
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <a href={`/coach/clients/${client.id}`} className="group/name">
                                     <h3 className="text-lg font-black text-foreground uppercase tracking-tighter truncate font-display group-hover/name:text-primary transition-colors leading-none">
                                         {client.full_name}
@@ -95,13 +98,31 @@ export function ClientCard({
                                     {client.email}
                                 </p>
                             </div>
+                            <GlassButton 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-10 w-10 rounded-xl shrink-0"
+                                onClick={() => setIsExpanded(!isExpanded)}
+                            >
+                                {isExpanded ? (
+                                    <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                                ) : (
+                                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                                )}
+                            </GlassButton>
                         </div>
-                        <GlassButton size="icon" variant="ghost" className="h-10 w-10 rounded-xl">
-                            <MoreHorizontal className="w-5 h-5 text-muted-foreground" />
-                        </GlassButton>
                     </div>
 
-                    {/* Analytics Grid */}
+                    <AnimatePresence>
+                        {isExpanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="space-y-8 overflow-hidden"
+                            >
+                                {/* Analytics Grid */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-white/40 dark:bg-white/[0.02] border border-border/50 dark:border-white/5 rounded-2xl p-4 flex flex-col gap-3 transition-colors group-hover:bg-white/60 dark:group-hover:bg-white/[0.05]">
                             <div className="flex items-center justify-between">
@@ -203,6 +224,9 @@ export function ClientCard({
                             />
                         </div>
                     </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </GlassCard>
         </motion.div>
