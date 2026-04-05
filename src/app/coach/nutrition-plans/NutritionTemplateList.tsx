@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, CalendarHeart, Search, Users, Utensils, Info, Pencil } from 'lucide-react'
+import { Plus, Trash2, CalendarHeart, Search, Users, Utensils, Info, Pencil, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { deleteNutritionTemplate } from './actions'
+import { deleteNutritionTemplate, assignTemplateToClients } from './actions'
 import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
 interface Template {
     id: string
@@ -29,13 +31,20 @@ interface Template {
 interface Props {
     templates: Template[]
     coachId: string
+    availableClients?: { id: string, full_name: string }[]
     onCreateClick: () => void
     onEditClick: (template: Template) => void
 }
 
-export function NutritionTemplateList({ templates, coachId, onCreateClick, onEditClick }: Props) {
+export function NutritionTemplateList({ templates, coachId, availableClients = [], onCreateClick, onEditClick }: Props) {
     const [searchTerm, setSearchTerm] = useState('')
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
+    
+    // Asignación Modal State
+    const [assigningTemplate, setAssigningTemplate] = useState<Template | null>(null)
+    const [selectedClients, setSelectedClients] = useState<string[]>([])
+    const [clientSearch, setClientSearch] = useState('')
+    const [isAssigning, setIsAssigning] = useState(false)
 
     const filteredTemplates = templates.filter(t => 
         t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -52,19 +61,38 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
                 toast.error(result.error)
             } else {
                 toast.success('Plan global eliminado correctamente')
-                // Note: The page will revalidate due to server action, 
-                // but for better UX we might want local state update if needed.
-                // In this setup, the parent handles the data.
             }
         } finally {
             setIsDeleting(null)
         }
     }
 
+    const openAssignModal = (template: Template) => {
+        setAssigningTemplate(template)
+        setSelectedClients(template.assigned_clients?.map(c => c.id) || [])
+        setClientSearch('')
+    }
+
+    const handleAssignTemplate = async () => {
+        if (!assigningTemplate) return
+        setIsAssigning(true)
+        try {
+            const result = await assignTemplateToClients(assigningTemplate.id, coachId, selectedClients)
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success(`Plantilla asignada a ${selectedClients.length} alumnos`)
+                setAssigningTemplate(null)
+            }
+        } finally {
+            setIsAssigning(false)
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                <div className="relative w-full">
+                <div className="relative w-full max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                         placeholder="Buscar planes..."
@@ -73,13 +101,6 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
                         className="pl-9 h-11 rounded-xl bg-card border-border/60"
                     />
                 </div>
-                <Button 
-                    onClick={onCreateClick}
-                    className="w-full sm:w-auto h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 px-6"
-                >
-                    <Plus className="w-5 h-5" />
-                    Nuevo Plan
-                </Button>
             </div>
 
             {filteredTemplates.length === 0 ? (
@@ -144,35 +165,109 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
                                     </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                                    <div className="flex items-center gap-1">
-                                        <Utensils className="w-3 h-3" />
-                                        <span>{template.template_meals?.length || 0} Comidas</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Info className="w-3 h-3" />
-                                        <span className="truncate max-w-[150px]">
-                                            {template.template_meals?.map(m => m.name).join(', ')}
-                                        </span>
-                                    </div>
-                                    {template.assigned_clients && template.assigned_clients.length > 0 && (
-                                        <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                                            <Users className="w-3 h-3" />
-                                            <span className="font-medium">
-                                                {template.assigned_clients.length} {template.assigned_clients.length === 1 ? 'Alumno' : 'Alumnos'}
-                                            </span>
-                                            <span className="text-[10px] ml-1 opacity-80 hidden sm:inline">
-                                                ({template.assigned_clients.slice(0, 2).map(c => c.full_name.split(' ')[0]).join(', ')}
-                                                {template.assigned_clients.length > 2 ? '...' : ''})
-                                            </span>
+                                <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground mt-4 pt-4 border-t border-border/50">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-1">
+                                            <Utensils className="w-3 h-3" />
+                                            <span>{template.template_meals?.length || 0} Comidas</span>
                                         </div>
-                                    )}
+                                        {template.assigned_clients && template.assigned_clients.length > 0 && (
+                                            <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full w-fit">
+                                                <Users className="w-3 h-3" />
+                                                <span className="font-medium text-[10px] uppercase tracking-widest">
+                                                    {template.assigned_clients.length} Activos
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <Button 
+                                        variant="default" 
+                                        size="sm"
+                                        className="h-8 text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20"
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            openAssignModal(template)
+                                        }}
+                                    >
+                                        Asignar a Alumno
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
                     ))}
                 </div>
             )}
+
+            {/* Modal de Asignación */}
+            <Dialog open={!!assigningTemplate} onOpenChange={(open) => !open && setAssigningTemplate(null)}>
+                <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                            <Users className="w-5 h-5 text-primary" />
+                            Asignar Protocolo
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4 pt-4">
+                        <div className="bg-primary/5 p-4 rounded-xl border border-primary/10">
+                            <p className="text-xs text-primary/80 font-bold uppercase tracking-widest mb-1">Plantilla Seleccionada:</p>
+                            <p className="text-base font-black">{assigningTemplate?.name}</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Buscar alumno..."
+                                    value={clientSearch}
+                                    onChange={(e) => setClientSearch(e.target.value)}
+                                    className="pl-9 h-10 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground"
+                                />
+                            </div>
+
+                            <div className="max-h-[300px] overflow-y-auto space-y-1 p-1">
+                                {availableClients
+                                    .filter(c => c.full_name.toLowerCase().includes(clientSearch.toLowerCase()))
+                                    .map(client => {
+                                        const isSelected = selectedClients.includes(client.id)
+                                        return (
+                                            <div 
+                                                key={client.id}
+                                                onClick={() => {
+                                                    setSelectedClients(prev => 
+                                                        isSelected ? prev.filter(id => id !== client.id) : [...prev, client.id]
+                                                    )
+                                                }}
+                                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-slate-200 dark:hover:border-white/10"
+                                            >
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors",
+                                                    isSelected ? "bg-primary border-primary text-white" : "border-slate-300 dark:border-white/20"
+                                                )}>
+                                                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                                                </div>
+                                                <span className="text-sm font-bold text-slate-700 dark:text-foreground">{client.full_name}</span>
+                                            </div>
+                                        )
+                                })}
+                                {availableClients.length === 0 && (
+                                    <div className="text-center py-8 text-sm text-muted-foreground font-bold">
+                                        No hay alumnos disponibles para asignar.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <Button 
+                            className="w-full h-12 font-black uppercase tracking-widest gap-2"
+                            disabled={isAssigning || selectedClients.length === 0}
+                            onClick={handleAssignTemplate}
+                        >
+                            {isAssigning ? 'Procesando...' : `Confirmar Asignación (${selectedClients.length})`}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

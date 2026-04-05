@@ -233,3 +233,21 @@ export async function deleteNutritionTemplate(templateId: string, coachId: strin
     revalidatePath('/coach/nutrition-plans')
     return { success: true }
 }
+
+export async function assignTemplateToClients(templateId: string, coachId: string, clientIds: string[]) {
+    const supabase = await createClient()
+
+    try {
+        if (clientIds.length === 0) return { success: true }
+
+        // Aprovechamos la función de propagación existente
+        await propagateTemplateChanges(supabase, templateId, coachId, JSON.stringify(clientIds))
+
+        revalidatePath('/coach/nutrition-plans')
+        revalidatePath('/coach/clients')
+        return { success: true }
+    } catch (err: any) {
+        console.error('[assignTemplateToClients] Error:', err)
+        return { error: err.message || 'Error al asignar la plantilla.' }
+    }
+}

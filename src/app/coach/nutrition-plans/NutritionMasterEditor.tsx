@@ -342,53 +342,7 @@ export function NutritionMasterEditor({
                             />
                         </div>
 
-                        {mode === 'template' && (
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Desplegar a Alumnos</Label>
-                                <Popover open={openPopover} onOpenChange={setOpenPopover}>
-                                    <PopoverTrigger>
-                                        <Button type="button" variant="outline" className="w-full h-11 justify-between bg-blue-50/30 dark:bg-black/20 border-blue-100 dark:border-white/10 font-bold text-slate-900 dark:text-foreground hover:bg-blue-100/50">
-                                            {selectedClients.length > 0 ? `${selectedClients.length} Alumnos` : "Seleccionar..."}
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[300px] p-0" align="start">
-                                        <div className="p-2 border-b dark:border-white/10">
-                                            <div className="flex items-center gap-2 px-2 bg-blue-50 dark:bg-black/20 rounded-lg">
-                                                <Search className="w-4 h-4 text-slate-400" />
-                                                <input 
-                                                    className="w-full h-9 bg-transparent text-sm outline-none text-slate-900 dark:text-foreground"
-                                                    placeholder="Buscar alumno..."
-                                                    value={searchTerm}
-                                                    onChange={e => setSearchTerm(e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="max-h-[250px] overflow-y-auto p-1">
-                                            {availableClients.filter(c => c.full_name.toLowerCase().includes(searchTerm.toLowerCase())).map(client => (
-                                                <div 
-                                                    key={client.id}
-                                                    onClick={() => {
-                                                        setSelectedClients(prev => 
-                                                            prev.includes(client.id) ? prev.filter(id => id !== client.id) : [...prev, client.id]
-                                                        )
-                                                    }}
-                                                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-white/5 cursor-pointer"
-                                                >
-                                                    <div className={cn(
-                                                        "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                                                        selectedClients.includes(client.id) ? "bg-primary border-primary text-white" : "border-slate-300 dark:border-white/20"
-                                                    )}>
-                                                        {selectedClients.includes(client.id) && <Check className="w-3 h-3" />}
-                                                    </div>
-                                                    <span className="text-sm font-bold text-slate-700 dark:text-foreground">{client.full_name}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        )}
+                        {/* Asignación eliminada de la creación/edición, ahora se hace desde la lista de plantillas */}
 
                         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-blue-50 dark:border-white/5">
                             {[
