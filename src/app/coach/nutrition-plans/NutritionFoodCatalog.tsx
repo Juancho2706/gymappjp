@@ -63,11 +63,9 @@ export function NutritionFoodCatalog({ foods, coachId }: Props) {
                 </div>
 
                 <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] gap-2 px-6 shadow-lg shadow-primary/20">
-                            <Plus className="w-4 h-4" />
-                            Nuevo Alimento
-                        </Button>
+                    <DialogTrigger className="h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] gap-2 px-6 shadow-lg shadow-primary/20 flex items-center justify-center">
+                        <Plus className="w-4 h-4" />
+                        Nuevo Alimento
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-border/50">
                         <DialogHeader>

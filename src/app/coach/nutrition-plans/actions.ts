@@ -148,10 +148,10 @@ export async function saveCustomFood(
             .insert({
                 name,
                 calories,
-                protein,
-                carbs,
-                fats,
-                category,
+                protein_g: protein,
+                carbs_g: carbs,
+                fats_g: fats,
+                serving_size: 100,
                 serving_unit: unit,
                 coach_id: coachId
             })
