@@ -4,6 +4,8 @@ import type { Metadata } from 'next'
 import type { Tables } from '@/lib/database.types'
 import CoachDashboardClient from './CoachDashboardClient'
 
+import { getAdherenceStats, getNutritionStats } from './actions'
+
 type Client = Tables<'clients'>
 
 export const metadata: Metadata = { title: 'Dashboard' }
@@ -22,7 +24,17 @@ export default async function CoachDashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
 
-    const results = await Promise.all([
+    const [
+        clientsCount,
+        workoutPlansCount,
+        recentClientsRaw,
+        recentCheckinsRaw,
+        expiringProgramsRaw,
+        clientsGrowthRaw,
+        weeklyCheckinsRaw,
+        adherenceStats,
+        nutritionStats
+    ] = await Promise.all([
             supabase
                 .from('clients')
                 .select('*', { count: 'exact', head: true })
@@ -68,16 +80,27 @@ export default async function CoachDashboardPage() {
                 .from('check_ins')
                 .select('created_at, clients!inner(coach_id)')
                 .eq('clients.coach_id', user.id)
-                .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+                .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+            getAdherenceStats(),
+            getNutritionStats()
         ])
 
-    const totalClients = results[0].count
-    const activePlans = results[1].count
-    const rawRecentClients = results[2].data
-    const rawRecentCheckins = results[3].data
-    const rawExpiringPrograms = results[4].data
-    const allClientsData = results[5].data || []
-    const weeklyCheckinsData = results[6].data || []
+    const totalClients = clientsCount.count
+    const activePlans = workoutPlansCount.count
+    const rawRecentClients = recentClientsRaw.data
+    const rawRecentCheckins = recentCheckinsRaw.data
+    const rawExpiringPrograms = expiringProgramsRaw.data
+    const allClientsData = clientsGrowthRaw.data || []
+    const weeklyCheckinsData = weeklyCheckinsRaw.data || []
+
+    // Calculate averages for top cards
+    const avgAdherence = adherenceStats.length > 0 
+        ? Math.round(adherenceStats.reduce((acc, s) => acc + s.percentage, 0) / adherenceStats.length)
+        : 0
+    
+    const avgNutrition = nutritionStats.length > 0
+        ? Math.round(nutritionStats.reduce((acc, s) => acc + s.percentage, 0) / nutritionStats.length)
+        : 0
 
     const recentClients = rawRecentClients as Pick<Client, 'id' | 'full_name' | 'email' | 'onboarding_completed' | 'created_at'>[] | null
     
@@ -190,6 +213,10 @@ export default async function CoachDashboardPage() {
         <CoachDashboardClient 
             totalClients={totalClients ?? 0}
             activePlans={activePlans ?? 0}
+            avgAdherence={avgAdherence}
+            avgNutrition={avgNutrition}
+            adherenceStats={adherenceStats}
+            nutritionStats={nutritionStats}
             recentActivities={recentActivities}
             expiringPrograms={expiringPrograms}
             areaData={areaData}
