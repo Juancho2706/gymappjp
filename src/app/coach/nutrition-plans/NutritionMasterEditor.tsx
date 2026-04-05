@@ -224,11 +224,22 @@ export function NutritionMasterEditor({
     }, [meals]);
 
     // UI Alerters
-    const showMacroMismatch = useMemo(() => {
-        if (!targetCalories) return false;
-        const diff = Math.abs(totalMacros.calories - Number(targetCalories));
-        return diff > (Number(targetCalories) * 0.05);
-    }, [totalMacros.calories, targetCalories]);
+    const mismatches = useMemo(() => {
+        const check = (current: number, targetStr: string) => {
+            const target = Number(targetStr) || 0;
+            if (target <= 0) return false;
+            return Math.abs(current - target) > (target * 0.05);
+        };
+
+        return {
+            calories: check(totalMacros.calories, targetCalories),
+            protein: check(totalMacros.protein, targetProtein),
+            carbs: check(totalMacros.carbs, targetCarbs),
+            fats: check(totalMacros.fats, targetFats)
+        };
+    }, [totalMacros, targetCalories, targetProtein, targetCarbs, targetFats]);
+
+    const hasAnyMismatch = Object.values(mismatches).some(v => v);
 
     const handleAddMeal = () => {
         setMeals([...meals, { id: Date.now(), name: '', food_items: [] }])
@@ -289,18 +300,30 @@ export function NutritionMasterEditor({
                 </div>
             )}
 
-            {showMacroMismatch && (
-                <div className="p-4 text-xs font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3">
-                    <AlertTriangle className="w-4 h-4" />
-                    ATENCIÓN: Los alimentos sumados ({Math.round(totalMacros.calories)} Kcal) no coinciden con el objetivo del plan ({targetCalories} Kcal).
+            {hasAnyMismatch && (
+                <div className="p-4 text-xs font-bold text-amber-600 dark:text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span className="uppercase tracking-tight">
+                            Atención: Desfase detectado en {Object.entries(mismatches).filter(([_,v]) => v).map(([k]) => k === 'calories' ? 'Kcal' : k).join(', ')}.
+                        </span>
+                    </div>
+                    <div className="flex-1 text-[10px] opacity-80 font-bold uppercase tracking-widest sm:text-center">
+                        Sumatoria alimentos: {Math.round(totalMacros.calories)}K | {Math.round(totalMacros.protein)}P | {Math.round(totalMacros.carbs)}C | {Math.round(totalMacros.fats)}G
+                    </div>
                     <Button 
                         type="button" 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => setTargetCalories(Math.round(totalMacros.calories).toString())}
-                        className="ml-auto h-7 text-[10px] uppercase font-black hover:bg-amber-500/20"
+                        onClick={() => {
+                            setTargetCalories(Math.round(totalMacros.calories).toString())
+                            setTargetProtein(Math.round(totalMacros.protein).toString())
+                            setTargetCarbs(Math.round(totalMacros.carbs).toString())
+                            setTargetFats(Math.round(totalMacros.fats).toString())
+                        }}
+                        className="h-7 text-[10px] uppercase font-black hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-500"
                     >
-                        Ajustar Plan
+                        Sincronizar Plan
                     </Button>
                 </div>
             )}
@@ -308,33 +331,33 @@ export function NutritionMasterEditor({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left Panel: Configuration */}
                 <div className="lg:col-span-1 space-y-6">
-                    <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/5 shadow-sm space-y-6">
+                    <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-blue-100 dark:border-white/5 shadow-sm space-y-6">
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nombre del Protocolo</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Nombre del Protocolo</Label>
                             <Input 
                                 value={name} 
                                 onChange={e => setName(e.target.value)} 
                                 required 
-                                className="h-11 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 font-bold uppercase tracking-widest"
+                                className="h-11 bg-blue-50/30 dark:bg-black/20 border-blue-100 dark:border-white/10 font-bold uppercase tracking-widest text-slate-900 dark:text-foreground"
                             />
                         </div>
 
                         {mode === 'template' && (
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desplegar a Alumnos</Label>
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Desplegar a Alumnos</Label>
                                 <Popover open={openPopover} onOpenChange={setOpenPopover}>
                                     <PopoverTrigger>
-                                        <Button type="button" variant="outline" className="w-full h-11 justify-between bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 font-bold">
+                                        <Button type="button" variant="outline" className="w-full h-11 justify-between bg-blue-50/30 dark:bg-black/20 border-blue-100 dark:border-white/10 font-bold text-slate-900 dark:text-foreground hover:bg-blue-100/50">
                                             {selectedClients.length > 0 ? `${selectedClients.length} Alumnos` : "Seleccionar..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-[300px] p-0" align="start">
                                         <div className="p-2 border-b dark:border-white/10">
-                                            <div className="flex items-center gap-2 px-2 bg-slate-50 dark:bg-black/20 rounded-lg">
+                                            <div className="flex items-center gap-2 px-2 bg-blue-50 dark:bg-black/20 rounded-lg">
                                                 <Search className="w-4 h-4 text-slate-400" />
                                                 <input 
-                                                    className="w-full h-9 bg-transparent text-sm outline-none"
+                                                    className="w-full h-9 bg-transparent text-sm outline-none text-slate-900 dark:text-foreground"
                                                     placeholder="Buscar alumno..."
                                                     value={searchTerm}
                                                     onChange={e => setSearchTerm(e.target.value)}
@@ -350,7 +373,7 @@ export function NutritionMasterEditor({
                                                             prev.includes(client.id) ? prev.filter(id => id !== client.id) : [...prev, client.id]
                                                         )
                                                     }}
-                                                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
+                                                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-white/5 cursor-pointer"
                                                 >
                                                     <div className={cn(
                                                         "w-4 h-4 rounded border flex items-center justify-center transition-colors",
@@ -358,7 +381,7 @@ export function NutritionMasterEditor({
                                                     )}>
                                                         {selectedClients.includes(client.id) && <Check className="w-3 h-3" />}
                                                     </div>
-                                                    <span className="text-sm font-bold">{client.full_name}</span>
+                                                    <span className="text-sm font-bold text-slate-700 dark:text-foreground">{client.full_name}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -367,7 +390,7 @@ export function NutritionMasterEditor({
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t dark:border-white/5">
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-blue-50 dark:border-white/5">
                             {[
                                 { id: 'targetCalories', label: 'Kcal Plan', val: targetCalories, set: setTargetCalories, color: 'text-primary' },
                                 { id: 'targetProtein', label: 'Proteína (g)', val: targetProtein, set: setTargetProtein, color: 'text-rose-500' },
@@ -378,16 +401,20 @@ export function NutritionMasterEditor({
                                     <Label className={cn("text-[9px] font-black uppercase tracking-tighter", item.color)}>{item.label}</Label>
                                     <Input 
                                         type="number" 
+                                        min="0"
                                         value={item.val} 
-                                        onChange={e => item.set(e.target.value)} 
-                                        className="h-10 text-center font-black bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10"
+                                        onChange={e => {
+                                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                                            item.set(val.toString());
+                                        }} 
+                                        className="h-10 text-center font-black bg-blue-50/30 dark:bg-black/20 border-blue-100 dark:border-white/10 text-slate-900 dark:text-foreground"
                                     />
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/5 shadow-sm flex flex-wrap justify-center gap-6">
+                    <div className="p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-blue-100 dark:border-white/5 shadow-sm flex flex-wrap justify-center gap-6">
                         <MacroRing value={totalMacros.calories} target={Number(targetCalories) || 0} label="Kcal" color="#007AFF" unit="" />
                         <MacroRing value={totalMacros.protein} target={Number(targetProtein) || 0} label="Prot" color="#F43F5E" />
                         <MacroRing value={totalMacros.carbs} target={Number(targetCarbs) || 0} label="Carbs" color="#F59E0B" />
@@ -398,11 +425,11 @@ export function NutritionMasterEditor({
                 {/* Right Panel: Meals & Items */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+                        <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-foreground">
                             <CalendarHeart className="w-5 h-5 text-primary" />
                             Distribución de Comidas
                         </h3>
-                        <Button type="button" variant="outline" size="sm" onClick={handleAddMeal} className="h-9 gap-2 font-black uppercase text-[10px] tracking-widest border-primary/20 text-primary hover:bg-primary/10">
+                        <Button type="button" variant="outline" size="sm" onClick={handleAddMeal} className="h-9 gap-2 font-black uppercase text-[10px] tracking-widest border-primary/30 text-primary hover:bg-primary/10">
                             <Plus className="w-4 h-4" /> Nueva Comida
                         </Button>
                     </div>
@@ -411,7 +438,7 @@ export function NutritionMasterEditor({
                         {meals.map((meal, index) => {
                             const mealMacros = calculateMealMacros(meal);
                             return (
-                                <div key={meal.id} className="relative p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/5 shadow-sm group animate-in fade-in zoom-in-95 duration-300">
+                                <div key={meal.id} className="relative p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-blue-50 dark:border-white/5 shadow-sm group animate-in fade-in zoom-in-95 duration-300">
                                     <button 
                                         type="button" 
                                         onClick={() => handleRemoveMeal(meal.id)}
@@ -423,24 +450,24 @@ export function NutritionMasterEditor({
                                     <div className="space-y-6">
                                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                                             <div className="flex-1 space-y-2">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400">Comida {index + 1}</Label>
+                                                <Label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">Comida {index + 1}</Label>
                                                 <Input 
                                                     value={meal.name} 
                                                     onChange={e => handleMealChange(meal.id, 'name', e.target.value)} 
-                                                    className="h-12 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 font-black text-lg" 
+                                                    className="h-12 bg-blue-50/30 dark:bg-black/20 border-blue-100 dark:border-white/10 font-black text-lg text-slate-900 dark:text-foreground" 
                                                     placeholder="Ej. Desayuno Post-Ayuno"
                                                 />
                                             </div>
-                                            <div className="flex items-center gap-4 bg-slate-50 dark:bg-black/20 p-3 rounded-xl border dark:border-white/5 shrink-0">
+                                            <div className="flex items-center gap-4 bg-blue-50/50 dark:bg-black/20 p-3 rounded-xl border border-blue-100 dark:border-white/5 shrink-0">
                                                 {[
                                                     { label: 'Kcal', val: Math.round(mealMacros.calories) },
                                                     { label: 'P', val: Math.round(mealMacros.protein), unit: 'g' },
                                                     { label: 'C', val: Math.round(mealMacros.carbs), unit: 'g' },
                                                     { label: 'G', val: Math.round(mealMacros.fats), unit: 'g' },
                                                 ].map((m, idx) => (
-                                                    <div key={idx} className={cn("text-center px-2", idx > 0 && "border-l dark:border-white/10")}>
-                                                        <div className="text-[9px] text-slate-400 uppercase font-black">{m.label}</div>
-                                                        <div className="text-sm font-black">{m.val}{m.unit}</div>
+                                                    <div key={idx} className={cn("text-center px-2", idx > 0 && "border-l border-blue-100 dark:border-white/10")}>
+                                                        <div className="text-[9px] text-slate-400 dark:text-slate-500 uppercase font-black">{m.label}</div>
+                                                        <div className="text-sm font-black text-slate-900 dark:text-foreground">{m.val}{m.unit}</div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -450,15 +477,15 @@ export function NutritionMasterEditor({
                                             {meal.food_items.map((foodItem, foodIndex) => {
                                                 const itemMacros = calculateItemMacros(foodItem);
                                                 return (
-                                                    <div key={foodIndex} className="p-4 rounded-xl bg-slate-50 dark:bg-black/10 border border-slate-200 dark:border-white/5 group/item relative">
+                                                    <div key={foodIndex} className="p-4 rounded-xl bg-blue-50/20 dark:bg-black/10 border border-blue-50 dark:border-white/5 group/item relative">
                                                         <div className="flex items-center gap-4">
-                                                            <span className="flex-1 text-sm font-black uppercase tracking-tight truncate">{foodItem.name}</span>
+                                                            <span className="flex-1 text-sm font-black uppercase tracking-tight truncate text-slate-700 dark:text-foreground">{foodItem.name}</span>
                                                             <div className="relative w-24">
-                                                                <Input type="number" step="any" value={foodItem.quantity} onChange={(e) => {
+                                                                <Input type="number" step="any" min="0" value={foodItem.quantity} onChange={(e) => {
                                                                     const newFoodItems = [...meal.food_items]
-                                                                    newFoodItems[foodIndex].quantity = Number(e.target.value)
+                                                                    newFoodItems[foodIndex].quantity = Math.max(0, Number(e.target.value))
                                                                     handleMealChange(meal.id, 'food_items', newFoodItems)
-                                                                }} className="h-9 text-xs font-black text-center pr-8 bg-white dark:bg-zinc-800" />
+                                                                }} className="h-9 text-xs font-black text-center pr-8 bg-white dark:bg-zinc-800 text-slate-900 dark:text-foreground border-blue-100 dark:border-white/10" />
                                                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 uppercase">{foodItem.unit}</span>
                                                             </div>
                                                             <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-rose-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg" onClick={() => {
@@ -468,14 +495,14 @@ export function NutritionMasterEditor({
                                                                 <Trash2 className="w-4 h-4" />
                                                             </Button>
                                                         </div>
-                                                        <div className="flex flex-wrap items-center gap-4 mt-2 pt-2 border-t dark:border-white/5">
+                                                        <div className="flex flex-wrap items-center gap-4 mt-2 pt-2 border-t border-blue-50 dark:border-white/5">
                                                             {[
                                                                 { val: Math.round(itemMacros.calories), label: 'Kcal' },
                                                                 { val: itemMacros.protein, label: 'P', unit: 'g' },
                                                                 { val: itemMacros.carbs, label: 'C', unit: 'g' },
                                                                 { val: itemMacros.fats, label: 'G', unit: 'g' },
                                                             ].map((mac, idx) => (
-                                                                <span key={idx} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                                <span key={idx} className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                                                                     {mac.label}: <span className="text-slate-900 dark:text-foreground font-black">{mac.val}{mac.unit}</span>
                                                                 </span>
                                                             ))}
@@ -507,12 +534,12 @@ export function NutritionMasterEditor({
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Notas e Instrucciones del Protocolo</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Notas e Instrucciones del Protocolo</Label>
                         <textarea 
                             rows={4}
                             value={instructions}
                             onChange={e => setInstructions(e.target.value)}
-                            className="w-full p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/5 text-sm font-bold shadow-sm focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
+                            className="w-full p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-blue-100 dark:border-white/5 text-sm font-bold shadow-sm focus:ring-1 focus:ring-primary outline-none transition-all resize-none text-slate-900 dark:text-foreground placeholder:text-slate-300 dark:placeholder:text-white/10"
                             placeholder="Ej. Consumir 500ml de agua con sal marina en ayunas..."
                         />
                     </div>
