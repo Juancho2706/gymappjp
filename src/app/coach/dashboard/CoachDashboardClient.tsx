@@ -417,18 +417,18 @@ function NutritionModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: (
 function MacroItem({ label, consumed, target, unit, color }: { label: string, consumed: number, target: number, unit: string, color: string }) {
     const percentage = target > 0 ? Math.min(Math.round((consumed / target) * 100), 100) : 0
     return (
-        <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                <span>{label}</span>
-                <span className={color}>{Math.round(consumed)}{unit}</span>
+        <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{label}</span>
+                <span className={`text-[11px] font-black ${color} tabular-nums`}>{Math.round(consumed)} {unit}</span>
             </div>
-            <div className="h-1.5 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
                 <div 
-                    className={`h-full transition-all duration-500 ${color.replace('text-', 'bg-')}`} 
+                    className={`h-full transition-all duration-700 ease-out ${color.replace('text-', 'bg-')}`} 
                     style={{ width: `${percentage}%` }}
                 />
             </div>
-            <div className="text-[9px] text-right text-muted-foreground font-medium">
+            <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter opacity-70">
                 Objetivo: {Math.round(target)}{unit}
             </div>
         </div>
