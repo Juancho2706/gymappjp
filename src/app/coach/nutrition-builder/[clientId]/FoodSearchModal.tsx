@@ -64,7 +64,7 @@ export function FoodSearchModal({ onFoodSelected }: Props) {
                                         step="any"
                                         value={quantity} 
                                         onChange={(e) => setQuantity(Number(e.target.value))}
-                                        className="h-10 bg-background border-emerald-200 dark:border-emerald-500/20 focus:ring-emerald-500 font-bold text-lg text-foreground"
+                                        className="h-10 bg-white dark:bg-background border-emerald-200 dark:border-emerald-500/20 focus:ring-emerald-500 font-bold text-lg text-slate-900 dark:text-foreground"
                                     />
                                 </div>
                             </div>

@@ -173,7 +173,7 @@ export default async function ClientDetailPage({
                     
                     <div className="flex flex-row items-center gap-3 md:gap-4 relative z-10">
                         <GlassButton asChild className="flex-1 md:flex-none h-12 md:h-14 px-4 md:px-8 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10">
-                            <Link href={`/coach/nutrition-builder/${clientId}`}>
+                            <Link href={`/coach/nutrition-builder/${clientId}${nutritionPlans.length > 0 ? `?planId=${nutritionPlans[0].id}` : ''}`}>
                                 <Apple className="w-4 h-4 md:w-5 md:h-5 mr-2 md:mr-3 text-emerald-500" />
                                 <span className="font-bold uppercase tracking-widest text-[10px] md:text-xs">Plan Dieta</span>
                             </Link>

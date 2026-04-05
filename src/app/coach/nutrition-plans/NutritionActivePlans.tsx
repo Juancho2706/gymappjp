@@ -46,7 +46,7 @@ export function NutritionActivePlans({ clients }: Props) {
                                     <p className="font-bold text-sm truncate">{client.active_plan.name}</p>
                                 </div>
                                 
-                                <Link href={`/coach/nutrition-builder/${client.id}`}>
+                                <Link href={`/coach/nutrition-builder/${client.id}?planId=${client.active_plan.id}`}>
                                     <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                         Gestionar Plan
                                         <ChevronRight className="w-4 h-4" />
