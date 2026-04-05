@@ -281,6 +281,8 @@ export async function duplicateNutritionTemplate(templateId: string, coachId: st
                 order_index: tMeal.order_index
             }).select('id').single()
 
+            if (!newMeal) continue;
+
             const items = tMeal.template_meal_groups?.[0]?.saved_meals?.saved_meal_items || []
             if (items.length > 0) {
                 const { data: savedMeal } = await supabase.from('saved_meals').insert({
@@ -288,20 +290,22 @@ export async function duplicateNutritionTemplate(templateId: string, coachId: st
                     name: `Internal_${tMeal.name}_${Date.now()}`
                 }).select('id').single()
 
-                await supabase.from('saved_meal_items').insert(
-                    items.map((it: any) => ({
-                        saved_meal_id: savedMeal.id,
-                        food_id: it.food_id,
-                        quantity: it.quantity,
-                        unit: it.unit
-                    }))
-                )
+                if (savedMeal) {
+                    await supabase.from('saved_meal_items').insert(
+                        items.map((it: any) => ({
+                            saved_meal_id: savedMeal.id,
+                            food_id: it.food_id,
+                            quantity: it.quantity,
+                            unit: it.unit
+                        }))
+                    )
 
-                await supabase.from('template_meal_groups').insert({
-                    template_meal_id: newMeal.id,
-                    saved_meal_id: savedMeal.id,
-                    order_index: 0
-                })
+                    await supabase.from('template_meal_groups').insert({
+                        template_meal_id: newMeal.id,
+                        saved_meal_id: savedMeal.id,
+                        order_index: 0
+                    })
+                }
             }
         }
 
