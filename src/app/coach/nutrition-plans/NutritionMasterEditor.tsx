@@ -323,8 +323,8 @@ export function NutritionMasterEditor({
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desplegar a Alumnos</Label>
                                 <Popover open={openPopover} onOpenChange={setOpenPopover}>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className="w-full h-11 justify-between bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 font-bold">
+                                    <PopoverTrigger>
+                                        <Button type="button" variant="outline" className="w-full h-11 justify-between bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 font-bold">
                                             {selectedClients.length > 0 ? `${selectedClients.length} Alumnos` : "Seleccionar..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                                         </Button>
