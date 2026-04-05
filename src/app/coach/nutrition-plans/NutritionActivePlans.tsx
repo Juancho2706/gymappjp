@@ -63,7 +63,14 @@ export function NutritionActivePlans({ clients }: Props) {
                         {client.active_plan ? (
                             <div className="space-y-4">
                                 <div className="p-3 rounded-xl bg-muted/50 border border-border/50">
-                                    <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Plan Actual</p>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <p className="text-[10px] font-black uppercase text-muted-foreground">Plan Actual</p>
+                                        {client.active_plan.is_custom ? (
+                                            <Badge variant="outline" className="text-[8px] py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/20">CUSTOM</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[8px] py-0 h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">SYNCED</Badge>
+                                        )}
+                                    </div>
                                     <p className="font-bold text-sm truncate">{client.active_plan.name}</p>
                                 </div>
                                 

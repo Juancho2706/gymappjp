@@ -34,7 +34,7 @@ interface Template {
 interface Props {
     templates: Template[]
     coachId: string
-    availableClients?: { id: string, full_name: string }[]
+    availableClients?: { id: string, full_name: string, active_plan?: any }[]
     onCreateClick: () => void
     onEditClick: (template: Template) => void
 }
@@ -250,7 +250,8 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                     {availableClients.length === 0 ? (
                                         <div className="p-4 text-center text-sm text-muted-foreground">No hay alumnos activos</div>
                                     ) : (
-                                        availableClients.map(client => {
+                                            availableClients.map(client => {
+                                            const hasActivePlan = (client as any).active_plan; // Assuming availableClients passes active_plan info
                                             return (
                                                 <SelectItem key={client.id} value={client.id} className="cursor-pointer text-slate-900 dark:text-foreground">
                                                     <div className="flex flex-col">

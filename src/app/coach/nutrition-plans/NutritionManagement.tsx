@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { LayoutGrid, CalendarHeart, ArrowLeft, Users, Apple, Search, Plus } from 'lucide-react'
+import { LayoutGrid, CalendarHeart, ArrowLeft, Users, Apple, Search, Plus, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { NutritionTemplateList } from './NutritionTemplateList'
 import { NutritionPlanBuilder } from './NutritionPlanBuilder'
 import { NutritionActivePlans } from './NutritionActivePlans'
 import { NutritionFoodCatalog } from './NutritionFoodCatalog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
 interface Props {
     coachId: string
@@ -67,7 +68,47 @@ export function NutritionManagement({
         <div className="max-w-[1400px] mx-auto animate-fade-in space-y-8">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="space-y-2">
-                    <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter font-display leading-none">Nutrición</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter font-display leading-none">Nutrición</h1>
+                        <Dialog>
+                            <DialogTrigger>
+                                <button type="button" className="w-8 h-8 rounded-full bg-amber-400 hover:bg-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.5)] flex items-center justify-center text-amber-950 transition-all hover:scale-110 active:scale-95 group relative">
+                                    <HelpCircle className="w-5 h-5 fill-amber-400 stroke-amber-950" />
+                                </button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-2xl bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10">
+                                <DialogHeader>
+                                    <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
+                                        <Apple className="w-6 h-6 text-emerald-500" />
+                                        Logística de Nutrición
+                                    </DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-6 pt-4 max-h-[70vh] overflow-y-auto pr-2">
+                                    <div className="space-y-3">
+                                        <h3 className="text-lg font-black uppercase text-primary">1. Plantillas (Moldes)</h3>
+                                        <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
+                                            Las plantillas son "moldes" globales. No pertenecen a ningún alumno hasta que las <span className="font-bold">asignas</span>. Si editas una plantilla y guardas, <span className="font-bold text-amber-600 dark:text-amber-500">todos los alumnos que usan ese molde se actualizarán automáticamente</span>.
+                                        </p>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <h3 className="text-lg font-black uppercase text-emerald-500">2. Alumnos (Planes Activos)</h3>
+                                        <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
+                                            Cuando le asignas una plantilla a un alumno, este queda "Sincronizado" (<span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 px-1 py-0.5 rounded">SYNC</span>).
+                                        </p>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <h3 className="text-lg font-black uppercase text-rose-500">3. Edición Individual (Custom)</h3>
+                                        <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
+                                            Si vas a la pestaña <span className="font-bold">Alumnos</span> y modificas el plan de Juan específicamente para él, el sistema dirá: "Ok, esto ya no es el molde original". El plan de Juan se volverá <span className="font-bold">Personalizado (Custom)</span>.
+                                        </p>
+                                        <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-xs text-amber-800 dark:text-amber-400 font-medium">
+                                            💡 Si luego editas el molde global, el plan "Custom" de Juan NO se verá afectado, protegiendo así tus ajustes manuales.
+                                        </div>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                     <p className="text-muted-foreground font-bold text-sm uppercase tracking-widest flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
                         Centro de Mando de Protocolos y Alimentos
@@ -122,6 +163,7 @@ export function NutritionManagement({
                             <NutritionTemplateList 
                                 templates={initialTemplates} 
                                 coachId={coachId}
+                                availableClients={availableClients}
                                 onCreateClick={() => setView('create-plan')}
                                 onEditClick={(template) => {
                                     setEditingTemplate(template)
