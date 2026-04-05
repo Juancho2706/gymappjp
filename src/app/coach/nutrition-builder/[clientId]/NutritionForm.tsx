@@ -468,8 +468,8 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                 )}
             </div>
 
-            <div className="fixed bottom-0 md:bottom-8 left-0 md:left-1/2 md:-translate-x-1/2 w-full md:max-w-[1200px] z-50 p-4 md:p-0 bg-background/80 md:bg-transparent backdrop-blur-lg md:backdrop-blur-none border-t md:border-t-0 border-border md:border-none">
-                <Button type="submit" className="w-full h-14 md:h-16 text-xs md:text-sm font-black uppercase tracking-[0.2em] md:tracking-[0.3em] shadow-2xl rounded-xl md:rounded-2xl border-t border-white/10" disabled={isPending}>
+            <div className="flex justify-center pt-10 pb-20">
+                <Button type="submit" className="w-full md:w-auto md:min-w-[400px] h-14 md:h-16 text-xs md:text-sm font-black uppercase tracking-[0.2em] md:tracking-[0.3em] shadow-2xl rounded-xl md:rounded-2xl border-t border-white/10" disabled={isPending}>
                     {isPending 
                         ? (initialData?.id ? 'Guardando Cambios...' : 'Guardando Plan...') 
                         : (initialData?.id ? 'Guardar Cambios en el Plan' : 'Asignar Plan Nutricional al Alumno')}
