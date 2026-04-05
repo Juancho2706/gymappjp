@@ -192,7 +192,7 @@ function ExercisePreviewModal({
 }) {
     if (!exercise) return null
 
-    const displayVideo = exercise.video_url
+    const displayVideo = exercise.video_url || exercise.gif_url
     const isYouTube = displayVideo?.includes('youtube.com') || displayVideo?.includes('youtu.be')
     const hasInstructions = exercise.instructions && exercise.instructions.length > 0
     const hasEquipment = !!exercise.equipment
@@ -204,7 +204,10 @@ function ExercisePreviewModal({
         return match ? match[1] : null
     }
     const ytId = isYouTube ? getYouTubeId(displayVideo!) : null
-    const hasGif = !isYouTube && !!exercise.gif_url
+    
+    // Check if it's a direct GIF or image from our bucket/ExerciseDB
+    const isGif = !!exercise.gif_url || (exercise.video_url && (exercise.video_url.toLowerCase().endsWith('.gif') || exercise.video_url.includes('supabase')))
+    const gifSource = exercise.gif_url || exercise.video_url
 
     // Build YouTube embed URL with trimming parameters
     const getEmbedUrl = () => {
@@ -232,15 +235,7 @@ function ExercisePreviewModal({
             >
                 {/* Media demonstration area */}
                 <div className="sticky top-0 relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-10">
-                    {hasGif ? (
-                        <Image
-                            src={exercise.gif_url!}
-                            alt={`Demostración: ${exercise.name}`}
-                            fill
-                            className="object-contain"
-                            unoptimized
-                        />
-                    ) : isYouTube && ytId ? (
+                    {isYouTube && ytId ? (
                         <iframe
                             className="w-full h-full"
                             src={getEmbedUrl()}
@@ -248,13 +243,14 @@ function ExercisePreviewModal({
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
                         />
-                    ) : exercise.video_url ? (
-                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-60">
-                            <a href={exercise.video_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-2 hover:text-primary transition-colors">
-                                <Play className="w-12 h-12" />
-                                <p className="text-xs font-bold">Ver Video Externo</p>
-                            </a>
-                        </div>
+                    ) : isGif && gifSource ? (
+                        <Image
+                            src={gifSource}
+                            alt={`Demostración: ${exercise.name}`}
+                            fill
+                            className="object-contain"
+                            unoptimized
+                        />
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
                             <Dumbbell className="w-12 h-12" />
@@ -335,10 +331,10 @@ function ExercisePreviewModal({
                                             unoptimized
                                         />
                                     </div>
-                                ) : hasGif ? (
+                                ) : isGif && gifSource ? (
                                     <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
                                         <Image
-                                            src={exercise.gif_url!}
+                                            src={gifSource}
                                             alt={exercise.name}
                                             fill
                                             className="object-cover"
