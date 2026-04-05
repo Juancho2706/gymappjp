@@ -231,6 +231,11 @@ export type Database = {
           id: string
           log_date: string
           plan_id: string
+          plan_name_at_log: string | null
+          target_calories_at_log: number | null
+          target_protein_at_log: number | null
+          target_carbs_at_log: number | null
+          target_fats_at_log: number | null
         }
         Insert: {
           client_id: string
@@ -238,6 +243,11 @@ export type Database = {
           id?: string
           log_date: string
           plan_id: string
+          plan_name_at_log?: string | null
+          target_calories_at_log?: number | null
+          target_protein_at_log?: number | null
+          target_carbs_at_log?: number | null
+          target_fats_at_log?: number | null
         }
         Update: {
           client_id?: string
@@ -245,6 +255,11 @@ export type Database = {
           id?: string
           log_date?: string
           plan_id?: string
+          plan_name_at_log?: string | null
+          target_calories_at_log?: number | null
+          target_protein_at_log?: number | null
+          target_carbs_at_log?: number | null
+          target_fats_at_log?: number | null
         }
         Relationships: [
           {
@@ -487,6 +502,7 @@ export type Database = {
           id: string
           instructions: string | null
           is_active: boolean
+          is_custom: boolean
           name: string
           protein_g: number | null
           template_id: string | null
@@ -502,6 +518,7 @@ export type Database = {
           id?: string
           instructions?: string | null
           is_active?: boolean
+          is_custom?: boolean
           name: string
           protein_g?: number | null
           template_id?: string | null
@@ -517,6 +534,7 @@ export type Database = {
           id?: string
           instructions?: string | null
           is_active?: boolean
+          is_custom?: boolean
           name?: string
           protein_g?: number | null
           template_id?: string | null
@@ -906,6 +924,7 @@ export type Database = {
           rpe: number | null
           set_number: number
           weight_kg: number | null
+          plan_name_at_log: string | null
         }
         Insert: {
           block_id: string
@@ -916,6 +935,7 @@ export type Database = {
           rpe?: number | null
           set_number: number
           weight_kg?: number | null
+          plan_name_at_log?: string | null
         }
         Update: {
           block_id?: string
@@ -926,6 +946,7 @@ export type Database = {
           rpe?: number | null
           set_number?: number
           weight_kg?: number | null
+          plan_name_at_log?: string | null
         }
         Relationships: [
           {
