@@ -59,9 +59,10 @@ const navItems = [
 interface CoachSidebarProps {
     coachName: string
     coachBrand: string
+    primaryColor?: string
 }
 
-export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -72,6 +73,12 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
         }
         return false
     })
+
+    const activeColorStyle = primaryColor ? { color: primaryColor } : undefined
+    const activeBgStyle = primaryColor ? { 
+        backgroundColor: `color-mix(in srgb, ${primaryColor} 10%, transparent)`,
+        borderColor: `color-mix(in srgb, ${primaryColor} 20%, transparent)`
+    } : undefined
 
     const toggleSidebar = () => {
         const newState = !isCollapsed
@@ -162,12 +169,14 @@ export function CoachSidebar({ coachName, coachBrand }: CoachSidebarProps) {
                                         ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(0,122,255,0.4)]'
                                         : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
                                 )}
+                                style={isActive ? activeBgStyle : undefined}
                             >
                                 <Icon
                                     className={cn(
                                         'w-5 h-5 md:w-5 md:h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
                                         isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-sidebar-foreground'
                                     )}
+                                    style={isActive ? activeColorStyle : undefined}
                                 />
                                 <span className={cn("truncate tracking-wide", isCollapsed && "md:hidden")}>
                                     <span className="hidden md:inline uppercase text-[11px]">{item.label}</span>

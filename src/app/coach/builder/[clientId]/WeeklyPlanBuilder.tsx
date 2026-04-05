@@ -62,6 +62,7 @@ interface BuilderBlock {
     exercise_id: string
     exercise_name: string
     muscle_group: string
+    gif_url?: string
     sets: number
     reps: string
     target_weight_kg: string
@@ -281,9 +282,9 @@ function DayColumn({
                 </SortableContext>
                 
                 {blocks.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-20 opacity-10">
-                        <Activity className="w-12 h-12 mb-4" />
-                        <p className="text-[11px] font-bold uppercase tracking-[0.3em]">No Data</p>
+                    <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                        <Activity className="w-12 h-12 mb-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
+                        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-primary" style={{ color: 'var(--theme-primary)' }}>No Data</p>
                     </div>
                 )}
             </div>
@@ -392,16 +393,17 @@ export function WeeklyPlanBuilder({
 
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     )
 
     const addExercise = useCallback((dayId: number, exercise: Exercise) => {
-        const newBlock: BuilderBlock = {
+        const newBlock: BuilderBlock & { gif_url?: string } = {
             uid: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             exercise_id: exercise.id,
             exercise_name: exercise.name,
             muscle_group: exercise.muscle_group,
+            gif_url: (exercise as any).gif_url,
             sets: 3,
             reps: '8-12',
             target_weight_kg: '',
@@ -796,13 +798,14 @@ export function WeeklyPlanBuilder({
                             <div className="flex md:hidden flex-col h-full relative z-10">
                                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
                                     <TabsList className={cn(
-                                        "flex w-full overflow-x-auto justify-start bg-background dark:bg-black/90 backdrop-blur-md border-b border-border dark:border-white/10 rounded-none h-12 px-2 z-10 sticky top-0 shrink-0",
+                                        "flex w-full overflow-x-auto justify-start bg-background dark:bg-black/90 backdrop-blur-md border-b border-border dark:border-white/10 rounded-none h-12 px-2 z-10 sticky top-0 shrink-0 custom-scrollbar",
                                     )}>
                                         {DAYS_OF_WEEK.map(day => (
                                             <TabsTrigger 
                                                 key={day.id} 
                                                 value={day.id.toString()}
                                                 className="px-4 text-[9px] font-bold uppercase tracking-widest text-muted-foreground data-[state=active]:text-primary data-[state=active]:bg-primary/5 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none transition-all flex-shrink-0"
+                                                style={{ '--theme-primary': 'var(--theme-primary)' } as any}
                                             >
                                                 {day.name.substring(0, 3)}
                                             </TabsTrigger>
@@ -910,12 +913,19 @@ export function WeeklyPlanBuilder({
                 <SheetContent side="right" className="w-full sm:max-w-md p-0 gap-0 overflow-y-auto bg-background/95 backdrop-blur-3xl border-l border-border dark:border-white/10">
                     <SheetHeader className="p-8 border-b border-border dark:border-white/10 sticky top-0 bg-background/50 dark:bg-black/50 backdrop-blur-md z-10">
                         <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)] shrink-0">
-                                <Dumbbell className="w-6 h-6 text-primary" />
+                            <div 
+                                className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)] shrink-0 overflow-hidden"
+                                style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
+                            >
+                                {editingBlock?.gif_url ? (
+                                    <img src={editingBlock.gif_url} alt={editingBlock.exercise_name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <Dumbbell className="w-8 h-8 text-primary" style={{ color: 'var(--theme-primary)' }} />
+                                )}
                             </div>
                             <div className="min-w-0">
                                 <SheetTitle className="text-left text-lg font-bold text-foreground leading-tight font-display">{editingBlock?.exercise_name}</SheetTitle>
-                                <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-1">{editingBlock?.muscle_group}</p>
+                                <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-1" style={{ color: 'var(--theme-primary)' }}>{editingBlock?.muscle_group}</p>
                             </div>
                         </div>
                     </SheetHeader>

@@ -193,7 +193,7 @@ export function NutritionManagement({
                                 </div>
                                 <h2 className="text-xl font-black uppercase tracking-tight font-display">Biblioteca Nutricional</h2>
                             </div>
-                            <NutritionFoodCatalog foods={initialFoods} />
+                            <NutritionFoodCatalog foods={initialFoods} coachId={coachId} />
                         </div>
                     </TabsContent>
                 </div>

@@ -12,6 +12,7 @@ const glassButtonVariants = cva(
         outline: "border border-border dark:border-white/10 bg-secondary/50 dark:bg-white/5 hover:bg-secondary hover:border-primary/30 dark:hover:bg-white/10 dark:hover:border-primary/40 backdrop-blur-md text-foreground",
         ghost: "hover:bg-accent/50 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground",
         danger: "bg-destructive text-destructive-foreground hover:opacity-90 glow-destructive hover:-translate-y-0.5",
+        brand: "text-white hover:opacity-90 hover:-translate-y-0.5 shadow-[0_0_20px_-5px_var(--theme-primary,rgba(0,122,255,0.4))]",
       },
       size: {
         default: "h-11 px-6 py-3",
@@ -36,10 +37,12 @@ export interface GlassButtonProps
 const GlassButton = React.forwardRef<HTMLButtonElement, GlassButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    const style = variant === 'brand' ? { backgroundColor: 'var(--theme-primary, #007AFF)' } : undefined
     return (
       <Comp
         className={cn(glassButtonVariants({ variant, size, className }))}
         ref={ref}
+        style={style}
         {...props}
       />
     )

@@ -64,7 +64,8 @@ export default async function CoachDashboardPage() {
                     client_id, 
                     clients:client_id (
                         id,
-                        full_name
+                        full_name,
+                        slug
                     )
                 `)
                 .eq('coach_id', user.id)
@@ -120,6 +121,7 @@ export default async function CoachDashboardPage() {
                 endDate: p.end_date,
                 clientId: p.clients?.id,
                 clientName: p.clients?.full_name,
+                clientSlug: p.clients?.slug,
                 daysLeft: diffDays
             }
         })

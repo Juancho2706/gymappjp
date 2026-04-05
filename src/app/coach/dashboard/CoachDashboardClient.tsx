@@ -139,7 +139,7 @@ export default function CoachDashboardClient({
                 </div>
                 
                 <div className="flex flex-col sm:flex-row items-center gap-4 relative z-10">
-                    <GlassButton asChild className="w-full sm:w-auto">
+                    <GlassButton asChild variant="brand" className="w-full sm:w-auto">
                         <Link href="/coach/clients">
                             <Users className="w-4 h-4 mr-2" />
                             Alumnos
@@ -159,8 +159,14 @@ export default function CoachDashboardClient({
                             
                             <div className="relative z-10 p-4 md:p-6 h-full flex flex-col justify-between">
                                 <div className="flex items-start justify-between mb-4 md:mb-8">
-                                    <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 bg-primary/5 dark:bg-white/5 border border-primary/10 dark:border-white/10 group-hover:border-primary/30 group-hover:bg-primary/5">
-                                        <Icon className="w-4 h-4 md:w-6 md:h-6 text-primary dark:text-zinc-400 group-hover:text-primary transition-colors" />
+                                    <div 
+                                        className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 bg-primary/5 dark:bg-white/5 border border-primary/10 dark:border-white/10 group-hover:border-primary/30 group-hover:bg-primary/5"
+                                        style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}
+                                    >
+                                        <Icon 
+                                            className="w-4 h-4 md:w-6 md:h-6 text-primary dark:text-zinc-400 group-hover:text-primary transition-colors" 
+                                            style={{ color: 'var(--theme-primary)' }}
+                                        />
                                     </div>
                                     <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-primary/5 dark:bg-white/5 flex items-center justify-center text-primary/40 dark:text-zinc-500 group-hover:text-primary group-hover:bg-primary/10 transition-colors">
                                         <ArrowRight className="w-3 h-3 md:w-4 md:h-4 -rotate-45" />
@@ -168,7 +174,10 @@ export default function CoachDashboardClient({
                                 </div>
                                 <div>
                                     <div className="flex items-center justify-between">
-                                        <h3 className="text-xl md:text-4xl font-black text-foreground tracking-tighter font-display mb-0.5 md:mb-1">
+                                        <h3 
+                                            className="text-xl md:text-4xl font-black text-foreground tracking-tighter font-display mb-0.5 md:mb-1"
+                                            style={{ color: 'var(--theme-primary)' }}
+                                        >
                                             {stat.value}
                                         </h3>
                                         {stat.hasInfo && (
@@ -259,16 +268,24 @@ export default function CoachDashboardClient({
                                 <div className="divide-y divide-border/50 dark:divide-white/5 p-4 space-y-1">
                                     {recentActivities.map((activity) => (
                                         <Link key={activity.id} href={activity.href} className="flex items-start gap-4 p-3 hover:bg-primary/5 dark:hover:bg-white/5 transition-colors rounded-lg group">
-                                            <div className="text-emerald-500 mt-0.5 opacity-70 group-hover:opacity-100">
-                                                <ArrowRight className="w-4 h-4" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-primary font-bold">[{activity.type.toUpperCase()}]</span>
-                                                    <span className="text-zinc-700 dark:text-zinc-300 truncate">{activity.title}</span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-emerald-500 mt-0.5 opacity-70 group-hover:opacity-100">
+                                                    <ArrowRight className="w-4 h-4" />
                                                 </div>
+                                                <span className="text-primary font-bold">[{activity.type.toUpperCase()}]</span>
+                                                <span className="text-zinc-700 dark:text-zinc-300 truncate">{activity.title}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-1">
                                                 <div className="text-zinc-500 text-xs">
                                                     {activity.subtitle}
+                                                </div>
+                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div 
+                                                        className="text-[10px] font-bold text-primary uppercase tracking-tight px-2 py-0.5 rounded bg-primary/10 border border-primary/20"
+                                                        style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
+                                                    >
+                                                        Gestionar
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="text-zinc-400 dark:text-zinc-600 text-xs shrink-0 pt-1">
@@ -320,12 +337,23 @@ export default function CoachDashboardClient({
                                                     </p>
                                                 </div>
                                             </div>
-                                            <Link 
-                                                href={`/coach/builder/${program.clientId}`}
-                                                className="mt-4 flex items-center justify-center gap-2 w-full py-2 rounded-lg bg-background border border-border dark:border-white/10 text-xs font-bold hover:bg-muted dark:hover:bg-white/5 transition-colors"
-                                            >
-                                                Actualizar Plan
-                                            </Link>
+                                            <div className="flex gap-2 mt-4">
+                                                <Link 
+                                                    href={`/coach/builder/${program.clientId}`}
+                                                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold hover:opacity-90 transition-all shadow-md"
+                                                    style={{ backgroundColor: 'var(--theme-primary)' }}
+                                                >
+                                                    Actualizar Plan
+                                                </Link>
+                                                <Link
+                                                    href={`/c/${program.clientSlug}/dashboard`}
+                                                    target="_blank"
+                                                    className="flex items-center justify-center w-10 h-9 rounded-lg bg-secondary border border-border text-muted-foreground hover:text-foreground transition-colors"
+                                                    title="Vista Previa de Alumno"
+                                                >
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </Link>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

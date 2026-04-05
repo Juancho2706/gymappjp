@@ -122,3 +122,46 @@ export async function assignTemplateToClients(templateId: string, coachId: strin
         return { error: err.message || 'Error al asignar la plantilla.' }
     }
 }
+
+export async function saveCustomFood(
+    coachId: string,
+    prevState: any,
+    formData: FormData
+) {
+    const supabase = await createClient()
+    
+    try {
+        const name = formData.get('name') as string
+        const calories = parseFloat(formData.get('calories') as string)
+        const protein = parseFloat(formData.get('protein') as string)
+        const carbs = parseFloat(formData.get('carbs') as string)
+        const fats = parseFloat(formData.get('fats') as string)
+        const category = formData.get('category') as string || 'General'
+        const unit = formData.get('unit') as string || 'g'
+
+        if (!name || isNaN(calories)) {
+            return { error: 'Nombre y calorías son obligatorios.' }
+        }
+
+        const { error } = await supabase
+            .from('foods')
+            .insert({
+                name,
+                calories,
+                protein,
+                carbs,
+                fats,
+                category,
+                serving_unit: unit,
+                coach_id: coachId
+            })
+
+        if (error) throw error
+
+        revalidatePath('/coach/nutrition-plans')
+        return { success: true }
+    } catch (err: any) {
+        console.error('[saveCustomFood] Error:', err)
+        return { error: 'Error al guardar el alimento personalizado.' }
+    }
+}

@@ -41,6 +41,15 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [state, formAction] = useActionState(updateBrandSettingsAction, initialState)
     const [selectedColor, setSelectedColor] = useState(coach.primary_color)
 
+    // Live Preview Effect
+    useEffect(() => {
+        const root = document.documentElement;
+        const container = document.querySelector('.coach-layout-container') as HTMLElement;
+        if (container) {
+            container.style.setProperty('--theme-primary', selectedColor);
+        }
+    }, [selectedColor]);
+
     return (
         <form action={formAction} className="space-y-8">
             {/* Identity */}
