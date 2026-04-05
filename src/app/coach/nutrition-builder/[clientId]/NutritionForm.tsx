@@ -29,8 +29,8 @@ function MacroRing({
     const isOver = value > target && target > 0;
     
     // SVG values
-    const size = 120;
-    const strokeWidth = 8;
+    const size = 100;
+    const strokeWidth = 6;
     const radius = (size - strokeWidth) / 2;
     const circumference = radius * 2 * Math.PI;
     const strokeDashoffset = circumference - (percentage / 100) * circumference;
@@ -47,9 +47,10 @@ function MacroRing({
                         cx={size / 2}
                         cy={size / 2}
                         r={radius}
-                        stroke="rgba(255,255,255,0.05)"
+                        stroke="currentColor"
                         strokeWidth={strokeWidth}
                         fill="none"
+                        className="text-slate-100 dark:text-white/5"
                     />
                     {/* Progress Ring */}
                     <circle
@@ -67,20 +68,15 @@ function MacroRing({
                 </svg>
                 {/* Center Content */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">{label}</span>
-                    <span className={cn("text-xl font-bold tracking-tighter", isOver ? "text-red-500" : "text-foreground")}>
-                        {value}
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-muted-foreground mb-0.5">{label}</span>
+                    <span className={cn("text-lg font-black tracking-tighter", isOver ? "text-red-500" : "text-slate-900 dark:text-foreground")}>
+                        {Math.round(value)}
                     </span>
-                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                    <span className="text-[8px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-widest">
                         / {target || 0}{unit}
                     </span>
                 </div>
             </div>
-            {/* Glow effect on hover */}
-            <div 
-                className="absolute inset-0 rounded-full blur-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-500 -z-10"
-                style={{ backgroundColor: isOver ? '#EF4444' : color }}
-            />
         </div>
     )
 }
@@ -268,75 +264,62 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
             {/* Basic Info */}
             <div className="space-y-6">
                 <div className="space-y-3">
-                    <Label htmlFor="name" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Designación del Plan</Label>
+                    <Label htmlFor="name" className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-muted-foreground px-1">Designación del Plan</Label>
                     <Input 
                         id="name" 
                         value={name} 
                         onChange={e => setName(e.target.value)} 
                         required 
                         placeholder="EJ. PROTOCOLO 1"
-                        className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-sm uppercase tracking-widest placeholder:text-muted-foreground"
+                        className="h-12 bg-white dark:bg-black/50 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-sm uppercase tracking-widest placeholder:text-slate-300 dark:placeholder:text-muted-foreground shadow-sm"
                     />
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                    <div className="space-y-3">
-                        <Label htmlFor="calories" className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary px-1">Target Kcal</Label>
-                        <Input id="calories" type="number" value={targetCalories} onChange={e => setTargetCalories(e.target.value)} placeholder="0" className="h-12 bg-primary/5 border-primary/20 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
-                    </div>
-                    <div className="space-y-3">
-                        <Label htmlFor="protein" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Prot (g)</Label>
-                        <Input id="protein" type="number" value={targetProtein} onChange={e => setTargetProtein(e.target.value)} placeholder="0" className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
-                    </div>
-                    <div className="space-y-3">
-                        <Label htmlFor="carbs" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Carbs (g)</Label>
-                        <Input id="carbs" type="number" value={targetCarbs} onChange={e => setTargetCarbs(e.target.value)} placeholder="0" className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
-                    </div>
-                    <div className="space-y-3">
-                        <Label htmlFor="fats" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Grasas (g)</Label>
-                        <Input id="fats" type="number" value={targetFats} onChange={e => setTargetFats(e.target.value)} placeholder="0" className="h-12 bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all" />
-                    </div>
+                    {[
+                        { id: 'calories', label: 'Target Kcal', val: targetCalories, set: setTargetCalories, primary: true },
+                        { id: 'protein', label: 'Prot (g)', val: targetProtein, set: setTargetProtein },
+                        { id: 'carbs', label: 'Carbs (g)', val: targetCarbs, set: setTargetCarbs },
+                        { id: 'fats', label: 'Grasas (g)', val: targetFats, set: setTargetFats },
+                    ].map(item => (
+                        <div key={item.id} className="space-y-3">
+                            <Label htmlFor={item.id} className={cn("text-[10px] font-black uppercase tracking-[0.2em] px-1", item.primary ? "text-primary" : "text-slate-400 dark:text-muted-foreground")}>
+                                {item.label}
+                            </Label>
+                            <Input 
+                                id={item.id} 
+                                type="number" 
+                                value={item.val} 
+                                onChange={e => item.set(e.target.value)} 
+                                placeholder="0" 
+                                className={cn(
+                                    "h-12 font-black text-center text-lg focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all shadow-sm",
+                                    item.primary ? "bg-blue-50/50 dark:bg-primary/5 border-blue-200/50 dark:border-primary/20 text-primary" : "bg-white dark:bg-black/50 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground"
+                                )} 
+                            />
+                        </div>
+                    ))}
                 </div>
 
                 {/* Real-time Daily Totals vs Targets using Ring Charts */}
-                <div className="p-4 md:p-8 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl shadow-sm dark:shadow-2xl grid grid-cols-2 sm:flex sm:flex-wrap justify-items-center sm:justify-around items-center gap-6 md:gap-8 relative overflow-hidden">
+                <div className="p-4 md:p-8 rounded-2xl border border-slate-100 dark:border-white/10 bg-white dark:bg-black/40 backdrop-blur-xl shadow-sm dark:shadow-2xl grid grid-cols-2 sm:flex sm:flex-wrap justify-items-center sm:justify-around items-center gap-6 md:gap-8 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-slate-50/50 dark:hidden pointer-events-none" />
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none" />
                     
-                    <MacroRing 
-                        value={totalMacros.calories} 
-                        target={Number(targetCalories) || 0} 
-                        label="Kcal" 
-                        color="#007AFF" 
-                        unit=""
-                    />
-                    <MacroRing 
-                        value={totalMacros.protein} 
-                        target={Number(targetProtein) || 0} 
-                        label="Prot" 
-                        color="#32ADE6" 
-                    />
-                    <MacroRing 
-                        value={totalMacros.carbs} 
-                        target={Number(targetCarbs) || 0} 
-                        label="Carbs" 
-                        color="#5856D6" 
-                    />
-                    <MacroRing 
-                        value={totalMacros.fats} 
-                        target={Number(targetFats) || 0} 
-                        label="Fats" 
-                        color="#00C7BE" 
-                    />
+                    <MacroRing value={totalMacros.calories} target={Number(targetCalories) || 0} label="Kcal" color="#007AFF" unit="" />
+                    <MacroRing value={totalMacros.protein} target={Number(targetProtein) || 0} label="Prot" color="#32ADE6" />
+                    <MacroRing value={totalMacros.carbs} target={Number(targetCarbs) || 0} label="Carbs" color="#5856D6" />
+                    <MacroRing value={totalMacros.fats} target={Number(targetFats) || 0} label="Fats" color="#00C7BE" />
                 </div>
 
                 <div className="space-y-3">
-                    <Label htmlFor="instructions" className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Notas del Protocolo</Label>
+                    <Label htmlFor="instructions" className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-muted-foreground px-1">Notas del Protocolo</Label>
                     <textarea 
                         id="instructions"
                         rows={3}
                         value={instructions}
                         onChange={e => setInstructions(e.target.value)}
-                        className="w-full p-4 rounded-xl bg-secondary/50 dark:bg-black/50 border border-border dark:border-white/10 text-foreground text-sm font-medium focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all resize-none placeholder:text-muted-foreground"
+                        className="w-full p-4 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground text-sm font-medium focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all shadow-sm resize-none placeholder:text-slate-300 dark:placeholder:text-muted-foreground"
                         placeholder="Instrucciones biométricas o directrices..."
                     />
                 </div>
@@ -344,28 +327,28 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
 
             {/* Meals */}
             <div>
-                <div className="flex items-center justify-between mb-4 pb-2 border-b border-border">
-                    <h3 className="text-base font-bold flex items-center gap-2">
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100 dark:border-border">
+                    <h3 className="text-base font-black uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-foreground">
                         <CalendarHeart className="w-4 h-4 text-emerald-500" />
                         Comidas del Día (Opcional)
                     </h3>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddMeal} className="h-8 gap-1 rounded-lg">
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddMeal} className="h-8 gap-1 rounded-lg border-slate-200 dark:border-border text-slate-600 dark:text-foreground hover:bg-slate-50 dark:hover:bg-secondary">
                         <Plus className="w-3.5 h-3.5" /> Agregar
                     </Button>
                 </div>
 
                 {meals.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No has añadido comidas específicas. Solo macros.</p>
+                    <p className="text-sm text-slate-400 dark:text-muted-foreground">No has añadido comidas específicas. Solo macros.</p>
                 ) : (
                     <div className="space-y-4">
                                 {meals.map((meal, index) => {
                                     const mealMacros = calculateMealMacros(meal);
                                     return (
-                                        <div key={meal.id} className="relative p-3 md:p-4 rounded-xl border border-border bg-muted/30 group">
+                                        <div key={meal.id} className="relative p-3 md:p-4 rounded-xl border border-slate-100 dark:border-border bg-slate-50/50 dark:bg-muted/30 group">
                                             <button 
                                                 type="button" 
                                                 onClick={() => handleRemoveMeal(meal.id)}
-                                                className="absolute -top-3 -right-3 w-7 h-7 bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400 rounded-full flex items-center justify-center md:opacity-0 md:group-hover:opacity-100 transition-opacity border border-red-200 dark:border-red-500/20 z-10"
+                                                className="absolute -top-3 -right-3 w-7 h-7 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-md md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
@@ -373,39 +356,34 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                                             <div className="space-y-4">
                                                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                                     <div className="flex-1 space-y-1.5">
-                                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-tight font-black">Comida {index + 1}</Label>
+                                                        <Label className="text-[10px] text-slate-400 dark:text-muted-foreground uppercase tracking-tight font-black">Comida {index + 1}</Label>
                                                         <Input 
                                                             value={meal.name} 
                                                             onChange={e => handleMealChange(meal.id, 'name', e.target.value)} 
-                                                            className="h-10 bg-background border-border/50 font-bold text-sm" 
+                                                            className="h-10 bg-white dark:bg-background border-slate-200 dark:border-border/50 font-bold text-sm text-slate-900 dark:text-foreground shadow-sm" 
                                                             placeholder="Ej. Desayuno, Pre-entreno..."
                                                             required
                                                         />
                                                     </div>
-                                                    <div className="flex items-center justify-between sm:justify-start gap-2 md:gap-4 bg-background/50 p-2 rounded-lg border border-border/50">
-                                                        <div className="text-center px-1 md:px-2 min-w-[50px]">
-                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">Kcal</div>
-                                                            <div className="text-xs md:text-sm font-black">{mealMacros.calories}</div>
-                                                        </div>
-                                                        <div className="text-center px-1 md:px-2 border-l border-border/30 min-w-[40px]">
-                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">P</div>
-                                                            <div className="text-xs md:text-sm font-black">{mealMacros.protein}g</div>
-                                                        </div>
-                                                        <div className="text-center px-1 md:px-2 border-l border-border/30 min-w-[40px]">
-                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">C</div>
-                                                            <div className="text-xs md:text-sm font-black">{mealMacros.carbs}g</div>
-                                                        </div>
-                                                        <div className="text-center px-1 md:px-2 border-l border-border/30 min-w-[40px]">
-                                                            <div className="text-[9px] text-muted-foreground uppercase font-bold">G</div>
-                                                            <div className="text-xs md:text-sm font-black">{mealMacros.fats}g</div>
-                                                        </div>
+                                                    <div className="flex items-center justify-between sm:justify-start gap-2 md:gap-4 bg-white dark:bg-background/50 p-2 rounded-lg border border-slate-100 dark:border-border/50 shadow-sm">
+                                                        {[
+                                                            { label: 'Kcal', val: mealMacros.calories, unit: '' },
+                                                            { label: 'P', val: mealMacros.protein, unit: 'g' },
+                                                            { label: 'C', val: mealMacros.carbs, unit: 'g' },
+                                                            { label: 'G', val: mealMacros.fats, unit: 'g' },
+                                                        ].map((m, idx) => (
+                                                            <div key={idx} className={cn("text-center px-1 md:px-2 min-w-[40px] md:min-w-[50px]", idx > 0 && "border-l border-slate-50 dark:border-border/30")}>
+                                                                <div className="text-[9px] text-slate-400 dark:text-muted-foreground uppercase font-black">{m.label}</div>
+                                                                <div className="text-xs md:text-sm font-black text-slate-900 dark:text-foreground">{m.val}{m.unit}</div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
 
                                                 <div className="space-y-1.5">
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <Label className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Alimentos e Ingredientes</Label>
-                                                        <Button type="button" variant="ghost" size="sm" onClick={() => handleSaveMeal(meal)} className="h-7 text-[9px] uppercase tracking-wide gap-1 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600">
+                                                        <Label className="text-[10px] text-slate-400 dark:text-muted-foreground font-black uppercase tracking-widest">Alimentos e Ingredientes</Label>
+                                                        <Button type="button" variant="ghost" size="sm" onClick={() => handleSaveMeal(meal)} className="h-7 text-[9px] uppercase tracking-wide gap-1 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600 text-slate-500 dark:text-muted-foreground">
                                                             <Bookmark className="w-3 h-3" />
                                                             <span className="hidden sm:inline">Guardar como Plantilla</span>
                                                             <span className="sm:hidden">Guardar</span>
@@ -415,29 +393,35 @@ export function NutritionForm({ clientId, coachId, initialData }: Props) {
                                                         {meal.food_items.map((foodItem, foodIndex) => {
                                                             const itemMacros = calculateItemMacros(foodItem);
                                                             return (
-                                                                <div key={foodIndex} className="flex flex-col gap-2 p-3 rounded-lg bg-background/40 border border-border/40">
+                                                                <div key={foodIndex} className="flex flex-col gap-2 p-3 rounded-lg bg-white dark:bg-background/40 border border-slate-100 dark:border-border/40 shadow-sm relative group/item">
                                                                     <div className="flex items-center gap-3">
-                                                                        <span className="flex-1 text-xs md:text-sm font-bold line-clamp-1">{foodItem.name}</span>
+                                                                        <span className="flex-1 text-xs md:text-sm font-bold line-clamp-1 text-slate-700 dark:text-foreground uppercase">{foodItem.name}</span>
                                                                         <div className="relative w-20 md:w-24 shrink-0">
                                                                             <Input type="number" step="any" value={foodItem.quantity} onChange={(e) => {
                                                                                 const newFoodItems = [...meal.food_items]
                                                                                 newFoodItems[foodIndex].quantity = Number(e.target.value)
                                                                                 handleMealChange(meal.id, 'food_items', newFoodItems)
-                                                                            }} className="h-8 text-xs shadow-none pr-7 font-bold text-center" title="Cantidad/Porción" />
-                                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground font-bold">{foodItem.unit || 'g/u'}</span>
+                                                                            }} className="h-8 text-xs font-black text-center pr-7 bg-slate-50 dark:bg-background border-slate-100 dark:border-border text-slate-900 dark:text-foreground shadow-none" title="Cantidad/Porción" />
+                                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 dark:text-muted-foreground font-black uppercase">{foodItem.unit}</span>
                                                                         </div>
-                                                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-500 hover:bg-red-500/10 shrink-0" onClick={() => {
+                                                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-rose-400 hover:text-rose-500 hover:bg-rose-500/10 shrink-0 rounded-lg" onClick={() => {
                                                                             const newFoodItems = meal.food_items.filter((_, i) => i !== foodIndex)
                                                                             handleMealChange(meal.id, 'food_items', newFoodItems)
                                                                         }}>
                                                                             <Trash2 className="w-3.5 h-3.5" />
                                                                         </Button>
                                                                     </div>
-                                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1">
-                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.calories}</span> kcal</span>
-                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.protein}g</span> prot</span>
-                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.carbs}g</span> carbs</span>
-                                                                        <span className="text-[10px] text-muted-foreground"><span className="font-bold text-foreground/70">{itemMacros.fats}g</span> grasas</span>
+                                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 border-t border-slate-50 dark:border-border/30 pt-2">
+                                                                        {[
+                                                                            { val: Math.round(itemMacros.calories), label: 'Kcal' },
+                                                                            { val: itemMacros.protein, label: 'P', unit: 'g' },
+                                                                            { val: itemMacros.carbs, label: 'C', unit: 'g' },
+                                                                            { val: itemMacros.fats, label: 'G', unit: 'g' },
+                                                                        ].map((mac, idx) => (
+                                                                            <span key={idx} className="text-[10px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-widest">
+                                                                                {mac.label}: <span className="text-slate-700 dark:text-foreground font-black">{mac.val}{mac.unit}</span>
+                                                                            </span>
+                                                                        ))}
                                                                     </div>
                                                                 </div>
                                                             );
