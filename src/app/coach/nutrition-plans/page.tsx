@@ -9,7 +9,7 @@ export default async function NutritionPlansPage() {
     if (!user) return null
 
     // 2. Get data in parallel
-    const [mealGroupsResponse, templatesResponse, clientsResponse] = await Promise.all([
+    const [mealGroupsResponse, templatesResponse, clientsResponse, foodsResponse] = await Promise.all([
         supabase
             .from('saved_meals')
             .select(`
@@ -66,7 +66,13 @@ export default async function NutritionPlansPage() {
             .eq('coach_id', user.id)
             .eq('is_active', true)
             .eq('active_plans.is_active', true)
-            .order('full_name')
+            .order('full_name'),
+
+        supabase
+            .from('foods')
+            .select('*')
+            .or(`coach_id.eq.${user.id},coach_id.is.null`)
+            .order('name')
     ])
 
     const mealGroups = mealGroupsResponse.data
@@ -81,6 +87,7 @@ export default async function NutritionPlansPage() {
         full_name: c.full_name,
         active_plan: c.active_plans?.[0] || null
     }))
+    const foods = foodsResponse.data || []
 
     return (
         <NutritionManagement 
@@ -88,6 +95,7 @@ export default async function NutritionPlansPage() {
             initialTemplates={templates || []}
             initialGroups={mealGroups || []} 
             availableClients={clients || []}
+            initialFoods={foods}
         />
     )
 }

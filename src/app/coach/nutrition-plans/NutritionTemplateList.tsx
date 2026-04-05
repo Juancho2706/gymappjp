@@ -91,9 +91,9 @@ export function NutritionTemplateList({ templates, coachId, onCreateClick, onEdi
                     <p className="text-muted-foreground max-w-xs mx-auto mt-1">Crea plantillas de nutrición para asignarlas rápidamente a tus alumnos.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredTemplates.map((template) => (
-                        <Card key={template.id} className="overflow-hidden border-blue-100/50 dark:border-blue-900/30 bg-blue-50/30 dark:bg-blue-950/20 hover:border-primary/40 dark:hover:border-blue-500/30 hover:shadow-md transition-all duration-300 group">
+                        <Card key={template.id} className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/40 hover:shadow-xl transition-all duration-500 group rounded-2xl">
                             <CardContent className="p-5">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="min-w-0">
