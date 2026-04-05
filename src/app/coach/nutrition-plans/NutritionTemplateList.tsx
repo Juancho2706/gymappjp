@@ -1,14 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, CalendarHeart, Search, Users, Utensils, Info, Pencil, Check } from 'lucide-react'
+import { Plus, Trash2, CalendarHeart, Search, Users, Utensils, Info, Pencil, Check, Copy, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { deleteNutritionTemplate, assignTemplateToClients } from './actions'
+import { deleteNutritionTemplate, assignTemplateToClients, duplicateNutritionTemplate } from './actions'
 import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+import { Label } from '@/components/ui/label'
 
 interface Template {
     id: string
@@ -39,11 +42,11 @@ interface Props {
 export function NutritionTemplateList({ templates, coachId, availableClients = [], onCreateClick, onEditClick }: Props) {
     const [searchTerm, setSearchTerm] = useState('')
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
+    const [isDuplicating, setIsDuplicating] = useState<string | null>(null)
     
     // Asignación Modal State
     const [assigningTemplate, setAssigningTemplate] = useState<Template | null>(null)
-    const [selectedClients, setSelectedClients] = useState<string[]>([])
-    const [clientSearch, setClientSearch] = useState('')
+    const [selectedClient, setSelectedClient] = useState<string>('')
     const [isAssigning, setIsAssigning] = useState(false)
 
     const filteredTemplates = templates.filter(t => 
@@ -67,21 +70,34 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
         }
     }
 
-    const openAssignModal = (template: Template) => {
-        setAssigningTemplate(template)
-        setSelectedClients(template.assigned_clients?.map(c => c.id) || [])
-        setClientSearch('')
-    }
-
-    const handleAssignTemplate = async () => {
-        if (!assigningTemplate) return
-        setIsAssigning(true)
+    const handleDuplicate = async (id: string) => {
+        setIsDuplicating(id)
         try {
-            const result = await assignTemplateToClients(assigningTemplate.id, coachId, selectedClients)
+            const result = await duplicateNutritionTemplate(id, coachId)
             if (result.error) {
                 toast.error(result.error)
             } else {
-                toast.success(`Plantilla asignada a ${selectedClients.length} alumnos`)
+                toast.success('Plan global duplicado correctamente')
+            }
+        } finally {
+            setIsDuplicating(null)
+        }
+    }
+
+    const openAssignModal = (template: Template) => {
+        setAssigningTemplate(template)
+        setSelectedClient('')
+    }
+
+    const handleAssignTemplate = async () => {
+        if (!assigningTemplate || !selectedClient) return
+        setIsAssigning(true)
+        try {
+            const result = await assignTemplateToClients(assigningTemplate.id, coachId, [selectedClient])
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success(`Plantilla asignada correctamente`)
                 setAssigningTemplate(null)
             }
         } finally {
@@ -98,7 +114,7 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                         placeholder="Buscar planes..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 h-11 rounded-xl bg-card border-border/60"
+                        className="pl-9 h-11 rounded-xl bg-white dark:bg-card border-slate-200 dark:border-border/60 text-slate-900 dark:text-foreground"
                     />
                 </div>
             </div>
@@ -133,6 +149,16 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                             onClick={() => onEditClick(template)}
                                         >
                                             <Pencil className="w-4 h-4" />
+                                        </Button>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary"
+                                            onClick={() => handleDuplicate(template.id)}
+                                            disabled={isDuplicating === template.id}
+                                            title="Duplicar Plantilla"
+                                        >
+                                            <Copy className="w-4 h-4" />
                                         </Button>
                                         <Button 
                                             variant="ghost" 
@@ -214,56 +240,45 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                             <p className="text-base font-black">{assigningTemplate?.name}</p>
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Buscar alumno..."
-                                    value={clientSearch}
-                                    onChange={(e) => setClientSearch(e.target.value)}
-                                    className="pl-9 h-10 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground"
-                                />
-                            </div>
-
-                            <div className="max-h-[300px] overflow-y-auto space-y-1 p-1">
-                                {availableClients
-                                    .filter(c => c.full_name.toLowerCase().includes(clientSearch.toLowerCase()))
-                                    .map(client => {
-                                        const isSelected = selectedClients.includes(client.id)
-                                        return (
-                                            <div 
-                                                key={client.id}
-                                                onClick={() => {
-                                                    setSelectedClients(prev => 
-                                                        isSelected ? prev.filter(id => id !== client.id) : [...prev, client.id]
-                                                    )
-                                                }}
-                                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-slate-200 dark:hover:border-white/10"
-                                            >
-                                                <div className={cn(
-                                                    "w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors",
-                                                    isSelected ? "bg-primary border-primary text-white" : "border-slate-300 dark:border-white/20"
-                                                )}>
-                                                    {isSelected && <Check className="w-3.5 h-3.5" />}
-                                                </div>
-                                                <span className="text-sm font-bold text-slate-700 dark:text-foreground">{client.full_name}</span>
-                                            </div>
-                                        )
-                                })}
-                                {availableClients.length === 0 && (
-                                    <div className="text-center py-8 text-sm text-muted-foreground font-bold">
-                                        No hay alumnos disponibles para asignar.
-                                    </div>
-                                )}
-                            </div>
+                        <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seleccionar Alumno Activo</Label>
+                            <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val || '')}>
+                                <SelectTrigger className="w-full h-12 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground">
+                                    <SelectValue placeholder="Elegir alumno..." />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[300px] z-[100]">
+                                    {availableClients.length === 0 ? (
+                                        <div className="p-4 text-center text-sm text-muted-foreground">No hay alumnos activos</div>
+                                    ) : (
+                                        availableClients.map(client => {
+                                            return (
+                                                <SelectItem key={client.id} value={client.id} className="cursor-pointer text-slate-900 dark:text-foreground">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold">{client.full_name}</span>
+                                                    </div>
+                                                </SelectItem>
+                                            )
+                                        })
+                                    )}
+                                </SelectContent>
+                            </Select>
+                            
+                            {selectedClient && (
+                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex gap-3 text-amber-700 dark:text-amber-500 animate-in fade-in">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <p className="text-xs font-medium">
+                                        Si el alumno ya tiene un plan activo, este será <span className="font-bold">desactivado y reemplazado</span> por esta plantilla.
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         <Button 
                             className="w-full h-12 font-black uppercase tracking-widest gap-2"
-                            disabled={isAssigning || selectedClients.length === 0}
+                            disabled={isAssigning || !selectedClient}
                             onClick={handleAssignTemplate}
                         >
-                            {isAssigning ? 'Procesando...' : `Confirmar Asignación (${selectedClients.length})`}
+                            {isAssigning ? 'Procesando...' : `Confirmar Asignación`}
                         </Button>
                     </div>
                 </DialogContent>

@@ -234,6 +234,106 @@ export async function deleteNutritionTemplate(templateId: string, coachId: strin
     return { success: true }
 }
 
+export async function duplicateNutritionTemplate(templateId: string, coachId: string) {
+    const supabase = await createClient()
+
+    try {
+        const { data: template, error: fetchError } = await supabase
+            .from('nutrition_plan_templates')
+            .select(`
+                *,
+                template_meals (
+                    *,
+                    template_meal_groups (
+                        saved_meals (
+                            *,
+                            saved_meal_items (*)
+                        )
+                    )
+                )
+            `)
+            .eq('id', templateId)
+            .eq('coach_id', coachId)
+            .single()
+
+        if (fetchError || !template) throw new Error('Plantilla no encontrada')
+
+        const { data: newTemplate, error: insertError } = await supabase
+            .from('nutrition_plan_templates')
+            .insert({
+                name: `${template.name} (Copia)`,
+                daily_calories: template.daily_calories,
+                protein_g: template.protein_g,
+                carbs_g: template.carbs_g,
+                fats_g: template.fats_g,
+                instructions: template.instructions,
+                coach_id: coachId
+            })
+            .select('id')
+            .single()
+
+        if (insertError) throw insertError
+
+        for (const tMeal of template.template_meals) {
+            const { data: newMeal } = await supabase.from('template_meals').insert({
+                template_id: newTemplate.id,
+                name: tMeal.name,
+                order_index: tMeal.order_index
+            }).select('id').single()
+
+            const items = tMeal.template_meal_groups?.[0]?.saved_meals?.saved_meal_items || []
+            if (items.length > 0) {
+                const { data: savedMeal } = await supabase.from('saved_meals').insert({
+                    coach_id: coachId,
+                    name: `Internal_${tMeal.name}_${Date.now()}`
+                }).select('id').single()
+
+                await supabase.from('saved_meal_items').insert(
+                    items.map((it: any) => ({
+                        saved_meal_id: savedMeal.id,
+                        food_id: it.food_id,
+                        quantity: it.quantity,
+                        unit: it.unit
+                    }))
+                )
+
+                await supabase.from('template_meal_groups').insert({
+                    template_meal_id: newMeal.id,
+                    saved_meal_id: savedMeal.id,
+                    order_index: 0
+                })
+            }
+        }
+
+        revalidatePath('/coach/nutrition-plans')
+        return { success: true }
+    } catch (err: any) {
+        console.error('[duplicateNutritionTemplate] Error:', err)
+        return { error: err.message || 'Error al duplicar la plantilla.' }
+    }
+}
+
+export async function unassignNutritionPlan(clientId: string, planId: string) {
+    const supabase = await createClient()
+
+    try {
+        const { error } = await supabase
+            .from('nutrition_plans')
+            .update({ is_active: false })
+            .eq('id', planId)
+            .eq('client_id', clientId)
+
+        if (error) throw error
+
+        revalidatePath('/coach/nutrition-plans')
+        revalidatePath(`/coach/clients/${clientId}`)
+        return { success: true }
+    } catch (err: any) {
+        console.error('[unassignNutritionPlan] Error:', err)
+        return { error: 'Error al desasignar el plan.' }
+    }
+}
+
 export async function assignTemplateToClients(templateId: string, coachId: string, clientIds: string[]) {
     const supabase = await createClient()
 

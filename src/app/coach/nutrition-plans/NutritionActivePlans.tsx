@@ -1,16 +1,37 @@
 'use client'
 
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Users, ChevronRight, Calculator } from 'lucide-react'
+import { Users, ChevronRight, Calculator, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import { unassignNutritionPlan } from './actions'
+import { toast } from 'sonner'
 
 interface Props {
     clients: any[]
 }
 
 export function NutritionActivePlans({ clients }: Props) {
+    const [isProcessing, setIsProcessing] = useState<string | null>(null)
+
+    const handleUnassign = async (clientId: string, planId: string) => {
+        if (!confirm('¿Estás seguro de que quieres eliminar el plan activo de este alumno?')) return
+        
+        setIsProcessing(clientId)
+        try {
+            const result = await unassignNutritionPlan(clientId, planId)
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success('Plan desasignado correctamente')
+            }
+        } finally {
+            setIsProcessing(null)
+        }
+    }
+
     if (!clients || clients.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-20 bg-muted/30 rounded-3xl border-2 border-dashed border-border/50">
@@ -46,12 +67,22 @@ export function NutritionActivePlans({ clients }: Props) {
                                     <p className="font-bold text-sm truncate">{client.active_plan.name}</p>
                                 </div>
                                 
-                                <Link href={`/coach/nutrition-builder/${client.id}?planId=${client.active_plan.id}`}>
-                                    <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                                <Link href={`/coach/nutrition-builder/${client.id}?planId=${client.active_plan.id}`} className="flex-1">
+                                    <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-primary-foreground transition-colors h-10">
                                         Gestionar Plan
                                         <ChevronRight className="w-4 h-4" />
                                     </Button>
                                 </Link>
+                                <Button 
+                                    variant="destructive" 
+                                    size="icon" 
+                                    className="h-10 w-10 shrink-0"
+                                    onClick={() => handleUnassign(client.id, client.active_plan.id)}
+                                    disabled={isProcessing === client.id}
+                                    title="Eliminar Plan"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
                             </div>
                         ) : (
                             <div className="space-y-4">
