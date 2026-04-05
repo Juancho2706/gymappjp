@@ -82,76 +82,79 @@ export function NutritionManagement({
                 </Button>
             </div>
 
-            <Tabs defaultValue="templates" className="space-y-8">
-                <div className="relative overflow-x-auto pb-2 scrollbar-hide">
-                    <TabsList className="bg-transparent h-auto p-0 flex gap-2 w-full justify-start md:justify-start">
+            <Tabs defaultValue="templates" className="flex flex-col gap-8">
+                <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0">
+                    <TabsList className="bg-muted/50 p-1.5 h-auto flex gap-1 w-full max-w-2xl rounded-2xl border border-border/50">
                         <TabsTrigger 
                             value="templates" 
-                            className="flex-1 md:flex-none h-14 px-8 rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border-2 border-border/50 data-[state=active]:border-primary transition-all duration-300 font-bold uppercase tracking-widest text-[10px]"
+                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
                         >
-                            <LayoutGrid className="w-4 h-4 mr-2" />
-                            Plantillas
+                            <LayoutGrid className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Plantillas</span>
+                            <span className="sm:hidden text-[8px]">Planes</span>
                         </TabsTrigger>
                         <TabsTrigger 
                             value="active" 
-                            className="flex-1 md:flex-none h-14 px-8 rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border-2 border-border/50 data-[state=active]:border-primary transition-all duration-300 font-bold uppercase tracking-widest text-[10px]"
+                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
                         >
-                            <Users className="w-4 h-4 mr-2" />
+                            <Users className="w-3.5 h-3.5" />
                             Alumnos
                         </TabsTrigger>
                         <TabsTrigger 
                             value="catalog" 
-                            className="flex-1 md:flex-none h-14 px-8 rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border-2 border-border/50 data-[state=active]:border-primary transition-all duration-300 font-bold uppercase tracking-widest text-[10px]"
+                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
                         >
-                            <Apple className="w-4 h-4 mr-2" />
+                            <Apple className="w-3.5 h-3.5" />
                             Alimentos
                         </TabsTrigger>
                     </TabsList>
                 </div>
 
-                <TabsContent value="templates" className="animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
-                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                <CalendarHeart className="w-5 h-5 text-primary" />
+                <div className="w-full">
+                    <TabsContent value="templates" className="mt-0 animate-in fade-in-50 slide-in-from-bottom-4 duration-500 focus-visible:outline-none">
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <CalendarHeart className="w-5 h-5 text-primary" />
+                                </div>
+                                <h2 className="text-xl font-black uppercase tracking-tight font-display">Protocolos Maestros</h2>
                             </div>
-                            <h2 className="text-xl font-black uppercase tracking-tight font-display">Protocolos Maestros</h2>
+                            <NutritionTemplateList 
+                                templates={initialTemplates} 
+                                coachId={coachId}
+                                onCreateClick={() => setView('create-plan')}
+                                onEditClick={(template) => {
+                                    setEditingTemplate(template)
+                                    setView('edit-plan')
+                                }}
+                            />
                         </div>
-                        <NutritionTemplateList 
-                            templates={initialTemplates} 
-                            coachId={coachId}
-                            onCreateClick={() => setView('create-plan')}
-                            onEditClick={(template) => {
-                                setEditingTemplate(template)
-                                setView('edit-plan')
-                            }}
-                        />
-                    </div>
-                </TabsContent>
+                    </TabsContent>
 
-                <TabsContent value="active" className="animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
-                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                <Users className="w-5 h-5 text-primary" />
+                    <TabsContent value="active" className="mt-0 animate-in fade-in-50 slide-in-from-bottom-4 duration-500 focus-visible:outline-none">
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <Users className="w-5 h-5 text-primary" />
+                                </div>
+                                <h2 className="text-xl font-black uppercase tracking-tight font-display">Seguimiento de Alumnos</h2>
                             </div>
-                            <h2 className="text-xl font-black uppercase tracking-tight font-display">Seguimiento de Alumnos</h2>
+                            <NutritionActivePlans clients={availableClients} />
                         </div>
-                        <NutritionActivePlans clients={availableClients} />
-                    </div>
-                </TabsContent>
+                    </TabsContent>
 
-                <TabsContent value="catalog" className="animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
-                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                <Apple className="w-5 h-5 text-primary" />
+                    <TabsContent value="catalog" className="mt-0 animate-in fade-in-50 slide-in-from-bottom-4 duration-500 focus-visible:outline-none">
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <Apple className="w-5 h-5 text-primary" />
+                                </div>
+                                <h2 className="text-xl font-black uppercase tracking-tight font-display">Biblioteca Nutricional</h2>
                             </div>
-                            <h2 className="text-xl font-black uppercase tracking-tight font-display">Biblioteca Nutricional</h2>
+                            <NutritionFoodCatalog foods={initialFoods} />
                         </div>
-                        <NutritionFoodCatalog foods={initialFoods} />
-                    </div>
-                </TabsContent>
+                    </TabsContent>
+                </div>
             </Tabs>
         </div>
     )
