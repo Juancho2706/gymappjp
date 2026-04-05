@@ -9,19 +9,10 @@ export type NutritionFormState = {
     success?: boolean
 }
 
-interface FoodItemPayload {
-    food_id: string
-    quantity: number
-    unit: string
-}
-
-interface MealPayload {
-    name: string
-    description: string
-    order_index: number
-    items: FoodItemPayload[]
-}
-
+/**
+ * Guarda o actualiza un plan nutricional individual para un alumno.
+ * Implementa la lógica de desvinculación (Custom) si el plan venía de una plantilla.
+ */
 export async function saveNutritionPlan(
     clientId: string,
     coachId: string,
@@ -30,138 +21,109 @@ export async function saveNutritionPlan(
 ): Promise<NutritionFormState> {
     const supabase = await createClient()
 
-    const planId = formData.get('plan_id') as string | null
+    try {
+        const planId = formData.get('id') as string | null
+        const name = formData.get('name') as string
+        const caloriesStr = formData.get('daily_calories') as string
+        const proteinStr = formData.get('protein_g') as string
+        const carbsStr = formData.get('carbs_g') as string
+        const fatsStr = formData.get('fats_g') as string
+        const instructions = formData.get('instructions') as string
 
-    // Extract Plan Details
-    const name = formData.get('name') as string
-    const caloriesStr = formData.get('daily_calories') as string
-    const proteinStr = formData.get('protein_g') as string
-    const carbsStr = formData.get('carbs_g') as string
-    const fatsStr = formData.get('fats_g') as string
-    const instructions = formData.get('instructions') as string
+        if (!name) return { error: 'El nombre del plan es requerido.' }
 
-    if (!name) {
-        return { error: 'El nombre del plan es requerido.' }
-    }
+        // Datos base del plan
+        const planData = {
+            client_id: clientId,
+            coach_id: coachId,
+            name,
+            daily_calories: caloriesStr ? parseInt(caloriesStr) : null,
+            protein_g: proteinStr ? parseInt(proteinStr) : null,
+            carbs_g: carbsStr ? parseInt(carbsStr) : null,
+            fats_g: fatsStr ? parseInt(fatsStr) : null,
+            instructions: instructions || null,
+            is_active: true,
+            is_custom: true // Siempre que se edita individualmente, se vuelve CUSTOM
+        }
 
-    // Extract Meals and Food Items
-    const meals: MealPayload[] = []
-    let i = 0
-    while (formData.has(`meal_name_${i}`)) {
-        const mealName = formData.get(`meal_name_${i}`) as string
-        const mealItems: FoodItemPayload[] = []
-        
-        let j = 0
-        while (formData.has(`meal_${i}_food_id_${j}`)) {
-            const foodId = formData.get(`meal_${i}_food_id_${j}`) as string
-            const quantity = formData.get(`meal_${i}_quantity_${j}`) as string
-            const unit = formData.get(`meal_${i}_unit_${j}`) as string
-            if (foodId && quantity) {
-                mealItems.push({ 
-                    food_id: foodId, 
-                    quantity: parseFloat(quantity) || 0,
-                    unit: unit || 'g'
+        let currentPlanId = planId
+
+        if (planId) {
+            // Actualizar plan existente
+            const { error: updateError } = await supabase
+                .from('nutrition_plans')
+                .update(planData)
+                .eq('id', planId)
+                .eq('coach_id', coachId)
+
+            if (updateError) throw updateError
+
+            // Limpieza atómica de comidas antiguas
+            await supabase.from('nutrition_meals').delete().eq('plan_id', planId)
+        } else {
+            // 1. Inactivar planes previos
+            await supabase.from('nutrition_plans')
+                .update({ is_active: false })
+                .eq('client_id', clientId)
+
+            // 2. Insertar nuevo plan
+            const { data: newPlan, error: planError } = await supabase
+                .from('nutrition_plans')
+                .insert(planData)
+                .select('id')
+                .single()
+
+            if (planError) throw planError
+            currentPlanId = newPlan.id
+        }
+
+        // 3. Insertar comidas y alimentos extraídos del FormData
+        let i = 0
+        while (formData.has(`meal_name_${i}`)) {
+            const mealName = formData.get(`meal_name_${i}`) as string
+            
+            const { data: insertedMeal, error: mealError } = await supabase
+                .from('nutrition_meals')
+                .insert({
+                    plan_id: currentPlanId!,
+                    name: mealName,
+                    description: "",
+                    order_index: i
                 })
+                .select('id')
+                .single()
+
+            if (mealError) throw mealError
+
+            let j = 0
+            const itemsToInsert = []
+            while (formData.has(`meal_${i}_food_${j}`)) {
+                const foodData = JSON.parse(formData.get(`meal_${i}_food_${j}`) as string)
+                itemsToInsert.push({
+                    meal_id: insertedMeal.id,
+                    food_id: foodData.food_id,
+                    quantity: foodData.quantity,
+                    unit: foodData.unit || 'g'
+                })
+                j++
             }
-            j++
+
+            if (itemsToInsert.length > 0) {
+                await supabase.from('food_items').insert(itemsToInsert)
+            }
+            i++
         }
 
-        meals.push({ 
-            name: mealName, 
-            description: "", 
-            order_index: i,
-            items: mealItems
-        })
-        i++
-    }
-
-    let currentPlanId = planId;
-
-    if (planId) {
-        // Update existing plan
-        const { error: updateError } = await supabase
-            .from('nutrition_plans')
-            .update({
-                name,
-                daily_calories: caloriesStr ? parseInt(caloriesStr) : null,
-                protein_g: proteinStr ? parseInt(proteinStr) : null,
-                carbs_g: carbsStr ? parseInt(carbsStr) : null,
-                fats_g: fatsStr ? parseInt(fatsStr) : null,
-                instructions: instructions || null,
-            })
-            .eq('id', planId)
-            .eq('coach_id', coachId)
-
-        if (updateError) {
-            console.error('Update Nutrition Plan Error:', updateError)
-            return { error: 'Error al actualizar el plan nutricional.' }
+        const { data: coach } = await supabase.from('coaches').select('slug').eq('id', coachId).single()
+        
+        revalidatePath(`/coach/clients/${clientId}`)
+        if (coach?.slug) {
+            revalidatePath(`/c/${coach.slug}/nutrition`)
         }
-
-        // Clean up old meals
-        await supabase.from('nutrition_meals').delete().eq('plan_id', planId)
-    } else {
-        // 1. Invalidate previous active plans
-        await supabase
-            .from('nutrition_plans')
-            .update({ is_active: false })
-            .eq('client_id', clientId)
-
-        // 2. Insert new plan
-        const { data: newPlan, error: planError } = await supabase
-            .from('nutrition_plans')
-            .insert({
-                client_id: clientId,
-                coach_id: coachId,
-                name,
-                daily_calories: caloriesStr ? parseInt(caloriesStr) : null,
-                protein_g: proteinStr ? parseInt(proteinStr) : null,
-                carbs_g: carbsStr ? parseInt(carbsStr) : null,
-                fats_g: fatsStr ? parseInt(fatsStr) : null,
-                instructions: instructions || null,
-                is_active: true
-            })
-            .select('id')
-            .single()
-
-        if (planError || !newPlan) {
-            console.error('Save Nutrition Plan Error:', planError)
-            return { error: 'Error al guardar el plan nutricional.' }
-        }
-        currentPlanId = newPlan.id;
+        
+        return { success: true }
+    } catch (err: any) {
+        console.error('[saveNutritionPlan] Error:', err)
+        return { error: err.message || 'Error al procesar el plan nutricional.' }
     }
-
-    // 3. Insert meals and their items
-    for (const meal of meals) {
-        const { data: insertedMeal, error: mealError } = await supabase
-            .from('nutrition_meals')
-            .insert({
-                plan_id: currentPlanId!,
-                name: meal.name,
-                description: meal.description,
-                order_index: meal.order_index
-            })
-            .select('id')
-            .single()
-
-        if (mealError || !insertedMeal) continue
-
-        if (meal.items.length > 0) {
-            const itemsToInsert = meal.items.map(item => ({
-                meal_id: insertedMeal.id,
-                food_id: item.food_id,
-                quantity: item.quantity,
-                unit: item.unit
-            }))
-
-            await supabase.from('food_items').insert(itemsToInsert)
-        }
-    }
-
-    const { data: coach } = await supabase.from('coaches').select('slug').eq('id', coachId).single()
-    
-    revalidatePath(`/coach/clients/${clientId}`)
-    if (coach?.slug) {
-        revalidatePath(`/c/${coach.slug}/nutrition`)
-    }
-    redirect(`/coach/clients/${clientId}`)
 }

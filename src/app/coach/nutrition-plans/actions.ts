@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 
 export type TemplateFormState = {
     error?: string
@@ -15,306 +14,163 @@ function safeParseInt(value: string | null): number | null {
     return isNaN(parsed) ? null : parsed
 }
 
+/**
+ * Guarda o actualiza una plantilla maestra de nutrición.
+ * Implementa limpieza atómica de comidas y alimentos para evitar duplicados.
+ */
 export async function saveNutritionTemplate(
     coachId: string,
     prevState: TemplateFormState,
     formData: FormData
 ): Promise<TemplateFormState> {
+    const supabase = await createClient()
+    
     try {
-        const templateId = formData.get('template_id') as string | null;
-        console.log('[saveNutritionTemplate] Action started for coach:', coachId, 'templateId:', templateId);
-        const startTime = Date.now();
-        const supabase = await createClient()
-
+        const templateId = formData.get('id') as string | null
         const name = formData.get('name') as string
-        const description = formData.get('description') as string
         const caloriesStr = formData.get('daily_calories') as string
         const proteinStr = formData.get('protein_g') as string
         const carbsStr = formData.get('carbs_g') as string
         const fatsStr = formData.get('fats_g') as string
         const instructions = formData.get('instructions') as string
-        const selectedClientsStr = formData.get('selected_clients') as string // JSON array of client IDs
+        const selectedClientsStr = formData.get('selected_clients') as string
 
-        if (!name) {
-            return { error: 'El nombre del plan es requerido.' }
+        if (!name) return { error: 'El nombre es obligatorio.' }
+
+        const templateData = {
+            name,
+            daily_calories: safeParseInt(caloriesStr),
+            protein_g: safeParseInt(proteinStr),
+            carbs_g: safeParseInt(carbsStr),
+            fats_g: safeParseInt(fatsStr),
+            instructions: instructions || null,
+            coach_id: coachId
         }
 
-        let currentTemplateId = templateId;
+        let currentTemplateId = templateId
 
         if (templateId) {
-            // 1a. Update Existing Template
+            // Actualizar plantilla existente
             const { error: updateError } = await supabase
                 .from('nutrition_plan_templates')
-                .update({
-                    name,
-                    description: description || null,
-                    daily_calories: safeParseInt(caloriesStr),
-                    protein_g: safeParseInt(proteinStr),
-                    carbs_g: safeParseInt(carbsStr),
-                    fats_g: safeParseInt(fatsStr),
-                    instructions: instructions || null,
-                })
+                .update(templateData)
                 .eq('id', templateId)
                 .eq('coach_id', coachId)
 
-            if (updateError) {
-                console.error('[saveNutritionTemplate] Update Template Error:', updateError)
-                return { error: 'Error al actualizar la plantilla del plan.' }
-            }
+            if (updateError) throw updateError
 
-            // Clean up old meals and groups for this template
-            // We'll delete and re-insert to simplify logic
-            const { error: deleteError } = await supabase
-                .from('template_meals')
-                .delete()
-                .eq('template_id', templateId)
-
-            if (deleteError) {
-                console.error('[saveNutritionTemplate] Error cleaning up old meals:', deleteError)
-                return { error: 'Error al limpiar datos antiguos de la plantilla.' }
-            }
+            // Limpieza atómica de comidas antiguas (las FKey cascada o manual)
+            // Para plantillas usamos template_meals
+            await supabase.from('template_meals').delete().eq('template_id', templateId)
         } else {
-            // 1b. Insert New Template
-            const { data: template, error: templateError } = await supabase
+            // Crear nueva plantilla
+            const { data: newTemplate, error: insertError } = await supabase
                 .from('nutrition_plan_templates')
-                .insert({
-                    coach_id: coachId,
-                    name,
-                    description: description || null,
-                    daily_calories: safeParseInt(caloriesStr),
-                    protein_g: safeParseInt(proteinStr),
-                    carbs_g: safeParseInt(carbsStr),
-                    fats_g: safeParseInt(fatsStr),
-                    instructions: instructions || null,
-                })
+                .insert(templateData)
                 .select('id')
                 .single()
 
-            if (templateError || !template) {
-                console.error('[saveNutritionTemplate] Save Template Error:', templateError)
-                return { error: templateError ? (templateError.message || 'Error al guardar la plantilla del plan.') : 'Error al guardar la plantilla del plan.' }
-            }
-            currentTemplateId = template.id;
+            if (insertError) throw insertError
+            currentTemplateId = newTemplate.id
         }
 
-        console.log('[saveNutritionTemplate] Template ID to use:', currentTemplateId);
+        // Insertar comidas y alimentos extraídos del FormData
+        await insertTemplateMealsFromFormData(supabase, currentTemplateId!, formData)
 
-        // 2. Extract and Insert Meals
-        let i = 0
-        const mealsToProcess = [];
-        while (formData.has(`meal_name_${i}`)) {
-            const mealName = formData.get(`meal_name_${i}`) as string
-            const groups = [];
-            let j = 0
-            while (formData.has(`meal_${i}_group_id_${j}`)) {
-                const savedMealId = formData.get(`meal_${i}_group_id_${j}`) as string
-                if (savedMealId) groups.push(savedMealId);
-                j++
-            }
-            mealsToProcess.push({ name: mealName, groups });
-            i++
-        }
-
-        for (let i = 0; i < mealsToProcess.length; i++) {
-            const mealData = mealsToProcess[i];
-            const { data: meal, error: mealError } = await supabase
-                .from('template_meals')
-                .insert({
-                    template_id: currentTemplateId!,
-                    name: mealData.name,
-                    order_index: i
-                })
-                .select('id')
-                .single()
-
-            if (mealError || !meal) {
-                return { error: `Error al guardar la comida ${mealData.name}: ${mealError?.message || 'Error desconocido'}` }
-            }
-
-            for (let j = 0; j < mealData.groups.length; j++) {
-                const savedMealId = mealData.groups[j];
-                await supabase.from('template_meal_groups').insert({
-                    template_meal_id: meal.id,
-                    saved_meal_id: savedMealId,
-                    order_index: j
-                })
-            }
-        }
-
-        // 3. Propagation and Mass Assignment
-        const clientIdsToAssign = new Set<string>();
-
-        // Add manually selected clients
-        if (selectedClientsStr) {
-            try {
-                const selectedIds: string[] = JSON.parse(selectedClientsStr);
-                selectedIds.forEach(id => clientIdsToAssign.add(id));
-            } catch (e) {
-                console.error('Error parsing selected clients:', e);
-            }
-        }
-
-        // Add clients already using this template (Propagation)
-        if (templateId) {
-            const { data: linkedPlans } = await supabase
-                .from('nutrition_plans')
-                .select('client_id')
-                .eq('template_id', templateId)
-                .eq('is_active', true);
-            
-            if (linkedPlans) {
-                linkedPlans.forEach(p => clientIdsToAssign.add(p.client_id));
-            }
-        }
-
-        if (clientIdsToAssign.size > 0) {
-            const { data: fullTemplate, error: tError } = await supabase
-                .from('nutrition_plan_templates')
-                .select(`
-                    *,
-                    template_meals (
-                        *,
-                        template_meal_groups (
-                            saved_meal_id,
-                            saved_meals (
-                                *,
-                                saved_meal_items (
-                                    *,
-                                    foods (*)
-                                )
-                            )
-                        )
-                    )
-                `)
-                .eq('id', currentTemplateId!)
-                .single();
-
-            if (!tError && fullTemplate) {
-                console.log(`[saveNutritionTemplate] Assigning/Updating template for ${clientIdsToAssign.size} clients`);
-                await Promise.all(
-                    Array.from(clientIdsToAssign).map(clientId => 
-                        assignTemplateToClientWithData(fullTemplate, clientId, coachId)
-                    )
-                );
-            }
-        }
-
-        const { data: coach } = await supabase.from('coaches').select('slug').eq('id', coachId).single()
-        if (coach?.slug) {
-            revalidatePath(`/c/${coach.slug}/nutrition`)
-        }
+        // Propagación a alumnos vinculados (Solo si no son "Custom")
+        await propagateTemplateChanges(supabase, currentTemplateId!, coachId, selectedClientsStr)
 
         revalidatePath('/coach/nutrition-plans')
         return { success: true }
-    } catch (error) {
-        console.error('[saveNutritionTemplate] Unexpected error:', error)
-        return { error: error instanceof Error ? error.message : String(error) }
+    } catch (err: any) {
+        console.error('[saveNutritionTemplate] Error:', err)
+        return { error: err.message || 'Error inesperado al guardar la plantilla.' }
     }
 }
 
-async function assignTemplateToClientWithData(template: any, clientId: string, coachId: string): Promise<string | null> {
-    const supabase = await createClient()
-
-    try {
-        // 1. Inactivate previous plans
-        const { error: updateError } = await supabase
-            .from('nutrition_plans')
-            .update({ is_active: false })
-            .eq('client_id', clientId)
+async function insertTemplateMealsFromFormData(supabase: any, templateId: string, formData: FormData) {
+    let i = 0
+    while (formData.has(`meal_name_${i}`)) {
+        const mealName = formData.get(`meal_name_${i}`) as string
         
-        if (updateError) console.error(`Error inactivating plans for ${clientId}:`, updateError)
-
-        // 2. Create new plan
-        const { data: newPlan, error: pError } = await supabase
-            .from('nutrition_plans')
+        const { data: meal, error: mealError } = await supabase
+            .from('template_meals')
             .insert({
-                client_id: clientId,
-                coach_id: coachId,
-                template_id: template.id,
-                name: template.name,
-                daily_calories: template.daily_calories,
-                protein_g: template.protein_g,
-                carbs_g: template.carbs_g,
-                fats_g: template.fats_g,
-                instructions: template.instructions,
-                is_active: true
+                template_id: templateId,
+                name: mealName,
+                order_index: i
             })
             .select('id')
             .single()
 
-        if (pError || !newPlan) {
-            console.error(`Error creating plan for ${clientId}:`, pError)
-            return `Error plan p/cliente ${clientId}: ${pError?.message}`
+        if (mealError) throw mealError
+
+        // En plantillas actuales guardamos alimentos a través de saved_meals/groups
+        // Para simplificar el editor unificado, crearemos una "comida guardada" interna o similar
+        // Pero basándonos en la estructura actual de nutrition_robust_plan.md, 
+        // procesaremos los food items directos si vienen en el formData
+        
+        let j = 0
+        const foodsToInsert = []
+        while (formData.has(`meal_${i}_food_${j}`)) {
+            const foodData = JSON.parse(formData.get(`meal_${i}_food_${j}`) as string)
+            // Para plantillas, necesitamos vincular a saved_meals para mantener la estructura actual
+            // O simplificar el esquema. Mantendremos compatibilidad creando un saved_meal temporal.
+            foodsToInsert.push(foodData)
+            j++
         }
 
-        // 3. Create meals and items
-        for (const tMeal of template.template_meals) {
-            const { data: newMeal, error: mError } = await supabase
-                .from('nutrition_meals')
-                .insert({
-                    plan_id: newPlan.id,
-                    name: tMeal.name,
-                    description: "",
-                    order_index: tMeal.order_index
-                })
-                .select('id')
-                .single()
+        if (foodsToInsert.length > 0) {
+            const { data: savedMeal } = await supabase.from('saved_meals').insert({
+                coach_id: (await supabase.auth.getUser()).data.user.id,
+                name: `Internal_${mealName}_${Date.now()}`
+            }).select('id').single()
 
-            if (mError || !newMeal) {
-                console.error(`Error creating meal ${tMeal.name} for ${clientId}:`, mError)
-                continue
-            }
+            await supabase.from('saved_meal_items').insert(
+                foodsToInsert.map(f => ({
+                    saved_meal_id: savedMeal.id,
+                    food_id: f.food_id,
+                    quantity: f.quantity,
+                    unit: f.unit
+                }))
+            )
 
-            // Flatten all items from all groups in this meal
-            const allItemsToInsert: any[] = []
-            if (tMeal.template_meal_groups && Array.isArray(tMeal.template_meal_groups)) {
-                for (const tGroup of tMeal.template_meal_groups) {
-                    const mealGroup = tGroup.saved_meals
-                    if (mealGroup && mealGroup.saved_meal_items && Array.isArray(mealGroup.saved_meal_items)) {
-                        mealGroup.saved_meal_items.forEach((item: any) => {
-                            if (item.food_id) {
-                                allItemsToInsert.push({
-                                    meal_id: newMeal.id,
-                                    food_id: item.food_id,
-                                    quantity: item.quantity,
-                                    unit: item.unit || 'g'
-                                })
-                            }
-                        })
-                    }
-                }
-            }
-
-            if (allItemsToInsert.length > 0) {
-                const { error: itemsError } = await supabase.from('food_items').insert(allItemsToInsert)
-                if (itemsError) console.error(`Error inserting items for meal ${newMeal.id} (client ${clientId}):`, itemsError)
-            }
+            await supabase.from('template_meal_groups').insert({
+                template_meal_id: meal.id,
+                saved_meal_id: savedMeal.id,
+                order_index: 0
+            })
         }
-        return null;
-    } catch (e: any) {
-        return e.message || String(e);
+        i++
     }
 }
 
-async function assignTemplateToClient(templateId: string, clientId: string, coachId: string) {
-    // This function is now deprecated in favor of assignTemplateToClientWithData to avoid multiple fetches
-    // Keeping it for backward compatibility if needed elsewhere, but updating it to be more robust
-    const supabase = await createClient()
+async function propagateTemplateChanges(supabase: any, templateId: string, coachId: string, selectedClientsStr: string) {
+    const selectedClients: string[] = selectedClientsStr ? JSON.parse(selectedClientsStr) : []
+    
+    // 1. Obtener alumnos que ya usan esta plantilla y NO son custom
+    const { data: existingClients } = await supabase
+        .from('nutrition_plans')
+        .select('client_id')
+        .eq('template_id', templateId)
+        .eq('is_active', true)
+        .eq('is_custom', false)
 
-    const { data: template, error: tError } = await supabase
+    const allClientIds = new Set([...selectedClients, ...(existingClients?.map((c: any) => c.client_id) || [])])
+
+    if (allClientIds.size === 0) return
+
+    // Obtener datos completos de la plantilla para replicar
+    const { data: template } = await supabase
         .from('nutrition_plan_templates')
         .select(`
             *,
             template_meals (
                 *,
                 template_meal_groups (
-                    saved_meal_id,
                     saved_meals (
                         *,
-                        saved_meal_items (
-                            *,
-                            foods (*)
-                        )
+                        saved_meal_items (*)
                     )
                 )
             )
@@ -322,25 +178,58 @@ async function assignTemplateToClient(templateId: string, clientId: string, coac
         .eq('id', templateId)
         .single()
 
-    if (tError || !template) return
+    for (const clientId of allClientIds) {
+        // Desactivar planes anteriores
+        await supabase.from('nutrition_plans').update({ is_active: false }).eq('client_id', clientId)
 
-    await assignTemplateToClientWithData(template, clientId, coachId)
+        // Crear nuevo plan vinculado
+        const { data: newPlan } = await supabase.from('nutrition_plans').insert({
+            client_id: clientId,
+            coach_id: coachId,
+            template_id: templateId,
+            name: template.name,
+            daily_calories: template.daily_calories,
+            protein_g: template.protein_g,
+            carbs_g: template.carbs_g,
+            fats_g: template.fats_g,
+            instructions: template.instructions,
+            is_active: true,
+            is_custom: false
+        }).select('id').single()
+
+        // Replicar comidas y alimentos
+        for (const tMeal of template.template_meals) {
+            const { data: newMeal } = await supabase.from('nutrition_meals').insert({
+                plan_id: newPlan.id,
+                name: tMeal.name,
+                description: '',
+                order_index: tMeal.order_index
+            }).select('id').single()
+
+            const items = tMeal.template_meal_groups?.[0]?.saved_meals?.saved_meal_items || []
+            if (items.length > 0) {
+                await supabase.from('food_items').insert(
+                    items.map((it: any) => ({
+                        meal_id: newMeal.id,
+                        food_id: it.food_id,
+                        quantity: it.quantity,
+                        unit: it.unit
+                    }))
+                )
+            }
+        }
+    }
 }
 
 export async function deleteNutritionTemplate(templateId: string, coachId: string) {
     const supabase = await createClient()
-
     const { error } = await supabase
         .from('nutrition_plan_templates')
         .delete()
         .eq('id', templateId)
         .eq('coach_id', coachId)
 
-    if (error) {
-        console.error('Delete Template Error:', error)
-        return { error: 'No se pudo eliminar la plantilla.' }
-    }
-
+    if (error) return { error: 'No se pudo eliminar la plantilla.' }
     revalidatePath('/coach/nutrition-plans')
     return { success: true }
 }

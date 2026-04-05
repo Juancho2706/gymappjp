@@ -26,6 +26,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
+import { Apple, CalendarHeart } from 'lucide-react'
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -381,30 +382,51 @@ function AdherenceModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: (
 function NutritionModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: () => void, data: any[] }) {
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-3xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+            <DialogContent className="max-w-4xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
                 <DialogHeader>
-                    <DialogTitle className="text-2xl font-black tracking-tighter uppercase font-display">Cumplimiento de Macros</DialogTitle>
-                    <DialogDescription>Desglose de nutrientes consumidos vs objetivo por alumno.</DialogDescription>
+                    <DialogTitle className="text-2xl font-black tracking-tighter uppercase font-display flex items-center gap-3">
+                        <Apple className="w-6 h-6 text-emerald-500" />
+                        Monitoreo de Nutrición Real-Time
+                    </DialogTitle>
+                    <DialogDescription>Comparativa entre el plan asignado y el consumo reportado hoy.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
-                    {data.map((stat) => (
-                        <div key={stat.clientId} className="p-5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-100 dark:border-white/5 space-y-4">
-                            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-3">
-                                <div>
-                                    <h4 className="font-bold text-lg text-foreground">{stat.clientName}</h4>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <Badge variant="outline" className="text-[9px] uppercase font-bold py-0">{stat.lastPlan}</Badge>
-                                        <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">{stat.percentage}% Completo</span>
+                <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+                    {data.length === 0 ? (
+                        <div className="py-10 text-center text-muted-foreground uppercase font-black text-xs tracking-widest">
+                            No hay reportes de nutrición para hoy
+                        </div>
+                    ) : data.map((stat) => (
+                        <div key={stat.clientId} className="p-6 rounded-2xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-100 dark:border-white/5 space-y-5">
+                            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-4">
+                                <div className="space-y-1">
+                                    <h4 className="font-black text-xl text-foreground uppercase tracking-tight">{stat.clientName}</h4>
+                                    <div className="flex items-center gap-3">
+                                        <Badge variant="outline" className="text-[10px] uppercase font-black py-0 border-primary/20 bg-primary/5 text-primary">
+                                            {stat.lastPlan}
+                                        </Badge>
+                                        <div className="flex items-center gap-1.5 text-emerald-500 font-black text-[10px] uppercase tracking-widest">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                            {stat.percentage}% Adherencia Hoy
+                                        </div>
                                     </div>
                                 </div>
-                                <Utensils className="w-5 h-5 text-primary opacity-50" />
+                                <div className="text-right">
+                                    <div className="text-2xl font-black text-foreground tabular-nums">{Math.round(stat.consumed.cal)}</div>
+                                    <div className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Kcal Consumidas</div>
+                                </div>
                             </div>
 
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 <MacroItem label="Calorías" consumed={stat.consumed.cal} target={stat.target.cal} unit="kcal" color="text-primary" />
                                 <MacroItem label="Proteína" consumed={stat.consumed.prot} target={stat.target.prot} unit="g" color="text-rose-500" />
                                 <MacroItem label="Carbs" consumed={stat.consumed.carb} target={stat.target.carb} unit="g" color="text-amber-500" />
                                 <MacroItem label="Grasas" consumed={stat.consumed.fat} target={stat.target.fat} unit="g" color="text-emerald-500" />
+                            </div>
+
+                            <div className="pt-2 flex justify-end">
+                                <Link href={`/coach/clients/${stat.clientId}`} className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
+                                    Ver Historial Completo <ArrowRight className="w-3 h-3" />
+                                </Link>
                             </div>
                         </div>
                     ))}
