@@ -82,6 +82,7 @@ export async function middleware(request: NextRequest) {
         const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug'> & { use_brand_colors?: boolean } | null
 
         if (!coach) {
+            console.error(`[Middleware] Coach not found for slug: ${coachSlug}`)
             // Coach slug doesn't exist → 404
             const notFoundUrl = request.nextUrl.clone()
             notFoundUrl.pathname = '/not-found'
