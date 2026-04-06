@@ -160,16 +160,22 @@ export default function CoachDashboardClient({
                             <div className="relative z-10 p-4 md:p-6 h-full flex flex-col justify-between">
                                 <div className="flex items-start justify-between mb-4 md:mb-8">
                                     <div 
-                                        className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 bg-primary/5 dark:bg-white/5 border border-primary/10 dark:border-white/10 group-hover:border-primary/30 group-hover:bg-primary/5"
-                                        style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}
+                                        className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 bg-white/5 border border-white/10 group-hover:bg-primary/5"
+                                        style={{ 
+                                            color: 'var(--theme-primary)', 
+                                            borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' 
+                                        } as any}
                                     >
                                         <Icon 
-                                            className="w-4 h-4 md:w-6 md:h-6 text-primary dark:text-zinc-400 group-hover:text-primary transition-colors" 
+                                            className="w-4 h-4 md:w-6 md:h-6 transition-colors" 
                                             style={{ color: 'var(--theme-primary)' }}
                                         />
                                     </div>
-                                    <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-primary/5 dark:bg-white/5 flex items-center justify-center text-primary/40 dark:text-zinc-500 group-hover:text-primary group-hover:bg-primary/10 transition-colors">
-                                        <ArrowRight className="w-3 h-3 md:w-4 md:h-4 -rotate-45" />
+                                    <div 
+                                        className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 transition-colors"
+                                        style={{ '--hover-color': 'var(--theme-primary)' } as any}
+                                    >
+                                        <ArrowRight className="w-3 h-3 md:w-4 md:h-4 -rotate-45 group-hover:text-[var(--hover-color)]" />
                                     </div>
                                 </div>
                                 <div>
@@ -187,7 +193,8 @@ export default function CoachDashboardClient({
                                                     e.stopPropagation();
                                                     setModalType(stat.id as any);
                                                 }}
-                                                className="p-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-colors md:hidden"
+                                                className="p-1.5 rounded-full bg-white/5 hover:bg-primary/20 transition-colors md:hidden"
+                                                style={{ color: 'var(--theme-primary)' }}
                                             >
                                                 <Info className="w-4 h-4" />
                                             </button>
@@ -197,7 +204,14 @@ export default function CoachDashboardClient({
                                         {stat.label}
                                     </p>
                                     <div className="flex items-center justify-between gap-2">
-                                        <div className="hidden md:inline-flex items-center text-[10px] font-bold text-primary/60 dark:text-foreground/30 group-hover:text-primary/80 dark:group-hover:text-foreground/50 bg-primary/5 dark:bg-white/5 px-2 py-1 rounded-md transition-colors border border-primary/10 dark:border-transparent">
+                                        <div 
+                                            className="hidden md:inline-flex items-center text-[10px] font-bold px-2 py-1 rounded-md transition-colors border border-white/5"
+                                            style={{ 
+                                                color: 'var(--theme-primary)', 
+                                                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
+                                                borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)'
+                                            }}
+                                        >
                                             {stat.trend}
                                         </div>
                                         {stat.hasInfo && (
@@ -207,7 +221,8 @@ export default function CoachDashboardClient({
                                                     e.stopPropagation();
                                                     setModalType(stat.id as any);
                                                 }}
-                                                className="hidden md:flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
+                                                className="hidden md:flex items-center gap-1.5 text-[10px] font-bold hover:opacity-80 transition-colors"
+                                                style={{ color: 'var(--theme-primary)' }}
                                             >
                                                 <span>MAS INFO</span>
                                                 <Info className="w-3 h-3" />
@@ -244,8 +259,11 @@ export default function CoachDashboardClient({
                     <GlassCard className="h-full flex flex-col bg-white/80 dark:bg-zinc-950">
                         <div className="px-6 py-5 border-b border-border dark:border-white/10 flex items-center justify-between bg-muted/30 dark:bg-white/[0.02]">
                             <div className="flex items-center gap-3">
-                                <div className="p-1.5 rounded-md bg-primary/10">
-                                    <Activity className="w-4 h-4 text-primary" />
+                                <div 
+                                    className="p-1.5 rounded-md"
+                                    style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' }}
+                                >
+                                    <Activity className="w-4 h-4" style={{ color: 'var(--theme-primary)' }} />
                                 </div>
                                 <h2 className="text-xs font-bold text-foreground uppercase tracking-[0.2em] font-display">
                                     Terminal de Actividad

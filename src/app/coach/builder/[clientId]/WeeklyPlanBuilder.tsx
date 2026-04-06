@@ -119,11 +119,16 @@ function SortableBlock({
     }
 
     return (
-        <div ref={setNodeRef} style={style}
+        <div ref={setNodeRef}
             className={cn(
                 'group relative flex flex-col bg-background dark:bg-[#0f172a] backdrop-blur-md border border-border dark:border-blue-900/30 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none',
                 isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-blue-900/40'
-            )}>
+            )}
+            style={{ 
+                ...style, 
+                borderColor: isDragging ? 'var(--theme-primary)' : undefined 
+            } as any}
+        >
             <div className="flex items-center gap-3 p-3">
                 <button {...attributes} {...listeners}
                     className="text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-muted dark:hover:bg-white/5 transition-colors flex-shrink-0">
@@ -144,9 +149,12 @@ function SortableBlock({
                             <span className="text-[11px] font-bold text-foreground">{block.reps || '–'}</span>
                         </div>
                         {block.target_weight_kg && (
-                            <div className="flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 shadow-sm">
-                                <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">Load</span>
-                                <span className="text-[11px] font-bold text-primary">{block.target_weight_kg}kg</span>
+                            <div 
+                                className="flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 shadow-sm"
+                                style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}
+                            >
+                                <span className="text-[10px] font-bold text-primary uppercase tracking-tighter" style={{ color: 'var(--theme-primary)' }}>Load</span>
+                                <span className="text-[11px] font-bold text-primary" style={{ color: 'var(--theme-primary)' }}>{block.target_weight_kg}kg</span>
                             </div>
                         )}
                     </div>
@@ -352,6 +360,8 @@ export function WeeklyPlanBuilder({
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
     const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false)
+
+    const [expandedGif, setExpandedGif] = useState<{url: string, name: string} | null>(null)
 
     const touchStartY = useRef(0)
     const initialSheetHeight = useRef(60)
@@ -637,10 +647,11 @@ export function WeeklyPlanBuilder({
                         onClick={handleSave} 
                         disabled={isPending}
                         className={cn(
-                            'hidden md:flex items-center gap-2 px-8 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all shadow-[0_0_20px_-5px_rgba(0,122,255,0.4)]',
-                            'bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-[1.02]',
+                            'hidden md:flex items-center gap-2 px-8 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all shadow-[0_0_20px_-5px_var(--theme-primary,rgba(0,122,255,0.4))]',
+                            'bg-primary text-primary-foreground hover:opacity-90 hover:scale-[1.02]',
                             'disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none'
                         )}
+                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                     >
                         {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         {isPending ? 'Ejecutando...' : 'Desplegar Protocolo'}
@@ -739,6 +750,7 @@ export function WeeklyPlanBuilder({
                         onClick={handleSave} 
                         disabled={isPending}
                         className="w-12 h-10 flex items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg active:scale-95 transition-all"
+                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                     >
                         {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     </button>
@@ -916,8 +928,12 @@ export function WeeklyPlanBuilder({
                     <SheetHeader className="p-8 border-b border-border dark:border-white/10 sticky top-0 bg-background/50 dark:bg-black/50 backdrop-blur-md z-10">
                         <div className="flex items-start gap-4">
                             <div 
-                                className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)] shrink-0 overflow-hidden"
+                                className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)] shrink-0 overflow-hidden cursor-zoom-in"
                                 style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
+                                onClick={() => {
+                                    if (editingBlock?.gif_url) setExpandedGif({url: editingBlock.gif_url, name: editingBlock.exercise_name})
+                                    else if (editingBlock?.video_url && !editingBlock.video_url.includes('youtube')) setExpandedGif({url: editingBlock.video_url, name: editingBlock.exercise_name})
+                                }}
                             >
                                 {editingBlock?.gif_url || (editingBlock?.video_url && !editingBlock.video_url.includes('youtube') && !editingBlock.video_url.includes('youtu.be')) ? (
                                     <img src={editingBlock.gif_url || editingBlock.video_url!} alt={editingBlock.exercise_name} className="w-full h-full object-cover" />
@@ -1038,7 +1054,11 @@ export function WeeklyPlanBuilder({
                             <button 
                                 onClick={() => handleBlockUpdate(editingBlock)}
                                 disabled={!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()}
-                                className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                style={{ 
+                                    backgroundColor: 'var(--theme-primary, #007AFF)',
+                                    boxShadow: '0 0 20px -5px var(--theme-primary, rgba(0,122,255,0.4))'
+                                }}
                             >
                                 {(!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()) 
                                     ? 'DATA INCOMPLETA' 
@@ -1048,6 +1068,22 @@ export function WeeklyPlanBuilder({
                     )}
                 </SheetContent>
             </Sheet>
+
+            {/* Expanded GIF Dialog */}
+            <Dialog open={!!expandedGif} onOpenChange={() => setExpandedGif(null)}>
+                <DialogContent className="sm:max-w-2xl bg-background border-border overflow-hidden p-0 gap-0">
+                    <div className="p-6 border-b border-border bg-muted/20">
+                        <DialogTitle className="text-xl font-display uppercase tracking-tighter text-foreground">
+                            {expandedGif?.name}
+                        </DialogTitle>
+                    </div>
+                    <div className="aspect-video relative w-full bg-white flex items-center justify-center">
+                        {expandedGif?.url && (
+                            <img src={expandedGif.url} alt={expandedGif.name} className="w-full h-full object-contain" />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
