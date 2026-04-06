@@ -18,11 +18,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const supabase = await createClient()
     const { data } = await supabase
         .from('coaches')
-        .select('brand_name, logo_url, primary_color')
+        .select('brand_name, logo_url, primary_color, use_brand_colors')
         .eq('slug', coach_slug)
         .maybeSingle()
 
-    const coach = data as Pick<Coach, 'brand_name' | 'logo_url' | 'primary_color'> | null
+    const coach = data as Pick<Coach, 'brand_name' | 'logo_url' | 'primary_color'> & { use_brand_colors?: boolean } | null
     const brandName = coach?.brand_name ?? 'Mi Coach'
 
     return {
@@ -47,12 +47,12 @@ export async function generateViewport({ params }: Props): Promise<Viewport> {
     const supabase = await createClient()
     const { data } = await supabase
         .from('coaches')
-        .select('primary_color')
+        .select('primary_color, use_brand_colors')
         .eq('slug', coach_slug)
         .maybeSingle()
         
-    const coach = data as Pick<Coach, 'primary_color'> | null
-    const primaryColor = coach?.primary_color ?? '#8B5CF6'
+    const coach = data as Pick<Coach, 'primary_color'> & { use_brand_colors?: boolean } | null
+    const primaryColor = coach?.use_brand_colors === false ? '#007AFF' : (coach?.primary_color ?? '#8B5CF6')
     
     return {
         themeColor: primaryColor,
@@ -67,6 +67,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const primaryColor = headersList.get('x-coach-primary-color') ?? '#8B5CF6'
     const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
     const coachId = headersList.get('x-coach-id') ?? ''
+    const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
+    const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
 
     if (!coachId) {
         redirect('/not-found')
@@ -81,7 +83,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
             >
-                <ClientNav coachSlug={coach_slug} coachBrand={brandName} />
+                <ClientNav coachSlug={coach_slug} coachBrand={brandName} initialUseBrandColors={initialUseBrandColors} />
                 <InstallPrompt brandName={brandName} />
 
                 <main className="flex-1 overflow-auto relative z-0 bg-muted/20 dark:bg-background pb-[80px] md:pb-0 has-[.is-workout-page]:pb-0">

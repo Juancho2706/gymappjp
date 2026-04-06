@@ -14,6 +14,7 @@ const brandSchema = z.object({
         .max(50)
         .regex(/^[a-z0-9-]+$/, 'Solo letras minúsculas, números y guiones'),
     primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color hexadecimal inválido'),
+    use_brand_colors_coach: z.boolean().default(false),
 })
 
 export type BrandSettingsState = {
@@ -31,6 +32,7 @@ export async function updateBrandSettingsAction(
         brand_name: formData.get('brand_name') as string,
         slug: formData.get('slug') as string,
         primary_color: formData.get('primary_color') as string,
+        use_brand_colors_coach: formData.get('use_brand_colors_coach') === 'on',
     }
 
     const parsed = brandSchema.safeParse(raw)
@@ -62,6 +64,7 @@ export async function updateBrandSettingsAction(
             brand_name: parsed.data.brand_name,
             slug: parsed.data.slug,
             primary_color: parsed.data.primary_color,
+            use_brand_colors_coach: parsed.data.use_brand_colors_coach,
         })
         .eq('id', user.id)
 

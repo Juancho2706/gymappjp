@@ -166,6 +166,22 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     </button>
                 </div>
 
+                <div className="space-y-4 pt-4 border-t border-border">
+                    <h3 className="text-sm font-bold">Configuración de Visualización</h3>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card">
+                        <div className="space-y-0.5">
+                            <Label className="text-sm font-semibold">Usar en mi panel (Coach)</Label>
+                            <p className="text-xs text-muted-foreground">Si se desactiva, tu panel usará el color azul por defecto.</p>
+                        </div>
+                        <input 
+                            type="checkbox" 
+                            name="use_brand_colors_coach" 
+                            defaultChecked={(coach as any).use_brand_colors_coach ?? false}
+                            className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
+                        />
+                    </div>
+                </div>
+
                 {state.fieldErrors?.primary_color && (
                     <p className="text-xs text-destructive">{state.fieldErrors.primary_color[0]}</p>
                 )}

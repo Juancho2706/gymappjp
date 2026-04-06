@@ -74,10 +74,10 @@ export function ClientCard({
         >
             <GlassCard 
                 hoverEffect
-                className="group relative bg-white/80 dark:bg-zinc-950/40 p-0 overflow-visible border-blue-500/10 dark:border-white/5 transition-all duration-500 shadow-xl dark:shadow-[0_0_20px_-5px_rgba(0,122,255,0.2)]"
+                className="group relative bg-white/80 dark:bg-zinc-950/40 p-0 overflow-visible border-border dark:border-white/5 transition-all duration-500 shadow-xl dark:shadow-[0_0_20px_-5px_var(--theme-primary,rgba(0,122,255,0.2))]"
             >
                 {/* Hover Light Effect */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(0,122,255,0.03),transparent_70%)] dark:bg-[radial-gradient(circle_at_0%_0%,rgba(0,122,255,0.15),transparent_75%)] pointer-events-none rounded-2xl" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,color-mix(in srgb,var(--theme-primary),transparent_97%),transparent_70%)] dark:bg-[radial-gradient(circle_at_0%_0%,color-mix(in srgb,var(--theme-primary),transparent_85%),transparent_75%)] pointer-events-none rounded-2xl" />
                 
                 <div className="p-6 md:p-8 space-y-8 relative z-10">
                     {/* Header */}

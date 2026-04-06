@@ -31,17 +31,17 @@ export default async function CoachLayout({
 
     const { data: coachData } = await supabase
         .from('coaches')
-        .select('full_name, brand_name, subscription_status, primary_color')
+        .select('full_name, brand_name, subscription_status, primary_color, use_brand_colors_coach')
         .eq('id', user.id)
         .maybeSingle()
 
-    const coach = coachData as Pick<Coach, 'full_name' | 'brand_name' | 'subscription_status' | 'primary_color'> | null
+    const coach = coachData as Pick<Coach, 'full_name' | 'brand_name' | 'subscription_status' | 'primary_color'> & { use_brand_colors_coach?: boolean } | null
 
     if (!coach) {
         redirect('/login')
     }
 
-    const primaryColor = coach.primary_color || '#007AFF'
+    const primaryColor = coach.use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF')
 
     return (
         <div 

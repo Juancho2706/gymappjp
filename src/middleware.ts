@@ -75,11 +75,11 @@ export async function middleware(request: NextRequest) {
         // Fetch coach branding by slug (public read — no auth required)
         const { data: coachData } = await supabase
             .from('coaches')
-            .select('id, brand_name, primary_color, logo_url, slug')
+            .select('id, brand_name, primary_color, logo_url, slug, use_brand_colors')
             .eq('slug', coachSlug)
             .maybeSingle()
 
-        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug'> | null
+        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug'> & { use_brand_colors?: boolean } | null
 
         if (!coach) {
             // Coach slug doesn't exist → 404
@@ -87,6 +87,8 @@ export async function middleware(request: NextRequest) {
             notFoundUrl.pathname = '/not-found'
             return NextResponse.redirect(notFoundUrl)
         }
+
+        let resolvedColor = coach.primary_color || '#007AFF'
 
         // Forward branding as request headers so layouts can read them
         const response = NextResponse.next({ request })
@@ -96,10 +98,11 @@ export async function middleware(request: NextRequest) {
             response.cookies.set(cookie.name, cookie.value)
         })
 
+        // Initial default headers (will be updated if client prefers default blue)
         response.headers.set('x-coach-id', coach.id)
         response.headers.set('x-coach-slug', coach.slug)
         response.headers.set('x-coach-brand-name', coach.brand_name)
-        response.headers.set('x-coach-primary-color', coach.primary_color)
+        response.headers.set('x-coach-primary-color', resolvedColor)
         response.headers.set('x-coach-logo-url', coach.logo_url ?? '')
 
         // Check if client is authenticated for protected /c/* routes (not login page)
@@ -119,12 +122,12 @@ export async function middleware(request: NextRequest) {
             // Verify the user is a client belonging to this coach
             const { data: clientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, force_password_change, onboarding_completed, is_active')
+                .select('id, coach_id, force_password_change, onboarding_completed, is_active, use_coach_brand_colors')
                 .eq('id', user.id)
                 .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            const client = clientData as Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed' | 'is_active'> | null
+            const client = clientData as Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed' | 'is_active'> & { use_coach_brand_colors?: boolean } | null
 
             if (!client) {
                 // Logged in user is NOT a client of this coach
@@ -132,6 +135,13 @@ export async function middleware(request: NextRequest) {
                 redirectUrl.pathname = `/c/${coachSlug}/login`
                 return NextResponse.redirect(redirectUrl)
             }
+
+            if (client.use_coach_brand_colors === false) {
+                resolvedColor = '#007AFF'
+                response.headers.set('x-coach-primary-color', resolvedColor)
+            }
+            
+            response.headers.set('x-client-use-brand-colors', String(client.use_coach_brand_colors !== false))
 
             // Suspend access if inactive
             if (client.is_active === false && !pathname.includes('/suspended')) {

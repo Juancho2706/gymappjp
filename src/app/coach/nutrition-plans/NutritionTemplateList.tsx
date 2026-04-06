@@ -130,8 +130,8 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredTemplates.map((template) => (
-                        <Card key={template.id} className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/40 hover:shadow-xl transition-all duration-500 group rounded-2xl">
-                            <CardContent className="p-5">
+                        <Card key={template.id} className="overflow-hidden bg-card/50 backdrop-blur-sm transition-all duration-500 group rounded-2xl border-border/50" style={{ '--hover-border': 'var(--theme-primary)' } as any}>
+                            <CardContent className="p-5 group-hover:border-[var(--hover-border)] border border-transparent transition-colors rounded-2xl h-full">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="min-w-0">
                                         <h3 className="font-bold text-lg truncate group-hover:text-primary transition-colors">
@@ -209,7 +209,8 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                     <Button 
                                         variant="default" 
                                         size="sm"
-                                        className="h-8 text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20"
+                                        className="h-8 text-[10px] font-black uppercase tracking-widest text-white transition-all shadow-[0_0_15px_-3px_var(--theme-primary)] hover:scale-105"
+                                        style={{ backgroundColor: 'var(--theme-primary)' }}
                                         onClick={(e) => {
                                             e.stopPropagation()
                                             openAssignModal(template)

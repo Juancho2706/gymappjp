@@ -20,18 +20,24 @@ import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
 import { GymAppLogo } from '@/components/ui/Logo'
+import { toggleClientBrandColors } from '@/app/c/[coach_slug]/actions'
+import { toast } from 'sonner'
+import { Switch } from '@/components/ui/switch'
 
 interface Props {
     coachSlug: string
     coachBrand: string
+    initialUseBrandColors?: boolean
 }
 
-export function ClientNav({ coachSlug, coachBrand }: Props) {
+export function ClientNav({ coachSlug, coachBrand, initialUseBrandColors = true }: Props) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
     const [isCollapsed, setIsCollapsed] = useState(false)
     const [isNavigating, setIsNavigating] = useState<string | null>(null)
+    const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
+    const [isTogglingColors, setIsTogglingColors] = useState(false)
 
     // Reset navigating state when pathname changes
     useEffect(() => {
@@ -65,6 +71,27 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
         await supabase.auth.signOut()
         router.push(`/c/${coachSlug}/login`)
         router.refresh()
+    }
+
+    const handleToggleBrandColors = async () => {
+        setIsTogglingColors(true)
+        const newValue = !useBrandColors
+        setUseBrandColors(newValue)
+        
+        try {
+            const res = await toggleClientBrandColors(newValue, coachSlug)
+            if (res.error) {
+                setUseBrandColors(!newValue) // revert
+                toast.error('Error al guardar preferencia')
+            } else {
+                toast.success(newValue ? 'Colores del Coach activados' : 'Colores por defecto activados')
+                window.location.reload() // Force reload to re-run middleware and get new headers
+            }
+        } catch (error) {
+            setUseBrandColors(!newValue) // revert
+        } finally {
+            setIsTogglingColors(false)
+        }
     }
 
     // Don't show nav on login, register, onboarding, etc, or during workout execution
@@ -179,12 +206,26 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
                 </nav>
 
                 {/* Bottom area (Desktop only) */}
-                <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 space-y-4 items-center" : "px-3 py-4 space-y-2")}>
-                    <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-end px-3 py-2")}>
-                        <ThemeToggle />
-                    </div>
+                    <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 space-y-4 items-center" : "px-3 py-4 space-y-4")}>
+                        <div className={cn("flex flex-col gap-2", isCollapsed && "items-center")}>
+                            {!isCollapsed && <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2">Apariencia</span>}
+                            
+                            <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between px-3 py-2")}>
+                                {!isCollapsed && <span className="text-sm font-medium text-muted-foreground">Modo Oscuro</span>}
+                                <ThemeToggle />
+                            </div>
+                            
+                            <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between px-3 py-2")}>
+                                {!isCollapsed && <span className="text-sm font-medium text-muted-foreground">Colores del Coach</span>}
+                                <Switch 
+                                    checked={useBrandColors} 
+                                    onCheckedChange={handleToggleBrandColors}
+                                    disabled={isTogglingColors}
+                                />
+                            </div>
+                        </div>
 
-                    <button
+                        <button
                         onClick={handleSignOut}
                         title={isCollapsed ? "Cerrar sesión" : undefined}
                         className={cn(

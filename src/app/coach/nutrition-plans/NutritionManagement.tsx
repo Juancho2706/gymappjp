@@ -110,13 +110,14 @@ export function NutritionManagement({
                         </Dialog>
                     </div>
                     <p className="text-muted-foreground font-bold text-sm uppercase tracking-widest flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: 'var(--theme-primary)' }} />
                         Centro de Mando de Protocolos y Alimentos
                     </p>
                 </div>
                 <Button 
                     onClick={() => setView('create-plan')}
-                    className="h-14 px-8 bg-primary text-primary-foreground font-black uppercase tracking-widest text-xs hover:bg-primary/90 shadow-xl rounded-2xl group"
+                    className="h-14 px-8 text-white font-black uppercase tracking-widest text-xs hover:opacity-90 shadow-xl rounded-2xl group border-none"
+                    style={{ backgroundColor: 'var(--theme-primary)' }}
                 >
                     <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 transition-transform duration-300" />
                     Nueva Plantilla
@@ -125,10 +126,10 @@ export function NutritionManagement({
 
             <Tabs defaultValue="templates" className="flex flex-col gap-8">
                 <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0 flex justify-center">
-                    <TabsList className="bg-muted/50 p-1.5 h-auto flex gap-1 w-full max-w-2xl rounded-2xl border border-border/50 shadow-sm">
+                    <TabsList className="bg-muted/50 p-1.5 h-auto flex gap-1 w-full max-w-2xl rounded-2xl border border-border/50 shadow-sm" style={{ '--theme-primary': 'var(--theme-primary)' } as any}>
                         <TabsTrigger 
                             value="templates" 
-                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
                         >
                             <LayoutGrid className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Plantillas</span>
@@ -136,14 +137,14 @@ export function NutritionManagement({
                         </TabsTrigger>
                         <TabsTrigger 
                             value="active" 
-                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
                         >
                             <Users className="w-3.5 h-3.5" />
                             Alumnos
                         </TabsTrigger>
                         <TabsTrigger 
                             value="catalog" 
-                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+                            className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
                         >
                             <Apple className="w-3.5 h-3.5" />
                             Alimentos
@@ -154,9 +155,9 @@ export function NutritionManagement({
                 <div className="w-full">
                     <TabsContent value="templates" className="mt-0 animate-in fade-in-50 slide-in-from-bottom-4 duration-500 focus-visible:outline-none">
                         <div className="space-y-6">
-                            <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
-                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                    <CalendarHeart className="w-5 h-5 text-primary" />
+                            <div className="flex items-center gap-4 pb-2 border-b-2" style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}>
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
+                                    <CalendarHeart className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
                                 </div>
                                 <h2 className="text-xl font-black uppercase tracking-tight font-display">Protocolos Maestros</h2>
                             </div>
@@ -175,9 +176,9 @@ export function NutritionManagement({
 
                     <TabsContent value="active" className="mt-0 animate-in fade-in-50 slide-in-from-bottom-4 duration-500 focus-visible:outline-none">
                         <div className="space-y-6">
-                            <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
-                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                    <Users className="w-5 h-5 text-primary" />
+                            <div className="flex items-center gap-4 pb-2 border-b-2" style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}>
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
+                                    <Users className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
                                 </div>
                                 <h2 className="text-xl font-black uppercase tracking-tight font-display">Seguimiento de Alumnos</h2>
                             </div>
@@ -187,9 +188,9 @@ export function NutritionManagement({
 
                     <TabsContent value="catalog" className="mt-0 animate-in fade-in-50 slide-in-from-bottom-4 duration-500 focus-visible:outline-none">
                         <div className="space-y-6">
-                            <div className="flex items-center gap-4 pb-2 border-b-2 border-primary/20">
-                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                    <Apple className="w-5 h-5 text-primary" />
+                            <div className="flex items-center gap-4 pb-2 border-b-2" style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}>
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
+                                    <Apple className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
                                 </div>
                                 <h2 className="text-xl font-black uppercase tracking-tight font-display">Biblioteca Nutricional</h2>
                             </div>
