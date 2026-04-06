@@ -47,6 +47,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         const container = document.querySelector('.coach-layout-container') as HTMLElement;
         if (!container) return;
 
+        const originalColor = (coach as any).use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF');
+
         // Si el coach tiene habilitado usar sus colores, aplicamos la previsualización en vivo
         if (useCoachColors) {
             container.style.setProperty('--theme-primary', selectedColor);
@@ -55,10 +57,14 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             container.style.setProperty('--theme-primary', '#007AFF');
         }
 
-        // Cleanup: al salir del componente, React se encargará de restaurar el estado del layout
-        // mediante SSR/RSC si hay recarga, pero para navegación cliente a cliente, 
-        // restauramos al valor original que tenía cuando entró.
-    }, [selectedColor, useCoachColors]);
+        // Cleanup: al desmontar el componente o antes de volver a ejecutar el efecto,
+        // restauramos el color a su valor guardado en la base de datos (originalColor).
+        // Si el usuario guarda, 'coach' se actualiza con los nuevos datos, así que
+        // originalColor será el correcto. Si navega sin guardar, revertirá al viejo.
+        return () => {
+            container.style.setProperty('--theme-primary', originalColor);
+        };
+    }, [selectedColor, useCoachColors, coach]);
 
     return (
         <form action={formAction} className="space-y-8">
