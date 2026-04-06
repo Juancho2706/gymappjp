@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Plus, Trash2, CalendarHeart, Search, Users, Utensils, Info, Pencil, Check, Copy, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,6 +47,16 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
     const [selectedClients, setSelectedClients] = useState<string[]>([])
     const [isAssigning, setIsAssigning] = useState(false)
     const [clientSearchTerm, setClientSearchTerm] = useState('')
+
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [themeColor, setThemeColor] = useState<string>('')
+
+    useEffect(() => {
+        if (containerRef.current) {
+            const color = getComputedStyle(containerRef.current).getPropertyValue('--theme-primary')
+            if (color) setThemeColor(color.trim())
+        }
+    }, [])
 
     const filteredTemplates = templates.filter(t => 
         t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -123,7 +133,7 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
     })
 
     return (
-        <div className="space-y-6">
+        <div ref={containerRef} className="space-y-6">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
                 <div className="relative w-full max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -245,22 +255,23 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
             {/* Modal de Asignación */}
             <Dialog open={!!assigningTemplate} onOpenChange={(open) => !open && setAssigningTemplate(null)}>
                 <DialogContent 
-                    className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10"
+                    className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10 p-6"
+                    style={{ '--theme-primary': themeColor || 'inherit' } as React.CSSProperties}
                 >
-                    <DialogHeader>
+                    <DialogHeader className="mb-2">
                         <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
                             <Users className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
                             Asignar Protocolo
                         </DialogTitle>
                     </DialogHeader>
 
-                    <div className="space-y-4 pt-4">
-                        <div className="p-4 rounded-xl border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
+                    <div className="space-y-5">
+                        <div className="p-4 rounded-xl border bg-primary/5 border-primary/10" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
                             <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--theme-primary)' }}>Plantilla Seleccionada:</p>
                             <p className="text-base font-black text-slate-900 dark:text-white">{assigningTemplate?.name}</p>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                                     Seleccionar Alumnos ({selectedClients.length})
@@ -268,7 +279,7 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                 {availableClients.length > 0 && (
                                     <button 
                                         type="button"
-                                        className="text-[10px] font-bold text-primary hover:underline"
+                                        className="text-[10px] font-bold hover:underline"
                                         onClick={() => {
                                             if (selectedClients.length === availableClients.length) {
                                                 setSelectedClients([])
@@ -293,9 +304,9 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                 />
                             </div>
 
-                            <div className="max-h-[200px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                            <div className="max-h-[300px] overflow-y-auto space-y-1.5 pr-2 custom-scrollbar">
                                 {filteredClients.length === 0 ? (
-                                    <div className="p-4 text-center text-sm text-muted-foreground border rounded-lg border-dashed">
+                                    <div className="p-6 text-center text-sm text-muted-foreground border rounded-xl border-dashed">
                                         No hay alumnos disponibles
                                     </div>
                                 ) : (
@@ -308,8 +319,8 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                                 className={cn(
                                                     "flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
                                                     isSelected 
-                                                        ? "bg-primary/5 border-primary/20" 
-                                                        : "bg-white dark:bg-zinc-900 border-slate-100 dark:border-white/5 hover:border-primary/20"
+                                                        ? "border-transparent" 
+                                                        : "bg-white dark:bg-zinc-900 border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-slate-700"
                                                 )}
                                                 style={isSelected ? { backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' } : {}}
                                             >
@@ -318,11 +329,11 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                                         "w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0",
                                                         isSelected 
                                                             ? "border-transparent" 
-                                                            : "border-slate-300 dark:border-slate-600"
+                                                            : "border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-zinc-800"
                                                     )}
                                                     style={isSelected ? { backgroundColor: 'var(--theme-primary)', borderColor: 'var(--theme-primary)' } : {}}
                                                 >
-                                                    {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                                    {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
                                                 </div>
                                                 <div className="min-w-0 flex-1">
                                                     <p className="font-bold text-sm truncate text-slate-900 dark:text-white">{client.full_name}</p>
@@ -347,7 +358,7 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                         </div>
 
                         <Button 
-                            className="w-full h-12 font-black uppercase tracking-widest gap-2 text-white border-none transition-all hover:opacity-90"
+                            className="w-full h-12 font-black uppercase tracking-widest gap-2 text-white border-none transition-all hover:opacity-90 shadow-lg"
                             disabled={isAssigning || selectedClients.length === 0}
                             onClick={handleAssignTemplate}
                             style={{ backgroundColor: 'var(--theme-primary)' }}
