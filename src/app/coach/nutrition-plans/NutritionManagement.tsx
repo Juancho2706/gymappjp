@@ -71,11 +71,13 @@ export function NutritionManagement({
                     <div className="flex items-center gap-3">
                         <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter font-display leading-none">Nutrición</h1>
                         <Dialog>
-                            <DialogTrigger>
-                                <button type="button" className="w-8 h-8 rounded-full bg-amber-400 hover:bg-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.5)] flex items-center justify-center text-amber-950 transition-all hover:scale-110 active:scale-95 group relative">
-                                    <HelpCircle className="w-5 h-5 fill-amber-400 stroke-amber-950" />
-                                </button>
-                            </DialogTrigger>
+                            <DialogTrigger
+                                render={
+                                    <button type="button" className="w-8 h-8 rounded-full bg-amber-400 hover:bg-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.5)] flex items-center justify-center text-amber-950 transition-all hover:scale-110 active:scale-95 group relative">
+                                        <HelpCircle className="w-5 h-5 fill-amber-400 stroke-amber-950" />
+                                    </button>
+                                }
+                            />
                             <DialogContent className="sm:max-w-2xl bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10">
                                 <DialogHeader>
                                     <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2">

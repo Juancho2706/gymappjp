@@ -144,7 +144,7 @@ export async function middleware(request: NextRequest) {
                 .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            const client = clientData as (Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed' | 'is_active'> & { use_coach_brand_colors?: boolean }) | null
+            const client = clientData as (Client & { use_coach_brand_colors?: boolean }) | null
 
             if (!client) {
                 // Logged in user is NOT a client of this coach

@@ -304,7 +304,7 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
  * Duplica un programa de entrenamiento existente (sea plantilla o asignado).
  * El nuevo programa será una plantilla (sin client_id) por defecto.
  */
-export async function duplicateWorkoutProgramAction(programId: string): Promise<{ error?: string }> {
+export async function duplicateWorkoutProgramAction(programId: string): Promise<{ error?: string, programId?: string }> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
@@ -317,6 +317,7 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
             .from('workout_programs')
             .select(`
                 *,
+                client:clients (full_name),
                 workout_plans (
                     *,
                     workout_blocks (*)
@@ -329,12 +330,17 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
         if (originalError || !original) throw new Error('Programa no encontrado.')
 
         // 2. Insertar nuevo programa como plantilla
+        const isOriginalAssigned = !!original.client_id
+        const newName = isOriginalAssigned && original.client?.full_name 
+            ? `Copia de ${original.client.full_name}`
+            : `${original.name} (Copia)`
+
         const { data: newProgram, error: newProgramError } = await adminDb
             .from('workout_programs')
             .insert({
                 coach_id: user.id,
                 client_id: null, // Siempre como plantilla al duplicar manualmente
-                name: `${original.name} (Copia)`,
+                name: newName,
                 weeks_to_repeat: original.weeks_to_repeat,
                 start_date: null,
                 end_date: null,
@@ -384,7 +390,7 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
         }
 
         revalidatePath('/coach/workout-programs')
-        return {}
+        return { programId: newProgram.id }
     } catch (error: any) {
         console.error('Error en duplicateWorkoutProgramAction:', error)
         return { error: error.message }

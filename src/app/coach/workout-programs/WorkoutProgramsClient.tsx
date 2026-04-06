@@ -3,7 +3,8 @@
 import { useState, useTransition, useMemo } from 'react'
 import { 
     Plus, Search, Dumbbell, User, MoreVertical, Copy, Trash2, LayoutGrid, List as ListIcon, 
-    Loader2, ArrowRight, Eye, Filter, Check, Folder, ChevronRight, ChevronDown, Repeat, ChevronsUpDown
+    Loader2, ArrowRight, Eye, Filter, Check, Folder, ChevronRight, ChevronDown, Repeat, ChevronsUpDown,
+    Calendar, Users, Clock, Settings2, Pencil, ExternalLink
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -170,7 +171,8 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                 toast.error(result.error)
             } else {
                 toast.success('Programa duplicado correctamente')
-                router.refresh()
+                // Forzar recarga de datos en el cliente para actualización "en vivo"
+                window.location.reload()
             }
         })
     }
@@ -232,55 +234,57 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Biblioteca de Programas</h1>
-                    <p className="text-muted-foreground">Gestiona tus plantillas y programas asignados.</p>
+                    <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">Biblioteca de Programas</h1>
+                    <p className="text-muted-foreground mt-1">Crea, gestiona y asigna planes de entrenamiento de alto nivel.</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button onClick={() => router.push('/coach/workout-programs/builder')} className="gap-2">
-                        <Plus className="w-4 h-4" />
+                <div className="flex items-center gap-3">
+                    <Button onClick={() => router.push('/coach/workout-programs/builder')} className="gap-2 h-11 px-6 rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all active:scale-95">
+                        <Plus className="w-5 h-5" />
                         Nueva Plantilla
                     </Button>
                 </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
-                <div className="flex flex-1 items-center gap-4 w-full">
-                    <div className="relative flex-1 md:max-w-96">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-card/40 backdrop-blur-md p-2 rounded-2xl border border-border/50 shadow-sm">
+                <div className="flex flex-1 items-center gap-3 w-full px-2">
+                    <div className="relative flex-1 md:max-w-md group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                         <Input
-                            placeholder="Buscar programas..."
+                            placeholder="Buscar programas o alumnos..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="pl-9 bg-background/50"
+                            className="pl-9 bg-background/50 border-none ring-1 ring-border focus-visible:ring-2 focus-visible:ring-primary h-10 rounded-xl transition-all"
                         />
                     </div>
                     
-                    <Tabs value={filterType} onValueChange={(val: any) => setFilterType(val)} className="hidden sm:block">
-                        <TabsList className="bg-background/50 border">
-                            <TabsTrigger value="all">Todos</TabsTrigger>
-                            <TabsTrigger value="templates">Plantillas</TabsTrigger>
-                            <TabsTrigger value="assigned">Asignados</TabsTrigger>
+                    <Tabs value={filterType} onValueChange={(val: any) => setFilterType(val)} className="hidden lg:block">
+                        <TabsList className="bg-background/50 border-none p-1 h-10 rounded-xl ring-1 ring-border">
+                            <TabsTrigger value="all" className="rounded-lg px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">Todos</TabsTrigger>
+                            <TabsTrigger value="templates" className="rounded-lg px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">Plantillas</TabsTrigger>
+                            <TabsTrigger value="assigned" className="rounded-lg px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">Asignados</TabsTrigger>
                         </TabsList>
                     </Tabs>
                 </div>
 
-                <div className="flex items-center gap-2 border rounded-lg p-1 bg-background/50">
-                    <Button 
-                        variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-                        size="sm" 
-                        onClick={() => setViewMode('grid')}
-                        className="h-8 w-8 p-0"
-                    >
-                        <LayoutGrid className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                        variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
-                        size="sm" 
-                        onClick={() => setViewMode('list')}
-                        className="h-8 w-8 p-0"
-                    >
-                        <ListIcon className="w-4 h-4" />
-                    </Button>
+                <div className="flex items-center gap-2 px-2">
+                    <div className="flex items-center gap-1 border rounded-xl p-1 bg-background/50 ring-1 ring-border h-10">
+                        <Button 
+                            variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                            size="sm" 
+                            onClick={() => setViewMode('grid')}
+                            className={cn("h-8 w-8 p-0 rounded-lg transition-all", viewMode === 'grid' && "shadow-sm bg-card")}
+                        >
+                            <LayoutGrid className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                            variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
+                            size="sm" 
+                            onClick={() => setViewMode('list')}
+                            className={cn("h-8 w-8 p-0 rounded-lg transition-all", viewMode === 'list' && "shadow-sm bg-card")}
+                        >
+                            <ListIcon className="w-4 h-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -297,30 +301,43 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                             <div className="space-y-4">
                                 <button 
                                     onClick={() => setIsTemplatesOpen(!isTemplatesOpen)}
-                                    className="flex items-center gap-3 w-full p-4 bg-primary/5 hover:bg-primary/10 rounded-xl border border-primary/20 transition-all group"
+                                    className="flex items-center gap-4 w-full p-2 pr-6 bg-card/50 backdrop-blur-sm hover:bg-card/80 rounded-2xl border border-border/50 transition-all group ring-1 ring-border/5 shadow-sm"
                                 >
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <Folder className={cn("w-5 h-5 text-primary", isTemplatesOpen ? "fill-primary/20" : "")} />
+                                    <div className={cn(
+                                        "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300",
+                                        isTemplatesOpen ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105" : "bg-primary/10 text-primary"
+                                    )}>
+                                        <Folder className={cn("w-6 h-6 transition-transform", isTemplatesOpen ? "fill-current/20 scale-110" : "group-hover:scale-110")} />
                                     </div>
                                     <div className="flex-1 text-left">
-                                        <h3 className="font-bold text-lg">Biblioteca de Plantillas</h3>
-                                        <p className="text-xs text-muted-foreground">
-                                            {filtered.filter(p => !p.client_id).length} plantillas guardadas
-                                        </p>
+                                        <h3 className="font-bold text-base tracking-tight">Biblioteca de Plantillas</h3>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-primary/5 text-primary border-none">
+                                                {filtered.filter(p => !p.client_id).length} items
+                                            </Badge>
+                                            <span className="text-[11px] text-muted-foreground font-medium">Modelos base para nuevos alumnos</span>
+                                        </div>
                                     </div>
-                                    {isTemplatesOpen ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-secondary/50 group-hover:bg-secondary transition-colors">
+                                        {isTemplatesOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    </div>
                                 </button>
 
                                 <AnimatePresence initial={false}>
                                     {isTemplatesOpen && (
                                         <motion.div
-                                            initial={{ height: 0, opacity: 0 }}
-                                            animate={{ height: "auto", opacity: 1 }}
-                                            exit={{ height: 0, opacity: 0 }}
-                                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                                            initial={{ height: 0, opacity: 0, y: -10 }}
+                                            animate={{ height: "auto", opacity: 1, y: 0 }}
+                                            exit={{ height: 0, opacity: 0, y: -10 }}
+                                            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
                                             className="overflow-hidden"
                                         >
-                                            <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2" : "space-y-2 pt-2"}>
+                                            <div className={cn(
+                                                "p-1",
+                                                viewMode === 'grid' 
+                                                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2" 
+                                                    : "space-y-3 pt-2"
+                                            )}>
                                                 {filtered.filter(p => !p.client_id).map(program => (
                                                     <ProgramCard 
                                                         key={program.id} 
@@ -340,7 +357,9 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                                     />
                                                 ))}
                                                 {filtered.filter(p => !p.client_id).length === 0 && (
-                                                    <p className="text-sm text-muted-foreground italic p-4">No hay plantillas que coincidan con la búsqueda.</p>
+                                                    <div className="col-span-full py-10 text-center bg-muted/10 rounded-2xl border border-dashed border-border/50">
+                                                        <p className="text-sm text-muted-foreground italic">No hay plantillas que coincidan con la búsqueda.</p>
+                                                    </div>
                                                 )}
                                             </div>
                                         </motion.div>
@@ -351,16 +370,27 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
 
                         {/* Active Plans Section */}
                         {(filterType === 'all' || filterType === 'assigned') && (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3 px-2">
-                                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                    <h3 className="font-bold text-lg">Planes Activos (Asignados)</h3>
-                                    <Badge variant="outline" className="ml-auto">
-                                        {activeAssignedPrograms.length} alumnos
-                                    </Badge>
+                            <div className="space-y-6 pt-4">
+                                <div className="flex items-center justify-between px-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative">
+                                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                            <div className="absolute inset-0 w-3 h-3 rounded-full bg-emerald-500 animate-ping opacity-40" />
+                                        </div>
+                                        <h3 className="font-bold text-lg tracking-tight">Programas en Curso</h3>
+                                        <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white border-none px-2 rounded-lg">
+                                            {activeAssignedPrograms.length}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground font-medium hidden sm:block">Planes actualmente seguidos por alumnos</p>
                                 </div>
                                 
-                                <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-2"}>
+                                <div className={cn(
+                                    "p-1",
+                                    viewMode === 'grid' 
+                                        ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" 
+                                        : "space-y-3"
+                                )}>
                                     {activeAssignedPrograms.map(program => (
                                         <ProgramCard 
                                             key={program.id} 
@@ -380,8 +410,12 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                         />
                                     ))}
                                     {activeAssignedPrograms.length === 0 && (
-                                        <div className="col-span-full py-8 text-center bg-muted/10 rounded-xl border border-dashed">
-                                            <p className="text-sm text-muted-foreground">No hay alumnos con planes activos que coincidan con la búsqueda.</p>
+                                        <div className="col-span-full py-16 text-center bg-card/30 rounded-3xl border-2 border-dashed border-border/40 backdrop-blur-sm">
+                                            <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center mx-auto mb-4">
+                                                <Users className="w-8 h-8 text-muted-foreground/50" />
+                                            </div>
+                                            <h4 className="font-semibold text-muted-foreground">Sin planes activos</h4>
+                                            <p className="text-sm text-muted-foreground/60 max-w-xs mx-auto mt-1">Asigna una plantilla a un alumno para verla aparecer en esta sección.</p>
                                         </div>
                                     )}
                                 </div>
@@ -474,33 +508,65 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
 
             {/* Preview Dialog */}
             <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-                <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Eye className="w-5 h-5 text-primary" />
-                            Vista Previa: {programToPreview?.name}
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto p-0 border-none bg-background shadow-2xl">
+                    <DialogHeader className="p-6 pb-2 sticky top-0 bg-background/80 backdrop-blur-lg z-10 border-b">
+                        <DialogTitle className="flex items-center gap-3 text-xl font-bold">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <Eye className="w-5 h-5 text-primary" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-foreground">Vista Previa</span>
+                                <span className="text-sm font-medium text-muted-foreground">{programToPreview?.name}</span>
+                            </div>
                         </DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-6 py-4">
+                    <div className="p-6 space-y-6">
                         {programToPreview?.workout_plans?.sort((a,b) => a.day_of_week - b.day_of_week).map((plan) => (
-                            <div key={plan.id} className="space-y-2">
-                                <h3 className="font-bold text-sm bg-muted p-2 rounded flex justify-between">
-                                    <span>Día {plan.day_of_week}: {plan.title}</span>
-                                    <span className="text-muted-foreground font-normal">{plan.workout_blocks.length} ejercicios</span>
-                                </h3>
-                                <div className="grid grid-cols-1 gap-1 pl-2">
+                            <div key={plan.id} className="group/day bg-card border rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md">
+                                <div className="bg-muted/50 p-4 flex justify-between items-center border-b">
+                                    <h3 className="font-bold text-base flex items-center gap-2 text-foreground">
+                                        <div className="w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-xs">
+                                            {plan.day_of_week}
+                                        </div>
+                                        Día {plan.day_of_week}: {plan.title}
+                                    </h3>
+                                    <Badge variant="secondary" className="bg-background/80 text-muted-foreground font-semibold px-2">
+                                        {plan.workout_blocks.length} ejercicios
+                                    </Badge>
+                                </div>
+                                <div className="divide-y divide-border/40">
                                     {plan.workout_blocks.map((block) => (
-                                        <div key={block.id} className="text-sm flex justify-between border-b border-border/50 py-1 last:border-0">
-                                            <span className="font-medium">{block.exercise.name}</span>
-                                            <span className="text-muted-foreground">{block.sets}x{block.reps}</span>
+                                        <div key={block.id} className="p-4 flex justify-between items-center hover:bg-muted/20 transition-colors">
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className="font-semibold text-foreground leading-tight">{block.exercise.name}</span>
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                                                    <Repeat className="w-3 h-3" />
+                                                    Enfoque técnico
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span className="text-sm font-bold text-primary bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
+                                                    {block.sets} <span className="text-[10px] text-primary/60 font-medium uppercase tracking-wider">sets</span> x {block.reps}
+                                                </span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         ))}
                         {(!programToPreview?.workout_plans || programToPreview.workout_plans.length === 0) && (
-                            <p className="text-center text-muted-foreground">Este programa no tiene ejercicios configurados.</p>
+                            <div className="py-20 text-center space-y-3">
+                                <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto text-muted-foreground">
+                                    <Dumbbell className="w-8 h-8 opacity-20" />
+                                </div>
+                                <p className="text-muted-foreground font-medium italic">Este programa no tiene ejercicios configurados aún.</p>
+                            </div>
                         )}
+                    </div>
+                    <div className="p-4 bg-muted/30 border-t flex justify-end">
+                        <Button variant="outline" onClick={() => setIsPreviewOpen(false)} className="rounded-xl font-semibold">
+                            Cerrar Vista Previa
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
@@ -517,36 +583,63 @@ function ProgramCard({ program, viewMode, onAssign, onDuplicate, onDelete, onPre
     onPreview: () => void,
     isPending: boolean
 }) {
+    const isAssigned = !!program.client_id;
+
     if (viewMode === 'list') {
         return (
-            <div className="flex items-center justify-between p-4 bg-card border rounded-xl hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between p-4 bg-card/50 backdrop-blur-sm border rounded-xl hover:shadow-lg hover:border-primary/30 transition-all group">
                 <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Dumbbell className="w-5 h-5 text-primary" />
+                    <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                        isAssigned ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"
+                    )}>
+                        <Dumbbell className="w-6 h-6" />
                     </div>
                     <div>
-                        <h3 className="font-bold">{program.name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                            {program.weeks_to_repeat} semanas • 
-                            {program.client ? ` Alumno: ${program.client.full_name}` : ' Plantilla'}
-                        </p>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-base tracking-tight">{program.name}</h3>
+                            {isAssigned ? (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] py-0 h-4">Activo</Badge>
+                            ) : (
+                                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px] py-0 h-4">Plantilla</Badge>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                {program.weeks_to_repeat} semanas
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                                <User className={cn("w-3 h-3", isAssigned ? "text-emerald-600" : "text-muted-foreground")} />
+                                {program.client?.full_name || 'Sin alumno'}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={onPreview} title="Vista previa">
-                        <Eye className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" onClick={onPreview} title="Vista previa">
+                        <Eye className="w-4 h-4 text-muted-foreground" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={onDuplicate} title="Duplicar">
-                        <Copy className="w-4 h-4" />
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" onClick={onDuplicate} title="Duplicar">
+                        <Copy className="w-4 h-4 text-muted-foreground" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={onAssign} className="gap-2">
-                        <User className="w-4 h-4" />
-                        Asignar
-                    </Button>
-                    <Link href={program.client_id ? `/coach/builder/${program.client_id}?programId=${program.id}` : `/coach/workout-programs/builder?programId=${program.id}`}>
-                        <Button variant="ghost" size="sm">Editar</Button>
+                    <div className="w-px h-4 bg-border mx-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    
+                    {!isAssigned && (
+                        <Button variant="ghost" size="sm" onClick={onAssign} className="gap-2 h-9 px-3 text-primary hover:text-primary hover:bg-primary/10 rounded-lg">
+                            <Users className="w-4 h-4" />
+                            <span className="hidden sm:inline">Asignar</span>
+                        </Button>
+                    )}
+                    
+                    <Link href={isAssigned ? `/coach/builder/${program.client_id}?programId=${program.id}` : `/coach/workout-programs/builder?programId=${program.id}`}>
+                        <Button variant="ghost" size="sm" className="h-9 px-3 gap-2 rounded-lg">
+                            <Pencil className="w-4 h-4" />
+                            <span className="hidden sm:inline">Editar</span>
+                        </Button>
                     </Link>
-                    <Button variant="ghost" size="sm" onClick={onDelete} className="text-destructive hover:text-destructive">
+                    
+                    <Button variant="ghost" size="icon" onClick={onDelete} className="h-9 w-9 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10">
                         <Trash2 className="w-4 h-4" />
                     </Button>
                 </div>
@@ -556,59 +649,88 @@ function ProgramCard({ program, viewMode, onAssign, onDuplicate, onDelete, onPre
 
     return (
         <Card className={cn(
-            "hover:shadow-md transition-all overflow-hidden group relative border-l-4",
-            program.client_id ? "border-l-green-500" : "border-l-primary"
+            "group relative overflow-hidden transition-all duration-300 border-none ring-1",
+            "shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_50px_rgba(59,130,246,0.12)] dark:hover:shadow-[0_20px_50px_rgba(139,92,246,0.15)]",
+            isAssigned 
+                ? "ring-emerald-500/20 bg-gradient-to-br from-card via-card to-emerald-50/40 dark:to-emerald-500/5" 
+                : "ring-border bg-gradient-to-br from-card via-card to-primary/5 hover:ring-primary/30"
         )}>
-            <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                    <div className="flex gap-2">
-                        <div className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center mb-2",
-                            program.client_id ? "bg-green-500/10" : "bg-primary/10"
-                        )}>
-                            <Dumbbell className={cn("w-6 h-6", program.client_id ? "text-green-600" : "text-primary")} />
-                        </div>
+            {/* Sombras y difuminados de marca sutiles */}
+            <div className="absolute -right-10 -top-10 w-32 h-32 bg-primary/5 blur-3xl rounded-full group-hover:bg-primary/10 transition-colors" />
+            <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full group-hover:bg-blue-500/10 transition-colors" />
+            
+            {/* Glassmorphism subtle overlay */}
+            <div className="absolute inset-0 bg-white/40 dark:bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            
+            <CardHeader className="pb-4 relative">
+                <div className="flex justify-between items-start mb-4">
+                    <div className={cn(
+                        "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-sm",
+                        isAssigned ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground"
+                    )}>
+                        <Dumbbell className="w-6 h-6" />
                     </div>
                     <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPreview} title="Vista previa">
-                            <Eye className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-background/80" onClick={onPreview} title="Vista previa">
+                            <Eye className="w-4 h-4 text-muted-foreground" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDuplicate} title="Duplicar">
-                            <Copy className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-background/80" onClick={onDuplicate} title="Duplicar">
+                            <Copy className="w-4 h-4 text-muted-foreground" />
                         </Button>
-                        <Badge 
-                            variant={program.client_id ? "secondary" : "default"} 
-                            className={cn(
-                                "font-bold",
-                                program.client_id && "bg-green-100 text-green-700 hover:bg-green-100"
-                            )}
-                        >
-                            {program.client_id ? 'Asignado' : 'Plantilla'}
-                        </Badge>
                     </div>
                 </div>
-                <CardTitle className="line-clamp-1 text-base">{program.name}</CardTitle>
-                <CardDescription className="flex flex-col gap-1 mt-2">
-                    <span className="flex items-center gap-2 text-xs">
-                        <Repeat className="w-3 h-3" />
-                        {program.weeks_to_repeat} semanas
-                    </span>
-                    <span className="flex items-center gap-2 truncate text-xs font-medium">
-                        <User className={cn("w-3.5 h-3.5", program.client_id ? "text-green-600" : "text-muted-foreground")} />
-                        {program.client?.full_name || 'Sin asignar'}
-                    </span>
-                </CardDescription>
+                
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg font-bold tracking-tight line-clamp-1">{program.name}</CardTitle>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1.5 pt-1">
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded-full">
+                            <Calendar className="w-3 h-3" />
+                            {program.weeks_to_repeat} semanas
+                        </span>
+                        {isAssigned ? (
+                            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                                <User className="w-3 h-3" />
+                                {program.client?.full_name}
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1.5 text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                <Settings2 className="w-3 h-3" />
+                                Plantilla
+                            </span>
+                        )}
+                    </div>
+                </div>
             </CardHeader>
-            <CardContent>
+
+            <CardContent className="pt-2 relative">
                 <div className="flex gap-2">
-                    <Button onClick={onAssign} className={cn("flex-1 gap-2", program.client_id && "bg-green-600 hover:bg-green-700")} size="sm">
-                        <User className="w-4 h-4" />
-                        {program.client_id ? 'Re-asignar' : 'Asignar'}
-                    </Button>
-                    <Link href={program.client_id ? `/coach/builder/${program.client_id}?programId=${program.id}` : `/coach/workout-programs/builder?programId=${program.id}`} className="flex-1">
-                        <Button variant="secondary" className="w-full" size="sm">Editar</Button>
+                    {!isAssigned ? (
+                        <Button 
+                            onClick={onAssign} 
+                            className="flex-1 gap-2 bg-primary hover:bg-primary/90 shadow-sm rounded-xl h-10"
+                        >
+                            <Users className="w-4 h-4" />
+                            Asignar
+                        </Button>
+                    ) : (
+                        <div className="flex-1" /> // Placeholder to keep layout if needed or just use the space
+                    )}
+                    
+                    <Link href={isAssigned ? `/coach/builder/${program.client_id}?programId=${program.id}` : `/coach/workout-programs/builder?programId=${program.id}`} className={isAssigned ? "w-full" : "flex-1"}>
+                        <Button variant="secondary" className="w-full gap-2 rounded-xl h-10 border-none bg-secondary/80 hover:bg-secondary" size="sm">
+                            <Pencil className="w-4 h-4" />
+                            Editar
+                        </Button>
                     </Link>
-                    <Button variant="ghost" size="icon" onClick={onDelete} className="text-muted-foreground hover:text-destructive h-9 w-9 shrink-0">
+                    
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={onDelete} 
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl h-10 w-10 shrink-0 transition-colors"
+                    >
                         <Trash2 className="w-4 h-4" />
                     </Button>
                 </div>

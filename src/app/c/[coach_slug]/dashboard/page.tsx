@@ -148,36 +148,35 @@ export default async function ClientDashboardPage({ params }: Props) {
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
-            <header className="border-b border-border px-4 py-4 flex items-center justify-between">
-                <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">
-                        {coachBranding?.brand_name}
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <h1
-                            className="text-xl font-bold text-foreground font-display"
-                        >
+            <header className="border-b border-border px-4 py-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest truncate">
+                            {coachBranding?.brand_name}
+                        </p>
+                        <h1 className="text-xl font-bold text-foreground font-display truncate">
                             Hola, {client.full_name.split(' ')[0]} 👋
                         </h1>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
                         {workoutsLast30Days > 0 && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20">
-                                🔥 {workoutsLast30Days} este mes
+                            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20 whitespace-nowrap">
+                                🔥 {workoutsLast30Days}
                             </span>
                         )}
+                        <ClientSettingsModal coachSlug={coach_slug} initialUseBrandColors={initialUseBrandColors} />
+                        <Link
+                            href={`/c/${coach_slug}/check-in`}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-colors uppercase tracking-wider"
+                            style={{
+                                borderColor: 'var(--theme-primary)',
+                                color: 'var(--theme-primary)',
+                                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)',
+                            }}
+                        >
+                            Check-in
+                        </Link>
                     </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <ClientSettingsModal coachSlug={coach_slug} initialUseBrandColors={initialUseBrandColors} />
-                    <Link
-                        href={`/c/${coach_slug}/check-in`}
-                        className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors"
-                        style={{
-                            borderColor: 'var(--theme-primary)',
-                            color: 'var(--theme-primary)',
-                        }}
-                    >
-                        Check-in
-                    </Link>
                 </div>
             </header>
 
