@@ -230,14 +230,14 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                 <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10">
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
-                            <Users className="w-5 h-5 text-primary" />
+                            <Users className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
                             Asignar Protocolo
                         </DialogTitle>
                     </DialogHeader>
 
                     <div className="space-y-4 pt-4">
-                        <div className="bg-primary/5 p-4 rounded-xl border border-primary/10">
-                            <p className="text-xs text-primary/80 font-bold uppercase tracking-widest mb-1">Plantilla Seleccionada:</p>
+                        <div className="p-4 rounded-xl border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
+                            <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--theme-primary)' }}>Plantilla Seleccionada:</p>
                             <p className="text-base font-black">{assigningTemplate?.name}</p>
                         </div>
 
@@ -247,17 +247,15 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                                 <SelectTrigger className="w-full h-12 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground">
                                     <SelectValue placeholder="Elegir alumno..." />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-[300px] z-[100]">
+                                <SelectContent className="max-h-[200px] z-[100]">
                                     {availableClients.length === 0 ? (
                                         <div className="p-4 text-center text-sm text-muted-foreground">No hay alumnos activos</div>
                                     ) : (
                                             availableClients.map(client => {
                                             const hasActivePlan = (client as any).active_plan; // Assuming availableClients passes active_plan info
                                             return (
-                                                <SelectItem key={client.id} value={client.id} className="cursor-pointer text-slate-900 dark:text-foreground">
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold">{client.full_name}</span>
-                                                    </div>
+                                                <SelectItem key={client.id} value={client.id} className="cursor-pointer font-bold text-slate-900 dark:text-foreground">
+                                                    {client.full_name}
                                                 </SelectItem>
                                             )
                                         })
@@ -276,9 +274,10 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                         </div>
 
                         <Button 
-                            className="w-full h-12 font-black uppercase tracking-widest gap-2"
+                            className="w-full h-12 font-black uppercase tracking-widest gap-2 text-white border-none transition-all hover:opacity-90"
                             disabled={isAssigning || !selectedClient}
                             onClick={handleAssignTemplate}
+                            style={{ backgroundColor: 'var(--theme-primary)' }}
                         >
                             {isAssigning ? 'Procesando...' : `Confirmar Asignación`}
                         </Button>
