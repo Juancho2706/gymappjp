@@ -14,7 +14,7 @@ export const getCoach = cache(async () => {
     .from('coaches')
     .select('id, full_name, brand_name, subscription_status, primary_color, use_brand_colors_coach')
     .eq('id', user.id)
-    .maybeSingle();
+    .maybeSingle() as any;
 
   if (!coachData) return null;
 
