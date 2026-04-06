@@ -63,6 +63,7 @@ interface BuilderBlock {
     exercise_name: string
     muscle_group: string
     gif_url?: string
+    video_url?: string
     sets: number
     reps: string
     target_weight_kg: string
@@ -398,12 +399,13 @@ export function WeeklyPlanBuilder({
     )
 
     const addExercise = useCallback((dayId: number, exercise: Exercise) => {
-        const newBlock: BuilderBlock & { gif_url?: string } = {
+        const newBlock: BuilderBlock & { gif_url?: string, video_url?: string } = {
             uid: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             exercise_id: exercise.id,
             exercise_name: exercise.name,
             muscle_group: exercise.muscle_group,
             gif_url: (exercise as any).gif_url,
+            video_url: (exercise as any).video_url,
             sets: 3,
             reps: '8-12',
             target_weight_kg: '',
@@ -917,8 +919,15 @@ export function WeeklyPlanBuilder({
                                 className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)] shrink-0 overflow-hidden"
                                 style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
                             >
-                                {editingBlock?.gif_url ? (
-                                    <img src={editingBlock.gif_url} alt={editingBlock.exercise_name} className="w-full h-full object-cover" />
+                                {editingBlock?.gif_url || (editingBlock?.video_url && !editingBlock.video_url.includes('youtube') && !editingBlock.video_url.includes('youtu.be')) ? (
+                                    <img src={editingBlock.gif_url || editingBlock.video_url!} alt={editingBlock.exercise_name} className="w-full h-full object-cover" />
+                                ) : editingBlock?.video_url && (editingBlock.video_url.includes('youtube') || editingBlock.video_url.includes('youtu.be')) ? (
+                                    <iframe
+                                        className="w-full h-full scale-[2] pointer-events-none"
+                                        src={`https://www.youtube-nocookie.com/embed/${editingBlock.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}?autoplay=1&mute=1&loop=1&playlist=${editingBlock.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}&controls=0`}
+                                        title={editingBlock.exercise_name}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    />
                                 ) : (
                                     <Dumbbell className="w-8 h-8 text-primary" style={{ color: 'var(--theme-primary)' }} />
                                 )}

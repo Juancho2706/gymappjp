@@ -156,12 +156,22 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
                             {previewExercise?.muscle_group}
                         </p>
                     </DialogHeader>
-                    {previewExercise?.gif_url ? (
-                        <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border">
+                    {previewExercise?.gif_url || (previewExercise?.video_url && !previewExercise.video_url.includes('youtube') && !previewExercise.video_url.includes('youtu.be')) ? (
+                        <div className="aspect-video relative rounded-xl overflow-hidden bg-white mt-4 border border-border flex items-center justify-center">
                             <img 
-                                src={previewExercise.gif_url} 
+                                src={previewExercise.gif_url || previewExercise.video_url!} 
                                 alt={previewExercise.name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+                    ) : previewExercise?.video_url && (previewExercise.video_url.includes('youtube') || previewExercise.video_url.includes('youtu.be')) ? (
+                        <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border flex items-center justify-center">
+                            <iframe
+                                className="w-full h-full"
+                                src={`https://www.youtube-nocookie.com/embed/${previewExercise.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}?autoplay=1&mute=1&loop=1&playlist=${previewExercise.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}&modestbranding=1&rel=0&showinfo=0&controls=1`}
+                                title={previewExercise.name}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowFullScreen
                             />
                         </div>
                     ) : (
