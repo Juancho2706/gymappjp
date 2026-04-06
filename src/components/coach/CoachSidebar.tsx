@@ -95,7 +95,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
     return (
         <>
             {/* Mobile Top Header */}
-            <div className="md:hidden flex items-center justify-between px-4 pt-5 pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40 pt-safe">
+            <div className="md:hidden flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
                 <div className="flex items-center gap-2.5">
                     <GymAppLogo className="w-8 h-8 flex-shrink-0" />
                     <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
