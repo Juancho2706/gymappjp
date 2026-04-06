@@ -160,6 +160,11 @@ export function ClientNav({ coachSlug, coachBrand }: Props) {
                     <PwaNavButton isCollapsed={isCollapsed} />
 
                     {/* Logout Button (Mobile Only) */}
+                    <div className="md:hidden flex flex-col items-center justify-center flex-1">
+                        <ThemeToggle />
+                        <span className="text-[10px] font-medium text-muted-foreground mt-1">Tema</span>
+                    </div>
+
                     <button
                         onClick={handleSignOut}
                         className={cn(

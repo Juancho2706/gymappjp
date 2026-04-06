@@ -280,8 +280,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                           <span
                             className="flex-shrink-0 w-6 h-6 rounded-full font-bold flex items-center justify-center text-xs mt-0.5"
                             style={{
-                              backgroundColor:
-                                "color-mix(in srgb, var(--theme-primary) 15%, transparent)",
+                              backgroundColor: "color-mix(in srgb, var(--theme-primary) 15%, transparent)",
                               color: "var(--theme-primary)",
                             }}
                           >

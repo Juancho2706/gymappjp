@@ -73,18 +73,21 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     }
 
     return (
-        <div
-            className="flex flex-col md:flex-row min-h-screen antialiased bg-background text-foreground pt-safe"
-            style={{ '--theme-primary': primaryColor } as React.CSSProperties}
-            data-coach-slug={coach_slug}
-            data-brand-name={brandName}
-        >
-            <ClientNav coachSlug={coach_slug} coachBrand={brandName} />
-            <InstallPrompt brandName={brandName} />
+        <>
+            <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; }` }} />
+            <div
+                className="flex flex-col md:flex-row min-h-screen antialiased bg-background text-foreground pt-safe"
+                style={{ '--theme-primary': primaryColor } as React.CSSProperties}
+                data-coach-slug={coach_slug}
+                data-brand-name={brandName}
+            >
+                <ClientNav coachSlug={coach_slug} coachBrand={brandName} />
+                <InstallPrompt brandName={brandName} />
 
-            <main className="flex-1 overflow-auto relative z-0 bg-muted/20 dark:bg-background pb-[80px] md:pb-0 has-[.is-workout-page]:pb-0">
-                {children}
-            </main>
-        </div>
+                <main className="flex-1 overflow-auto relative z-0 bg-muted/20 dark:bg-background pb-[80px] md:pb-0 has-[.is-workout-page]:pb-0">
+                    {children}
+                </main>
+            </div>
+        </>
     )
 }
