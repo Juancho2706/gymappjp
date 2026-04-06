@@ -186,12 +186,6 @@ export function ClientNav({ coachSlug, coachBrand, initialUseBrandColors = true 
                     {/* PWA Install Button */}
                     <PwaNavButton isCollapsed={isCollapsed} />
 
-                    {/* Logout Button (Mobile Only) */}
-                    <div className="md:hidden flex flex-col items-center justify-center flex-1">
-                        <ThemeToggle />
-                        <span className="text-[10px] font-medium text-muted-foreground mt-1">Tema</span>
-                    </div>
-
                     <button
                         onClick={handleSignOut}
                         className={cn(
@@ -206,25 +200,7 @@ export function ClientNav({ coachSlug, coachBrand, initialUseBrandColors = true 
                 </nav>
 
                 {/* Bottom area (Desktop only) */}
-                    <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 space-y-4 items-center" : "px-3 py-4 space-y-4")}>
-                        <div className={cn("flex flex-col gap-2", isCollapsed && "items-center")}>
-                            {!isCollapsed && <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2">Apariencia</span>}
-                            
-                            <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between px-3 py-2")}>
-                                {!isCollapsed && <span className="text-sm font-medium text-muted-foreground">Modo Oscuro</span>}
-                                <ThemeToggle />
-                            </div>
-                            
-                            <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between px-3 py-2")}>
-                                {!isCollapsed && <span className="text-sm font-medium text-muted-foreground">Colores del Coach</span>}
-                                <Switch 
-                                    checked={useBrandColors} 
-                                    onCheckedChange={handleToggleBrandColors}
-                                    disabled={isTogglingColors}
-                                />
-                            </div>
-                        </div>
-
+                    <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 items-center" : "px-3 py-4 space-y-2")}>
                         <button
                         onClick={handleSignOut}
                         title={isCollapsed ? "Cerrar sesión" : undefined}

@@ -1,9 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { Calendar, Dumbbell, TrendingUp, ChevronRight, Apple } from 'lucide-react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import type { Tables } from '@/lib/database.types'
+
+import { ClientSettingsModal } from '@/components/client/ClientSettingsModal'
 
 type Client = Tables<'clients'>
 type WorkoutPlan = Tables<'workout_plans'>
@@ -139,6 +142,9 @@ export default async function ClientDashboardPage({ params }: Props) {
         }
     })
 
+    const useBrandColorsStr = (await headers()).get('x-client-use-brand-colors')
+    const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
+
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
@@ -160,16 +166,19 @@ export default async function ClientDashboardPage({ params }: Props) {
                         )}
                     </div>
                 </div>
-                <Link
-                    href={`/c/${coach_slug}/check-in`}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors"
-                    style={{
-                        borderColor: 'var(--theme-primary)',
-                        color: 'var(--theme-primary)',
-                    }}
-                >
-                    Check-in
-                </Link>
+                <div className="flex items-center gap-2">
+                    <ClientSettingsModal coachSlug={coach_slug} initialUseBrandColors={initialUseBrandColors} />
+                    <Link
+                        href={`/c/${coach_slug}/check-in`}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors"
+                        style={{
+                            borderColor: 'var(--theme-primary)',
+                            color: 'var(--theme-primary)',
+                        }}
+                    >
+                        Check-in
+                    </Link>
+                </div>
             </header>
 
             <main className="px-4 py-6 space-y-6 max-w-lg mx-auto">

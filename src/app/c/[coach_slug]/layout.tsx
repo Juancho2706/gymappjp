@@ -44,15 +44,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export async function generateViewport({ params }: Props): Promise<Viewport> {
     const { coach_slug } = await params
-    const supabase = await createClient()
-    const { data } = await supabase
-        .from('coaches')
-        .select('primary_color')
-        .eq('slug', coach_slug)
-        .maybeSingle()
-        
-    const coach = data as Pick<Coach, 'primary_color'> & { use_brand_colors?: boolean } | null
-    const primaryColor = coach?.use_brand_colors === false ? '#007AFF' : (coach?.primary_color ?? '#8B5CF6')
+    const headersList = await headers()
+    
+    // Use the same logic as the main layout to get the primary color
+    const primaryColor = headersList.get('x-coach-primary-color') ?? '#8B5CF6'
     
     return {
         themeColor: primaryColor,

@@ -139,12 +139,12 @@ export async function middleware(request: NextRequest) {
             // Verify the user is a client belonging to this coach
             const { data: clientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, force_password_change, onboarding_completed, is_active')
+                .select('id, coach_id, force_password_change, onboarding_completed, is_active, use_coach_brand_colors')
                 .eq('id', user.id)
                 .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            const client = clientData as Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed' | 'is_active'> | null
+            const client = clientData as (Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed' | 'is_active'> & { use_coach_brand_colors?: boolean }) | null
 
             if (!client) {
                 // Logged in user is NOT a client of this coach
@@ -153,8 +153,13 @@ export async function middleware(request: NextRequest) {
                 return NextResponse.redirect(redirectUrl)
             }
 
-            // Default behavior if columns are missing
-            response.headers.set('x-client-use-brand-colors', 'true')
+            // Default behavior if columns are missing or false
+            const useBrandColors = client.use_coach_brand_colors ?? true
+            response.headers.set('x-client-use-brand-colors', String(useBrandColors))
+
+            if (!useBrandColors) {
+                response.headers.set('x-coach-primary-color', '#007AFF')
+            }
 
             // Suspend access if inactive
             if (client.is_active === false && !pathname.includes('/suspended')) {

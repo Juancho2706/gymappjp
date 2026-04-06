@@ -10,7 +10,7 @@ export async function toggleClientBrandColors(useBrandColors: boolean, coachSlug
 
     const { error } = await supabase
         .from('clients')
-        .update({ use_coach_brand_colors: useBrandColors } as any)
+        .update({ use_coach_brand_colors: useBrandColors })
         .eq('id', user.id)
 
     if (error) {

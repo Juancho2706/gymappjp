@@ -143,6 +143,7 @@ export type Database = {
           phone: string | null
           subscription_start_date: string | null
           updated_at: string
+          use_coach_brand_colors: boolean
         }
         Insert: {
           coach_id: string
@@ -154,6 +155,7 @@ export type Database = {
           is_active?: boolean | null
           onboarding_completed?: boolean
           updated_at?: string
+          use_coach_brand_colors?: boolean
         }
         Update: {
           coach_id?: string
@@ -165,6 +167,7 @@ export type Database = {
           is_active?: boolean | null
           onboarding_completed?: boolean
           updated_at?: string
+          use_coach_brand_colors?: boolean
         }
         Relationships: [
           {
@@ -191,6 +194,7 @@ export type Database = {
           trial_ends_at: string | null
           trial_used_email: string | null
           updated_at: string
+          use_brand_colors_coach: boolean
         }
         Insert: {
           brand_name: string
@@ -206,6 +210,7 @@ export type Database = {
           trial_ends_at?: string | null
           trial_used_email?: string | null
           updated_at?: string
+          use_brand_colors_coach?: boolean
         }
         Update: {
           brand_name?: string
@@ -221,6 +226,7 @@ export type Database = {
           trial_ends_at?: string | null
           trial_used_email?: string | null
           updated_at?: string
+          use_brand_colors_coach?: boolean
         }
         Relationships: []
       }
