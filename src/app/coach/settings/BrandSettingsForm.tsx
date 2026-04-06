@@ -40,14 +40,25 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [state, formAction] = useActionState(updateBrandSettingsAction, initialState)
     const [selectedColor, setSelectedColor] = useState(coach.primary_color)
 
+    const [useCoachColors, setUseCoachColors] = useState((coach as any).use_brand_colors_coach ?? false)
+
     // Live Preview Effect
     useEffect(() => {
-        const root = document.documentElement;
         const container = document.querySelector('.coach-layout-container') as HTMLElement;
-        if (container) {
+        if (!container) return;
+
+        // Si el coach tiene habilitado usar sus colores, aplicamos la previsualización en vivo
+        if (useCoachColors) {
             container.style.setProperty('--theme-primary', selectedColor);
+        } else {
+            // Si lo desactiva, forzamos el color por defecto en el layout
+            container.style.setProperty('--theme-primary', '#007AFF');
         }
-    }, [selectedColor]);
+
+        // Cleanup: al salir del componente, React se encargará de restaurar el estado del layout
+        // mediante SSR/RSC si hay recarga, pero para navegación cliente a cliente, 
+        // restauramos al valor original que tenía cuando entró.
+    }, [selectedColor, useCoachColors]);
 
     return (
         <form action={formAction} className="space-y-8">
@@ -176,7 +187,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         <input 
                             type="checkbox" 
                             name="use_brand_colors_coach" 
-                            defaultChecked={(coach as any).use_brand_colors_coach ?? false}
+                            checked={useCoachColors}
+                            onChange={(e) => setUseCoachColors(e.target.checked)}
                             className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
                         />
                     </div>
