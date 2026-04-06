@@ -40,10 +40,10 @@ export function ClientsHeader({ coachSlug, appUrl, stats }: ClientsHeaderProps) 
                     
                     <div className="relative z-10">
                         <h1 className="text-4xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display">
-                            Directorio de Unidades
+                            Directorio de Alumnos
                         </h1>
                         <p className="text-muted-foreground text-sm font-medium mt-2 max-w-md leading-relaxed">
-                            Gestión centralizada de activos, seguimiento de protocolos y métricas de despliegue.
+                            Gestión centralizada de alumnos, seguimiento de rutinas y métricas de progreso.
                         </p>
                         
                         {loginUrl && (
@@ -65,10 +65,14 @@ export function ClientsHeader({ coachSlug, appUrl, stats }: ClientsHeaderProps) 
                     <div className="relative z-10 w-full md:w-auto">
                         <GlassButton 
                             onClick={() => setOpen(true)}
-                            className="w-full md:w-auto px-8 h-14 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)] border-none"
+                            className="w-full md:w-auto px-8 h-14 text-white hover:opacity-90 transition-all border-none"
+                            style={{ 
+                                backgroundColor: 'var(--theme-primary)',
+                                boxShadow: '0 0 20px -5px var(--theme-primary)'
+                            }}
                         >
                             <UserPlus className="w-5 h-5 mr-2" />
-                            <span className="font-bold uppercase tracking-widest text-xs">Nueva Alta</span>
+                            <span className="font-bold uppercase tracking-widest text-xs">Nuevo Alumno</span>
                         </GlassButton>
                     </div>
                 </div>

@@ -153,9 +153,9 @@ export default function CoachDashboardClient({
                 {stats.map((stat, i) => {
                     const Icon = stat.icon
                     const CardContent = (
-                        <GlassCard hoverEffect className="relative h-full flex flex-col justify-between overflow-hidden border-blue-500/10 dark:border-white/5 bg-white/80 dark:bg-zinc-950 transition-all duration-500 shadow-xl dark:shadow-[0_0_20px_-5px_rgba(0,122,255,0.3)]">
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(0,122,255,0.05),transparent_70%)] dark:bg-[radial-gradient(circle_at_0%_0%,rgba(0,122,255,0.25),transparent_75%)] pointer-events-none z-0" />
-                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-[radial-gradient(circle_at_0%_0%,rgba(0,122,255,0.1),transparent_75%)] dark:bg-[radial-gradient(circle_at_0%_0%,rgba(0,122,255,0.35),transparent_80%)] transition-opacity duration-500 pointer-events-none z-0" />
+                        <GlassCard hoverEffect className="relative h-full flex flex-col justify-between overflow-hidden border-border dark:border-white/5 bg-white/80 dark:bg-zinc-950 transition-all duration-500 shadow-xl dark:shadow-[0_0_20px_-5px_var(--theme-primary,rgba(0,122,255,0.3))]">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,color-mix(in srgb,var(--theme-primary),transparent_95%),transparent_70%)] dark:bg-[radial-gradient(circle_at_0%_0%,color-mix(in srgb,var(--theme-primary),transparent_75%),transparent_75%)] pointer-events-none z-0" />
+                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-[radial-gradient(circle_at_0%_0%,color-mix(in srgb,var(--theme-primary),transparent_90%),transparent_75%)] dark:bg-[radial-gradient(circle_at_0%_0%,color-mix(in srgb,var(--theme-primary),transparent_65%),transparent_80%)] transition-opacity duration-500 pointer-events-none z-0" />
                             
                             <div className="relative z-10 p-4 md:p-6 h-full flex flex-col justify-between">
                                 <div className="flex items-start justify-between mb-4 md:mb-8">
@@ -283,31 +283,34 @@ export default function CoachDashboardClient({
                                     <p className="text-muted-foreground text-sm">Esperando señales...</p>
                                 </div>
                             ) : (
-                                <div className="divide-y divide-border/50 dark:divide-white/5 p-4 space-y-1">
+                                <div className="divide-y divide-border/50 dark:divide-white/5 p-2 md:p-4 space-y-1">
                                     {recentActivities.map((activity) => (
-                                        <Link key={activity.id} href={activity.href} className="flex items-start gap-4 p-3 hover:bg-primary/5 dark:hover:bg-white/5 transition-colors rounded-lg group">
-                                            <div className="flex items-center gap-2">
-                                                <div className="text-emerald-500 mt-0.5 opacity-70 group-hover:opacity-100">
+                                        <Link key={activity.id} href={activity.href} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 p-3 hover:bg-primary/5 dark:hover:bg-white/5 transition-colors rounded-lg group">
+                                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                                                <div className="text-emerald-500 mt-0.5 opacity-70 group-hover:opacity-100 shrink-0">
                                                     <ArrowRight className="w-4 h-4" />
                                                 </div>
-                                                <span className="text-primary font-bold">[{activity.type.toUpperCase()}]</span>
-                                                <span className="text-zinc-700 dark:text-zinc-300 truncate">{activity.title}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between mt-1">
-                                                <div className="text-zinc-500 text-xs">
-                                                    {activity.subtitle}
-                                                </div>
-                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <div 
-                                                        className="text-[10px] font-bold text-primary uppercase tracking-tight px-2 py-0.5 rounded bg-primary/10 border border-primary/20"
-                                                        style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
-                                                    >
-                                                        Gestionar
+                                                <div className="flex flex-col gap-0.5 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-primary font-bold whitespace-nowrap">[{activity.type.toUpperCase()}]</span>
+                                                        <span className="text-zinc-700 dark:text-zinc-300 font-medium truncate">{activity.title}</span>
+                                                    </div>
+                                                    <div className="text-zinc-500 text-xs truncate">
+                                                        {activity.subtitle}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="text-zinc-400 dark:text-zinc-600 text-xs shrink-0 pt-1">
-                                                {new Date(activity.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                                            
+                                            <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pl-7 sm:pl-0">
+                                                <div className="text-zinc-400 dark:text-zinc-600 text-[10px] md:text-xs">
+                                                    {new Date(activity.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                                                </div>
+                                                <div 
+                                                    className="text-[9px] font-bold text-primary uppercase tracking-tight px-2 py-0.5 rounded bg-primary/10 border border-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
+                                                >
+                                                    Gestionar
+                                                </div>
                                             </div>
                                         </Link>
                                     ))}
