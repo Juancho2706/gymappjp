@@ -9,8 +9,6 @@ import { deleteNutritionTemplate, assignTemplateToClients, duplicateNutritionTem
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
 import { Label } from '@/components/ui/label'
 
 interface Template {
@@ -46,12 +44,17 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
     
     // Asignación Modal State
     const [assigningTemplate, setAssigningTemplate] = useState<Template | null>(null)
-    const [selectedClient, setSelectedClient] = useState<string>('')
+    const [selectedClients, setSelectedClients] = useState<string[]>([])
     const [isAssigning, setIsAssigning] = useState(false)
+    const [clientSearchTerm, setClientSearchTerm] = useState('')
 
     const filteredTemplates = templates.filter(t => 
         t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.description?.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+
+    const filteredClients = availableClients.filter(c => 
+        c.full_name.toLowerCase().includes(clientSearchTerm.toLowerCase())
     )
 
     const handleDelete = async (id: string) => {
@@ -86,24 +89,38 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
 
     const openAssignModal = (template: Template) => {
         setAssigningTemplate(template)
-        setSelectedClient('')
+        setSelectedClients([])
+        setClientSearchTerm('')
+    }
+
+    const toggleClientSelection = (clientId: string) => {
+        setSelectedClients(prev => 
+            prev.includes(clientId) 
+                ? prev.filter(id => id !== clientId)
+                : [...prev, clientId]
+        )
     }
 
     const handleAssignTemplate = async () => {
-        if (!assigningTemplate || !selectedClient) return
+        if (!assigningTemplate || selectedClients.length === 0) return
         setIsAssigning(true)
         try {
-            const result = await assignTemplateToClients(assigningTemplate.id, coachId, [selectedClient])
+            const result = await assignTemplateToClients(assigningTemplate.id, coachId, selectedClients)
             if (result.error) {
                 toast.error(result.error)
             } else {
-                toast.success(`Plantilla asignada correctamente`)
+                toast.success(`Plantilla asignada correctamente a ${selectedClients.length} alumno(s)`)
                 setAssigningTemplate(null)
             }
         } finally {
             setIsAssigning(false)
         }
     }
+
+    const someClientHasActivePlan = selectedClients.some(clientId => {
+        const client = availableClients.find(c => c.id === clientId)
+        return client && client.active_plan
+    })
 
     return (
         <div className="space-y-6">
@@ -240,40 +257,90 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                     <div className="space-y-4 pt-4">
                         <div className="p-4 rounded-xl border" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
                             <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--theme-primary)' }}>Plantilla Seleccionada:</p>
-                            <p className="text-base font-black">{assigningTemplate?.name}</p>
+                            <p className="text-base font-black text-slate-900 dark:text-white">{assigningTemplate?.name}</p>
                         </div>
 
-                        <div className="space-y-4">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seleccionar Alumno Activo</Label>
-                            <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val || '')}>
-                                <SelectTrigger className="w-full h-12 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground">
-                                    <SelectValue placeholder="Elegir alumno...">
-                                        {selectedClient ? availableClients.find(c => c.id === selectedClient)?.full_name : "Elegir alumno..."}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent 
-                                    className="max-h-[200px] z-[100]"
-                                >
-                                    {availableClients.length === 0 ? (
-                                        <div className="p-4 text-center text-sm text-muted-foreground">No hay alumnos activos</div>
-                                    ) : (
-                                            availableClients.map(client => {
-                                            const hasActivePlan = (client as any).active_plan; // Assuming availableClients passes active_plan info
-                                            return (
-                                                <SelectItem key={client.id} value={client.id} className="cursor-pointer font-bold text-slate-900 dark:text-foreground">
-                                                    {client.full_name}
-                                                </SelectItem>
-                                            )
-                                        })
-                                    )}
-                                </SelectContent>
-                            </Select>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                    Seleccionar Alumnos ({selectedClients.length})
+                                </Label>
+                                {availableClients.length > 0 && (
+                                    <button 
+                                        type="button"
+                                        className="text-[10px] font-bold text-primary hover:underline"
+                                        onClick={() => {
+                                            if (selectedClients.length === availableClients.length) {
+                                                setSelectedClients([])
+                                            } else {
+                                                setSelectedClients(availableClients.map(c => c.id))
+                                            }
+                                        }}
+                                        style={{ color: 'var(--theme-primary)' }}
+                                    >
+                                        {selectedClients.length === availableClients.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                                    </button>
+                                )}
+                            </div>
                             
-                            {selectedClient && (
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Buscar por nombre..."
+                                    value={clientSearchTerm}
+                                    onChange={(e) => setClientSearchTerm(e.target.value)}
+                                    className="pl-9 h-10 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10"
+                                />
+                            </div>
+
+                            <div className="max-h-[200px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                {filteredClients.length === 0 ? (
+                                    <div className="p-4 text-center text-sm text-muted-foreground border rounded-lg border-dashed">
+                                        No hay alumnos disponibles
+                                    </div>
+                                ) : (
+                                    filteredClients.map(client => {
+                                        const isSelected = selectedClients.includes(client.id)
+                                        return (
+                                            <div 
+                                                key={client.id} 
+                                                onClick={() => toggleClientSelection(client.id)}
+                                                className={cn(
+                                                    "flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
+                                                    isSelected 
+                                                        ? "bg-primary/5 border-primary/20" 
+                                                        : "bg-white dark:bg-zinc-900 border-slate-100 dark:border-white/5 hover:border-primary/20"
+                                                )}
+                                                style={isSelected ? { backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' } : {}}
+                                            >
+                                                <div 
+                                                    className={cn(
+                                                        "w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0",
+                                                        isSelected 
+                                                            ? "border-transparent" 
+                                                            : "border-slate-300 dark:border-slate-600"
+                                                    )}
+                                                    style={isSelected ? { backgroundColor: 'var(--theme-primary)', borderColor: 'var(--theme-primary)' } : {}}
+                                                >
+                                                    {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-bold text-sm truncate text-slate-900 dark:text-white">{client.full_name}</p>
+                                                    {client.active_plan && (
+                                                        <p className="text-[10px] text-amber-600 dark:text-amber-500 font-medium">Tiene plan activo</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                )}
+                            </div>
+                            
+                            {someClientHasActivePlan && (
                                 <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex gap-3 text-amber-700 dark:text-amber-500 animate-in fade-in">
                                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                                     <p className="text-xs font-medium">
-                                        Si el alumno ya tiene un plan activo, este será <span className="font-bold">desactivado y reemplazado</span> por esta plantilla.
+                                        Algunos alumnos seleccionados ya tienen un plan activo. Será <span className="font-bold">reemplazado</span> por esta plantilla.
                                     </p>
                                 </div>
                             )}
@@ -281,11 +348,11 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
 
                         <Button 
                             className="w-full h-12 font-black uppercase tracking-widest gap-2 text-white border-none transition-all hover:opacity-90"
-                            disabled={isAssigning || !selectedClient}
+                            disabled={isAssigning || selectedClients.length === 0}
                             onClick={handleAssignTemplate}
                             style={{ backgroundColor: 'var(--theme-primary)' }}
                         >
-                            {isAssigning ? 'Procesando...' : `Confirmar Asignación`}
+                            {isAssigning ? 'Procesando...' : `Confirmar Asignación ${selectedClients.length > 0 ? `(${selectedClients.length})` : ''}`}
                         </Button>
                     </div>
                 </DialogContent>
