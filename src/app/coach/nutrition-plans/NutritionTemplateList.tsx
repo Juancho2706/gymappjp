@@ -227,7 +227,9 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
 
             {/* Modal de Asignación */}
             <Dialog open={!!assigningTemplate} onOpenChange={(open) => !open && setAssigningTemplate(null)}>
-                <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10">
+                <DialogContent 
+                    className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10"
+                >
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
                             <Users className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
@@ -245,9 +247,13 @@ export function NutritionTemplateList({ templates, coachId, availableClients = [
                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seleccionar Alumno Activo</Label>
                             <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val || '')}>
                                 <SelectTrigger className="w-full h-12 bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-foreground">
-                                    <SelectValue placeholder="Elegir alumno..." />
+                                    <SelectValue placeholder="Elegir alumno...">
+                                        {selectedClient ? availableClients.find(c => c.id === selectedClient)?.full_name : "Elegir alumno..."}
+                                    </SelectValue>
                                 </SelectTrigger>
-                                <SelectContent className="max-h-[200px] z-[100]">
+                                <SelectContent 
+                                    className="max-h-[200px] z-[100]"
+                                >
                                     {availableClients.length === 0 ? (
                                         <div className="p-4 text-center text-sm text-muted-foreground">No hay alumnos activos</div>
                                     ) : (
