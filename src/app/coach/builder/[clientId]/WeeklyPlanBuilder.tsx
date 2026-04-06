@@ -853,7 +853,8 @@ export function WeeklyPlanBuilder({
                                 {!isCatalogOpen && (
                                     <button
                                         onClick={() => setIsCatalogOpen(true)}
-                                        className="fixed bottom-[110px] right-6 w-14 h-14 rounded-full bg-primary text-white shadow-[0_8px_25px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-90 transition-all z-40 border border-white/20 flex items-center justify-center"
+                                        className="fixed bottom-[110px] right-6 w-14 h-14 rounded-full bg-primary text-white hover:scale-105 active:scale-90 transition-all z-40 border border-white/20 flex items-center justify-center"
+                                        style={{ boxShadow: '0 8px 25px color-mix(in srgb, var(--theme-primary) 40%, transparent)' }}
                                     >
                                         <Plus className="w-6 h-6" />
                                     </button>
@@ -864,7 +865,7 @@ export function WeeklyPlanBuilder({
 
                     <DragOverlay dropAnimation={null}>
                         {activeId && activeOverlayItem ? (
-                            <div className="bg-primary/20 backdrop-blur-xl border border-primary text-white p-4 rounded-xl shadow-[0_0_30px_rgba(0,122,255,0.5)] min-w-[240px] opacity-100 scale-105 pointer-events-none z-[100] flex items-center gap-3">
+                            <div className="bg-primary/20 backdrop-blur-xl border border-primary text-white p-4 rounded-xl min-w-[240px] opacity-100 scale-105 pointer-events-none z-[100] flex items-center gap-3" style={{ boxShadow: '0 0 30px color-mix(in srgb, var(--theme-primary) 50%, transparent)' }}>
                                 <Activity className="w-5 h-5 text-primary" />
                                 <div>
                                     <p className="text-sm font-bold leading-tight">{activeOverlayItem.name}</p>
