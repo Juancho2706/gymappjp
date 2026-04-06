@@ -75,7 +75,7 @@
   --popover-foreground: #121212;
 
   /* Accent: Electric Blue (#007AFF) */
-  --primary: #007AFF;
+  --primary: var(--theme-primary, #007AFF);
   --primary-foreground: #FFFFFF;
 
   /* Secondary & Muted for High Density UI */

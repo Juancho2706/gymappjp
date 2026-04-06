@@ -121,8 +121,8 @@ function SortableBlock({
     return (
         <div ref={setNodeRef}
             className={cn(
-                'group relative flex flex-col bg-background dark:bg-[#0f172a] backdrop-blur-md border border-border dark:border-blue-900/30 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none',
-                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-blue-900/40'
+                'group relative flex flex-col bg-background dark:bg-zinc-950/50 backdrop-blur-md border border-border dark:border-white/10 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none',
+                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-primary/10'
             )}
             style={{ 
                 ...style, 
@@ -210,7 +210,7 @@ function DayColumn({
     })
 
     return (
-        <div className="flex flex-col h-full bg-card dark:bg-blue-950/10 backdrop-blur-xl border border-border dark:border-blue-900/20 rounded-2xl min-w-[280px] xl:min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
+        <div className="flex flex-col h-full bg-card dark:bg-zinc-950/30 backdrop-blur-xl border border-border dark:border-white/10 rounded-2xl min-w-[280px] xl:min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
             <div className="p-4 border-b border-border dark:border-white/10 bg-muted/50 dark:bg-white/[0.02]">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
@@ -774,7 +774,7 @@ export function WeeklyPlanBuilder({
 
                         <div className="flex-1 overflow-hidden flex flex-col relative">
                             {/* Background ambient light for builder area */}
-                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none" />
+                            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, color-mix(in srgb, var(--theme-primary) 5%, transparent) 0%, transparent 70%)' }} />
 
                             {/* Desktop View: Horizontal Scroll Board */}
                             <div 
