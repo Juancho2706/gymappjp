@@ -1,10 +1,7 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
-import type { Tables } from '@/lib/database.types'
 import { SuccessAnimationProvider } from '@/components/SuccessAnimationProvider'
-
-type Coach = Tables<'coaches'>
+import { getCoach } from '@/lib/coach/get-coach'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -19,23 +16,7 @@ export default async function CoachLayout({
 }: {
     children: React.ReactNode
 }) {
-    const supabase = await createClient()
-
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-        redirect('/login')
-    }
-
-    const { data: coachData } = await supabase
-        .from('coaches')
-        .select('full_name, brand_name, subscription_status, primary_color, use_brand_colors_coach')
-        .eq('id', user.id)
-        .maybeSingle()
-
-    const coach = coachData as Pick<Coach, 'full_name' | 'brand_name' | 'subscription_status' | 'primary_color'> & { use_brand_colors_coach?: boolean } | null
+    const coach = await getCoach()
 
     if (!coach) {
         redirect('/login')
