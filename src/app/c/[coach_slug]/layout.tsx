@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const supabase = await createClient()
     const { data } = await supabase
         .from('coaches')
-        .select('brand_name, logo_url, primary_color, use_brand_colors')
+        .select('brand_name, logo_url, primary_color')
         .eq('slug', coach_slug)
         .maybeSingle()
 
@@ -47,7 +47,7 @@ export async function generateViewport({ params }: Props): Promise<Viewport> {
     const supabase = await createClient()
     const { data } = await supabase
         .from('coaches')
-        .select('primary_color, use_brand_colors')
+        .select('primary_color')
         .eq('slug', coach_slug)
         .maybeSingle()
         

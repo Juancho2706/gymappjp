@@ -73,20 +73,16 @@ export async function middleware(request: NextRequest) {
         }
 
         // 1. Fetch coach branding by slug (public read — no auth required)
+        // NOTE: We removed use_brand_colors from the query because it might not exist in the DB yet
         const { data: coachData, error: coachError } = await supabase
             .from('coaches')
-            .select('id, brand_name, primary_color, logo_url, slug, use_brand_colors')
+            .select('id, brand_name, primary_color, logo_url, slug')
             .eq('slug', coachSlug)
             .maybeSingle()
 
-        if (coachError) {
-            console.error(`[Middleware] Error fetching coach for slug ${coachSlug}:`, coachError)
-        }
-
-        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug'> & { use_brand_colors?: boolean } | null
+        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug'> | null
 
         if (!coach) {
-            console.error(`[Middleware] Coach not found for slug: ${coachSlug}`)
             // Coach slug doesn't exist → 404
             const notFoundUrl = request.nextUrl.clone()
             notFoundUrl.pathname = '/not-found'
@@ -115,30 +111,22 @@ export async function middleware(request: NextRequest) {
 
         if (isLoginPage && user) {
             // If already logged in, check if it's a client of this coach and redirect to dashboard
-            const { data: clientData, error: clientFetchError } = await supabase
+            const { data: clientData } = await supabase
                 .from('clients')
                 .select('id, coach_id')
                 .eq('id', user.id)
                 .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            if (clientFetchError) {
-                console.error('[Middleware] Error checking client on login page:', clientFetchError)
-            }
-
             if (clientData) {
-                console.log(`[Middleware] User already logged in as client for ${coachSlug}, redirecting to dashboard`)
                 const dashboardUrl = request.nextUrl.clone()
                 dashboardUrl.pathname = `/c/${coachSlug}/dashboard`
                 return NextResponse.redirect(dashboardUrl)
-            } else {
-                console.warn(`[Middleware] User logged in but NOT a client of ${coachSlug}`)
             }
         }
 
         if (!isLoginPage) {
             if (!user) {
-                console.log(`[Middleware] No user for protected route ${pathname}, redirecting to login`)
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/login`
                 const redirect = NextResponse.redirect(redirectUrl)
@@ -149,33 +137,24 @@ export async function middleware(request: NextRequest) {
             }
 
             // Verify the user is a client belonging to this coach
-            const { data: clientData, error: clientFetchError } = await supabase
+            const { data: clientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, force_password_change, onboarding_completed, is_active, use_coach_brand_colors')
+                .select('id, coach_id, force_password_change, onboarding_completed, is_active')
                 .eq('id', user.id)
                 .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            if (clientFetchError) {
-                console.error('[Middleware] Error fetching client for protected route:', clientFetchError)
-            }
-
-            const client = clientData as Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed' | 'is_active'> & { use_coach_brand_colors?: boolean } | null
+            const client = clientData as Pick<Client, 'id' | 'coach_id' | 'force_password_change' | 'onboarding_completed' | 'is_active'> | null
 
             if (!client) {
                 // Logged in user is NOT a client of this coach
-                console.warn(`[Middleware] Logged in user ${user.id} is NOT a client of coach ${coach.id}`)
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/login`
                 return NextResponse.redirect(redirectUrl)
             }
 
-            if (client.use_coach_brand_colors === false) {
-                resolvedColor = '#007AFF'
-                response.headers.set('x-coach-primary-color', resolvedColor)
-            }
-            
-            response.headers.set('x-client-use-brand-colors', String(client.use_coach_brand_colors !== false))
+            // Default behavior if columns are missing
+            response.headers.set('x-client-use-brand-colors', 'true')
 
             // Suspend access if inactive
             if (client.is_active === false && !pathname.includes('/suspended')) {
