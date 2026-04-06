@@ -55,7 +55,7 @@ export default async function BuilderPage(
                     *,
                     workout_blocks (
                         *,
-                        exercises ( name, muscle_group )
+                        exercises ( name, muscle_group, gif_url )
                     )
                 )
             `)

@@ -122,7 +122,10 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                         <GymAppLogo className="w-10 h-10 flex-shrink-0" />
                         {!isCollapsed && (
                             <div className="min-w-0 animate-in fade-in duration-300">
-                                <p className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mb-0.5">
+                                <p 
+                                    className="text-[10px] font-bold uppercase tracking-[0.2em] mb-0.5"
+                                    style={{ color: 'var(--theme-primary, #007AFF)' }}
+                                >
                                     COACH OP
                                 </p>
                                 <p className="text-sm font-bold text-sidebar-foreground truncate uppercase tracking-tight font-display">

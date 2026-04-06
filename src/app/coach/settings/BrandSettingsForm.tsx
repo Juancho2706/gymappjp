@@ -25,11 +25,10 @@ function SaveButton() {
             type="submit"
             disabled={pending}
             className={cn(
-                'flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200',
-                'bg-gradient-to-r from-emerald-500 to-teal-600 text-white',
-                'hover:shadow-lg hover:shadow-emerald-500/25',
-                'disabled:opacity-60 disabled:cursor-not-allowed'
+                'flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 text-white shadow-lg',
+                'disabled:opacity-60 disabled:cursor-not-allowed hover:opacity-90 hover:-translate-y-0.5'
             )}
+            style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
         >
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {pending ? 'Guardando...' : 'Guardar cambios'}
