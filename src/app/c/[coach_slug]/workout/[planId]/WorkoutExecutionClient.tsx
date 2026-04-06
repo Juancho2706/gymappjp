@@ -574,12 +574,32 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                             }
                             
                             if (currentExercise.video_url) {
+                                const isMp4 = currentExercise.video_url.toLowerCase().includes('.mp4') || currentExercise.video_url.toLowerCase().includes('.mov') || currentExercise.video_url.toLowerCase().includes('supabase.co/storage');
+                                
+                                if (isMp4) {
+                                    return (
+                                        <div className="relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
+                                            <video
+                                                src={currentExercise.video_url}
+                                                autoPlay
+                                                loop
+                                                muted
+                                                playsInline
+                                                className="w-full h-full object-contain"
+                                            />
+                                        </div>
+                                    );
+                                }
+
                                 return (
-                                    <div className="p-8 text-center bg-muted shrink-0">
-                                        <a href={currentExercise.video_url} target="_blank" rel="noopener noreferrer" 
-                                           className="inline-flex items-center gap-2 text-primary font-bold">
-                                            <Play className="w-5 h-5" /> Ver Video Externo
-                                        </a>
+                                    <div className="relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
+                                        <Image
+                                            src={currentExercise.video_url}
+                                            alt={currentExercise.name}
+                                            fill
+                                            className="object-contain"
+                                            unoptimized
+                                        />
                                     </div>
                                 );
                             }

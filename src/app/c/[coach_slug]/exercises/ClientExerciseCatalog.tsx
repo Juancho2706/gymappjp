@@ -214,17 +214,32 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 }
 
                 if (selectedExercise.video_url) {
+                  const isMp4 = selectedExercise.video_url.toLowerCase().includes('.mp4') || selectedExercise.video_url.toLowerCase().includes('.mov') || selectedExercise.video_url.toLowerCase().includes('supabase.co/storage');
+                  
+                  if (isMp4) {
+                    return (
+                      <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
+                        <video
+                          src={selectedExercise.video_url}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    );
+                  }
+
                   return (
-                    <div className="p-8 text-center bg-muted border-b border-border/50 shrink-0">
-                      <a
-                        href={selectedExercise.video_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 font-bold"
-                        style={{ color: primaryColor }}
-                      >
-                        <Play className="w-5 h-5" /> Ver Video de Referencia
-                      </a>
+                    <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
+                      <Image
+                        src={selectedExercise.video_url}
+                        alt={selectedExercise.name}
+                        fill
+                        className="object-contain"
+                        unoptimized
+                      />
                     </div>
                   );
                 }
