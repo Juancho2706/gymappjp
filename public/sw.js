@@ -48,9 +48,8 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('supabase.co') || 
     url.pathname.includes('/_next/') ||
     url.pathname.includes('/api/') ||
-    url.pathname.includes('/nutrition') ||
-    url.pathname.includes('/nutrition-plans') ||
-    url.pathname.includes('/nutrition-builder')
+    url.pathname.startsWith('/coach') ||
+    url.pathname.startsWith('/c/')
   ) {
     return;
   }
