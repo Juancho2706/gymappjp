@@ -574,7 +574,8 @@ export function WorkoutExecutionClient({ plan, logs, previousHistory = {}, coach
                             }
                             
                             if (currentExercise.video_url) {
-                                const isMp4 = currentExercise.video_url.toLowerCase().includes('.mp4') || currentExercise.video_url.toLowerCase().includes('.mov') || currentExercise.video_url.toLowerCase().includes('supabase.co/storage');
+                                const urlLower = currentExercise.video_url.toLowerCase();
+                                const isMp4 = urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.webm') || (urlLower.includes('supabase.co/storage') && !urlLower.includes('.gif') && !urlLower.includes('.jpg') && !urlLower.includes('.png'));
                                 
                                 if (isMp4) {
                                     return (

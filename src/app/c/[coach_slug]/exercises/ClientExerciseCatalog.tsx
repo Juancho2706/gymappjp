@@ -214,7 +214,8 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 }
 
                 if (selectedExercise.video_url) {
-                  const isMp4 = selectedExercise.video_url.toLowerCase().includes('.mp4') || selectedExercise.video_url.toLowerCase().includes('.mov') || selectedExercise.video_url.toLowerCase().includes('supabase.co/storage');
+                  const urlLower = selectedExercise.video_url.toLowerCase();
+                  const isMp4 = urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.webm') || (urlLower.includes('supabase.co/storage') && !urlLower.includes('.gif') && !urlLower.includes('.jpg') && !urlLower.includes('.png'));
                   
                   if (isMp4) {
                     return (
