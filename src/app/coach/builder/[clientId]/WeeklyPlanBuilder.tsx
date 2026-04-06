@@ -929,8 +929,8 @@ export function WeeklyPlanBuilder({
                     <SheetHeader className="p-8 border-b border-border dark:border-white/10 sticky top-0 bg-background/50 dark:bg-black/50 backdrop-blur-md z-10">
                         <div className="flex items-start gap-4">
                             <div 
-                                className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_15px_rgba(0,122,255,0.2)] shrink-0 overflow-hidden cursor-zoom-in"
-                                style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
+                                className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden cursor-zoom-in"
+                                style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)', boxShadow: '0 0 15px color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}
                                 onClick={() => {
                                     if (editingBlock?.gif_url) setExpandedGif({url: editingBlock.gif_url, name: editingBlock.exercise_name})
                                     else if (editingBlock?.video_url && !editingBlock.video_url.includes('youtube')) setExpandedGif({url: editingBlock.video_url, name: editingBlock.exercise_name})
