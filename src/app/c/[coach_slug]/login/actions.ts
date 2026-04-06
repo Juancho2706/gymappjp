@@ -42,36 +42,53 @@ export async function clientLoginAction(
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
+        console.error('[LoginAction] Error signing in:', error.message)
         return { error: 'Email o contraseña incorrectos.' }
     }
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Error al obtener sesión.' }
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+        console.error('[LoginAction] No user after successful sign in:', userError)
+        return { error: 'Error al obtener sesión.' }
+    }
+
+    // Use admin client for the initial check to bypass RLS if it's restrictive
+    const rawAdmin = await createRawAdminClient()
 
     // Verify the logged-in user is a client of this coach
-    const { data: coachData } = await supabase
+    const { data: coachData, error: coachError } = await rawAdmin
         .from('coaches')
         .select('id')
         .eq('slug', coach_slug)
         .maybeSingle()
 
+    if (coachError) {
+        console.error('[LoginAction] Error fetching coach (admin):', coachError)
+    }
+
     const coach = coachData as Pick<Coach, 'id'> | null
 
     if (!coach) {
+        console.error('[LoginAction] Coach not found for slug (admin):', coach_slug)
         await supabase.auth.signOut()
         return { error: 'Coach no encontrado.' }
     }
 
-    const { data: clientData } = await supabase
+    const { data: clientData, error: clientError } = await rawAdmin
         .from('clients')
         .select('id, force_password_change, is_active')
         .eq('id', user.id)
         .eq('coach_id', coach.id)
         .maybeSingle()
+    
+    if (clientError) {
+        console.error('[LoginAction] Error fetching client (admin):', clientError)
+    }
 
     const client = clientData as Pick<Client, 'id' | 'force_password_change' | 'is_active'> | null
 
     if (!client) {
+        console.warn('[LoginAction] User is not a client of this coach (admin):', { userId: user.id, coachId: coach.id })
         await supabase.auth.signOut()
         return { error: 'No tienes acceso a esta plataforma.' }
     }
