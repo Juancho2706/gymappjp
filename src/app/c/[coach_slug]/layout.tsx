@@ -65,16 +65,22 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
     const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
 
+    // Compute RGB values for rgba() usage throughout the UI
+    const hexMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(primaryColor)
+    const primaryRgb = hexMatch
+        ? `${parseInt(hexMatch[1], 16)}, ${parseInt(hexMatch[2], 16)}, ${parseInt(hexMatch[3], 16)}`
+        : '0, 122, 255'
+
     if (!coachId) {
         redirect('/not-found')
     }
 
     return (
         <>
-            <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; }` }} />
+            <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; --theme-primary-rgb: ${primaryRgb}; }` }} />
             <div
                 className="flex flex-col md:flex-row min-h-screen antialiased bg-background text-foreground pt-safe"
-                style={{ '--theme-primary': primaryColor } as React.CSSProperties}
+                style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
             >

@@ -169,7 +169,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                                     'flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-xl text-[10px] md:text-sm font-semibold transition-all duration-300 group flex-1 md:flex-none border border-transparent',
                                     isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start md:px-4',
                                     isActive
-                                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(0,122,255,0.4)]'
+                                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.4)]'
                                         : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
                                 )}
                                 style={isActive ? activeBgStyle : undefined}

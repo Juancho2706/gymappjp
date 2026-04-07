@@ -140,18 +140,27 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
 
     // Procesar logs de nutrición (últimos 7-14 días)
     const nutritionHistory = [...(data.nutritionLogs || [])]
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .sort((a, b) => new Date(a.log_date).getTime() - new Date(b.log_date).getTime())
         .map(log => {
-            const diff = log.total_calories - targetCalories;
-            const isAdherent = Math.abs(diff) <= 100;
+            const mealLogs: any[] = log.nutrition_meal_logs || [];
+            const total = mealLogs.length;
+            const done = mealLogs.filter((ml: any) => ml.is_completed).length;
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
             return {
-                date: new Date(log.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-                proteina: log.total_protein || 0,
-                carbohidratos: log.total_carbs || 0,
-                grasas: log.total_fats || 0,
-                calorias: log.total_calories || 0,
-                diferencial: diff,
-                isAdherent
+                date: new Date(log.log_date + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+                log_date: log.log_date,
+                plan_name: log.plan_name_at_log || '',
+                target_calories: log.target_calories_at_log || 0,
+                target_protein: log.target_protein_at_log || 0,
+                target_carbs: log.target_carbs_at_log || 0,
+                target_fats: log.target_fats_at_log || 0,
+                mealsTotal: total,
+                mealsDone: done,
+                compliancePct: pct,
+                mealLogs,
+                // Legacy fields for charts (no real macro data available - only completion)
+                diferencial: 0,
+                isAdherent: pct >= 80,
             };
         });
 
@@ -791,23 +800,125 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                 {/* Task 4: Estructura Base Nutrición */}
                 {activeTab === 'nutrition' && (
                     <div className="md:col-span-12 space-y-6 animate-in fade-in duration-500">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <GlassCard className="p-8 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-[400px] flex flex-col items-center justify-center text-center">
+                        {/* Plan activo + macros objetivo */}
+                        {activeNutritionPlan && (
+                            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-                                <PieChartIcon className="w-12 h-12 text-primary/50 mb-4" />
-                                <h3 className="text-sm font-black uppercase tracking-widest text-primary mb-2">Distribución de Macros</h3>
-                                <p className="text-sm text-muted-foreground max-w-sm">
-                                    Gráfico apilado próximamente...
-                                </p>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
+                                    <Utensils className="w-4 h-4" /> Plan Activo: {activeNutritionPlan.name}
+                                </h3>
+                                {(activeNutritionPlan.daily_calories || activeNutritionPlan.protein_g) && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 relative z-10">
+                                        {activeNutritionPlan.daily_calories && (
+                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
+                                                <p className="text-lg font-black text-primary">{activeNutritionPlan.daily_calories}</p>
+                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">kcal</p>
+                                            </div>
+                                        )}
+                                        {activeNutritionPlan.protein_g && (
+                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
+                                                <p className="text-lg font-black text-blue-400">{activeNutritionPlan.protein_g}g</p>
+                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Proteína</p>
+                                            </div>
+                                        )}
+                                        {activeNutritionPlan.carbs_g && (
+                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
+                                                <p className="text-lg font-black text-yellow-400">{activeNutritionPlan.carbs_g}g</p>
+                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Carbos</p>
+                                            </div>
+                                        )}
+                                        {activeNutritionPlan.fats_g && (
+                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
+                                                <p className="text-lg font-black text-orange-400">{activeNutritionPlan.fats_g}g</p>
+                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Grasas</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </GlassCard>
-                            
-                            <GlassCard className="p-8 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-[400px] flex flex-col items-center justify-center text-center">
-                                <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-                                <AlertCircle className="w-12 h-12 text-primary/50 mb-4" />
-                                <h3 className="text-sm font-black uppercase tracking-widest text-primary mb-2">Registro Diario</h3>
-                                <p className="text-sm text-muted-foreground max-w-sm">
-                                    Detalle del registro de comidas de hoy...
-                                </p>
+                        )}
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Historial de cumplimiento de comidas */}
+                            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
+                                    <CheckSquare className="w-4 h-4" /> Cumplimiento por Día
+                                </h3>
+                                {nutritionHistory.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                                        <Utensils className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                                        <p className="text-sm text-muted-foreground">Sin registros de comidas aún.</p>
+                                        <p className="text-xs text-muted-foreground/60 mt-1">El alumno verá sus comidas al ingresar al app.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 relative z-10">
+                                        {[...nutritionHistory].reverse().map((log, i) => (
+                                            <div key={i} className="flex items-center gap-3">
+                                                <div className="w-16 text-[10px] font-bold text-muted-foreground uppercase shrink-0">{log.date}</div>
+                                                <div className="flex-1">
+                                                    <div className="flex justify-between text-xs mb-1">
+                                                        <span className="text-muted-foreground">{log.mealsDone}/{log.mealsTotal} comidas</span>
+                                                        <span className={cn("font-black", log.compliancePct >= 80 ? "text-emerald-500" : log.compliancePct >= 50 ? "text-yellow-500" : "text-red-500")}>
+                                                            {log.compliancePct}%
+                                                        </span>
+                                                    </div>
+                                                    <Progress
+                                                        value={log.compliancePct}
+                                                        className={cn("h-1.5 bg-secondary",
+                                                            log.compliancePct >= 80 && "[&>div]:bg-emerald-500",
+                                                            log.compliancePct >= 50 && log.compliancePct < 80 && "[&>div]:bg-yellow-500",
+                                                            log.compliancePct < 50 && "[&>div]:bg-red-500"
+                                                        )}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </GlassCard>
+
+                            {/* Detalle del día más reciente */}
+                            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
+                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
+                                    <Calendar className="w-4 h-4" /> Último Registro Detallado
+                                </h3>
+                                {nutritionHistory.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                                        <AlertCircle className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                                        <p className="text-sm text-muted-foreground">Sin registros aún.</p>
+                                    </div>
+                                ) : (() => {
+                                    const latest = [...nutritionHistory].reverse()[0];
+                                    return (
+                                        <div className="space-y-2 relative z-10">
+                                            <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-3">{latest.date}</p>
+                                            {latest.mealLogs.length === 0 ? (
+                                                <p className="text-sm text-muted-foreground">Sin comidas registradas.</p>
+                                            ) : (
+                                                [...latest.mealLogs]
+                                                    .sort((a: any, b: any) => (a.nutrition_meals?.order_index ?? 0) - (b.nutrition_meals?.order_index ?? 0))
+                                                    .map((ml: any, i: number) => (
+                                                        <div key={i} className={cn(
+                                                            "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm",
+                                                            ml.is_completed
+                                                                ? "bg-emerald-500/10 border border-emerald-500/20"
+                                                                : "bg-secondary/50 dark:bg-white/5 border border-border/50 dark:border-white/10"
+                                                        )}>
+                                                            <span className="font-bold truncate">
+                                                                {ml.nutrition_meals?.name || `Comida ${i + 1}`}
+                                                            </span>
+                                                            {ml.is_completed
+                                                                ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                                                : <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                                                            }
+                                                        </div>
+                                                    ))
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </GlassCard>
                         </div>
                     </div>

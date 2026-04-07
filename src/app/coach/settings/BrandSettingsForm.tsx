@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, Palette } from 'lucide-react'
+import { Loader2, Save, Palette, ExternalLink } from 'lucide-react'
 import { updateBrandSettingsAction, type BrandSettingsState } from './actions'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
@@ -42,27 +42,31 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
     const [useCoachColors, setUseCoachColors] = useState((coach as any).use_brand_colors_coach ?? false)
 
-    // Live Preview Effect
+    // Live Preview Effect — updates both :root and the container so portals/modals also preview
     useEffect(() => {
         const container = document.querySelector('.coach-layout-container') as HTMLElement;
-        if (!container) return;
-
         const originalColor = (coach as any).use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF');
+        const previewColor = useCoachColors ? (selectedColor || '#007AFF') : '#007AFF';
 
-        // Si el coach tiene habilitado usar sus colores, aplicamos la previsualización en vivo
-        if (useCoachColors) {
-            container.style.setProperty('--theme-primary', selectedColor);
-        } else {
-            // Si lo desactiva, forzamos el color por defecto en el layout
-            container.style.setProperty('--theme-primary', '#007AFF');
+        const hexToRgb = (hex: string) => {
+            const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return r ? `${parseInt(r[1],16)}, ${parseInt(r[2],16)}, ${parseInt(r[3],16)}` : '0, 122, 255';
+        };
+
+        document.documentElement.style.setProperty('--theme-primary', previewColor);
+        document.documentElement.style.setProperty('--theme-primary-rgb', hexToRgb(previewColor));
+        if (container) {
+            container.style.setProperty('--theme-primary', previewColor);
+            container.style.setProperty('--theme-primary-rgb', hexToRgb(previewColor));
         }
 
-        // Cleanup: al desmontar el componente o antes de volver a ejecutar el efecto,
-        // restauramos el color a su valor guardado en la base de datos (originalColor).
-        // Si el usuario guarda, 'coach' se actualiza con los nuevos datos, así que
-        // originalColor será el correcto. Si navega sin guardar, revertirá al viejo.
         return () => {
-            container.style.setProperty('--theme-primary', originalColor);
+            document.documentElement.style.setProperty('--theme-primary', originalColor);
+            document.documentElement.style.setProperty('--theme-primary-rgb', hexToRgb(originalColor));
+            if (container) {
+                container.style.setProperty('--theme-primary', originalColor);
+                container.style.setProperty('--theme-primary-rgb', hexToRgb(originalColor));
+            }
         };
     }, [selectedColor, useCoachColors, coach]);
 
@@ -216,7 +220,14 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                 </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-4">
+                <a
+                    href="/coach/settings/preview"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+                >
+                    <ExternalLink className="w-4 h-4" />
+                    Ver como alumno
+                </a>
                 <SaveButton />
             </div>
         </form>

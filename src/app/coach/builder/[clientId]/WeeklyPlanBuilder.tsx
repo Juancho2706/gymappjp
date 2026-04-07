@@ -1055,7 +1055,7 @@ export function WeeklyPlanBuilder({
                             <button 
                                 onClick={() => handleBlockUpdate(editingBlock)}
                                 disabled={!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()}
-                                className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                                 style={{ 
                                     backgroundColor: 'var(--theme-primary, #007AFF)',
                                     boxShadow: '0 0 20px -5px var(--theme-primary, rgba(0,122,255,0.4))'

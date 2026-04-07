@@ -31,16 +31,21 @@ export default async function ClientDashboardPage({ params }: Props) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect(`/c/${coach_slug}/login`)
 
-    // Pre-calculate dates
-    const todayStrFull = new Date().toLocaleString("en-US", { timeZone: "America/Santiago" })
-    const localDate = new Date(todayStrFull)
-    
-    const dYearToday = localDate.getFullYear()
-    const dMonthToday = String(localDate.getMonth() + 1).padStart(2, '0')
-    const dDayToday = String(localDate.getDate()).padStart(2, '0')
-    // We already defined 'today' below so we don't need it here
-    
-    // The previous today string logic here is replaced
+    // Pre-calculate dates using Santiago timezone (where the app is used)
+    const tzDateStr = new Date().toLocaleString("en-US", { timeZone: "America/Santiago" })
+    const userLocalDate = new Date(tzDateStr)
+
+    const dYearToday2 = userLocalDate.getFullYear()
+    const dMonthToday2 = String(userLocalDate.getMonth() + 1).padStart(2, '0')
+    const dDayToday2 = String(userLocalDate.getDate()).padStart(2, '0')
+    const today = `${dYearToday2}-${dMonthToday2}-${dDayToday2}`
+
+    const thirtyDaysAgo = new Date(userLocalDate)
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // day_of_week: 1=Monday, 7=Sunday (matching DB convention)
+    const jsDayOfWeek = userLocalDate.getDay() // 0=Sunday, 1=Monday...
+    const todayDayOfWeek = jsDayOfWeek === 0 ? 7 : jsDayOfWeek
 
     // Fetch everything in parallel to reduce delay
     const [
@@ -93,33 +98,8 @@ export default async function ClientDashboardPage({ params }: Props) {
     const allPlans = (plansResponse.data || []) as (Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name' | 'created_at'> & { day_of_week?: number | null, program_id?: string | null })[]
     
     // Find today's workout:
-    // 1. Check for specific date match (old system or one-off)
-    // 2. Check for day of week match (if program is active)
-    const currentDateForDay = new Date()
-    // Convert to timezone offset to ensure correct local day
-    // JS dates on server are UTC. Need to get proper day for client ideally, 
-    // but without timezone we use UTC or a simple adjustment. 
-    // We'll use local server time which is UTC-4 based on user timezone provided, 
-    // or just rely on UTC if the server's timezone isn't set, but it's simpler to use UTC day
-    // Wait, the environment says user time zone is UTC-4. Server might be running in UTC.
-    // A quick fix is to use the local date strings. 
-    // Since we're in SSR, `new Date()` is server time.
-    
-    const d = new Date()
-    // Adjust to local timezone roughly if needed, or just use UTC day if that's what's failing
-    // Let's create date from the ISO string to avoid timezone shifting
-    // Using simple format that gets current local string without redeclaring var
-    const tzDateStr = new Date().toLocaleString("en-US", { timeZone: "America/Santiago" })
-    const userLocalDate = new Date(tzDateStr)
-    
-    const dYearToday2 = userLocalDate.getFullYear()
-    const dMonthToday2 = String(userLocalDate.getMonth() + 1).padStart(2, '0')
-    const dDayToday2 = String(userLocalDate.getDate()).padStart(2, '0')
-    const today = `${dYearToday2}-${dMonthToday2}-${dDayToday2}`
-    
-    const thirtyDaysAgo = new Date(userLocalDate)
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
+    // 1. Check for specific date match (one-off assigned)
+    // 2. Check for day of week match (recurring program)
     let todayPlan = allPlans.find((p) => p.assigned_date === today)
     if (!todayPlan && activeProgram) {
         todayPlan = allPlans.find((p) => p.program_id === activeProgram.id && p.day_of_week === todayDayOfWeek)
@@ -151,7 +131,7 @@ export default async function ClientDashboardPage({ params }: Props) {
     }, {})
     
     // Generar calendario de la semana actual (Lunes a Domingo)
-    const curr = localDate
+    const curr = userLocalDate
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1) // Ajuste para Lunes = primer día
     const weekDays = Array.from({ length: 7 }).map((_, i) => {
         const d = new Date(curr)

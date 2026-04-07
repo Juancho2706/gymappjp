@@ -78,12 +78,18 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .eq('client_id', clientId)
         .order('payment_date', { ascending: false })
 
-    // Fetch daily nutrition logs
+    // Fetch daily nutrition logs with meal completion detail
     const nutritionLogsPromise = supabase
         .from('daily_nutrition_logs')
-        .select('*')
+        .select(`
+            *,
+            nutrition_meal_logs (
+                id, meal_id, is_completed,
+                nutrition_meals ( name, order_index )
+            )
+        `)
         .eq('client_id', clientId)
-        .order('date', { ascending: false })
+        .order('log_date', { ascending: false })
         .limit(30)
 
     // Current Date details for compliance
@@ -99,11 +105,16 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .eq('client_id', clientId)
         .gte('date_completed', startDateStr)
 
+    // Fetch today's meal completion logs for nutrition compliance
     const mealCompletionsPromise = supabase
-        .from('meal_completions' as any)
-        .select('*')
+        .from('daily_nutrition_logs')
+        .select(`
+            log_date,
+            nutrition_meal_logs ( is_completed )
+        `)
         .eq('client_id', clientId)
-        .gte('date_completed', startDateStr)
+        .eq('log_date', todayStr)
+        .maybeSingle()
 
     const streakPromise = supabase
         .rpc('get_client_current_streak' as any, { p_client_id: clientId })
@@ -129,7 +140,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         { data: workoutLogs },
         { data: payments },
         { data: workoutSessions },
-        { data: mealCompletions },
+        { data: todayNutritionLog },
         { data: currentStreak },
         { data: activeNutritionPlan }
     ] = await Promise.all([
@@ -160,18 +171,17 @@ export const getClientProfileData = cache(async (clientId: string) => {
     // Si no hay programa o no tiene bloques, evitamos dividir por 0
     if (weeklyWorkoutTarget === 0) weeklyWorkoutTarget = 1; 
 
-    // 2. Calcular Nutricion Hoy
+    // 2. Calcular Nutricion Hoy usando nutrition_meal_logs (fuente real de datos)
     let todayMealsTotal = 0;
     if (activeNutritionPlan?.nutrition_meals) {
         todayMealsTotal = activeNutritionPlan.nutrition_meals.length;
     }
-    if (todayMealsTotal === 0) todayMealsTotal = 1; // Fallback para no dividir por 0 si no hay comidas
-    
-    // Contar check-offs de hoy
-    const mealsDoneToday = mealCompletions?.filter((mc: any) => 
-        mc.date_completed && mc.date_completed.startsWith(todayStr)
-    ).length || 0;
-    
+    if (todayMealsTotal === 0) todayMealsTotal = 1;
+
+    // Contar comidas completadas hoy desde nutrition_meal_logs
+    const todayMealLogs = (todayNutritionLog as any)?.nutrition_meal_logs || [];
+    const mealsDoneToday = todayMealLogs.filter((ml: any) => ml.is_completed === true).length;
+
     // Calcular % de cumplimiento de hoy (0 a 100)
     const nutritionCompliancePercent = Math.min(100, Math.round((mealsDoneToday / todayMealsTotal) * 100));
 
@@ -329,13 +339,13 @@ export async function getDynamicMetrics(clientId: string) {
 
     if (!user) throw new Error("Unauthorized")
 
-    // Fetch latest check-ins to calculate averages for energy, sleep, etc.
+    // Fetch latest check-ins (only columns that exist in the schema)
     const { data: latestCheckIns } = await supabase
         .from('check_ins')
-        .select('energy_level, sleep_quality, digestion_quality, weight, date')
+        .select('energy_level, weight, created_at')
         .eq('client_id', clientId)
-        .order('date', { ascending: false })
-        .limit(4) // e.g., last 4 weeks
+        .order('created_at', { ascending: false })
+        .limit(4)
 
     // Call RPC for streak
     const { data: currentStreak, error: streakError } = await supabase

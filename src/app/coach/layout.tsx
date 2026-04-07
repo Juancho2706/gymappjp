@@ -11,6 +11,12 @@ export const metadata: Metadata = {
     },
 }
 
+function hexToRgb(hex: string): string {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+    if (!result) return '0, 122, 255'
+    return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+}
+
 export default async function CoachLayout({
     children,
 }: {
@@ -23,11 +29,14 @@ export default async function CoachLayout({
     }
 
     const primaryColor = coach.use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF')
+    const primaryRgb = hexToRgb(primaryColor)
 
     return (
-        <div 
+        <>
+        <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; --theme-primary-rgb: ${primaryRgb}; }` }} />
+        <div
             className="coach-layout-container flex flex-col md:flex-row min-h-screen bg-white dark:bg-black transition-colors pt-safe selection:bg-primary/30 selection:text-primary"
-            style={{ '--theme-primary': primaryColor } as React.CSSProperties}
+            style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': primaryRgb } as React.CSSProperties}
         >
             <CoachSidebar
                 coachName={coach.full_name}
@@ -51,5 +60,6 @@ export default async function CoachLayout({
             </main>
             <SuccessAnimationProvider />
         </div>
+        </>
     )
 }

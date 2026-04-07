@@ -85,7 +85,7 @@ export function ClientNav({ coachSlug, coachBrand, initialUseBrandColors = true 
                 toast.error('Error al guardar preferencia')
             } else {
                 toast.success(newValue ? 'Colores del Coach activados' : 'Colores por defecto activados')
-                window.location.reload() // Force reload to re-run middleware and get new headers
+                router.refresh() // Re-runs middleware and Server Components to pick up new color header
             }
         } catch (error) {
             setUseBrandColors(!newValue) // revert
