@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import { Search, Dumbbell, Filter, Eye } from 'lucide-react'
+import { Search, Dumbbell, Filter, Eye, Activity, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { filterExercises, cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
+import { getMuscleColor } from './muscle-colors'
 
 type Exercise = Tables<'exercises'>
 
@@ -16,9 +17,10 @@ interface DraggableExerciseItemProps {
     exercise: Exercise
     onSelect?: (exercise: Exercise) => void
     onPreview?: (exercise: Exercise) => void
+    onTapAdd?: (exercise: Exercise) => void
 }
 
-function DraggableExerciseItem({ exercise, onSelect, onPreview }: DraggableExerciseItemProps) {
+function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: DraggableExerciseItemProps) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: `catalog-${exercise.id}`,
         data: {
@@ -45,26 +47,71 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview }: DraggableExerc
             )}
         >
             <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                    <Dumbbell className="w-4 h-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
+                <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center border border-black/5 dark:border-white/5 overflow-hidden shrink-0 group-hover:shadow-md transition-all relative"
+                    style={{ backgroundColor: `color-mix(in srgb, ${getMuscleColor(exercise.muscle_group)} 15%, transparent)` }}
+                >
+                    {exercise.gif_url || (exercise.video_url && !exercise.video_url.includes('youtube') && !exercise.video_url.includes('youtu.be')) ? (
+                        <img 
+                            src={exercise.gif_url || exercise.video_url!} 
+                            alt={exercise.name} 
+                            loading="lazy" 
+                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal" 
+                        />
+                    ) : (
+                        <Activity className="w-5 h-5 opacity-50" style={{ color: getMuscleColor(exercise.muscle_group) }} />
+                    )}
                 </div>
                 <div className="flex-1 min-w-0 pr-8">
-                    <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors" style={{ color: 'inherit' }}>{exercise.name}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">{exercise.muscle_group}</p>
+                    <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors truncate" style={{ color: 'inherit' }}>{exercise.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getMuscleColor(exercise.muscle_group) }} />
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider truncate">{exercise.muscle_group}</p>
+                    </div>
                 </div>
             </div>
-            {onPreview && (
-                <button 
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onPreview(exercise);
-                    }}
+            
+            {/* Hover Tooltip (Desktop) */}
+            <div className="hidden lg:block absolute left-[105%] top-1/2 -translate-y-1/2 w-64 bg-background/95 backdrop-blur-xl border border-border dark:border-white/10 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] translate-x-[-10px] group-hover:translate-x-0 pointer-events-none overflow-hidden">
+                <div className="h-40 bg-muted/30 relative flex items-center justify-center">
+                    {exercise.gif_url || (exercise.video_url && !exercise.video_url.includes('youtube') && !exercise.video_url.includes('youtu.be')) ? (
+                        <img 
+                            src={exercise.gif_url || exercise.video_url!} 
+                            alt={exercise.name} 
+                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal" 
+                        />
+                    ) : (
+                        <Activity className="w-12 h-12 text-muted-foreground/30" />
+                    )}
+                    <div className="absolute top-3 left-3 bg-background/80 backdrop-blur-md px-2 py-1 rounded-md border border-border/50">
+                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: getMuscleColor(exercise.muscle_group) }}>
+                            {exercise.muscle_group}
+                        </span>
+                    </div>
+                </div>
+                <div className="p-3">
+                    <p className="text-sm font-bold leading-tight">{exercise.name}</p>
+                </div>
+            </div>
+
+            {onTapAdd ? (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onTapAdd(exercise) }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-primary text-white shadow-md active:scale-95 transition-transform z-10"
+                    style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                    title="Añadir al día"
+                >
+                    <Plus className="w-4 h-4" />
+                </button>
+            ) : onPreview ? (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onPreview(exercise) }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors z-10"
                     title="Vista Previa"
                 >
                     <Eye className="w-4 h-4" style={{ color: 'var(--theme-primary)' }} />
                 </button>
-            )}
+            ) : null}
         </div>
     )
 }
@@ -73,12 +120,34 @@ interface DraggableExerciseCatalogProps {
     exercises: Exercise[]
     className?: string
     onSelect?: (exercise: Exercise) => void
+    onTapAdd?: (exercise: Exercise) => void
 }
 
-export function DraggableExerciseCatalog({ exercises, className, onSelect }: DraggableExerciseCatalogProps) {
+export function DraggableExerciseCatalog({ exercises, className, onSelect, onTapAdd }: DraggableExerciseCatalogProps) {
     const [search, setSearch] = useState('')
     const [selectedMuscle, setSelectedMuscle] = useState<string>('Todos')
     const [previewExercise, setPreviewExercise] = useState<Exercise | null>(null)
+    const [recentIds, setRecentIds] = useState<string[]>([])
+
+    useEffect(() => {
+        const loadRecent = () => {
+            try {
+                const saved = localStorage.getItem('builder_recent_exercises')
+                if (saved) setRecentIds(JSON.parse(saved))
+            } catch (e) {}
+        }
+        loadRecent()
+        window.addEventListener('recent_exercises_updated', loadRecent)
+        window.addEventListener('storage', loadRecent)
+        return () => {
+            window.removeEventListener('recent_exercises_updated', loadRecent)
+            window.removeEventListener('storage', loadRecent)
+        }
+    }, [])
+
+    const recentExercises = useMemo(() => {
+        return recentIds.map(id => exercises.find(e => e.id === id)).filter(Boolean) as Exercise[]
+    }, [recentIds, exercises])
 
     const filteredExercises = useMemo(() => {
         return filterExercises(exercises, search, selectedMuscle)
@@ -89,7 +158,7 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
             <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-xl">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
-                        <Dumbbell className="w-4 h-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
+                        <Activity className="w-4 h-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
                         Catálogo de Ejercicios
                     </h2>
                 </div>
@@ -126,17 +195,32 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect }: Dra
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                {filteredExercises.length > 0 ? (
-                    filteredExercises.map(ex => (
-                        <DraggableExerciseItem key={ex.id} exercise={ex} onSelect={onSelect} onPreview={setPreviewExercise} />
-                    ))
-                ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center opacity-40 text-foreground">
-                        <Search className="w-8 h-8 mb-2" />
-                        <p className="text-xs font-medium">No se encontraron<br/>ejercicios</p>
+            <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
+                {search === '' && selectedMuscle === 'Todos' && recentExercises.length > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Usados Recientemente</p>
+                        {recentExercises.map(ex => (
+                            <DraggableExerciseItem key={`recent-${ex.id}`} exercise={ex} onSelect={onSelect} onPreview={onTapAdd ? undefined : setPreviewExercise} onTapAdd={onTapAdd} />
+                        ))}
+                        <div className="h-px bg-border/50 my-4" />
                     </div>
                 )}
+
+                <div className="space-y-2">
+                    {search === '' && selectedMuscle === 'Todos' && recentExercises.length > 0 && (
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Todos los Ejercicios</p>
+                    )}
+                    {filteredExercises.length > 0 ? (
+                        filteredExercises.map(ex => (
+                            <DraggableExerciseItem key={ex.id} exercise={ex} onSelect={onSelect} onPreview={onTapAdd ? undefined : setPreviewExercise} onTapAdd={onTapAdd} />
+                        ))
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center opacity-40 text-foreground">
+                            <Search className="w-8 h-8 mb-2" />
+                            <p className="text-xs font-medium">No se encontraron<br/>ejercicios</p>
+                        </div>
+                    )}
+                </div>
             </div>
             
             <div className="hidden md:block p-3 bg-muted/10 border-t border-border">

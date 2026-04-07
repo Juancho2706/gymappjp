@@ -1094,11 +1094,15 @@ export type Database = {
           client_id: string | null
           coach_id: string
           created_at: string
+          duration_days: number | null
+          duration_type: string | null
           end_date: string | null
           id: string
           is_active: boolean
           name: string
+          program_notes: string | null
           start_date: string | null
+          start_date_flexible: boolean | null
           updated_at: string
           weeks_to_repeat: number
         }
@@ -1106,11 +1110,15 @@ export type Database = {
           client_id?: string | null
           coach_id: string
           created_at?: string
+          duration_days?: number | null
+          duration_type?: string | null
           end_date?: string | null
           id?: string
           is_active?: boolean
           name: string
+          program_notes?: string | null
           start_date?: string | null
+          start_date_flexible?: boolean | null
           updated_at?: string
           weeks_to_repeat?: number
         }
@@ -1118,11 +1126,15 @@ export type Database = {
           client_id?: string | null
           coach_id?: string
           created_at?: string
+          duration_days?: number | null
+          duration_type?: string | null
           end_date?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          program_notes?: string | null
           start_date?: string | null
+          start_date_flexible?: boolean | null
           updated_at?: string
           weeks_to_repeat?: number
         }
