@@ -80,6 +80,63 @@ export type Database = {
           },
         ]
       }
+      client_payments: {
+        Row: {
+          amount: number
+          client_id: string
+          coach_id: string
+          created_at: string
+          id: string
+          payment_date: string
+          period_months: number | null
+          receipt_image_url: string | null
+          service_description: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          client_id: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          payment_date?: string
+          period_months?: number | null
+          receipt_image_url?: string | null
+          service_description: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          payment_date?: string
+          period_months?: number | null
+          receipt_image_url?: string | null
+          service_description?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_payments_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_intake: {
         Row: {
           availability: string
