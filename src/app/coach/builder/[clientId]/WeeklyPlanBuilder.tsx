@@ -547,7 +547,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     if (!mounted) return <div className="h-[100dvh] flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
 
     return (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-background overflow-hidden">
+        <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
             {showDraftBanner && (
                 <div className="bg-primary/10 border-b border-primary/20 p-3 flex justify-center items-center gap-4 animate-in slide-in-from-top">
                     <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>

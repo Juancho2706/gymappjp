@@ -92,28 +92,33 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
         router.refresh()
     }
 
+    const isBuilder = pathname.startsWith('/coach/builder')
+
     return (
         <>
-            {/* Mobile Top Header */}
-            <div className="md:hidden flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
-                <div className="flex items-center gap-2.5">
-                    <GymAppLogo className="w-8 h-8 flex-shrink-0" />
-                    <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
-                        {coachBrand || coachName}
-                    </span>
+            {/* Mobile Top Header — hidden on builder (builder has its own full-screen header) */}
+            {!isBuilder && (
+                <div className="md:hidden flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
+                    <div className="flex items-center gap-2.5">
+                        <GymAppLogo className="w-8 h-8 flex-shrink-0" />
+                        <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
+                            {coachBrand || coachName}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <ThemeToggle />
+                        <button onClick={handleSignOut} className="text-muted-foreground hover:text-destructive">
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <ThemeToggle />
-                    <button onClick={handleSignOut} className="text-muted-foreground hover:text-destructive">
-                        <LogOut className="w-5 h-5" />
-                    </button>
-                </div>
-            </div>
+            )}
 
-            {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
+            {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile — hidden on builder) */}
             <aside className={cn(
                 "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-sidebar border-t md:border-t-0 md:border-r border-sidebar-border flex flex-col transition-all duration-300 pb-safe shadow-2xl md:shadow-none",
-                isCollapsed ? "md:w-20" : "md:w-64"
+                isCollapsed ? "md:w-20" : "md:w-64",
+                isBuilder && "hidden md:flex"
             )}>
                 
                 {/* Logo area (Desktop only) */}
