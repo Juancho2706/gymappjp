@@ -80,6 +80,63 @@ export type Database = {
           },
         ]
       }
+      client_payments: {
+        Row: {
+          amount: number
+          client_id: string
+          coach_id: string
+          created_at: string
+          id: string
+          payment_date: string
+          period_months: number | null
+          receipt_image_url: string | null
+          service_description: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          client_id: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          payment_date?: string
+          period_months?: number | null
+          receipt_image_url?: string | null
+          service_description: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          payment_date?: string
+          period_months?: number | null
+          receipt_image_url?: string | null
+          service_description?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_payments_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_intake: {
         Row: {
           availability: string
@@ -865,13 +922,18 @@ export type Database = {
           created_at: string
           exercise_id: string
           id: string
+          is_override: boolean
           notes: string | null
           order_index: number
           plan_id: string
+          progression_type: string | null
+          progression_value: number | null
           reps: string
           rest_time: string | null
           rir: string | null
+          section: string
           sets: number
+          superset_group: string | null
           target_weight_kg: number | null
           tempo: string | null
         }
@@ -879,13 +941,18 @@ export type Database = {
           created_at?: string
           exercise_id: string
           id?: string
+          is_override?: boolean
           notes?: string | null
           order_index?: number
           plan_id: string
+          progression_type?: string | null
+          progression_value?: number | null
           reps?: string
           rest_time?: string | null
           rir?: string | null
+          section?: string
           sets?: number
+          superset_group?: string | null
           target_weight_kg?: number | null
           tempo?: string | null
         }
@@ -893,13 +960,18 @@ export type Database = {
           created_at?: string
           exercise_id?: string
           id?: string
+          is_override?: boolean
           notes?: string | null
           order_index?: number
           plan_id?: string
+          progression_type?: string | null
+          progression_value?: number | null
           reps?: string
           rest_time?: string | null
           rir?: string | null
+          section?: string
           sets?: number
+          superset_group?: string | null
           target_weight_kg?: number | null
           tempo?: string | null
         }
@@ -983,6 +1055,7 @@ export type Database = {
           program_id: string | null
           title: string
           updated_at: string
+          week_variant: string | null
         }
         Insert: {
           assigned_date?: string | null
@@ -995,6 +1068,7 @@ export type Database = {
           program_id?: string | null
           title: string
           updated_at?: string
+          week_variant?: string | null
         }
         Update: {
           assigned_date?: string | null
@@ -1007,6 +1081,7 @@ export type Database = {
           program_id?: string | null
           title?: string
           updated_at?: string
+          week_variant?: string | null
         }
         Relationships: [
           {
@@ -1034,38 +1109,65 @@ export type Database = {
       }
       workout_programs: {
         Row: {
+          ab_mode: boolean | null
           client_id: string | null
           coach_id: string
           created_at: string
+          cycle_length: number | null
+          duration_days: number | null
+          duration_type: string | null
           end_date: string | null
           id: string
           is_active: boolean
           name: string
+          program_notes: string | null
+          program_phases: Json
+          program_structure_type: "weekly" | "cycle" | null
+          source_template_id: string | null
           start_date: string | null
+          start_date_flexible: boolean | null
           updated_at: string
           weeks_to_repeat: number
         }
         Insert: {
+          ab_mode?: boolean | null
           client_id?: string | null
           coach_id: string
           created_at?: string
+          duration_days?: number | null
+          duration_type?: string | null
           end_date?: string | null
           id?: string
           is_active?: boolean
           name: string
+          program_notes?: string | null
+          program_phases?: Json
+          program_structure_type?: "weekly" | "cycle" | null
+          cycle_length?: number | null
+          source_template_id?: string | null
           start_date?: string | null
+          start_date_flexible?: boolean | null
           updated_at?: string
           weeks_to_repeat?: number
         }
         Update: {
+          ab_mode?: boolean | null
           client_id?: string | null
           coach_id?: string
           created_at?: string
+          duration_days?: number | null
+          duration_type?: string | null
           end_date?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          program_notes?: string | null
+          program_phases?: Json
+          program_structure_type?: "weekly" | "cycle" | null
+          cycle_length?: number | null
+          source_template_id?: string | null
           start_date?: string | null
+          start_date_flexible?: boolean | null
           updated_at?: string
           weeks_to_repeat?: number
         }
@@ -1082,6 +1184,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_programs_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "workout_programs"
             referencedColumns: ["id"]
           },
         ]

@@ -31,10 +31,21 @@ export default async function ClientDashboardPage({ params }: Props) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect(`/c/${coach_slug}/login`)
 
-    // Pre-calculate dates
-    const today = new Date().toISOString().split('T')[0]
-    const thirtyDaysAgo = new Date()
+    // Pre-calculate dates using Santiago timezone (where the app is used)
+    const tzDateStr = new Date().toLocaleString("en-US", { timeZone: "America/Santiago" })
+    const userLocalDate = new Date(tzDateStr)
+
+    const dYearToday2 = userLocalDate.getFullYear()
+    const dMonthToday2 = String(userLocalDate.getMonth() + 1).padStart(2, '0')
+    const dDayToday2 = String(userLocalDate.getDate()).padStart(2, '0')
+    const today = `${dYearToday2}-${dMonthToday2}-${dDayToday2}`
+
+    const thirtyDaysAgo = new Date(userLocalDate)
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // day_of_week: 1=Monday, 7=Sunday (matching DB convention)
+    const jsDayOfWeek = userLocalDate.getDay() // 0=Sunday, 1=Monday...
+    const todayDayOfWeek = jsDayOfWeek === 0 ? 7 : jsDayOfWeek
 
     // Fetch everything in parallel to reduce delay
     const [
@@ -87,11 +98,8 @@ export default async function ClientDashboardPage({ params }: Props) {
     const allPlans = (plansResponse.data || []) as (Pick<WorkoutPlan, 'id' | 'title' | 'assigned_date' | 'group_name' | 'created_at'> & { day_of_week?: number | null, program_id?: string | null })[]
     
     // Find today's workout:
-    // 1. Check for specific date match (old system or one-off)
-    // 2. Check for day of week match (if program is active)
-    const d = new Date()
-    const todayDayOfWeek = d.getDay() === 0 ? 7 : d.getDay() // 1: Mon, ..., 7: Sun
-
+    // 1. Check for specific date match (one-off assigned)
+    // 2. Check for day of week match (recurring program)
     let todayPlan = allPlans.find((p) => p.assigned_date === today)
     if (!todayPlan && activeProgram) {
         todayPlan = allPlans.find((p) => p.program_id === activeProgram.id && p.day_of_week === todayDayOfWeek)
@@ -123,11 +131,18 @@ export default async function ClientDashboardPage({ params }: Props) {
     }, {})
     
     // Generar calendario de la semana actual (Lunes a Domingo)
-    const curr = new Date()
+    const curr = userLocalDate
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1) // Ajuste para Lunes = primer día
     const weekDays = Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(new Date().setDate(firstDay + i))
-        const dStr = d.toISOString().split('T')[0]
+        const d = new Date(curr)
+        d.setDate(firstDay + i)
+        // d is now the correct date object
+        // Format to YYYY-MM-DD local
+        const dYear = d.getFullYear()
+        const dMonth = String(d.getMonth() + 1).padStart(2, '0')
+        const dDay = String(d.getDate()).padStart(2, '0')
+        const dStr = `${dYear}-${dMonth}-${dDay}`
+        
         const dDayOfWeek = d.getDay() === 0 ? 7 : d.getDay()
 
         const hasAssignedWorkout = allPlans.some(p => p.assigned_date === dStr)

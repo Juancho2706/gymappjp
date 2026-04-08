@@ -1,370 +1,305 @@
 'use client'
 
-import { useState, useCallback, useTransition, useMemo, useEffect, useRef } from 'react'
+import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-    DndContext,
-    closestCenter,
-    closestCorners,
-    KeyboardSensor,
-    MouseSensor,
-    TouchSensor,
-    useSensor,
-    useSensors,
-    type DragEndEvent,
-    type DragOverEvent,
-    DragStartEvent,
-    defaultDropAnimationSideEffects,
-    type DropAnimation,
-    DragOverlay,
-    useDroppable,
+    DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
+    useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    verticalListSortingStrategy,
-    useSortable,
-    horizontalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import {
-    GripVertical, Plus, X, Save, ArrowLeft, Search,
-    Loader2, ChevronDown, ChevronUp, Dumbbell, Copy, Repeat, Edit2, Trash2,
-    LayoutGrid,
-    List,
-    Activity
-} from 'lucide-react'
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn, filterExercises } from '@/lib/utils'
-import { saveWorkoutProgramAction, type WorkoutProgramInput } from './actions'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './actions'
 import type { Tables } from '@/lib/database.types'
-import { MUSCLE_GROUPS } from '@/lib/constants'
 import { toast } from 'sonner'
-import { AnimatePresence, motion } from 'framer-motion'
+import { TemplatePickerDialog } from './components/TemplatePickerDialog'
+import { ProgramPreviewDialog } from './components/ProgramPreviewDialog'
+import { AssignToClientsDialog } from './components/AssignToClientsDialog'
+import { MuscleBalancePanel } from './components/MuscleBalancePanel'
+import { PrintProgramDialog } from './components/PrintProgramDialog'
+
+import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
+import { DayColumn } from './components/DayColumn'
+import { BlockEditSheet } from './components/BlockEditSheet'
+import { ProgramConfigHeader } from './components/ProgramConfigHeader'
+import { ProgramPhasesBar } from './components/ProgramPhasesBar'
+import { ExerciseBlock } from './components/ExerciseBlock'
+import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
+import type { BuilderBlock, DayState, ProgramPhase } from './types'
+import { getMuscleColor } from './muscle-colors'
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function parseProgramPhases(raw: unknown): ProgramPhase[] {
+    if (raw == null) return []
+    try {
+        const arr = Array.isArray(raw) ? raw : typeof raw === 'string' ? JSON.parse(raw) : []
+        if (!Array.isArray(arr)) return []
+        return arr.map((p: any, i: number) => ({
+            name: String(p?.name || `Fase ${i + 1}`).slice(0, 80),
+            weeks: Math.min(52, Math.max(1, Number(p?.weeks) || 1)),
+            color: typeof p?.color === 'string' && p.color.startsWith('#') ? p.color : '#6366F1',
+        }))
+    } catch {
+        return []
+    }
+}
+
+function createDefaultBlock(exercise: Exercise): BuilderBlock {
+    return {
+        uid: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        exercise_id: exercise.id,
+        exercise_name: exercise.name,
+        muscle_group: exercise.muscle_group,
+        gif_url: exercise.gif_url ?? undefined,
+        video_url: exercise.video_url ?? undefined,
+        sets: 3,
+        reps: '8-12',
+        target_weight_kg: '',
+        tempo: '',
+        rir: '',
+        rest_time: '90s',
+        notes: '',
+        section: 'main',
+        is_override: false,
+    }
+}
+
+function trackRecentExercise(exerciseId: string) {
+    try {
+        const saved = localStorage.getItem('builder_recent_exercises')
+        const ids: string[] = saved ? JSON.parse(saved) : []
+        const updated = [exerciseId, ...ids.filter(id => id !== exerciseId)].slice(0, 8)
+        localStorage.setItem('builder_recent_exercises', JSON.stringify(updated))
+        window.dispatchEvent(new Event('recent_exercises_updated'))
+    } catch { /* silently ignore storage errors */ }
+}
 
 type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
+type BaseDays = typeof DAYS_OF_WEEK
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
-import { useTranslation } from '@/lib/i18n/LanguageContext'
-
-// ─── Types ──────────────────────────────────────────────────────
-interface BuilderBlock {
-    uid: string
-    exercise_id: string
-    exercise_name: string
-    muscle_group: string
-    gif_url?: string
-    video_url?: string
-    sets: number
-    reps: string
-    target_weight_kg: string
-    tempo: string
-    rir: string
-    rest_time: string
-    notes: string
-}
-
-interface DayState {
-    id: number // 1 to 7
-    title: string
-    blocks: BuilderBlock[]
-}
-
-const DAYS_OF_WEEK = [
-    { id: 1, name: 'Lunes' },
-    { id: 2, name: 'Martes' },
-    { id: 3, name: 'Miércoles' },
-    { id: 4, name: 'Jueves' },
-    { id: 5, name: 'Viernes' },
-    { id: 6, name: 'Sábado' },
-    { id: 7, name: 'Domingo' },
-]
-
-// ─── Sortable Block Component ────────────────────────────────────
-function SortableBlock({
-    block,
-    dayId,
-    index,
-    onEdit,
-    onRemove,
-}: {
-    block: BuilderBlock
-    dayId: number
-    index: number
-    onEdit: (block: BuilderBlock) => void
-    onRemove: (dayId: number, uid: string) => void
-}) {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-        useSortable({ 
-            id: block.uid,
-            data: {
-                type: 'block',
-                block,
-                dayId
-            }
-        })
-
-    const style = {
-        transform: CSS.Translate.toString(transform),
-        transition,
-    }
-
-    return (
-        <div ref={setNodeRef}
-            className={cn(
-                'group relative flex flex-col bg-background dark:bg-zinc-950/50 backdrop-blur-md border border-border dark:border-white/10 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none',
-                isDragging ? 'z-50 border-primary ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-primary/10'
-            )}
-            style={{ 
-                ...style, 
-                borderColor: isDragging ? 'var(--theme-primary)' : undefined 
-            } as any}
-        >
-            <div className="flex items-center gap-3 p-3">
-                <button {...attributes} {...listeners}
-                    className="text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-muted dark:hover:bg-white/5 transition-colors flex-shrink-0">
-                    <GripVertical className="w-4 h-4" />
-                </button>
-                
-                <div className="flex-1 min-w-0" onClick={() => onEdit(block)}>
-                    <p className="text-sm font-bold text-foreground leading-tight cursor-pointer group-hover:text-primary transition-colors">
-                        {block.exercise_name}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1.5">
-                        <div className="flex items-center gap-1.5 bg-muted dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5 shadow-sm">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Sets</span>
-                            <span className="text-[11px] font-bold text-foreground">{block.sets}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-muted dark:bg-black/40 px-2 py-0.5 rounded-md border border-border dark:border-white/5 shadow-sm">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Reps</span>
-                            <span className="text-[11px] font-bold text-foreground">{block.reps || '–'}</span>
-                        </div>
-                        {block.target_weight_kg && (
-                            <div 
-                                className="flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 shadow-sm"
-                                style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}
-                            >
-                                <span className="text-[10px] font-bold text-primary uppercase tracking-tighter" style={{ color: 'var(--theme-primary)' }}>Load</span>
-                                <span className="text-[11px] font-bold text-primary" style={{ color: 'var(--theme-primary)' }}>{block.target_weight_kg}kg</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <button onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove(dayId, block.uid);
-                }}
-                    className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0"
-                    title="Remover Unidad">
-                    <X className="w-5 h-5 stroke-[2.5px]" />
-                </button>
-            </div>
-        </div>
-    )
-}
-
-// ─── Day Column Component ────────────────────────────────────────
-function DayColumn({
-    day,
-    title,
-    blocks,
-    exercises,
-    onAddExercise,
-    onEditBlock,
-    onRemoveBlock,
-    onUpdateTitle,
-}: {
-    day: { id: number; name: string }
-    title: string
-    blocks: BuilderBlock[]
-    exercises: Exercise[]
-    onAddExercise: (dayId: number, exercise: Exercise) => void
-    onEditBlock: (block: BuilderBlock) => void
-    onRemoveBlock: (dayId: number, uid: string) => void
-    onUpdateTitle: (dayId: number, title: string) => void
-}) {
-    const [search, setSearch] = useState('')
-    const [isSearchOpen, setIsSearchOpen] = useState(false)
-
-    const filtered = useMemo(() => {
-        if (!search) return []
-        return filterExercises(exercises, search, 'Todos').slice(0, 5)
-    }, [exercises, search])
-
-    const { setNodeRef } = useDroppable({
-        id: `day-${day.id}`,
-        data: {
-            type: 'day',
-            dayId: day.id
-        }
-    })
-
-    return (
-        <div className="flex flex-col h-full bg-card dark:bg-zinc-950/30 backdrop-blur-xl border border-border dark:border-white/10 rounded-2xl min-w-[280px] xl:min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl">
-            <div className="p-4 border-b border-border dark:border-white/10 bg-muted/50 dark:bg-white/[0.02]">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
-                        {day.name}
-                    </h3>
-                    <Badge variant="outline" className="bg-white/5 text-zinc-500 border-white/10 font-bold">
-                        {blocks.length} UNITS
-                    </Badge>
-                </div>
-
-                <div className="relative mb-4 group">
-                    <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" />
-                    <input 
-                        value={title}
-                        onChange={(e) => onUpdateTitle(day.id, e.target.value)}
-                        placeholder="TITULO DEL DIA (EJ: EMPUJE)"
-                        className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/5 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
-                    />
-                </div>
-                
-                {/* Quick Search - Professional look */}
-                <div className="relative hidden md:block">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-                    <input 
-                        value={search}
-                        onChange={(e) => {
-                            setSearch(e.target.value)
-                            setIsSearchOpen(true)
-                        }}
-                        onFocus={() => setIsSearchOpen(true)}
-                        placeholder="BUSCAR PROTOCOLO..."
-                        className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-xl bg-black/10 dark:bg-black/40 border border-black/10 dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
-                    />
-                    
-                    {isSearchOpen && search && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
-                            {filtered.length > 0 ? (
-                                filtered.map(ex => (
-                                    <button 
-                                        key={ex.id}
-                                        onClick={() => {
-                                            onAddExercise(day.id, ex)
-                                            setSearch('')
-                                            setIsSearchOpen(false)
-                                        }}
-                                        className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group"
-                                    >
-                                        <p className="text-xs font-bold text-zinc-300 group-hover:text-primary transition-colors">{ex.name}</p>
-                                        <p className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5 font-bold">{ex.muscle_group}</p>
-                                    </button>
-                                ))
-                            ) : (
-                                <p className="p-4 text-[10px] text-zinc-600 text-center font-bold uppercase tracking-widest">Sin Coincidencias</p>
-                            )}
-                            <button 
-                                onClick={() => setIsSearchOpen(false)}
-                                className="w-full py-3 text-[10px] text-primary bg-primary/5 hover:bg-primary/10 transition-colors font-bold uppercase tracking-[0.2em] border-t border-white/5"
-                            >
-                                Cerrar Terminal
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div ref={setNodeRef} className="flex-1 overflow-y-auto p-3 pb-32 space-y-3 min-h-[400px]">
-                <SortableContext items={blocks.map(b => b.uid)} strategy={verticalListSortingStrategy}>
-                    {blocks.map((block, index) => (
-                        <SortableBlock
-                            key={block.uid}
-                            block={block}
-                            dayId={day.id}
-                            index={index}
-                            onEdit={onEditBlock}
-                            onRemove={onRemoveBlock}
-                        />
-                    ))}
-                </SortableContext>
-                
-                {blocks.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-20 opacity-20">
-                        <Activity className="w-12 h-12 mb-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
-                        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-primary" style={{ color: 'var(--theme-primary)' }}>No Data</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    )
-}
-
-// ─── Main Weekly Builder ──────────────────────────────────────────
-export function WeeklyPlanBuilder({
-    client,
-    exercises,
-    initialProgram,
-}: {
-    client?: Pick<Client, 'id' | 'full_name' | 'email'>
-    exercises: Exercise[]
-    initialProgram?: any
-}) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any }) {
     const router = useRouter()
-    const { t } = useTranslation()
-    const [programName, setProgramName] = useState(initialProgram?.name || '')
-    const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
-    const [activeTab, setActiveTab] = useState('1')
-    
-    const isAssigned = !!initialProgram?.client_id
-    
-    // Initialize days 1-7
-    const [days, setDays] = useState<DayState[]>(() => {
-        const baseDays: DayState[] = DAYS_OF_WEEK.map(d => ({ id: d.id, title: '', blocks: [] as BuilderBlock[] }))
-        
-        if (initialProgram?.workout_plans) {
-            initialProgram.workout_plans.forEach((plan: any) => {
-                const dayIndex = baseDays.findIndex(d => d.id === plan.day_of_week)
-                if (dayIndex !== -1) {
-                    baseDays[dayIndex].title = plan.title || ''
-                    baseDays[dayIndex].blocks = plan.workout_blocks
-                        ?.sort((a: any, b: any) => a.order_index - b.order_index)
-                        .map((b: any) => ({
-                            uid: b.id,
-                            exercise_id: b.exercise_id,
-                            exercise_name: b.exercises?.name || 'Unknown',
-                            muscle_group: b.exercises?.muscle_group || 'Unknown',
-                            sets: b.sets,
-                            reps: b.reps,
-                            target_weight_kg: b.target_weight_kg?.toString() || '',
-                            tempo: b.tempo || '',
-                            rir: b.rir || '',
-                            rest_time: b.rest_time || '',
-                            notes: b.notes || '',
-                        })) || []
+
+    const getInitialDays = (variant: 'A' | 'B' = 'A', structureType?: string, cyclLen?: number): DayState[] => {
+        // Determine structure type and cycle length (prefer passed params over initialProgram)
+        const sType = structureType ?? initialProgram?.program_structure_type ?? 'weekly'
+        const cLen = cyclLen ?? initialProgram?.cycle_length ?? 7
+
+        if (sType === 'cycle') {
+            // Build N days for a cycle program
+            const cycleDays = Array.from({ length: cLen }, (_, i) => ({
+                id: i + 1,
+                name: `Día ${i + 1}`,
+                title: '',
+                blocks: [] as BuilderBlock[]
+            }))
+            if (!initialProgram?.workout_plans?.length) return cycleDays
+            return cycleDays.map(d => {
+                const plan = initialProgram.workout_plans?.find((p: any) =>
+                    p.day_of_week === d.id && (p.week_variant === variant || (variant === 'A' && !p.week_variant))
+                )
+                return {
+                    ...d,
+                    title: plan?.title || '',
+                    blocks: (plan?.workout_blocks ?? []).map((b: any) => ({
+                        uid: `block-${b.id || Math.random().toString()}`,
+                        exercise_id: b.exercise_id,
+                        exercise_name: b.exercises?.name || 'Unknown',
+                        muscle_group: b.exercises?.muscle_group || 'Unknown',
+                        gif_url: b.exercises?.gif_url || undefined,
+                        video_url: b.exercises?.video_url || undefined,
+                        sets: b.sets,
+                        reps: b.reps,
+                        target_weight_kg: b.target_weight_kg?.toString() || '',
+                        tempo: b.tempo || '',
+                        rir: b.rir || '',
+                        rest_time: b.rest_time || '',
+                        notes: b.notes || '',
+                        superset_group: b.superset_group || null,
+                        progression_type: b.progression_type || null,
+                        progression_value: b.progression_value ?? null,
+                        section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+                        is_override: !!b.is_override,
+                        dayId: d.id
+                    }))
                 }
             })
         }
-        
-        return baseDays
-    })
+
+        // Weekly mode (default)
+        const baseDays = DAYS_OF_WEEK.map(d => ({ ...d, title: '', blocks: [] as BuilderBlock[] }))
+        if (!initialProgram?.workout_plans?.length) return baseDays
+        return DAYS_OF_WEEK.map(d => {
+            const plan = initialProgram.workout_plans?.find((p: any) =>
+                p.day_of_week === d.id && (p.week_variant === variant || (variant === 'A' && !p.week_variant))
+            )
+            return {
+                ...d,
+                title: plan?.title || '',
+                blocks: (plan?.workout_blocks ?? []).map((b: any) => ({
+                    uid: `block-${b.id || Math.random().toString()}`,
+                    exercise_id: b.exercise_id,
+                    exercise_name: b.exercises?.name || 'Unknown',
+                    muscle_group: b.exercises?.muscle_group || 'Unknown',
+                    gif_url: b.exercises?.gif_url || undefined,
+                    video_url: b.exercises?.video_url || undefined,
+                    sets: b.sets,
+                    reps: b.reps,
+                    target_weight_kg: b.target_weight_kg?.toString() || '',
+                    tempo: b.tempo || '',
+                    rir: b.rir || '',
+                    rest_time: b.rest_time || '',
+                    notes: b.notes || '',
+                    superset_group: b.superset_group || null,
+                    progression_type: b.progression_type || null,
+                    progression_value: b.progression_value ?? null,
+                    section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+                    is_override: !!b.is_override,
+                    dayId: d.id
+                }))
+            }
+        })
+    }
+
+    // A/B mode: two independent builder instances (hooks must always be called)
+    const [isABMode, setIsABMode] = useState<boolean>(initialProgram?.ab_mode ?? false)
+    const [activeVariant, setActiveVariant] = useState<'A' | 'B'>('A')
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initialDaysA = useMemo(() => getInitialDays('A'), [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initialDaysB = useMemo(() => getInitialDays('B'), [])
+
+    const builderA = usePlanBuilder(initialDaysA)
+    const builderB = usePlanBuilder(initialDaysB)
+    const activeBuilder = activeVariant === 'A' ? builderA : builderB
+
+    const {
+        days, dispatch, dispatchWithHistory,
+        addExercise, removeBlock, updateBlock, updateDayTitle, copyDay, toggleRestDay, toggleSuperset,
+        setBlockSection, toggleBlockOverride,
+        undo, redo, canUndo, canRedo,
+    } = activeBuilder
+
+    const [programName, setProgramName] = useState(initialProgram?.name || '')
+    const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
+    const [durationType, setDurationType] = useState<'weeks' | 'async' | 'calendar_days'>((initialProgram?.duration_type as any) || 'weeks')
+    const [durationDays, setDurationDays] = useState<number | null>(initialProgram?.duration_days || null)
+    const [startDateFlexible, setStartDateFlexible] = useState<boolean>(initialProgram?.start_date_flexible ?? true)
+    const [startDate, setStartDate] = useState<string>(
+        initialProgram?.start_date 
+            ? new Date(initialProgram.start_date).toISOString().split('T')[0] 
+            : new Date().toISOString().split('T')[0]
+    )
+    const [programNotes, setProgramNotes] = useState(initialProgram?.program_notes || '')
+    const [programPhases, setProgramPhases] = useState<ProgramPhase[]>(() => parseProgramPhases(initialProgram?.program_phases))
+    const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(initialProgram?.source_template_id ?? null)
+    const [programStructureType, setProgramStructureTypeState] = useState<'weekly' | 'cycle'>(
+        (initialProgram?.program_structure_type as 'weekly' | 'cycle') || 'weekly'
+    )
+    const [cycleLength, setCycleLengthState] = useState<number>(initialProgram?.cycle_length || 7)
+
+    // When structure type or cycle length changes, rebuild the day columns
+    const setProgramStructureType = (type: 'weekly' | 'cycle') => {
+        setProgramStructureTypeState(type)
+        const newDays = getInitialDays('A', type, cycleLength)
+        builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
+        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: getInitialDays('B', type, cycleLength) })
+    }
+    const setCycleLength = (length: number) => {
+        setCycleLengthState(length)
+        if (programStructureType === 'cycle') {
+            const newDays = getInitialDays('A', 'cycle', length)
+            builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
+            builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: getInitialDays('B', 'cycle', length) })
+        }
+    }
+
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+    const [showDraftBanner, setShowDraftBanner] = useState(false)
+    const isFirstRender = useRef(true)
+
+    const [showTemplatePicker, setShowTemplatePicker] = useState(false)
+    const [showPreview, setShowPreview] = useState(false)
+    const [showAssign, setShowAssign] = useState(false)
+    const [showBalance, setShowBalance] = useState(false)
+    const [showPrint, setShowPrint] = useState(false)
+    const [isCatalogSidebarOpen, setIsCatalogSidebarOpen] = useState(false)
+    const [isDragPending, setIsDragPending] = useState(false)
 
     const [editingBlock, setEditingBlock] = useState<BuilderBlock | null>(null)
     const [activeId, setActiveId] = useState<string | null>(null)
     const [activeData, setActiveData] = useState<any>(null)
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
-    const [sheetHeight, setSheetHeight] = useState(60)
+    const [sheetHeight, setSheetHeight] = useState(12)
     const [isDraggingSheet, setIsDraggingSheet] = useState(false)
     const [isPending, startTransition] = useTransition()
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
-    const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false)
-
-    const [expandedGif, setExpandedGif] = useState<{url: string, name: string} | null>(null)
+    const [showConfig, setShowConfig] = useState(!initialProgram?.id)
+    const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
 
     const touchStartY = useRef(0)
     const initialSheetHeight = useRef(60)
+    const swipeTouchStartX = useRef(0)
+    const swipeTouchStartY = useRef(0)
+    const boardScrollRef = useRef<HTMLDivElement>(null)
+
+    const scrollBoard = (dir: 'left' | 'right') => {
+        const el = boardScrollRef.current
+        if (!el) return
+        el.scrollBy({ left: dir === 'right' ? 300 : -300, behavior: 'smooth' })
+    }
+
+    useEffect(() => {
+        setMounted(true)
+        const checkMobile = () => setIsMobile(window.innerWidth < 768)
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(`builder_draft_${initialProgram?.id || 'new'}`)
+            if (saved) setShowDraftBanner(true)
+        } catch (e) {}
+    }, [initialProgram])
+
+    useEffect(() => {
+        if (isFirstRender.current) { isFirstRender.current = false; return }
+        setHasUnsavedChanges(true)
+    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId])
+
+    useEffect(() => {
+        if (!hasUnsavedChanges) return
+        const timer = setTimeout(() => {
+            try {
+                localStorage.setItem(`builder_draft_${initialProgram?.id || 'new'}`, JSON.stringify({
+                    programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes,
+                    isABMode, days, daysB: builderB.days, programPhases, sourceTemplateId,
+                }))
+            } catch (e) {}
+        }, 3000)
+        return () => clearTimeout(timer)
+    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId, hasUnsavedChanges, initialProgram])
+
+
+    // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo
+    useEffect(() => {
+        function handleKeyDown(e: KeyboardEvent) {
+            const mod = e.ctrlKey || e.metaKey
+            if (!mod) return
+            if (!e.shiftKey && e.key === 'z') { e.preventDefault(); undo() }
+            if ((e.shiftKey && e.key === 'z') || e.key === 'y') { e.preventDefault(); redo() }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [undo, redo])
 
     const handleTouchStart = (e: React.TouchEvent) => {
         touchStartY.current = e.touches[0].clientY
@@ -380,27 +315,61 @@ export function WeeklyPlanBuilder({
         setSheetHeight(newHeight)
     }
 
-    const handleTouchEnd = (e: React.TouchEvent) => {
+    const handleTouchEnd = () => {
         setIsDraggingSheet(false)
-        if (sheetHeight > 70) {
-            setSheetHeight(80)
-        } else if (sheetHeight < 50) {
-            setIsCatalogOpen(false)
-            setTimeout(() => setSheetHeight(60), 300)
+        if (sheetHeight > 60) { setIsCatalogOpen(true); setSheetHeight(80) }
+        else if (sheetHeight > 28) { setIsCatalogOpen(true); setSheetHeight(40) }
+        else { setIsCatalogOpen(false); setSheetHeight(12) }
+    }
+
+    const handleSwipeTouchStart = (e: React.TouchEvent) => {
+        swipeTouchStartX.current = e.touches[0].clientX
+        swipeTouchStartY.current = e.touches[0].clientY
+    }
+
+    const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+        const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current
+        const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current
+        // Only register horizontal swipes (must be more horizontal than vertical)
+        if (Math.abs(deltaX) < 50 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return
+        if (deltaX < 0) {
+            // Swipe left → next day
+            setActiveMobileDayIndex(i => Math.min(days.length - 1, i + 1))
         } else {
-            setSheetHeight(60)
+            // Swipe right → prev day
+            setActiveMobileDayIndex(i => Math.max(0, i - 1))
         }
     }
 
-    const horizontalScrollRef = useRef<HTMLDivElement>(null)
+    const handleRestoreDraft = () => {
+        try {
+            const saved = localStorage.getItem(`builder_draft_${initialProgram?.id || 'new'}`)
+            if (saved) {
+                const draft = JSON.parse(saved)
+                if (draft.programName) setProgramName(draft.programName)
+                if (draft.weeksToRepeat) setWeeksToRepeat(draft.weeksToRepeat)
+                if (draft.durationType) setDurationType(draft.durationType)
+                if (draft.durationDays !== undefined) setDurationDays(draft.durationDays)
+                if (draft.startDateFlexible !== undefined) setStartDateFlexible(draft.startDateFlexible)
+                if (draft.startDate) setStartDate(draft.startDate)
+                if (draft.programNotes) setProgramNotes(draft.programNotes)
+                if (draft.isABMode !== undefined) setIsABMode(draft.isABMode)
+                if (draft.days) builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: draft.days })
+                if (draft.daysB) builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: draft.daysB })
+                if (draft.programPhases) setProgramPhases(draft.programPhases)
+                if (draft.sourceTemplateId !== undefined) setSourceTemplateId(draft.sourceTemplateId)
+                toast.success('Borrador restaurado')
+            }
+        } catch (e) {}
+        setShowDraftBanner(false)
+    }
 
-    useEffect(() => {
-        setMounted(true)
-        const checkMobile = () => setIsMobile(window.innerWidth < 768)
-        checkMobile()
-        window.addEventListener('resize', checkMobile)
-        return () => window.removeEventListener('resize', checkMobile)
-    }, [])
+    const handleDiscardDraft = () => {
+        try {
+            localStorage.removeItem(`builder_draft_${initialProgram?.id || 'new'}`)
+            setShowDraftBanner(false)
+        } catch (e) {}
+    }
 
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -408,683 +377,805 @@ export function WeeklyPlanBuilder({
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     )
 
-    const addExercise = useCallback((dayId: number, exercise: Exercise) => {
-        const newBlock: BuilderBlock & { gif_url?: string, video_url?: string } = {
-            uid: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            exercise_id: exercise.id,
-            exercise_name: exercise.name,
-            muscle_group: exercise.muscle_group,
-            gif_url: (exercise as any).gif_url,
-            video_url: (exercise as any).video_url,
-            sets: 3,
-            reps: '8-12',
-            target_weight_kg: '',
-            tempo: '',
-            rir: '',
-            rest_time: '90s',
-            notes: '',
-        }
-        setDays(prev => prev.map(d => d.id === dayId ? { ...d, blocks: [...d.blocks, newBlock] } : d))
-        toast.success(`Añadido: ${exercise.name}`)
-    }, [])
-
-    const updateDayTitle = useCallback((dayId: number, title: string) => {
-        setDays(prev => prev.map(d => d.id === dayId ? { ...d, title } : d))
-    }, [])
-
-    const removeBlock = useCallback((dayId: number, uid: string) => {
-        setDays(prev => prev.map(d => d.id === dayId ? { ...d, blocks: d.blocks.filter(b => b.uid !== uid) } : d))
-    }, [])
-
-    const handleBlockUpdate = (updatedBlock: BuilderBlock) => {
-        setDays(prev => prev.map(d => ({
-            ...d,
-            blocks: d.blocks.map(b => b.uid === updatedBlock.uid ? updatedBlock : b)
-        })))
-        setEditingBlock(null)
-    }
-
-    // DnD Handlers
     function handleDragStart(event: DragStartEvent) {
-        const { active } = event
-        setActiveId(active.id as string)
-        setActiveData(active.data.current)
+        setActiveId(event.active.id as string)
+        setActiveData(event.active.data.current)
+        setIsDragPending(true)
+        // Clear pending after transition window (slightly longer than TouchSensor delay)
+        setTimeout(() => setIsDragPending(false), 400)
     }
 
     function handleDragOver(event: DragOverEvent) {
         const { active, over } = event
         if (!over) return
-
-        const activeId = active.id as string
-        const overId = over.id as string
-
         const activeData = active.data.current
         const overData = over.data.current
-
         if (!activeData || activeData.type !== 'block') return
-
         const activeDayId = activeData.dayId
-        let overDayId = overData?.dayId
-
-        // If hovering over a day column
-        if (overData?.type === 'day') {
-            overDayId = overData.dayId
-        }
-
+        let overDayId = overData?.dayId || (overData?.type === 'day' ? overData.dayId : null)
         if (!overDayId || activeDayId === overDayId) return
 
-        setDays(prev => {
-            const activeDay = prev.find(d => d.id === activeDayId)
-            const overDay = prev.find(d => d.id === overDayId)
-            
-            if (!activeDay || !overDay) return prev
-
-            const activeBlockIndex = activeDay.blocks.findIndex(b => b.uid === activeId)
-            const activeBlock = activeDay.blocks[activeBlockIndex]
-
-            // Remove from source day
-            const newActiveBlocks = [...activeDay.blocks]
-            newActiveBlocks.splice(activeBlockIndex, 1)
-
-            // Add to destination day
-            const newOverBlocks = [...overDay.blocks]
-            const overBlockIndex = overDay.blocks.findIndex(b => b.uid === overId)
-            
-            if (overBlockIndex === -1) {
-                newOverBlocks.push({ ...activeBlock })
-            } else {
-                newOverBlocks.splice(overBlockIndex, 0, { ...activeBlock })
-            }
-
-            // Update data in the active item for the next drag event
-            active.data.current = { ...activeData, dayId: overDayId }
-
-            return prev.map(d => {
-                if (d.id === activeDayId) return { ...d, blocks: newActiveBlocks }
-                if (d.id === overDayId) return { ...d, blocks: newOverBlocks }
-                return d
-            })
-        })
+        dispatch({ type: 'TRANSFER_BLOCK', payload: { activeId: active.id as string, activeDayId, overDayId } })
     }
 
     function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event
-        if (!over) {
+        const activeData = active.data.current
+        const overData = over?.data?.current
+
+        if (over && activeData?.type === 'block' && overData?.type === 'section' && activeData.dayId === overData.dayId) {
+            dispatchWithHistory({
+                type: 'SET_BLOCK_SECTION',
+                payload: { dayId: overData.dayId, uid: active.id as string, section: overData.section },
+            })
             setActiveId(null)
             setActiveData(null)
+            setHasUnsavedChanges(true)
             return
         }
 
-        const activeId = active.id as string
-        const overId = over.id as string
-        const activeData = active.data.current
-        const overData = over.data.current
-
-        // Handle dropping a new exercise from the catalog
+        if (!over) { setActiveId(null); return }
         if (activeData?.type === 'new-exercise') {
-            const dayId = overData?.dayId
+            const dayId = over.data.current?.dayId
             if (dayId) {
-                addExercise(dayId, activeData.exercise)
+                handleAddExercise(dayId, activeData.exercise)
             }
-        } else if (activeId !== overId) {
-            // Existing logic for blocks
+        } else if (active.id !== over.id) {
             const dayId = activeData?.dayId
-
             if (dayId) {
-                setDays(prev => prev.map(d => {
-                    if (d.id === dayId) {
-                        const oldIndex = d.blocks.findIndex(b => b.uid === activeId)
-                        const newIndex = d.blocks.findIndex(b => b.uid === overId)
-                        return { ...d, blocks: arrayMove(d.blocks, oldIndex, newIndex) }
-                    }
-                    return d
-                }))
-            }
-        }
-        
-        setActiveId(null)
-        setActiveData(null)
-    }
-
-    const handleSave = () => {
-        if (!programName.trim()) { toast.error('Ingresa el nombre del programa'); return }
-        
-        const hasExercises = days.some(d => d.blocks.length > 0)
-        if (!hasExercises) { toast.error('Agrega al menos un ejercicio en algún día'); return }
-
-        // Validar que todos los ejercicios tengan series y reps válidas
-        for (const day of days) {
-            for (const block of day.blocks) {
-                if (!block.sets || block.sets < 1 || !block.reps?.trim()) {
-                    toast.error(`El ejercicio "${block.exercise_name}" en el día ${DAYS_OF_WEEK.find(d => d.id === day.id)?.name} necesita series y reps válidas`);
-                    return;
+                const d = days.find(x => x.id === dayId)
+                if (d) {
+                    const oldIndex = d.blocks.findIndex(b => b.uid === active.id)
+                    const newIndex = d.blocks.findIndex(b => b.uid === over.id)
+                    dispatchWithHistory({ type: 'MOVE_BLOCK', payload: { dayId, oldIndex, newIndex } })
                 }
             }
         }
+        setActiveId(null)
+        setActiveData(null)
+        setHasUnsavedChanges(true)
+    }
 
-                startTransition(async () => {
-            const payload: WorkoutProgramInput = {
+    function handleAddExercise(dayId: number, exercise: Exercise) {
+        addExercise(dayId, createDefaultBlock(exercise))
+        trackRecentExercise(exercise.id)
+        setHasUnsavedChanges(true)
+    }
+
+    // ── Stable handlers for React.memo'd DayColumn ──────────────────────────
+    const handleRemoveBlock = useCallback((dayId: number, uid: string) => {
+        removeBlock(dayId, uid)
+        setHasUnsavedChanges(true)
+    }, [removeBlock])
+
+    const handleUpdateBlock = useCallback((b: BuilderBlock) => {
+        updateBlock(b)
+        setHasUnsavedChanges(true)
+    }, [updateBlock])
+
+    const handleUpdateTitle = useCallback((dayId: number, title: string) => {
+        updateDayTitle(dayId, title)
+    }, [updateDayTitle])
+
+    const handleCopyDay = useCallback((s: number, ts: number[]) => {
+        copyDay(s, ts)
+        setHasUnsavedChanges(true)
+        toast.success(`Día copiado a ${ts.length} día(s)`)
+    }, [copyDay])
+
+    const handleToggleRest = useCallback((dayId: number) => {
+        toggleRestDay(dayId)
+        setHasUnsavedChanges(true)
+    }, [toggleRestDay])
+
+    const handleToggleSuperset = useCallback((dayId: number, uid: string) => {
+        toggleSuperset(dayId, uid)
+        setHasUnsavedChanges(true)
+    }, [toggleSuperset])
+
+    const handleSetBlockSection = useCallback((d: number, u: string, s: import('./types').BuilderSection) => {
+        setBlockSection(d, u, s)
+        setHasUnsavedChanges(true)
+    }, [setBlockSection])
+
+    const handleToggleBlockOverride = useCallback((uid: string) => {
+        toggleBlockOverride(uid)
+        setHasUnsavedChanges(true)
+    }, [toggleBlockOverride])
+
+    const handleSave = () => {
+        if (!programName.trim()) { toast.error('El programa necesita un nombre.'); return }
+        const allDaysToCheck = isABMode ? [...builderA.days, ...builderB.days] : days
+        const hasExercises = allDaysToCheck.some(d => d.blocks.length > 0)
+        if (!hasExercises) { toast.error('Debes añadir al menos un ejercicio al programa.'); return }
+        const missingData = allDaysToCheck.some(d => d.blocks.some(b => !b.sets || b.sets < 1 || !b.reps?.trim()))
+        if (missingData) { toast.error('Hay ejercicios con datos incompletos (Series o Repeticiones faltan).'); return }
+
+        const mapDays = (dayList: DayState[], variant: 'A' | 'B') =>
+            dayList.filter(d => d.blocks.length > 0).map(d => ({
+                day_of_week: d.id,
+                title: d.title.trim(),
+                week_variant: variant,
+                blocks: d.blocks.map((b, idx) => ({
+                    exercise_id: b.exercise_id,
+                    sets: b.sets || 3,
+                    reps: b.reps || '',
+                    target_weight_kg: b.target_weight_kg ? parseFloat(b.target_weight_kg) : null,
+                    tempo: b.tempo || null,
+                    rir: b.rir || null,
+                    rest_time: b.rest_time || null,
+                    notes: b.notes || null,
+                    superset_group: b.superset_group || null,
+                    progression_type: b.progression_type || null,
+                    progression_value: b.progression_value ?? null,
+                    section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
+                    is_override: b.is_override ?? false,
+                    order_index: idx
+                }))
+            }))
+
+        startTransition(async () => {
+            const input: WorkoutProgramInput = {
                 programId: initialProgram?.id,
                 clientId: client?.id || null,
                 programName: programName.trim(),
                 weeksToRepeat,
-                days: days
-                    .filter(d => d.blocks.length > 0)
-                    .map(d => ({
-                        day_of_week: d.id,
-                        title: d.title || `${programName} - Día ${d.id}`,
-                        blocks: d.blocks.map(b => ({
-                            exercise_id: b.exercise_id,
-                            sets: b.sets,
-                            reps: b.reps,
-                            target_weight_kg: b.target_weight_kg ? parseFloat(b.target_weight_kg) : null,
-                            tempo: b.tempo || null,
-                            rir: b.rir || null,
-                            rest_time: b.rest_time || null,
-                            notes: b.notes || null,
-                        }))
-                    }))
+                startDate: startDateFlexible ? null : startDate,
+                duration_type: durationType || 'weeks',
+                duration_days: durationDays,
+                program_structure_type: programStructureType,
+                cycle_length: programStructureType === 'cycle' ? cycleLength : undefined,
+                start_date_flexible: startDateFlexible,
+                program_notes: programNotes,
+                ab_mode: isABMode,
+                program_phases: programPhases,
+                source_template_id: client?.id ? sourceTemplateId : null,
+                days: isABMode
+                    ? [...mapDays(builderA.days, 'A'), ...mapDays(builderB.days, 'B')]
+                    : mapDays(days, 'A')
             }
 
-            const result = await saveWorkoutProgramAction(payload)
-            if (result.error) {
+            const result = await saveWorkoutProgramAction(input)
+            if (result?.error) {
                 toast.error(result.error)
             } else {
-                toast.success('Programa guardado con éxito')
+                toast.success('Programa guardado exitosamente.')
+                try { localStorage.removeItem(`builder_draft_${initialProgram?.id || 'new'}`) } catch (e) {}
+                setHasUnsavedChanges(false)
                 if (client) {
-                    router.push(`/coach/clients/${client.id}`)
+                    router.push(`/coach/clients/${client.id}?tab=entrenamiento`)
                 } else {
-                    router.push('/coach/workout-programs')
+                    router.push('/coach/templates')
                 }
-                router.refresh()
             }
         })
     }
 
-    const activeOverlayItem = useMemo(() => {
-        if (!activeId || !activeData) return null
-        
-        if (activeData.type === 'new-exercise') {
-            return {
-                name: activeData.exercise.name,
-                muscle: activeData.exercise.muscle_group
-            }
-        }
-        
-        if (activeData.type === 'block') {
-            return {
-                name: activeData.block.exercise_name,
-                muscle: activeData.block.muscle_group
-            }
-        }
-        
-        return null
-    }, [activeId, activeData])
+    if (!mounted) return <div className="h-[100dvh] flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
 
     return (
-        <div className="flex flex-col h-[calc(100vh-130px)] md:h-[calc(100vh-60px)] -mx-4 -my-6 md:-mx-6 md:-my-8 bg-transparent overflow-hidden relative">
-            {/* Header Area */}
-            <div className={cn(
-                "flex flex-col border-b border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl p-4 md:px-8 md:py-4 gap-4 flex-shrink-0 transition-all duration-500 ease-in-out shadow-sm dark:shadow-2xl relative",
-                isCatalogOpen && "md:opacity-100 md:h-auto md:p-4 md:pointer-events-auto h-0 p-0 opacity-0 overflow-hidden pointer-events-none"
-            )}>
-                <div className="flex items-center gap-3 md:gap-4">
-                    <Link href={client ? `/coach/clients/${client.id}` : '/coach/workout-programs'}
-                        className="p-2 md:p-2.5 rounded-xl text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground/30 hover:bg-secondary dark:border-white/5 dark:hover:border-white/20 dark:hover:bg-white/5 transition-all">
-                        <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
-                    </Link>
-                    <div className="flex-1 min-w-0">
-                        <h1 className="text-lg md:text-xl font-bold text-foreground uppercase tracking-tighter font-display truncate">
-                            Diseño de Protocolo
-                        </h1>
-                        <p className="text-[9px] md:text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-0.5 md:mt-1 truncate">
-                            {client ? `TARGET: ${client.full_name}` : 'MODO: PLANTILLA MAESTRA'}
-                        </p>
-                    </div>
-                    
-                    {/* Botón Guardar en Desktop */}
-                    <button 
-                        onClick={handleSave} 
-                        disabled={isPending}
-                        className={cn(
-                            'hidden md:flex items-center gap-2 px-8 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all shadow-[0_0_20px_-5px_var(--theme-primary,rgba(0,122,255,0.4))]',
-                            'bg-primary text-primary-foreground hover:opacity-90 hover:scale-[1.02]',
-                            'disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none'
-                        )}
-                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
-                    >
-                        {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        {isPending ? 'Ejecutando...' : 'Desplegar Protocolo'}
-                    </button>
+        <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
+            {showDraftBanner && (
+                <div className="bg-primary/10 border-b border-primary/20 p-3 flex justify-center items-center gap-4 animate-in slide-in-from-top">
+                    <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
+                    <Button variant="outline" size="sm" onClick={handleRestoreDraft}>Restaurar</Button>
+                    <Button variant="ghost" size="sm" onClick={handleDiscardDraft}>Descartar</Button>
                 </div>
+            )}
 
-                {/* Desktop and Tablet config inputs */}
-                <div className={cn(
-                    "hidden md:grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden transition-all duration-300 ease-in-out",
-                    isHeaderCollapsed ? "h-0 opacity-0 mt-0" : "h-auto opacity-100 mt-2"
-                )}>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1 flex items-center justify-between">
-                            Designación
-                            {isAssigned && (
-                                <span className="text-primary normal-case font-medium">Bloqueado (Activo)</span>
-                            )}
-                        </label>
-                        <div className="relative">
-                            <Edit2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input 
-                                value={programName}
-                                onChange={e => setProgramName(e.target.value)}
-                                disabled={isAssigned}
-                                placeholder="EJ: HYPERTROPHY BLOCK 1"
-                                className={cn(
-                                    "h-12 pl-11 rounded-xl bg-secondary/50 dark:bg-black/50 border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all font-bold text-xs uppercase tracking-widest placeholder:text-muted-foreground",
-                                    isAssigned && "bg-muted dark:bg-white/5 cursor-not-allowed opacity-50"
+            <header className="flex-shrink-0 border-b border-border bg-background/50 backdrop-blur-xl z-20">
+                <div className="h-16 px-4 md:px-6 flex items-center justify-between max-w-[2000px] mx-auto gap-4">
+                    <div className="flex items-center gap-4">
+                        <Link href={client ? `/coach/clients/${client.id}` : '/coach/templates'}>
+                            <Button variant="ghost" size="icon" className="shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+                            </Button>
+                        </Link>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-sm font-display uppercase tracking-[0.2em] text-foreground truncate max-w-[160px] md:max-w-md">
+                                    {programName || 'NUEVO PROGRAMA'}
+                                </h1>
+                                {hasUnsavedChanges && (
+                                    <span className="hidden md:flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20 shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                        CAMBIOS SIN GUARDAR
+                                    </span>
                                 )}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground px-1">Duración del Ciclo</label>
-                        <div className="relative">
-                            <Repeat className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <select 
-                                value={weeksToRepeat}
-                                onChange={e => setWeeksToRepeat(parseInt(e.target.value))}
-                                className="w-full h-12 pl-11 pr-10 rounded-xl bg-secondary/50 dark:bg-black/50 border border-border dark:border-white/10 text-foreground font-bold text-xs uppercase tracking-widest focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all appearance-none outline-none"
-                            >
-                                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(w => (
-                                    <option key={w} value={w} className="bg-background dark:bg-zinc-900">{w} {w === 1 ? 'SEMANA' : 'SEMANAS'}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Toggle Button for Desktop Header */}
-                <button
-                    onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
-                    className="hidden md:flex absolute -bottom-3 left-1/2 -translate-x-1/2 bg-card border border-border dark:border-white/10 rounded-full p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-all shadow-sm z-20"
-                    title={isHeaderCollapsed ? "Expandir configuración" : "Colapsar configuración"}
-                >
-                    {isHeaderCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-                </button>
-
-                {/* Mobile: Compact Config Toggle */}
-                <div className="md:hidden flex items-center gap-2">
-                    <Popover>
-                        <PopoverTrigger className="flex-1 flex items-center justify-between h-10 px-4 rounded-lg bg-secondary/50 dark:bg-white/5 border border-border dark:border-white/10 text-[10px] font-bold uppercase tracking-widest overflow-hidden">
-                            <span className="truncate">{programName || 'Configurar Plan'}</span>
-                            <ChevronDown className="w-3 h-3 ml-2 flex-shrink-0" />
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] p-4 bg-background/95 backdrop-blur-xl border-border dark:border-white/10 shadow-2xl rounded-2xl">
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground px-1">Designación</label>
-                                    <Input 
-                                        value={programName}
-                                        onChange={e => setProgramName(e.target.value)}
-                                        disabled={isAssigned}
-                                        placeholder="EJ: BLOQUE 1"
-                                        className="h-10 text-xs font-bold uppercase tracking-widest"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground px-1">Duración</label>
-                                    <select 
-                                        value={weeksToRepeat}
-                                        onChange={e => setWeeksToRepeat(parseInt(e.target.value))}
-                                        className="w-full h-10 px-3 rounded-md bg-secondary dark:bg-white/5 border border-border text-xs font-bold uppercase tracking-widest outline-none"
-                                    >
-                                        {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(w => (
-                                            <option key={w} value={w}>{w} {w === 1 ? 'SEMANA' : 'SEMANAS'}</option>
-                                        ))}
-                                    </select>
-                                </div>
                             </div>
-                        </PopoverContent>
-                    </Popover>
-                    
-                    <button 
-                        onClick={handleSave} 
-                        disabled={isPending}
-                        className="w-12 h-10 flex items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg active:scale-95 transition-all"
-                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
-                    >
-                        {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    </button>
-                </div>
-            </div>
+                            {hasUnsavedChanges ? (
+                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-orange-500 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse inline-block shrink-0"></span>
+                                    Sin guardar
+                                </p>
+                            ) : (
+                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60 truncate">
+                                    {client ? client.full_name : 'Plantilla Global'}
+                                </p>
+                            )}
+                            <p className="hidden md:block text-xs font-bold uppercase tracking-widest text-muted-foreground/60">
+                                {client ? `Cliente: ${client.full_name}` : 'Plantilla Global'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {/* Catalog toggle — tablet only (md→lg) */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hidden md:max-lg:flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setIsCatalogSidebarOpen(v => !v)}
+                            title={isCatalogSidebarOpen ? 'Ocultar catálogo' : 'Mostrar catálogo'}
+                        >
+                            <Search className="w-4 h-4" />
+                        </Button>
 
-            {/* Scrollable Board (Desktop) / Tabs (Mobile) */}
-            <div className="flex-1 overflow-hidden bg-transparent">
-                <DndContext 
-                    sensors={sensors} 
-                    collisionDetection={closestCorners} 
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDragEnd={handleDragEnd}
-                >
-                    <div className="flex h-full">
-                        {/* Sidebar Catalog (Desktop) */}
-                        <aside className="hidden md:block w-[280px] xl:w-[320px] border-r border-border dark:border-white/10 bg-card dark:bg-black/40 backdrop-blur-xl h-full overflow-hidden shadow-sm dark:shadow-2xl relative z-10 flex-shrink-0">
-                            <DraggableExerciseCatalog exercises={exercises} />
-                        </aside>
+                        {/* Secondary actions — desktop only */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setShowTemplatePicker(true)}
+                            title="Cargar plantilla"
+                        >
+                            <LayoutTemplate className="w-4 h-4 mr-2" />
+                            Plantillas
+                        </Button>
 
-                        <div className="flex-1 overflow-hidden flex flex-col relative">
-                            {/* Background ambient light for builder area */}
-                            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, color-mix(in srgb, var(--theme-primary) 5%, transparent) 0%, transparent 70%)' }} />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setShowPreview(true)}
+                            title="Vista previa"
+                        >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Preview
+                        </Button>
 
-                            {/* Desktop View: Horizontal Scroll Board */}
-                            <div 
-                                ref={horizontalScrollRef}
-                                onWheel={(e) => {
-                                    if (horizontalScrollRef.current) {
-                                        // Allow horizontal scroll with mouse wheel
-                                        const target = e.target as HTMLElement;
-                                        const isScrollableVertical = target.closest('.overflow-y-auto');
-                                        
-                                        if (e.deltaY !== 0 && !isScrollableVertical) {
-                                            e.preventDefault();
-                                            horizontalScrollRef.current.scrollLeft += e.deltaY;
+                        {!client && initialProgram?.id && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                onClick={() => setShowAssign(true)}
+                                title="Asignar a clientes"
+                            >
+                                <Users className="w-4 h-4 mr-2" />
+                                Asignar
+                            </Button>
+                        )}
+
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setShowBalance(true)}
+                            title="Balance muscular"
+                        >
+                            <BarChart3 className="w-4 h-4 mr-2" />
+                            Balance
+                        </Button>
+
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setShowPrint(true)}
+                            title="Imprimir / Exportar PDF"
+                        >
+                            <Printer className="w-4 h-4 mr-2" />
+                            Imprimir
+                        </Button>
+
+                        <div className="hidden md:flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className={`h-10 w-10 transition-colors ${canUndo ? 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5' : 'text-muted-foreground/30 cursor-not-allowed'}`}
+                                onClick={undo}
+                                disabled={!canUndo}
+                                title="Deshacer (Ctrl+Z)"
+                            >
+                                <Undo2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className={`h-10 w-10 transition-colors ${canRedo ? 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5' : 'text-muted-foreground/30 cursor-not-allowed'}`}
+                                onClick={redo}
+                                disabled={!canRedo}
+                                title="Rehacer (Ctrl+Shift+Z)"
+                            >
+                                <Redo2 className="w-4 h-4" />
+                            </Button>
+                        </div>
+
+                        {/* Mobile overflow menu — hidden on md+ */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger
+                                className="md:hidden h-10 w-10 px-0 border-0 bg-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                title="Más opciones"
+                            >
+                                <MoreVertical className="w-5 h-5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                                <DropdownMenuItem onClick={() => setShowTemplatePicker(true)}>
+                                    <LayoutTemplate className="w-4 h-4 mr-2" /> Plantillas
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowPreview(true)}>
+                                    <Eye className="w-4 h-4 mr-2" /> Vista previa
+                                </DropdownMenuItem>
+                                {!client && initialProgram?.id && (
+                                    <DropdownMenuItem onClick={() => setShowAssign(true)}>
+                                        <Users className="w-4 h-4 mr-2" /> Asignar a clientes
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => setShowBalance(true)}>
+                                    <BarChart3 className="w-4 h-4 mr-2" /> Balance muscular
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowPrint(true)}>
+                                    <Printer className="w-4 h-4 mr-2" /> Imprimir / PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={undo} disabled={!canUndo}>
+                                    <Undo2 className="w-4 h-4 mr-2" /> Deshacer
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={redo} disabled={!canRedo}>
+                                    <Redo2 className="w-4 h-4 mr-2" /> Rehacer
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        {/* Config/Settings — always visible */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest border-border hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setShowConfig(!showConfig)}
+                            title="Configuración"
+                        >
+                            <Settings className="w-4 h-4 md:mr-2" />
+                            <span className="hidden md:inline">Config</span>
+                        </Button>
+
+                        {client && initialProgram?.id && sourceTemplateId && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                                disabled={isPending}
+                                title="Copiar cambios de la plantilla base (no pisa bloques marcados Modif.)"
+                                onClick={() => {
+                                    if (!initialProgram?.id) return
+                                    startTransition(async () => {
+                                        const r = await syncProgramFromTemplateAction(initialProgram.id)
+                                        if (r.error) toast.error(r.error)
+                                        else {
+                                            toast.success('Sincronizado con la plantilla base.')
+                                            router.refresh()
                                         }
-                                    }
+                                    })
                                 }}
-                                className="hidden md:flex gap-6 h-full p-8 overflow-x-auto relative z-10 custom-scrollbar"
                             >
-                                {mounted && !isMobile && DAYS_OF_WEEK.map(day => (
-                                    <DayColumn
-                                        key={day.id}
-                                        day={day}
-                                        title={days.find(d => d.id === day.id)?.title || ''}
-                                        blocks={days.find(d => d.id === day.id)?.blocks || []}
-                                        exercises={exercises}
-                                        onAddExercise={addExercise}
-                                        onEditBlock={setEditingBlock}
-                                        onRemoveBlock={removeBlock}
-                                        onUpdateTitle={updateDayTitle}
-                                    />
-                                ))}
-                            </div>
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                <span className="hidden lg:inline">Sync plantilla</span>
+                            </Button>
+                        )}
 
-                            {/* Mobile View: Tabs + Catalog Trigger */}
-                            <div className="flex md:hidden flex-col h-full relative z-10">
-                                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-                                    <TabsList className={cn(
-                                        "flex w-full overflow-x-auto justify-start bg-background dark:bg-black/90 backdrop-blur-md border-b border-border dark:border-white/10 rounded-none h-12 px-2 z-10 sticky top-0 shrink-0 custom-scrollbar",
-                                    )}>
-                                        {DAYS_OF_WEEK.map(day => (
-                                            <TabsTrigger 
-                                                key={day.id} 
-                                                value={day.id.toString()}
-                                                className="px-4 text-[9px] font-bold uppercase tracking-widest text-muted-foreground data-[state=active]:text-primary data-[state=active]:bg-primary/5 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none transition-all flex-shrink-0"
-                                                style={{ '--theme-primary': 'var(--theme-primary)' } as any}
+                        {/* Save — always visible */}
+                        <Button
+                            onClick={handleSave}
+                            disabled={isPending || !programName.trim()}
+                            size="sm"
+                            className="h-10 px-4 md:px-6 text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] hover:opacity-90 transition-all disabled:opacity-50"
+                            style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                        >
+                            {isPending ? <Loader2 className="w-4 h-4 animate-spin md:mr-2" /> : <Save className="w-4 h-4 md:mr-2" />}
+                            <span className="hidden md:inline">{isPending ? 'GUARDANDO...' : 'GUARDAR'}</span>
+                        </Button>
+                    </div>
+                </div>
+
+                <ProgramPhasesBar phases={programPhases} weeksToRepeat={weeksToRepeat} />
+
+                {showConfig && (
+                    <ProgramConfigHeader 
+                        programName={programName} setProgramName={setProgramName}
+                        durationType={durationType} setDurationType={setDurationType}
+                        weeksToRepeat={weeksToRepeat} setWeeksToRepeat={setWeeksToRepeat}
+                        durationDays={durationDays} setDurationDays={setDurationDays}
+                        startDateFlexible={startDateFlexible} setStartDateFlexible={setStartDateFlexible}
+                        startDate={startDate} setStartDate={setStartDate}
+                        programNotes={programNotes} setProgramNotes={setProgramNotes}
+                        programStructureType={programStructureType} setProgramStructureType={setProgramStructureType}
+                        cycleLength={cycleLength} setCycleLength={setCycleLength}
+                        programPhases={programPhases} setProgramPhases={setProgramPhases}
+                        onClose={() => setShowConfig(false)}
+                    />
+                )}
+            </header>
+
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+            >
+                <div className="flex-1 flex overflow-hidden max-w-[2000px] w-full mx-auto relative bg-secondary/30 dark:bg-background/80">
+                    {/* Catalog sidebar — hidden mobile, collapsible tablet, always open desktop */}
+                    <div className={`hidden md:flex flex-col flex-shrink-0 border-r border-border bg-background/50 backdrop-blur-sm relative z-10 transition-all duration-300 lg:w-[350px] ${
+                        isCatalogSidebarOpen ? 'md:max-lg:w-[300px]' : 'md:max-lg:w-[48px] md:max-lg:overflow-hidden'
+                    }`}>
+                        {/* Toggle button — tablet only */}
+                        <div className="hidden md:max-lg:flex justify-center py-3 border-b border-border shrink-0">
+                            <button
+                                onClick={() => setIsCatalogSidebarOpen(v => !v)}
+                                className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                title={isCatalogSidebarOpen ? 'Ocultar catálogo' : 'Mostrar catálogo'}
+                            >
+                                <Search className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className={`flex-1 min-h-0 transition-opacity duration-200 ${!isCatalogSidebarOpen ? 'md:max-lg:opacity-0 md:max-lg:pointer-events-none' : ''}`}>
+                            <DraggableExerciseCatalog exercises={exercises} />
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-background to-background">
+                        {/* A/B Mode bar */}
+                        <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 flex-shrink-0">
+                            <button
+                                onClick={() => setIsABMode(v => !v)}
+                                className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-colors ${
+                                    isABMode
+                                        ? 'bg-primary/10 border-primary/30 text-primary'
+                                        : 'border-border text-muted-foreground hover:border-primary/30 hover:text-primary'
+                                }`}
+                            >
+                                <span className="font-black">A/B</span>
+                                <span>{isABMode ? 'Semanas alternas activas' : 'Activar semanas A/B'}</span>
+                            </button>
+
+                            {isABMode && (
+                                <div className="flex bg-muted/50 p-0.5 rounded-lg">
+                                    {(['A', 'B'] as const).map(v => (
+                                        <button
+                                            key={v}
+                                            onClick={() => setActiveVariant(v)}
+                                            className={`px-4 py-1 text-[11px] font-black uppercase tracking-widest rounded-md transition-colors ${
+                                                activeVariant === v
+                                                    ? 'bg-background text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground'
+                                            }`}
+                                        >
+                                            Semana {v}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {isABMode && (
+                                <p className="text-[9px] text-muted-foreground uppercase tracking-widest ml-auto hidden md:block">
+                                    El sistema alterna A→B cada semana automáticamente
+                                </p>
+                            )}
+
+                            {/* Desktop day scroll arrows — hidden on mobile */}
+                            {!isMobile && (
+                                <div className={`flex items-center gap-1 ${isABMode ? '' : 'ml-auto'}`}>
+                                    <button
+                                        onClick={() => scrollBoard('left')}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        title="Días anteriores"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => scrollBoard('right')}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        title="Días siguientes"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar" ref={boardScrollRef}>
+                        {isMobile ? (
+                            <div className="h-full flex flex-col">
+                                {/* Mobile tab bar with exercise counts */}
+                                <div className="flex bg-muted/50 p-1 h-11 rounded-xl gap-0.5 mx-2 mt-2 mb-1 flex-shrink-0" style={{ paddingTop: 'max(4px, env(safe-area-inset-top))' }}>
+                                    {days.map((d, idx) => {
+                                        const isActive = activeMobileDayIndex === idx
+                                        const count = d.blocks.length
+                                        return (
+                                            <button
+                                                key={d.id}
+                                                onClick={() => setActiveMobileDayIndex(idx)}
+                                                className={`flex-1 flex flex-col items-center justify-center rounded-lg relative transition-all ${
+                                                    isActive
+                                                        ? 'bg-background text-foreground shadow-sm'
+                                                        : 'text-muted-foreground'
+                                                }`}
                                             >
-                                                {day.name.substring(0, 3)}
-                                            </TabsTrigger>
-                                        ))}
-                                    </TabsList>
-                                    <div className={cn(
-                                        "flex-1 overflow-hidden transition-all duration-500 ease-in-out",
-                                    )}>
-                                        {mounted && isMobile && DAYS_OF_WEEK.map(day => (
-                                            <TabsContent 
-                                                key={day.id} 
-                                                value={day.id.toString()} 
-                                                className="h-full p-4 mt-0"
+                                                <span className="text-[9px] font-bold uppercase tracking-widest leading-none">
+                                                    {d.name.slice(0, 3)}
+                                                </span>
+                                                {d.is_rest ? (
+                                                    <span className="text-[8px] text-indigo-400 font-bold mt-0.5">ZZZ</span>
+                                                ) : count > 0 ? (
+                                                    <span className={`text-[8px] font-black mt-0.5 ${isActive ? 'text-primary' : 'text-muted-foreground/60'}`}>
+                                                        {count}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[8px] text-muted-foreground/30 mt-0.5">·</span>
+                                                )}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
+                                {/* Carousel swipeable area */}
+                                <div
+                                    className="flex-1 overflow-hidden"
+                                    onTouchStart={handleSwipeTouchStart}
+                                    onTouchEnd={handleSwipeTouchEnd}
+                                >
+                                    <div
+                                        className="flex h-full"
+                                        style={{
+                                            width: `${days.length * 100}%`,
+                                            transform: `translateX(-${(activeMobileDayIndex * 100) / days.length}%)`,
+                                            transition: 'transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                                        }}
+                                    >
+                                        {days.map((day) => (
+                                            <div
+                                                key={day.id}
+                                                className="h-full overflow-y-auto"
+                                                style={{
+                                                    width: `${100 / days.length}%`,
+                                                    paddingBottom: `calc(${sheetHeight}vh + env(safe-area-inset-bottom) + 0.5rem)`,
+                                                    WebkitOverflowScrolling: 'touch',
+                                                } as React.CSSProperties}
                                             >
                                                 <DayColumn
                                                     day={day}
-                                                    title={days.find(d => d.id === day.id)?.title || ''}
-                                                    blocks={days.find(d => d.id === day.id)?.blocks || []}
                                                     exercises={exercises}
-                                                    onAddExercise={addExercise}
+                                                    allDays={days}
+                                                    isCycleMode={programStructureType === 'cycle'}
+                                                    isDragPending={isDragPending}
+                                                    onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
-                                                    onRemoveBlock={removeBlock}
-                                                    onUpdateTitle={updateDayTitle}
+                                                    onRemoveBlock={handleRemoveBlock}
+                                                    onUpdateBlock={handleUpdateBlock}
+                                                    onUpdateTitle={handleUpdateTitle}
+                                                    onCopyDay={handleCopyDay}
+                                                    onToggleRest={handleToggleRest}
+                                                    onToggleSuperset={handleToggleSuperset}
+                                                    onSetBlockSection={handleSetBlockSection}
+                                                    onToggleBlockOverride={handleToggleBlockOverride}
+                                                    templateLinked={!!(client?.id && sourceTemplateId)}
                                                 />
-                                            </TabsContent>
+                                            </div>
                                         ))}
                                     </div>
-                                </Tabs>
-
-                                {/* Mobile Floating Button (FAB) - Elevated to avoid Bottom Nav */}
-                                {!isCatalogOpen && (
-                                    <button
-                                        onClick={() => setIsCatalogOpen(true)}
-                                        className="fixed bottom-[110px] right-6 w-14 h-14 rounded-full bg-primary text-white hover:scale-105 active:scale-90 transition-all z-40 border border-white/20 flex items-center justify-center"
-                                        style={{ boxShadow: '0 8px 25px color-mix(in srgb, var(--theme-primary) 40%, transparent)' }}
-                                    >
-                                        <Plus className="w-6 h-6" />
-                                    </button>
-                                )}
+                                </div>
                             </div>
+                        ) : (
+                            <div className="h-full flex px-6 py-6 gap-4">
+                                {days.map((day) => (
+                                    <div key={day.id} className="h-full pb-8">
+                                        <DayColumn
+                                            day={day}
+                                            exercises={exercises}
+                                            allDays={days}
+                                            isCycleMode={programStructureType === 'cycle'}
+                                            isDragPending={isDragPending}
+                                            onAddExercise={handleAddExercise}
+                                            onEditBlock={setEditingBlock}
+                                            onRemoveBlock={handleRemoveBlock}
+                                            onUpdateBlock={handleUpdateBlock}
+                                            onUpdateTitle={handleUpdateTitle}
+                                            onCopyDay={handleCopyDay}
+                                            onToggleRest={handleToggleRest}
+                                            onToggleSuperset={handleToggleSuperset}
+                                            onSetBlockSection={handleSetBlockSection}
+                                            onToggleBlockOverride={handleToggleBlockOverride}
+                                            templateLinked={!!(client?.id && sourceTemplateId)}
+                                        />
+                                    </div>
+                                ))}
+                                <div className="w-12 flex-shrink-0" />
+                            </div>
+                        )}
                         </div>
                     </div>
+
+                    {isMobile && (
+                        <>
+                            {isCatalogOpen && sheetHeight >= 40 && (
+                                <div
+                                    className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
+                                    onClick={() => { setIsCatalogOpen(false); setSheetHeight(12) }}
+                                />
+                            )}
+                            <div
+                                className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
+                                style={{ height: `${sheetHeight}vh`, transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+                            >
+                                {/* Drag handle — always visible */}
+                                <div
+                                    className="w-full flex flex-col items-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+                                    onTouchStart={handleTouchStart}
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
+                                    onClick={() => {
+                                        if (!isCatalogOpen) { setIsCatalogOpen(true); setSheetHeight(80) }
+                                    }}
+                                >
+                                    <div className="w-10 h-1 bg-muted-foreground/25 rounded-full mb-2" />
+                                    {/* Collapsed label */}
+                                    {sheetHeight < 28 && (
+                                        <div className="flex items-center gap-2 pb-1">
+                                            <Plus className="w-3.5 h-3.5 text-primary" />
+                                            <span className="text-[11px] font-bold text-foreground">Añadir ejercicio</span>
+                                            <span className="text-[10px] text-muted-foreground ml-1">
+                                                · {days[activeMobileDayIndex]?.blocks.length || 0} en este día
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Compact state (40vh): search + muscle group chips */}
+                                {sheetHeight >= 28 && sheetHeight < 60 && (
+                                    <div className="flex flex-col h-[calc(100%-48px)] px-4 pb-4 gap-3">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar ejercicio..."
+                                                className="w-full pl-9 pr-4 py-2.5 text-[16px] bg-muted/50 border border-border rounded-xl focus:outline-none focus:border-primary"
+                                                onFocus={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
+                                            />
+                                        </div>
+                                        <div className="overflow-x-auto flex gap-2 pb-1 -mx-1 px-1">
+                                            {['Pectorales','Dorsales','Hombros','Bíceps','Tríceps','Cuádriceps','Glúteos','Abdominales'].map(m => (
+                                                <button
+                                                    key={m}
+                                                    onClick={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
+                                                    className="flex-shrink-0 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border border-border bg-background hover:border-primary/50 transition-colors"
+                                                    style={{ color: getMuscleColor(m) }}
+                                                >
+                                                    {m}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground text-center">Toca un grupo o arrastra para ver todos</p>
+                                    </div>
+                                )}
+
+                                {/* Full catalog (80vh) */}
+                                {sheetHeight >= 60 && (
+                                    <div className="h-[calc(100%-48px)] overflow-hidden px-4 pb-4">
+                                        <DraggableExerciseCatalog
+                                            exercises={exercises}
+                                            onTapAdd={(exercise) => {
+                                                const dayId = days[activeMobileDayIndex]?.id
+                                                if (dayId != null) {
+                                                    handleAddExercise(dayId, exercise)
+                                                    toast.success(`${exercise.name} añadido`)
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
 
                     <DragOverlay dropAnimation={null}>
-                        {activeId && activeOverlayItem ? (
-                            <div className="bg-primary/20 backdrop-blur-xl border border-primary text-white p-4 rounded-xl min-w-[240px] opacity-100 scale-105 pointer-events-none z-[100] flex items-center gap-3" style={{ boxShadow: '0 0 30px color-mix(in srgb, var(--theme-primary) 50%, transparent)' }}>
-                                <Activity className="w-5 h-5 text-primary" />
-                                <div>
-                                    <p className="text-sm font-bold leading-tight">{activeOverlayItem.name}</p>
-                                    <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{activeOverlayItem.muscle}</p>
+                        {activeId && activeData ? (
+                            activeData.type === 'new-exercise' ? (
+                                <div className="p-4 bg-primary/10 border-2 border-primary/50 border-dashed rounded-xl backdrop-blur-xl shadow-2xl transform scale-105 rotate-3 -mr-16">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded bg-primary/20 flex items-center justify-center">
+                                            <span className="text-primary font-bold">N</span>
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-xs uppercase tracking-widest text-primary truncate max-w-[150px]">
+                                                {activeData.exercise.name}
+                                            </div>
+                                            <div className="text-[9px] font-bold mt-1 uppercase text-primary/70">{activeData.exercise.muscle_group}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : activeData.type === 'block' ? (
+                                <div className="opacity-80 scale-105 rotate-3 w-[260px] pointer-events-none shadow-2xl z-50">
+                                    <ExerciseBlock
+                                        block={activeData.block}
+                                        dayId={activeData.dayId}
+                                        onEdit={() => {}}
+                                        onRemove={() => {}}
+                                    />
+                                </div>
+                            ) : null
                         ) : null}
                     </DragOverlay>
+                </div>
+            </DndContext>
 
-                    {/* Mobile Exercise Catalog Sheet */}
-                    <Sheet open={isCatalogOpen} onOpenChange={(open) => { 
-                        if (!open) {
-                            setIsCatalogOpen(false)
-                            setTimeout(() => setSheetHeight(60), 300)
-                        }
-                    }}>
-                        <SheetContent 
-                            side="bottom" 
-                            className={cn(
-                                "p-0 rounded-t-[2rem] overflow-hidden border-x-0 border-b-0 border-t border-border dark:border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] z-50 flex flex-col bg-background/95 backdrop-blur-2xl",
-                                !isDraggingSheet && "transition-all duration-300 ease-out"
-                            )}
-                            style={{ height: `${sheetHeight}vh` }}
-                            showCloseButton={false}
-                        >
-                            {/* Handle visual */}
-                            <div 
-                                className="w-full pt-4 pb-2 cursor-grab active:cursor-grabbing flex justify-center"
-                                onTouchStart={handleTouchStart}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={handleTouchEnd}
-                                onClick={() => setSheetHeight(sheetHeight === 80 ? 60 : 80)}
-                            >
-                                <div className="w-12 h-1.5 bg-muted-foreground/20 dark:bg-white/20 rounded-full shrink-0" />
-                            </div>
-                            
-                            <div className="flex-1 overflow-hidden">
-                                <DraggableExerciseCatalog 
-                                    exercises={exercises} 
-                                    onSelect={(ex) => addExercise(parseInt(activeTab), ex)}
-                                    className="border-none shadow-none h-full rounded-none bg-transparent" 
-                                />
-                            </div>
+            <BlockEditSheet
+                block={editingBlock}
+                clientId={client?.id}
+                onClose={() => setEditingBlock(null)}
+                onUpdate={(b) => {
+                    updateBlock(b);
+                    setHasUnsavedChanges(true);
+                    setEditingBlock(null);
+                }}
+                onChange={setEditingBlock}
+            />
 
-                            {/* Botón de cerrar (X) flotante */}
-                            <button 
-                                onClick={() => setIsCatalogOpen(false)}
-                                className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-secondary/80 dark:bg-white/10 border border-border dark:border-white/20 text-foreground dark:text-white shadow-xl hover:bg-secondary dark:hover:bg-white/20 transition-all active:scale-90 z-[60]"
-                                aria-label="Cerrar catálogo"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </SheetContent>
-                    </Sheet>
-                </DndContext>
-            </div>
+            <TemplatePickerDialog
+                open={showTemplatePicker}
+                onClose={() => setShowTemplatePicker(false)}
+                hasExistingData={days.some(d => d.blocks.length > 0)}
+                onApply={(newDays, name, meta) => {
+                    dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
+                    setProgramName((prev: string) => prev || name)
+                    setWeeksToRepeat(meta.weeks_to_repeat)
+                    setDurationType(meta.duration_type as any)
+                    setDurationDays(meta.duration_days)
+                    setProgramNotes(meta.program_notes)
+                    if (meta.program_phases?.length) setProgramPhases(meta.program_phases)
+                    if (client?.id) setSourceTemplateId(meta.appliedTemplateId)
+                    else setSourceTemplateId(null)
+                    setHasUnsavedChanges(true)
+                    toast.success(`Plantilla "${name}" aplicada`)
+                }}
+            />
 
-            {/* Block Edit Drawer (Mobile) / Sheet (Desktop) */}
-            <Sheet open={!!editingBlock} onOpenChange={() => setEditingBlock(null)}>
-                <SheetContent side="right" className="w-full sm:max-w-md p-0 gap-0 overflow-y-auto bg-background/95 backdrop-blur-3xl border-l border-border dark:border-white/10">
-                    <SheetHeader className="p-8 border-b border-border dark:border-white/10 sticky top-0 bg-background/50 dark:bg-black/50 backdrop-blur-md z-10">
-                        <div className="flex items-start gap-4">
-                            <div 
-                                className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden cursor-zoom-in"
-                                style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)', boxShadow: '0 0 15px color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}
-                                onClick={() => {
-                                    if (editingBlock?.gif_url) setExpandedGif({url: editingBlock.gif_url, name: editingBlock.exercise_name})
-                                    else if (editingBlock?.video_url && !editingBlock.video_url.includes('youtube')) setExpandedGif({url: editingBlock.video_url, name: editingBlock.exercise_name})
-                                }}
-                            >
-                                {editingBlock?.gif_url || (editingBlock?.video_url && !editingBlock.video_url.includes('youtube') && !editingBlock.video_url.includes('youtu.be')) ? (
-                                    <img src={editingBlock.gif_url || editingBlock.video_url!} alt={editingBlock.exercise_name} className="w-full h-full object-cover" />
-                                ) : editingBlock?.video_url && (editingBlock.video_url.includes('youtube') || editingBlock.video_url.includes('youtu.be')) ? (
-                                    <iframe
-                                        className="w-full h-full scale-[2] pointer-events-none"
-                                        src={`https://www.youtube-nocookie.com/embed/${editingBlock.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}?autoplay=1&mute=1&loop=1&playlist=${editingBlock.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}&controls=0`}
-                                        title={editingBlock.exercise_name}
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                    />
-                                ) : (
-                                    <Dumbbell className="w-8 h-8 text-primary" style={{ color: 'var(--theme-primary)' }} />
-                                )}
-                            </div>
-                            <div className="min-w-0">
-                                <SheetTitle className="text-left text-lg font-bold text-foreground leading-tight font-display">{editingBlock?.exercise_name}</SheetTitle>
-                                <p className="text-[10px] text-primary uppercase font-bold tracking-[0.2em] mt-1" style={{ color: 'var(--theme-primary)' }}>{editingBlock?.muscle_group}</p>
-                            </div>
-                        </div>
-                    </SheetHeader>
-                    
-                    {editingBlock && (
-                        <div className="p-8 space-y-8">
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
-                                        Series Target
-                                        <InfoTooltip content={t('tooltip.sets')} />
-                                    </label>
-                                    <Input 
-                                        type="number" 
-                                        value={editingBlock.sets || ''}
-                                        onChange={e => setEditingBlock({...editingBlock, sets: e.target.value === '' ? 0 : parseInt(e.target.value) || 0})}
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground text-center text-lg font-bold focus:border-primary"
-                                    />
-                                </div>
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
-                                        Repeticiones
-                                        <InfoTooltip content={t('tooltip.reps')} />
-                                    </label>
-                                    <Input 
-                                        value={editingBlock.reps}
-                                        onChange={e => setEditingBlock({...editingBlock, reps: e.target.value})}
-                                        placeholder="Ej. 8-12"
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground text-center text-lg font-bold focus:border-primary"
-                                    />
-                                </div>
-                            </div>
+            <ProgramPreviewDialog
+                open={showPreview}
+                onClose={() => setShowPreview(false)}
+                programName={programName}
+                days={days}
+                weeksToRepeat={weeksToRepeat}
+                durationType={durationType}
+                durationDays={durationDays}
+                programNotes={programNotes}
+                clientName={client?.full_name}
+            />
 
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
-                                        Carga (KG)
-                                        <InfoTooltip content={t('tooltip.weight')} />
-                                    </label>
-                                    <Input 
-                                        value={editingBlock.target_weight_kg}
-                                        onChange={e => setEditingBlock({...editingBlock, target_weight_kg: e.target.value})}
-                                        placeholder="Opcional"
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
-                                    />
-                                </div>
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
-                                        RIR / RPE
-                                        <InfoTooltip content={t('tooltip.rir')} />
-                                    </label>
-                                    <Input 
-                                        value={editingBlock.rir}
-                                        onChange={e => setEditingBlock({...editingBlock, rir: e.target.value})}
-                                        placeholder="Ej. RIR 2"
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
-                                    />
-                                </div>
-                            </div>
+            {!client && initialProgram?.id && (
+                <AssignToClientsDialog
+                    open={showAssign}
+                    onClose={() => setShowAssign(false)}
+                    programId={initialProgram.id}
+                    programName={programName}
+                />
+            )}
 
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
-                                        Tempo
-                                        <InfoTooltip content={t('tooltip.tempo')} />
-                                    </label>
-                                    <Input 
-                                        value={editingBlock.tempo}
-                                        onChange={e => setEditingBlock({...editingBlock, tempo: e.target.value})}
-                                        placeholder="Ej. 3-1-X-1"
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
-                                    />
-                                </div>
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
-                                        Recuperación
-                                        <InfoTooltip content={t('tooltip.rest')} />
-                                    </label>
-                                    <Input 
-                                        value={editingBlock.rest_time}
-                                        onChange={e => setEditingBlock({...editingBlock, rest_time: e.target.value})}
-                                        placeholder="Ej. 120s"
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
-                                    />
-                                </div>
-                            </div>
+            <MuscleBalancePanel
+                open={showBalance}
+                onClose={() => setShowBalance(false)}
+                days={days}
+            />
 
-                            <div className="space-y-3">
-                                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
-                                    Instrucciones de Protocolo
-                                    <InfoTooltip content={t('tooltip.notes')} />
-                                </label>
-                                <textarea 
-                                    className="w-full h-32 p-4 text-sm rounded-xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-muted-foreground"
-                                    value={editingBlock.notes}
-                                    onChange={e => setEditingBlock({...editingBlock, notes: e.target.value})}
-                                    placeholder="Detalles biomécanicos o notas..."
-                                />
-                            </div>
-
-                            <button 
-                                onClick={() => handleBlockUpdate(editingBlock)}
-                                disabled={!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()}
-                                className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(0,122,255,0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                                style={{ 
-                                    backgroundColor: 'var(--theme-primary, #007AFF)',
-                                    boxShadow: '0 0 20px -5px var(--theme-primary, rgba(0,122,255,0.4))'
-                                }}
-                            >
-                                {(!editingBlock.sets || editingBlock.sets < 1 || !editingBlock.reps?.trim()) 
-                                    ? 'DATA INCOMPLETA' 
-                                    : 'SINCRONIZAR BLOQUE'}
-                            </button>
-                        </div>
-                    )}
-                </SheetContent>
-            </Sheet>
-
-            {/* Expanded GIF Dialog */}
-            <Dialog open={!!expandedGif} onOpenChange={() => setExpandedGif(null)}>
-                <DialogContent className="sm:max-w-2xl bg-background border-border overflow-hidden p-0 gap-0">
-                    <div className="p-6 border-b border-border bg-muted/20">
-                        <DialogTitle className="text-xl font-display uppercase tracking-tighter text-foreground">
-                            {expandedGif?.name}
-                        </DialogTitle>
-                    </div>
-                    <div className="aspect-video relative w-full bg-white flex items-center justify-center">
-                        {expandedGif?.url && (
-                            <img src={expandedGif.url} alt={expandedGif.name} className="w-full h-full object-contain" />
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <PrintProgramDialog
+                open={showPrint}
+                onClose={() => setShowPrint(false)}
+                programName={programName || 'Programa'}
+                clientName={client?.full_name ?? undefined}
+                weeksToRepeat={weeksToRepeat}
+                days={builderA.days}
+                daysB={isABMode ? builderB.days : undefined}
+                isABMode={isABMode}
+            />
         </div>
     )
 }

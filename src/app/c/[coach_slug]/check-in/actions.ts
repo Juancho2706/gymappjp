@@ -67,6 +67,7 @@ export async function submitCheckinAction(
             .upload(filePath, file, { cacheControl: '3600', upsert: false })
 
         if (uploadError) {
+            console.error('[CheckinAction] Error uploading photo:', uploadError)
             return { error: 'Error al subir la imagen de progreso.' }
         }
 

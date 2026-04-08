@@ -92,28 +92,33 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
         router.refresh()
     }
 
+    const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
+
     return (
         <>
-            {/* Mobile Top Header */}
-            <div className="md:hidden flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
-                <div className="flex items-center gap-2.5">
-                    <GymAppLogo className="w-8 h-8 flex-shrink-0" />
-                    <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
-                        {coachBrand || coachName}
-                    </span>
+            {/* Mobile Top Header — hidden on builder (builder has its own full-screen header) */}
+            {!isBuilder && (
+                <div className="md:hidden flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
+                    <div className="flex items-center gap-2.5">
+                        <GymAppLogo className="w-8 h-8 flex-shrink-0" />
+                        <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
+                            {coachBrand || coachName}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <ThemeToggle />
+                        <button onClick={handleSignOut} className="text-muted-foreground hover:text-destructive">
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <ThemeToggle />
-                    <button onClick={handleSignOut} className="text-muted-foreground hover:text-destructive">
-                        <LogOut className="w-5 h-5" />
-                    </button>
-                </div>
-            </div>
+            )}
 
-            {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
+            {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile — hidden on builder) */}
             <aside className={cn(
                 "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-sidebar border-t md:border-t-0 md:border-r border-sidebar-border flex flex-col transition-all duration-300 pb-safe shadow-2xl md:shadow-none",
-                isCollapsed ? "md:w-20" : "md:w-64"
+                isCollapsed ? "md:w-20" : "md:w-64",
+                isBuilder && "hidden md:flex"
             )}>
                 
                 {/* Logo area (Desktop only) */}
@@ -169,7 +174,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                                     'flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-xl text-[10px] md:text-sm font-semibold transition-all duration-300 group flex-1 md:flex-none border border-transparent',
                                     isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start md:px-4',
                                     isActive
-                                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(0,122,255,0.4)]'
+                                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.4)]'
                                         : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
                                 )}
                                 style={isActive ? activeBgStyle : undefined}

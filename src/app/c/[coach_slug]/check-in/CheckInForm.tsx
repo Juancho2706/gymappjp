@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useRef } from 'react'
+import { startTransition, useActionState, useState, useRef } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Camera, CheckCircle2, Loader2, UploadCloud, X } from 'lucide-react'
 import Image from 'next/image'
@@ -14,6 +14,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
     const router = useRouter()
     const [state, formAction, isServerPending] = useActionState(submitCheckinAction, initialState)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+    const [fileError, setFileError] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     if (state.success) {
@@ -36,8 +37,24 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
     }
 
     function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setFileError(null)
         const file = e.target.files?.[0]
         if (file) {
+            const MAX_SIZE = 5 * 1024 * 1024 // 5MB
+            const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                setFileError('Formato no permitido. Solo JPG, PNG o WEBP.')
+                if (fileInputRef.current) fileInputRef.current.value = ''
+                return
+            }
+
+            if (file.size > MAX_SIZE) {
+                setFileError('La imagen pesa más de 5MB. Sube una más ligera.')
+                if (fileInputRef.current) fileInputRef.current.value = ''
+                return
+            }
+
             const url = URL.createObjectURL(file)
             setPreviewUrl(url)
         }
@@ -58,7 +75,9 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
                 console.error('Error compressing image:', error)
             }
         }
-        formAction(formData)
+        startTransition(() => {
+            formAction(formData)
+        })
     }
 
     return (
@@ -143,11 +162,23 @@ export function CheckInForm({ coachSlug, coachPrimaryColor }: { coachSlug: strin
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-full flex flex-col items-center justify-center py-6 border-2 border-dashed border-border rounded-xl hover:border-muted-foreground hover:bg-secondary/50 transition-colors"
+                            className={`w-full flex flex-col items-center justify-center py-6 border-2 border-dashed rounded-xl transition-colors ${
+                                fileError 
+                                    ? 'border-red-500/50 bg-red-500/5 hover:bg-red-500/10' 
+                                    : 'border-border hover:border-muted-foreground hover:bg-secondary/50'
+                            }`}
                         >
-                            <Camera className="w-8 h-8 text-muted-foreground mb-2" />
-                            <span className="text-sm font-medium text-muted-foreground">Seleccionar foto</span>
-                            <span className="text-xs text-muted-foreground mt-1">Formatos: JPG, PNG, WEBP</span>
+                            <Camera className={`w-8 h-8 mb-2 ${fileError ? 'text-red-400' : 'text-muted-foreground'}`} />
+                            <span className={`text-sm font-medium ${fileError ? 'text-red-400' : 'text-muted-foreground'}`}>
+                                {fileError ? fileError : 'Seleccionar foto frontal'}
+                            </span>
+                            {!fileError && (
+                                <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5 text-center">
+                                    <p>• Formatos: JPG, PNG, WEBP</p>
+                                    <p>• Tamaño Máximo: 5 MB</p>
+                                    <p>• Buena iluminación recomendada</p>
+                                </div>
+                            )}
                         </button>
                     )}
                 </div>

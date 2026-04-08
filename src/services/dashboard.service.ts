@@ -13,48 +13,53 @@ export class DashboardService {
 
         if (clientsError || !clients) return [];
 
-        // 2. Para cada alumno, calcular adherencia de la última semana
         const lastWeek = new Date();
         lastWeek.setDate(lastWeek.getDate() - 7);
+        const lastWeekStr = lastWeek.toISOString();
 
         const stats = await Promise.all(
             clients.map(async (client) => {
+                // Logs de la última semana
                 const { data: logs } = await this.supabase
                     .from('workout_logs')
-                    .select('*')
+                    .select('set_number, plan_name_at_log')
                     .eq('client_id', client.id)
-                    .gte('logged_at', lastWeek.toISOString());
+                    .gte('logged_at', lastWeekStr);
 
-                // Obtener bloques de entrenamiento programados activos para este cliente
-                const { data: activePlans } = await this.supabase
-                    .from('workout_plans')
-                    .select('id')
-                    .eq('client_id', client.id);
+                // Solo el programa ACTIVO para calcular sets planificados semanales
+                const { data: activeProgram } = await this.supabase
+                    .from('workout_programs')
+                    .select(`
+                        workout_plans (
+                            workout_blocks ( sets )
+                        )
+                    `)
+                    .eq('client_id', client.id)
+                    .eq('is_active', true)
+                    .limit(1)
+                    .maybeSingle();
 
+                // Sets por semana = suma de sets de todos los bloques del programa activo
                 let totalPlannedSets = 0;
-                if (activePlans && activePlans.length > 0) {
-                    const planIds = activePlans.map((p) => p.id);
-                    const { data: blocks } = await this.supabase
-                        .from('workout_blocks')
-                        .select('sets')
-                        .in('plan_id', planIds);
-
-                    totalPlannedSets =
-                        blocks?.reduce((acc, b) => acc + (b.sets || 0), 0) || 0;
+                if (activeProgram?.workout_plans) {
+                    totalPlannedSets = (activeProgram.workout_plans as any[]).reduce(
+                        (acc: number, plan: any) =>
+                            acc + (plan.workout_blocks || []).reduce(
+                                (s: number, b: any) => s + (b.sets || 0), 0
+                            ),
+                        0
+                    );
                 }
 
                 const logsCount = logs?.length || 0;
                 const percentage =
                     totalPlannedSets > 0
-                        ? Math.min(
-                              Math.round((logsCount / totalPlannedSets) * 100),
-                              100
-                          )
+                        ? Math.min(Math.round((logsCount / totalPlannedSets) * 100), 100)
                         : 0;
 
                 const lastPlanName =
                     logs && logs.length > 0
-                        ? (logs[logs.length - 1] as any).plan_name_at_log || 'Plan Actual' // TODO: add plan_name_at_log to DB types if exists or join
+                        ? (logs[logs.length - 1] as any).plan_name_at_log || 'Plan Actual'
                         : 'Sin actividad reciente';
 
                 return {

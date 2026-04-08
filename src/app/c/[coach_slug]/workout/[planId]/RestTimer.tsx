@@ -130,40 +130,10 @@ export function RestTimer({
     };
   }, []);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (isActive && timeLeft > 0) {
-      // Calculate real end time to prevent background throttling issues
-      if (!endTimeRef.current) {
-         endTimeRef.current = Date.now() + (timeLeft * 1000);
-      }
-      
-      interval = setInterval(() => {
-        if (endTimeRef.current) {
-          const newTimeLeft = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
-          setTimeLeft(newTimeLeft);
-          
-          if (newTimeLeft === 0) {
-            triggerAlarm();
-          }
-        }
-      }, 500); // Check more frequently than 1s to be precise
-    } else if (timeLeft === 0 && isActive) {
-      triggerAlarm();
-    } else if (!isActive) {
-      endTimeRef.current = null;
-    }
-
-    return () => {
-        clearInterval(interval);
-    };
-  }, [isActive, timeLeft, soundType]);
-
   const triggerAlarm = () => {
     // Si ya está sonando, no reiniciar el ciclo
     if (isAlarmRinging) return;
-    
+
     setIsAlarmRinging(true);
     alarmCountRef.current = 1;
     playTimerSound(soundType, volume);
@@ -202,6 +172,37 @@ export function RestTimer({
     setIsActive(false);
     endTimeRef.current = null;
   };
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (isActive && timeLeft > 0) {
+      // Calculate real end time to prevent background throttling issues
+      if (!endTimeRef.current) {
+         endTimeRef.current = Date.now() + (timeLeft * 1000);
+      }
+
+      interval = setInterval(() => {
+        if (endTimeRef.current) {
+          const newTimeLeft = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+          setTimeLeft(newTimeLeft);
+
+          if (newTimeLeft === 0) {
+            triggerAlarm();
+          }
+        }
+      }, 500); // Check more frequently than 1s to be precise
+    } else if (timeLeft === 0 && isActive) {
+      triggerAlarm();
+    } else if (!isActive) {
+      endTimeRef.current = null;
+    }
+
+    return () => {
+        clearInterval(interval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, timeLeft, soundType, volume]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
