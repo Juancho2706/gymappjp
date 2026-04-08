@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useDraggable } from '@dnd-kit/core'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search, Dumbbell, Filter, Eye, Activity, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -41,44 +42,44 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
             {...attributes}
             onClick={() => onSelect?.(exercise)}
             className={cn(
-                "p-3 rounded-lg border bg-card dark:bg-white/5 dark:border-white/10 dark:hover:bg-white/10 hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group relative",
+                "p-3 rounded-lg border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group relative",
                 isDragging && "opacity-50 ring-2 ring-primary border-primary",
                 onSelect && "cursor-pointer active:scale-95 transition-transform"
             )}
         >
             <div className="flex items-center gap-3">
-                <div 
-                    className="w-10 h-10 rounded-lg flex items-center justify-center border border-black/5 dark:border-white/5 overflow-hidden shrink-0 group-hover:shadow-md transition-all relative"
+                <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center border border-border overflow-hidden shrink-0 group-hover:shadow-md transition-all relative"
                     style={{ backgroundColor: `color-mix(in srgb, ${getMuscleColor(exercise.muscle_group)} 15%, transparent)` }}
                 >
                     {exercise.gif_url || (exercise.video_url && !exercise.video_url.includes('youtube') && !exercise.video_url.includes('youtu.be')) ? (
-                        <img 
-                            src={exercise.gif_url || exercise.video_url!} 
-                            alt={exercise.name} 
-                            loading="lazy" 
-                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal" 
+                        <img
+                            src={exercise.gif_url || exercise.video_url!}
+                            alt={exercise.name}
+                            loading="lazy"
+                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal"
                         />
                     ) : (
                         <Activity className="w-5 h-5 opacity-50" style={{ color: getMuscleColor(exercise.muscle_group) }} />
                     )}
                 </div>
                 <div className="flex-1 min-w-0 pr-8">
-                    <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors truncate" style={{ color: 'inherit' }}>{exercise.name}</p>
+                    <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors truncate">{exercise.name}</p>
                     <div className="flex items-center gap-2 mt-1">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getMuscleColor(exercise.muscle_group) }} />
                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider truncate">{exercise.muscle_group}</p>
                     </div>
                 </div>
             </div>
-            
+
             {/* Hover Tooltip (Desktop) */}
-            <div className="hidden lg:block absolute left-[105%] top-1/2 -translate-y-1/2 w-64 bg-background/95 backdrop-blur-xl border border-border dark:border-white/10 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] translate-x-[-10px] group-hover:translate-x-0 pointer-events-none overflow-hidden">
+            <div className="hidden lg:block absolute left-[105%] top-1/2 -translate-y-1/2 w-64 bg-background/95 backdrop-blur-xl border border-border rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] translate-x-[-10px] group-hover:translate-x-0 pointer-events-none overflow-hidden">
                 <div className="h-40 bg-muted/30 relative flex items-center justify-center">
                     {exercise.gif_url || (exercise.video_url && !exercise.video_url.includes('youtube') && !exercise.video_url.includes('youtu.be')) ? (
-                        <img 
-                            src={exercise.gif_url || exercise.video_url!} 
-                            alt={exercise.name} 
-                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal" 
+                        <img
+                            src={exercise.gif_url || exercise.video_url!}
+                            alt={exercise.name}
+                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal"
                         />
                     ) : (
                         <Activity className="w-12 h-12 text-muted-foreground/30" />
@@ -97,7 +98,7 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
             {onTapAdd ? (
                 <button
                     onClick={(e) => { e.stopPropagation(); onTapAdd(exercise) }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-primary text-white shadow-md active:scale-95 transition-transform z-10"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white shadow-md active:scale-95 transition-transform z-10"
                     style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                     title="Añadir al día"
                 >
@@ -115,6 +116,13 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
         </div>
     )
 }
+
+// ─── List item types for virtualizer ────────────────────────────────────────
+
+type ListItem =
+    | { kind: 'header'; label: string }
+    | { kind: 'separator' }
+    | { kind: 'exercise'; exercise: Exercise; isRecent: boolean }
 
 interface DraggableExerciseCatalogProps {
     exercises: Exercise[]
@@ -134,7 +142,7 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect, onTap
             try {
                 const saved = localStorage.getItem('builder_recent_exercises')
                 if (saved) setRecentIds(JSON.parse(saved))
-            } catch (e) {}
+            } catch { /* ignore */ }
         }
         loadRecent()
         window.addEventListener('recent_exercises_updated', loadRecent)
@@ -153,30 +161,62 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect, onTap
         return filterExercises(exercises, search, selectedMuscle)
     }, [exercises, search, selectedMuscle])
 
+    // ── Flat list for virtualizer ──────────────────────────────────────────
+    const listItems = useMemo((): ListItem[] => {
+        const items: ListItem[] = []
+        const showRecents = search === '' && selectedMuscle === 'Todos' && recentExercises.length > 0
+        if (showRecents) {
+            items.push({ kind: 'header', label: 'Usados Recientemente' })
+            recentExercises.forEach(ex => items.push({ kind: 'exercise', exercise: ex, isRecent: true }))
+            items.push({ kind: 'separator' })
+            if (filteredExercises.length > 0) {
+                items.push({ kind: 'header', label: 'Todos los Ejercicios' })
+            }
+        }
+        filteredExercises.forEach(ex => items.push({ kind: 'exercise', exercise: ex, isRecent: false }))
+        return items
+    }, [search, selectedMuscle, recentExercises, filteredExercises])
+
+    const parentRef = useRef<HTMLDivElement>(null)
+
+    const rowVirtualizer = useVirtualizer({
+        count: listItems.length,
+        getScrollElement: () => parentRef.current,
+        estimateSize: (i) => {
+            const item = listItems[i]
+            if (!item) return 68
+            if (item.kind === 'header') return 32
+            if (item.kind === 'separator') return 17
+            return 68 // exercise card height (p-3 + thumbnail row)
+        },
+        overscan: 5,
+    })
+
     return (
         <div className={cn("flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm relative", className)}>
-            <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-xl">
+            {/* Header / Filters */}
+            <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-xl shrink-0">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
                         <Activity className="w-4 h-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
                         Catálogo de Ejercicios
                     </h2>
                 </div>
-                
+
                 <div className="flex flex-col gap-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input 
+                        <Input
                             placeholder="Buscar por nombre..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 h-10 text-xs bg-background border-border rounded-xl focus:border-primary focus:ring-primary/20 transition-all text-foreground"
+                            className="pl-9 h-10 text-[16px] md:text-xs bg-background border-border rounded-xl focus:border-primary focus:ring-primary/20 transition-all text-foreground"
                             style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
                         />
                     </div>
-                    
+
                     <Select value={selectedMuscle} onValueChange={(val) => setSelectedMuscle(val || 'Todos')}>
-                        <SelectTrigger 
+                        <SelectTrigger
                             className="h-10 text-xs bg-background border-border rounded-xl focus:border-primary focus:ring-primary/20 transition-all text-foreground"
                             style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
                         >
@@ -195,35 +235,57 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect, onTap
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
-                {search === '' && selectedMuscle === 'Todos' && recentExercises.length > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Usados Recientemente</p>
-                        {recentExercises.map(ex => (
-                            <DraggableExerciseItem key={`recent-${ex.id}`} exercise={ex} onSelect={onSelect} onPreview={onTapAdd ? undefined : setPreviewExercise} onTapAdd={onTapAdd} />
-                        ))}
-                        <div className="h-px bg-border/50 my-4" />
+            {/* Virtualized list */}
+            <div
+                ref={parentRef}
+                className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2"
+                style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+            >
+                {listItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center opacity-40 text-foreground">
+                        <Search className="w-8 h-8 mb-2" />
+                        <p className="text-xs font-medium">No se encontraron<br />ejercicios</p>
+                    </div>
+                ) : (
+                    <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                        {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                            const item = listItems[virtualRow.index]
+                            return (
+                                <div
+                                    key={virtualRow.key}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: `${virtualRow.size}px`,
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                    }}
+                                >
+                                    {item.kind === 'header' && (
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pt-2 pb-1">
+                                            {item.label}
+                                        </p>
+                                    )}
+                                    {item.kind === 'separator' && (
+                                        <div className="h-px bg-border/50 my-2" />
+                                    )}
+                                    {item.kind === 'exercise' && (
+                                        <DraggableExerciseItem
+                                            exercise={item.exercise}
+                                            onSelect={onSelect}
+                                            onPreview={onTapAdd ? undefined : setPreviewExercise}
+                                            onTapAdd={onTapAdd}
+                                        />
+                                    )}
+                                </div>
+                            )
+                        })}
                     </div>
                 )}
-
-                <div className="space-y-2">
-                    {search === '' && selectedMuscle === 'Todos' && recentExercises.length > 0 && (
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Todos los Ejercicios</p>
-                    )}
-                    {filteredExercises.length > 0 ? (
-                        filteredExercises.map(ex => (
-                            <DraggableExerciseItem key={ex.id} exercise={ex} onSelect={onSelect} onPreview={onTapAdd ? undefined : setPreviewExercise} onTapAdd={onTapAdd} />
-                        ))
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-12 text-center opacity-40 text-foreground">
-                            <Search className="w-8 h-8 mb-2" />
-                            <p className="text-xs font-medium">No se encontraron<br/>ejercicios</p>
-                        </div>
-                    )}
-                </div>
             </div>
-            
-            <div className="hidden md:block p-3 bg-muted/10 border-t border-border">
+
+            <div className="hidden md:block p-3 bg-muted/10 border-t border-border shrink-0">
                 <p className="text-[10px] text-muted-foreground text-center">
                     Arrastra un ejercicio al día deseado
                 </p>
@@ -242,8 +304,8 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect, onTap
                     </DialogHeader>
                     {previewExercise?.gif_url || (previewExercise?.video_url && !previewExercise.video_url.includes('youtube') && !previewExercise.video_url.includes('youtu.be')) ? (
                         <div className="aspect-video relative rounded-xl overflow-hidden bg-white mt-4 border border-border flex items-center justify-center">
-                            <img 
-                                src={previewExercise.gif_url || previewExercise.video_url!} 
+                            <img
+                                src={previewExercise.gif_url || previewExercise.video_url!}
                                 alt={previewExercise.name}
                                 className="w-full h-full object-contain"
                             />
@@ -268,4 +330,3 @@ export function DraggableExerciseCatalog({ exercises, className, onSelect, onTap
         </div>
     )
 }
-

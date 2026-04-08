@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, X, Minus, Plus } from 'lucide-react'
@@ -23,11 +23,13 @@ interface ExerciseBlockProps {
     onToggleOverride?: () => void
     /** Muestra badge Base/Modif. cuando hay plantilla vinculada */
     showTemplateLink?: boolean
+    /** Indica que el drag está en periodo de delay (300ms TouchSensor) */
+    isDragPending?: boolean
 }
 
-export function ExerciseBlock({
+function ExerciseBlockInner({
     block, dayId, onEdit, onRemove, onUpdate, onToggleSuperset,
-    onSetSection, onToggleOverride, showTemplateLink,
+    onSetSection, onToggleOverride, showTemplateLink, isDragPending,
 }: ExerciseBlockProps) {
     const {
         attributes,
@@ -82,8 +84,12 @@ export function ExerciseBlock({
     return (
         <div ref={setNodeRef}
             className={cn(
-                'group relative flex flex-col bg-background dark:bg-zinc-950/50 backdrop-blur-md border border-border dark:border-white/10 rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none border-l-4',
-                isDragging ? 'z-50 ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50' : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-primary/10'
+                'group relative flex flex-col bg-background dark:bg-card/50 backdrop-blur-md border border-border rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none border-l-4',
+                isDragging
+                    ? 'z-50 ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50'
+                    : isDragPending
+                        ? 'ring-2 ring-primary/40 scale-[1.02] shadow-lg'
+                        : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-primary/10'
             )}
             style={{
                 ...style,
@@ -92,12 +98,12 @@ export function ExerciseBlock({
         >
             <div className="flex items-center gap-3 p-3">
                 <button {...attributes} {...listeners}
-                    className="text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing p-1.5 -ml-1 rounded-lg hover:bg-muted dark:hover:bg-white/5 transition-colors flex-shrink-0">
+                    className="text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing p-1.5 -ml-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center">
                     <GripVertical className="w-4 h-4" />
                 </button>
 
                 <div
-                    className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center overflow-hidden bg-muted relative border border-black/5 dark:border-white/5"
+                    className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center overflow-hidden bg-muted relative border border-border"
                     style={{ backgroundColor: `color-mix(in srgb, ${muscleColor} 15%, transparent)` }}
                 >
                     {block.gif_url || (block.video_url && !block.video_url.includes('youtube') && !block.video_url.includes('youtu.be')) ? (
@@ -144,12 +150,12 @@ export function ExerciseBlock({
                                     </button>
                                 </div>
                                 <span className="text-muted-foreground text-[10px]">×</span>
-                                {/* Reps input */}
+                                {/* Reps input — font-size 16px en mobile para evitar zoom en iOS */}
                                 <input
                                     autoFocus
                                     value={quickReps}
                                     onChange={e => setQuickReps(e.target.value)}
-                                    className="w-14 text-[10px] font-bold text-center bg-primary/10 border border-primary/30 rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:border-primary"
+                                    className="w-14 text-[16px] md:text-[10px] font-bold text-center bg-primary/10 border border-primary/30 rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:border-primary"
                                     placeholder="reps"
                                 />
                                 <button
@@ -266,7 +272,7 @@ export function ExerciseBlock({
                     e.stopPropagation();
                     onRemove(dayId, block.uid);
                 }}
-                    className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0"
+                    className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
                     title="Remover Unidad">
                     <X className="w-5 h-5 stroke-[2.5px]" />
                 </button>
@@ -274,3 +280,5 @@ export function ExerciseBlock({
         </div>
     )
 }
+
+export const ExerciseBlock = React.memo(ExerciseBlockInner)

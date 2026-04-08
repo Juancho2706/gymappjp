@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect, useRef } from 'react'
+import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -168,8 +168,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const [isABMode, setIsABMode] = useState<boolean>(initialProgram?.ab_mode ?? false)
     const [activeVariant, setActiveVariant] = useState<'A' | 'B'>('A')
 
-    const builderA = usePlanBuilder(getInitialDays('A'))
-    const builderB = usePlanBuilder(getInitialDays('B'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initialDaysA = useMemo(() => getInitialDays('A'), [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initialDaysB = useMemo(() => getInitialDays('B'), [])
+
+    const builderA = usePlanBuilder(initialDaysA)
+    const builderB = usePlanBuilder(initialDaysB)
     const activeBuilder = activeVariant === 'A' ? builderA : builderB
 
     const {
@@ -222,6 +227,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const [showAssign, setShowAssign] = useState(false)
     const [showBalance, setShowBalance] = useState(false)
     const [showPrint, setShowPrint] = useState(false)
+    const [isCatalogSidebarOpen, setIsCatalogSidebarOpen] = useState(false)
+    const [isDragPending, setIsDragPending] = useState(false)
 
     const [editingBlock, setEditingBlock] = useState<BuilderBlock | null>(null)
     const [activeId, setActiveId] = useState<string | null>(null)
@@ -365,6 +372,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     function handleDragStart(event: DragStartEvent) {
         setActiveId(event.active.id as string)
         setActiveData(event.active.data.current)
+        setIsDragPending(true)
+        // Clear pending after transition window (slightly longer than TouchSensor delay)
+        setTimeout(() => setIsDragPending(false), 400)
     }
 
     function handleDragOver(event: DragOverEvent) {
@@ -423,6 +433,47 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         trackRecentExercise(exercise.id)
         setHasUnsavedChanges(true)
     }
+
+    // ── Stable handlers for React.memo'd DayColumn ──────────────────────────
+    const handleRemoveBlock = useCallback((dayId: number, uid: string) => {
+        removeBlock(dayId, uid)
+        setHasUnsavedChanges(true)
+    }, [removeBlock])
+
+    const handleUpdateBlock = useCallback((b: BuilderBlock) => {
+        updateBlock(b)
+        setHasUnsavedChanges(true)
+    }, [updateBlock])
+
+    const handleUpdateTitle = useCallback((dayId: number, title: string) => {
+        updateDayTitle(dayId, title)
+    }, [updateDayTitle])
+
+    const handleCopyDay = useCallback((s: number, ts: number[]) => {
+        copyDay(s, ts)
+        setHasUnsavedChanges(true)
+        toast.success(`Día copiado a ${ts.length} día(s)`)
+    }, [copyDay])
+
+    const handleToggleRest = useCallback((dayId: number) => {
+        toggleRestDay(dayId)
+        setHasUnsavedChanges(true)
+    }, [toggleRestDay])
+
+    const handleToggleSuperset = useCallback((dayId: number, uid: string) => {
+        toggleSuperset(dayId, uid)
+        setHasUnsavedChanges(true)
+    }, [toggleSuperset])
+
+    const handleSetBlockSection = useCallback((d: number, u: string, s: import('./types').BuilderSection) => {
+        setBlockSection(d, u, s)
+        setHasUnsavedChanges(true)
+    }, [setBlockSection])
+
+    const handleToggleBlockOverride = useCallback((uid: string) => {
+        toggleBlockOverride(uid)
+        setHasUnsavedChanges(true)
+    }, [toggleBlockOverride])
 
     const handleSave = () => {
         if (!programName.trim()) { toast.error('El programa necesita un nombre.'); return }
@@ -492,10 +543,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         })
     }
 
-    if (!mounted) return <div className="h-screen flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+    if (!mounted) return <div className="h-[100dvh] flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
 
     return (
-        <div className="flex flex-col h-screen bg-background overflow-hidden relative">
+        <div className="flex flex-col h-[100dvh] bg-background overflow-hidden relative">
             {showDraftBanner && (
                 <div className="bg-primary/10 border-b border-primary/20 p-3 flex justify-center items-center gap-4 animate-in slide-in-from-top">
                     <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
@@ -528,6 +579,17 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                        {/* Catalog toggle — tablet only (md→lg) */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hidden md:max-lg:flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setIsCatalogSidebarOpen(v => !v)}
+                            title={isCatalogSidebarOpen ? 'Ocultar catálogo' : 'Mostrar catálogo'}
+                        >
+                            <Search className="w-4 h-4" />
+                        </Button>
+
                         <Button
                             variant="ghost"
                             size="sm"
@@ -682,9 +744,24 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex-1 flex overflow-hidden max-w-[2000px] w-full mx-auto relative bg-secondary/30 dark:bg-zinc-950/20">
-                    <div className="hidden md:block w-[350px] flex-shrink-0 border-r border-border bg-background/50 backdrop-blur-sm relative z-10 transition-transform duration-300">
-                        <DraggableExerciseCatalog exercises={exercises} />
+                <div className="flex-1 flex overflow-hidden max-w-[2000px] w-full mx-auto relative bg-secondary/30 dark:bg-background/80">
+                    {/* Catalog sidebar — hidden mobile, collapsible tablet, always open desktop */}
+                    <div className={`hidden md:flex flex-col flex-shrink-0 border-r border-border bg-background/50 backdrop-blur-sm relative z-10 transition-all duration-300 lg:w-[350px] ${
+                        isCatalogSidebarOpen ? 'md:max-lg:w-[300px]' : 'md:max-lg:w-[48px] md:max-lg:overflow-hidden'
+                    }`}>
+                        {/* Toggle button — tablet only */}
+                        <div className="hidden md:max-lg:flex justify-center py-3 border-b border-border shrink-0">
+                            <button
+                                onClick={() => setIsCatalogSidebarOpen(v => !v)}
+                                className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                title={isCatalogSidebarOpen ? 'Ocultar catálogo' : 'Mostrar catálogo'}
+                            >
+                                <Search className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className={`flex-1 min-h-0 transition-opacity duration-200 ${!isCatalogSidebarOpen ? 'md:max-lg:opacity-0 md:max-lg:pointer-events-none' : ''}`}>
+                            <DraggableExerciseCatalog exercises={exercises} />
+                        </div>
                     </div>
 
                     <div className="flex-1 flex flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-background to-background">
@@ -731,7 +808,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         {isMobile ? (
                             <div className="h-full flex flex-col">
                                 {/* Mobile tab bar with exercise counts */}
-                                <div className="flex bg-muted/50 p-1 h-12 rounded-xl gap-0.5 mx-2 mt-2 mb-1 flex-shrink-0">
+                                <div className="flex bg-muted/50 p-1 h-11 rounded-xl gap-0.5 mx-2 mt-2 mb-1 flex-shrink-0" style={{ paddingTop: 'max(4px, env(safe-area-inset-top))' }}>
                                     {days.map((d, idx) => {
                                         const isActive = activeMobileDayIndex === idx
                                         const count = d.blocks.length
@@ -779,31 +856,29 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                         {days.map((day) => (
                                             <div
                                                 key={day.id}
-                                                className="h-full pb-36 overflow-y-auto"
-                                                style={{ width: `${100 / days.length}%` }}
+                                                className="h-full overflow-y-auto"
+                                                style={{
+                                                    width: `${100 / days.length}%`,
+                                                    paddingBottom: 'calc(9rem + env(safe-area-inset-bottom))',
+                                                    WebkitOverflowScrolling: 'touch',
+                                                } as React.CSSProperties}
                                             >
                                                 <DayColumn
                                                     day={day}
                                                     exercises={exercises}
                                                     allDays={days}
                                                     isCycleMode={programStructureType === 'cycle'}
+                                                    isDragPending={isDragPending}
                                                     onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
-                                                    onRemoveBlock={(dayId, uid) => {
-                                                        removeBlock(dayId, uid);
-                                                        setHasUnsavedChanges(true);
-                                                    }}
-                                                    onUpdateBlock={(b) => { updateBlock(b); setHasUnsavedChanges(true); }}
-                                                    onUpdateTitle={updateDayTitle}
-                                                    onCopyDay={(s, ts) => {
-                                                        copyDay(s, ts);
-                                                        setHasUnsavedChanges(true);
-                                                        toast.success(`Día copiado a ${ts.length} día(s)`);
-                                                    }}
-                                                    onToggleRest={(dayId) => { toggleRestDay(dayId); setHasUnsavedChanges(true); }}
-                                                    onToggleSuperset={(dayId, uid) => { toggleSuperset(dayId, uid); setHasUnsavedChanges(true); }}
-                                                    onSetBlockSection={(d, u, s) => { setBlockSection(d, u, s); setHasUnsavedChanges(true); }}
-                                                    onToggleBlockOverride={(uid) => { toggleBlockOverride(uid); setHasUnsavedChanges(true); }}
+                                                    onRemoveBlock={handleRemoveBlock}
+                                                    onUpdateBlock={handleUpdateBlock}
+                                                    onUpdateTitle={handleUpdateTitle}
+                                                    onCopyDay={handleCopyDay}
+                                                    onToggleRest={handleToggleRest}
+                                                    onToggleSuperset={handleToggleSuperset}
+                                                    onSetBlockSection={handleSetBlockSection}
+                                                    onToggleBlockOverride={handleToggleBlockOverride}
                                                     templateLinked={!!(client?.id && sourceTemplateId)}
                                                 />
                                             </div>
@@ -812,7 +887,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full flex px-6 py-6 gap-6">
+                            <div className="h-full flex px-6 py-6 gap-4">
                                 {days.map((day) => (
                                     <div key={day.id} className="h-full pb-8">
                                         <DayColumn
@@ -820,23 +895,17 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                             exercises={exercises}
                                             allDays={days}
                                             isCycleMode={programStructureType === 'cycle'}
+                                            isDragPending={isDragPending}
                                             onAddExercise={handleAddExercise}
                                             onEditBlock={setEditingBlock}
-                                            onRemoveBlock={(dayId, uid) => {
-                                                removeBlock(dayId, uid);
-                                                setHasUnsavedChanges(true);
-                                            }}
-                                            onUpdateBlock={(b) => { updateBlock(b); setHasUnsavedChanges(true); }}
-                                            onUpdateTitle={updateDayTitle}
-                                            onCopyDay={(s, ts) => {
-                                                copyDay(s, ts);
-                                                setHasUnsavedChanges(true);
-                                                toast.success(`Día copiado a ${ts.length} día(s)`);
-                                            }}
-                                            onToggleRest={(dayId) => { toggleRestDay(dayId); setHasUnsavedChanges(true); }}
-                                            onToggleSuperset={(dayId, uid) => { toggleSuperset(dayId, uid); setHasUnsavedChanges(true); }}
-                                            onSetBlockSection={(d, u, s) => { setBlockSection(d, u, s); setHasUnsavedChanges(true); }}
-                                            onToggleBlockOverride={(uid) => { toggleBlockOverride(uid); setHasUnsavedChanges(true); }}
+                                            onRemoveBlock={handleRemoveBlock}
+                                            onUpdateBlock={handleUpdateBlock}
+                                            onUpdateTitle={handleUpdateTitle}
+                                            onCopyDay={handleCopyDay}
+                                            onToggleRest={handleToggleRest}
+                                            onToggleSuperset={handleToggleSuperset}
+                                            onSetBlockSection={handleSetBlockSection}
+                                            onToggleBlockOverride={handleToggleBlockOverride}
                                             templateLinked={!!(client?.id && sourceTemplateId)}
                                         />
                                     </div>
@@ -857,7 +926,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             )}
                             <div
                                 className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
-                                style={{ height: `${sheetHeight}vh`, transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)' }}
+                                style={{ height: `${sheetHeight}vh`, transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)', paddingBottom: 'env(safe-area-inset-bottom)' }}
                             >
                                 {/* Drag handle — always visible */}
                                 <div
@@ -890,9 +959,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                             <input
                                                 type="text"
                                                 placeholder="Buscar ejercicio..."
-                                                className="w-full pl-9 pr-4 py-2.5 text-sm bg-muted/50 border border-border rounded-xl focus:outline-none focus:border-primary"
+                                                className="w-full pl-9 pr-4 py-2.5 text-[16px] bg-muted/50 border border-border rounded-xl focus:outline-none focus:border-primary"
                                                 onFocus={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
-                                                readOnly
                                             />
                                         </div>
                                         <div className="overflow-x-auto flex gap-2 pb-1 -mx-1 px-1">

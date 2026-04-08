@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Edit2, Search, Copy, Moon, Sun, Link2, Unlink } from 'lucide-react'
@@ -44,6 +44,7 @@ interface DayColumnProps {
     exercises: Exercise[]
     allDays?: DayState[]
     isCycleMode?: boolean
+    isDragPending?: boolean
     onAddExercise: (dayId: number, exercise: Exercise) => void
     onEditBlock: (block: BuilderBlock) => void
     onRemoveBlock: (dayId: number, uid: string) => void
@@ -57,11 +58,12 @@ interface DayColumnProps {
     templateLinked?: boolean
 }
 
-export function DayColumn({
+function DayColumnInner({
     day,
     exercises,
     allDays,
     isCycleMode = false,
+    isDragPending,
     onAddExercise,
     onEditBlock,
     onRemoveBlock,
@@ -81,8 +83,11 @@ export function DayColumn({
     const [isSearchOpen, setIsSearchOpen] = useState(false)
     const [selectedDaysToCopy, setSelectedDaysToCopy] = useState<number[]>([])
 
-    const totalSets = blocks.reduce((sum, b) => sum + (b.sets || 0), 0)
-    const uniqueMuscles = Array.from(new Set(blocks.map(b => b.muscle_group).filter(Boolean)))
+    const totalSets = useMemo(() => blocks.reduce((sum, b) => sum + (b.sets || 0), 0), [blocks])
+    const uniqueMuscles = useMemo(
+        () => Array.from(new Set(blocks.map(b => b.muscle_group).filter(Boolean))),
+        [blocks]
+    )
 
     const filtered = useMemo(() => {
         if (!search) return []
@@ -98,14 +103,20 @@ export function DayColumn({
     })
 
     return (
-        <div className={`flex flex-col h-full backdrop-blur-xl border border-border dark:border-white/10 rounded-2xl min-w-[280px] xl:min-w-[320px] w-full md:w-auto overflow-hidden shadow-sm dark:shadow-2xl transition-colors duration-300 ${
+        <div className={cn(
+            'flex flex-col h-full backdrop-blur-xl border border-border rounded-2xl overflow-hidden shadow-sm transition-colors duration-300',
+            // Responsive widths: mobile handled by carousel, tablet/desktop by min-w
+            'min-w-[200px] md:min-w-[220px] lg:min-w-[260px] xl:min-w-[280px] w-full md:w-auto',
             is_rest
-                ? 'bg-muted/30 dark:bg-zinc-900/50'
-                : 'bg-card dark:bg-zinc-950/30'
-        }`}>
-            <div className={`p-4 border-b border-border dark:border-white/10 ${is_rest ? 'bg-muted/40 dark:bg-white/[0.01]' : 'bg-muted/50 dark:bg-white/[0.02]'}`}>
+                ? 'bg-muted/30 dark:bg-muted/20'
+                : 'bg-card dark:bg-card/80'
+        )}>
+            <div className={cn(
+                'p-4 border-b border-border',
+                is_rest ? 'bg-muted/40' : 'bg-muted/30'
+            )}>
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400 flex items-center gap-2">
+                    <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
                         {dayLabel}
                         {is_rest && (
                             <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-widest">
@@ -114,7 +125,7 @@ export function DayColumn({
                         )}
                         {!is_rest && blocks.length > 0 && (
                             <Popover>
-                                <PopoverTrigger className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors text-zinc-400 hover:text-foreground">
+                                <PopoverTrigger className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors text-muted-foreground hover:text-foreground">
                                     <Copy className="w-3.5 h-3.5" />
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-3 bg-background/95 backdrop-blur-xl border border-border shadow-2xl rounded-xl">
@@ -156,16 +167,17 @@ export function DayColumn({
                         <button
                             onClick={() => onToggleRest(dayId)}
                             title={is_rest ? 'Marcar como día activo' : 'Marcar como descanso'}
-                            className={`p-1.5 rounded-lg transition-colors text-xs ${
+                            className={cn(
+                                'p-1.5 rounded-lg transition-colors text-xs min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center',
                                 is_rest
                                     ? 'text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20'
-                                    : 'text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-indigo-400'
-                            }`}
+                                    : 'text-muted-foreground hover:bg-black/5 dark:hover:bg-white/10 hover:text-indigo-400'
+                            )}
                         >
                             {is_rest ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                         </button>
                         {!is_rest && (
-                            <Badge variant="outline" className="bg-white/5 text-zinc-500 border-white/10 font-bold">
+                            <Badge variant="outline" className="text-muted-foreground border-border font-bold">
                                 {blocks.length} UNITS
                             </Badge>
                         )}
@@ -175,22 +187,22 @@ export function DayColumn({
                 {!is_rest && (
                     <>
                         <div className="relative mb-3 group">
-                            <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" />
+                            <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                             <input
                                 value={title}
                                 onChange={(e) => onUpdateTitle(dayId, e.target.value)}
                                 placeholder="TITULO DEL DIA (EJ: EMPUJE)"
-                                className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/5 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
+                                className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/5 dark:bg-black/20 border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground text-[16px] md:text-[10px]"
                             />
                         </div>
 
                         {/* Contador de Volumen por Día */}
                         <div className="flex items-center gap-2 flex-wrap mb-4">
-                            <div className="flex items-center gap-1.5 bg-muted dark:bg-black/30 px-2 py-0.5 rounded-md border border-border shadow-sm">
-                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Ejercicios</span>
+                            <div className="flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded-md border border-border shadow-sm">
+                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Ej.</span>
                                 <span className="text-[10px] font-bold text-foreground">{blocks.length}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 bg-muted dark:bg-black/30 px-2 py-0.5 rounded-md border border-border shadow-sm">
+                            <div className="flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded-md border border-border shadow-sm">
                                 <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Series</span>
                                 <span className="text-[10px] font-bold text-foreground">{totalSets}</span>
                             </div>
@@ -201,8 +213,9 @@ export function DayColumn({
                             </div>
                         </div>
 
+                        {/* Búsqueda rápida — solo desktop */}
                         <div className="relative hidden md:block">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <input
                                 value={search}
                                 onChange={(e) => {
@@ -211,7 +224,7 @@ export function DayColumn({
                                 }}
                                 onFocus={() => setIsSearchOpen(true)}
                                 placeholder="BUSCAR PROTOCOLO..."
-                                className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-xl bg-black/10 dark:bg-black/40 border border-black/10 dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
+                                className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-xl bg-black/10 dark:bg-black/40 border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
                             />
 
                             {search && isSearchOpen && (
@@ -219,7 +232,7 @@ export function DayColumn({
                                     {filtered.length > 0 ? (
                                         <div className="py-2">
                                             <div className="px-3 pb-2 mb-2 border-b border-border text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                                                Resultados Rápido
+                                                Resultados Rápidos
                                             </div>
                                             {filtered.map(ex => (
                                                 <button
@@ -250,8 +263,9 @@ export function DayColumn({
             <div
                 ref={setNodeRef}
                 className="flex-1 p-4 space-y-2 overflow-y-auto min-h-[200px]"
+                style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
-                {/* Capa de overlay para cerrar sugerencias */}
+                {/* Overlay para cerrar sugerencias */}
                 {isSearchOpen && (
                     <div className="fixed inset-0 z-40 hidden md:block" onClick={() => setIsSearchOpen(false)} />
                 )}
@@ -273,7 +287,7 @@ export function DayColumn({
                         items={blocks.map(b => b.uid)}
                         strategy={verticalListSortingStrategy}
                     >
-                                {blocks.map((block, idx) => {
+                        {blocks.map((block, idx) => {
                             const nextBlock = blocks[idx + 1]
                             const linkedToNext = !!block.superset_group && block.superset_group === nextBlock?.superset_group
                             const isLastBlock = idx === blocks.length - 1
@@ -314,8 +328,9 @@ export function DayColumn({
                                                 : undefined
                                         }
                                         showTemplateLink={!!templateLinked}
+                                        isDragPending={isDragPending}
                                     />
-                                    {/* Superset connector between this block and the next */}
+                                    {/* Superset connector */}
                                     {!isLastBlock && (
                                         linkedToNext ? (
                                             <div className="flex items-center gap-2 px-3 h-6 group/ss">
@@ -368,3 +383,5 @@ export function DayColumn({
         </div>
     )
 }
+
+export const DayColumn = React.memo(DayColumnInner)
