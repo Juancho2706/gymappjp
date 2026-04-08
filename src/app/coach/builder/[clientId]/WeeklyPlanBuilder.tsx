@@ -686,15 +686,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
 
                         {/* Mobile overflow menu — hidden on md+ */}
                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="md:hidden h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                                    title="Más opciones"
-                                >
-                                    <MoreVertical className="w-5 h-5" />
-                                </Button>
+                            <DropdownMenuTrigger
+                                className="md:hidden h-10 w-10 px-0 border-0 bg-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                title="Más opciones"
+                            >
+                                <MoreVertical className="w-5 h-5" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
                                 <DropdownMenuItem onClick={() => setShowTemplatePicker(true)}>
