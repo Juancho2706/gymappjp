@@ -12,7 +12,13 @@
       "Bash(node -e \"const {execSync} = require\\('child_process'\\); try { const r = execSync\\('npx tsc --noEmit', {cwd: 'd:/Proyectos/Antigravity/gymappjp', encoding: 'utf8', timeout: 60000}\\); console.log\\('OK', r\\); } catch\\(e\\) { console.log\\(e.stdout || e.message\\); }\")",
       "Bash(node -e \"const {execSync} = require\\('child_process'\\); try { const r = execSync\\('npx tsc --noEmit', {cwd: 'd:/Proyectos/Antigravity/gymappjp', encoding: 'utf8', timeout: 60000}\\); console.log\\('OK'\\); } catch\\(e\\) { console.log\\(e.stdout || e.stderr || e.message\\); }\")",
       "Bash(ls -la /d/Proyectos/Antigravity/gymappjp/*.config.*)",
-      "Bash(ls -la /d/Proyectos/Antigravity/gymappjp/src/app/c/[coach_slug]/)"
+      "Bash(ls -la /d/Proyectos/Antigravity/gymappjp/src/app/c/[coach_slug]/)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(npm run:*)",
+      "mcp__supabase__apply_migration",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npm install:*)"
     ]
   }
 }
