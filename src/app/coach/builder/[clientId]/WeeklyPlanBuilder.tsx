@@ -911,7 +911,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                 className="h-full overflow-y-auto"
                                                 style={{
                                                     width: `${100 / days.length}%`,
-                                                    paddingBottom: 'calc(9rem + env(safe-area-inset-bottom))',
+                                                    paddingBottom: `calc(${sheetHeight}vh + env(safe-area-inset-bottom) + 0.5rem)`,
                                                     WebkitOverflowScrolling: 'touch',
                                                 } as React.CSSProperties}
                                             >
