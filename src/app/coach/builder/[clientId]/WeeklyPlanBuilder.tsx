@@ -7,7 +7,7 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -247,6 +247,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const initialSheetHeight = useRef(60)
     const swipeTouchStartX = useRef(0)
     const swipeTouchStartY = useRef(0)
+    const boardScrollRef = useRef<HTMLDivElement>(null)
+
+    const scrollBoard = (dir: 'left' | 'right') => {
+        const el = boardScrollRef.current
+        if (!el) return
+        el.scrollBy({ left: dir === 'right' ? 300 : -300, behavior: 'smooth' })
+    }
 
     useEffect(() => {
         setMounted(true)
@@ -854,9 +861,29 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                     El sistema alterna A→B cada semana automáticamente
                                 </p>
                             )}
+
+                            {/* Desktop day scroll arrows — hidden on mobile */}
+                            {!isMobile && (
+                                <div className={`flex items-center gap-1 ${isABMode ? '' : 'ml-auto'}`}>
+                                    <button
+                                        onClick={() => scrollBoard('left')}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        title="Días anteriores"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => scrollBoard('right')}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        title="Días siguientes"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
-                        <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar">
+                        <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar" ref={boardScrollRef}>
                         {isMobile ? (
                             <div className="h-full flex flex-col">
                                 {/* Mobile tab bar with exercise counts */}
