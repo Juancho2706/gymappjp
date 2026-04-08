@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 
 export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
-    const isBuilder = pathname.startsWith('/coach/builder')
+    const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
 
     if (isBuilder) {
         return (

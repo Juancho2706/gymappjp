@@ -92,7 +92,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
         router.refresh()
     }
 
-    const isBuilder = pathname.startsWith('/coach/builder')
+    const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
 
     return (
         <>
