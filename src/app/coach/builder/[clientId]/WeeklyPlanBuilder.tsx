@@ -7,9 +7,10 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
@@ -546,7 +547,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     if (!mounted) return <div className="h-[100dvh] flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
 
     return (
-        <div className="flex flex-col h-[100dvh] bg-background overflow-hidden relative">
+        <div className="fixed inset-0 z-[60] flex flex-col bg-background overflow-hidden">
             {showDraftBanner && (
                 <div className="bg-primary/10 border-b border-primary/20 p-3 flex justify-center items-center gap-4 animate-in slide-in-from-top">
                     <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
@@ -563,17 +564,29 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />
                             </Button>
                         </Link>
-                        <div>
-                            <h1 className="text-sm font-display uppercase tracking-[0.2em] text-foreground truncate max-w-[200px] md:max-w-md flex items-center gap-3">
-                                {programName || 'NUEVO PROGRAMA'}
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-sm font-display uppercase tracking-[0.2em] text-foreground truncate max-w-[160px] md:max-w-md">
+                                    {programName || 'NUEVO PROGRAMA'}
+                                </h1>
                                 {hasUnsavedChanges && (
-                                    <span className="flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20">
+                                    <span className="hidden md:flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20 shrink-0">
                                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                                         CAMBIOS SIN GUARDAR
                                     </span>
                                 )}
-                            </h1>
-                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 hidden md:block">
+                            </div>
+                            {hasUnsavedChanges ? (
+                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-orange-500 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse inline-block shrink-0"></span>
+                                    Sin guardar
+                                </p>
+                            ) : (
+                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60 truncate">
+                                    {client ? client.full_name : 'Plantilla Global'}
+                                </p>
+                            )}
+                            <p className="hidden md:block text-xs font-bold uppercase tracking-widest text-muted-foreground/60">
                                 {client ? `Cliente: ${client.full_name}` : 'Plantilla Global'}
                             </p>
                         </div>
@@ -590,61 +603,62 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             <Search className="w-4 h-4" />
                         </Button>
 
+                        {/* Secondary actions — desktop only */}
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowTemplatePicker(true)}
                             title="Cargar plantilla"
                         >
-                            <LayoutTemplate className="w-4 h-4 md:mr-2" />
-                            <span className="hidden md:inline">Plantillas</span>
+                            <LayoutTemplate className="w-4 h-4 mr-2" />
+                            Plantillas
                         </Button>
 
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowPreview(true)}
                             title="Vista previa"
                         >
-                            <Eye className="w-4 h-4 md:mr-2" />
-                            <span className="hidden md:inline">Preview</span>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Preview
                         </Button>
 
                         {!client && initialProgram?.id && (
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                                 onClick={() => setShowAssign(true)}
                                 title="Asignar a clientes"
                             >
-                                <Users className="w-4 h-4 md:mr-2" />
-                                <span className="hidden md:inline">Asignar</span>
+                                <Users className="w-4 h-4 mr-2" />
+                                Asignar
                             </Button>
                         )}
 
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowBalance(true)}
                             title="Balance muscular"
                         >
-                            <BarChart3 className="w-4 h-4 md:mr-2" />
-                            <span className="hidden md:inline">Balance</span>
+                            <BarChart3 className="w-4 h-4 mr-2" />
+                            Balance
                         </Button>
 
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowPrint(true)}
                             title="Imprimir / Exportar PDF"
                         >
-                            <Printer className="w-4 h-4 md:mr-2" />
-                            <span className="hidden md:inline">Imprimir</span>
+                            <Printer className="w-4 h-4 mr-2" />
+                            Imprimir
                         </Button>
 
                         <div className="hidden md:flex items-center gap-1">
@@ -670,6 +684,47 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             </Button>
                         </div>
 
+                        {/* Mobile overflow menu — hidden on md+ */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="md:hidden h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                    title="Más opciones"
+                                >
+                                    <MoreVertical className="w-5 h-5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                                <DropdownMenuItem onClick={() => setShowTemplatePicker(true)}>
+                                    <LayoutTemplate className="w-4 h-4 mr-2" /> Plantillas
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowPreview(true)}>
+                                    <Eye className="w-4 h-4 mr-2" /> Vista previa
+                                </DropdownMenuItem>
+                                {!client && initialProgram?.id && (
+                                    <DropdownMenuItem onClick={() => setShowAssign(true)}>
+                                        <Users className="w-4 h-4 mr-2" /> Asignar a clientes
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => setShowBalance(true)}>
+                                    <BarChart3 className="w-4 h-4 mr-2" /> Balance muscular
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShowPrint(true)}>
+                                    <Printer className="w-4 h-4 mr-2" /> Imprimir / PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={undo} disabled={!canUndo}>
+                                    <Undo2 className="w-4 h-4 mr-2" /> Deshacer
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={redo} disabled={!canRedo}>
+                                    <Redo2 className="w-4 h-4 mr-2" /> Rehacer
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        {/* Config/Settings — always visible */}
                         <Button
                             variant="outline"
                             size="sm"
@@ -685,7 +740,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
                                 disabled={isPending}
                                 title="Copiar cambios de la plantilla base (no pisa bloques marcados Modif.)"
                                 onClick={() => {
@@ -700,11 +755,12 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                     })
                                 }}
                             >
-                                <RefreshCw className="w-4 h-4 md:mr-2" />
+                                <RefreshCw className="w-4 h-4 mr-2" />
                                 <span className="hidden lg:inline">Sync plantilla</span>
                             </Button>
                         )}
 
+                        {/* Save — always visible */}
                         <Button
                             onClick={handleSave}
                             disabled={isPending || !programName.trim()}
