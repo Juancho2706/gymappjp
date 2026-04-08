@@ -1,7 +1,7 @@
 'use client'
 
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react'
-import type { BuilderBlock, DayState } from '../types'
+import type { BuilderBlock, BuilderSection, DayState } from '../types'
 import { arrayMove } from '@dnd-kit/sortable'
 
 export const DAYS_OF_WEEK = [
@@ -25,6 +25,12 @@ type BuilderAction =
     | { type: 'COPY_DAY'; payload: { sourceId: number; targetIds: number[] } }
     | { type: 'TOGGLE_REST_DAY'; payload: { dayId: number } }
     | { type: 'TOGGLE_SUPERSET'; payload: { dayId: number; uid: string } }
+    | { type: 'SET_BLOCK_SECTION'; payload: { dayId: number; uid: string; section: BuilderSection } }
+    | { type: 'TOGGLE_OVERRIDE'; payload: { uid: string } }
+
+function normalizedSection(b: BuilderBlock): BuilderSection {
+    return b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main'
+}
 
 function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
     switch (action.type) {
@@ -106,6 +112,32 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
                 }
                 return d
             })
+        }
+
+        case 'SET_BLOCK_SECTION': {
+            const { dayId, uid, section } = action.payload
+            return state.map(d => {
+                if (d.id !== dayId) return d
+                const block = d.blocks.find(b => b.uid === uid)
+                if (!block) return d
+                const rest = d.blocks.filter(b => b.uid !== uid)
+                const moved: BuilderBlock = { ...block, section }
+                const warmup = rest.filter(b => normalizedSection(b) === 'warmup')
+                const main = rest.filter(b => normalizedSection(b) === 'main')
+                const cool = rest.filter(b => normalizedSection(b) === 'cooldown')
+                if (section === 'warmup') warmup.push(moved)
+                else if (section === 'main') main.push(moved)
+                else cool.push(moved)
+                return { ...d, blocks: [...warmup, ...main, ...cool] }
+            })
+        }
+
+        case 'TOGGLE_OVERRIDE': {
+            const { uid } = action.payload
+            return state.map(d => ({
+                ...d,
+                blocks: d.blocks.map(b => (b.uid === uid ? { ...b, is_override: !b.is_override } : b)),
+            }))
         }
 
         case 'TOGGLE_SUPERSET': {
@@ -226,6 +258,14 @@ export function usePlanBuilder(initialDays: DayState[]) {
         dispatchWithHistory({ type: 'TOGGLE_SUPERSET', payload: { dayId, uid } })
     }, [dispatchWithHistory])
 
+    const setBlockSection = useCallback((dayId: number, uid: string, section: BuilderSection) => {
+        dispatchWithHistory({ type: 'SET_BLOCK_SECTION', payload: { dayId, uid, section } })
+    }, [dispatchWithHistory])
+
+    const toggleBlockOverride = useCallback((uid: string) => {
+        dispatchWithHistory({ type: 'TOGGLE_OVERRIDE', payload: { uid } })
+    }, [dispatchWithHistory])
+
     return {
         days,
         dispatch,             // raw dispatch — use for DnD drag-over (no history entry)
@@ -237,6 +277,8 @@ export function usePlanBuilder(initialDays: DayState[]) {
         copyDay,
         toggleRestDay,
         toggleSuperset,
+        setBlockSection,
+        toggleBlockOverride,
         undo,
         redo,
         canUndo,

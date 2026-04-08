@@ -922,13 +922,18 @@ export type Database = {
           created_at: string
           exercise_id: string
           id: string
+          is_override: boolean
           notes: string | null
           order_index: number
           plan_id: string
+          progression_type: string | null
+          progression_value: number | null
           reps: string
           rest_time: string | null
           rir: string | null
+          section: string
           sets: number
+          superset_group: string | null
           target_weight_kg: number | null
           tempo: string | null
         }
@@ -936,13 +941,18 @@ export type Database = {
           created_at?: string
           exercise_id: string
           id?: string
+          is_override?: boolean
           notes?: string | null
           order_index?: number
           plan_id: string
+          progression_type?: string | null
+          progression_value?: number | null
           reps?: string
           rest_time?: string | null
           rir?: string | null
+          section?: string
           sets?: number
+          superset_group?: string | null
           target_weight_kg?: number | null
           tempo?: string | null
         }
@@ -950,13 +960,18 @@ export type Database = {
           created_at?: string
           exercise_id?: string
           id?: string
+          is_override?: boolean
           notes?: string | null
           order_index?: number
           plan_id?: string
+          progression_type?: string | null
+          progression_value?: number | null
           reps?: string
           rest_time?: string | null
           rir?: string | null
+          section?: string
           sets?: number
+          superset_group?: string | null
           target_weight_kg?: number | null
           tempo?: string | null
         }
@@ -1040,6 +1055,7 @@ export type Database = {
           program_id: string | null
           title: string
           updated_at: string
+          week_variant: string | null
         }
         Insert: {
           assigned_date?: string | null
@@ -1052,6 +1068,7 @@ export type Database = {
           program_id?: string | null
           title: string
           updated_at?: string
+          week_variant?: string | null
         }
         Update: {
           assigned_date?: string | null
@@ -1064,6 +1081,7 @@ export type Database = {
           program_id?: string | null
           title?: string
           updated_at?: string
+          week_variant?: string | null
         }
         Relationships: [
           {
@@ -1091,9 +1109,11 @@ export type Database = {
       }
       workout_programs: {
         Row: {
+          ab_mode: boolean | null
           client_id: string | null
           coach_id: string
           created_at: string
+          cycle_length: number | null
           duration_days: number | null
           duration_type: string | null
           end_date: string | null
@@ -1101,12 +1121,16 @@ export type Database = {
           is_active: boolean
           name: string
           program_notes: string | null
+          program_phases: Json
+          program_structure_type: "weekly" | "cycle" | null
+          source_template_id: string | null
           start_date: string | null
           start_date_flexible: boolean | null
           updated_at: string
           weeks_to_repeat: number
         }
         Insert: {
+          ab_mode?: boolean | null
           client_id?: string | null
           coach_id: string
           created_at?: string
@@ -1117,12 +1141,17 @@ export type Database = {
           is_active?: boolean
           name: string
           program_notes?: string | null
+          program_phases?: Json
+          program_structure_type?: "weekly" | "cycle" | null
+          cycle_length?: number | null
+          source_template_id?: string | null
           start_date?: string | null
           start_date_flexible?: boolean | null
           updated_at?: string
           weeks_to_repeat?: number
         }
         Update: {
+          ab_mode?: boolean | null
           client_id?: string | null
           coach_id?: string
           created_at?: string
@@ -1133,6 +1162,10 @@ export type Database = {
           is_active?: boolean
           name?: string
           program_notes?: string | null
+          program_phases?: Json
+          program_structure_type?: "weekly" | "cycle" | null
+          cycle_length?: number | null
+          source_template_id?: string | null
           start_date?: string | null
           start_date_flexible?: boolean | null
           updated_at?: string
@@ -1151,6 +1184,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_programs_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "workout_programs"
             referencedColumns: ["id"]
           },
         ]

@@ -19,10 +19,18 @@ const blockSchema = z.object({
     superset_group: z.string().max(10).nullable().optional(),
     progression_type: z.enum(['weight', 'reps']).nullable().optional(),
     progression_value: z.coerce.number().min(0).max(1000).nullable().optional(),
+    section: z.enum(['warmup', 'main', 'cooldown']).optional(),
+    is_override: z.boolean().optional(),
+})
+
+const programPhaseSchema = z.object({
+    name: z.string().min(1).max(80),
+    weeks: z.coerce.number().int().min(1).max(52),
+    color: z.string().max(32).optional(),
 })
 
 const workoutDaySchema = z.object({
-    day_of_week: z.number().int().min(1).max(7),
+    day_of_week: z.number().int().min(1).max(28),
     title: z.string().max(100).optional(),
     week_variant: z.enum(['A', 'B']).optional().default('A'),
     blocks: z.array(blockSchema).min(1, 'Agrega al menos un ejercicio'),
@@ -36,9 +44,13 @@ const workoutProgramSchema = z.object({
     startDate: z.string().nullable().optional(),
     duration_type: z.enum(['weeks', 'async', 'calendar_days']).optional(),
     duration_days: z.coerce.number().int().min(1).max(365).nullable().optional(),
+    program_structure_type: z.enum(['weekly', 'cycle']).optional(),
+    cycle_length: z.coerce.number().int().min(1).max(28).optional(),
     start_date_flexible: z.boolean().optional(),
     program_notes: z.string().max(2000).nullable().optional(),
     ab_mode: z.boolean().optional(),
+    program_phases: z.array(programPhaseSchema).max(24).optional(),
+    source_template_id: z.string().uuid().nullable().optional(),
     days: z.array(workoutDaySchema).min(1, 'Agrega al menos un día de entrenamiento'),
 })
 
@@ -65,7 +77,18 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
         return { error: parsed.error.issues[0].message }
     }
 
-    const { programId, clientId, programName, weeksToRepeat, startDate, duration_type, duration_days, start_date_flexible, program_notes, ab_mode, days } = parsed.data
+    const {
+        programId, clientId, programName, weeksToRepeat, startDate, duration_type, duration_days,
+        program_structure_type, cycle_length, start_date_flexible, program_notes, ab_mode,
+        program_phases, source_template_id, days,
+    } = parsed.data
+
+    const phasesForDb = (program_phases ?? []).map(p => ({
+        name: p.name,
+        weeks: p.weeks,
+        color: (p.color && p.color.trim()) || '#6366F1',
+    }))
+    const sourceTplId = clientId ? (source_template_id ?? null) : null
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -158,9 +181,13 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                     end_date: endDate,
                     duration_type: duration_type || 'weeks',
                     duration_days: duration_days || null,
+                    program_structure_type: program_structure_type || 'weekly',
+                    cycle_length: program_structure_type === 'cycle' ? (cycle_length || null) : null,
                     start_date_flexible: start_date_flexible ?? true,
                     program_notes: program_notes || null,
                     ab_mode: ab_mode ?? false,
+                    program_phases: phasesForDb,
+                    source_template_id: sourceTplId,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', finalProgramId)
@@ -203,9 +230,13 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                     end_date: endDate,
                     duration_type: duration_type || 'weeks',
                     duration_days: duration_days || null,
+                    program_structure_type: program_structure_type || 'weekly',
+                    cycle_length: program_structure_type === 'cycle' ? (cycle_length || null) : null,
                     start_date_flexible: start_date_flexible ?? true,
                     program_notes: program_notes || null,
                     ab_mode: ab_mode ?? false,
+                    program_phases: phasesForDb,
+                    source_template_id: sourceTplId,
                 })
                 .select('id')
                 .single()
@@ -254,6 +285,8 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                 superset_group: block.superset_group ?? null,
                 progression_type: block.progression_type ?? null,
                 progression_value: block.progression_value ?? null,
+                section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+                is_override: block.is_override ?? false,
             }))
 
             const { error: blocksError } = await adminDb
@@ -367,6 +400,15 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
                 weeks_to_repeat: original.weeks_to_repeat,
                 start_date: null,
                 end_date: null,
+                duration_type: (original as any).duration_type || 'weeks',
+                duration_days: (original as any).duration_days ?? null,
+                program_structure_type: (original as any).program_structure_type || 'weekly',
+                cycle_length: (original as any).cycle_length ?? null,
+                start_date_flexible: (original as any).start_date_flexible ?? true,
+                program_notes: (original as any).program_notes ?? null,
+                ab_mode: (original as any).ab_mode ?? false,
+                program_phases: (original as any).program_phases ?? [],
+                source_template_id: null,
             })
             .select('id')
             .single()
@@ -385,6 +427,7 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
                     title: plan.title,
                     group_name: plan.group_name,
                     assigned_date: null,
+                    week_variant: (plan as any).week_variant || 'A',
                 })
                 .select('id')
                 .single()
@@ -402,6 +445,11 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
                 rir: block.rir,
                 rest_time: block.rest_time,
                 notes: block.notes,
+                superset_group: block.superset_group ?? null,
+                progression_type: block.progression_type ?? null,
+                progression_value: block.progression_value ?? null,
+                section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+                is_override: false,
             }))
 
             if (blocksToInsert.length > 0) {
@@ -481,6 +529,15 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
                     weeks_to_repeat: template.weeks_to_repeat,
                     start_date: dateToUse,
                     end_date: endDate,
+                    duration_type: (template as any).duration_type || 'weeks',
+                    duration_days: (template as any).duration_days ?? null,
+                    program_structure_type: (template as any).program_structure_type || 'weekly',
+                    cycle_length: (template as any).cycle_length ?? null,
+                    start_date_flexible: (template as any).start_date_flexible ?? true,
+                    program_notes: (template as any).program_notes ?? null,
+                    ab_mode: (template as any).ab_mode ?? false,
+                    program_phases: (template as any).program_phases ?? [],
+                    source_template_id: templateId,
                 })
                 .select('id')
                 .single()
@@ -499,6 +556,7 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
                         title: plan.title,
                         group_name: plan.group_name,
                         assigned_date: dateToUse,
+                        week_variant: (plan as any).week_variant || 'A',
                     })
                     .select('id')
                     .single()
@@ -516,6 +574,11 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
                     rir: block.rir,
                     rest_time: block.rest_time,
                     notes: block.notes,
+                    superset_group: block.superset_group ?? null,
+                    progression_type: block.progression_type ?? null,
+                    progression_value: block.progression_value ?? null,
+                    section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+                    is_override: false,
                 }))
 
                 if (blocksToInsert.length > 0) {
@@ -636,12 +699,13 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
         .from('workout_programs')
         .select(`
             id, name, weeks_to_repeat, duration_type, duration_days,
-            start_date_flexible, program_notes,
+            start_date_flexible, program_notes, program_phases,
             workout_plans (
-                day_of_week, title,
+                day_of_week, title, week_variant,
                 workout_blocks (
                     exercise_id, sets, reps, target_weight_kg,
                     tempo, rir, rest_time, notes, order_index, superset_group,
+                    progression_type, progression_value, section, is_override,
                     exercises ( name, muscle_group, gif_url, video_url )
                 )
             )
@@ -652,6 +716,131 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
 
     if (error || !data) return { error: 'Plantilla no encontrada.' }
     return { data }
+}
+
+function sortWorkoutPlans(plans: any[]): any[] {
+    return [...(plans || [])].sort((a, b) => {
+        const da = a.day_of_week ?? 0
+        const db = b.day_of_week ?? 0
+        if (da !== db) return da - db
+        return String(a.week_variant || 'A').localeCompare(String(b.week_variant || 'A'))
+    })
+}
+
+function mergeBlocksForSync(clientBlocks: any[] | null | undefined, templateBlocks: any[] | null | undefined): any[] {
+    const C = [...(clientBlocks || [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+    const T = [...(templateBlocks || [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+    const maxL = Math.max(C.length, T.length)
+    const out: any[] = []
+    for (let j = 0; j < maxL; j++) {
+        const c = C[j]
+        const t = T[j]
+        if (c?.is_override) out.push(c)
+        else if (t) out.push({ ...t, is_override: false })
+        else if (c) out.push(c)
+    }
+    return out
+}
+
+function mapDbBlockToWorkoutInput(b: any): WorkoutBlockInput {
+    const progType = b.progression_type === 'reps' || b.progression_type === 'weight' ? b.progression_type : null
+    return {
+        exercise_id: b.exercise_id,
+        sets: b.sets,
+        reps: b.reps,
+        target_weight_kg: b.target_weight_kg ?? null,
+        tempo: b.tempo ?? null,
+        rir: b.rir ?? null,
+        rest_time: b.rest_time ?? null,
+        notes: b.notes ?? null,
+        superset_group: b.superset_group ?? null,
+        progression_type: progType,
+        progression_value: b.progression_value ?? null,
+        section: b.section && ['warmup', 'main', 'cooldown'].includes(b.section) ? b.section : 'main',
+        is_override: !!b.is_override,
+    }
+}
+
+/**
+ * Actualiza bloques no marcados como override desde la plantilla vinculada (source_template_id).
+ */
+export async function syncProgramFromTemplateAction(programId: string): Promise<ProgramState> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado.' }
+
+    const adminDb = await createRawAdminClient()
+    const { data: program, error: pErr } = await adminDb
+        .from('workout_programs')
+        .select('*, workout_plans ( *, workout_blocks ( * ) )')
+        .eq('id', programId)
+        .eq('coach_id', user.id)
+        .single()
+
+    if (pErr || !program) return { error: 'Programa no encontrado.' }
+    if (!program.client_id) return { error: 'Solo programas de cliente pueden sincronizarse con una plantilla.' }
+
+    const templateId = program.source_template_id
+    if (!templateId) return { error: 'Este programa no tiene plantilla base vinculada.' }
+
+    const { data: template, error: tErr } = await adminDb
+        .from('workout_programs')
+        .select('*, workout_plans ( *, workout_blocks ( * ) )')
+        .eq('id', templateId)
+        .eq('coach_id', user.id)
+        .is('client_id', null)
+        .maybeSingle()
+
+    if (tErr || !template) return { error: 'La plantilla base no existe o ya no está disponible.' }
+
+    const mergedDays: WorkoutDayInput[] = []
+    for (const cp of sortWorkoutPlans(program.workout_plans || [])) {
+        const tp = (template.workout_plans || []).find(
+            (p: any) => p.day_of_week === cp.day_of_week && String(p.week_variant || 'A') === String(cp.week_variant || 'A')
+        )
+        const raw = mergeBlocksForSync(cp.workout_blocks, tp?.workout_blocks)
+        const blocks = raw.map(mapDbBlockToWorkoutInput)
+        if (blocks.length === 0) continue
+        mergedDays.push({
+            day_of_week: cp.day_of_week as number,
+            title: (cp.title as string) || '',
+            week_variant: (cp.week_variant || 'A') as 'A' | 'B',
+            blocks,
+        })
+    }
+
+    if (mergedDays.length === 0) return { error: 'No hay días con ejercicios para sincronizar.' }
+
+    let phasesSafe: { name: string; weeks: number; color?: string }[] = []
+    try {
+        const raw = program.program_phases
+        const arr = Array.isArray(raw) ? raw : typeof raw === 'string' ? JSON.parse(raw) : []
+        phasesSafe = (arr as any[]).map((p: any) => ({
+            name: String(p?.name || 'Fase').slice(0, 80),
+            weeks: Math.min(52, Math.max(1, Number(p?.weeks) || 1)),
+            color: typeof p?.color === 'string' ? p.color.slice(0, 32) : '#6366F1',
+        }))
+    } catch {
+        phasesSafe = []
+    }
+
+    return saveWorkoutProgramAction({
+        programId: program.id,
+        clientId: program.client_id,
+        programName: program.name,
+        weeksToRepeat: program.weeks_to_repeat,
+        startDate: program.start_date ? String(program.start_date).split('T')[0] : null,
+        duration_type: (program.duration_type as 'weeks' | 'async' | 'calendar_days') || 'weeks',
+        duration_days: program.duration_days,
+        program_structure_type: (program.program_structure_type as 'weekly' | 'cycle') || 'weekly',
+        cycle_length: program.cycle_length ?? undefined,
+        start_date_flexible: program.start_date_flexible ?? true,
+        program_notes: program.program_notes,
+        ab_mode: program.ab_mode ?? false,
+        program_phases: phasesSafe,
+        source_template_id: templateId,
+        days: mergedDays,
+    })
 }
 
 /**

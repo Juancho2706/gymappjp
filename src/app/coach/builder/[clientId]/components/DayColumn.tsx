@@ -8,17 +8,42 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { getMuscleColor } from '../muscle-colors'
-import { filterExercises } from '@/lib/utils'
+import { cn, filterExercises } from '@/lib/utils'
 import { ExerciseBlock } from './ExerciseBlock'
 import { DAYS_OF_WEEK } from '../hooks/usePlanBuilder'
-import type { BuilderBlock, DayState } from '../types'
+import type { BuilderBlock, BuilderSection, DayState } from '../types'
 import type { Tables } from '@/lib/database.types'
 
 type Exercise = Tables<'exercises'>
 
+function normSection(b: BuilderBlock): BuilderSection {
+    return b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main'
+}
+
+function SectionDropZone({ dayId, section, label }: { dayId: number; section: BuilderSection; label: string }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: `section-${dayId}-${section}`,
+        data: { type: 'section', dayId, section },
+    })
+    return (
+        <div
+            ref={setNodeRef}
+            className={cn(
+                'text-[9px] font-bold uppercase tracking-widest text-muted-foreground/70 px-2 py-1 rounded-lg border border-dashed border-border/80 mb-1 transition-colors select-none',
+                isOver && 'border-primary bg-primary/10 text-primary'
+            )}
+        >
+            {label}
+            <span className="font-normal normal-case opacity-60 ml-1">· soltar</span>
+        </div>
+    )
+}
+
 interface DayColumnProps {
     day: DayState
     exercises: Exercise[]
+    allDays?: DayState[]
+    isCycleMode?: boolean
     onAddExercise: (dayId: number, exercise: Exercise) => void
     onEditBlock: (block: BuilderBlock) => void
     onRemoveBlock: (dayId: number, uid: string) => void
@@ -27,11 +52,16 @@ interface DayColumnProps {
     onCopyDay: (sourceId: number, targets: number[]) => void
     onToggleRest: (dayId: number) => void
     onToggleSuperset: (dayId: number, uid: string) => void
+    onSetBlockSection?: (dayId: number, uid: string, section: BuilderSection) => void
+    onToggleBlockOverride?: (uid: string) => void
+    templateLinked?: boolean
 }
 
 export function DayColumn({
     day,
     exercises,
+    allDays,
+    isCycleMode = false,
     onAddExercise,
     onEditBlock,
     onRemoveBlock,
@@ -40,8 +70,12 @@ export function DayColumn({
     onCopyDay,
     onToggleRest,
     onToggleSuperset,
+    onSetBlockSection,
+    onToggleBlockOverride,
+    templateLinked,
 }: DayColumnProps) {
     const { id: dayId, title, blocks, name, is_rest } = day
+    const dayLabel = isCycleMode ? `Día ${dayId}` : name
 
     const [search, setSearch] = useState('')
     const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -72,7 +106,7 @@ export function DayColumn({
             <div className={`p-4 border-b border-border dark:border-white/10 ${is_rest ? 'bg-muted/40 dark:bg-white/[0.01]' : 'bg-muted/50 dark:bg-white/[0.02]'}`}>
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400 flex items-center gap-2">
-                        {name}
+                        {dayLabel}
                         {is_rest && (
                             <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-widest">
                                 DESCANSO
@@ -86,7 +120,7 @@ export function DayColumn({
                                 <PopoverContent className="w-56 p-3 bg-background/95 backdrop-blur-xl border border-border shadow-2xl rounded-xl">
                                     <h4 className="text-xs font-bold uppercase tracking-widest mb-3 text-muted-foreground">Copiar a otro día</h4>
                                     <div className="space-y-2 mb-4">
-                                        {DAYS_OF_WEEK.map(d => dayId !== d.id && (
+                                        {(allDays || DAYS_OF_WEEK).map(d => d.id !== dayId && (
                                             <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1.5 rounded-md">
                                                 <input
                                                     type="checkbox"
@@ -97,7 +131,9 @@ export function DayColumn({
                                                         else setSelectedDaysToCopy(prev => prev.filter(x => x !== d.id))
                                                     }}
                                                 />
-                                                <span className="font-medium text-xs">{d.name}</span>
+                                                <span className="font-medium text-xs">
+                                                    {isCycleMode ? `Día ${d.id}` : (d as DayState).name || `Día ${d.id}`}
+                                                </span>
                                             </label>
                                         ))}
                                     </div>
@@ -237,13 +273,29 @@ export function DayColumn({
                         items={blocks.map(b => b.uid)}
                         strategy={verticalListSortingStrategy}
                     >
-                        {blocks.map((block, idx) => {
+                                {blocks.map((block, idx) => {
                             const nextBlock = blocks[idx + 1]
                             const linkedToNext = !!block.superset_group && block.superset_group === nextBlock?.superset_group
                             const isLastBlock = idx === blocks.length - 1
+                            const prevSec = idx > 0 ? normSection(blocks[idx - 1]) : null
+                            const thisSec = normSection(block)
+                            const showSecHeader = thisSec !== prevSec
 
                             return (
                                 <div key={block.uid}>
+                                    {showSecHeader && (
+                                        <SectionDropZone
+                                            dayId={dayId}
+                                            section={thisSec}
+                                            label={
+                                                thisSec === 'warmup'
+                                                    ? 'Calentamiento'
+                                                    : thisSec === 'main'
+                                                      ? 'Principal'
+                                                      : 'Enfriamiento'
+                                            }
+                                        />
+                                    )}
                                     <ExerciseBlock
                                         block={block}
                                         dayId={dayId}
@@ -251,6 +303,17 @@ export function DayColumn({
                                         onRemove={onRemoveBlock}
                                         onUpdate={onUpdateBlock}
                                         onToggleSuperset={isLastBlock ? undefined : () => onToggleSuperset(dayId, block.uid)}
+                                        onSetSection={
+                                            onSetBlockSection
+                                                ? (s) => onSetBlockSection(dayId, block.uid, s)
+                                                : undefined
+                                        }
+                                        onToggleOverride={
+                                            templateLinked && onToggleBlockOverride
+                                                ? () => onToggleBlockOverride(block.uid)
+                                                : undefined
+                                        }
+                                        showTemplateLink={!!templateLinked}
                                     />
                                     {/* Superset connector between this block and the next */}
                                     {!isLastBlock && (
@@ -290,9 +353,13 @@ export function DayColumn({
                         })}
 
                         {blocks.length === 0 && (
-                            <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-center text-muted-foreground border-2 border-dashed border-border dark:border-white/5 rounded-xl bg-black/5 dark:bg-white/[0.02]">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-50">SLOT VACÍO</p>
-                                <p className="text-[10px] mt-2 opacity-30 px-4">SUELTA UN PROTOCOLO AQUÍ O USA LA BÚSQUEDA</p>
+                            <div className="space-y-1">
+                                <SectionDropZone dayId={dayId} section="warmup" label="Calentamiento" />
+                                <SectionDropZone dayId={dayId} section="main" label="Principal" />
+                                <SectionDropZone dayId={dayId} section="cooldown" label="Enfriamiento" />
+                                <p className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-30 text-center pt-2 px-4">
+                                    Arrastra un ejercicio o usa la búsqueda
+                                </p>
                             </div>
                         )}
                     </SortableContext>

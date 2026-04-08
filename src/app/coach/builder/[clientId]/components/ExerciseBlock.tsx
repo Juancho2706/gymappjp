@@ -6,7 +6,11 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, X, Minus, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
-import type { BuilderBlock } from '../types'
+import type { BuilderBlock, BuilderSection } from '../types'
+
+function blockSection(b: BuilderBlock): BuilderSection {
+    return b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main'
+}
 
 interface ExerciseBlockProps {
     block: BuilderBlock
@@ -15,9 +19,16 @@ interface ExerciseBlockProps {
     onRemove: (dayId: number, uid: string) => void
     onUpdate?: (block: BuilderBlock) => void
     onToggleSuperset?: () => void
+    onSetSection?: (section: BuilderSection) => void
+    onToggleOverride?: () => void
+    /** Muestra badge Base/Modif. cuando hay plantilla vinculada */
+    showTemplateLink?: boolean
 }
 
-export function ExerciseBlock({ block, dayId, onEdit, onRemove, onUpdate, onToggleSuperset }: ExerciseBlockProps) {
+export function ExerciseBlock({
+    block, dayId, onEdit, onRemove, onUpdate, onToggleSuperset,
+    onSetSection, onToggleOverride, showTemplateLink,
+}: ExerciseBlockProps) {
     const {
         attributes,
         listeners,
@@ -201,6 +212,51 @@ export function ExerciseBlock({ block, dayId, onEdit, onRemove, onUpdate, onTogg
                                 >
                                     {block.muscle_group}
                                 </div>
+                                {onSetSection && (
+                                    <div
+                                        className="flex rounded-md overflow-hidden border border-border opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={e => e.stopPropagation()}
+                                    >
+                                        {(['warmup', 'main', 'cooldown'] as const).map(s => (
+                                            <button
+                                                key={s}
+                                                type="button"
+                                                className={cn(
+                                                    'px-1.5 py-0.5 text-[8px] font-black uppercase tracking-tighter transition-colors',
+                                                    blockSection(block) === s
+                                                        ? 'bg-primary text-primary-foreground'
+                                                        : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                                                )}
+                                                title={s === 'warmup' ? 'Calentamiento' : s === 'main' ? 'Principal' : 'Enfriamiento'}
+                                                onClick={() => onSetSection(s)}
+                                            >
+                                                {s === 'warmup' ? 'W' : s === 'main' ? 'P' : 'E'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {showTemplateLink && onToggleOverride && (
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            'px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest border transition-colors',
+                                            block.is_override
+                                                ? 'bg-sky-500/15 border-sky-500/40 text-sky-600 dark:text-sky-400'
+                                                : 'bg-muted/40 border-border text-muted-foreground hover:text-foreground'
+                                        )}
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            onToggleOverride()
+                                        }}
+                                        title={
+                                            block.is_override
+                                                ? 'Marcado como modificado: no se sobrescribe al sincronizar con plantilla'
+                                                : 'Marcar como modificado para excluirlo de la sincronización'
+                                        }
+                                    >
+                                        {block.is_override ? 'Modif.' : 'Base'}
+                                    </button>
+                                )}
                             </>
                         )}
                     </div>

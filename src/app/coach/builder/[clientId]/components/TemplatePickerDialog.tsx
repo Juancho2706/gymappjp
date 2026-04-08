@@ -5,8 +5,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Loader2, FileText, ChevronRight, AlertTriangle } from 'lucide-react'
 import { getTemplatesForBuilderAction, loadTemplateForBuilderAction } from '../actions'
-import type { DayState } from '../types'
+import type { DayState, ProgramPhase } from '../types'
 import { DAYS_OF_WEEK } from '../hooks/usePlanBuilder'
+
+function parseTemplatePhases(raw: unknown): ProgramPhase[] {
+    if (raw == null) return []
+    try {
+        const arr = Array.isArray(raw) ? raw : typeof raw === 'string' ? JSON.parse(raw) : []
+        if (!Array.isArray(arr)) return []
+        return arr.map((p: any, i: number) => ({
+            name: String(p?.name || `Fase ${i + 1}`).slice(0, 80),
+            weeks: Math.min(52, Math.max(1, Number(p?.weeks) || 1)),
+            color: typeof p?.color === 'string' && p.color.startsWith('#') ? p.color : '#6366F1',
+        }))
+    } catch {
+        return []
+    }
+}
 
 interface Template {
     id: string
@@ -25,6 +40,8 @@ interface TemplatePickerDialogProps {
         duration_type: string
         duration_days: number | null
         program_notes: string
+        program_phases: ProgramPhase[]
+        appliedTemplateId: string
     }) => void
 }
 
@@ -57,7 +74,9 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
 
         const template = result.data
         const days: DayState[] = DAYS_OF_WEEK.map(d => {
-            const plan = template.workout_plans?.find((p: any) => p.day_of_week === d.id)
+            const plan = template.workout_plans?.find(
+                (p: any) => p.day_of_week === d.id && String(p.week_variant || 'A') === 'A'
+            )
             return {
                 ...d,
                 title: plan?.title || '',
@@ -77,6 +96,11 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                         rir: b.rir || '',
                         rest_time: b.rest_time || '',
                         notes: b.notes || '',
+                        superset_group: b.superset_group || null,
+                        progression_type: b.progression_type || null,
+                        progression_value: b.progression_value ?? null,
+                        section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+                        is_override: false,
                     })),
             }
         })
@@ -86,6 +110,8 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
             duration_type: template.duration_type || 'weeks',
             duration_days: template.duration_days ?? null,
             program_notes: template.program_notes || '',
+            program_phases: parseTemplatePhases(template.program_phases),
+            appliedTemplateId: templateId,
         })
         setApplying(null)
         setConfirmId(null)

@@ -7,10 +7,10 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { saveWorkoutProgramAction, type WorkoutProgramInput } from './actions'
+import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
 import { TemplatePickerDialog } from './components/TemplatePickerDialog'
@@ -23,12 +23,28 @@ import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
 import { DayColumn } from './components/DayColumn'
 import { BlockEditSheet } from './components/BlockEditSheet'
 import { ProgramConfigHeader } from './components/ProgramConfigHeader'
+import { ProgramPhasesBar } from './components/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
-import type { BuilderBlock, DayState } from './types'
+import type { BuilderBlock, DayState, ProgramPhase } from './types'
 import { getMuscleColor } from './muscle-colors'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+function parseProgramPhases(raw: unknown): ProgramPhase[] {
+    if (raw == null) return []
+    try {
+        const arr = Array.isArray(raw) ? raw : typeof raw === 'string' ? JSON.parse(raw) : []
+        if (!Array.isArray(arr)) return []
+        return arr.map((p: any, i: number) => ({
+            name: String(p?.name || `Fase ${i + 1}`).slice(0, 80),
+            weeks: Math.min(52, Math.max(1, Number(p?.weeks) || 1)),
+            color: typeof p?.color === 'string' && p.color.startsWith('#') ? p.color : '#6366F1',
+        }))
+    } catch {
+        return []
+    }
+}
 
 function createDefaultBlock(exercise: Exercise): BuilderBlock {
     return {
@@ -45,6 +61,8 @@ function createDefaultBlock(exercise: Exercise): BuilderBlock {
         rir: '',
         rest_time: '90s',
         notes: '',
+        section: 'main',
+        is_override: false,
     }
 }
 
@@ -65,7 +83,53 @@ type BaseDays = typeof DAYS_OF_WEEK
 export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any }) {
     const router = useRouter()
 
-    const getInitialDays = (variant: 'A' | 'B' = 'A'): DayState[] => {
+    const getInitialDays = (variant: 'A' | 'B' = 'A', structureType?: string, cyclLen?: number): DayState[] => {
+        // Determine structure type and cycle length (prefer passed params over initialProgram)
+        const sType = structureType ?? initialProgram?.program_structure_type ?? 'weekly'
+        const cLen = cyclLen ?? initialProgram?.cycle_length ?? 7
+
+        if (sType === 'cycle') {
+            // Build N days for a cycle program
+            const cycleDays = Array.from({ length: cLen }, (_, i) => ({
+                id: i + 1,
+                name: `Día ${i + 1}`,
+                title: '',
+                blocks: [] as BuilderBlock[]
+            }))
+            if (!initialProgram?.workout_plans?.length) return cycleDays
+            return cycleDays.map(d => {
+                const plan = initialProgram.workout_plans?.find((p: any) =>
+                    p.day_of_week === d.id && (p.week_variant === variant || (variant === 'A' && !p.week_variant))
+                )
+                return {
+                    ...d,
+                    title: plan?.title || '',
+                    blocks: (plan?.workout_blocks ?? []).map((b: any) => ({
+                        uid: `block-${b.id || Math.random().toString()}`,
+                        exercise_id: b.exercise_id,
+                        exercise_name: b.exercises?.name || 'Unknown',
+                        muscle_group: b.exercises?.muscle_group || 'Unknown',
+                        gif_url: b.exercises?.gif_url || undefined,
+                        video_url: b.exercises?.video_url || undefined,
+                        sets: b.sets,
+                        reps: b.reps,
+                        target_weight_kg: b.target_weight_kg?.toString() || '',
+                        tempo: b.tempo || '',
+                        rir: b.rir || '',
+                        rest_time: b.rest_time || '',
+                        notes: b.notes || '',
+                        superset_group: b.superset_group || null,
+                        progression_type: b.progression_type || null,
+                        progression_value: b.progression_value ?? null,
+                        section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+                        is_override: !!b.is_override,
+                        dayId: d.id
+                    }))
+                }
+            })
+        }
+
+        // Weekly mode (default)
         const baseDays = DAYS_OF_WEEK.map(d => ({ ...d, title: '', blocks: [] as BuilderBlock[] }))
         if (!initialProgram?.workout_plans?.length) return baseDays
         return DAYS_OF_WEEK.map(d => {
@@ -92,6 +156,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     superset_group: b.superset_group || null,
                     progression_type: b.progression_type || null,
                     progression_value: b.progression_value ?? null,
+                    section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+                    is_override: !!b.is_override,
                     dayId: d.id
                 }))
             }
@@ -109,6 +175,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const {
         days, dispatch, dispatchWithHistory,
         addExercise, removeBlock, updateBlock, updateDayTitle, copyDay, toggleRestDay, toggleSuperset,
+        setBlockSection, toggleBlockOverride,
         undo, redo, canUndo, canRedo,
     } = activeBuilder
 
@@ -123,6 +190,28 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
             : new Date().toISOString().split('T')[0]
     )
     const [programNotes, setProgramNotes] = useState(initialProgram?.program_notes || '')
+    const [programPhases, setProgramPhases] = useState<ProgramPhase[]>(() => parseProgramPhases(initialProgram?.program_phases))
+    const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(initialProgram?.source_template_id ?? null)
+    const [programStructureType, setProgramStructureTypeState] = useState<'weekly' | 'cycle'>(
+        (initialProgram?.program_structure_type as 'weekly' | 'cycle') || 'weekly'
+    )
+    const [cycleLength, setCycleLengthState] = useState<number>(initialProgram?.cycle_length || 7)
+
+    // When structure type or cycle length changes, rebuild the day columns
+    const setProgramStructureType = (type: 'weekly' | 'cycle') => {
+        setProgramStructureTypeState(type)
+        const newDays = getInitialDays('A', type, cycleLength)
+        builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
+        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: getInitialDays('B', type, cycleLength) })
+    }
+    const setCycleLength = (length: number) => {
+        setCycleLengthState(length)
+        if (programStructureType === 'cycle') {
+            const newDays = getInitialDays('A', 'cycle', length)
+            builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
+            builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: getInitialDays('B', 'cycle', length) })
+        }
+    }
 
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [showDraftBanner, setShowDraftBanner] = useState(false)
@@ -169,7 +258,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     useEffect(() => {
         if (isFirstRender.current) { isFirstRender.current = false; return }
         setHasUnsavedChanges(true)
-    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode])
+    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId])
 
     useEffect(() => {
         if (!hasUnsavedChanges) return
@@ -177,12 +266,12 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
             try {
                 localStorage.setItem(`builder_draft_${initialProgram?.id || 'new'}`, JSON.stringify({
                     programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes,
-                    isABMode, days, daysB: builderB.days
+                    isABMode, days, daysB: builderB.days, programPhases, sourceTemplateId,
                 }))
             } catch (e) {}
         }, 3000)
         return () => clearTimeout(timer)
-    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, hasUnsavedChanges, initialProgram])
+    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId, hasUnsavedChanges, initialProgram])
 
 
     // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo
@@ -252,6 +341,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 if (draft.isABMode !== undefined) setIsABMode(draft.isABMode)
                 if (draft.days) builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: draft.days })
                 if (draft.daysB) builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: draft.daysB })
+                if (draft.programPhases) setProgramPhases(draft.programPhases)
+                if (draft.sourceTemplateId !== undefined) setSourceTemplateId(draft.sourceTemplateId)
                 toast.success('Borrador restaurado')
             }
         } catch (e) {}
@@ -291,8 +382,21 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
 
     function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event
-        if (!over) { setActiveId(null); return }
         const activeData = active.data.current
+        const overData = over?.data?.current
+
+        if (over && activeData?.type === 'block' && overData?.type === 'section' && activeData.dayId === overData.dayId) {
+            dispatchWithHistory({
+                type: 'SET_BLOCK_SECTION',
+                payload: { dayId: overData.dayId, uid: active.id as string, section: overData.section },
+            })
+            setActiveId(null)
+            setActiveData(null)
+            setHasUnsavedChanges(true)
+            return
+        }
+
+        if (!over) { setActiveId(null); return }
         if (activeData?.type === 'new-exercise') {
             const dayId = over.data.current?.dayId
             if (dayId) {
@@ -345,6 +449,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     superset_group: b.superset_group || null,
                     progression_type: b.progression_type || null,
                     progression_value: b.progression_value ?? null,
+                    section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
+                    is_override: b.is_override ?? false,
                     order_index: idx
                 }))
             }))
@@ -358,9 +464,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 startDate: startDateFlexible ? null : startDate,
                 duration_type: durationType || 'weeks',
                 duration_days: durationDays,
+                program_structure_type: programStructureType,
+                cycle_length: programStructureType === 'cycle' ? cycleLength : undefined,
                 start_date_flexible: startDateFlexible,
                 program_notes: programNotes,
                 ab_mode: isABMode,
+                program_phases: programPhases,
+                source_template_id: client?.id ? sourceTemplateId : null,
                 days: isABMode
                     ? [...mapDays(builderA.days, 'A'), ...mapDays(builderB.days, 'B')]
                     : mapDays(days, 'A')
@@ -509,6 +619,30 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             <span className="hidden md:inline">Config</span>
                         </Button>
 
+                        {client && initialProgram?.id && sourceTemplateId && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                                disabled={isPending}
+                                title="Copiar cambios de la plantilla base (no pisa bloques marcados Modif.)"
+                                onClick={() => {
+                                    if (!initialProgram?.id) return
+                                    startTransition(async () => {
+                                        const r = await syncProgramFromTemplateAction(initialProgram.id)
+                                        if (r.error) toast.error(r.error)
+                                        else {
+                                            toast.success('Sincronizado con la plantilla base.')
+                                            router.refresh()
+                                        }
+                                    })
+                                }}
+                            >
+                                <RefreshCw className="w-4 h-4 md:mr-2" />
+                                <span className="hidden lg:inline">Sync plantilla</span>
+                            </Button>
+                        )}
+
                         <Button
                             onClick={handleSave}
                             disabled={isPending || !programName.trim()}
@@ -522,6 +656,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     </div>
                 </div>
 
+                <ProgramPhasesBar phases={programPhases} weeksToRepeat={weeksToRepeat} />
+
                 {showConfig && (
                     <ProgramConfigHeader 
                         programName={programName} setProgramName={setProgramName}
@@ -531,6 +667,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         startDateFlexible={startDateFlexible} setStartDateFlexible={setStartDateFlexible}
                         startDate={startDate} setStartDate={setStartDate}
                         programNotes={programNotes} setProgramNotes={setProgramNotes}
+                        programStructureType={programStructureType} setProgramStructureType={setProgramStructureType}
+                        cycleLength={cycleLength} setCycleLength={setCycleLength}
+                        programPhases={programPhases} setProgramPhases={setProgramPhases}
                         onClose={() => setShowConfig(false)}
                     />
                 )}
@@ -646,6 +785,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                 <DayColumn
                                                     day={day}
                                                     exercises={exercises}
+                                                    allDays={days}
+                                                    isCycleMode={programStructureType === 'cycle'}
                                                     onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
                                                     onRemoveBlock={(dayId, uid) => {
@@ -661,6 +802,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                     }}
                                                     onToggleRest={(dayId) => { toggleRestDay(dayId); setHasUnsavedChanges(true); }}
                                                     onToggleSuperset={(dayId, uid) => { toggleSuperset(dayId, uid); setHasUnsavedChanges(true); }}
+                                                    onSetBlockSection={(d, u, s) => { setBlockSection(d, u, s); setHasUnsavedChanges(true); }}
+                                                    onToggleBlockOverride={(uid) => { toggleBlockOverride(uid); setHasUnsavedChanges(true); }}
+                                                    templateLinked={!!(client?.id && sourceTemplateId)}
                                                 />
                                             </div>
                                         ))}
@@ -674,6 +818,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                         <DayColumn
                                             day={day}
                                             exercises={exercises}
+                                            allDays={days}
+                                            isCycleMode={programStructureType === 'cycle'}
                                             onAddExercise={handleAddExercise}
                                             onEditBlock={setEditingBlock}
                                             onRemoveBlock={(dayId, uid) => {
@@ -689,6 +835,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                             }}
                                             onToggleRest={(dayId) => { toggleRestDay(dayId); setHasUnsavedChanges(true); }}
                                             onToggleSuperset={(dayId, uid) => { toggleSuperset(dayId, uid); setHasUnsavedChanges(true); }}
+                                            onSetBlockSection={(d, u, s) => { setBlockSection(d, u, s); setHasUnsavedChanges(true); }}
+                                            onToggleBlockOverride={(uid) => { toggleBlockOverride(uid); setHasUnsavedChanges(true); }}
+                                            templateLinked={!!(client?.id && sourceTemplateId)}
                                         />
                                     </div>
                                 ))}
@@ -835,6 +984,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     setDurationType(meta.duration_type as any)
                     setDurationDays(meta.duration_days)
                     setProgramNotes(meta.program_notes)
+                    if (meta.program_phases?.length) setProgramPhases(meta.program_phases)
+                    if (client?.id) setSourceTemplateId(meta.appliedTemplateId)
+                    else setSourceTemplateId(null)
                     setHasUnsavedChanges(true)
                     toast.success(`Plantilla "${name}" aplicada`)
                 }}

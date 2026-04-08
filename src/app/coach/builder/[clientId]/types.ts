@@ -1,3 +1,5 @@
+export type BuilderSection = 'warmup' | 'main' | 'cooldown'
+
 export interface BuilderBlock {
     uid: string
     exercise_id: string
@@ -16,6 +18,14 @@ export interface BuilderBlock {
     superset_group?: string | null
     progression_type?: 'weight' | 'reps' | null
     progression_value?: number | null
+    section?: BuilderSection
+    is_override?: boolean
+}
+
+export interface ProgramPhase {
+    name: string
+    weeks: number
+    color: string
 }
 
 export interface DayState {
