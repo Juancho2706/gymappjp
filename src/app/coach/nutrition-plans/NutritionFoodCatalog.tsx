@@ -166,7 +166,7 @@ export function NutritionFoodCatalog({ foods, coachId }: Props) {
 
                 {filteredFoods.length === 0 && (
                     <div className="col-span-full py-12 text-center text-muted-foreground italic border-2 border-dashed border-border/50 rounded-3xl">
-                        No se encontraron alimentos con "{search}"
+                        {`No se encontraron alimentos con "${search}"`}
                     </div>
                 )}
             </div>

@@ -1,7 +1,16 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { TrendingUp, TrendingDown, Smartphone, Calendar, Activity, ChevronDown, ChevronUp } from 'lucide-react'
+import {
+    TrendingUp,
+    TrendingDown,
+    Smartphone,
+    Calendar,
+    Activity,
+    ChevronDown,
+    ChevronUp,
+    Star,
+} from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { GlassButton } from '@/components/ui/glass-button'
 import { MiniSparkline } from './MiniSparkline'
@@ -9,6 +18,59 @@ import { ResetPasswordButton } from '@/app/coach/clients/ResetPasswordButton'
 import { ToggleStatusButton } from '@/app/coach/clients/ToggleStatusButton'
 import { DeleteClientButton } from '@/app/coach/clients/DeleteClientButton'
 import { useState } from 'react'
+import type { DirectoryPulseRow } from '@/services/dashboard.service'
+
+function ClientCardAttentionBadge({ score, streak }: { score: number; streak: number }) {
+    if (score >= 50) {
+        return (
+            <span className="inline-flex shrink-0 animate-pulse items-center rounded-md border border-rose-500/30 bg-rose-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-rose-500">
+                Atención urgente
+            </span>
+        )
+    }
+    if (score >= 25) {
+        return (
+            <span className="inline-flex shrink-0 items-center rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-500">
+                Revisar
+            </span>
+        )
+    }
+    if (score === 0 && streak > 10) {
+        return (
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-500">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                Destacado
+            </span>
+        )
+    }
+    return (
+        <span className="inline-flex shrink-0 items-center rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+            On track
+        </span>
+    )
+}
+
+function ClientCardStatusBadge({ forceChange, isActive }: { forceChange: boolean; isActive?: boolean | null }) {
+    if (isActive === false) {
+        return (
+            <span className="inline-flex items-center rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-rose-500">
+                Pausado
+            </span>
+        )
+    }
+    if (forceChange) {
+        return (
+            <span className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-500">
+                Pendiente Sync
+            </span>
+        )
+    }
+    return (
+        <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+            Activo
+        </span>
+    )
+}
 
 interface ClientCardProps {
     client: any
@@ -17,51 +79,38 @@ interface ClientCardProps {
     subscriptionDaysRemaining: number | null
     remainingDays: number | null
     activeProgramName: string | null
+    pulse?: DirectoryPulseRow | null
 }
 
-export function ClientCard({ 
-    client, 
-    loginUrl, 
-    whatsappLink, 
-    subscriptionDaysRemaining, 
+export function ClientCard({
+    client,
+    loginUrl,
+    whatsappLink,
+    subscriptionDaysRemaining,
     remainingDays,
-    activeProgramName
+    activeProgramName,
+    pulse,
 }: ClientCardProps) {
-    
-    // Mock data for sparklines (In a real app, these would come from the database)
-    const weightData = [
-        { value: 75.0 }, { value: 74.8 }, { value: 74.5 }, { value: 74.9 }, 
-        { value: 74.2 }, { value: 73.8 }, { value: 73.5 }, { value: 73.6 }, 
-        { value: 73.0 }, { value: 72.4 }
-    ]
+    const weightData =
+        pulse?.weightHistory30d?.length ?
+            pulse.weightHistory30d.map((d) => ({ value: d.value }))
+        :   [
+                { value: 75.0 },
+                { value: 74.8 },
+                { value: 74.5 },
+            ]
 
-    const adherenceData = [
-        { value: 80 }, { value: 90 }, { value: 75 }, { value: 100 }, 
-        { value: 85 }, { value: 95 }, { value: 90 }, { value: 80 }, 
-        { value: 100 }, { value: 84 }
-    ]
+    const adherenceData =
+        pulse?.adherenceHistory4w?.length ?
+            pulse.adherenceHistory4w.map((v) => ({ value: v }))
+        :   [{ value: 80 }, { value: 90 }, { value: 75 }, { value: 84 }]
 
-    const StatusBadge = ({ forceChange, isActive }: { forceChange: boolean, isActive?: boolean | null }) => {
-        if (isActive === false) {
-            return (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-rose-500/10 text-rose-500 border border-rose-500/20">
-                    Pausado
-                </span>
-            )
-        }
-        if (forceChange) {
-            return (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                    Pendiente Sync
-                </span>
-            )
-        }
-        return (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
-                Activo
-            </span>
-        )
-    }
+    const adherencePct = pulse?.percentage ?? 84
+    const nutritionPct = pulse?.nutritionPercentage ?? 0
+    const currentWeight = pulse?.currentWeight
+    const weightDelta = pulse?.weightDelta7d
+    const score = pulse?.attentionScore ?? 0
+    const streak = pulse?.streak ?? 0
 
     const [isExpanded, setIsExpanded] = useState(false)
 
@@ -89,11 +138,14 @@ export function ClientCard({
                                 </span>
                             </div>
                             <div className="min-w-0 flex-1">
-                                <a href={`/coach/clients/${client.id}`} className="group/name">
-                                    <h3 className="text-lg font-black text-foreground uppercase tracking-tighter truncate font-display group-hover/name:text-primary transition-colors leading-none">
-                                        {client.full_name}
-                                    </h3>
-                                </a>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <a href={`/coach/clients/${client.id}`} className="group/name min-w-0">
+                                        <h3 className="text-lg font-black text-foreground uppercase tracking-tighter truncate font-display group-hover/name:text-primary transition-colors leading-none">
+                                            {client.full_name}
+                                        </h3>
+                                    </a>
+                                    {pulse ? <ClientCardAttentionBadge score={score} streak={streak} /> : null}
+                                </div>
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest truncate mt-2">
                                     {client.email}
                                 </p>
@@ -127,26 +179,52 @@ export function ClientCard({
                         <div className="bg-white/40 dark:bg-white/[0.02] border border-border/50 dark:border-white/5 rounded-2xl p-4 flex flex-col gap-3 transition-colors group-hover:bg-white/60 dark:group-hover:bg-white/[0.05]">
                             <div className="flex items-center justify-between">
                                 <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Adherencia</span>
-                                <div className="flex items-center text-emerald-500 gap-0.5">
-                                    <TrendingUp className="w-3 h-3" />
-                                    <span className="text-[9px] font-black">+4%</span>
-                                </div>
+                                <div
+                                className={`flex items-center gap-0.5 ${
+                                    adherencePct >= 70 ? 'text-emerald-500' : 'text-amber-500'
+                                }`}
+                            >
+                                <TrendingUp className="w-3 h-3" />
+                                <span className="text-[9px] font-black">rutina</span>
+                            </div>
                             </div>
                             <div className="flex items-end gap-1.5 mb-1">
-                                <span className="text-xl font-black text-foreground leading-none">84%</span>
+                                <span className="text-xl font-black text-foreground leading-none">
+                                    {adherencePct}%
+                                </span>
                             </div>
                             <MiniSparkline data={adherenceData} color="#10B981" />
+                            <p className="text-[9px] text-muted-foreground font-medium">
+                                Nutrición (7d): {nutritionPct}%
+                            </p>
                         </div>
                         <div className="bg-white/40 dark:bg-white/[0.02] border border-border/50 dark:border-white/5 rounded-2xl p-4 flex flex-col gap-3 transition-colors group-hover:bg-white/60 dark:group-hover:bg-white/[0.05]">
                             <div className="flex items-center justify-between">
                                 <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Peso Actual</span>
-                                <div className="flex items-center text-rose-500 gap-0.5">
-                                    <TrendingDown className="w-3 h-3" />
-                                    <span className="text-[9px] font-black">-0.6kg</span>
+                                <div
+                                    className={`flex items-center gap-0.5 ${
+                                        weightDelta != null && weightDelta < 0 ?
+                                            'text-emerald-500'
+                                        : weightDelta != null && weightDelta > 0 ? 'text-rose-500'
+                                        : 'text-muted-foreground'
+                                    }`}
+                                >
+                                    {weightDelta != null && weightDelta < 0 ?
+                                        <TrendingDown className="w-3 h-3" />
+                                    : weightDelta != null && weightDelta > 0 ?
+                                        <TrendingUp className="w-3 h-3" />
+                                    : null}
+                                    <span className="text-[9px] font-black">
+                                        {weightDelta != null ?
+                                            `${weightDelta > 0 ? '+' : ''}${weightDelta} kg (7d)`
+                                        :   '—'}
+                                    </span>
                                 </div>
                             </div>
                             <div className="flex items-end gap-1.5 mb-1">
-                                <span className="text-xl font-black text-foreground leading-none">72.4</span>
+                                <span className="text-xl font-black text-foreground leading-none">
+                                    {currentWeight != null ? currentWeight : '—'}
+                                </span>
                                 <span className="text-[10px] font-bold text-muted-foreground mb-0.5">KG</span>
                             </div>
                             <MiniSparkline data={weightData} color="#007AFF" />
@@ -156,7 +234,7 @@ export function ClientCard({
                     {/* Protocols & Status */}
                     <div className="space-y-4">
                         <div className="flex items-center flex-wrap gap-2">
-                            <StatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
+                            <ClientCardStatusBadge forceChange={client.force_password_change} isActive={client.is_active} />
                             {subscriptionDaysRemaining !== null && (
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${subscriptionDaysRemaining <= 5 ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'}`}>
                                     {subscriptionDaysRemaining > 0 ? `${subscriptionDaysRemaining} Días Restantes` : 'Vencido'}
@@ -177,9 +255,15 @@ export function ClientCard({
                                 </div>
                                 <div className="text-right">
                                     <p className="text-sm font-black text-foreground leading-none">
-                                        {remainingDays !== null ? (remainingDays > 0 ? remainingDays : 0) : '∞'}
+                                        {remainingDays !== null ?
+                                            remainingDays > 0 ?
+                                                remainingDays
+                                            :   0
+                                        :   '—'}
                                     </p>
-                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Días</p>
+                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                                        Días prog.
+                                    </p>
                                 </div>
                             </div>
                         ) : (

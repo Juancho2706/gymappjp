@@ -24,7 +24,7 @@ import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
 import { DayColumn } from './components/DayColumn'
 import { BlockEditSheet } from './components/BlockEditSheet'
 import { ProgramConfigHeader } from './components/ProgramConfigHeader'
-import { ProgramPhasesBar } from './components/ProgramPhasesBar'
+import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 import type { BuilderBlock, DayState, ProgramPhase } from './types'
@@ -777,7 +777,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     </div>
                 </div>
 
-                <ProgramPhasesBar phases={programPhases} weeksToRepeat={weeksToRepeat} />
+                <ProgramPhasesBar phases={programPhases} />
 
                 {showConfig && (
                     <ProgramConfigHeader 
@@ -887,7 +887,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         {isMobile ? (
                             <div className="h-full flex flex-col">
                                 {/* Mobile tab bar with exercise counts */}
-                                <div className="flex bg-muted/50 p-1 h-11 rounded-xl gap-0.5 mx-2 mt-2 mb-1 flex-shrink-0" style={{ paddingTop: 'max(4px, env(safe-area-inset-top))' }}>
+                                <div className="flex bg-muted/50 p-1 h-11 rounded-xl gap-0.5 mx-2 mt-1 mb-1 flex-shrink-0">
                                     {days.map((d, idx) => {
                                         const isActive = activeMobileDayIndex === idx
                                         const count = d.blocks.length

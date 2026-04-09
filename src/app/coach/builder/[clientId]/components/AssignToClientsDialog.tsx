@@ -29,11 +29,24 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
     const [flexibleStart, setFlexibleStart] = useState(true)
     const [assigning, setAssigning] = useState(false)
     const [search, setSearch] = useState('')
+    const [durationWeeks, setDurationWeeks] = useState('4')
+    const [selectedDays, setSelectedDays] = useState<number[]>([])
+
+    const dayOptions = [
+        { id: 1, label: 'Lun' },
+        { id: 2, label: 'Mar' },
+        { id: 3, label: 'Mié' },
+        { id: 4, label: 'Jue' },
+        { id: 5, label: 'Vie' },
+        { id: 6, label: 'Sáb' },
+        { id: 7, label: 'Dom' },
+    ]
 
     useEffect(() => {
         if (!open) return
         setLoading(true)
         setSelected([])
+        setSelectedDays([])
         getCoachClientsAction().then(result => {
             setClients(result.data || [])
             setLoading(false)
@@ -54,12 +67,20 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
         const result = await assignProgramToClientsAction(
             programId,
             selected,
-            flexibleStart ? undefined : startDate
+            {
+                startDate: flexibleStart ? undefined : startDate,
+                durationWeeks: Math.max(1, Number(durationWeeks) || 4),
+                selectedDays: selectedDays.length ? selectedDays : undefined,
+            }
         )
         if (result.error) {
             toast.error(result.error)
         } else {
-            toast.success(`Programa asignado a ${selected.length} cliente${selected.length !== 1 ? 's' : ''}`)
+            const assignedCount = result.assignedCount ?? selected.length
+            toast.success(`Programa asignado a ${assignedCount} cliente${assignedCount !== 1 ? 's' : ''}`)
+            if (result.failedClients?.length) {
+                toast.warning(`${result.failedClients.length} asignación(es) fallaron. Revisa permisos o datos.`)
+            }
             setSelected([])
             onClose()
         }
@@ -152,6 +173,37 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
                                 className="h-10 bg-background border-border text-foreground font-bold text-sm"
                             />
                         )}
+                        <div className="grid grid-cols-2 gap-2 pt-2">
+                            <div>
+                                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Duración (semanas)</label>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    max={52}
+                                    value={durationWeeks}
+                                    onChange={e => setDurationWeeks(e.target.value)}
+                                    className="h-10 bg-background border-border text-foreground font-bold text-sm mt-1"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Días a asignar</label>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                    {dayOptions.map(day => {
+                                        const active = selectedDays.includes(day.id)
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={day.id}
+                                                onClick={() => setSelectedDays(prev => active ? prev.filter(d => d !== day.id) : [...prev, day.id])}
+                                                className={`px-2 py-1 rounded-md text-[10px] font-bold border ${active ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted/30 border-border text-muted-foreground'}`}
+                                            >
+                                                {day.label}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Acción */}

@@ -1,101 +1,255 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Search, TrendingUp, Users } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { GlassButton } from '@/components/ui/glass-button'
+import { useMemo, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { Users } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
-import { ClientCard } from '@/components/coach/ClientCard'
+import { ClientCardV2 } from '@/components/coach/ClientCardV2'
+import { DirectoryActionBar } from './DirectoryActionBar'
+import { ClientsDirectoryTable } from './ClientsDirectoryTable'
+import { ClientsDirectoryEmpty } from './ClientsDirectoryEmpty'
+import type {
+    DirectoryRiskFilter,
+    DirectorySortKey,
+    ProgramDirectoryFilter,
+    StatusDirectoryFilter,
+} from './directory-types'
+import type { DirectoryPulseRow } from '@/services/dashboard.service'
+import { defaultSortDir, sortClientsByKey } from './clientsDirectorySort'
 
 interface ClientsDirectoryClientProps {
     clients: any[]
-    coach: any
+    coach: { slug: string } | null
     appUrl: string
+    riskFilter: DirectoryRiskFilter
+    onRiskFilterChange: (f: DirectoryRiskFilter) => void
+    pulseByClientId: Record<string, DirectoryPulseRow>
 }
 
-export function ClientsDirectoryClient({ clients, coach, appUrl }: ClientsDirectoryClientProps) {
+function matchesRiskFilter(
+    client: any,
+    pulse: DirectoryPulseRow | undefined,
+    filter: DirectoryRiskFilter
+): boolean {
+    switch (filter) {
+        case 'all':
+            return true
+        case 'urgent':
+            return !!pulse && pulse.attentionScore >= 50
+        case 'review':
+            return !!pulse && pulse.attentionScore >= 25 && pulse.attentionScore < 50
+        case 'on_track':
+            return !!pulse && pulse.attentionScore < 25
+        case 'expired_program':
+            return (
+                !!pulse &&
+                pulse.planDaysRemaining !== null &&
+                pulse.planDaysRemaining <= 0
+            )
+        case 'password_reset':
+            return !!client.force_password_change
+        default:
+            return true
+    }
+}
+
+function matchesStatusFilter(
+    client: any,
+    filter: StatusDirectoryFilter
+): boolean {
+    if (filter === 'any') return true
+    if (filter === 'active') {
+        return client.is_active !== false && !client.force_password_change
+    }
+    if (filter === 'paused') return client.is_active === false
+    if (filter === 'pending_sync') return !!client.force_password_change
+    return true
+}
+
+function matchesProgramFilter(
+    client: any,
+    pulse: DirectoryPulseRow | undefined,
+    filter: ProgramDirectoryFilter
+): boolean {
+    if (filter === 'any') return true
+    const hasProgram = !!client.workout_programs?.some((p: any) => p.is_active)
+    if (filter === 'with_program') return hasProgram
+    if (filter === 'no_program') return !hasProgram
+    if (filter === 'expired') {
+        return (
+            !!pulse &&
+            pulse.planDaysRemaining !== null &&
+            pulse.planDaysRemaining <= 0
+        )
+    }
+    return true
+}
+
+function useGridVariants(reduceMotion: boolean | null) {
+    if (reduceMotion) {
+        return {
+            hidden: { opacity: 1 },
+            show: { opacity: 1 },
+        }
+    }
+    return {
+        hidden: {},
+        show: { transition: { staggerChildren: 0.06 } },
+    }
+}
+
+export function ClientsDirectoryClient({
+    clients,
+    coach,
+    appUrl,
+    riskFilter,
+    onRiskFilterChange,
+    pulseByClientId,
+}: ClientsDirectoryClientProps) {
+    const reduceMotion = useReducedMotion()
+    const gridContainer = useGridVariants(reduceMotion)
+
     const [search, setSearch] = useState('')
+    const [sortKey, setSortKey] = useState<DirectorySortKey>('attention_score')
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() =>
+        defaultSortDir('attention_score')
+    )
+    const [view, setView] = useState<'grid' | 'table'>('grid')
+    const [statusFilter, setStatusFilter] = useState<StatusDirectoryFilter>('any')
+    const [programFilter, setProgramFilter] = useState<ProgramDirectoryFilter>('any')
+
+    const handleSortFromBar = (k: DirectorySortKey) => {
+        setSortKey(k)
+        setSortDir(defaultSortDir(k))
+    }
+
+    const handleSortFromTable = (k: DirectorySortKey, d: 'asc' | 'desc') => {
+        setSortKey(k)
+        setSortDir(d)
+    }
 
     const filteredClients = useMemo(() => {
-        return clients.filter(client => {
-            const matchesSearch = 
-                client.full_name.toLowerCase().includes(search.toLowerCase()) ||
-                client.email.toLowerCase().includes(search.toLowerCase())
-            
-            return matchesSearch
+        return clients.filter((client) => {
+            const q = search.toLowerCase()
+            const matchesSearch =
+                client.full_name.toLowerCase().includes(q) ||
+                client.email.toLowerCase().includes(q)
+            const pulse = pulseByClientId[client.id]
+            return (
+                matchesSearch &&
+                matchesRiskFilter(client, pulse, riskFilter) &&
+                matchesStatusFilter(client, statusFilter) &&
+                matchesProgramFilter(client, pulse, programFilter)
+            )
         })
-    }, [clients, search])
+    }, [
+        clients,
+        search,
+        riskFilter,
+        statusFilter,
+        programFilter,
+        pulseByClientId,
+    ])
+
+    const sortedClients = useMemo(
+        () => sortClientsByKey(filteredClients, pulseByClientId, sortKey, sortDir),
+        [filteredClients, pulseByClientId, sortKey, sortDir]
+    )
+
+    if (clients.length === 0) {
+        return <ClientsDirectoryEmpty />
+    }
 
     return (
-        <div className="space-y-6 md:space-y-12">
-            {/* List Controls */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative z-20">
-                <div className="relative w-full md:w-96">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input 
-                        placeholder="Buscar unidad por nombre o email..." 
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-11 h-12 bg-white/50 dark:bg-white/[0.03] border-border/50 dark:border-white/10 rounded-2xl backdrop-blur-md focus:ring-primary/20 transition-all font-medium"
-                    />
-                </div>
-                
-                {/* Oculto en móvil, visible en md */}
-                <div className="hidden md:flex items-center gap-3 w-full md:w-auto">
-                    <GlassButton className="flex-1 md:flex-none h-12 px-6 border border-primary/10">
-                        <TrendingUp className="w-4 h-4 mr-2" />
-                        <span className="font-bold uppercase tracking-widest text-[10px]">Ordenar</span>
-                    </GlassButton>
-                </div>
-            </div>
+        <div className="space-y-6 md:space-y-8">
+            <DirectoryActionBar
+                search={search}
+                onSearchChange={setSearch}
+                sortKey={sortKey}
+                onSortChange={handleSortFromBar}
+                view={view}
+                onViewChange={setView}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                programFilter={programFilter}
+                onProgramFilterChange={setProgramFilter}
+                riskFilter={riskFilter}
+                onRiskFilterChange={onRiskFilterChange}
+            />
 
-            {/* Main Directory */}
-            {filteredClients.length === 0 ? (
-                <GlassCard className="flex flex-col items-center justify-center py-20 md:py-32 text-center mx-4 md:mx-0">
-                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-2xl">
-                        <Users className="w-8 h-8 md:w-10 md:h-10 text-muted-foreground opacity-20" />
+            {sortedClients.length === 0 ?
+                <GlassCard className="mx-4 flex flex-col items-center justify-center py-20 text-center md:mx-0 md:py-28">
+                    <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-white/5 shadow-2xl">
+                        <Users className="h-10 w-10 text-muted-foreground opacity-25" />
                     </div>
-                    <h3 className="text-lg md:text-xl font-black text-foreground uppercase tracking-tighter mb-2 font-display">
+                    <h3 className="font-display text-lg font-black uppercase tracking-tighter text-foreground md:text-xl">
                         Sin resultados
                     </h3>
-                    <p className="text-muted-foreground text-xs md:text-sm max-w-xs font-medium leading-relaxed px-4">
-                        No se han encontrado alumnos que coincidan con la búsqueda.
+                    <p className="mt-3 max-w-md px-4 text-xs font-medium leading-relaxed text-muted-foreground md:text-sm">
+                        {search ?
+                            <>
+                                Prueba buscando por email o nombre completo. Término:{' '}
+                                <span className="font-bold text-foreground">&quot;{search}&quot;</span>
+                            </>
+                        :   'Ningún alumno coincide con los filtros activos.'}
                     </p>
                 </GlassCard>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-8 relative z-10 px-4 md:px-0 pb-20 md:pb-0">
-                    {filteredClients.map((client) => {
+            : view === 'table' ?
+                <ClientsDirectoryTable
+                    clients={sortedClients}
+                    pulseByClientId={pulseByClientId}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSortChange={handleSortFromTable}
+                    coachSlug={coach?.slug}
+                    appUrl={appUrl}
+                />
+            :   <motion.div
+                    className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-0 xl:grid-cols-3 xl:gap-8"
+                    variants={gridContainer}
+                    initial="hidden"
+                    animate="show"
+                >
+                    {sortedClients.map((client) => {
+                        const pulse = pulseByClientId[client.id]
                         let subscriptionDaysRemaining = null
                         if (client.subscription_start_date) {
                             const start = new Date(client.subscription_start_date)
                             const end = new Date(start)
                             end.setMonth(end.getMonth() + 1)
-                            const diff = Math.ceil((end.getTime() - new Date().getTime()) / (1000 * 3600 * 24))
+                            const diff = Math.ceil(
+                                (end.getTime() - new Date().getTime()) / (1000 * 3600 * 24)
+                            )
                             subscriptionDaysRemaining = diff
                         }
 
-                        const loginUrl = coach && appUrl ? `${appUrl}/c/${coach.slug}/login` : ''
-                        const whatsappLink = client.phone 
-                            ? `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}, aquí tienes tu link de acceso a la app: ${loginUrl}`)}`
-                            : '#'
-                        
-                        const activeProgram = client.workout_programs?.find((p: any) => p.is_active);
-                        
+                        const loginUrl =
+                            coach && appUrl ? `${appUrl}/c/${coach.slug}/login` : ''
+                        const whatsappLink =
+                            client.phone ?
+                                `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}, aquí tienes tu link de acceso a la app: ${loginUrl}`)}`
+                            :   '#'
+
+                        const activeProgram = client.workout_programs?.find(
+                            (p: any) => p.is_active
+                        )
+                        const programDaysRemaining = pulse?.planDaysRemaining ?? null
+
                         return (
-                            <ClientCard 
+                            <ClientCardV2
                                 key={client.id}
                                 client={client}
                                 loginUrl={loginUrl}
                                 whatsappLink={whatsappLink}
                                 subscriptionDaysRemaining={subscriptionDaysRemaining}
-                                remainingDays={15} // Mock
+                                remainingDays={programDaysRemaining}
                                 activeProgramName={activeProgram?.name || null}
+                                pulse={pulse}
                             />
                         )
                     })}
-                </div>
-            )}
+                </motion.div>
+            }
         </div>
     )
 }
-

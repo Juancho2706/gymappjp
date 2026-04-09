@@ -860,7 +860,7 @@ export default function LandingPage() {
                                     ))}
                                 </div>
                                 <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
-                                    "COACH OP revolucionó mi negocio. Pasé de Excels caóticos a gestionar 50 clientes sin esfuerzo."
+                                    {`"COACH OP revolucionó mi negocio. Pasé de Excels caóticos a gestionar 50 clientes sin esfuerzo."`}
                                 </p>
                             </div>
                             <div className="relative z-10 border-t border-border pt-6 mt-auto">
@@ -885,7 +885,7 @@ export default function LandingPage() {
                                     ))}
                                 </div>
                                 <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
-                                    "La mejor inversión para mi servicio de asesorías. Mis clientes aman la app y yo ahorro horas de trabajo."
+                                    {`"La mejor inversión para mi servicio de asesorías. Mis clientes aman la app y yo ahorro horas de trabajo."`}
                                 </p>
                             </div>
                             <div className="relative z-10 border-t border-border pt-6 mt-auto">
@@ -910,7 +910,7 @@ export default function LandingPage() {
                                     ))}
                                 </div>
                                 <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
-                                    "Increíblemente fácil de usar. El constructor de rutinas y dietas es exactamente lo que necesitaba."
+                                    {`"Increíblemente fácil de usar. El constructor de rutinas y dietas es exactamente lo que necesitaba."`}
                                 </p>
                             </div>
                             <div className="relative z-10 border-t border-border pt-6 mt-auto">

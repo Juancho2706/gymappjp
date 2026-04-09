@@ -61,4 +61,5 @@ export async function toggleMealCompletion(
     }
 
     revalidatePath(`/c/${coachSlug}/nutrition`)
+    revalidatePath(`/c/${coachSlug}/dashboard`)
 }

@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useTransition } from 'react'
 import { useTheme } from 'next-themes'
-import { Activity, CreditCard, Dumbbell, Target, User, Edit2, Plus, ChevronDown, ChevronUp, CheckCircle2, PieChart as PieChartIcon, Flame, TrendingUp, Calendar, AlertCircle, Camera, CheckSquare, Utensils, Clock, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Activity, Dumbbell, User, Edit2, Plus, ChevronDown, ChevronUp, CheckCircle2, PieChart as PieChartIcon, Flame, TrendingUp, Camera, ArrowUpRight, ArrowDownRight, Minus, Trophy, Layers } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart } from 'recharts'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -12,17 +14,48 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
+import { getProfileTopAlert } from './getProfileTopAlert'
+import { ProfileTopAlertBanner } from './ProfileTopAlertBanner'
+import { ProfileTabNav, type ProfileMainTabId, type ProfileTabBadges } from './ProfileTabNav'
+import { ProfileOverviewB3 } from './ProfileOverviewB3'
+import { ProfileProgramSummaryCard } from './ProfileProgramSummaryCard'
+import { ProfileCheckInSnapshot } from './ProfileCheckInSnapshot'
+import { TrainingTabB4Panels } from './TrainingTabB4Panels'
+import { NutritionTabB5 } from './NutritionTabB5'
+import { ProgressBodyCompositionB6 } from './ProgressBodyCompositionB6'
+import { ProgramTabB7 } from './ProgramTabB7'
+import { BillingTabB8 } from './BillingTabB8'
+import { ProfileFloatingActions } from './ProfileFloatingActions'
+import {
+    resolveActiveWeekVariantForDisplay,
+    workoutPlanMatchesVariant,
+} from '@/lib/workout/programWeekVariant'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
 }
 
 export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
-    const [activeTab, setActiveTab] = useState('overview')
+    const reduceMotion = useReducedMotion()
+    const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
+    const [isPending, startTransition] = useTransition()
+
+    const handleTabChange = useCallback((id: ProfileMainTabId) => {
+        startTransition(() => {
+            setActiveTab(id)
+        })
+    }, [])
     const [activeChart, setActiveChart] = useState('peso_composicion')
     const [expandedWorkouts, setExpandedWorkouts] = useState<string[]>([])
     const { resolvedTheme } = useTheme()
     const { client, checkIns, payments } = data
+
+    const coachSlug =
+        client?.coaches == null
+            ? undefined
+            : Array.isArray(client.coaches)
+              ? client.coaches[0]?.slug
+              : client.coaches.slug
 
     const toggleWorkout = (id: string) => {
         setExpandedWorkouts(prev => 
@@ -50,7 +83,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                 date: new Date(c.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
                 peso: currentWeight,
                 // Usamos energy_level si existe, sino lo simulamos para tener una segunda métrica
-                energia: c.energy_level || Math.floor(Math.random() * 5) + 6, // Simulamos 6-10 si no hay
+                energia: c.energy_level ?? 0,
                 cambio_peso: Number(weightChange.toFixed(2))
             };
         });
@@ -173,39 +206,13 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
 
     const checkInsWithPhotos = (checkIns || []).filter((c: any) => c.front_photo_url || c.side_photo_url || c.back_photo_url).slice(0, 3);
 
-    // --- TASK 1, 2, 3: DATA PROCESSING ---
-    const today = new Date();
-    
-    // Weekly Compliance Radar
     const compliance = data.compliance || {};
-    const workoutsThisWeek = compliance.workoutsThisWeek || 0; 
-    const workoutsTarget = compliance.workoutsTarget || 7;
     const nutritionCompliancePercent = compliance.nutritionCompliancePercent || 0;
     const isNutritionAtRisk = nutritionCompliancePercent < 60;
-    
+
     const lastCheckIn = checkIns && checkIns.length > 0 
         ? checkIns.sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] 
         : null;
-    const daysSinceCheckIn = lastCheckIn 
-        ? Math.floor((today.getTime() - new Date(lastCheckIn.created_at).getTime()) / (1000 * 3600 * 24))
-        : 999;
-    
-    // Check-in status
-    let checkInStatus = 'primary';
-    if (daysSinceCheckIn > 14) checkInStatus = 'destructive';
-    else if (daysSinceCheckIn >= 7) checkInStatus = 'warning';
-    
-    // Acciones de Hoy
-    const todayStr = today.toISOString().split('T')[0];
-    // Asumiendo que el overview necesita comprobar si se entrenó o comió hoy, lo simulamos para evitar complejidades excesivas
-    // si no tenemos el array de logs completo, o podríamos derivarlo de workoutHistory y nutritionLogs.
-    const todayWorkoutDone = data.workoutHistory?.some((plan: any) => 
-        plan.workout_blocks?.some((block: any) => 
-            block.workout_logs?.some((log: any) => log.logged_at?.startsWith(todayStr))
-        )
-    ) || false;
-    const todayMealsDone = 0; // Podría calcularse desde meal_completions
-    const todayMealsTotal = 4;
 
     // Dynamic Metrics Card
     const currentWeight = lastCheckIn?.weight || client.client_intake?.weight_kg || 0;
@@ -213,8 +220,12 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
         ? checkIns.sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[1] 
         : null;
     const weeklyWeightVariation = prevWeightCheckIn ? currentWeight - prevWeightCheckIn.weight : 0;
-    const interactionStreak = compliance.currentStreak || 0;
+    const interactionStreak = compliance.currentStreak || 0
 
+    const topAlert = getProfileTopAlert({
+        checkIns,
+        compliance,
+    })
 
     const chartTabs = [
         { id: 'peso_composicion', label: '⚖️ Peso & Comp.' },
@@ -226,132 +237,108 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
         { id: 'balance_neto', label: '⚖️ Balance Neto' },
     ]
 
-    const tabs = [
-        { id: 'overview', label: 'Overview' },
-        { id: 'progress', label: 'Progreso' },
-        { id: 'workout', label: 'Entrenamiento' },
-        { id: 'nutrition', label: 'Nutrición' },
-        { id: 'billing', label: 'Facturación' },
-    ]
+    const prCount = Array.isArray(data.personalRecords) ? data.personalRecords.length : 0
+    const checkInTotal = (checkIns || []).length
+    const mealDetailCount = Array.isArray(data.mealDetails) ? data.mealDetails.length : 0
+    const pendingPayments = (payments || []).filter(
+        (p: { status?: string }) => String(p.status || '').toLowerCase() === 'pending'
+    ).length
+
+    const abModeProgram = !!data.activeProgram?.ab_mode
+    const programVariantLetter = resolveActiveWeekVariantForDisplay(
+        data.activeProgram,
+        compliance.planCurrentWeek && compliance.planCurrentWeek > 0
+            ? compliance.planCurrentWeek
+            : null,
+        new Date()
+    )
+    const programTrainingDayCount =
+        (data.activeProgram?.workout_plans as any[] | undefined)?.filter(
+            (p: any) =>
+                (p?.workout_blocks?.length ?? 0) > 0 &&
+                workoutPlanMatchesVariant(p, programVariantLetter, abModeProgram)
+        ).length ?? 0
+
+    const tabBadges: ProfileTabBadges = {
+        progress: checkInTotal > 0 ? checkInTotal : undefined,
+        workout:
+            prCount > 0
+                ? prCount
+                : (data.workoutHistory?.length ?? 0) > 0
+                  ? data.workoutHistory.length
+                  : undefined,
+        program: programTrainingDayCount > 0 ? programTrainingDayCount : undefined,
+        nutrition: isNutritionAtRisk ? '!' : mealDetailCount > 0 ? mealDetailCount : undefined,
+        billing: pendingPayments > 0 ? pendingPayments : undefined,
+    }
+
+    const goToProgressHistory = () => {
+        handleTabChange('progress')
+        requestAnimationFrame(() => {
+            document.getElementById('profile-progress-panel')?.scrollIntoView({
+                behavior: reduceMotion ? 'auto' : 'smooth',
+                block: 'start',
+            })
+        })
+    }
+
+    const tabEase = [0.25, 0.46, 0.45, 0.94] as const
+    const tabMotion = {
+        initial: { opacity: 0, y: reduceMotion ? 0 : 8 } as const,
+        animate: { opacity: 1, y: 0 } as const,
+        exit: { opacity: 0, y: reduceMotion ? 0 : -8 } as const,
+        transition: reduceMotion
+            ? { duration: 0 }
+            : { duration: 0.18, ease: tabEase },
+    }
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-6 border-b border-border/50 pb-2 relative z-10 overflow-x-auto">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`text-[10px] font-black uppercase tracking-widest pb-2 px-2 shrink-0 transition-colors ${
-                            activeTab === tab.id
-                                ? 'text-primary border-b-2 border-primary'
-                                : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+            <ProfileTabNav activeTab={activeTab} onChange={handleTabChange} badges={tabBadges} />
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10">
-                {activeTab === 'overview' && (
-                    <>
+            {isPending && (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-pulse">
+                    <div className="md:col-span-8 space-y-4">
+                        <Skeleton className="h-16 rounded-xl" />
+                        <Skeleton className="h-40 rounded-xl" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <Skeleton className="h-32 rounded-xl" />
+                            <Skeleton className="h-32 rounded-xl" />
+                        </div>
+                    </div>
+                    <div className="md:col-span-4 space-y-4">
+                        <Skeleton className="h-64 rounded-xl" />
+                    </div>
+                </div>
+            )}
+
+            <AnimatePresence mode="wait" initial={false}>
+                {activeTab === 'overview' && !isPending && (
+                    <motion.div
+                        key="overview"
+                        {...tabMotion}
+                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                    >
                         {/* Task 2: Rediseño de Overview */}
                         <div className="md:col-span-8 space-y-6">
-                            
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                {/* Task 1: Weekly Compliance Radar */}
-                                <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden flex flex-col justify-between">
-                                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
-                                    <div>
-                                        <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
-                                            <Activity className="w-4 h-4" /> Radar Semanal
-                                        </h3>
-                                        <div className="space-y-4 relative z-10 w-full">
-                                            {/* Entrenamiento */}
-                                            <div>
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className="font-bold text-muted-foreground flex items-center gap-1"><Dumbbell className="w-3 h-3"/> Entrenamientos</span>
-                                                    <span className="font-black">{workoutsThisWeek}/{workoutsTarget} Días</span>
-                                                </div>
-                                                <Progress value={(workoutsThisWeek / workoutsTarget) * 100} className="h-1.5 bg-secondary" />
-                                            </div>
-                                            
-                                            {/* Nutrición */}
-                                            <div>
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className="font-bold text-muted-foreground flex items-center gap-1"><Utensils className="w-3 h-3"/> Nutrición (Hoy)</span>
-                                                    <span className={cn("font-black", isNutritionAtRisk ? "text-red-500" : "text-emerald-500")}>{nutritionCompliancePercent}%</span>
-                                                </div>
-                                                <Progress value={nutritionCompliancePercent} className={cn("h-1.5 bg-secondary", isNutritionAtRisk && "[&>div]:bg-red-500", !isNutritionAtRisk && "[&>div]:bg-emerald-500")} />
-                                            </div>
-                                            
-                                            {/* Check-in */}
-                                            <div>
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className="font-bold text-muted-foreground flex items-center gap-1"><Camera className="w-3 h-3"/> Check-in</span>
-                                                    <span className={cn("font-black", 
-                                                        checkInStatus === 'destructive' ? "text-red-500" : 
-                                                        checkInStatus === 'warning' ? "text-yellow-500" : "text-emerald-500"
-                                                    )}>
-                                                        {lastCheckIn ? `Hace ${daysSinceCheckIn} días` : "Ninguno"}
-                                                    </span>
-                                                </div>
-                                                <Progress value={compliance.checkInCompliancePercent || 0} 
-                                                    className={cn("h-1.5 bg-secondary", 
-                                                        checkInStatus === 'destructive' && "[&>div]:bg-red-500",
-                                                        checkInStatus === 'warning' && "[&>div]:bg-yellow-500",
-                                                        checkInStatus === 'primary' && "[&>div]:bg-emerald-500"
-                                                    )} 
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t border-border/50 dark:border-white/5 relative z-10">
-                                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
-                                            <span>Acción de Hoy:</span>
-                                            <div className="flex gap-2">
-                                                <span className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded">
-                                                    <Dumbbell className="w-3 h-3" /> {compliance.workoutsThisWeek > 0 ? '✅' : '⏳'}
-                                                </span>
-                                                <span className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded">
-                                                    <Utensils className="w-3 h-3" /> {compliance.todayMealsDone || 0}/{compliance.todayMealsTotal || 4} {(compliance.todayMealsDone || 0) >= (compliance.todayMealsTotal || 4) ? '✅' : '⏳'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </GlassCard>
+                            <ProfileTopAlertBanner alert={topAlert} />
 
-                                {/* Current Plan Status */}
-                                <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden flex flex-col justify-between">
-                                    <div className="absolute bottom-0 right-0 -mr-8 -mb-8 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
-                                    <div>
-                                        <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
-                                            <Calendar className="w-4 h-4" /> {data.activeProgram?.name || 'Sin Plan Activo'}
-                                        </h3>
-                                        <div className="space-y-4 relative z-10">
-                                            <div>
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className="font-bold text-muted-foreground uppercase tracking-widest">Fase Actual</span>
-                                                    <span className="font-black">Entrenamiento</span>
-                                                </div>
-                                                <div className="flex justify-between text-xs mb-1 mt-3">
-                                                    <span className="font-bold text-muted-foreground uppercase tracking-widest">Progreso del Ciclo</span>
-                                                    <span className="font-black text-primary">Semana {compliance.planCurrentWeek || 1} / {compliance.planTotalWeeks || 4}</span>
-                                                </div>
-                                                <Progress value={((compliance.planCurrentWeek || 1) / (compliance.planTotalWeeks || 4)) * 100} className="h-2 bg-secondary" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t border-border/50 dark:border-white/5 relative z-10 flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className={cn("w-2 h-2 rounded-full animate-pulse", isNutritionAtRisk ? "bg-red-500" : "bg-emerald-500")} />
-                                            <span className={cn("text-xs font-bold uppercase tracking-widest", isNutritionAtRisk ? "text-red-500" : "text-emerald-500")}>
-                                                {isNutritionAtRisk ? 'En Riesgo' : 'En track'}
-                                            </span>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{compliance.planDaysRemaining || 0} días restantes</span>
-                                    </div>
-                                </GlassCard>
+                            <ProfileOverviewB3
+                                workoutHistory={data.workoutHistory || []}
+                                checkIns={checkIns || []}
+                                compliance={compliance}
+                            />
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <ProfileProgramSummaryCard
+                                    activeProgram={data.activeProgram}
+                                    compliance={compliance}
+                                    isNutritionAtRisk={isNutritionAtRisk}
+                                />
+                                <ProfileCheckInSnapshot
+                                    checkIn={lastCheckIn}
+                                    onViewHistory={goToProgressHistory}
+                                />
                             </div>
 
                             {/* Miniaturas de Check-in */}
@@ -456,13 +443,28 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                 </div>
                             </GlassCard>
                         </div>
-                    </>
+                    </motion.div>
                 )}
 
-                {activeTab === 'progress' && (
+                {activeTab === 'progress' && !isPending && (
+                    <motion.div
+                        key="progress"
+                        {...tabMotion}
+                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                    >
                     <div className="md:col-span-12 space-y-6">
+                        <ProgressBodyCompositionB6
+                            checkIns={checkIns || []}
+                            heightCm={client?.client_intake?.height_cm}
+                            chartGridColor={chartGridColor}
+                            chartAxisColor={chartAxisColor}
+                            tooltipBgColor={tooltipBgColor}
+                            tooltipBorderColor={tooltipBorderColor}
+                            tooltipTextColor={tooltipTextColor}
+                        />
+
                         {/* Task 3: Panel de Progreso Unificado */}
-                        <GlassCard className="p-6 md:p-8 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-[35rem]">
+                        <GlassCard id="profile-progress-panel" className="p-6 md:p-8 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-[35rem]">
                             <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 relative z-10">
                                 <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
@@ -677,43 +679,87 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                 )}
                             </div>
                         </GlassCard>
-
-                        <GlassCard className="p-8 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden mt-6">
-                            <div className="absolute top-0 right-1/4 -mr-16 -mt-16 w-64 h-64 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-                            <h3 className="text-xs font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-2 relative z-10">
-                                <Target className="w-4 h-4" /> Check-ins Recientes
-                            </h3>
-                            {checkIns && checkIns.length > 0 ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
-                                    {checkIns.map((checkIn: any) => (
-                                        <div key={checkIn.id} className="bg-secondary/50 dark:bg-white/5 border border-border dark:border-white/10 p-4 rounded-xl space-y-3 shadow-sm dark:shadow-none hover:shadow-md transition-shadow">
-                                            <div className="flex justify-between items-center border-b border-border dark:border-white/5 pb-2">
-                                                <span className="font-bold text-sm text-foreground">{new Date(checkIn.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
-                                                <span className="text-xs text-primary font-black">{checkIn.weight} kg</span>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground line-clamp-3">{checkIn.notes || 'Sin notas.'}</p>
-                                            {checkIn.front_photo_url && (
-                                                <div className="relative h-48 w-full bg-black/5 dark:bg-black/20 rounded-lg overflow-hidden group/photo">
-                                                    <Image 
-                                                        src={checkIn.front_photo_url} 
-                                                        alt={`Progreso ${new Date(checkIn.created_at).toLocaleDateString()}`}
-                                                        fill
-                                                        className="object-cover transition-transform duration-500 group-hover/photo:scale-110"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground text-center relative z-10">Este alumno aún no ha registrado check-ins.</p>
-                            )}
-                        </GlassCard>
                     </div>
+                    </motion.div>
                 )}
 
-                {activeTab === 'workout' && (
+                {activeTab === 'workout' && !isPending && (
+                    <motion.div
+                        key="workout"
+                        {...tabMotion}
+                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                    >
                     <div className="md:col-span-12 space-y-6">
+                        <TrainingTabB4Panels
+                            workoutHistory={data.workoutHistory || []}
+                            muscleVolumeByGroup={data.muscleVolumeByGroup || []}
+                            chartGridColor={chartGridColor}
+                            chartAxisColor={chartAxisColor}
+                            tooltipBgColor={tooltipBgColor}
+                            tooltipBorderColor={tooltipBorderColor}
+                            tooltipTextColor={tooltipTextColor}
+                        />
+
+                        {(data.personalRecords?.length > 0 || data.muscleVolumeByGroup?.length > 0) && (
+                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                                {data.personalRecords?.length > 0 && (
+                                    <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10">
+                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+                                            <Trophy className="h-4 w-4" /> Récords de peso (máx. registrado)
+                                        </h3>
+                                        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                                            {data.personalRecords.slice(0, 12).map((pr: any) => (
+                                                <div
+                                                    key={pr.exerciseId}
+                                                    className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/30 px-3 py-2 text-xs dark:border-white/10"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <p className="truncate font-bold text-foreground">{pr.exerciseName}</p>
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                            {pr.muscleGroup}
+                                                        </p>
+                                                    </div>
+                                                    <span className="shrink-0 font-black tabular-nums text-primary">
+                                                        {pr.maxWeightKg} kg
+                                                        <span className="ml-1 text-[10px] font-bold text-muted-foreground">
+                                                            ×{pr.repsAtMax}
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </GlassCard>
+                                )}
+                                {data.muscleVolumeByGroup?.length > 0 && (
+                                    <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10">
+                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+                                            <Layers className="h-4 w-4" /> Volumen últimos 30 días
+                                        </h3>
+                                        <p className="mb-3 text-[10px] font-medium text-muted-foreground">
+                                            Σ (peso × reps) por grupo muscular.
+                                        </p>
+                                        <div className="space-y-2">
+                                            {data.muscleVolumeByGroup.slice(0, 8).map((row: any) => {
+                                                const maxV = data.muscleVolumeByGroup[0]?.volume || 1
+                                                const pct = Math.min(100, Math.round((row.volume / maxV) * 100))
+                                                return (
+                                                    <div key={row.muscleGroup}>
+                                                        <div className="mb-0.5 flex justify-between text-[10px] font-bold uppercase tracking-widest">
+                                                            <span className="text-muted-foreground">{row.muscleGroup}</span>
+                                                            <span className="tabular-nums text-foreground">
+                                                                {Math.round(row.volume).toLocaleString('es-ES')} u.
+                                                            </span>
+                                                        </div>
+                                                        <Progress value={pct} className="h-1 bg-secondary" />
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </GlassCard>
+                                )}
+                            </div>
+                        )}
+
                         <GlassCard className="p-8 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
                             <div className="absolute bottom-0 left-1/4 -ml-16 -mb-16 w-64 h-64 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
                             <h3 className="text-xs font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-2 relative z-10">
@@ -766,8 +812,8 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                                                                 {(block.workout_logs || []).map((log: any, lIdx: number) => (
                                                                                     <tr key={lIdx} className="border-b border-border/5 dark:border-white/5 last:border-0">
                                                                                         <td className="py-2">{lIdx + 1}</td>
-                                                                                        <td className="py-2">{log.reps || '-'}</td>
-                                                                                        <td className="py-2">{log.weight || '-'} kg</td>
+                                                                                        <td className="py-2">{log.reps_done ?? log.reps ?? '-'}</td>
+                                                                                        <td className="py-2">{log.weight_kg ?? log.weight ?? '-'} kg</td>
                                                                                         <td className="py-2 text-right">
                                                                                             <CheckCircle2 className="w-3 h-3 text-emerald-500 ml-auto" />
                                                                                         </td>
@@ -795,198 +841,68 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             )}
                         </GlassCard>
                     </div>
+                    </motion.div>
+                )}
+
+                {activeTab === 'program' && !isPending && (
+                    <motion.div
+                        key="program"
+                        {...tabMotion}
+                        className="relative z-10 grid grid-cols-1 gap-6 md:grid-cols-12"
+                    >
+                        <div className="animate-in fade-in space-y-6 duration-500 md:col-span-12">
+                            <ProgramTabB7
+                                clientId={client.id}
+                                activeProgram={data.activeProgram}
+                                workoutHistory={data.workoutHistory || []}
+                                planCurrentWeek={compliance.planCurrentWeek ?? 0}
+                                planTotalWeeks={compliance.planTotalWeeks ?? 1}
+                                planDaysRemaining={compliance.planDaysRemaining ?? 0}
+                            />
+                        </div>
+                    </motion.div>
                 )}
 
                 {/* Task 4: Estructura Base Nutrición */}
-                {activeTab === 'nutrition' && (
+                {activeTab === 'nutrition' && !isPending && (
+                    <motion.div
+                        key="nutrition"
+                        {...tabMotion}
+                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                    >
                     <div className="md:col-span-12 space-y-6 animate-in fade-in duration-500">
-                        {/* Plan activo + macros objetivo */}
-                        {activeNutritionPlan && (
-                            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
-                                    <Utensils className="w-4 h-4" /> Plan Activo: {activeNutritionPlan.name}
-                                </h3>
-                                {(activeNutritionPlan.daily_calories || activeNutritionPlan.protein_g) && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 relative z-10">
-                                        {activeNutritionPlan.daily_calories && (
-                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
-                                                <p className="text-lg font-black text-primary">{activeNutritionPlan.daily_calories}</p>
-                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">kcal</p>
-                                            </div>
-                                        )}
-                                        {activeNutritionPlan.protein_g && (
-                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
-                                                <p className="text-lg font-black text-blue-400">{activeNutritionPlan.protein_g}g</p>
-                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Proteína</p>
-                                            </div>
-                                        )}
-                                        {activeNutritionPlan.carbs_g && (
-                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
-                                                <p className="text-lg font-black text-yellow-400">{activeNutritionPlan.carbs_g}g</p>
-                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Carbos</p>
-                                            </div>
-                                        )}
-                                        {activeNutritionPlan.fats_g && (
-                                            <div className="bg-secondary/50 dark:bg-white/5 rounded-xl p-3 text-center">
-                                                <p className="text-lg font-black text-orange-400">{activeNutritionPlan.fats_g}g</p>
-                                                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Grasas</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </GlassCard>
-                        )}
+                        <NutritionTabB5
+                            activeNutritionPlan={activeNutritionPlan}
+                            nutritionTimeline={nutritionHistory}
+                            mealDetails={data.mealDetails}
+                            chartGridColor={chartGridColor}
+                            chartAxisColor={chartAxisColor}
+                            tooltipBgColor={tooltipBgColor}
+                            tooltipBorderColor={tooltipBorderColor}
+                            tooltipTextColor={tooltipTextColor}
+                        />
+                    </div>
+                    </motion.div>
+                )}
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Historial de cumplimiento de comidas */}
-                            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
-                                    <CheckSquare className="w-4 h-4" /> Cumplimiento por Día
-                                </h3>
-                                {nutritionHistory.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                                        <Utensils className="w-10 h-10 text-muted-foreground/30 mb-3" />
-                                        <p className="text-sm text-muted-foreground">Sin registros de comidas aún.</p>
-                                        <p className="text-xs text-muted-foreground/60 mt-1">El alumno verá sus comidas al ingresar al app.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3 relative z-10">
-                                        {[...nutritionHistory].reverse().map((log, i) => (
-                                            <div key={i} className="flex items-center gap-3">
-                                                <div className="w-16 text-[10px] font-bold text-muted-foreground uppercase shrink-0">{log.date}</div>
-                                                <div className="flex-1">
-                                                    <div className="flex justify-between text-xs mb-1">
-                                                        <span className="text-muted-foreground">{log.mealsDone}/{log.mealsTotal} comidas</span>
-                                                        <span className={cn("font-black", log.compliancePct >= 80 ? "text-emerald-500" : log.compliancePct >= 50 ? "text-yellow-500" : "text-red-500")}>
-                                                            {log.compliancePct}%
-                                                        </span>
-                                                    </div>
-                                                    <Progress
-                                                        value={log.compliancePct}
-                                                        className={cn("h-1.5 bg-secondary",
-                                                            log.compliancePct >= 80 && "[&>div]:bg-emerald-500",
-                                                            log.compliancePct >= 50 && log.compliancePct < 80 && "[&>div]:bg-yellow-500",
-                                                            log.compliancePct < 50 && "[&>div]:bg-red-500"
-                                                        )}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </GlassCard>
-
-                            {/* Detalle del día más reciente */}
-                            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
-                                    <Calendar className="w-4 h-4" /> Último Registro Detallado
-                                </h3>
-                                {nutritionHistory.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                                        <AlertCircle className="w-10 h-10 text-muted-foreground/30 mb-3" />
-                                        <p className="text-sm text-muted-foreground">Sin registros aún.</p>
-                                    </div>
-                                ) : (() => {
-                                    const latest = [...nutritionHistory].reverse()[0];
-                                    return (
-                                        <div className="space-y-2 relative z-10">
-                                            <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-3">{latest.date}</p>
-                                            {latest.mealLogs.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground">Sin comidas registradas.</p>
-                                            ) : (
-                                                [...latest.mealLogs]
-                                                    .sort((a: any, b: any) => (a.nutrition_meals?.order_index ?? 0) - (b.nutrition_meals?.order_index ?? 0))
-                                                    .map((ml: any, i: number) => (
-                                                        <div key={i} className={cn(
-                                                            "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm",
-                                                            ml.is_completed
-                                                                ? "bg-emerald-500/10 border border-emerald-500/20"
-                                                                : "bg-secondary/50 dark:bg-white/5 border border-border/50 dark:border-white/10"
-                                                        )}>
-                                                            <span className="font-bold truncate">
-                                                                {ml.nutrition_meals?.name || `Comida ${i + 1}`}
-                                                            </span>
-                                                            {ml.is_completed
-                                                                ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                                                                : <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                                                            }
-                                                        </div>
-                                                    ))
-                                            )}
-                                        </div>
-                                    );
-                                })()}
-                            </GlassCard>
+                {activeTab === 'billing' && !isPending && (
+                    <motion.div
+                        key="billing"
+                        {...tabMotion}
+                        className="relative z-10 grid grid-cols-1 gap-6 md:grid-cols-12"
+                    >
+                        <div className="animate-in fade-in duration-500 md:col-span-12">
+                            <BillingTabB8 payments={payments || []} clientId={client.id} />
                         </div>
-                    </div>
+                    </motion.div>
                 )}
+            </AnimatePresence>
 
-                {activeTab === 'billing' && (
-                    <div className="md:col-span-12">
-                        <GlassCard className="p-8 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                            <div className="absolute top-1/2 left-1/2 -ml-32 -mt-32 w-64 h-64 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-                            <div className="flex justify-between items-center mb-6 relative z-10">
-                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                                    <CreditCard className="w-4 h-4" /> Historial de Pagos
-                                </h3>
-                                <Dialog>
-                                    <DialogTrigger render={
-                                        <Button className="h-8 bg-primary text-primary-foreground hover:bg-primary/90 text-[10px] font-black uppercase tracking-widest px-4 shadow-[0_0_20px_-5px_var(--theme-primary)]">
-                                            <Plus className="w-3 h-3 mr-2" /> Nuevo Pago
-                                        </Button>
-                                    } />
-                                    <DialogContent className="sm:max-w-[425px]">
-                                        <DialogHeader>
-                                            <DialogTitle className="uppercase font-black tracking-tighter text-xl">Registrar Nuevo Pago</DialogTitle>
-                                        </DialogHeader>
-                                        <div className="grid gap-4 py-4">
-                                            <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="amount" className="text-right text-xs font-bold uppercase tracking-widest">Monto</Label>
-                                                <Input id="amount" type="number" className="col-span-3" placeholder="$ 0.00" />
-                                            </div>
-                                            <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="date" className="text-right text-xs font-bold uppercase tracking-widest">Fecha</Label>
-                                                <Input id="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="col-span-3" />
-                                            </div>
-                                            <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="method" className="text-right text-xs font-bold uppercase tracking-widest">Método</Label>
-                                                <Input id="method" className="col-span-3" placeholder="Ej: Transferencia, Efectivo" />
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-end gap-3">
-                                            <Button variant="outline" className="text-[10px] font-black uppercase tracking-widest">Cancelar</Button>
-                                            <Button className="text-[10px] font-black uppercase tracking-widest bg-primary hover:bg-primary/90">Confirmar Pago</Button>
-                                        </div>
-                                    </DialogContent>
-                                </Dialog>
-                            </div>
-                            <div className="space-y-4 relative z-10">
-                                {payments && payments.length > 0 ? (
-                                    payments.map((payment: any) => (
-                                        <div key={payment.id} className="flex justify-between items-center bg-secondary/50 dark:bg-white/5 border border-border/50 dark:border-white/10 p-4 rounded-xl shadow-sm dark:shadow-none hover:shadow-md transition-shadow">
-                                            <div>
-                                                <p className="text-sm font-black text-foreground uppercase tracking-tight">{new Date(payment.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{payment.method}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-black text-primary">${payment.amount}</p>
-                                                <span className="text-[10px] uppercase font-black tracking-widest bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-md border border-emerald-500/20">
-                                                    {payment.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-muted-foreground text-center py-8">No se han registrado pagos para este alumno.</p>
-                                )}
-                            </div>
-                        </GlassCard>
-                    </div>
-                )}
-            </div>
+            <ProfileFloatingActions
+                clientId={client.id}
+                clientPhone={client.phone}
+                coachSlug={coachSlug}
+            />
         </div>
     )
 }

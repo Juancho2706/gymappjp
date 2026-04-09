@@ -89,22 +89,36 @@ export function NutritionManagement({
                                     <div className="space-y-3">
                                         <h3 className="text-lg font-black uppercase text-primary">1. Plantillas (Moldes)</h3>
                                         <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
-                                            Las plantillas son "moldes" globales. No pertenecen a ningún alumno hasta que las <span className="font-bold">asignas</span>. Si editas una plantilla y guardas, <span className="font-bold text-amber-600 dark:text-amber-500">todos los alumnos que usan ese molde se actualizarán automáticamente</span>.
+                                            {`Las plantillas son "moldes" globales. No pertenecen a ningún alumno hasta que las `}
+                                            <span className="font-bold">asignas</span>
+                                            {`. Si editas una plantilla y guardas, `}
+                                            <span className="font-bold text-amber-600 dark:text-amber-500">
+                                                todos los alumnos que usan ese molde se actualizarán automáticamente
+                                            </span>
+                                            .
                                         </p>
                                     </div>
                                     <div className="space-y-3">
                                         <h3 className="text-lg font-black uppercase text-emerald-500">2. Alumnos (Planes Activos)</h3>
                                         <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
-                                            Cuando le asignas una plantilla a un alumno, este queda "Sincronizado" (<span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 px-1 py-0.5 rounded">SYNC</span>).
+                                            {`Cuando le asignas una plantilla a un alumno, este queda "Sincronizado" (`}
+                                            <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 px-1 py-0.5 rounded">
+                                                SYNC
+                                            </span>
+                                            ).
                                         </p>
                                     </div>
                                     <div className="space-y-3">
                                         <h3 className="text-lg font-black uppercase text-rose-500">3. Edición Individual (Custom)</h3>
                                         <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
-                                            Si vas a la pestaña <span className="font-bold">Alumnos</span> y modificas el plan de Juan específicamente para él, el sistema dirá: "Ok, esto ya no es el molde original". El plan de Juan se volverá <span className="font-bold">Personalizado (Custom)</span>.
+                                            Si vas a la pestaña <span className="font-bold">Alumnos</span> y modificas el plan de
+                                            Juan específicamente para él, el sistema dirá:{' '}
+                                            {`"Ok, esto ya no es el molde original". El plan de Juan se volverá `}
+                                            <span className="font-bold">Personalizado (Custom)</span>.
                                         </p>
                                         <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-xs text-amber-800 dark:text-amber-400 font-medium">
-                                            💡 Si luego editas el molde global, el plan "Custom" de Juan NO se verá afectado, protegiendo así tus ajustes manuales.
+                                            💡 Si luego editas el molde global, el plan {`"Custom"`} de Juan NO se verá afectado,
+                                            protegiendo así tus ajustes manuales.
                                         </div>
                                     </div>
                                 </div>

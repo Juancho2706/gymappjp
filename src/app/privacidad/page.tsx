@@ -51,7 +51,7 @@ export default function PrivacidadPage() {
               <section className="space-y-4">
                 <h2 className="text-2xl font-bold text-white">1. Identidad del Responsable de los Datos</h2>
                 <p className="leading-relaxed text-sm md:text-base">
-                  Los datos personales recopilados a través de esta plataforma (la "Plataforma") serán incorporados y tratados bajo la responsabilidad del titular de la Plataforma.
+                  {`Los datos personales recopilados a través de esta plataforma (la "Plataforma") serán incorporados y tratados bajo la responsabilidad del titular de la Plataforma. `}
                   <br /><br />
                   <strong>Nombre:</strong> COACH OP
                   <br />

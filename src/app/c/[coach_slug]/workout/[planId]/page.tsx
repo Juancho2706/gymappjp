@@ -35,6 +35,11 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         rir: string | null
         rest_time: string | null
         notes: string | null
+        section: 'warmup' | 'main' | 'cooldown' | null
+        superset_group: string | null
+        progression_type: 'weight' | 'reps' | null
+        progression_value: number | null
+        is_override: boolean
         exercises: ExerciseType | ExerciseType[]
     }
 
@@ -43,15 +48,28 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         title: string
         assigned_date: string
         day_of_week: number | null
+        week_variant: 'A' | 'B' | null
+        program_id: string | null
         workout_blocks: BlockType[]
+    }
+
+    interface ProgramType {
+        id: string
+        name: string
+        program_phases: { name: string; weeks: number; color?: string }[] | null
+        program_structure_type: 'weekly' | 'cycle' | null
+        cycle_length: number | null
+        ab_mode: boolean | null
+        start_date: string | null
+        weeks_to_repeat: number
     }
 
     const { data: rawPlan } = await supabase
         .from('workout_plans')
         .select(`
-            id, title, assigned_date, day_of_week,
+            id, title, assigned_date, day_of_week, week_variant, program_id,
             workout_blocks (
-                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes,
+                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, superset_group, progression_type, progression_value, is_override,
                 exercises ( id, name, muscle_group, video_url, gif_url, instructions )
             )
         `)
@@ -62,6 +80,29 @@ export default async function WorkoutExecutionPage({ params }: Props) {
     if (!rawPlan) redirect(`/c/${coach_slug}/dashboard`)
 
     const plan = rawPlan as unknown as PlanType
+    if (plan.program_id) {
+        const { data: activeProgramForUser } = await supabase
+            .from('workout_programs')
+            .select('id')
+            .eq('client_id', user.id)
+            .eq('id', plan.program_id)
+            .eq('is_active', true)
+            .maybeSingle()
+        if (!activeProgramForUser) {
+            redirect(`/c/${coach_slug}/dashboard`)
+        }
+    }
+
+    let program: ProgramType | null = null
+    if (plan.program_id) {
+        const { data: rawProgram } = await supabase
+            .from('workout_programs')
+            .select('id, name, program_phases, program_structure_type, cycle_length, ab_mode, start_date, weeks_to_repeat')
+            .eq('id', plan.program_id)
+            .eq('client_id', user.id)
+            .maybeSingle()
+        program = (rawProgram as ProgramType | null) ?? null
+    }
 
     // Fetch logs for this plan to show completion status
     const blockIds = plan.workout_blocks.map(b => b.id)
@@ -124,5 +165,5 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         }
     }
 
-    return <WorkoutExecutionClient plan={plan} logs={logs} previousHistory={previousHistory} coachSlug={coach_slug} />
+    return <WorkoutExecutionClient plan={plan} program={program} logs={logs} previousHistory={previousHistory} coachSlug={coach_slug} />
 }

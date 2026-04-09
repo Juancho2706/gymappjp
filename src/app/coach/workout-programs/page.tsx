@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { WorkoutProgramsClient } from './WorkoutProgramsClient'
+import { WorkoutProgramsClientShell } from './WorkoutProgramsClientShell'
+import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-programs-library'
 
 export default async function WorkoutProgramsPage() {
     const supabase = await createClient()
@@ -10,21 +11,7 @@ export default async function WorkoutProgramsPage() {
     const [programsResponse, clientsResponse] = await Promise.all([
         supabase
             .from('workout_programs')
-            .select(`
-                *,
-                client:clients(id, full_name),
-                workout_plans (
-                    id,
-                    day_of_week,
-                    title,
-                    workout_blocks (
-                        id,
-                        exercise:exercises(name),
-                        sets,
-                        reps
-                    )
-                )
-            `)
+            .select(LIBRARY_PROGRAM_LIST_SELECT)
             .eq('coach_id', user.id)
             .order('created_at', { ascending: false }),
         
@@ -35,7 +22,8 @@ export default async function WorkoutProgramsPage() {
                 full_name,
                 workout_programs (
                     id,
-                    name
+                    name,
+                    is_active
                 )
             `)
             .eq('coach_id', user.id)
@@ -43,12 +31,12 @@ export default async function WorkoutProgramsPage() {
             .order('full_name')
     ])
 
-    const programs = programsResponse.data || []
+    const programs = (programsResponse.data || []) as unknown as import('./libraryStats').ProgramListModel[]
     const clients = clientsResponse.data || []
 
     return (
-        <WorkoutProgramsClient 
-            initialPrograms={programs} 
+        <WorkoutProgramsClientShell
+            initialPrograms={programs}
             availableClients={clients}
         />
     )

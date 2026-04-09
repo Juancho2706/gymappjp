@@ -65,7 +65,9 @@ export function FoodSearch({ onFoodSelected }: Props) {
 
             <div className="mt-4 space-y-2">
                 {results.length === 0 && searchTerm.length >= 3 && (
-                    <p className="text-center py-8 text-muted-foreground text-sm italic">No se encontraron alimentos con "{searchTerm}"</p>
+                    <p className="text-center py-8 text-muted-foreground text-sm italic">
+                        {`No se encontraron alimentos con "${searchTerm}"`}
+                    </p>
                 )}
                 {results.map((food) => (
                     <div key={food.id} className="bg-white dark:bg-card border border-emerald-100 dark:border-border/60 hover:border-emerald-500/40 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors group">

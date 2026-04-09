@@ -58,7 +58,7 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
     return (
         <Sheet open={!!block} onOpenChange={onClose}>
             <SheetContent side="right" className="w-[400px] sm:w-[540px] bg-background/95 backdrop-blur-2xl border-l border-border p-0 flex flex-col shadow-2xl">
-                <SheetHeader className="p-6 border-b border-border bg-muted/20">
+                <SheetHeader className="px-6 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))] border-b border-border bg-muted/20">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0">
                             {block.gif_url || (block.video_url && !block.video_url.includes('youtube') && !block.video_url.includes('youtu.be')) ? (

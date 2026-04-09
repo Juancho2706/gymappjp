@@ -1,14 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -19,6 +12,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { Settings, Moon, Sun, Palette, Volume2 } from 'lucide-react'
+import { SettingsModalTrigger } from '@/components/client/SettingsModalTrigger'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useTheme } from 'next-themes'
 import { toggleClientBrandColors } from '@/app/c/[coach_slug]/actions'
@@ -82,10 +76,7 @@ export function ClientSettingsModal({ coachSlug, initialUseBrandColors }: Props)
 
     return (
         <Dialog>
-            <DialogTrigger render={<Button variant="ghost" size="icon" className="rounded-xl hover:bg-muted/50 transition-colors" />}>
-                <Settings className="w-5 h-5 text-muted-foreground" />
-                <span className="sr-only">Configuración</span>
-            </DialogTrigger>
+            <SettingsModalTrigger />
             <DialogContent className="sm:max-w-[425px] rounded-3xl border-border/40 bg-background/95 backdrop-blur-xl md:bg-background/80">
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">

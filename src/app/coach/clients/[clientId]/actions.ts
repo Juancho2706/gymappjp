@@ -3,6 +3,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { revalidatePath } from 'next/cache'
+import { subDays } from 'date-fns'
+import { calculateAttentionScore } from '@/services/dashboard.service'
+import {
+    buildMuscleVolumeFromLogs,
+    buildPersonalRecordsFromLogs,
+} from './profileDataHelpers'
+import { checkInRegularityPercentAsOf } from './profileOverviewUtils'
+import {
+    programWeekIndex1Based,
+    resolveActiveWeekVariantForDisplay,
+    workoutPlanMatchesVariant,
+} from '@/lib/workout/programWeekVariant'
 
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
@@ -15,7 +27,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .from('clients')
         .select(`
             *,
-            client_intake (*)
+            client_intake (*),
+            coaches ( slug )
         `)
         .eq('id', clientId)
         .eq('coach_id', user.id)
@@ -27,18 +40,18 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .select(`
             *,
             workout_plans (
-                id, title, day_of_week,
+                id, title, day_of_week, week_variant,
                 workout_blocks (
-                    id, order_index, sets, reps, rest_time, notes, target_weight_kg,
-                    exercises ( name )
+                    id, exercise_id, order_index, sets, reps, rest_time, notes, target_weight_kg,
+                    tempo, rir,
+                    exercises ( id, name, muscle_group, gif_url, video_url )
                 )
             )
         `)
         .eq('client_id', clientId)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .limit(2)
 
     // Fetch nutrition plans
     const nutritionPromise = supabase
@@ -61,8 +74,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .select(`
             id, title, assigned_date,
             workout_blocks (
-                id, target_weight_kg, reps, sets,
-                exercises ( name ),
+                id, exercise_id, target_weight_kg, reps, sets,
+                exercises ( id, name, muscle_group ),
                 workout_logs (
                     id, set_number, weight_kg, reps_done, rpe, logged_at
                 )
@@ -99,11 +112,15 @@ export const getClientProfileData = cache(async (clientId: string) => {
     startDate.setDate(startDate.getDate() - 7)
     const startDateStr = startDate.toISOString().split('T')[0]
 
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().split('T')[0]
+
     const workoutSessionsPromise = supabase
         .from('workout_sessions' as any)
         .select('*')
         .eq('client_id', clientId)
-        .gte('date_completed', startDateStr)
+        .gte('date_completed', fourteenDaysAgoStr)
 
     // Fetch today's meal completion logs for nutrition compliance
     const mealCompletionsPromise = supabase
@@ -133,7 +150,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
 
     const [
         { data: client, error: clientErr },
-        { data: activeProgram },
+        { data: activePrograms },
         { data: nutritionPlans },
         { data: nutritionLogs },
         { data: checkIns },
@@ -161,12 +178,73 @@ export const getClientProfileData = cache(async (clientId: string) => {
         throw new Error("Client not found")
     }
 
-    // 1. Calcular Workouts Target: Dias con ejercicios en el programa activo
-    let weeklyWorkoutTarget = 0;
+    // ─── B0: PRs, volumen por grupo (30d), detalle de comidas ─────────────
+    const activeNutritionPlanIds = (nutritionPlans || [])
+        .filter((p: { is_active?: boolean }) => p.is_active)
+        .map((p: { id: string }) => p.id)
+
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const thirtyDaysIso = thirtyDaysAgo.toISOString()
+
+    const workoutLogSelect = `
+        weight_kg, reps_done, logged_at,
+        workout_blocks (
+            exercise_id,
+            exercises ( name, muscle_group )
+        )
+    `
+
+    const [prsRes, volRes] = await Promise.all([
+        supabase
+            .from('workout_logs')
+            .select(workoutLogSelect)
+            .eq('client_id', clientId)
+            .not('weight_kg', 'is', null)
+            .order('weight_kg', { ascending: false })
+            .limit(4000),
+        supabase
+            .from('workout_logs')
+            .select(workoutLogSelect)
+            .eq('client_id', clientId)
+            .gte('logged_at', thirtyDaysIso),
+    ])
+
+    let mealDetails: unknown[] = []
+    if (activeNutritionPlanIds.length > 0) {
+        const { data: meals } = await supabase
+            .from('nutrition_meals')
+            .select(
+                `
+                *,
+                food_items (
+                    quantity,
+                    unit,
+                    foods ( name, calories, protein_g, carbs_g, fats_g )
+                )
+            `
+            )
+            .in('plan_id', activeNutritionPlanIds)
+            .order('order_index', { ascending: true })
+        mealDetails = meals || []
+    }
+
+    const personalRecords = buildPersonalRecordsFromLogs(prsRes.data as unknown[])
+    const muscleVolumeByGroup = buildMuscleVolumeFromLogs(volRes.data as unknown[])
+
+    // 1. Calcular Workouts Target: días con entreno en la variante A/B que toca esta semana
+    let weeklyWorkoutTarget = 0
+    const activeProgram = (activePrograms || [])[0]
     if (activeProgram?.workout_plans) {
-        weeklyWorkoutTarget = activeProgram.workout_plans.filter((wp: any) => 
-            wp.workout_blocks && wp.workout_blocks.length > 0
-        ).length;
+        const abMode = !!activeProgram.ab_mode
+        const wkIdx = programWeekIndex1Based(activeProgram, today)
+        const variantLetter = resolveActiveWeekVariantForDisplay(activeProgram, wkIdx, today)
+        weeklyWorkoutTarget = activeProgram.workout_plans.filter(
+            (wp: any) =>
+                wp.workout_blocks &&
+                wp.workout_blocks.length > 0 &&
+                workoutPlanMatchesVariant(wp, variantLetter, abMode)
+        ).length
     }
     // Si no hay programa o no tiene bloques, evitamos dividir por 0
     if (weeklyWorkoutTarget === 0) weeklyWorkoutTarget = 1; 
@@ -204,33 +282,123 @@ export const getClientProfileData = cache(async (clientId: string) => {
     }
 
     // Check if workout sessions are being created properly. If not, fallback to counting unique days with workout logs
-    let completedWorkoutsCount = workoutSessions?.length || 0;
-    
-    // Fallback: check if we have any workout logs for this week in case workout_sessions are not being recorded yet
-    if (completedWorkoutsCount === 0 && workoutLogs) {
-        const uniqueWorkoutDays = new Set();
+    let completedWorkoutsCount = 0
+    let completedWorkoutsPrevWeek = 0
+
+    const sessionsList = (workoutSessions || []) as { date_completed?: string }[]
+    if (sessionsList.length > 0) {
+        completedWorkoutsCount = sessionsList.filter(
+            (s) => s.date_completed && s.date_completed >= startDateStr
+        ).length
+        completedWorkoutsPrevWeek = sessionsList.filter(
+            (s) =>
+                s.date_completed &&
+                s.date_completed >= fourteenDaysAgoStr &&
+                s.date_completed < startDateStr
+        ).length
+    } else if (workoutLogs) {
+        const uniqueThisWeek = new Set<string>()
+        const uniquePrevWeek = new Set<string>()
         workoutLogs.forEach((plan: any) => {
             plan.workout_blocks?.forEach((block: any) => {
                 block.workout_logs?.forEach((log: any) => {
-                    if (log.logged_at && log.logged_at >= startDateStr) {
-                        uniqueWorkoutDays.add(log.logged_at.split('T')[0]);
+                    if (log.logged_at) {
+                        const day = log.logged_at.split('T')[0]
+                        if (day >= startDateStr) uniqueThisWeek.add(day)
+                        else if (day >= fourteenDaysAgoStr) uniquePrevWeek.add(day)
                     }
-                });
-            });
-        });
-        completedWorkoutsCount = uniqueWorkoutDays.size;
+                })
+            })
+        })
+        completedWorkoutsCount = uniqueThisWeek.size
+        completedWorkoutsPrevWeek = uniquePrevWeek.size
     }
+
+    const sortedCheckIns = [...(checkIns || [])].sort(
+        (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+    const lastCheckInRow = sortedCheckIns[0]
+    const checkInCompliancePercent = checkInRegularityPercentAsOf(today, checkIns || [])
+    const checkInCompliancePercentWeekAgo = checkInRegularityPercentAsOf(
+        subDays(today, 7),
+        checkIns || []
+    )
+
+    const avgMealCompliance = (logs: any[]) => {
+        if (!logs.length) return null
+        let sum = 0
+        for (const l of logs) {
+            const ml = l.nutrition_meal_logs || []
+            const t = ml.length
+            const d = ml.filter((x: { is_completed?: boolean }) => x.is_completed).length
+            sum += t ? (d / t) * 100 : 0
+        }
+        return Math.round(sum / logs.length)
+    }
+    const nutritionLogsArr = nutritionLogs || []
+    const nutritionWeeklyAvgPct =
+        avgMealCompliance(
+            nutritionLogsArr.filter((l: { log_date?: string }) => l.log_date && l.log_date >= startDateStr)
+        ) ?? 0
+    const nutritionPrevWeeklyAvgPct =
+        avgMealCompliance(
+            nutritionLogsArr.filter(
+                (l: { log_date?: string }) =>
+                    l.log_date &&
+                    l.log_date >= fourteenDaysAgoStr &&
+                    l.log_date < startDateStr
+            )
+        ) ?? 0
+
+    let lastActivityMs = 0
+    if (client.updated_at) {
+        lastActivityMs = Math.max(lastActivityMs, new Date(client.updated_at).getTime())
+    }
+    for (const plan of workoutLogs || []) {
+        plan.workout_blocks?.forEach((block: any) => {
+            block.workout_logs?.forEach((log: { logged_at?: string }) => {
+                if (log.logged_at) {
+                    lastActivityMs = Math.max(lastActivityMs, new Date(log.logged_at).getTime())
+                }
+            })
+        })
+    }
+    for (const c of checkIns || []) {
+        if (c.created_at) {
+            lastActivityMs = Math.max(lastActivityMs, new Date(c.created_at).getTime())
+        }
+    }
+    const profileLastActivityAt =
+        lastActivityMs > 0 ? new Date(lastActivityMs).toISOString() : null
+
+    const adherencePct = Math.min(
+        100,
+        Math.round((completedWorkoutsCount / weeklyWorkoutTarget) * 100)
+    )
+    const { score: attentionScore } = calculateAttentionScore({
+        lastCheckinDate: lastCheckInRow?.created_at ?? null,
+        adherence: adherencePct,
+        nutritionCompliance: nutritionCompliancePercent,
+        planDaysRemaining: daysRemaining,
+        oneRMDelta: null,
+    })
 
     const compliance = {
         workoutsThisWeek: completedWorkoutsCount,
+        workoutsPrevWeek: completedWorkoutsPrevWeek,
         workoutsTarget: weeklyWorkoutTarget,
         nutritionCompliancePercent: nutritionCompliancePercent,
+        nutritionWeeklyAvgPct,
+        nutritionPrevWeeklyAvgPct,
         todayMealsDone: mealsDoneToday,
         todayMealsTotal: todayMealsTotal,
         currentStreak: currentStreak || 0,
         planCurrentWeek: currentWeek,
         planTotalWeeks: totalWeeks,
-        planDaysRemaining: daysRemaining
+        planDaysRemaining: daysRemaining,
+        checkInCompliancePercent,
+        checkInCompliancePercentWeekAgo,
     }
 
     return {
@@ -241,7 +409,12 @@ export const getClientProfileData = cache(async (clientId: string) => {
         checkIns: checkIns || [],
         workoutHistory: workoutLogs || [],
         payments: payments || [],
-        compliance
+        compliance,
+        personalRecords,
+        muscleVolumeByGroup,
+        mealDetails,
+        attentionScore,
+        profileLastActivityAt,
     }
 })
 

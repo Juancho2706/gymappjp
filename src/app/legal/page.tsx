@@ -51,7 +51,7 @@ export default function AvisoLegalPage() {
               <section className="space-y-4">
                 <h2 className="text-2xl font-bold text-white">1. Información General</h2>
                 <p className="leading-relaxed text-sm md:text-base">
-                  En cumplimiento con el deber de información dispuesto en la normativa vigente, se hace constar que esta aplicación web (en adelante, "la Plataforma") está diseñada para ser utilizada por entrenadores personales y sus clientes.
+                  {`En cumplimiento con el deber de información dispuesto en la normativa vigente, se hace constar que esta aplicación web (en adelante, "la Plataforma") está diseñada para ser utilizada por entrenadores personales y sus clientes. `}
                   Los datos identificativos del responsable de la plataforma son:
                   <br /><br />
                   <strong>Nombre de la empresa / Titular:</strong> COACH OP

@@ -116,7 +116,9 @@ export function InstallPrompt({ brandName = 'COACH OP' }: { brandName?: string }
                   <div className="w-8 h-8 flex items-center justify-center bg-background rounded-xl shrink-0 border border-border">
                     <PlusSquare className="w-4 h-4" />
                   </div>
-                  <p>Selecciona <strong>"Añadir a inicio"</strong>.</p>
+                  <p>
+                    Selecciona <strong>{'"Añadir a inicio"'}</strong>.
+                  </p>
                 </div>
               </div>
 

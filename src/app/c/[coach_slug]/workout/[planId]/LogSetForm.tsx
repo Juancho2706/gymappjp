@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState, useEffect, useRef, useOptimistic } from 'react'
-import { Check } from 'lucide-react'
+import { useActionState, useRef, useOptimistic } from 'react'
+import { Check, Loader2 } from 'lucide-react'
+import { useFormStatus } from 'react-dom'
 import { logSetAction, type LogState } from './actions'
 import { useWorkoutTimer } from './WorkoutTimerProvider'
 
@@ -13,9 +14,10 @@ interface Props {
     restTimeStr: string | null
     existingLog?: { weight_kg: number | null; reps_done: number | null; rpe: number | null }
     autoTimerEnabled?: boolean
+    onLogged?: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null }) => void
 }
 
-export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog, autoTimerEnabled = true }: Props) {
+export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog, autoTimerEnabled = true, onLogged }: Props) {
     const [state, formAction] = useActionState(logSetAction, initialState)
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
@@ -39,6 +41,17 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog, autoT
             startRest(restTimeStr)
         }
         
+        const weightRaw = formData.get('weight_kg')
+        const repsRaw = formData.get('reps_done')
+        const rpeRaw = formData.get('rpe')
+        onLogged?.({
+            blockId,
+            setNumber,
+            weightKg: weightRaw === null || weightRaw === '' ? null : Number(weightRaw),
+            repsDone: repsRaw === null || repsRaw === '' ? null : Number(repsRaw),
+            rpe: rpeRaw === null || rpeRaw === '' ? null : Number(rpeRaw),
+        })
+
         formAction(formData)
     }
 
@@ -84,15 +97,23 @@ export function LogSetForm({ blockId, setNumber, restTimeStr, existingLog, autoT
             )}
 
             <div className="w-8 flex justify-center">
-                <button type="submit"
-                    className={`w-10 h-10 md:w-7 md:h-7 rounded-md flex items-center justify-center transition-all shadow-sm
-                    ${isLogged
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-secondary text-muted-foreground hover:bg-violet-600 hover:text-white'}`}>
-                    <Check className="w-5 h-5 md:w-4 md:h-4" />
-                </button>
+                <SubmitSetButton isLogged={Boolean(isLogged)} />
             </div>
             {state.error && <p className="col-span-full text-xs text-red-400 px-2 mt-1">{state.error}</p>}
         </form>
+    )
+}
+
+function SubmitSetButton({ isLogged }: { isLogged: boolean }) {
+    const { pending } = useFormStatus()
+    return (
+        <button
+            type="submit"
+            className={`w-10 h-10 md:w-7 md:h-7 rounded-md flex items-center justify-center transition-all shadow-sm
+            ${isLogged ? 'bg-emerald-500/20 text-emerald-400' : 'bg-secondary text-muted-foreground hover:bg-violet-600 hover:text-white'}`}
+            title={pending ? 'Guardando set...' : isLogged ? 'Set guardado' : 'Guardar set'}
+        >
+            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-5 h-5 md:w-4 md:h-4" />}
+        </button>
     )
 }

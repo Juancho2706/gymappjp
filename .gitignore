@@ -1,5 +1,29 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# ── Seguridad / secretos (nunca subir al remoto) ──
+# Variables de entorno (local, staging, producción)
+.env*
+!.env.example
+
+# Claves y certificados
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Patrones habituales de credenciales (Google Cloud, Firebase admin, etc.)
+*credentials*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+
+# Herramientas con tokens o rutas locales
+.mcp.json
+.cursor/
+.claude/settings.local.json
+
+# Deploy (puede incluir metadata sensible)
+.vercel
+
 # dependencies
 /node_modules
 /.pnp
@@ -22,7 +46,6 @@
 
 # misc
 .DS_Store
-*.pem
 
 # debug
 npm-debug.log*
@@ -30,15 +53,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 *.log
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# MCP config (contains API tokens)
-.mcp.json
-
-# vercel
-.vercel
 
 # typescript
 *.tsbuildinfo
@@ -54,11 +68,8 @@ supabase/migrations/007_enrich_exercises.sql
 supabase/migrations/008_client_intake.sql
 vertex.json
 /supabase
-/tests
-/scripts
 
 # Playwright
-node_modules/
 /test-results/
 /playwright-report/
 /blob-report/

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -17,6 +18,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
+    "@lottiefiles/react-lottie-player": "^3.6.0",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/ssr": "^0.9.0",
@@ -27,6 +29,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "date-fns": "^4.1.0",
     "dotenv": "^17.4.0",
     "framer-motion": "^12.35.2",
     "googleapis": "^171.4.0",
@@ -35,6 +38,8 @@
     "next-themes": "^0.4.6",
     "puppeteer": "^24.40.0",
     "react": "19.2.3",
+    "react-activity-calendar": "^3.1.1",
+    "react-circular-progressbar": "^2.2.0",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.72.0",
     "recharts": "^3.8.1",

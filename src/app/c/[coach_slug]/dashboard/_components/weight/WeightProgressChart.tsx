@@ -54,7 +54,7 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                         <p className="text-sm">Realiza tu primer check-in para medir tu progreso.</p>
                     </div>
                     {coachSlug && (
-                        <Link 
+                        <Link
                             href={`/c/${coachSlug}/check-in`}
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90 active:scale-95 text-white"
                             style={{ backgroundColor: primaryColor }}
@@ -68,14 +68,13 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
         )
     }
 
-    // Format dates for display
-    const formattedData = [...data].reverse().map(item => ({
+    const formattedData = [...data].reverse().map((item) => ({
         ...item,
-        displayDate: new Date(item.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+        displayDate: new Date(item.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
     }))
 
-    const minWeight = Math.min(...data.map(d => d.weight))
-    const maxWeight = Math.max(...data.map(d => d.weight))
+    const minWeight = Math.min(...data.map((d) => d.weight))
+    const maxWeight = Math.max(...data.map((d) => d.weight))
     const domainPadding = (maxWeight - minWeight) * 0.2 || 5
 
     return (
@@ -97,17 +96,17 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
-                            <XAxis 
-                                dataKey="displayDate" 
-                                axisLine={false} 
-                                tickLine={false} 
+                            <XAxis
+                                dataKey="displayDate"
+                                axisLine={false}
+                                tickLine={false}
                                 tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                                 dy={10}
                             />
-                            <YAxis 
-                                domain={[minWeight - domainPadding, maxWeight + domainPadding]} 
-                                axisLine={false} 
-                                tickLine={false} 
+                            <YAxis
+                                domain={[minWeight - domainPadding, maxWeight + domainPadding]}
+                                axisLine={false}
+                                tickLine={false}
                                 tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                                 tickFormatter={(val) => `${val.toFixed(1)}kg`}
                             />

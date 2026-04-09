@@ -1,11 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 
-test('landing page loads and has title', async ({ page }) => {
-  await page.goto('http://localhost:3000/');
-  await expect(page).toHaveTitle(/OmniCoach OS/);
-});
+test('landing carga', async ({ page }) => {
+    await page.goto('/')
+    await expect(page).toHaveTitle(/COACH OP/i)
+    await expect(page.locator('body')).toBeVisible()
+})
 
-test('coach login page loads', async ({ page }) => {
-  await page.goto('http://localhost:3000/login');
-  await expect(page.getByRole('heading', { name: 'Bienvenido de nuevo' })).toBeVisible();
-});
+test('login coach carga', async ({ page }) => {
+    await page.goto('/login')
+    await expect(page.getByRole('heading', { name: 'Bienvenido de vuelta' })).toBeVisible()
+})

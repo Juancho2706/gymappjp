@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-programs-library'
+import type { ProgramListModel } from '../../workout-programs/libraryStats'
 
 // --- SCHEMAS ---
 
@@ -65,7 +67,28 @@ export type ProgramState = {
     programId?: string
 }
 
+export type AssignProgramResult = {
+    success?: boolean
+    error?: string
+    assignedCount?: number
+    failedClients?: { clientId: string; reason: string }[]
+}
+
+export type AssignProgramOptions = {
+    startDate?: string
+    durationWeeks?: number
+    selectedDays?: number[]
+}
+
 // --- ACTIONS ---
+
+async function deactivateActiveProgramsForClient(adminDb: any, clientId: string) {
+    return adminDb
+        .from('workout_programs')
+        .update({ is_active: false })
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+}
 
 /**
  * Guarda o actualiza un programa de entrenamiento completo, incluyendo sus planes y bloques.
@@ -203,6 +226,13 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
             if (deleteError) throw new Error('Error al limpiar planes antiguos.')
         } else {
+            if (clientId) {
+                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId)
+                if (deactivateError) {
+                    throw new Error('No se pudo desactivar el programa activo actual del alumno.')
+                }
+            }
+
             // Validar unicidad de nombre si es una nueva plantilla
             if (!clientId) {
                 const { data: existingName } = await adminDb
@@ -360,7 +390,11 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
  * Duplica un programa de entrenamiento existente (sea plantilla o asignado).
  * El nuevo programa será una plantilla (sin client_id) por defecto.
  */
-export async function duplicateWorkoutProgramAction(programId: string): Promise<{ error?: string, programId?: string }> {
+export async function duplicateWorkoutProgramAction(programId: string): Promise<{
+    error?: string
+    programId?: string
+    program?: ProgramListModel
+}> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
@@ -461,7 +495,19 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
         }
 
         revalidatePath('/coach/workout-programs')
-        return { programId: newProgram.id }
+
+        const { data: libraryRow, error: librarySelectError } = await adminDb
+            .from('workout_programs')
+            .select(LIBRARY_PROGRAM_LIST_SELECT)
+            .eq('id', newProgram.id)
+            .single()
+
+        if (librarySelectError) {
+            console.warn('duplicateWorkoutProgramAction: list snapshot select failed', librarySelectError)
+            return { programId: newProgram.id }
+        }
+
+        return { programId: newProgram.id, program: libraryRow }
     } catch (error: any) {
         console.error('Error en duplicateWorkoutProgramAction:', error)
         return { error: error.message }
@@ -471,7 +517,11 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
 /**
  * Duplica una plantilla de programa y la asigna a varios clientes.
  */
-export async function assignProgramToClientsAction(templateId: string, clientIds: string[], startDate?: string): Promise<{ error?: string, success?: boolean }> {
+export async function assignProgramToClientsAction(
+    templateId: string,
+    clientIds: string[],
+    options?: string | AssignProgramOptions
+): Promise<AssignProgramResult> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
@@ -480,7 +530,11 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
 
     const adminDb = await createRawAdminClient()
 
-    const dateToUse = startDate || new Date().toISOString().split('T')[0]
+    const normalizedOptions: AssignProgramOptions = typeof options === 'string'
+        ? { startDate: options }
+        : (options || {})
+
+    const dateToUse = normalizedOptions.startDate || new Date().toISOString().split('T')[0]
 
     try {
         // 1. Obtener plantilla
@@ -499,101 +553,141 @@ export async function assignProgramToClientsAction(templateId: string, clientIds
 
         if (templateError || !template) throw new Error('Plantilla no encontrada.')
 
+        const { data: ownedClients, error: ownedClientsError } = await adminDb
+            .from('clients')
+            .select('id')
+            .eq('coach_id', user.id)
+            .in('id', clientIds)
+
+        if (ownedClientsError) throw new Error('No se pudo validar los alumnos seleccionados.')
+
+        const ownedClientIdSet = new Set((ownedClients || []).map(c => c.id))
+        const failedClients: { clientId: string; reason: string }[] = []
+        const validClientIds = clientIds.filter(id => {
+            const allowed = ownedClientIdSet.has(id)
+            if (!allowed) {
+                failedClients.push({ clientId: id, reason: 'El alumno no pertenece a este coach.' })
+            }
+            return allowed
+        })
+
+        if (!validClientIds.length) {
+            return { error: 'Ningún alumno seleccionado es válido para este coach.' }
+        }
+
+        const selectedDaysSet = new Set((normalizedOptions.selectedDays || []).filter(d => d >= 1 && d <= 28))
+        const templatePlans = (template.workout_plans || []).filter((plan: any) => {
+            if (!selectedDaysSet.size) return true
+            return selectedDaysSet.has(plan.day_of_week)
+        })
+
+        const weeksToRepeat = Math.max(1, Math.min(52, normalizedOptions.durationWeeks || template.weeks_to_repeat))
         const start = new Date(dateToUse)
         const end = new Date(start)
-        end.setDate(start.getDate() + (template.weeks_to_repeat * 7) - 1)
+        end.setDate(start.getDate() + (weeksToRepeat * 7) - 1)
         const endDate = end.toISOString().split('T')[0]
 
+        let assignedCount = 0
+
         // Iterar por cada cliente
-        for (const clientId of clientIds) {
-            // 2.a Desactivar programas anteriores del cliente sin borrar el historial.
-            // Usamos is_active = false para preservar workout_logs (no CASCADE DELETE).
-            const { error: deactivateError } = await adminDb
-                .from('workout_programs')
-                .update({ is_active: false })
-                .eq('client_id', clientId)
-                .eq('is_active', true)
+        for (const clientId of validClientIds) {
+            try {
+                // 2.a Desactivar programas anteriores del cliente sin borrar historial.
+                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId)
+                if (deactivateError) throw new Error('No se pudo desactivar el plan activo previo.')
 
-            if (deactivateError) {
-                console.error(`Error desactivando programas anteriores para el cliente ${clientId}:`, deactivateError)
-                // Continuamos — no es bloqueante, el nuevo programa se crea igualmente
-            }
-
-            // 2. Duplicar programa para el cliente
-            const { data: newProgram, error: newProgramError } = await adminDb
-                .from('workout_programs')
-                .insert({
-                    client_id: clientId,
-                    coach_id: user.id,
-                    name: template.name,
-                    weeks_to_repeat: template.weeks_to_repeat,
-                    start_date: dateToUse,
-                    end_date: endDate,
-                    duration_type: (template as any).duration_type || 'weeks',
-                    duration_days: (template as any).duration_days ?? null,
-                    program_structure_type: (template as any).program_structure_type || 'weekly',
-                    cycle_length: (template as any).cycle_length ?? null,
-                    start_date_flexible: (template as any).start_date_flexible ?? true,
-                    program_notes: (template as any).program_notes ?? null,
-                    ab_mode: (template as any).ab_mode ?? false,
-                    program_phases: (template as any).program_phases ?? [],
-                    source_template_id: templateId,
-                })
-                .select('id')
-                .single()
-
-            if (newProgramError || !newProgram) throw new Error(`Error al asignar programa al cliente ${clientId}.`)
-
-            // 3. Duplicar planes y bloques
-            for (const plan of (template.workout_plans || [])) {
-                const { data: newPlan, error: newPlanError } = await adminDb
-                    .from('workout_plans')
+                // 2.b Duplicar programa para el cliente
+                const { data: newProgram, error: newProgramError } = await adminDb
+                    .from('workout_programs')
                     .insert({
                         client_id: clientId,
                         coach_id: user.id,
-                        program_id: newProgram.id,
-                        day_of_week: plan.day_of_week,
-                        title: plan.title,
-                        group_name: plan.group_name,
-                        assigned_date: dateToUse,
-                        week_variant: (plan as any).week_variant || 'A',
+                        name: template.name,
+                        weeks_to_repeat: weeksToRepeat,
+                        start_date: dateToUse,
+                        end_date: endDate,
+                        duration_type: (template as any).duration_type || 'weeks',
+                        duration_days: (template as any).duration_days ?? null,
+                        program_structure_type: (template as any).program_structure_type || 'weekly',
+                        cycle_length: (template as any).cycle_length ?? null,
+                        start_date_flexible: (template as any).start_date_flexible ?? true,
+                        program_notes: (template as any).program_notes ?? null,
+                        ab_mode: (template as any).ab_mode ?? false,
+                        program_phases: (template as any).program_phases ?? [],
+                        source_template_id: templateId,
                     })
                     .select('id')
                     .single()
 
-                if (newPlanError || !newPlan) throw new Error('Error al duplicar plan.')
+                if (newProgramError || !newProgram) throw new Error('No se pudo crear el nuevo programa.')
 
-                const blocksToInsert = (plan.workout_blocks || []).map((block: any) => ({
-                    plan_id: newPlan.id,
-                    exercise_id: block.exercise_id,
-                    order_index: block.order_index,
-                    sets: block.sets,
-                    reps: block.reps,
-                    target_weight_kg: block.target_weight_kg,
-                    tempo: block.tempo,
-                    rir: block.rir,
-                    rest_time: block.rest_time,
-                    notes: block.notes,
-                    superset_group: block.superset_group ?? null,
-                    progression_type: block.progression_type ?? null,
-                    progression_value: block.progression_value ?? null,
-                    section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
-                    is_override: false,
-                }))
+                // 3. Duplicar planes y bloques
+                for (const plan of templatePlans) {
+                    const { data: newPlan, error: newPlanError } = await adminDb
+                        .from('workout_plans')
+                        .insert({
+                            client_id: clientId,
+                            coach_id: user.id,
+                            program_id: newProgram.id,
+                            day_of_week: plan.day_of_week,
+                            title: plan.title,
+                            group_name: plan.group_name,
+                            assigned_date: dateToUse,
+                            week_variant: (plan as any).week_variant || 'A',
+                        })
+                        .select('id')
+                        .single()
 
-                if (blocksToInsert.length > 0) {
-                    const { error: blocksError } = await adminDb
-                        .from('workout_blocks')
-                        .insert(blocksToInsert)
-                    if (blocksError) throw new Error(blocksError.message)
+                    if (newPlanError || !newPlan) throw new Error('No se pudo duplicar un día del programa.')
+
+                    const blocksToInsert = (plan.workout_blocks || []).map((block: any) => ({
+                        plan_id: newPlan.id,
+                        exercise_id: block.exercise_id,
+                        order_index: block.order_index,
+                        sets: block.sets,
+                        reps: block.reps,
+                        target_weight_kg: block.target_weight_kg,
+                        tempo: block.tempo,
+                        rir: block.rir,
+                        rest_time: block.rest_time,
+                        notes: block.notes,
+                        superset_group: block.superset_group ?? null,
+                        progression_type: block.progression_type ?? null,
+                        progression_value: block.progression_value ?? null,
+                        section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+                        is_override: false,
+                    }))
+
+                    if (blocksToInsert.length > 0) {
+                        const { error: blocksError } = await adminDb
+                            .from('workout_blocks')
+                            .insert(blocksToInsert)
+                        if (blocksError) throw new Error(blocksError.message)
+                    }
                 }
+
+                assignedCount += 1
+                revalidatePath(`/coach/clients/${clientId}`)
+            } catch (clientError: any) {
+                failedClients.push({
+                    clientId,
+                    reason: clientError?.message || 'Error inesperado durante la asignación.',
+                })
             }
-            
-            revalidatePath(`/coach/clients/${clientId}`)
         }
 
         revalidatePath('/coach/workout-programs')
-        return { success: true }
+        if (assignedCount === 0) {
+            return {
+                error: 'No se pudo asignar el programa a ningún alumno.',
+                failedClients,
+            }
+        }
+        return {
+            success: true,
+            assignedCount,
+            failedClients,
+        }
     } catch (error: any) {
         console.error('Error en assignProgramToClientsAction:', error)
         return { error: error.message }
