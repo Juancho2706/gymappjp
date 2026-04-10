@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from 'next'
 import type { Tables } from '@/lib/database.types'
 
 type Coach = Tables<'coaches'>
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { ClientNav } from '@/components/client/ClientNav'
 import { InstallPrompt } from '@/components/InstallPrompt'
 
@@ -38,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         },
         icons: coach?.logo_url
             ? { apple: coach.logo_url }
-            : { apple: '/eva-app-icon.png' },
+            : { apple: BRAND_APP_ICON },
     }
 }
 

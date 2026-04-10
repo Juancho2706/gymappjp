@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Tables } from '@/lib/database.types'
@@ -54,12 +55,12 @@ export async function GET(request: NextRequest, { params }: Params) {
             ]
             : [
                 {
-                    src: '/eva-app-icon.png',
+                    src: BRAND_APP_ICON,
                     sizes: '192x192',
                     type: 'image/png',
                 },
                 {
-                    src: '/eva-app-icon.png',
+                    src: BRAND_APP_ICON,
                     sizes: '512x512',
                     type: 'image/png',
                 },

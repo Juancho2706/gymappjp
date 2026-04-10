@@ -7,6 +7,7 @@ import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 import { PwaRegister } from '@/components/PwaRegister'
 import { ScrollRestoration } from '@/components/ScrollRestoration'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { BRAND_APP_ICON, BRAND_OG_IMAGE } from '@/lib/brand-assets'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -52,7 +53,7 @@ export const metadata: Metadata = {
     siteName: 'EVA',
     images: [
       {
-        url: '/eva-seo.png',
+        url: BRAND_OG_IMAGE,
         alt: 'EVA',
       },
     ],
@@ -63,13 +64,13 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'EVA | Escala tu Negocio de Fitness',
     description: 'Rutinas, nutrición y app propia. Todo lo que necesitas para profesionalizar tu servicio de coaching.',
-    images: ['/eva-seo.png'],
+    images: [BRAND_OG_IMAGE],
   },
   metadataBase: new URL('https://coachop.app'),
   manifest: '/api/manifest/default',
   icons: {
-    icon: '/favicon.ico',
-    apple: '/apple-icon.png',
+    icon: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+    apple: [{ url: BRAND_APP_ICON, type: 'image/png' }],
   },
 }
 

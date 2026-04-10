@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Timer, X, Play, Pause, RotateCcw, Settings, Pencil, TriangleAlert, BellRing, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { playTimerSound, TimerSound } from "@/lib/audioUtils";
+import { BRAND_APP_ICON } from "@/lib/brand-assets";
 
 interface RestTimerProps {
   initialSeconds: number;
@@ -93,7 +94,7 @@ export function RestTimer({
          // Create a test notification to ensure it works
          new Notification("¡Notificaciones activadas!", {
              body: "El cronómetro te avisará cuando termine.",
-             icon: "/eva-app-icon.png"
+             icon: BRAND_APP_ICON
          });
       }
     }
@@ -156,7 +157,7 @@ export function RestTimer({
         navigator.serviceWorker.ready.then(registration => {
             registration.showNotification("¡Tiempo de Descanso Terminado!", {
                 body: "Prepárate para la siguiente serie. (Toca para detener)",
-                icon: "/eva-app-icon.png",
+                icon: BRAND_APP_ICON,
                 vibrate: [200, 100, 200, 100, 400],
                 tag: "rest-timer",
                 requireInteraction: true // Hace que actúe más como alarma

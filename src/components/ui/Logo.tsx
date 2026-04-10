@@ -1,5 +1,6 @@
 import React from 'react';
 import Image from 'next/image';
+import { BRAND_LOGO_WEB } from '@/lib/brand-assets';
 import { cn } from '@/lib/utils';
 
 interface LogoProps {
@@ -15,7 +16,7 @@ export const GymAppLogo = ({ className = "w-32 h-32" }: LogoProps) => {
       )}
     >
       <Image
-        src="/eva-logo.png"
+        src={BRAND_LOGO_WEB}
         alt="EVA Logo"
         fill
         sizes="(max-width: 768px) 100vw, 128px"

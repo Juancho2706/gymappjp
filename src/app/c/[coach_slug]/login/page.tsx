@@ -6,6 +6,7 @@ import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
 import type { Tables } from '@/lib/database.types'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 
 type Coach = Tables<'coaches'>
 
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         },
         icons: coach?.logo_url
             ? { apple: coach.logo_url }
-            : { apple: '/eva-app-icon.png' },
+            : { apple: BRAND_APP_ICON },
     }
 }
 

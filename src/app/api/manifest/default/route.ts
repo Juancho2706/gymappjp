@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { BRAND_APP_ICON } from '@/lib/brand-assets';
 
 export async function GET() {
   const manifest = {
@@ -12,19 +13,19 @@ export async function GET() {
     theme_color: "#10B981",
     icons: [
       {
-        src: "/eva-app-icon.png",
+        src: BRAND_APP_ICON,
         sizes: "192x192",
         type: "image/png",
         purpose: "any"
       },
       {
-        src: "/eva-app-icon.png",
+        src: BRAND_APP_ICON,
         sizes: "512x512",
         type: "image/png",
         purpose: "any"
       },
       {
-        src: "/eva-app-icon.png",
+        src: BRAND_APP_ICON,
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable"
