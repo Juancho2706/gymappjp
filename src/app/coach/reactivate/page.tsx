@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
     getTierPriceClp,
@@ -13,14 +14,44 @@ const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TI
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [BillingCycle, (typeof BILLING_CYCLE_CONFIG)[BillingCycle]][]
 
 export default function ReactivatePage() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const [tier, setTier] = useState<SubscriptionTier>('starter')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     const [isLoading, setIsLoading] = useState(false)
+    const [isConfirming, setIsConfirming] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     const monthlyBase = useMemo(() => TIER_CONFIG[tier].monthlyPriceClp, [tier])
+    const preapprovalIdFromUrl = searchParams.get('preapproval_id') ?? undefined
+
+    async function confirmSubscription(preapprovalId?: string) {
+        setIsConfirming(true)
+        setError(null)
+        try {
+            const response = await fetch('/api/payments/confirm-subscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(preapprovalId ? { preapprovalId } : {}),
+            })
+            const raw = await response.text()
+            const payload = raw ? JSON.parse(raw) : {}
+            if (!response.ok) throw new Error(payload.error ?? 'No se pudo confirmar la suscripción.')
+
+            if (payload.subscriptionStatus === 'active') {
+                router.replace('/coach/dashboard?subscription=active')
+                return
+            }
+
+            setError('Tu pago fue creado, pero la suscripción aún aparece pendiente. Reintenta en unos segundos.')
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error inesperado')
+        } finally {
+            setIsConfirming(false)
+        }
+    }
 
     async function handleCheckout() {
         setIsLoading(true)
@@ -129,6 +160,15 @@ export default function ReactivatePage() {
                     className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                 >
                     {isLoading ? 'Redirigiendo...' : 'Continuar al pago'}
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => confirmSubscription(preapprovalIdFromUrl)}
+                    disabled={isConfirming}
+                    className="mt-3 inline-flex h-11 items-center justify-center rounded-xl border border-border px-6 text-sm font-semibold text-foreground hover:bg-secondary/40 disabled:opacity-60"
+                >
+                    {isConfirming ? 'Verificando...' : 'Ya pagué, verificar acceso'}
                 </button>
             </div>
         </main>
