@@ -507,7 +507,7 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
             return { programId: newProgram.id }
         }
 
-        return { programId: newProgram.id, program: libraryRow }
+        return { programId: newProgram.id, program: libraryRow as unknown as ProgramListModel }
     } catch (error: any) {
         console.error('Error en duplicateWorkoutProgramAction:', error)
         return { error: error.message }
@@ -951,10 +951,16 @@ export async function getCoachClientsAction(): Promise<{
     const adminDb = await createRawAdminClient()
     const { data, error } = await adminDb
         .from('clients')
-        .select('id, full_name, avatar_url')
+        .select('id, full_name')
         .eq('coach_id', user.id)
         .order('full_name', { ascending: true })
 
     if (error) return { error: error.message }
-    return { data: data || [] }
+    return {
+        data: (data || []).map((client) => ({
+            id: client.id,
+            full_name: client.full_name,
+            avatar_url: null,
+        })),
+    }
 }
