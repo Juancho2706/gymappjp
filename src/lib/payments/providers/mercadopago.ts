@@ -47,9 +47,11 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
             }
         }
     }
-    const payerEmail = isSandbox && normalizedConfigured ? normalizedConfigured : coachEmail
+    // If a test payer email is explicitly configured, always prefer it.
+    // This allows testing with APP_USR credentials from test seller accounts.
+    const payerEmail = normalizedConfigured || coachEmail
 
-    if (isSandbox && !payerEmail.toLowerCase().endsWith('@testuser.com')) {
+    if ((isSandbox || Boolean(normalizedConfigured)) && !payerEmail.toLowerCase().endsWith('@testuser.com')) {
         throw new Error(
             'MercadoPago sandbox requiere payer_email @testuser.com. Configura MERCADOPAGO_TEST_PAYER_EMAIL con un test user de MP.'
         )
