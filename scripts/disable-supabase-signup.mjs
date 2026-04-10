@@ -1,4 +1,7 @@
-import 'dotenv/config'
+import dotenv from 'dotenv'
+
+dotenv.config({ path: '.env.local' })
+dotenv.config()
 
 function readProjectRef() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

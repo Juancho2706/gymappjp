@@ -139,6 +139,28 @@ export default function RegisterPage() {
                         </div>
                     )}
 
+                    <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                name="accept_legal"
+                                required
+                                className="mt-0.5 h-4 w-4 rounded border-border"
+                            />
+                            <span>
+                                Acepto los{' '}
+                                <Link href="/legal" className="text-primary hover:opacity-80">
+                                    términos de servicio
+                                </Link>{' '}
+                                y la{' '}
+                                <Link href="/privacidad" className="text-primary hover:opacity-80">
+                                    política de privacidad
+                                </Link>
+                                .
+                            </span>
+                        </label>
+                    </div>
+
                     <div className="pt-2">
                         <SubmitButton />
                     </div>

@@ -305,14 +305,14 @@ No aplicado en todos los componentes hijo del perfil (hovers de imágenes, anima
 | ~~**Dashboard del alumno**~~ | Completado | ~98% | §12 QA manual | ~~Media~~ → **COMPLETADO** |
 | ~~**Workout execution rework**~~ | Rework abril 10 | ~82% | Optimistic updates, offline/retry | ~~Media~~ → **COMPLETADO (parcial)** |
 | ~~**Check-in rework**~~ | Rework abril 10 | ~80% | Medidas corporales, notas | ~~Media~~ → **COMPLETADO (parcial)** |
-| **Pagos & Suscripciones** | 0% | 0% | Integración completa | **CRÍTICA (revenue)** |
+| **Pagos & Suscripciones** | Sprint 2 en curso | ~65% | Webhook productivo + validación E2E sandbox/prod | **CRÍTICA (revenue)** |
 | **Dashboard coach** | Funcional básico | ~45% | Rework UX, KPIs globales | Media |
 | **Mi Marca / Settings** | Funcional básico | ~35% | Rework branding, preview actualizado | Media |
 | **Ejercicios coach** | Funcional básico | ~40% | Upload GIF, bulk edit | Baja |
 | **Onboarding** | Multi-step con draft | ~58% | Progress bar, foto, validación | Baja |
 | **Catálogo ejercicios alumno** | Funcional | ~68% | Rework visual, favoritos, historial | Baja |
 | **Login/Auth coach** | Funcional | ~40% | Rework visual, rate limiting | Baja |
-| **Registro coach** | Funcional | ~35% | Integración pago obligatorio | **Alta (con pagos)** |
+| **Registro coach** | Funcional con gate de suscripción | ~60% | Flujo final registro→suscripción aprobada→acceso | **Alta (con pagos)** |
 | **Landing/Pricing** | Sustancial | ~60/25% | Unificar moneda, SEO, testimonios | Media |
 | **Panel CEO / Superadmin** | Inexistente | 0% | Métricas globales | Baja |
 | **Testing** | Mínimo | 10% | Cobertura razonable | Media-Alta |

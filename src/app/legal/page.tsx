@@ -97,6 +97,27 @@ export default function AvisoLegalPage() {
                   El titular de la Plataforma se reserva el derecho de efectuar sin previo aviso las modificaciones que considere oportunas en la Plataforma, pudiendo cambiar, suprimir o añadir tanto los contenidos y servicios que se presten a través de la misma como la forma en la que éstos aparezcan presentados o localizados.
                 </p>
               </section>
+
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-white">7. Suscripción y Cobros Recurrentes</h2>
+                <p className="leading-relaxed text-sm md:text-base">
+                  EVA funciona con suscripciones para coaches. El cobro puede ser mensual, trimestral o anual según el plan seleccionado. Al confirmar el pago, autorizas los cobros recurrentes correspondientes al ciclo elegido hasta que canceles la suscripción.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-white">8. Cancelación y Reembolsos</h2>
+                <p className="leading-relaxed text-sm md:text-base">
+                  Puedes cancelar la renovación de tu plan antes del próximo ciclo de facturación. La cancelación evita cobros futuros, pero no revierte automáticamente cobros ya procesados del periodo activo. Los reembolsos se evaluarán caso a caso ante errores de facturación comprobables.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-white">9. Límites de Uso por Tier</h2>
+                <p className="leading-relaxed text-sm md:text-base">
+                  Cada plan incluye un límite de alumnos y funciones habilitadas. El uso fuera de los límites del tier contratado puede requerir upgrade del plan para continuar operando sin restricciones.
+                </p>
+              </section>
             </div>
           </div>
         </main>

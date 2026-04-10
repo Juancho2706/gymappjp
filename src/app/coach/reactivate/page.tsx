@@ -1,0 +1,115 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+
+const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
+const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [BillingCycle, (typeof BILLING_CYCLE_CONFIG)[BillingCycle]][]
+
+export default function ReactivatePage() {
+    const [tier, setTier] = useState<SubscriptionTier>('starter')
+    const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
+    const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
+
+    async function handleCheckout() {
+        setIsLoading(true)
+        setError(null)
+        try {
+            const response = await fetch('/api/payments/create-preference', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tier, billingCycle }),
+            })
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error ?? 'No se pudo iniciar el pago.')
+            if (!payload.checkoutUrl) throw new Error('No se recibió URL de pago.')
+            window.location.href = payload.checkoutUrl
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error inesperado')
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    return (
+        <main className="mx-auto max-w-3xl px-4 py-10">
+            <div className="rounded-2xl border border-border bg-card p-6 md:p-8">
+                <h1 className="text-2xl font-bold text-foreground">Reactivar suscripción</h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                    Tu acceso de coach está pausado. Elige un plan y continúa al checkout para reactivar tu cuenta.
+                </p>
+
+                <section className="mt-6">
+                    <h2 className="text-sm font-semibold text-foreground">Tier</h2>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {tierOptions.map(([key, option]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setTier(key)}
+                                className={`rounded-xl border p-4 text-left transition ${tier === key
+                                    ? 'border-primary bg-primary/10'
+                                    : 'border-border hover:border-primary/40'
+                                    }`}
+                            >
+                                <p className="font-semibold text-foreground">{option.label}</p>
+                                <p className="text-xs text-muted-foreground">Hasta {option.maxClients} alumnos</p>
+                            </button>
+                        ))}
+                    </div>
+                </section>
+
+                <section className="mt-6">
+                    <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        {cycleOptions.map(([key, option]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setBillingCycle(key)}
+                                className={`rounded-xl border p-4 text-left transition ${billingCycle === key
+                                    ? 'border-primary bg-primary/10'
+                                    : 'border-border hover:border-primary/40'
+                                    }`}
+                            >
+                                <p className="font-semibold text-foreground">{option.label}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
+                                </p>
+                            </button>
+                        ))}
+                    </div>
+                </section>
+
+                <section className="mt-6 rounded-xl border border-border p-4">
+                    <p className="text-sm text-muted-foreground">
+                        Plan seleccionado: <span className="font-semibold text-foreground">{selectedTier.label}</span>
+                    </p>
+                    <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                        {selectedTier.features.map((feature) => (
+                            <li key={feature}>{feature}</li>
+                        ))}
+                    </ul>
+                </section>
+
+                {error ? (
+                    <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                        {error}
+                    </p>
+                ) : null}
+
+                <button
+                    type="button"
+                    onClick={handleCheckout}
+                    disabled={isLoading}
+                    className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                    {isLoading ? 'Redirigiendo...' : 'Continuar al pago'}
+                </button>
+            </div>
+        </main>
+    )
+}

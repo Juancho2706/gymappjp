@@ -260,7 +260,7 @@ Dashboard | Entrenar | Nutricion | Progreso | Mas (ejercicios, settings)
 |----|----------|----------|---------|
 | ENG-004 | Crear cuenta MercadoPago Chile, obtener API keys | 0.5 dia | Sandbox + produccion |
 | ENG-005 | Instalar SDK MercadoPago (`mercadopago` npm) | 0.5 dia | — |
-| ENG-006 | API route: `POST /api/payments/create-preference` | 1 dia | Genera preference de suscripcion MercadoPago, retorna init_point |
+| ENG-006 | API route: `POST /api/payments/create-preference` | 1 dia | Crea suscripcion recurrente (preapproval) de MercadoPago y retorna init_point |
 | ENG-007 | API route: `POST /api/payments/webhook` | 1.5 dias | Recibe IPN de MercadoPago, valida firma, actualiza `coaches.subscription_status` |
 | ENG-008 | API route: `GET /api/payments/subscription-status` | 0.5 dia | Para que el frontend consulte estado actual |
 | ENG-009 | Middleware: agregar `subscription_status` check en `/coach/*` | 0.5 dia | Si expired/cancelled → redirigir a pagina de reactivacion |

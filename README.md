@@ -51,6 +51,12 @@ Required variables:
 | `VERCEL_URL` | No | Auto-set in Vercel deployments |
 | `EDAMAM_APP_ID` | Optional | Recipe search integration |
 | `EDAMAM_APP_KEY` | Optional | Recipe search integration |
+| `PAYMENT_PROVIDER` | Recommended | `mercadopago` (default) or `stripe` |
+| `MERCADOPAGO_ACCESS_TOKEN` | Yes (if MercadoPago) | Server token for payment API and webhooks |
+| `NEXT_PUBLIC_MP_PUBLIC_KEY` | Optional | MercadoPago client-side public key |
+| `STRIPE_SECRET_KEY` | Future | Stripe server key (provider prepared for future) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Future | Stripe client public key |
+| `STRIPE_WEBHOOK_SECRET` | Future | Stripe webhook signature secret |
 | `PLAYWRIGHT_BASE_URL` | Optional | Playwright base URL override |
 
 ### 3. Run the Development Server
@@ -92,6 +98,7 @@ Security hardening:
 ```bash
 npm run supabase:disable-signup
 ```
+- Payments architecture is provider-agnostic. Configure `PAYMENT_PROVIDER=mercadopago` for Sprint 2.
 
 ## 📚 Learn More
 

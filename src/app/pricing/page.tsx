@@ -1,77 +1,66 @@
 import Link from 'next/link'
-import { Check, Zap, Crown, Dumbbell } from 'lucide-react'
+import { Check, Zap, Crown, Dumbbell, Rocket } from 'lucide-react'
 import type { Metadata } from 'next'
+import { BILLING_CYCLE_CONFIG, getTierPriceClp, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
 
 export const metadata: Metadata = {
     title: 'Precios | EVA',
     description: 'Elige el plan perfecto para tu negocio de coaching fitness.',
 }
 
-const plans = [
+const planDisplay: Array<{
+    id: SubscriptionTier
+    description: string
+    icon: typeof Zap
+    color: string
+    bg: string
+    border: string
+    popular?: boolean
+}> = [
     {
-        name: 'Starter',
-        price: '49',
-        period: '/mes',
+        id: 'starter_lite',
+        description: 'Tier de entrada para empezar con bajo costo',
+        icon: Rocket,
+        color: 'text-emerald-300',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/25',
+    },
+    {
+        id: 'starter',
         description: 'Para coaches que están comenzando',
         icon: Zap,
         color: 'text-sky-400',
         bg: 'bg-sky-500/10',
         border: 'border-sky-500/20',
-        buttonClass: 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent',
-        features: [
-            'Hasta 10 alumnos',
-            'Rutinas ilimitadas',
-            'App white-label para alumnos',
-            'Seguimiento de progreso',
-            'Check-ins semanales',
-        ],
-        cta: 'Empezar ahora',
-        popular: false,
     },
     {
-        name: 'Pro',
-        price: '99',
-        period: '/mes',
+        id: 'pro',
         description: 'El favorito de los coaches activos',
         icon: Crown,
         color: 'text-violet-400',
         bg: 'bg-violet-500/10',
         border: 'border-violet-500/20',
-        buttonClass:
-            'bg-violet-600 hover:bg-violet-500 text-white shadow-[0_0_20px_rgba(139,92,246,0.4)]',
-        features: [
-            'Hasta 50 alumnos',
-            'Todo en Starter',
-            'Constructor de rutinas DnD',
-            'Logo y colores personalizados',
-            'PWA instalable (app nativa)',
-            'Soporte prioritario',
-        ],
-        cta: 'Comenzar con Pro',
         popular: true,
     },
     {
-        name: 'Elite',
-        price: '199',
-        period: '/mes',
-        description: 'Para agencias y coaches high-ticket',
+        id: 'elite',
+        description: 'Para escalar con analítica avanzada',
         icon: Dumbbell,
         color: 'text-amber-400',
         bg: 'bg-amber-500/10',
         border: 'border-amber-500/20',
-        buttonClass: 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent',
-        features: [
-            'Alumnos ilimitados',
-            'Todo en Pro',
-            'Multi-coach (equipo)',
-            'API access',
-            'Onboarding dedicado',
-            'SLA garantizado',
-        ],
-        cta: 'Hablar con ventas',
-        popular: false,
+    },
+    {
+        id: 'scale',
+        description: 'Operación avanzada para equipos y alto volumen',
+        icon: Crown,
+        color: 'text-rose-300',
+        bg: 'bg-rose-500/10',
+        border: 'border-rose-500/25',
     },
 ]
+
+const cycleOrder: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 export default function PricingPage() {
     return (
@@ -98,26 +87,27 @@ export default function PricingPage() {
             <div className="text-center px-6 py-16 max-w-3xl mx-auto">
                 <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 text-xs font-medium text-violet-300 mb-6">
                     <Zap className="w-3 h-3" />
-                    Elige el plan ideal para ti
+                    Elige tu tier y frecuencia de pago
                 </div>
                 <h1 className="text-4xl sm:text-5xl font-bold text-zinc-50 mb-4 leading-tight">
-                    Precios simples,<br />
-                    <span className="text-violet-400">valor sin límites</span>
+                    Precios en CLP,<br />
+                    <span className="text-violet-400">mensual, trimestral o anual</span>
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                    Tu marca. Tus alumnos. Tu app. EVA le da a tu negocio
-                    la tecnología de una startup sin el costo de una.
+                    Incluye nuevo tier Starter Lite para mayor accesibilidad y
+                    descuentos por prepago trimestral y anual.
                 </p>
             </div>
 
             {/* Plans */}
             <div className="px-6 pb-20 max-w-5xl mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {plans.map((plan) => {
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {planDisplay.map((plan) => {
                         const Icon = plan.icon
+                        const tier = TIER_CONFIG[plan.id]
                         return (
                             <div
-                                key={plan.name}
+                                key={plan.id}
                                 className={`relative bg-card border rounded-2xl p-6 flex flex-col ${plan.popular
                                     ? 'border-violet-500/40 shadow-[0_0_40px_rgba(139,92,246,0.12)]'
                                     : 'border-border'
@@ -133,19 +123,29 @@ export default function PricingPage() {
                                     <Icon className={`w-5 h-5 ${plan.color}`} />
                                 </div>
 
-                                <h2 className="text-lg font-bold text-foreground mb-1">{plan.name}</h2>
+                                <h2 className="text-lg font-bold text-foreground mb-1">{tier.label}</h2>
                                 <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
+                                <p className="text-xs text-muted-foreground mb-3">
+                                    Hasta {tier.maxClients} alumnos
+                                </p>
 
-                                <div className="flex items-baseline gap-1 mb-6">
-                                    <span className="text-muted-foreground text-sm">USD</span>
-                                    <span className="text-4xl font-bold text-zinc-50">
-                                        ${plan.price}
-                                    </span>
-                                    <span className="text-muted-foreground text-sm">{plan.period}</span>
+                                <div className="space-y-2 mb-6">
+                                    {cycleOrder.map((cycle) => {
+                                        const cycleInfo = BILLING_CYCLE_CONFIG[cycle]
+                                        const price = getTierPriceClp(plan.id, cycle)
+                                        return (
+                                            <div key={cycle} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                                                <span className="text-sm text-muted-foreground">{cycleInfo.label}</span>
+                                                <span className="text-sm font-semibold text-foreground">
+                                                    ${price.toLocaleString('es-CL')} CLP
+                                                </span>
+                                            </div>
+                                        )
+                                    })}
                                 </div>
 
                                 <ul className="space-y-3 mb-8 flex-1">
-                                    {plan.features.map((feat) => (
+                                    {tier.features.map((feat) => (
                                         <li key={feat} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                                             <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                                             {feat}
@@ -154,10 +154,13 @@ export default function PricingPage() {
                                 </ul>
 
                                 <Link
-                                    href="/login"
-                                    className={`w-full py-3 rounded-xl text-sm font-semibold text-center transition-all duration-200 block ${plan.buttonClass}`}
+                                    href="/register"
+                                    className={`w-full py-3 rounded-xl text-sm font-semibold text-center transition-all duration-200 block ${plan.popular
+                                        ? 'bg-violet-600 hover:bg-violet-500 text-white'
+                                        : 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent'
+                                        }`}
                                 >
-                                    {plan.cta}
+                                    Elegir plan
                                 </Link>
                             </div>
                         )
@@ -167,7 +170,7 @@ export default function PricingPage() {
                 {/* FAQ teaser */}
                 <p className="text-center text-muted-foreground text-sm mt-12">
                     ¿Tienes preguntas?{' '}
-                    <Link href="/login" className="text-violet-400 hover:text-violet-300 transition-colors">
+                    <Link href="/register" className="text-violet-400 hover:text-violet-300 transition-colors">
                         Contáctanos
                     </Link>
                 </p>

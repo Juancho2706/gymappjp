@@ -242,10 +242,14 @@ export type Database = {
       coaches: {
         Row: {
           brand_name: string
+          billing_cycle: string
           created_at: string
+          current_period_end: string | null
           full_name: string
           id: string
           logo_url: string | null
+          max_clients: number
+          payment_provider: string
           primary_color: string
           slug: string
           subscription_mp_id: string | null
@@ -258,10 +262,14 @@ export type Database = {
         }
         Insert: {
           brand_name: string
+          billing_cycle?: string
           created_at?: string
+          current_period_end?: string | null
           full_name: string
           id: string
           logo_url?: string | null
+          max_clients?: number
+          payment_provider?: string
           primary_color?: string
           slug: string
           subscription_mp_id?: string | null
@@ -274,10 +282,14 @@ export type Database = {
         }
         Update: {
           brand_name?: string
+          billing_cycle?: string
           created_at?: string
+          current_period_end?: string | null
           full_name?: string
           id?: string
           logo_url?: string | null
+          max_clients?: number
+          payment_provider?: string
           primary_color?: string
           slug?: string
           subscription_mp_id?: string | null
@@ -289,6 +301,47 @@ export type Database = {
           use_brand_colors_coach?: boolean
         }
         Relationships: []
+      }
+      subscription_events: {
+        Row: {
+          coach_id: string
+          created_at: string
+          id: string
+          payload: Json | null
+          provider: string
+          provider_checkout_id: string | null
+          provider_event_id: string | null
+          provider_status: string | null
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          provider: string
+          provider_checkout_id?: string | null
+          provider_event_id?: string | null
+          provider_status?: string | null
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          provider?: string
+          provider_checkout_id?: string | null
+          provider_event_id?: string | null
+          provider_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_events_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       daily_nutrition_logs: {
         Row: {

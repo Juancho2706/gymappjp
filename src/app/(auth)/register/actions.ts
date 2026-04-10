@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { redirect } from 'next/navigation'
+import { getTierMaxClients } from '@/lib/constants'
 
 export type RegisterState = {
     error?: string
@@ -16,6 +17,7 @@ export async function registerAction(
     const email = formData.get('email') as string
     const password = formData.get('password') as string
     const brandName = formData.get('brand_name') as string
+    const acceptLegal = formData.get('accept_legal')
 
     if (!fullName || !email || !password || !brandName) {
         return { error: 'Todos los campos son obligatorios' }
@@ -23,6 +25,10 @@ export async function registerAction(
 
     if (password.length < 8) {
         return { error: 'La contraseña debe tener al menos 8 caracteres' }
+    }
+
+    if (!acceptLegal) {
+        return { error: 'Debes aceptar los términos para crear tu cuenta.' }
     }
 
     // Generate slug from brand name
@@ -68,7 +74,11 @@ export async function registerAction(
             brand_name: brandName,
             slug,
             primary_color: '#10B981',
-            subscription_status: 'active',
+            subscription_status: 'pending_payment',
+            subscription_tier: 'starter_lite',
+            billing_cycle: 'monthly',
+            payment_provider: process.env.PAYMENT_PROVIDER ?? 'mercadopago',
+            max_clients: getTierMaxClients('starter_lite'),
         })
 
     if (coachError) {
@@ -81,5 +91,5 @@ export async function registerAction(
     const supabase = await createClient()
     await supabase.auth.signInWithPassword({ email, password })
 
-    redirect('/coach/dashboard')
+    redirect('/coach/reactivate?from=register')
 }

@@ -71,9 +71,9 @@ graph LR
 | 17 | Login Coach | 40% | ~200 | 2 | Medio (adquisición) |
 | 18 | Forgot/Reset PW | 40% | ~300 | 4 | Bajo |
 | 19 | Mi Marca Settings | 35% | ~500 | 7 | Medio (diferenciación) |
-| 20 | Registro Coach | 35% | ~300 | 2 | **Critico** (adquisición) |
+| 20 | Registro Coach | 60% | ~420 | 3 | **Critico** (adquisición) |
 | 21 | Pricing | 25% | ~200 | 1 | **Critico** (conversión) |
-| 22 | Pagos & Suscripciones | 0% | 0 | 0 | **BLOQUEANTE** (monetización) |
+| 22 | Pagos & Suscripciones | 65% | ~650 | 8 | **BLOQUEANTE** (monetización) |
 | 23 | Panel CEO | 0% | 0 | 0 | Alto (operaciones) |
 | 24 | Testing | 10% | ~50 | 2 | Critico (calidad) |
 

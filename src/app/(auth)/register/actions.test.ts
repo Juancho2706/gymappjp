@@ -36,6 +36,7 @@ function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
   formData.set('email', base.email)
   formData.set('password', base.password)
   formData.set('brand_name', base.brand_name)
+  formData.set('accept_legal', 'on')
   return formData
 }
 
@@ -67,6 +68,13 @@ describe('registerAction', () => {
 
     expect(result.error).toContain('ya está en uso')
     expect(adminDb.auth.admin.createUser).not.toHaveBeenCalled()
+  })
+
+  it('requires legal terms acceptance', async () => {
+    const formData = buildRegisterFormData()
+    formData.delete('accept_legal')
+    const result = await registerAction({}, formData)
+    expect(result).toEqual({ error: 'Debes aceptar los términos para crear tu cuenta.' })
   })
 
   it('rolls back auth user when coach insert fails', async () => {
@@ -141,13 +149,13 @@ describe('registerAction', () => {
     createClientMock.mockResolvedValue(userSupabase)
 
     await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(
-      'REDIRECT:/coach/dashboard'
+      'REDIRECT:/coach/reactivate?from=register'
     )
 
     expect(userSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
       email: 'coach@example.com',
       password: 'super-secret-123',
     })
-    expect(redirectMock).toHaveBeenCalledWith('/coach/dashboard')
+    expect(redirectMock).toHaveBeenCalledWith('/coach/reactivate?from=register')
   })
 })

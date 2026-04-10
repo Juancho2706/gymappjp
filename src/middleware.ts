@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
+import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
@@ -55,6 +56,22 @@ export async function middleware(request: NextRequest) {
             // User is logged in but isn't a coach → redirect
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/login'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        const isReactivatePage = pathname.startsWith('/coach/reactivate')
+        const blockedStatuses = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES)
+        const isBlocked = blockedStatuses.has(coach.subscription_status ?? '')
+
+        if (isBlocked && !isReactivatePage) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/coach/reactivate'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        if (!isBlocked && isReactivatePage) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/coach/dashboard'
             return NextResponse.redirect(redirectUrl)
         }
 
