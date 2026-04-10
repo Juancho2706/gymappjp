@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
     getTierPriceClp,
@@ -14,7 +14,6 @@ const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TI
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [BillingCycle, (typeof BILLING_CYCLE_CONFIG)[BillingCycle]][]
 
 export default function ReactivatePage() {
-    const router = useRouter()
     const searchParams = useSearchParams()
     const [tier, setTier] = useState<SubscriptionTier>('starter')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
@@ -73,7 +72,7 @@ export default function ReactivatePage() {
                     clearInterval(pollingIntervalRef.current)
                     pollingIntervalRef.current = null
                 }
-                router.replace('/coach/dashboard?subscription=active')
+                window.location.href = '/coach/dashboard?subscription=active'
                 return
             }
 
@@ -87,7 +86,7 @@ export default function ReactivatePage() {
         } finally {
             setIsConfirming(false)
         }
-    }, [router])
+    }, [])
 
     useEffect(() => {
         if (!fromSuccessfulCheckout || hasAutoCheckedRef.current) return
@@ -106,7 +105,7 @@ export default function ReactivatePage() {
                         clearInterval(pollingIntervalRef.current)
                         pollingIntervalRef.current = null
                     }
-                    router.replace('/coach/dashboard?subscription=active')
+                    window.location.href = '/coach/dashboard?subscription=active'
                 }
             } catch {
                 // Ignore transient polling errors.
@@ -119,7 +118,7 @@ export default function ReactivatePage() {
                 pollingIntervalRef.current = null
             }
         }
-    }, [confirmSubscription, fromSuccessfulCheckout, preapprovalIdFromUrl, router])
+    }, [confirmSubscription, fromSuccessfulCheckout, preapprovalIdFromUrl])
 
     async function handleCheckout() {
         setIsLoading(true)

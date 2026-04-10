@@ -52,7 +52,7 @@ export default function SubscriptionProcessingPage() {
                     throw new Error(payload.error ?? 'No se pudo validar el pago.')
                 }
                 if (payload.subscriptionStatus === 'active') {
-                    router.replace('/coach/dashboard?subscription=active')
+                    window.location.href = '/coach/dashboard?subscription=active'
                     return
                 }
             } catch (err) {
@@ -78,7 +78,7 @@ export default function SubscriptionProcessingPage() {
                         clearInterval(pollRef.current)
                         pollRef.current = null
                     }
-                    router.replace('/coach/dashboard?subscription=active')
+                    window.location.href = '/coach/dashboard?subscription=active'
                 }
             } catch {
                 // Keep polling.
