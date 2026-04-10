@@ -19,8 +19,8 @@ export const GymAppLogo = ({ className = "w-32 h-32" }: LogoProps) => {
         src={BRAND_LOGO_WEB}
         alt="EVA Logo"
         fill
-        sizes="(max-width: 768px) 100vw, 128px"
-        className="object-contain scale-[1.18] [transform-origin:center]"
+        sizes="(max-width: 768px) 160px, 200px"
+        className="object-contain object-left [transform-origin:center] md:object-center"
         priority
       />
     </div>

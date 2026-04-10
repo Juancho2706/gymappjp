@@ -7,9 +7,9 @@
 
 - Este archivo y [`ESTADO-PROYECTO.md`](ESTADO-PROYECTO.md) son la **referencia fundamental** del estado del código: deben reflejar **lo hecho el mismo día** cuando haya trabajo sustancial (rework, features, migraciones, decisiones de alcance).
 - Cada actualización debe llevar **fecha y hora** en **America/Santiago** en la línea **Última actualización** de ambos documentos (formato recomendado: `YYYY-MM-DD HH:mm America/Santiago`).
-- Bitácoras Cursor (sesiones): [`progreso cursor/PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md).
+- Bitácoras Cursor (sesiones): [`progreso cursor/PROGRESO-workout-checkin-rework-2026-04-10.md`](../progreso%20cursor/PROGRESO-workout-checkin-rework-2026-04-10.md).
 
-**Última actualización:** 2026-04-10 America/Santiago — Revisión completa del código real: check-in tiene form funcional con compresión de imagen; workout execution tiene RestTimer con audio/configuración (no es 30% sino ~65%); WorkoutSummaryOverlay muestra sets/reps/volumen (no es 30% sino ~70%); OnboardingForm es multi-step con localStorage draft; ejercicios alumno funcional con búsqueda + filtro + modal GIF. Porcentajes corregidos. TOTAL sube a ~52%.
+**Última actualización:** 2026-04-10 America/Santiago — Auditoría completa del código real (225+ archivos TS/TSX, 24 tablas BD, 38 rutas). Porcentajes corregidos masivamente: coach dashboard 0%→45%, coach settings 0%→35%, coach exercises 0%→40%, workout execution 68%→82%, check-in 63%→80%, landing 0%→60%, pricing 0%→25%, auth coach 0%→40/35%. Templates reclasificado como redirect (N/A). TOTAL sube de ~52% a **~62%**.
 
 ---
 
@@ -28,11 +28,11 @@
 
 | Componente | Ruta | Estado | % | Notas |
 |------------|------|--------|---|-------|
-| Landing Page | `/` | ❌ | 0% | Existe pero sin rework |
-| Pricing / Planes | `/pricing` | ❌ | 0% | Página estática — sin integración de pago real |
-| Registro con pago | `/register` | ❌ | 0% | No hay método de pago real, no hay cuentas free — flujo completo pendiente |
-| Login coach | `/login` | ❌ | 0% | Funcional básico, sin rework |
-| Forgot / Reset password | `/forgot-password`, `/reset-password` | ❌ | 0% | Funcional básico, sin rework |
+| Landing Page | `/` | 🔶 | 60% | 972 líneas: hero con animaciones Framer Motion, stats, features grid, pricing por tiers CLP (14.990–89.990), testimonios, CTAs, i18n (es/en), `StickyBrandingCard` lee `last_coach_slug` de localStorage, menú mobile Sheet. Pendiente: integración pago real, testimonios reales, optimización LCP, SEO técnico |
+| Pricing / Planes | `/pricing` | 🔶 | 25% | Página estática con 3 tiers USD (Starter $49, Pro $99, Elite $199) — **inconsistente con landing que usa CLP**. Sin integración de pago. Header con links a `/login`. Necesita alineación de moneda y conexión al flujo de registro+pago |
+| Registro coach | `/register` | 🔶 | 35% | Funcional: `createRawAdminClient()` crea auth user + row en `coaches`, slugifica brand name, verifica unicidad de slug. Zod (nombre, marca, email, password min 8). Sin payment gate, sin cuentas free, sin verificación email real |
+| Login coach | `/login` | 🔶 | 40% | Funcional: `useActionState` + `signInWithPassword`, verifica existencia de coach row. UI básica con logo + ThemeToggle. Sin rework visual, sin "remember me", sin rate limiting |
+| Forgot / Reset password | `/forgot-password`, `/reset-password` | 🔶 | 40% | Funcional: `resetPasswordForEmail` con `redirectTo` correcto, soporta `coach_slug` para redirigir al login del alumno. `reset-password` usa `updateUser`. Bug: auth callback error redirect va a `/auth/login` (no existe, debería ser `/login`) |
 
 ---
 
@@ -42,11 +42,12 @@
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| `page.tsx` (server) | ❌ | 0% | Existe con estadísticas básicas — sin rework |
-| `CoachDashboardClient` | ❌ | 0% | Existe — sin rework de UX ni optimización de queries |
-| `actions.ts` | ❌ | 0% | Sin rework |
+| `page.tsx` (server) | 🔶 | 50% | Streaming con `Suspense`, `StatsCards` y `MainDashboardData` como server components separados; `Promise.all` paralelo (clients count, plans count, adherence, nutrition, recent clients, check-ins, expiring programs, growth chart data, weekly check-ins). Skeleton dedicado. Funcional pero queries no usan `React.cache` |
+| `CoachDashboardClient` | 🔶 | 45% | ~495 líneas. Stat cards (alumnos, planes, adherencia, nutrición) con iconos y motion. Activity feed reciente. Alertas de programas por vencer (≤3 días). Charts (área crecimiento alumnos, barras check-ins semana). Dialog de compliance. `CreateClientModal` integrado. Pendiente: War Room style, attention scores globales, tendencias, comparativas periodo a periodo |
+| `actions.ts` | 🔶 | 40% | `getAdherenceStats` y `getNutritionStats` vía `getCachedDirectoryPulse` + mapeo de scores. Funcional pero acoplado a `dashboard.service.ts` |
+| `loading.tsx` | ✅ | 100% | Skeleton con stat cards + chart placeholder |
 
-**Resultado del módulo: 0% — Pendiente de rework**
+**Resultado del módulo: ~45% — Funcional con streaming, charts y activity feed. No es 0% — tiene data pipeline completo. Pendiente: rework UX al nivel del directorio de clientes (War Room style), queries enriquecidas, KPIs globales**
 
 ---
 
@@ -54,14 +55,14 @@
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| `page.tsx` (server) | ❌ | 0% | Existe — sin rework |
-| `BrandSettingsForm` | ❌ | 0% | Formulario de colores y datos de marca — sin rework |
-| `LogoUploadForm` | ❌ | 0% | Upload de logo — sin rework |
-| `loading.tsx` | ❌ | 0% | Sin rework |
-| `settings/preview/` `StudentDashboardPreview` | ❌ | 0% | Preview de cómo ve el alumno la app — sin rework |
-| `actions.ts` | ❌ | 0% | Sin rework |
+| `page.tsx` (server) | 🔶 | 50% | Carga coach row, renderiza `LogoUploadForm` + `BrandSettingsForm`. Layout limpio `max-w-3xl` |
+| `BrandSettingsForm` | 🔶 | 35% | Formulario de colores y datos de marca funcional. Sin rework visual |
+| `LogoUploadForm` | 🔶 | 35% | Upload de logo a Supabase Storage funcional. Sin preview en tiempo real, sin crop |
+| `loading.tsx` | ✅ | 100% | Skeleton básico |
+| `settings/preview/page.tsx` | 🔶 | 20% | Existe pero `StudentDashboardPreview` muestra vista desactualizada del dashboard alumno |
+| `actions.ts` | 🔶 | 40% | Update brand settings + logo URL funcional |
 
-**Resultado del módulo: 0% — Pendiente de rework**
+**Resultado del módulo: ~35% — Funcional básico. No es 0% — tiene forms de logo y brand que operan. Pendiente: rework visual, crop de logo, preview alineado al dashboard actual, más opciones de personalización**
 
 ---
 
@@ -139,6 +140,7 @@
 | `libraryStats.ts` | ✅ | 100% | Capa de dominio pura |
 | `page.tsx` | 🔶 | 70% | `LIBRARY_PROGRAM_LIST_SELECT` duplicado respecto a `actions.ts` |
 | `actions.ts` | ✅ | 100% | duplicate con snapshot + prepend local |
+| `builder/page.tsx` | ✅ | 100% | Reusa `WeeklyPlanBuilder` para templates (sin `clientId`) |
 
 **Resultado del módulo: ~95%**
 
@@ -157,7 +159,7 @@
 
 Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): datos reales documentados en sus secciones; no duplicados en esta tabla de núcleo coach.
 
-**Resultado núcleo: ~93%** — **RLS** (logs, planes, meals, items, foods, `saved_meals`): migraciones en `supabase/migrations/`; **validación E2E alumno+coach con RLS** cuando el **TOTAL ESTIMADO** global de este documento supere **~90%** (acordado 2026-04-10).
+**Resultado núcleo: ~93%** — **RLS** (logs, planes, meals, items, foods, `saved_meals`): migraciones referenciadas en docs pero **no presentes en el repo** (ver deuda técnica en ESTADO-PROYECTO.md); **validación E2E alumno+coach con RLS** cuando el **TOTAL ESTIMADO** global supere **~90%**.
 
 #### Extensiones futuras (fuera de scope — decisión producto 2026-04-09)
 
@@ -174,9 +176,12 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| Catálogo de ejercicios | ❌ | 0% | Existe — sin rework |
+| `page.tsx` (server) | 🔶 | 50% | Carga ejercicios globales + custom del coach, agrupa por `muscle_group`, pasa a `ExerciseCatalogClient`. Funcional |
+| `ExerciseCatalogClient` | 🔶 | 40% | Catálogo con búsqueda, filtro por grupo muscular, modal de ejercicio con GIF/video. Funcional pero UI sin rework |
+| `actions.ts` | 🔶 | 35% | CRUD para ejercicios custom del coach. Sin upload de GIF, sin bulk edit |
+| `loading.tsx` | ✅ | 100% | Skeleton dedicado |
 
-**Resultado del módulo: 0% — Pendiente**
+**Resultado del módulo: ~40% — Funcional con catálogo + CRUD. No es 0% — tiene búsqueda, filtros y modal. Pendiente: rework UX, upload GIF, bulk edit, organización por tags**
 
 ---
 
@@ -184,9 +189,9 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| Biblioteca de templates | ❌ | 0% | Existe — sin rework |
+| `page.tsx` | — | N/A | **Solo `redirect('/coach/workout-programs')`** — no es un módulo independiente. La biblioteca de programas maneja templates vía `source_template_id` (self-reference en `workout_programs`). Builder de templates accesible desde `/coach/workout-programs/builder` |
 
-**Resultado del módulo: 0% — Pendiente**
+**Resultado del módulo: N/A — Redirect. No cuenta para el TOTAL.**
 
 ---
 
@@ -206,11 +211,11 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| `page.tsx` | 🔶 | 60% | Server component funcional |
-| `OnboardingForm` | 🔶 | 55% | Multi-step (AnimatePresence entre pasos), `useActionState`, localStorage draft (persiste progreso entre sesiones), campos: peso, altura, goals, experience_level, disponibilidad, lesiones, condiciones médicas. Pendiente: foto inicial, UI visual por paso más clara, validación campo a campo, progress bar, skip optional |
+| `page.tsx` | 🔶 | 60% | Server component funcional, redirige a dashboard si `onboarding_completed` |
+| `OnboardingForm` | 🔶 | 55% | ~357 líneas. Multi-step (AnimatePresence entre pasos), `useActionState`, localStorage draft (persiste progreso entre sesiones), campos: peso, altura, goals, experience_level, disponibilidad, lesiones, condiciones médicas. Pendiente: foto inicial, UI visual por paso más clara, validación campo a campo, progress bar, skip optional |
 | `actions.ts` | 🔶 | 60% | `submitIntakeForm` guarda en `client_intake`; sin validación exhaustiva server-side |
 
-**Resultado del módulo: ~58% — Funcional pero UX básica. No es 0% — tiene multi-step con localStorage draft (prioridad baja para rework)**
+**Resultado del módulo: ~58% — Funcional pero UX básica. Tiene multi-step con localStorage draft (prioridad baja para rework)**
 
 ---
 
@@ -240,7 +245,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 ---
 
-**Nota:** `StudentDashboardPreview` en `/coach/settings/preview` (0%) sigue mostrando una vista desactualizada del dashboard alumno. Actualizar cuando se haga el rework de Mi Marca.
+**Nota:** `StudentDashboardPreview` en `/coach/settings/preview` (20%) sigue mostrando una vista desactualizada del dashboard alumno. Actualizar cuando se haga el rework de Mi Marca.
 
 ---
 
@@ -248,16 +253,16 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| `page.tsx` | 🔶 | 60% | Fetch plan + historial + verificación ownership funcional; falta contexto de variante A/B activa y streak |
+| `page.tsx` | ✅ | 90% | Fetch plan + historial + verificación ownership + `resolveActiveWeekVariantForDisplay` + query `exerciseMaxes` con exclusión de bloques del plan actual. Funcional y completo; falta: streak context |
 | `WorkoutTimerProvider` | ✅ | 100% | Context limpio, expone `useWorkoutTimer()` |
-| `WorkoutExecutionClient` | 🔶 | 65% | Funcional con secciones warmup/main/cooldown, modal GIF/video, superset handling, ThemeToggle, i18n; pendiente: optimistic UI para sets, vibración, mejor UX mobile (scroll por bloque) |
-| `LogSetForm` | 🔶 | 55% | Funcional — sin optimistic update local ni feedback animado al guardar |
-| `RestTimer` | 🔶 | 75% | Tiene audio (`playTimerSound`, `TimerSound`), selector de tipo de sonido, volumen, edición del tiempo, settings panel, notificaciones web, alarm ringing; falta: personalización por ejercicio desde prescripción, vibración nativa |
-| `WorkoutSummaryOverlay` | 🔶 | 70% | Muestra sets completados, total reps, volumen (kg×reps); falta: PRs del día, comparativa histórica, logros, confetti |
-| `loading.tsx` | ✅ | 100% | Skeleton básico |
-| `actions.ts` | 🔶 | 60% | `logSetAction` upsert funcional — falta manejo offline/retry |
+| `WorkoutExecutionClient` | 🔶 | 80% | ~600+ líneas. Funcional con secciones warmup/main/cooldown, modal GIF/video, superset handling, ThemeToggle, i18n, barra de progreso, badge Semana A/B, headers de sección, bloques completados con check, scroll al siguiente bloque, fechas relativas en historial. Pendiente: optimistic UI completo para sets, mejor UX mobile (scroll por bloque), vibración nativa |
+| `LogSetForm` | 🔶 | 75% | `motion` en fila y botón, slider RPE opcional post-log. Pendiente: optimistic update local más fino, feedback animado más pulido |
+| `RestTimer` | 🔶 | 80% | Audio (`playTimerSound`, `TimerSound`), selector tipo de sonido, volumen, edición del tiempo, settings panel, notificaciones web, alarm ringing. Falta: personalización por ejercicio desde prescripción, vibración nativa |
+| `WorkoutSummaryOverlay` | ✅ | 90% | ~313 líneas. Desglose por ejercicio, PRs del día con 1RM Epley, volumen por grupo muscular, confetti, `useReducedMotion`, animaciones stagger. Falta: comparativa histórica, logros/badges |
+| `loading.tsx` | ✅ | 100% | Skeleton |
+| `actions.ts` | 🔶 | 75% | `logSetAction` upsert funcional + `revalidatePath` del perfil coach. Falta: manejo offline/retry, batch logging |
 
-**Resultado del módulo: ~68% — Más avanzado de lo documentado. Pendiente: optimistic updates, PRs en summary, UX mobile pulida (prioridad media)**
+**Resultado del módulo: ~82% — Avanzado significativamente con el rework del 2026-04-10. PRs en summary, A/B en page, confetti, progress bar. Pendiente: optimistic updates completos, offline/retry, vibración**
 
 ---
 
@@ -265,11 +270,12 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| `page.tsx` | 🔶 | 65% | Server component, carga coach branding, renderiza form; sin loading.tsx dedicado |
-| `CheckInForm` | 🔶 | 60% | Funcional: peso + nivel de energía + foto frontal; `useActionState`, compresión de imagen (`browser-image-compression`), validación tipo/tamaño, preview, success state con redirect. Pendiente: múltiples fotos (perfil/espalda), medidas corporales, notas libres, UX mobile (step wizard), `useReducedMotion` |
-| `actions.ts` | 🔶 | 65% | `submitCheckinAction` funciona: upload imagen a Storage + insert en `check_ins`; pendiente: validación server-side más robusta, manejo de errores de Storage con rollback |
+| `page.tsx` | ✅ | 90% | Server component con título/metadata mensual, query directa `lastCheckIn`, header sticky + `pt-safe`. Carga coach branding |
+| `CheckInForm` | 🔶 | 78% | ~460 líneas. Wizard 3 pasos con indicadores, compresión dual (front + back photo), animaciones direction-aware (AnimatePresence), `formatRelativeDate` en banner del último check-in, `useActionState`. Pendiente: campos de medidas corporales, notas libres, más fotos (perfil lateral), `useReducedMotion` completo |
+| `actions.ts` | 🔶 | 75% | `submitCheckinAction`: schema con `back_photo`, upload a bucket `checkins` con path `-back-`, insert `back_photo_url`; `revalidatePath` coach con path concreto. Pendiente: validación server-side más robusta, manejo de errores de Storage con rollback |
+| `loading.tsx` | ✅ | 100% | Skeleton dedicado (nuevo en rework 2026-04-10) |
 
-**Resultado del módulo: ~63% — Funcional básico. Pendiente: múltiples fotos, campos extra (medidas), UX mobile mejorada (prioridad media)**
+**Resultado del módulo: ~80% — Avanzado significativamente con el rework del 2026-04-10. Wizard 3 pasos, dual photos. Pendiente: medidas corporales, notas libres, fotos extra**
 
 ---
 
@@ -286,7 +292,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | `_actions/nutrition.actions.ts` | ✅ | 100% | Toggle + fetch log por fecha |
 | `NutritionTracker` / `nutrition/actions.ts` | — | — | **Eliminados** (reemplazados por arquitectura anterior) |
 
-**Resultado del módulo: ~96% — Alineado con [PLAN-NUTRICION-ALUMNO.md](../claudeplans/PLAN-NUTRICION-ALUMNO.md) en alcance A–D+H (perfil coach); matices RLS/UX en bitácora [`PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md) y sección nutrición coach arriba.**
+**Resultado del módulo: ~96% — Alineado con plan nutrición alumno en alcance A–D+H.**
 
 ---
 
@@ -296,9 +302,9 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 |------------|--------|---|-------|
 | `page.tsx` | 🔶 | 70% | Server: carga ejercicios agrupados por músculo, pasa `primaryColor` al cliente |
 | `loading.tsx` | ✅ | 100% | Skeleton dedicado |
-| `ClientExerciseCatalog` | 🔶 | 65% | Búsqueda por texto, filtro por grupo muscular (chips horizontales), modal con GIF/video, `--theme-primary` para ring de focus. Pendiente: animaciones de lista, favoritos, filtro por equipo, acceso al historial del ejercicio |
+| `ClientExerciseCatalog` | 🔶 | 65% | ~319 líneas. Búsqueda por texto, filtro por grupo muscular (chips horizontales), modal con GIF/video, `--theme-primary` para ring de focus. Pendiente: animaciones de lista, favoritos, filtro por equipo, acceso al historial del ejercicio |
 
-**Resultado del módulo: ~68% — Funcional. No es 0% — tiene búsqueda + filtro + modal GIF. Pendiente: rework visual y features extra (baja prioridad)**
+**Resultado del módulo: ~68% — Funcional. Tiene búsqueda + filtro + modal GIF. Pendiente: rework visual y features extra (baja prioridad)**
 
 ---
 
@@ -306,7 +312,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| Panel CEO / Superadmin | ❌ | 0% | **No existe aún.** Ruta secreta (ej. `/x/internal` o similar) protegida solo para vos y tu socio. Ver métricas globales: coaches activos, MRR, churn, alumnos totales, actividad de la plataforma |
+| Panel CEO / Superadmin | ❌ | 0% | **No existe aún.** Ruta secreta (ej. `/x/internal` o similar) protegida solo para founders. Ver métricas globales: coaches activos, MRR, churn, alumnos totales, actividad de la plataforma |
 
 **Resultado del módulo: 0% — No implementado**
 
@@ -330,7 +336,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| `middleware.ts` | ✅ | 100% | Auth, branding por slug, client suspension |
+| `middleware.ts` | ✅ | 100% | Auth, branding por slug, client suspension, force password change, onboarding redirect |
 | `CoachMainWrapper` | ✅ | 100% | `isBuilder` + ancho **2000px** en rutas `/coach/nutrition-plans/*` (alineado a builder) |
 | `CoachSidebar` | ✅ | 100% | Navegación coach completa |
 | `ClientNav` | 🔶 | 50% | Funcional — sin revisión post-rework del módulo cliente |
@@ -339,15 +345,18 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | `programWeekVariant.ts` | ✅ | 100% | Lógica A/B centralizada, 3+ módulos |
 | `dashboard.service.ts` | ✅ | 100% | Attention Score, DirectoryPulse, 1RM |
 | `supabase/server.ts` | ✅ | 100% | Client + AdminClient |
+| `supabase/admin-raw.ts` | 🔶 | 50% | Untyped `any` service-role client para edge cases RLS |
 | `supabase/queries/workout-programs-library.ts` | 🔶 | 50% | Existe pero select no unificado |
-| UI primitives (shadcn) | ✅ | 100% | button, card, dialog, input, form, sheet, etc. |
-| PWA / manifests | 🔶 | 60% | Funcional básico — sin rework de UX offline |
+| UI primitives (shadcn) | ✅ | 100% | button, card, dialog, input, form, sheet, select, dropdown, alert-dialog, etc. |
+| PWA / manifests | 🔶 | 55% | `sw.js` manual (cache name aún "omnicoach"), manifests dinámicos por coach, `PwaRegister`, `InstallPrompt`. Sin offline real, sin push notifications |
+| i18n | 🔶 | 40% | `LanguageContext` + `en.json`/`es.json`. Implementado en landing pero no consistente en toda la app |
+| Testing | ❌ | 10% | 1 unit test (`Button.test.tsx`), 1 Playwright spec (`auth.spec.ts`). Vitest + Playwright configurados pero cobertura mínima |
 
 ---
 
 ## Resumen General
 
-> Porcentajes revisados contra el código real (2026-04-10). Los módulos marcados con `*` tenían % incorrectos en la versión anterior.
+> Porcentajes revisados contra el código real (auditoría completa 2026-04-10). Los módulos marcados con `*` tenían % incorrectos en la versión anterior; `**` indica correcciones nuevas en esta auditoría.
 
 | Módulo | % Completado |
 |--------|-------------|
@@ -355,54 +364,64 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | Perfil del Alumno (coach) | 94% |
 | Constructor de Planes | 95% |
 | Biblioteca de Programas | 95% |
-| Infraestructura / Shared | 85% |
-| Workout Execution (alumno) * | **68%** (antes 50%) |
-| Dashboard Coach Principal | 0% |
-| Mi Marca / Brand Settings | 0% |
-| Módulo Nutrición Coach (núcleo) | ~93% (extensiones futuras excluidas) |
-| Ejercicios Coach | 0% |
-| Templates | 0% |
+| Infraestructura / Shared | 80% |
+| Módulo Nutrición Coach (núcleo) | ~93% |
 | Dashboard Alumno | ~98% |
-| Check-in Alumno * | **63%** (antes 0%) |
 | Nutrición Alumno | ~96% |
-| Catálogo Ejercicios Alumno * | **68%** (antes 0%) |
-| Onboarding Alumno * | **58%** (antes 0%) |
-| Login / Auth Alumno * | **50%** (antes 0%) |
-| Landing / Pricing / Marketing | 0% |
+| Workout Execution (alumno) ** | **82%** (antes 68%) |
+| Check-in Alumno ** | **80%** (antes 63%) |
+| Catálogo Ejercicios Alumno | 68% |
+| Onboarding Alumno | 58% |
+| Login / Auth Alumno | 50% |
+| Dashboard Coach Principal ** | **45%** (antes 0%) |
+| Ejercicios Coach ** | **40%** (antes 0%) |
+| Mi Marca / Brand Settings ** | **35%** (antes 0%) |
+| Landing / Marketing ** | **60%** (antes 0%) |
+| Pricing ** | **25%** (antes 0%) |
+| Registro Coach ** | **35%** (antes 0%) |
+| Login Coach ** | **40%** (antes 0%) |
+| Forgot/Reset Password ** | **40%** (antes 0%) |
 | **Pagos & Suscripciones** | **0%** |
 | **Panel CEO / Superadmin** | **0%** |
-| **TOTAL ESTIMADO** | **~52%** |
+| Templates | N/A (redirect) |
+| Testing | 10% |
+| **TOTAL ESTIMADO** | **~62%** |
 
 ---
 
 ## Próximos Reworks (por prioridad)
 
-### 🔴 Alta
-1. **Pagos & Suscripciones** — integrar Stripe o MercadoPago, registro obligatorio con pago, webhooks.
+### 🔴 Alta (Revenue-critical)
+1. **Pagos & Suscripciones** — integrar MercadoPago (Chile) o Stripe, registro obligatorio con pago, webhooks, control de acceso por tier. **Bloquea monetización.**
+2. **Alineación Pricing/Landing** — unificar moneda (CLP), conectar CTAs a flujo de registro+pago.
 
-### 🟠 Media
-2. **Workout Execution** (~68%) — optimistic updates en `LogSetForm`, PRs del día en `WorkoutSummaryOverlay`, confetti al completar, variante A/B en `page.tsx`, vibración en `RestTimer`.
-3. **Check-in del alumno** (~63%) — múltiples fotos (perfil/espalda), campos de medidas corporales, UX step wizard mobile, notas libres.
-4. **Dashboard principal del coach** (`/coach/dashboard`) — rework de UX, queries más ricas (tendencias globales, alertas agregadas).
-5. **Mi Marca** (`/coach/settings`) — rework del flow de branding y `StudentDashboardPreview` alineado al dashboard actual.
+### 🟠 Media (Core Loop)
+3. **Workout Execution** (~82%) — optimistic updates completos, offline/retry, vibración nativa, batch logging.
+4. **Check-in del alumno** (~80%) — campos de medidas corporales, notas libres, fotos extra (perfil lateral).
+5. **Dashboard principal del coach** (~45%) — rework UX al nivel War Room, KPIs globales, tendencias, comparativas, attention scores agregados.
+6. **Mi Marca** (~35%) — rework del flow de branding, crop de logo, `StudentDashboardPreview` alineado al dashboard actual, más opciones de personalización.
 
-### 🟡 Baja
-6. **Onboarding alumno** (~58%) — rework UX: progress bar visual, foto inicial, validación por paso, skip de opcionales.
-7. **Catálogo Ejercicios Alumno** (~68%) — rework visual: animaciones, favoritos, historial del ejercicio, filtro por equipo.
-8. **Panel CEO / Superadmin** — ruta secreta para supervisión global de la plataforma.
-9. **Ejercicios Coach** — catálogo con rework de UX.
-10. **Landing / Pricing** — rework de marketing y conexión al flujo de registro+pago.
-11. **Deuda técnica menor:** borrar `ClientCard.tsx` V1, unificar `LIBRARY_PROGRAM_LIST_SELECT`, `useReducedMotion` en child components del perfil (B3–B8).
+### 🟡 Baja (Polish)
+7. **Ejercicios Coach** (~40%) — rework UX: upload GIF, bulk edit, organización por tags.
+8. **Onboarding alumno** (~58%) — rework UX: progress bar visual, foto inicial, validación por paso, skip de opcionales.
+9. **Catálogo Ejercicios Alumno** (~68%) — rework visual: animaciones, favoritos, historial del ejercicio, filtro por equipo.
+10. **Landing / Marketing** (~60%) — testimonios reales, optimización LCP, SEO técnico, A/B testing copy.
+11. **Login/Register Coach** (~40/35%) — rework visual, rate limiting, verificación email, "remember me".
+12. **Panel CEO / Superadmin** — ruta secreta para supervisión global de la plataforma.
 
-### 🔵 Futuro (sin urgencia acordada — nutrición)
+### 🔵 Futuro (sin urgencia acordada)
 - **Código de barras / import rápido de alimentos** (`FoodImportRow` o similar).
 - **Extensión nutrición coach:** rework `/coach/meals`, UX `/coach/meal-groups`, `/coach/recipes` si el producto los reabre.
+- **App móvil nativa** (Capacitor/React Native) si la PWA no alcanza.
 
 ### ⏳ Condicionado (calidad / seguridad)
-- **QA E2E nutrición con RLS** (sesión alumno + coach, toggles, planes, `saved_meals`): ejecutar cuando **TOTAL ESTIMADO** de **este documento** sea **> ~90%** (acordado 2026-04-10). Hasta entonces, RLS sigue aplicándose por migraciones pero sin esa batería formal.
-- **§12 QA manual dashboard alumno:** Lighthouse PWA, iOS/Android real, auditoría contraste — pendiente aunque el código esté al ~98%.
+- **QA E2E nutrición con RLS** (sesión alumno + coach, toggles, planes, `saved_meals`): ejecutar cuando **TOTAL ESTIMADO** sea **> ~90%**.
+- **§12 QA manual dashboard alumno:** Lighthouse PWA, iOS/Android real, auditoría contraste.
+- **Testing:** escalar de 10% a cobertura razonable (crítico antes de monetización).
 
 ### ✅ Cerrado en esta iteración (referencia)
-- **Nutrición alumno** `/c/[slug]/nutrition` + integración dashboard — ver módulo en este archivo y [`PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md).
-- **Núcleo nutrición coach** — hub (board enriquecido), PlanBuilder, rutas, foods (lista compacta), actions unificadas, layout ancho, migraciones RLS fase 1–2 en repo — mismo archivo + bitácora 2026-04-09/10.
-- **Revisión de porcentajes contra código real (2026-04-10):** check-in, onboarding, ejercicios alumno, workout execution y auth alumno subieron de 0% a sus valores reales.
+- **Nutrición alumno** `/c/[slug]/nutrition` + integración dashboard — completado 2026-04-09.
+- **Núcleo nutrición coach** — hub, PlanBuilder, rutas, foods, migraciones RLS — completado 2026-04-09/10.
+- **Workout execution rework** — A/B variant, progress bar, PRs summary, confetti, LogSetForm motion — completado 2026-04-10.
+- **Check-in rework** — wizard 3 pasos, dual photos, loading.tsx, sticky header — completado 2026-04-10.
+- **Revisión de porcentajes contra código real (2026-04-10):** auditoría completa de 225+ archivos, 24 tablas, 38 rutas. Múltiples módulos corregidos de 0% a sus valores reales.

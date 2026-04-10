@@ -5,7 +5,8 @@ import type { Metadata, Viewport } from 'next'
 import type { Tables } from '@/lib/database.types'
 
 type Coach = Tables<'coaches'>
-import { BRAND_APP_ICON } from '@/lib/brand-assets'
+import { BRAND_APP_ICON, BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
+import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { InstallPrompt } from '@/components/InstallPrompt'
 
@@ -26,11 +27,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const coach = data as Pick<Coach, 'brand_name' | 'logo_url' | 'primary_color'> & { use_brand_colors?: boolean } | null
     const brandName = coach?.brand_name ?? 'Mi Coach'
 
+    const metadataBase = resolveMetadataBase()
+    const openGraphImageAbsoluteUrl = new URL(BRAND_OG_IMAGE, metadataBase).href
+    const coachPath = `/c/${coach_slug}`
+    const pageUrl = new URL(coachPath, metadataBase).href
+
     return {
+        metadataBase,
         title: {
             default: brandName,
             template: `%s | ${brandName}`,
         },
+        description: `Entrena con ${brandName}. Rutinas, nutrición y seguimiento desde tu móvil.`,
         manifest: `/api/manifest/${coach_slug}`,
         appleWebApp: {
             capable: true,
@@ -40,6 +48,29 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         icons: coach?.logo_url
             ? { apple: coach.logo_url }
             : { apple: BRAND_APP_ICON },
+        openGraph: {
+            title: brandName,
+            description: `Entrena con ${brandName}. Rutinas, nutrición y seguimiento desde tu móvil.`,
+            url: pageUrl,
+            siteName: brandName,
+            images: [
+                {
+                    url: openGraphImageAbsoluteUrl,
+                    width: BRAND_OG_IMAGE_WIDTH,
+                    height: BRAND_OG_IMAGE_HEIGHT,
+                    alt: brandName,
+                    type: 'image/png',
+                },
+            ],
+            locale: 'es_ES',
+            type: 'website',
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title: brandName,
+            description: `Entrena con ${brandName}. Rutinas, nutrición y seguimiento desde tu móvil.`,
+            images: [openGraphImageAbsoluteUrl],
+        },
     }
 }
 

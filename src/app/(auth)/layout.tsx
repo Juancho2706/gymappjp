@@ -18,7 +18,7 @@ export default function AuthLayout({
             {/* Minimal header */}
             <header className="flex items-center justify-between px-6 py-4">
                 <Link href="/" className="flex items-center gap-2.5">
-                    <GymAppLogo className="w-8 h-8" />
+                    <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0" />
                     <span className="font-bold text-foreground font-display">
                         EVA
                     </span>

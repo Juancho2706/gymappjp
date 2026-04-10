@@ -107,8 +107,8 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                     isBuilder && "hidden"
                 )}
             >
-                <div className="flex items-center gap-2.5">
-                    <GymAppLogo className="w-8 h-8 flex-shrink-0" />
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0 sm:w-[4.75rem]" />
                     <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
                         {coachBrand || coachName}
                     </span>
@@ -130,8 +130,11 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                 
                 {/* Logo area (Desktop only) */}
                 <div className={cn("hidden md:flex py-8 border-b border-sidebar-border items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
-                    <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
-                        <GymAppLogo className="w-10 h-10 flex-shrink-0" />
+                    <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
+                        <GymAppLogo className={cn(
+                            'h-10 flex-shrink-0',
+                            isCollapsed ? 'w-14' : 'w-[6.75rem]'
+                        )} />
                         {!isCollapsed && (
                             <div className="min-w-0 animate-in fade-in duration-300">
                                 <p 

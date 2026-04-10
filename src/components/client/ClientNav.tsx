@@ -112,8 +112,11 @@ export function ClientNav({ coachSlug, coachBrand, initialUseBrandColors = true 
                 
                 {/* Logo area (Desktop only) */}
                 <div className={cn("hidden md:flex py-6 border-b border-border/10 items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
-                    <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
-                        <GymAppLogo className="w-10 h-10 flex-shrink-0" />
+                    <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
+                        <GymAppLogo className={cn(
+                            'h-10 flex-shrink-0',
+                            isCollapsed ? 'w-14' : 'w-[6.75rem]'
+                        )} />
                         {!isCollapsed && (
                             <div>
                                 <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">

@@ -26,7 +26,7 @@ export default function PrivacidadPage() {
         <header className="border-b border-white/5 bg-transparent py-6">
             <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2 group">
-                    <GymAppLogo className="w-8 h-8 group-hover:scale-105 transition-transform" />
+                    <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0 transition-transform group-hover:scale-105" />
                     <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
                 </Link>
                 <Link href="/" className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors">
@@ -130,7 +130,7 @@ export default function PrivacidadPage() {
             <div className="max-w-4xl mx-auto px-6">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-2">
-                        <GymAppLogo className="w-8 h-8" />
+                        <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0" />
                         <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
                     </div>
 

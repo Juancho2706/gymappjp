@@ -1,4 +1,4 @@
-# Estado del Proyecto — GymApp JP
+# Estado del Proyecto — GymApp JP (EVA)
 
 > Documento vivo. Actualizar cada vez que se cierre un rework, se agregue deuda técnica, o cambie la prioridad de algo pendiente.
 
@@ -7,7 +7,32 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-10 America/Santiago — Revisión completa del código real: corregidos porcentajes de check-in (~63%), workout execution (~68%), catálogo ejercicios alumno (~68%), onboarding (~58%), auth alumno (~50%). Módulos pendientes actualizados. TOTAL global sube a ~52%.
+**Última actualización:** 2026-04-10 America/Santiago — Auditoría completa del código real (225+ archivos, 24 tablas BD, 38 rutas). Rework workout execution + check-in documentado. Múltiples módulos corregidos de 0% a sus valores reales: coach dashboard (~45%), coach settings (~35%), coach exercises (~40%), landing (~60%), pricing (~25%), auth coach (~40/35%). Se descubrió deuda técnica nueva (migrations ausentes en repo, sw.js con nombre viejo, inconsistencia moneda pricing vs landing, auth callback bug, cobertura de tests mínima). TOTAL global sube de ~52% a **~62%**.
+
+---
+
+## Stack Tecnológico
+
+| Capa | Tecnología | Versión |
+|------|-----------|---------|
+| Framework | Next.js (App Router, RSC, Server Actions) | 16.1.6 |
+| React | React + React Compiler | 19.2.3 |
+| Estilos | Tailwind CSS v4 (PostCSS, sin tailwind.config) | ^4 |
+| UI Components | shadcn/ui + @base-ui/react + Radix primitives | — |
+| Estado | useState/useReducer/useTransition/Context (sin Redux/Zustand) | — |
+| Animación | Framer Motion + tw-animate-css | — |
+| Formularios | react-hook-form + Zod v4 | ^4.3.6 |
+| Backend | Supabase (Auth, DB, Storage, RLS) | — |
+| Charts | Recharts + react-circular-progressbar + react-activity-calendar | — |
+| DnD | @dnd-kit/core + sortable | — |
+| Virtualización | @tanstack/react-virtual | — |
+| Lottie | @lottiefiles/react-lottie-player | — |
+| Confetti | canvas-confetti | — |
+| Compresión img | browser-image-compression | — |
+| i18n | Custom LanguageContext + JSON (es/en) | — |
+| PWA | Manual sw.js + dynamic manifests (no next-pwa) | — |
+| Testing | Vitest + Testing Library + Playwright | — |
+| PDF | puppeteer (evaluación pendiente — dep pesada) | — |
 
 ---
 
@@ -28,7 +53,7 @@
 **Archivos clave:**
 - `src/app/coach/workout-programs/WorkoutProgramsClient.tsx`
 - `src/app/coach/workout-programs/libraryStats.ts`
-- `src/app/coach/workout-programs/components/` (4 componentes: `LibraryHeader`, `LibraryToolbar`, `ProgramRow`, `ProgramPreviewPanel`)
+- `src/app/coach/workout-programs/components/` (4 componentes)
 - `src/app/coach/builder/[clientId]/actions.ts` (duplicate con snapshot)
 
 ---
@@ -91,9 +116,8 @@
 **Archivos clave:**
 - `src/app/coach/clients/[clientId]/ClientProfileDashboard.tsx`
 - `src/app/coach/clients/[clientId]/ProfileTabNav.tsx`
-- `src/app/coach/clients/[clientId]/` — TrainingTabB4Panels, NutritionTabB5, ProgressBodyCompositionB6, ProgramTabB7, BillingTabB8, ProfileOverviewB3, ProfileFloatingActions, ProfileCheckInSnapshot, ProfileProgramSummaryCard
+- `src/app/coach/clients/[clientId]/` — todos los tabs B3–B8 + utils
 - `src/app/coach/clients/[clientId]/profileTrainingAnalytics.ts`
-- `src/app/coach/clients/[clientId]/loading.tsx`
 
 ---
 
@@ -104,39 +128,19 @@
 - Reescritura total de `page.tsx` — server component con Suspense por sección (9 boundaries independientes)
 - Arquitectura nueva: `_data/` (React.cache), `_components/` (por dominio), `_actions/`
 - `dashboard.queries.ts` — todas las queries cacheadas con timezone Santiago
-- `heroComplianceBundle.ts` — bundle cacheado que calcula hero + 3 scores de compliance (§10 del plan maestro). `planned_days` calculado iterando días reales (no hardcoded)
-- `DashboardShell` — grid responsive 1 col mobile / 2 cols desktop con sidebar sticky 280–300px
-- `DashboardHeader` + `ClientGreeting` + `StreakWidget` (flame, confetti ≥ 30 días)
-- `WeekCalendar` + `CalendarDay` — con variante A/B vía `resolveActiveWeekVariantForDisplay`
-- `CheckInBanner` — lógica urgente/warning/normal con `prefers-reduced-motion`
-- `HeroSection` + `WorkoutHeroCard` + `RestDayCard` + `QuickLogSheet` (log rápido sin navegar)
-- `ComplianceRingCluster` + `ComplianceRing` — anillo gris si sin datos nutrición
-- `NutritionDailySummary` + `MacroBar` + `MealCompletionRow` — macros **reales** (`calculateConsumedMacros` + bundle con `food_items`/`foods`)
-- `WeightWidget` + `WeightSparkline` + `TrendArrow` + `WeightQuickLog`
-- `PersonalRecordsBanner` + `PRBadge` — confetti si PR < 24h
-- `ActiveProgramSection` + `ProgramPhaseBar` + `WorkoutPlanCard` (stagger animado)
-- `RecentWorkoutsSection` + `WorkoutLogItem`
-- `DashboardPullToRefresh` — PWA-first, pull en mobile
-- `loading.tsx` con skeletons por sección, replicando grid de dos columnas (sin layout shift)
-- `quickLogWeightAction` server action (validación 20–400 kg)
-- `src/lib/animation-presets.ts` + `src/lib/date-utils.ts` creados como utilidades compartidas
-- E2E smoke test (Playwright, Chromium) — `npm run test:e2e` OK
+- `heroComplianceBundle.ts` — bundle cacheado que calcula hero + 3 scores de compliance
+- `DashboardShell` — grid responsive 1 col mobile / 2 cols desktop con sidebar sticky
+- 30+ componentes: Header, Calendar, Hero, Compliance, Nutrition, Weight, PRs, Program, History, PullToRefresh
+- E2E smoke test (Playwright, Chromium) OK
 - `npm run build` OK
 
 **Deuda residual (baja):**
 - §12 QA manual: Lighthouse PWA, iOS/Android real, auditoría contraste
 - `goal_weight` no existe en schema — sin línea target en `WeightProgressChart`
-- `StudentDashboardPreview` en coach settings sigue mostrando una vista desactualizada del dashboard alumno
 
 **Archivos clave:**
-- `src/app/c/[coach_slug]/dashboard/page.tsx` (rewrite)
-- `src/app/c/[coach_slug]/dashboard/_data/dashboard.queries.ts`
-- `src/app/c/[coach_slug]/dashboard/_data/heroComplianceBundle.ts`
-- `src/app/c/[coach_slug]/dashboard/_components/` (30+ componentes)
-- `src/app/c/[coach_slug]/dashboard/_actions/dashboard.actions.ts`
-- `src/app/c/[coach_slug]/dashboard/loading.tsx`
-- `src/lib/animation-presets.ts`
-- `src/lib/date-utils.ts`
+- `src/app/c/[coach_slug]/dashboard/` (page, _data, _components, _actions, loading)
+- `src/lib/animation-presets.ts`, `src/lib/date-utils.ts`
 
 ---
 
@@ -144,29 +148,40 @@
 **Fecha inicio núcleo:** 2026-04-09 · **Ampliaciones:** 2026-04-10
 
 **Qué se hizo (resumen):**
-- **Alumno** (`/c/[slug]/nutrition`): arquitectura `_data` / `_actions` / `_components`; `NutritionShell` con día navegable, macros reales, adherencia 30 días, streak; eliminado `NutritionTracker` monolítico. Dashboard: `NutritionDailySummary` con consumo real alineado al plan + comidas completadas. Fix Motion en `MealCard` (spring vs keyframes).
-- **Coach — hub**: `NutritionHub` (layout ancho 2000px), plantillas, alumnos SYNCED/CUSTOM, **`getActivePlansBoardData`** (barras 7d + kcal hoy en tarjetas), biblioteca alimentos con **`FoodListCompact`** (lista densa responsive en hub y `/coach/foods`).
-- **Coach — PlanBuilder** y rutas `new` / `edit` / `client/[clientId]`; queries `nutrition-coach.queries.ts`; **todas** las server actions del hub en `_actions/nutrition-coach.actions.ts` (eliminado barrel `nutrition-plans/actions.ts` por límite Next/Turbopack); `unassignNutritionPlan` con sesión y chequeo de plan.
-- **Redirect** desde `/coach/nutrition-builder/[clientId]`; `/coach/foods` con `FoodBrowser` + `AddFoodSheet`.
-- **Perfil coach** tab Nutrición (B5): datos reales — `MacroRingSummary`, `AdherenceStrip`, kcal en gráficos/tabla, enlaces a editor y vista alumno.
-- **BD / Supabase:** `nutrition-utils`; migraciones RLS **fase 1** (`daily_nutrition_logs`, `nutrition_meal_logs`, `nutrition_plans`, `nutrition_meals`, `food_items`, `foods`) y **fase 2** (`saved_meals`, `saved_meal_items`). Aplicación en proyecto vinculado vía MCP donde corresponda; copia en `supabase/migrations/`.
-- **Pulido UI (plan `fizzy-skipping-torvalds`, 2026-04-09):** toasts en errores de búsqueda/toggle, `AlertDialog` en borrar plantilla y desasignar plan, `useReducedMotion` en `MealCard` / `MacroRingSummary`, validación plan vacío en PlanBuilder, sparkline cap 100, stats hub en grid 2 cols móvil, etc. — ver [`claudeplans/fizzy-skipping-torvalds.md`](../claudeplans/fizzy-skipping-torvalds.md).
-
-**Backlog futuro (sin urgencia acordada):** código de barras / `FoodImportRow`; rework `/coach/meals`, UX `/coach/meal-groups`, `/coach/recipes`. Bitácora Cursor: [`progreso cursor/PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md).
-
-**QA RLS nutrición (E2E alumno + coach):** se ejecutará cuando [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md) supere **~90%** en TOTAL ESTIMADO global (acordado 2026-04-10).
+- **Alumno** (`/c/[slug]/nutrition`): arquitectura `_data` / `_actions` / `_components`; `NutritionShell` con día navegable, macros reales, adherencia 30 días, streak; eliminado `NutritionTracker` monolítico.
+- **Coach — hub**: `NutritionHub` (layout ancho 2000px), plantillas, alumnos SYNCED/CUSTOM, board enriquecido con sparklines 7d + kcal hoy, biblioteca alimentos con lista compacta.
+- **Coach — PlanBuilder** y rutas `new` / `edit` / `client/[clientId]`; queries + actions unificadas.
+- **Perfil coach** tab Nutrición (B5): datos reales — macros, adherencia, kcal, enlaces editor.
+- **BD / Supabase:** migraciones RLS fase 1+2 referenciadas pero **no presentes en el repo** (ver deuda técnica).
 
 **Archivos clave:**
-- `src/app/c/[coach_slug]/nutrition/` (`NutritionShell`, queries, actions)
-- `src/app/c/[coach_slug]/dashboard/_components/nutrition/NutritionDailySummary.tsx`
-- `src/app/coach/nutrition-plans/_components/` (hub, PlanBuilder, `ActivePlansBoard`, `FoodLibrary`, …)
-- `src/app/coach/nutrition-plans/_data/nutrition-coach.queries.ts`, `_actions/nutrition-coach.actions.ts`
-- `src/components/coach/FoodListCompact.tsx`
-- `src/components/coach/CoachMainWrapper.tsx` (ancho nutrición)
-- `src/app/coach/clients/[clientId]/NutritionTabB5.tsx`, `actions.ts` (`getClientProfileData`)
-- `src/app/coach/foods/`
-- `src/lib/nutrition-utils.ts`
-- `supabase/migrations/20260410000000_nutrition_rls_phase1.sql`, `20260410120000_nutrition_rls_phase2_saved_meals.sql`
+- `src/app/c/[coach_slug]/nutrition/`, `src/app/coach/nutrition-plans/`, `src/app/coach/foods/`
+- `src/components/coach/FoodListCompact.tsx`, `src/lib/nutrition-utils.ts`
+
+---
+
+### Rework Workout Execution + Check-in
+**Fecha:** 2026-04-10
+
+**Qué se hizo (workout):**
+- `page.tsx` — `resolveActiveWeekVariantForDisplay`, query `exerciseMaxes` con exclusión de bloques del plan actual
+- `WorkoutSummaryOverlay.tsx` reescrito: desglose por ejercicio, PRs con 1RM Epley, volumen por grupo muscular, confetti, `useReducedMotion`, animaciones stagger
+- `WorkoutExecutionClient.tsx` — barra de progreso, badge Semana A/B, headers de sección, bloques completados con check, scroll al siguiente bloque, fechas relativas en historial
+- `LogSetForm.tsx` — `motion` en fila y botón, slider RPE opcional post-log
+- `actions.ts` — `revalidatePath` del perfil coach tras log exitoso
+
+**Qué se hizo (check-in):**
+- Migración `back_photo_url` en `check_ins` (aplicada vía MCP)
+- `page.tsx` — título/metadata mensual, query directa `lastCheckIn`, header sticky + `pt-safe`
+- `CheckInForm.tsx` — wizard 3 pasos con indicadores, compresión dual (front + back), animaciones direction-aware, `formatRelativeDate` en banner
+- `actions.ts` — schema `back_photo`, upload a bucket `checkins` con path `-back-`, insert `back_photo_url`
+- `loading.tsx` nuevo
+
+**Verificación:** `npm run build` OK (Next.js 16.1.6 / Turbopack)
+
+**Archivos clave:**
+- `src/app/c/[coach_slug]/workout/[planId]/` (page, client, summary, logset, actions)
+- `src/app/c/[coach_slug]/check-in/` (page, form, actions, loading)
 
 ---
 
@@ -184,91 +199,135 @@
 ### Coach panel móvil / PWA (refinamiento 2026-04-09)
 
 - **Safe area:** se quitó `pt-safe` del contenedor del layout coach (evitaba **doble** inset con el header móvil). Solo el header móvil (`CoachSidebar`) usa `pt-safe` bajo Dynamic Island.
-- **Directorio alumnos:** vista **tabla** por defecto; tabla con scroll horizontal único (cabecera + filas); menús Base UI con `DropdownMenuGroup`; `modal={false}` en dropdowns para menos saltos con nav fijo.
+- **Directorio alumnos:** vista **tabla** por defecto; tabla con scroll horizontal único; menús Base UI con `DropdownMenuGroup`; `modal={false}` en dropdowns.
 - **PWA:** `PwaRegister` ajusta viewport en `standalone` (sin zoom); layout coach con `min-h-[100dvh]` en móvil.
-- **Tarjetas:** menú “más opciones” con icono visible (`MoreHorizontal`).
+- **Tarjetas:** menú "más opciones" con icono visible (`MoreHorizontal`).
 
 ---
 
 ## Deuda técnica pendiente
 
+### Alta prioridad (bloquea monetización o producción)
+
+#### Migraciones SQL ausentes del repositorio
+Los docs y bitácoras referencian archivos de migración (`supabase/migrations/20260410000000_nutrition_rls_phase1.sql`, `20260410120000_nutrition_rls_phase2_saved_meals.sql`, `20260410200000_add_back_photo_url_to_check_ins.sql`) pero **no existe** la carpeta `supabase/migrations/` en el repo. Las migraciones se aplicaron vía MCP al proyecto Supabase pero no se commitearon.
+**Trabajo:** `supabase db pull` o exportar DDL desde dashboard, guardar en `supabase/migrations/`, agregar a `.gitignore` si es necesario. Establecer workflow de migraciones versionadas.
+
+---
+
+#### Sin `.env.example` en el repositorio
+No hay archivo de ejemplo de variables de entorno. El `README.md` menciona 3 vars necesarias pero no hay `.env.example` formal.
+**Trabajo:** Crear `.env.example` con todas las vars necesarias (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, PLAYWRIGHT_BASE_URL, etc.) y documentar.
+
+---
+
+#### Auth callback error redirect incorrecto
+`src/app/auth/callback/route.ts` redirige a `/auth/login?error=...` en caso de fallo, pero la ruta real de login coach es `/login`. El alumno usa `/c/[slug]/login`.
+**Trabajo:** Cambiar el redirect de error a `/login` o a la ruta apropiada según contexto.
+
+---
+
 ### Media prioridad
 
+#### Inconsistencia de moneda Pricing vs Landing
+`/pricing` muestra tiers en USD (Starter $49, Pro $99, Elite $199). La landing (`/page.tsx`) muestra tiers en CLP (14.990–89.990). Deben alinearse antes de monetizar.
+**Trabajo:** Decisión de producto sobre moneda y tiers definitivos. Actualizar ambas páginas.
+
+---
+
+#### `sw.js` cache name desactualizado
+`public/sw.js` usa `omnicoach-pwa-cache-v1` como nombre de cache. La marca es "EVA".
+**Trabajo:** Renombrar a `eva-pwa-cache-v1` y verificar que no haya caches huérfanos en browsers existentes.
+
+---
+
+#### Cobertura de tests mínima
+Solo existe 1 unit test (`Button.test.tsx`) y 1 Playwright spec (`auth.spec.ts` — verifica títulos de landing y login). Vitest + Playwright están configurados pero sin cobertura real.
+**Trabajo:** Escalar tests antes de monetización. Priorizar: server actions críticas (pagos, auth, logSet), flujos E2E (registro→login→workout→check-in), RLS validación.
+
+---
+
+#### `puppeteer` en dependencies
+`puppeteer` está en `dependencies` (no `devDependencies`). Se usa para `PrintProgramDialog`. Es una dependencia pesada (~400MB con Chromium) que infla el deploy.
+**Trabajo:** Evaluar alternativa ligera (html2canvas + jsPDF, o API route con headless Chrome preinstalado en Vercel). Si se mantiene, mover a `devDependencies` o excluir de producción.
+
+---
+
 #### ~~`consumedCals` en tab Nutrición del perfil~~ *(cerrado 2026-04-09)*
-El alumno marca comidas en `/nutrition`; el perfil coach agrega kcal consumidas estimadas por `food_items` de comidas completadas (`nutritionLogsEnriched` + `NutritionTabB5`). Opcional futuro: persistir `consumed_*` en `daily_nutrition_logs` para historial sin recomputar con el plan actual.
+Cerrado — kcal consumidas implementadas via `food_items` de comidas completadas.
 
 ---
 
 #### Unificar `LIBRARY_PROGRAM_LIST_SELECT`
 El string de select de la biblioteca está duplicado en `actions.ts` y en `page.tsx`.
-**Trabajo:** Extraer a `src/lib/supabase/queries/workout-programs-library.ts`.
+**Trabajo:** Extraer a `src/lib/supabase/queries/workout-programs-library.ts` (archivo ya existe pero no unifica).
 
 ---
 
 #### `goal_weight` en tabla `clients` — línea target en chart de peso
-El `WeightProgressChart` del dashboard del alumno no tiene línea de objetivo porque el campo `goal_weight` no existe en el schema de `clients`.
-**Trabajo cuando aplique:** Agregar columna `goal_weight_kg numeric` en `clients` (migración Supabase) y pasar el valor al componente para mostrar `<ReferenceLine>` en el chart.
-**Dependencia:** Decisión de producto sobre si se expone al coach en el perfil del alumno o en onboarding.
+El `WeightProgressChart` no tiene línea de objetivo porque `goal_weight` no existe en schema.
+**Trabajo cuando aplique:** Agregar columna `goal_weight_kg numeric` en `clients`, pasar al componente, mostrar `<ReferenceLine>`.
 
 ---
 
 #### `ClientCard.tsx` V1 — archivo huérfano
-`src/components/coach/ClientCard.tsx` sigue en el repo pero nada lo importa (el directorio usa `ClientCardV2`).
-**Trabajo:** Confirmar con `grep` y borrar.
-
----
-
-#### Workout execution — variante A/B en `page.tsx`
-`/c/[coach_slug]/workout/[planId]/page.tsx` carga el plan pero no resuelve la variante A/B activa de la semana. El dashboard sí lo hace vía `resolveActiveWeekVariantForDisplay`. Alinear la página de ejecución para que sepa si el alumno está en semana A o B.
-**Trabajo:** Pasar `week_variant` resuelto desde la query de `page.tsx` al cliente, y mostrarlo como contexto en el header.
+`src/components/coach/ClientCard.tsx` sigue en el repo pero nada lo importa.
+**Trabajo:** Confirmar con grep y borrar.
 
 ---
 
 ### Baja prioridad / UX futura
 
 #### `ProgramPhasesBar` en filas de biblioteca
-Las filas de la biblioteca solo tienen badge "Fases". Las cards antiguas mostraban la barra visual.
-**Opción:** Mostrar en vista previa o al hover (tooltip desktop).
-
----
+Las filas solo tienen badge "Fases". Las cards antiguas mostraban la barra visual.
 
 #### Ordenación y agrupación en biblioteca
-El orden actual viene del servidor (`created_at DESC`).
-**Opciones:** Ordenar por nombre / última actividad / cliente. Agrupar plantillas vs en curso con encabezados sticky.
-
----
+El orden actual viene del servidor (`created_at DESC`). Opciones: nombre, última actividad, cliente. Agrupar plantillas vs en curso.
 
 #### `useReducedMotion` en todos los child components del perfil
-Aplicado en tab transitions, FAB y grid del directorio. No aplicado en todos los componentes hijo del perfil (hovers de imágenes, animaciones internas de B3–B8).
+No aplicado en todos los componentes hijo del perfil (hovers de imágenes, animaciones internas de B3–B8).
+
+#### `font-outfit` referenciado pero no cargado
+`/pricing` y `/coach/exercises` usan `var(--font-outfit)` pero root layout solo carga Inter + Montserrat. Posible mismatch visual.
+
+#### `admin-raw.ts` untyped client
+`src/lib/supabase/admin-raw.ts` usa `any` para el service-role client. Deuda de tipado.
 
 ---
 
 ## Módulos pendientes de rework (próximos planes)
 
-> Estado revisado contra código real 2026-04-10. Los módulos "pendientes" ya tienen implementación base; el % indica cuánto queda para considerarlos "reworkeados".
+> Estado revisado contra código real 2026-04-10 (auditoría completa).
 
-| Módulo | Estado actual | Pendiente | Prioridad |
-|--------|--------------|-----------|-----------|
-| ~~**Nutrición (alumno + núcleo coach)**~~ | ~~`/nutrition`, hub, PlanBuilder, foods, tab B5, board enriquecido, RLS en repo, lista compacta alimentos.~~ | — | ~~Alta~~ → **COMPLETADO (núcleo)** 2026-04-09/10 |
-| **Extensión nutrición coach** | Stub / parcial | Barcode/import; `/coach/meals`, `/coach/recipes`, UX meal-groups | **Futura** (baja prioridad) |
-| ~~**Dashboard del alumno**~~ | ~98% | §12 QA manual (Lighthouse, iOS/Android real) | ~~Media~~ → **COMPLETADO** 2026-04-09 |
-| **Workout execution** (`/c/[coach_slug]/workout/[planId]`) | ~68% funcional | Optimistic updates, PRs en summary, A/B en page, confetti al completar | Media |
-| **Check-in del alumno** (`/c/[coach_slug]/check-in`) | ~63% funcional | Múltiples fotos, medidas corporales, UX step wizard mobile | Media |
-| **Dashboard coach principal** (`/coach/dashboard`) | ~0% rework | Rework completo UX + queries enriquecidas | Media |
-| **Mi Marca / Settings** (`/coach/settings`) | ~0% rework | Rework branding, `StudentDashboardPreview` alineado al dashboard actual | Media |
-| **Onboarding** (`/c/[coach_slug]/onboarding`) | ~58% funcional | Progress bar visual, foto inicial, validación por paso | Baja |
-| **Catálogo ejercicios alumno** (`/c/[coach_slug]/exercises`) | ~68% funcional | Rework visual, favoritos, historial por ejercicio | Baja |
-| **Ejercicios coach** (`/coach/exercises`) | Funcional básico, sin rework | Rework UX: upload GIF, bulk edit, organización | Baja |
-| **Login / auth alumno** | ~50% | Rework visual con branding avanzado | Baja |
-| **Pagos & Suscripciones** | 0% | Stripe/MercadoPago, webhook, feature flags por tier | **Alta (producto)** |
-| **Panel CEO / Superadmin** | 0% | Métricas globales: coaches, MRR, churn, actividad | Baja |
+| Módulo | Estado actual | % | Pendiente | Prioridad |
+|--------|--------------|---|-----------|-----------|
+| ~~**Nutrición (alumno + núcleo coach)**~~ | Completado | ~93-96% | — | ~~Alta~~ → **COMPLETADO** |
+| ~~**Dashboard del alumno**~~ | Completado | ~98% | §12 QA manual | ~~Media~~ → **COMPLETADO** |
+| ~~**Workout execution rework**~~ | Rework abril 10 | ~82% | Optimistic updates, offline/retry | ~~Media~~ → **COMPLETADO (parcial)** |
+| ~~**Check-in rework**~~ | Rework abril 10 | ~80% | Medidas corporales, notas | ~~Media~~ → **COMPLETADO (parcial)** |
+| **Pagos & Suscripciones** | 0% | 0% | Integración completa | **CRÍTICA (revenue)** |
+| **Dashboard coach** | Funcional básico | ~45% | Rework UX, KPIs globales | Media |
+| **Mi Marca / Settings** | Funcional básico | ~35% | Rework branding, preview actualizado | Media |
+| **Ejercicios coach** | Funcional básico | ~40% | Upload GIF, bulk edit | Baja |
+| **Onboarding** | Multi-step con draft | ~58% | Progress bar, foto, validación | Baja |
+| **Catálogo ejercicios alumno** | Funcional | ~68% | Rework visual, favoritos, historial | Baja |
+| **Login/Auth coach** | Funcional | ~40% | Rework visual, rate limiting | Baja |
+| **Registro coach** | Funcional | ~35% | Integración pago obligatorio | **Alta (con pagos)** |
+| **Landing/Pricing** | Sustancial | ~60/25% | Unificar moneda, SEO, testimonios | Media |
+| **Panel CEO / Superadmin** | Inexistente | 0% | Métricas globales | Baja |
+| **Testing** | Mínimo | 10% | Cobertura razonable | Media-Alta |
 
 ---
 
 ## Notas de arquitectura
 
-- **Colores por coach:** `--theme-primary` CSS var en `CoachLayout`. Respetar en todos los charts y elementos de énfasis.
-- **Dark mode primario:** Verificar variantes dark en todos los componentes nuevos.
+- **Colores por coach:** `--theme-primary` CSS var en `CoachLayout` y `ClientLayout`. Respetar en todos los charts y elementos de énfasis.
+- **Dark mode primario:** Verificar variantes dark en todos los componentes nuevos. `ThemeProvider` default dark.
 - **`GlassCard`:** Base de todas las cards del perfil y directorio. No crear cards custom sin revisar si aplica.
-- **Safe area iOS:** Usar `env(safe-area-inset-top/bottom)` en fixed/sticky en mobile. En **coach móvil**, el **header superior** (`CoachSidebar`) lleva `pt-safe`; el contenedor del layout **no** debe duplicar `pt-safe` (evita doble hueco bajo Dynamic Island). No re-aplicar inset en hijos que ya quedan bajo ese header.
-- **Variante A/B:** Lógica centralizada en `src/lib/workout/programWeekVariant.ts`. Semana impar del programa → A, par → B. Usada en builder, perfil (tab Programa, badges, `resolveNextProgramWorkout`) y dashboard cliente.
+- **Safe area iOS:** Usar `env(safe-area-inset-top/bottom)` en fixed/sticky en mobile. En **coach móvil**, el **header superior** (`CoachSidebar`) lleva `pt-safe`; el contenedor del layout **no** debe duplicar `pt-safe`.
+- **Variante A/B:** Lógica centralizada en `src/lib/workout/programWeekVariant.ts`. Semana impar del programa → A, par → B. Usada en builder, perfil, dashboard cliente, workout execution.
+- **Arquitectura `_data/_actions/_components`:** Patrón establecido en dashboard alumno y nutrición. Seguir en nuevos módulos.
+- **React.cache:** Usar para queries deduplicadas en RSC. Patrón establecido en dashboard queries.
+- **24 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`. 1 función RPC: `search_foods`.
+- **PWA manual:** `public/sw.js` + manifests dinámicos por coach (`/api/manifest/[coach_slug]` + `/c/[slug]/manifest.webmanifest`). No usa next-pwa.
+- **i18n parcial:** `LanguageContext` con `es.json`/`en.json`. Implementado en landing, no consistente en toda la app.

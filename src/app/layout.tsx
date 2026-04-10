@@ -7,29 +7,8 @@ import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 import { PwaRegister } from '@/components/PwaRegister'
 import { ScrollRestoration } from '@/components/ScrollRestoration'
 import { InstallPrompt } from '@/components/InstallPrompt'
-import { BRAND_APP_ICON, BRAND_OG_IMAGE } from '@/lib/brand-assets'
-
-/** Base para resolver URLs absolutas (OG/Twitter); prioriza dominio real del despliegue. */
-function resolveMetadataBase(): URL {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (fromEnv) {
-    try {
-      return new URL(fromEnv.endsWith('/') ? fromEnv.slice(0, -1) : fromEnv)
-    } catch {
-      /* ignore */
-    }
-  }
-  const vercel = process.env.VERCEL_URL?.trim()
-  if (vercel) {
-    const origin = vercel.startsWith('http') ? vercel : `https://${vercel}`
-    try {
-      return new URL(origin)
-    } catch {
-      /* ignore */
-    }
-  }
-  return new URL('https://www.eva-app.cl')
-}
+import { BRAND_APP_ICON, BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
+import { resolveMetadataBase } from '@/lib/site-url'
 
 const metadataBase = resolveMetadataBase()
 /** Crawlers (WhatsApp, X) suelen exigir URL absoluta y sin caracteres problemáticos en la ruta. */
@@ -82,8 +61,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: openGraphImageAbsoluteUrl,
-        width: 1920,
-        height: 1080,
+        width: BRAND_OG_IMAGE_WIDTH,
+        height: BRAND_OG_IMAGE_HEIGHT,
         alt: 'EVA',
         type: 'image/png',
       },
