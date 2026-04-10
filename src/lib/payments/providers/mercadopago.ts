@@ -19,6 +19,20 @@ function getMpAccessToken() {
     return accessToken
 }
 
+function resolvePayerEmail(accessToken: string, coachEmail: string) {
+    const isSandbox = accessToken.startsWith('TEST-')
+    const configuredTestEmail = process.env.MERCADOPAGO_TEST_PAYER_EMAIL?.trim()
+    const payerEmail = isSandbox && configuredTestEmail ? configuredTestEmail : coachEmail
+
+    if (isSandbox && !payerEmail.includes('@testuser.com')) {
+        throw new Error(
+            'MercadoPago sandbox requiere payer_email @testuser.com. Configura MERCADOPAGO_TEST_PAYER_EMAIL con un test user de MP.'
+        )
+    }
+
+    return payerEmail
+}
+
 function buildExternalReference(input: CreateCheckoutInput) {
     return `${input.coachId}|${input.tier}|${input.billingCycle}`
 }
@@ -50,9 +64,11 @@ export class MercadoPagoProvider implements PaymentsProvider {
 
     async createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult> {
         const accessToken = getMpAccessToken()
+        const payerEmail = resolvePayerEmail(accessToken, input.coachEmail)
         const externalReference = buildExternalReference(input)
         const cycle = BILLING_CYCLE_CONFIG[input.billingCycle]
         const startDate = new Date(Date.now() + 60_000).toISOString()
+        const endDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 5).toISOString()
 
         const response = await fetch('https://api.mercadopago.com/preapproval', {
             method: 'POST',
@@ -63,16 +79,18 @@ export class MercadoPagoProvider implements PaymentsProvider {
             body: JSON.stringify({
                 reason: input.title,
                 external_reference: externalReference,
-                payer_email: input.coachEmail,
+                payer_email: payerEmail,
                 back_url: input.successUrl,
                 notification_url: input.webhookUrl,
-                status: 'authorized',
+                // "authorized" requires card_token_id. For checkout link flow we create it as pending.
+                status: 'pending',
                 auto_recurring: {
                     frequency: cycle.months,
                     frequency_type: 'months',
                     transaction_amount: input.amountClp,
                     currency_id: 'CLP',
                     start_date: startDate,
+                    end_date: endDate,
                 },
             }),
         })
