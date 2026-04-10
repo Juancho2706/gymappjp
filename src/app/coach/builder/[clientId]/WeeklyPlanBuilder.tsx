@@ -551,10 +551,16 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         })
     }
 
-    if (!mounted) return <div className="h-[100dvh] flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+    if (!mounted) {
+        return (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-background">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        )
+    }
 
     return (
-        <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {showDraftBanner && (
                 <div className="bg-primary/10 border-b border-primary/20 p-3 flex justify-center items-center gap-4 animate-in slide-in-from-top">
                     <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
@@ -938,7 +944,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                 className="h-full overflow-y-auto"
                                                 style={{
                                                     width: `${100 / days.length}%`,
-                                                    paddingBottom: `calc(${sheetHeight}vh + env(safe-area-inset-bottom) + 0.5rem)`,
+                                                    /* Solo altura del sheet: el sheet ya lleva paddingBottom safe-area; sumar inset aquí duplicaba hueco */
+                                                    paddingBottom: `calc(${sheetHeight}vh + 6px)`,
                                                     WebkitOverflowScrolling: 'touch',
                                                 } as React.CSSProperties}
                                             >

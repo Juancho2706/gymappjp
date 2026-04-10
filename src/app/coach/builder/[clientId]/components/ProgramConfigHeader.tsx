@@ -2,6 +2,7 @@
 
 import { Edit2, Repeat, ChevronDown, ChevronUp, RotateCcw, Calendar, Plus, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { ClampedIntInput, OptionalClampedIntInput } from '@/components/ui/clamped-int-input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ProgramPhase } from '../types'
@@ -142,22 +143,23 @@ export function ProgramConfigHeader({
                             {durationType === 'weeks' && (
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Cant. Semanas</label>
-                                    <Input 
-                                        type="number"
+                                    <ClampedIntInput
                                         value={weeksToRepeat}
-                                        onChange={e => setWeeksToRepeat(parseInt(e.target.value) || 1)}
+                                        onValueChange={setWeeksToRepeat}
+                                        min={1}
+                                        max={12}
                                         className="h-12 bg-background border-border font-bold text-xs text-center"
-                                        min={1} max={12}
                                     />
                                 </div>
                             )}
                             {(durationType === 'async' || durationType === 'calendar_days') && (
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Días</label>
-                                    <Input 
-                                        type="number"
-                                        value={durationDays || ''}
-                                        onChange={e => setDurationDays(parseInt(e.target.value) || null)}
+                                    <OptionalClampedIntInput
+                                        value={durationDays}
+                                        onValueChange={setDurationDays}
+                                        min={1}
+                                        max={730}
                                         placeholder="Ej: 10"
                                         className="h-12 bg-background border-border font-bold text-xs text-center"
                                     />
@@ -260,16 +262,15 @@ export function ProgramConfigHeader({
                             />
                             <div className="flex items-center gap-1">
                                 <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">Sem.</span>
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    max={52}
+                                <ClampedIntInput
                                     value={phase.weeks}
-                                    onChange={e => {
+                                    onValueChange={(weeks) => {
                                         const next = [...programPhases]
-                                        next[index] = { ...next[index], weeks: Math.min(52, Math.max(1, parseInt(e.target.value, 10) || 1)) }
+                                        next[index] = { ...next[index], weeks }
                                         setProgramPhases(next)
                                     }}
+                                    min={1}
+                                    max={52}
                                     className="h-9 w-14 text-center text-xs font-bold"
                                 />
                             </div>

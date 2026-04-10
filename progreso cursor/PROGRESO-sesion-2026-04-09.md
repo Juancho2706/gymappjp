@@ -68,6 +68,29 @@ Zona horaria de referencia: **America/Santiago**.
 
 ---
 
+## 20:27 — Biblia: `ESTADO-COMPONENTES` + `ESTADO-PROYECTO`
+
+- Nutrición coach: subsecciones **Núcleo** vs **Extensiones futuras**; eliminada la línea confusa del ~55%; resumen general con texto “extensiones excluidas”.
+- Directorio alumnos: notas alineadas al código (tabla default, scroll, Base UI, PWA, `ClientCardV2`).
+- Enlaces rotos (`PROGRESO-nutricion-rework`, `PROGRESO-jaunty-*`) sustituidos por rutas válidas o `ESTADO-PROYECTO`.
+- `ESTADO-PROYECTO`: bloque *Coach panel móvil / PWA*, pulido `fizzy-skipping-torvalds`, nota **safe area** corregida (sin `pt-safe` duplicado en layout).
+
 ## 20:25 — Cierre de sesión (registro)
 
 Documento creado/actualizado con el detalle anterior. Próximos pasos opcionales: revisar C1 en git para `NutritionDailySummary`; si se desea zoom deshabilitado también en pestaña del navegador, habría que acordar impacto en accesibilidad.
+
+---
+
+## 20:42 — Inputs numéricos: poder borrar y reescribir (móvil)
+
+- **Problema:** `type="number"` + `parseInt(...) || 1` (o `|| 0`) reinyectaba un valor mínimo al quedar vacío → en iOS/Android el retroceso parecía no borrar.
+- **Nuevo:** `src/components/ui/clamped-int-input.tsx` — `ClampedIntInput` y `OptionalClampedIntInput` (texto + `inputMode="numeric"`, string local, clamp en `blur`).
+- **Integración:** `ProgramConfigHeader.tsx` (semanas / fases / días opcionales), `PlanBuilderSidebar.tsx` (metas manuales), `BlockEditSheet.tsx` (series + `BlockProgressionValueInput` para progresión decimal).
+
+## 20:42 — Creador de planes (móvil): hueco bajo la lista + barra superior coach fija
+
+- **`WeeklyPlanBuilder.tsx`:** raíz deja `h-[100dvh]` por `flex-1 min-h-0` para encajar en `<main>` y evitar scroll del documento que “se lleva” el encabezado; `paddingBottom` del carrusel de día pasa de `sheetHeight vh + safe-bottom + 0.5rem` a `sheetHeight vh + 6px` (el sheet ya aplica `env(safe-area-inset-bottom)` — se evita **doble** reserva y el hueco rojo bajo la lista).
+- **`CoachSidebar.tsx`:** header móvil (logo, tema, cerrar sesión) **ya no se oculta** en rutas builder; pasa de `sticky` a **`fixed`**, `z-[55]`, `pt-safe`.
+- **`CoachMainWrapper.tsx`:** en móvil, `pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]` y `md:pt-0` para que el contenido (incl. creador) quede **debajo** del header fijo; `min-h-0` + `flex` en `<main>` para que el flex hijo pueda encoger.
+
+**Verificación:** `npm run build` — OK (tras estos cambios).

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Input } from '@/components/ui/input'
+import { ClampedIntInput } from '@/components/ui/clamped-int-input'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { getExerciseHistoryAction } from '../actions'
 import type { BuilderBlock } from '../types'
@@ -21,6 +22,68 @@ interface BlockEditSheetProps {
     onClose: () => void
     onUpdate: (block: BuilderBlock) => void
     onChange: (block: BuilderBlock) => void
+}
+
+/** Texto + blur: evita `type="number"` en móvil donde a veces no se puede vaciar el campo. */
+function BlockProgressionValueInput({
+    progressionType,
+    value,
+    onCommit,
+}: {
+    progressionType: 'weight' | 'reps'
+    value: number | null
+    onCommit: (n: number | null) => void
+}) {
+    const [str, setStr] = useState(() => (value == null ? '' : String(value)))
+    const defaultNum = progressionType === 'weight' ? 2.5 : 1
+
+    useEffect(() => {
+        setStr(value == null ? '' : String(value))
+    }, [value, progressionType])
+
+    return (
+        <input
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            value={str}
+            onChange={(e) => {
+                let v = e.target.value.replace(',', '.')
+                if (v !== '' && !/^\d*\.?\d*$/.test(v)) return
+                setStr(v)
+                if (v === '' || v === '.') {
+                    onCommit(null)
+                    return
+                }
+                const f = parseFloat(v)
+                if (!Number.isNaN(f)) onCommit(f)
+            }}
+            onBlur={() => {
+                if (str === '' || str === '.') {
+                    onCommit(defaultNum)
+                    setStr(String(defaultNum))
+                    return
+                }
+                const f = parseFloat(str)
+                if (Number.isNaN(f) || f < 0) {
+                    onCommit(defaultNum)
+                    setStr(String(defaultNum))
+                    return
+                }
+                if (progressionType === 'weight') {
+                    const rounded = Math.round(f * 2) / 2
+                    onCommit(rounded)
+                    setStr(String(rounded))
+                } else {
+                    const n = Math.round(f)
+                    onCommit(n)
+                    setStr(String(n))
+                }
+            }}
+            className="w-20 h-8 text-center text-sm font-bold bg-secondary dark:bg-white/5 border border-border dark:border-white/10 rounded-lg text-foreground focus:border-primary focus:outline-none"
+            placeholder={progressionType === 'weight' ? '2.5' : '1'}
+        />
+    )
 }
 
 export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }: BlockEditSheetProps) {
@@ -107,13 +170,13 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                                 Series
                                 <span className="text-red-500">*</span>
                             </label>
-                            <Input
-                                type="number"
-                                value={block.sets || ''}
-                                onChange={e => onChange({...block, sets: parseInt(e.target.value) || 0})}
+                            <ClampedIntInput
+                                value={block.sets ?? 0}
+                                onValueChange={(sets) => onChange({ ...block, sets })}
+                                min={1}
+                                max={99}
                                 placeholder="Ej. 3"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
-                                min={1}
                             />
                         </div>
                         <div className="space-y-3">
@@ -236,14 +299,10 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-1">
-                                    <input
-                                        type="number"
-                                        step={block.progression_type === 'weight' ? 0.5 : 1}
-                                        min={0}
-                                        value={block.progression_value ?? ''}
-                                        onChange={e => onChange({...block, progression_value: parseFloat(e.target.value) || null})}
-                                        className="w-20 h-8 text-center text-sm font-bold bg-secondary dark:bg-white/5 border border-border dark:border-white/10 rounded-lg text-foreground focus:border-primary focus:outline-none"
-                                        placeholder="2.5"
+                                    <BlockProgressionValueInput
+                                        progressionType={block.progression_type}
+                                        value={block.progression_value ?? null}
+                                        onCommit={(n) => onChange({ ...block, progression_value: n })}
                                     />
                                     <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
                                         {block.progression_type === 'weight' ? 'kg/sem' : 'rep/ses'}

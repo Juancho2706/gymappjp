@@ -7,9 +7,9 @@
 
 - Este archivo y [`ESTADO-PROYECTO.md`](ESTADO-PROYECTO.md) son la **referencia fundamental** del estado del código: deben reflejar **lo hecho el mismo día** cuando haya trabajo sustancial (rework, features, migraciones, decisiones de alcance).
 - Cada actualización debe llevar **fecha y hora** en **America/Santiago** en la línea **Última actualización** de ambos documentos (formato recomendado: `YYYY-MM-DD HH:mm America/Santiago`).
-- Detalle nutrición día a día: [`progreso cursor/PROGRESO-nutricion-rework.md`](progreso%20cursor/PROGRESO-nutricion-rework.md).
+- Bitácoras Cursor (sesiones): [`progreso cursor/PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md).
 
-**Última actualización:** 2026-04-10 19:00 America/Santiago — Nutrición coach (núcleo ~93%): board 7d+kcal, lista compacta alimentos, layout ancho, actions unificadas, RLS fase 1+2 en repo; gatillo QA RLS cuando este documento supere **~90% global**; barcode / meals / meal-groups / recipes → futuro.
+**Última actualización:** 2026-04-09 20:27 America/Santiago — Nutrición coach: sección núcleo vs extensiones alineada al plan maestro; directorio alumnos (móvil/PWA) y enlaces de progreso actualizados.
 
 ---
 
@@ -70,13 +70,13 @@
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
 | `CoachClientsShell` | ✅ | 100% | Orquestador limpio, maneja riskFilter |
-| `CoachWarRoom` | ✅ | 100% | Stat cards animadas, banners de alerta por attention score |
-| `DirectoryActionBar` | ✅ | 100% | Búsqueda, filtros, sort, toggle grid/tabla |
-| `ClientsDirectoryClient` | ✅ | 100% | Vista grid + tabla unificada, filtros activos |
-| `ClientsDirectoryTable` | ✅ | 100% | Virtualizable con @tanstack/react-virtual, columnas ordenables |
+| `CoachWarRoom` | ✅ | 100% | Stat cards animadas, banners de alerta; `attentionFlags` null-safe |
+| `DirectoryActionBar` | ✅ | 100% | Búsqueda, filtros, sort, toggle grid/tabla; menús Base UI con `DropdownMenuGroup`; `modal={false}` en móvil |
+| `ClientsDirectoryClient` | ✅ | 100% | Vista grid + tabla; **tabla por defecto**; filtros activos; búsqueda null-safe (`full_name` / `email`) |
+| `ClientsDirectoryTable` | ✅ | 100% | Virtualizable; columnas ordenables; **un solo** `overflow-x` para cabecera + filas (sin desbordar página) |
 | `ClientsDirectoryEmpty` | ✅ | 100% | Empty state con Lottie |
 | `ClientCard.tsx` (V1) | ❌ | 0% | **Huérfano** — nada lo importa, pendiente borrar |
-| `ClientCardV2` | ✅ | 100% | Compliance ring, attention badge, sparklines, semáforo, quick actions |
+| `ClientCardV2` | ✅ | 100% | Compliance ring, attention badge, sparklines, semáforo, quick actions; menú ⋯ (`MoreHorizontal`) + dropdown `modal={false}` |
 | `CreateClientModal` | ✅ | 100% | Crea auth user + registro vía Admin API |
 | `dashboard.service.ts` | ✅ | 100% | Motor de Attention Score, cálculo de riesgo, 1RM Epley |
 | `actions.ts` | ✅ | 100% | CRUD completo: crear/borrar/toggle/resetPassword vía Admin API |
@@ -146,20 +146,27 @@
 
 ### Módulo Nutrición del Coach
 
+#### Núcleo (en scope — flujo principal alumno + coach)
+
 | Componente | Ruta | Estado | % | Notas |
 |------------|------|--------|---|-------|
 | Hub + tabs | `/coach/nutrition-plans` | ✅ | 95% | `NutritionHub` (ancho 2000px), `TemplateLibrary`, `ActivePlansBoard` (**sparkline 7d + kcal hoy** vía `getActivePlansBoardData`), `FoodLibrary`, `AssignModal`; `page.tsx` + `loading.tsx`; datos vía `nutrition-coach.queries` |
-| PlanBuilder + rutas | `/coach/nutrition-plans/new`, `…/[id]/edit`, `…/client/[clientId]` | ✅ | 95% | dnd-kit, `FoodSearchDrawer`, persistencia JSON vía `_actions/nutrition-coach.actions.ts` (incl. assign, delete/duplicate template, custom food, `unassign` con sesión) |
+| PlanBuilder + rutas | `/coach/nutrition-plans/new`, `…/[id]/edit`, `…/client/[clientId]` | ✅ | 95% | dnd-kit, `FoodSearchDrawer`, persistencia JSON vía `_actions/nutrition-coach.actions.ts` (incl. assign, delete/duplicate template, custom food, `unassign` con sesión); orden móvil sidebar→canvas; validación plan vacío; toasts / `AlertDialog` / `useReducedMotion` (auditoría 2026-04-09) |
 | Redirect legacy | `/coach/nutrition-builder/[clientId]` | 🔶 | 40% | Solo redirect a `nutrition-plans/client/...`; forms/modal legacy eliminados |
 | Alimentos | `/coach/foods` | ✅ | 95% | `FoodBrowser` + **`FoodListCompact`** (lista densa responsive), `AddFoodSheet`, `getFoodLibrary`; `FoodSearch.tsx` (RPC) compartido con meal-groups |
-| Comidas | `/coach/meals` | ❌ | 0% | **Futuro** — sin rework; decisión producto (prioridad baja hasta nuevo aviso) |
-| Grupos de Comidas | `/coach/meal-groups` | 🔶 | 30% | **Futuro (UX)** — sin rework; sigue usando `FoodSearch` |
-| Recetas | `/coach/recipes`, `[recipeId]` | ❌ | 0% | **Futuro** — sin rework; fuera del núcleo nutrición acordado |
-| Código de barras / import | — | ❌ | 0% | **Futuro** — `FoodImportRow` u equivalente no implementado |
 
-**Resultado — núcleo (hub + PlanBuilder + foods + datos perfil B5 ya en otra sección): ~93%** — Alineado con el flujo maestro coach **excl.** extensiones meals/recipes/grupos/barcode. **RLS** (logs, planes, meals, items, foods, `saved_meals`): migraciones en `supabase/migrations/`; **validación E2E alumno+coach con RLS** se hará cuando el **TOTAL ESTIMADO** de este documento supere **~90%** (acordado 2026-04-10).
+Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): datos reales documentados en sus secciones; no duplicados en esta tabla de núcleo coach.
 
-**Resultado — módulo “completo” si se exigen meals + recipes + grupos al mismo nivel:** ~55% (arrastran filas en 0–30%). Detalle: [`PROGRESO-nutricion-rework.md`](progreso%20cursor/PROGRESO-nutricion-rework.md).
+**Resultado núcleo: ~93%** — **RLS** (logs, planes, meals, items, foods, `saved_meals`): migraciones en `supabase/migrations/`; **validación E2E alumno+coach con RLS** cuando el **TOTAL ESTIMADO** global de este documento supere **~90%** (acordado 2026-04-10).
+
+#### Extensiones futuras (fuera de scope — decisión producto 2026-04-09)
+
+| Componente | Ruta | Estado | Notas |
+|------------|------|--------|-------|
+| Comidas | `/coach/meals` | ❌ Futuro | Prioridad baja hasta nueva decisión de producto |
+| Grupos de Comidas | `/coach/meal-groups` | 🔶 Futuro | Sin rework UX; sigue usando `FoodSearch` |
+| Recetas | `/coach/recipes`, `[recipeId]` | ❌ Futuro | Fuera del núcleo acordado |
+| Código de barras / import | — | ❌ Futuro | `FoodImportRow` u equivalente no implementado |
 
 ---
 
@@ -210,7 +217,7 @@
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| `page.tsx` + `_data/*` + `_components/*` | ✅ | 100% | Checklist §11 cerrado. Shell md+, streaming Suspense, React.cache, compliance §10, skeletons, E2E smoke. Ver [`PROGRESO-jaunty-fluttering-spark.md`](progreso%20cursor/PROGRESO-jaunty-fluttering-spark.md) |
+| `page.tsx` + `_data/*` + `_components/*` | ✅ | 100% | Checklist §11 cerrado. Shell md+, streaming Suspense, React.cache, compliance §10, skeletons, E2E smoke. Resumen en [ESTADO-PROYECTO.md](ESTADO-PROYECTO.md) (*Dashboard del Alumno — Rework Total*). |
 | `DashboardShell` + `loading.tsx` | ✅ | 100% | Grid 2 cols desktop, sidebar sticky, safe-area. `loading.tsx` replica el grid exacto — sin layout shift |
 | `DashboardHeader` + `StreakWidget` + `ClientGreeting` | ✅ | 100% | Greeting contextual, fecha Santiago, racha con flame + confetti ≥ 30 días |
 | `WeekCalendar` + `CalendarDay` | ✅ | 100% | Usa `resolveActiveWeekVariantForDisplay` + `workoutPlanMatchesVariant` — A/B correcto |
@@ -276,7 +283,7 @@
 | `_actions/nutrition.actions.ts` | ✅ | 100% | Toggle + fetch log por fecha |
 | `NutritionTracker` / `nutrition/actions.ts` | — | — | **Eliminados** (reemplazados por arquitectura anterior) |
 
-**Resultado del módulo: ~96% — Alineado con [PLAN-NUTRICION-ALUMNO.md](../claudeplans/PLAN-NUTRICION-ALUMNO.md) en alcance A–D+H (perfil coach); ver PROGRESO-nutricion-rework para matices RLS/UX.**
+**Resultado del módulo: ~96% — Alineado con [PLAN-NUTRICION-ALUMNO.md](../claudeplans/PLAN-NUTRICION-ALUMNO.md) en alcance A–D+H (perfil coach); matices RLS/UX en bitácora [`PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md) y sección nutrición coach arriba.**
 
 ---
 
@@ -345,7 +352,7 @@
 | Workout Execution (alumno) | 50% |
 | Dashboard Coach Principal | 0% |
 | Mi Marca / Brand Settings | 0% |
-| Módulo Nutrición Coach (núcleo) | ~93% |
+| Módulo Nutrición Coach (núcleo) | ~93% (extensiones futuras excluidas) |
 | Ejercicios Coach | 0% |
 | Templates | 0% |
 | Dashboard Alumno | ~98% |
@@ -367,7 +374,7 @@
 1. **Pagos & Suscripciones** — integrar Stripe o MercadoPago, registro obligatorio con pago, webhooks.
 
 ### 🟠 Media
-2. **Dashboard del alumno** — **código al ~98%** (ver [`PROGRESO-jaunty-fluttering-spark.md`](progreso%20cursor/PROGRESO-jaunty-fluttering-spark.md)); pendiente §12 QA (Lighthouse, iOS/Android real) y actualizar **preview** en Mi Marca.
+2. **Dashboard del alumno** — **código al ~98%** (resumen en [ESTADO-PROYECTO.md](ESTADO-PROYECTO.md)); pendiente §12 QA (Lighthouse, iOS/Android real) y actualizar **preview** en Mi Marca.
 3. **Workout Execution** — optimistic updates, WorkoutSummaryOverlay con datos reales, RestTimer con audio/vibración.
 4. **Check-in del alumno** — flujo mobile: peso + fotos + energía.
 5. **Dashboard principal del coach** (`/coach/dashboard`) — rework de UX y queries.
@@ -388,5 +395,5 @@
 - **QA E2E nutrición con RLS** (sesión alumno + coach, toggles, planes, `saved_meals`): ejecutar cuando **TOTAL ESTIMADO** de **este documento** sea **> ~90%** (acordado 2026-04-10). Hasta entonces, RLS sigue aplicándose por migraciones pero sin esa batería formal.
 
 ### ✅ Cerrado en esta iteración (referencia)
-- **Nutrición alumno** `/c/[slug]/nutrition` + integración dashboard — ver [`PROGRESO-nutricion-rework.md`](progreso%20cursor/PROGRESO-nutricion-rework.md).
+- **Nutrición alumno** `/c/[slug]/nutrition` + integración dashboard — ver módulo en este archivo y [`PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md).
 - **Núcleo nutrición coach** — hub (board enriquecido), PlanBuilder, rutas, foods (lista compacta), actions unificadas, layout ancho, migraciones RLS fase 1–2 en repo — mismo archivo + bitácora 2026-04-09/10.

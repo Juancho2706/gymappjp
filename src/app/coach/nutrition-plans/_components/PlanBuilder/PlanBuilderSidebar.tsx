@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ClampedIntInput } from '@/components/ui/clamped-int-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
@@ -82,15 +83,15 @@ export function PlanBuilderSidebar({
           ).map(([label, key, val]) => (
             <div key={key}>
               <Label className="text-[10px] text-muted-foreground">{label}</Label>
-              <Input
-                type="number"
-                min={0}
+              <ClampedIntInput
                 className="h-9 mt-0.5"
-                value={val || ''}
-                onChange={(e) =>
+                value={val}
+                min={0}
+                max={key === 'calories' ? 50000 : 10000}
+                onValueChange={(n) =>
                   onGoalsChange({
                     ...goals,
-                    [key]: Number(e.target.value) || 0,
+                    [key]: n,
                   })
                 }
               />

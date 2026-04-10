@@ -7,7 +7,7 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-10 19:00 America/Santiago — Post nutrición: board hub, actions unificadas, RLS fase 2 `saved_meals`, lista compacta alimentos, gatillo QA RLS; norma biblia explícita.
+**Última actualización:** 2026-04-09 20:27 America/Santiago — Docs alineados al código: nutrición coach núcleo vs extensiones; directorio coach móvil/PWA; nota safe area; enlaces de bitácora corregidos.
 
 ---
 
@@ -150,8 +150,9 @@
 - **Redirect** desde `/coach/nutrition-builder/[clientId]`; `/coach/foods` con `FoodBrowser` + `AddFoodSheet`.
 - **Perfil coach** tab Nutrición (B5): datos reales — `MacroRingSummary`, `AdherenceStrip`, kcal en gráficos/tabla, enlaces a editor y vista alumno.
 - **BD / Supabase:** `nutrition-utils`; migraciones RLS **fase 1** (`daily_nutrition_logs`, `nutrition_meal_logs`, `nutrition_plans`, `nutrition_meals`, `food_items`, `foods`) y **fase 2** (`saved_meals`, `saved_meal_items`). Aplicación en proyecto vinculado vía MCP donde corresponda; copia en `supabase/migrations/`.
+- **Pulido UI (plan `fizzy-skipping-torvalds`, 2026-04-09):** toasts en errores de búsqueda/toggle, `AlertDialog` en borrar plantilla y desasignar plan, `useReducedMotion` en `MealCard` / `MacroRingSummary`, validación plan vacío en PlanBuilder, sparkline cap 100, stats hub en grid 2 cols móvil, etc. — ver [`claudeplans/fizzy-skipping-torvalds.md`](../claudeplans/fizzy-skipping-torvalds.md).
 
-**Backlog futuro (sin urgencia acordada):** código de barras / `FoodImportRow`; rework `/coach/meals`, UX `/coach/meal-groups`, `/coach/recipes`. Detalle y checklist: [`docs/progreso cursor/PROGRESO-nutricion-rework.md`](progreso%20cursor/PROGRESO-nutricion-rework.md).
+**Backlog futuro (sin urgencia acordada):** código de barras / `FoodImportRow`; rework `/coach/meals`, UX `/coach/meal-groups`, `/coach/recipes`. Bitácora Cursor: [`progreso cursor/PROGRESO-sesion-2026-04-09.md`](../progreso%20cursor/PROGRESO-sesion-2026-04-09.md).
 
 **QA RLS nutrición (E2E alumno + coach):** se ejecutará cuando [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md) supere **~90%** en TOTAL ESTIMADO global (acordado 2026-04-10).
 
@@ -177,6 +178,15 @@
 | Label "Alumnos (0)" pegado al combobox | `WorkoutProgramsClient.tsx` | `space-y-2` → `space-y-3` |
 | Título ejercicio chocaba con notch/Dynamic Island | `BlockEditSheet.tsx` | `pt-[max(1.5rem,env(safe-area-inset-top))]` en SheetHeader |
 | Day tabs del builder desplazadas hacia abajo | `WeeklyPlanBuilder.tsx` | Removido `paddingTop: env(safe-area-inset-top)` erróneo + `mt-2→mt-1` |
+
+---
+
+### Coach panel móvil / PWA (refinamiento 2026-04-09)
+
+- **Safe area:** se quitó `pt-safe` del contenedor del layout coach (evitaba **doble** inset con el header móvil). Solo el header móvil (`CoachSidebar`) usa `pt-safe` bajo Dynamic Island.
+- **Directorio alumnos:** vista **tabla** por defecto; tabla con scroll horizontal único (cabecera + filas); menús Base UI con `DropdownMenuGroup`; `modal={false}` en dropdowns para menos saltos con nav fijo.
+- **PWA:** `PwaRegister` ajusta viewport en `standalone` (sin zoom); layout coach con `min-h-[100dvh]` en móvil.
+- **Tarjetas:** menú “más opciones” con icono visible (`MoreHorizontal`).
 
 ---
 
@@ -231,7 +241,7 @@ Aplicado en tab transitions, FAB y grid del directorio. No aplicado en todos los
 
 | Módulo | Descripción | Prioridad |
 |--------|-------------|-----------|
-| ~~**Nutrición (alumno + núcleo coach)**~~ | ~~`/nutrition`, hub, PlanBuilder, foods, tab B5, board enriquecido, RLS en repo, lista compacta alimentos.~~ | ~~Alta~~ → **COMPLETADO (núcleo)** 2026-04-09 / **refuerzos** 2026-04-10 — ver *Rework Nutrición* y [`PROGRESO-nutricion-rework.md`](progreso%20cursor/PROGRESO-nutricion-rework.md) |
+| ~~**Nutrición (alumno + núcleo coach)**~~ | ~~`/nutrition`, hub, PlanBuilder, foods, tab B5, board enriquecido, RLS en repo, lista compacta alimentos.~~ | ~~Alta~~ → **COMPLETADO (núcleo)** 2026-04-09 / **refuerzos** 2026-04-10 — ver *Rework Nutrición* y [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md) (módulo nutrición coach) |
 | **Extensión nutrición coach** | Barcode/import; `/coach/meals`, `/coach/recipes`, UX meal-groups | **Futura** (prioridad baja hasta decisión producto) |
 | ~~**Dashboard del alumno**~~ | ~~Rework general del dashboard que ve el alumno.~~ | ~~Media~~ → **COMPLETADO** 2026-04-09 |
 | **Workout execution** (`/c/[coach_slug]/workout/[planId]`) | Logging de series/reps durante el entrenamiento — mejoras pendientes. | Media |
@@ -245,5 +255,5 @@ Aplicado en tab transitions, FAB y grid del directorio. No aplicado en todos los
 - **Colores por coach:** `--theme-primary` CSS var en `CoachLayout`. Respetar en todos los charts y elementos de énfasis.
 - **Dark mode primario:** Verificar variantes dark en todos los componentes nuevos.
 - **`GlassCard`:** Base de todas las cards del perfil y directorio. No crear cards custom sin revisar si aplica.
-- **Safe area iOS:** Usar `env(safe-area-inset-top/bottom)` en fixed/sticky en mobile. El layout raíz del coach aplica `pt-safe` — no re-aplicar en hijos dentro del flow normal.
+- **Safe area iOS:** Usar `env(safe-area-inset-top/bottom)` en fixed/sticky en mobile. En **coach móvil**, el **header superior** (`CoachSidebar`) lleva `pt-safe`; el contenedor del layout **no** debe duplicar `pt-safe` (evita doble hueco bajo Dynamic Island). No re-aplicar inset en hijos que ya quedan bajo ese header.
 - **Variante A/B:** Lógica centralizada en `src/lib/workout/programWeekVariant.ts`. Semana impar del programa → A, par → B. Usada en builder, perfil (tab Programa, badges, `resolveNextProgramWorkout`) y dashboard cliente.
