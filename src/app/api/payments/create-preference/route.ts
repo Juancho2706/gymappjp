@@ -49,7 +49,7 @@ export async function POST(request: Request) {
             billingCycle,
             amountClp,
             title: `Suscripción ${TIER_CONFIG[tier].label} ${cycle.label} (${cycle.months} mes/es)`,
-            successUrl: `${appUrl}/coach/reactivate?subscription=success`,
+            successUrl: `${appUrl}/coach/subscription/processing`,
             failureUrl: `${appUrl}/coach/reactivate?payment=failure`,
             pendingUrl: `${appUrl}/coach/reactivate?payment=pending`,
             webhookUrl: `${appUrl}/api/payments/webhook`,

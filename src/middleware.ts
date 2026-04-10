@@ -60,16 +60,18 @@ export async function middleware(request: NextRequest) {
         }
 
         const isReactivatePage = pathname.startsWith('/coach/reactivate')
+        const isSubscriptionProcessingPage = pathname.startsWith('/coach/subscription/processing')
+        const isSubscriptionGatePage = isReactivatePage || isSubscriptionProcessingPage
         const blockedStatuses = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES)
         const isBlocked = blockedStatuses.has(coach.subscription_status ?? '')
 
-        if (isBlocked && !isReactivatePage) {
+        if (isBlocked && !isSubscriptionGatePage) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/coach/reactivate'
             return NextResponse.redirect(redirectUrl)
         }
 
-        if (!isBlocked && isReactivatePage) {
+        if (!isBlocked && isSubscriptionGatePage) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/coach/dashboard'
             return NextResponse.redirect(redirectUrl)
