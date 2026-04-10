@@ -3,6 +3,7 @@ import { addMonths } from 'date-fns'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { BILLING_CYCLE_CONFIG } from '@/lib/constants'
+import type { Json, TablesInsert } from '@/lib/database.types'
 
 function mapProviderStatus(status?: string | null) {
     if (!status) return 'pending_payment'
@@ -20,6 +21,15 @@ function buildPayload(request: Request, body: unknown) {
     const id = url.searchParams.get('id')
     if (!topic && !id) return {}
     return { type: topic ?? undefined, data: { id: id ?? undefined } }
+}
+
+function toJsonPayload(value: unknown): Json | null {
+    if (value == null) return null
+    try {
+        return JSON.parse(JSON.stringify(value)) as Json
+    } catch {
+        return null
+    }
 }
 
 export async function POST(request: Request) {
@@ -63,13 +73,15 @@ export async function POST(request: Request) {
         payment_provider: provider.name,
     }).eq('id', coach.id)
 
-    await admin.from('subscription_events').upsert({
+    const eventRow: TablesInsert<'subscription_events'> = {
         coach_id: coach.id,
         provider: provider.name,
         provider_event_id: result.eventId ?? null,
         provider_status: result.providerStatus ?? null,
-        payload: body && typeof body === 'object' ? body : null,
-    }, { onConflict: 'provider_event_id' })
+        payload: toJsonPayload(body),
+    }
+
+    await admin.from('subscription_events').upsert(eventRow, { onConflict: 'provider_event_id' })
 
     return NextResponse.json({ ok: true })
 }
