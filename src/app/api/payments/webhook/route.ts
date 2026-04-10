@@ -10,7 +10,8 @@ function mapProviderStatus(status?: string | null) {
     if (['approved', 'authorized'].includes(status)) return 'active'
     if (['pending', 'in_process', 'in_mediation'].includes(status)) return 'pending_payment'
     if (status === 'paused') return 'paused'
-    if (['rejected', 'cancelled', 'refunded', 'charged_back'].includes(status)) return 'expired'
+    if (['cancelled', 'canceled'].includes(status)) return 'canceled'
+    if (['rejected', 'refunded', 'charged_back'].includes(status)) return 'expired'
     return 'pending_payment'
 }
 

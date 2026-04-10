@@ -142,7 +142,7 @@ export const BILLING_CYCLE_CONFIG: Record<
 export const SUBSCRIPTION_BLOCKED_STATUSES = [
     'pending_payment',
     'expired',
-    'cancelled',
+    'canceled',
     'past_due',
     'paused',
 ] as const
