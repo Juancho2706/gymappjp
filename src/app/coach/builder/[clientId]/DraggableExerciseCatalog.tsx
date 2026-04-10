@@ -129,11 +129,27 @@ interface DraggableExerciseCatalogProps {
     className?: string
     onSelect?: (exercise: Exercise) => void
     onTapAdd?: (exercise: Exercise) => void
+    /** Si se define, el filtro de músculo es controlado por el padre (p. ej. chips del sheet móvil). */
+    selectedMuscleGroup?: string
+    onSelectedMuscleGroupChange?: (group: string) => void
 }
 
-export function DraggableExerciseCatalog({ exercises, className, onSelect, onTapAdd }: DraggableExerciseCatalogProps) {
+export function DraggableExerciseCatalog({
+    exercises,
+    className,
+    onSelect,
+    onTapAdd,
+    selectedMuscleGroup: selectedMuscleProp,
+    onSelectedMuscleGroupChange,
+}: DraggableExerciseCatalogProps) {
     const [search, setSearch] = useState('')
-    const [selectedMuscle, setSelectedMuscle] = useState<string>('Todos')
+    const [internalMuscle, setInternalMuscle] = useState<string>('Todos')
+    const controlled = selectedMuscleProp !== undefined
+    const selectedMuscle = controlled ? selectedMuscleProp : internalMuscle
+    const setSelectedMuscle = (v: string) => {
+        onSelectedMuscleGroupChange?.(v)
+        if (!controlled) setInternalMuscle(v)
+    }
     const [previewExercise, setPreviewExercise] = useState<Exercise | null>(null)
     const [recentIds, setRecentIds] = useState<string[]>([])
 

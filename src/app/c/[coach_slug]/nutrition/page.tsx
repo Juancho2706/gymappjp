@@ -48,7 +48,7 @@ export default async function ClientNutritionPage({ params }: Props) {
         style={{ backgroundColor: 'var(--theme-primary)' }}
       />
 
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/10 px-4 py-3.5 flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/10 px-4 py-3.5 pt-safe flex items-center gap-3">
         <Link
           href={`/c/${coach_slug}/dashboard`}
           className="w-9 h-9 flex items-center justify-center -ml-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"

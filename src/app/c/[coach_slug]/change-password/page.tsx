@@ -41,7 +41,7 @@ export default function ChangePasswordPage({ params }: Props) {
 
     return (
         <div
-            className="min-h-screen flex items-center justify-center p-4 bg-background"
+            className="min-h-screen flex items-center justify-center p-4 pt-safe bg-background"
         >
             <div className="w-full max-w-md animate-slide-up">
                 <div className="text-center mb-8">

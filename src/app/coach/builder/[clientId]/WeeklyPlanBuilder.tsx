@@ -235,6 +235,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const [activeId, setActiveId] = useState<string | null>(null)
     const [activeData, setActiveData] = useState<any>(null)
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
+    /** Filtro muscular compartido: chips del sheet móvil + Select del catálogo (sidebar y sheet expandido). */
+    const [catalogMuscleFilter, setCatalogMuscleFilter] = useState('Todos')
     const [sheetHeight, setSheetHeight] = useState(12)
     const [isDraggingSheet, setIsDraggingSheet] = useState(false)
     const [isPending, startTransition] = useTransition()
@@ -825,7 +827,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             </button>
                         </div>
                         <div className={`flex-1 min-h-0 transition-opacity duration-200 ${!isCatalogSidebarOpen ? 'md:max-lg:opacity-0 md:max-lg:pointer-events-none' : ''}`}>
-                            <DraggableExerciseCatalog exercises={exercises} />
+                            <DraggableExerciseCatalog
+                                exercises={exercises}
+                                selectedMuscleGroup={catalogMuscleFilter}
+                                onSelectedMuscleGroupChange={setCatalogMuscleFilter}
+                            />
                         </div>
                     </div>
 
@@ -1053,7 +1059,12 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                             {['Pectorales','Dorsales','Hombros','Bíceps','Tríceps','Cuádriceps','Glúteos','Abdominales'].map(m => (
                                                 <button
                                                     key={m}
-                                                    onClick={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCatalogMuscleFilter(m)
+                                                        setIsCatalogOpen(true)
+                                                        setSheetHeight(80)
+                                                    }}
                                                     className="flex-shrink-0 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border border-border bg-background hover:border-primary/50 transition-colors"
                                                     style={{ color: getMuscleColor(m) }}
                                                 >
@@ -1070,6 +1081,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                     <div className="h-[calc(100%-48px)] overflow-hidden px-4 pb-4">
                                         <DraggableExerciseCatalog
                                             exercises={exercises}
+                                            selectedMuscleGroup={catalogMuscleFilter}
+                                            onSelectedMuscleGroupChange={setCatalogMuscleFilter}
                                             onTapAdd={(exercise) => {
                                                 const dayId = days[activeMobileDayIndex]?.id
                                                 if (dayId != null) {

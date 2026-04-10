@@ -22,7 +22,7 @@ export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors
     const greeting = `${greet}, ${firstName}`
 
     return (
-        <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl lg:relative lg:top-auto lg:border-none lg:bg-transparent lg:pt-0 lg:backdrop-blur-none">
+        <header className="fixed left-0 right-0 top-0 z-40 border-b border-border/40 bg-background/95 pt-safe backdrop-blur-xl lg:static lg:z-auto lg:border-none lg:bg-transparent lg:pt-0 lg:backdrop-blur-none">
             <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-0">
                 <div className="min-w-0 flex-1">
                     {brandName ? (

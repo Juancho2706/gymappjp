@@ -25,7 +25,7 @@ export default async function OnboardingPage({ params }: Props) {
     }
 
     return (
-        <main className="flex min-h-screen flex-col items-center justify-center py-12 px-4 sm:px-6">
+        <main className="flex min-h-screen flex-col items-center justify-center py-12 px-4 pt-safe sm:px-6">
             <div className="w-full max-w-xl space-y-8 bg-card/80 backdrop-blur-xl p-8 rounded-3xl border border-border shadow-2xl">
                 <div className="text-center">
                     <h1 className="text-3xl font-black text-foreground tracking-tight">Completa tu perfil</h1>

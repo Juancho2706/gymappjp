@@ -12,7 +12,7 @@ import {
 export default function LoadingClientDashboard() {
     return (
         <div className="min-h-screen bg-background">
-            <div className="mx-auto max-w-5xl px-4 py-4 pb-[calc(80px+env(safe-area-inset-bottom))] sm:px-6 md:pb-6">
+            <div className="mx-auto max-w-5xl px-4 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)] pb-[calc(1rem+80px+env(safe-area-inset-bottom))] sm:px-6 md:pb-6 lg:pt-4">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_300px]">
                     <div className="min-w-0 space-y-4">
                         <DashboardHeaderSkeleton />

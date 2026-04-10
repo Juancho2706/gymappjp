@@ -200,7 +200,7 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ duration: 0.25 }}
-                    className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/60"
+                    className="sticky top-0 z-20 bg-background/95 pt-safe backdrop-blur border-b border-border/60"
                 >
                     <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
                         <div className="flex items-center justify-between mb-3">

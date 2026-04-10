@@ -38,7 +38,7 @@ export default async function ClientCheckInPage({ params }: Props) {
     return (
         <div className="min-h-screen pb-20">
             {/* Header */}
-            <header className="border-b border-border px-4 py-4">
+            <header className="border-b border-border px-4 py-4 pt-safe">
                 <Link href={`/c/${coach_slug}/dashboard`}
                     className="inline-flex items-center gap-1.5 text-sm font-medium mb-4 transition-colors hover:opacity-80"
                     style={{ color: coachPrimaryColor }}>

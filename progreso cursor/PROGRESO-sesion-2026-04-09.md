@@ -94,3 +94,17 @@ Documento creado/actualizado con el detalle anterior. Próximos pasos opcionales
 - **`CoachMainWrapper.tsx`:** en móvil, `pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]` y `md:pt-0` para que el contenido (incl. creador) quede **debajo** del header fijo; `min-h-0` + `flex` en `<main>` para que el flex hijo pueda encoger.
 
 **Verificación:** `npm run build` — OK (tras estos cambios).
+
+## 20:50 — Creador móvil: chips musculares del sheet aplican el mismo filtro que el Select
+
+- **Problema:** En el estado intermedio del bottom sheet, al tocar p. ej. «Pectorales» solo se abría el catálogo a altura completa sin fijar el grupo; la lista seguía en «Todos».
+- **Fix:** Estado `catalogMuscleFilter` en `WeeklyPlanBuilder.tsx` compartido entre sidebar (tablet/desktop) y catálogo del sheet; chips llaman `setCatalogMuscleFilter(m)` antes de `setSheetHeight(80)`.
+- **`DraggableExerciseCatalog.tsx`:** props opcionales `selectedMuscleGroup` + `onSelectedMuscleGroupChange` para modo controlado (sin romper usos sin props).
+
+## 21:05 — Vista alumno (iPhone): hueco negro arriba + header del dashboard fijo
+
+- **Causa del hueco:** `c/[coach_slug]/layout.tsx` tenía `pt-safe` en el contenedor **y** `DashboardHeader` añadía `pt-[env(safe-area-inset-top)]` → **doble** reserva superior.
+- **Layout alumno:** se quitó `pt-safe` global; cada pantalla pone `pt-safe` solo donde corresponde.
+- **`DashboardHeader.tsx`:** en móvil/tablet (`< lg`) el encabezado pasa a **`fixed`** `top-0 left-0 right-0 z-40`, `pt-safe`, `bg-background/95`; en `lg:` vuelve a flujo normal (`lg:static`) sin borde/fondo de barra.
+- **`DashboardShell.tsx` + `dashboard/loading.tsx`:** `pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]` para que el scroll empiece bajo el header fijo + `lg:pt-4` en escritorio.
+- **`pt-safe` añadido** en cabeceras o contenedores: nutrición (`page` + `EmptyNutritionState`), ejercicios, check-in, workout (`WorkoutExecutionClient`), suspended, change-password, login y onboarding.
