@@ -68,7 +68,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://coachop.app'),
   manifest: '/api/manifest/default',
   icons: {
-    icon: '/favicon.png',
+    icon: '/favicon.ico',
     apple: '/apple-icon.png',
   },
 }
