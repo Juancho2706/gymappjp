@@ -7,6 +7,8 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { logSetAction, type LogState } from './actions'
 import { useWorkoutTimer } from './WorkoutTimerProvider'
 import { springs } from '@/lib/animation-presets'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 const initialState: LogState = {}
 
@@ -33,6 +35,7 @@ export function LogSetForm({
     autoTimerEnabled = true,
     onLogged,
 }: Props) {
+    const { t } = useTranslation()
     const [state, formAction] = useActionState(logSetAction, initialState)
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
@@ -168,9 +171,10 @@ export function LogSetForm({
                         transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
                         className="overflow-hidden px-2 pb-2"
                     >
-                        <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 mt-1">
-                            RPE (opcional)
-                        </p>
+                        <div className="text-[10px] font-semibold text-muted-foreground mb-1.5 mt-1 flex items-center gap-1">
+                            <span>RPE (opcional)</span>
+                            <InfoTooltip content={t('tooltip.rir')} />
+                        </div>
                         <input
                             type="range"
                             min={6}
