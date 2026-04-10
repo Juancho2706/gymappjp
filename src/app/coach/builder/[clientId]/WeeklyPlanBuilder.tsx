@@ -564,10 +564,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {showDraftBanner && (
-                <div className="bg-primary/10 border-b border-primary/20 p-3 flex justify-center items-center gap-4 animate-in slide-in-from-top">
-                    <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
-                    <Button variant="outline" size="sm" onClick={handleRestoreDraft}>Restaurar</Button>
-                    <Button variant="ghost" size="sm" onClick={handleDiscardDraft}>Descartar</Button>
+                <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[72] animate-in slide-in-from-bottom rounded-xl border border-primary/25 bg-background/95 p-3 shadow-2xl backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:rounded-none md:border-x-0 md:border-t-0 md:bg-primary/10 md:shadow-none">
+                    <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-4">
+                        <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
+                        <div className="flex items-center justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={handleRestoreDraft}>Restaurar</Button>
+                            <Button variant="ghost" size="sm" onClick={handleDiscardDraft}>Descartar</Button>
+                        </div>
+                    </div>
                 </div>
             )}
 

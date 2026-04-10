@@ -51,6 +51,24 @@ const CATEGORIES = [
 
 const UNITS = ['g', 'ml', 'un', 'cda', 'cdta', 'taza', 'porción']
 
+function normalizeCategory(raw: string | null | undefined): string {
+  const value = (raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+
+  if (!value) return 'otro'
+  if (value.startsWith('prote')) return 'proteina'
+  if (value.startsWith('carb') || value.includes('cereal')) return 'carbohidrato'
+  if (value.startsWith('gras')) return 'grasa'
+  if (value.startsWith('lact')) return 'lacteo'
+  if (value.startsWith('frut')) return 'fruta'
+  if (value.startsWith('verd')) return 'verdura'
+  if (value.startsWith('snack')) return 'snack'
+  return value
+}
+
 function toFoodDraftShape(f: FoodRow): FoodItemDraft['food'] {
   return {
     name: f.name,
@@ -105,7 +123,7 @@ export function FoodSearchDrawer({ open, onClose, onConfirm }: Props) {
 
   const filtered = results.filter((f) => {
     if (category === 'todos') return true
-    return (f.category ?? 'otro') === category
+    return normalizeCategory(f.category) === category
   })
 
   const preview = picked
@@ -124,8 +142,8 @@ export function FoodSearchDrawer({ open, onClose, onConfirm }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 gap-0">
-        <SheetHeader className="p-4 border-b border-border">
+      <SheetContent side="right" className="flex w-full max-w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b border-border p-4 pt-[max(1rem,env(safe-area-inset-top,0px))]">
           <SheetTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
             Buscar alimento

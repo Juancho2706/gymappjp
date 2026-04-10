@@ -34,7 +34,10 @@ export function linearRegressionKgPerDay(
 
 export function bmiFromMetric(weightKg: number, heightCm: number): number | null {
     if (!heightCm || heightCm <= 0 || !weightKg || weightKg <= 0) return null
-    const m = heightCm / 100
+    // Backward-compatible: some profiles store meters (e.g. 1.72) instead of cm.
+    const normalizedHeightCm = heightCm < 3 ? heightCm * 100 : heightCm
+    if (normalizedHeightCm < 80 || normalizedHeightCm > 260) return null
+    const m = normalizedHeightCm / 100
     return weightKg / (m * m)
 }
 

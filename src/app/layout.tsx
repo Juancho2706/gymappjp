@@ -94,7 +94,7 @@ export default function RootLayout({
             <ScrollRestoration />
             <InstallPrompt brandName="COACH OP" />
             {children}
-            <Toaster richColors position="top-right" />
+            <Toaster richColors position="bottom-center" />
           </LanguageProvider>
         </ThemeProvider>
       </body>

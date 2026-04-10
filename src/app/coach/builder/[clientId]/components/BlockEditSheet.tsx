@@ -80,7 +80,7 @@ function BlockProgressionValueInput({
                     setStr(String(n))
                 }
             }}
-            className="w-20 h-8 text-center text-sm font-bold bg-secondary dark:bg-white/5 border border-border dark:border-white/10 rounded-lg text-foreground focus:border-primary focus:outline-none"
+            className="h-9 w-full min-w-0 rounded-lg border border-border bg-secondary text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none dark:border-white/10 dark:bg-white/5 sm:w-24"
             placeholder={progressionType === 'weight' ? '2.5' : '1'}
         />
     )
@@ -120,7 +120,7 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
 
     return (
         <Sheet open={!!block} onOpenChange={onClose}>
-            <SheetContent side="right" className="w-[400px] sm:w-[540px] bg-background/95 backdrop-blur-2xl border-l border-border p-0 flex flex-col shadow-2xl">
+            <SheetContent side="right" className="w-full max-w-full bg-background/95 p-0 shadow-2xl backdrop-blur-2xl sm:w-[540px] sm:max-w-[540px] border-l border-border">
                 <SheetHeader className="px-6 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))] border-b border-border bg-muted/20">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0">
@@ -261,7 +261,7 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                     </div>
 
                     {/* Auto-progression */}
-                    <div className="space-y-3 border border-border dark:border-white/10 rounded-xl p-4 bg-muted/30">
+                    <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4 dark:border-white/10">
                         <div className="flex items-center justify-between">
                             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                                 Progresión Automática
@@ -283,28 +283,28 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                         </div>
 
                         {block.progression_type && (
-                            <div className="flex items-center gap-3 mt-2">
-                                <div className="flex rounded-lg border border-border dark:border-white/10 overflow-hidden text-[10px] font-bold uppercase tracking-widest">
+                            <div className="mt-2 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+                                <div className="grid min-w-0 grid-cols-2 overflow-hidden rounded-lg border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
                                     <button
                                         onClick={() => onChange({...block, progression_type: 'weight'})}
-                                        className={`px-3 py-1.5 transition-colors ${block.progression_type === 'weight' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                                        className={`px-3 py-2 transition-colors ${block.progression_type === 'weight' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
                                     >
                                         + Peso
                                     </button>
                                     <button
                                         onClick={() => onChange({...block, progression_type: 'reps'})}
-                                        className={`px-3 py-1.5 transition-colors ${block.progression_type === 'reps' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                                        className={`px-3 py-2 transition-colors ${block.progression_type === 'reps' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
                                     >
                                         + Reps
                                     </button>
                                 </div>
-                                <div className="flex items-center gap-1.5 flex-1">
+                                <div className="flex min-w-0 items-center gap-1.5 sm:flex-1">
                                     <BlockProgressionValueInput
                                         progressionType={block.progression_type}
                                         value={block.progression_value ?? null}
                                         onCommit={(n) => onChange({ ...block, progression_value: n })}
                                     />
-                                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                                         {block.progression_type === 'weight' ? 'kg/sem' : 'rep/ses'}
                                     </span>
                                 </div>
