@@ -180,9 +180,8 @@ function PillNav() {
                 : 'border-border/50'
                 } rounded-full px-4 sm:px-6 py-3 flex items-center w-[95%] max-w-5xl justify-between`}
         >
-            <Link href="/" className="flex items-center gap-2">
-                <GymAppLogo className="w-8 h-8" />
-                <span className="text-foreground font-bold text-sm tracking-tight font-display">EVA</span>
+            <Link href="/" className="flex items-center" aria-label="EVA — inicio">
+                <GymAppLogo className="h-10 w-[7.5rem] sm:h-11 sm:w-[8.5rem]" />
             </Link>
 
             {/* Desktop Navigation */}
@@ -956,10 +955,9 @@ export default function LandingPage() {
             <footer className="border-t border-border bg-transparent py-12">
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div className="flex items-center gap-2">
-                            <GymAppLogo className="w-8 h-8" />
-                            <span className="text-foreground font-bold text-sm tracking-tight font-display">EVA</span>
-                        </div>
+                        <Link href="/" className="flex items-center" aria-label="EVA — inicio">
+                            <GymAppLogo className="h-9 w-[6.75rem] sm:h-10 sm:w-[7.5rem]" />
+                        </Link>
 
                         <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">
                             <Link href="/legal" className="hover:text-foreground transition-colors">Aviso Legal</Link>

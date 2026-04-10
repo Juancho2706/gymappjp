@@ -2,10 +2,7 @@ const CACHE_NAME = 'omnicoach-pwa-cache-v1';
 
 // Recursos mínimos a guardar en caché para la PWA
 // He quitado el manifest y el root porque son dinámicos en Next.js
-const urlsToCache = [
-  '/icon-192x192.png',
-  '/icon-512x512.png'
-];
+const urlsToCache = ['/eva-app-icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

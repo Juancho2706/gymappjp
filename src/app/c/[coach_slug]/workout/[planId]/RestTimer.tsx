@@ -93,7 +93,7 @@ export function RestTimer({
          // Create a test notification to ensure it works
          new Notification("¡Notificaciones activadas!", {
              body: "El cronómetro te avisará cuando termine.",
-             icon: "/icon-192x192.png"
+             icon: "/eva-app-icon.png"
          });
       }
     }
@@ -156,7 +156,7 @@ export function RestTimer({
         navigator.serviceWorker.ready.then(registration => {
             registration.showNotification("¡Tiempo de Descanso Terminado!", {
                 body: "Prepárate para la siguiente serie. (Toca para detener)",
-                icon: "/icon-192x192.png",
+                icon: "/eva-app-icon.png",
                 vibrate: [200, 100, 200, 100, 400],
                 tag: "rest-timer",
                 requireInteraction: true // Hace que actúe más como alarma
