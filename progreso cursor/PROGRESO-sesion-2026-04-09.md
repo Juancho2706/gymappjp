@@ -184,3 +184,21 @@ Documento creado/actualizado con el detalle anterior. Próximos pasos opcionales
 - **`ProfileTopAlertBanner.tsx`:** texto del aviso con `min-w-0 flex-1 break-words [overflow-wrap:anywhere]` para que no se corte a la derecha.
 - **`ProfileTabNav.tsx`:** `max-w-full min-w-0` en el contenedor sticky y en la fila con scroll.
 - **`CoachSidebar.tsx` (nav móvil):** deja de usar `flex-1` por ítem (aplastaba etiquetas); `flex-nowrap overflow-x-auto` + ítems `shrink-0`; `shortLabel` para Inicio, Planes, Ejer., Marca; `title={item.label}` en cada `Link`.
+
+---
+
+## Cursor (posterior) — Builder: GIFs al editar plan guardado + buscador de alimentos
+
+*Registro añadido tras trabajo en el asistente; no implica commit automático.*
+
+### Planificador semanal (`WeeklyPlanBuilder.tsx`)
+
+- **Problema:** Al abrir un programa ya guardado, los bloques no mostraban GIF (ni vídeo directo) aunque el ejercicio lo tuviera en catálogo.
+- **Causa probable:** Los medios salían solo de `workout_blocks.exercises` en el `select` anidado; el embed puede venir vacío (RLS) o como **array** de un elemento en PostgREST, y entonces `b.exercises?.gif_url` fallaba.
+- **Fix:** Helpers `embeddedExerciseRow`, `mapDbBlockToBuilderBlock` y `enrichDaysWithExerciseMedia`: normalizar el embed, rellenar `gif_url` / `video_url` (y nombre/grupo si faltan) desde el **mapa del catálogo** ya cargado (`exercise_id` → fila). Tipos `Client` / `Exercise` movidos arriba para usar esos helpers. Al aplicar plantilla, `onApply` enriquece días con el mismo criterio.
+
+### Plan nutrición — `FoodSearchDrawer` + `PlanBuilder.tsx`
+
+- **Problema:** Con “Todos” u otros chips, la lista quedaba vacía si no escribías al menos 2 caracteres.
+- **Causa:** El efecto hacía `setResults([])` cuando `searchTerm.length < 2` y solo entonces llamaba a `search_foods`.
+- **Fix:** Carga vía **`searchCoachFoodLibrary(coachId, …)`** (misma lógica que la biblioteca: globales + del coach), hasta **200** ítems sin texto; con texto, filtro por nombre en servidor. Filtros por categoría siguen en cliente (`normalizeCategory`). Prop obligatoria **`coachId`** desde `PlanBuilder`. Estados de **carga** (`Loader2`) y mensajes vacíos (sin catálogo / sin búsqueda / categoría sin coincidencias). Placeholder: “Buscar por nombre (opcional)…”. Eliminado uso de `createClient` + RPC en este drawer.

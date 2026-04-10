@@ -238,6 +238,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
 
       <FoodSearchDrawer
         open={searchDrawer.open}
+        coachId={coachId}
         onClose={() => setSearchDrawer({ open: false, targetMealId: null })}
         onConfirm={(item) => {
           if (searchDrawer.targetMealId) addFoodToMeal(searchDrawer.targetMealId, item)

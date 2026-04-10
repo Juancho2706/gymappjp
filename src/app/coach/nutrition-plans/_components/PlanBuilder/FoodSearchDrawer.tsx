@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,11 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Search } from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { previewMacrosForQuantity } from './MacroCalculator'
 import type { FoodItemDraft } from './types'
+import { searchCoachFoodLibrary } from '../../_actions/food-library.actions'
 
 type FoodRow = {
   id: string
@@ -34,6 +34,7 @@ type FoodRow = {
 
 interface Props {
   open: boolean
+  coachId: string
   onClose: () => void
   onConfirm: (item: FoodItemDraft) => void
 }
@@ -81,20 +82,20 @@ function toFoodDraftShape(f: FoodRow): FoodItemDraft['food'] {
   }
 }
 
-export function FoodSearchDrawer({ open, onClose, onConfirm }: Props) {
+export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
+  const [loading, setLoading] = useState(false)
   const [category, setCategory] = useState('todos')
   const [picked, setPicked] = useState<FoodRow | null>(null)
   const [quantity, setQuantity] = useState(100)
   const [unit, setUnit] = useState('g')
 
-  const supabase = createClient()
-
   useEffect(() => {
     if (!open) {
       setSearchTerm('')
       setResults([])
+      setLoading(false)
       setPicked(null)
       setQuantity(100)
       setUnit('g')
@@ -103,23 +104,33 @@ export function FoodSearchDrawer({ open, onClose, onConfirm }: Props) {
   }, [open])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !coachId) return
+    let cancelled = false
+    setLoading(true)
     const t = setTimeout(async () => {
-      if (searchTerm.trim().length < 2) {
-        setResults([])
-        return
+      try {
+        const q = searchTerm.trim()
+        const { foods } = await searchCoachFoodLibrary(coachId, {
+          search: q || undefined,
+          pageSize: 200,
+          page: 0,
+        })
+        if (!cancelled) setResults((foods as FoodRow[]) ?? [])
+      } catch (e) {
+        console.error(e)
+        if (!cancelled) {
+          toast.error('Error al cargar alimentos')
+          setResults([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      const { data, error } = await supabase.rpc('search_foods', { search_term: searchTerm.trim() })
-      if (error) {
-        console.error(error)
-        toast.error('Error al buscar alimentos')
-        setResults([])
-        return
-      }
-      setResults((data as FoodRow[]) ?? [])
     }, 300)
-    return () => clearTimeout(t)
-  }, [searchTerm, open, supabase])
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [searchTerm, open, coachId])
 
   const filtered = results.filter((f) => {
     if (category === 'todos') return true
@@ -154,7 +165,7 @@ export function FoodSearchDrawer({ open, onClose, onConfirm }: Props) {
           {!picked ? (
             <>
               <Input
-                placeholder="Escribe al menos 2 caracteres…"
+                placeholder="Buscar por nombre (opcional)…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="h-11"
@@ -177,10 +188,25 @@ export function FoodSearchDrawer({ open, onClose, onConfirm }: Props) {
                 ))}
               </div>
               <div className="space-y-2">
-                {filtered.length === 0 && searchTerm.trim().length >= 2 && (
-                  <p className="text-center text-sm text-muted-foreground py-6">Sin resultados.</p>
+                {loading && (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+                  </div>
                 )}
-                {filtered.map((f) => (
+                {!loading && filtered.length === 0 && results.length === 0 && (
+                  <p className="text-center text-sm text-muted-foreground py-6">
+                    {searchTerm.trim()
+                      ? 'Sin resultados para tu búsqueda.'
+                      : 'No hay alimentos en el catálogo.'}
+                  </p>
+                )}
+                {!loading && filtered.length === 0 && results.length > 0 && (
+                  <p className="text-center text-sm text-muted-foreground py-6">
+                    Ningún alimento en esta categoría. Prueba otro filtro o la búsqueda.
+                  </p>
+                )}
+                {!loading &&
+                  filtered.map((f) => (
                   <button
                     key={f.id}
                     type="button"
