@@ -3,7 +3,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { revalidatePath } from 'next/cache'
-import { subDays } from 'date-fns'
+import { format, parseISO, subDays } from 'date-fns'
+import { getTodayInSantiago } from '@/lib/date-utils'
+import {
+    calculateConsumedMacros,
+    normalizeMealForMacros,
+    type NutritionMealMacroSource,
+} from '@/lib/nutrition-utils'
 import { calculateAttentionScore } from '@/services/dashboard.service'
 import {
     buildMuscleVolumeFromLogs,
@@ -91,7 +97,10 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .eq('client_id', clientId)
         .order('payment_date', { ascending: false })
 
-    // Fetch daily nutrition logs with meal completion detail
+    const { iso: todayIso } = getTodayInSantiago()
+    const nutritionLogDateFrom = format(subDays(parseISO(`${todayIso}T12:00:00`), 40), 'yyyy-MM-dd')
+
+    // Fetch daily nutrition logs with meal completion detail (ventana calendario, misma lógica que alumno)
     const nutritionLogsPromise = supabase
         .from('daily_nutrition_logs')
         .select(`
@@ -102,8 +111,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
             )
         `)
         .eq('client_id', clientId)
+        .gte('log_date', nutritionLogDateFrom)
         .order('log_date', { ascending: false })
-        .limit(30)
 
     // Current Date details for compliance
     const today = new Date()
@@ -127,10 +136,10 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .from('daily_nutrition_logs')
         .select(`
             log_date,
-            nutrition_meal_logs ( is_completed )
+            nutrition_meal_logs ( meal_id, is_completed )
         `)
         .eq('client_id', clientId)
-        .eq('log_date', todayStr)
+        .eq('log_date', todayIso)
         .maybeSingle()
 
     const streakPromise = supabase
@@ -140,10 +149,17 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .from('nutrition_plans')
         .select(`
             *,
-            nutrition_meals (id)
+            nutrition_meals (
+                *,
+                food_items (
+                    *,
+                    foods (*)
+                )
+            )
         `)
         .eq('client_id', clientId)
         .eq('is_active', true)
+        .order('order_index', { referencedTable: 'nutrition_meals', ascending: true })
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -159,7 +175,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         { data: workoutSessions },
         { data: todayNutritionLog },
         { data: currentStreak },
-        { data: activeNutritionPlan }
+        { data: activeNutritionPlanFull }
     ] = await Promise.all([
         clientPromise,
         activeProgramPromise,
@@ -251,8 +267,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
 
     // 2. Calcular Nutricion Hoy usando nutrition_meal_logs (fuente real de datos)
     let todayMealsTotal = 0;
-    if (activeNutritionPlan?.nutrition_meals) {
-        todayMealsTotal = activeNutritionPlan.nutrition_meals.length;
+    if (activeNutritionPlanFull?.nutrition_meals) {
+        todayMealsTotal = activeNutritionPlanFull.nutrition_meals.length;
     }
     if (todayMealsTotal === 0) todayMealsTotal = 1;
 
@@ -351,6 +367,109 @@ export const getClientProfileData = cache(async (clientId: string) => {
             )
         ) ?? 0
 
+    const planId = (activeNutritionPlanFull as { id?: string } | null)?.id
+    const planMealsRaw = (activeNutritionPlanFull as { nutrition_meals?: unknown[] } | null)?.nutrition_meals
+
+    let mealsForMacros: ReturnType<typeof normalizeMealForMacros>[] = []
+    if (Array.isArray(planMealsRaw) && planMealsRaw.length) {
+        const sorted = [...planMealsRaw].sort(
+            (a, b) =>
+                ((a as { order_index?: number }).order_index ?? 0) -
+                ((b as { order_index?: number }).order_index ?? 0)
+        )
+        mealsForMacros = sorted.map((m) => normalizeMealForMacros(m as NutritionMealMacroSource))
+    }
+
+    const nutritionLogsEnriched = nutritionLogsArr.map((log: Record<string, unknown>) => {
+        const row = log as {
+            plan_id?: string
+            nutrition_meal_logs?: { is_completed?: boolean; meal_id?: string }[]
+        }
+        if (!planId || row.plan_id !== planId || mealsForMacros.length === 0) {
+            return {
+                ...log,
+                consumed_calories: 0,
+                consumed_protein: 0,
+                consumed_carbs: 0,
+                consumed_fats: 0,
+            }
+        }
+        const completed = new Set<string>()
+        for (const ml of row.nutrition_meal_logs || []) {
+            if (ml.is_completed && ml.meal_id) completed.add(ml.meal_id)
+        }
+        const c = calculateConsumedMacros(mealsForMacros, completed)
+        return {
+            ...log,
+            consumed_calories: Math.round(c.calories),
+            consumed_protein: Math.round(c.protein),
+            consumed_carbs: Math.round(c.carbs),
+            consumed_fats: Math.round(c.fats),
+        }
+    })
+
+    const nutritionAdherence30d = nutritionLogsArr
+        .filter((l: { plan_id?: string }) => planId && l.plan_id === planId)
+        .map((l: { log_date: string; nutrition_meal_logs?: { is_completed?: boolean }[] }) => ({
+            log_date: l.log_date,
+            nutrition_meal_logs: (l.nutrition_meal_logs || []).map((m) => ({
+                is_completed: !!m.is_completed,
+            })),
+        }))
+
+    let todayConsumedMacros = { calories: 0, protein: 0, carbs: 0, fats: 0 }
+    let hasTodayNutritionLog = false
+    const tn = todayNutritionLog as {
+        log_date?: string
+        nutrition_meal_logs?: { is_completed?: boolean; meal_id?: string }[]
+    } | null
+    if (tn?.log_date === todayIso && mealsForMacros.length) {
+        hasTodayNutritionLog = true
+        const completed = new Set<string>()
+        for (const ml of tn.nutrition_meal_logs || []) {
+            if (ml.is_completed && ml.meal_id) completed.add(ml.meal_id)
+        }
+        todayConsumedMacros = calculateConsumedMacros(mealsForMacros, completed)
+    }
+
+    const dateFrom30 = format(subDays(parseISO(`${todayIso}T12:00:00`), 29), 'yyyy-MM-dd')
+    const logsLast30 = nutritionLogsArr.filter(
+        (l: { plan_id?: string; log_date?: string }) =>
+            planId && l.plan_id === planId && l.log_date && l.log_date >= dateFrom30
+    )
+    let nutritionMonthlyAvgPct: number | null = null
+    if (logsLast30.length) {
+        let s = 0
+        for (const l of logsLast30) {
+            const ml = (l as { nutrition_meal_logs?: { is_completed?: boolean }[] }).nutrition_meal_logs || []
+            const t = ml.length
+            const d = ml.filter((x) => x.is_completed).length
+            s += t ? (d / t) * 100 : 0
+        }
+        nutritionMonthlyAvgPct = Math.round(s / logsLast30.length)
+    }
+
+    const pctByDate = new Map<string, number>()
+    for (const l of nutritionLogsArr) {
+        const row = l as { plan_id?: string; log_date?: string; nutrition_meal_logs?: { is_completed?: boolean }[] }
+        if (!(planId && row.plan_id === planId && row.log_date)) continue
+        const ml = row.nutrition_meal_logs || []
+        const t = ml.length
+        if (!t) continue
+        const d = ml.filter((x) => x.is_completed).length
+        pctByDate.set(row.log_date, Math.round((d / t) * 100))
+    }
+    let nutritionStreakDays = 0
+    let cursor = parseISO(`${todayIso}T12:00:00`)
+    for (let i = 0; i < 120; i++) {
+        const key = format(cursor, 'yyyy-MM-dd')
+        const pct = pctByDate.get(key)
+        if (pct == null) break
+        if (pct < 80) break
+        nutritionStreakDays++
+        cursor = subDays(cursor, 1)
+    }
+
     let lastActivityMs = 0
     if (client.updated_at) {
         lastActivityMs = Math.max(lastActivityMs, new Date(client.updated_at).getTime())
@@ -406,6 +525,14 @@ export const getClientProfileData = cache(async (clientId: string) => {
         activeProgram,
         nutritionPlans: nutritionPlans || [],
         nutritionLogs: nutritionLogs || [],
+        nutritionLogsEnriched,
+        activeNutritionPlanWithMeals: activeNutritionPlanFull,
+        nutritionAdherence30d,
+        todayConsumedMacros,
+        hasTodayNutritionLog,
+        nutritionStreakDays,
+        nutritionMonthlyAvgPct,
+        todayIso,
         checkIns: checkIns || [],
         workoutHistory: workoutLogs || [],
         payments: payments || [],

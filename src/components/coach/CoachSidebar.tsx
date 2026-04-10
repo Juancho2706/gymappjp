@@ -98,7 +98,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
         <>
             {/* Mobile Top Header — hidden on builder (builder has its own full-screen header) */}
             {!isBuilder && (
-                <div className="md:hidden flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 border-b border-sidebar-border bg-sidebar sticky top-0 z-40">
+                <div className="md:hidden flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 pt-safe pb-3 sticky top-0 z-40">
                     <div className="flex items-center gap-2.5">
                         <GymAppLogo className="w-8 h-8 flex-shrink-0" />
                         <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
@@ -116,7 +116,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
 
             {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile — hidden on builder) */}
             <aside className={cn(
-                "fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-screen bg-sidebar border-t md:border-t-0 md:border-r border-sidebar-border flex flex-col transition-all duration-300 pb-safe shadow-2xl md:shadow-none",
+                "fixed bottom-0 left-0 right-0 z-50 flex flex-col border-t border-sidebar-border bg-sidebar pb-safe shadow-2xl transition-all duration-300 [transform:translateZ(0)] md:sticky md:top-0 md:h-screen md:border-r md:border-t-0 md:pb-0 md:shadow-none supports-[height:100dvh]:md:h-[100dvh]",
                 isCollapsed ? "md:w-20" : "md:w-64",
                 isBuilder && "hidden md:flex"
             )}>

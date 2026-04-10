@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
@@ -185,7 +186,7 @@ export function DirectoryActionBar({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                         <DropdownMenuTrigger
                             type="button"
                             className={cn(
@@ -196,49 +197,58 @@ export function DirectoryActionBar({
                             <SlidersHorizontal className="h-4 w-4" />
                             Filtros
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="min-w-[14rem] rounded-xl" align="start">
-                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                Estado
-                            </DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onStatusFilterChange('active')}>
-                                Activo
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onStatusFilterChange('paused')}>
-                                Pausado
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onStatusFilterChange('pending_sync')}>
-                                Pendiente Sync
-                            </DropdownMenuItem>
+                        <DropdownMenuContent
+                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-xl"
+                            align="start"
+                        >
+                            <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
+                                    Estado
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => onStatusFilterChange('active')}>
+                                    Activo
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onStatusFilterChange('paused')}>
+                                    Pausado
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onStatusFilterChange('pending_sync')}>
+                                    Pendiente Sync
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
                             <DropdownMenuSeparator />
-                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                Riesgo
-                            </DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onRiskFilterChange('urgent')}>
-                                Atención Urgente
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onRiskFilterChange('review')}>
-                                En Riesgo
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onRiskFilterChange('on_track')}>
-                                On Track
-                            </DropdownMenuItem>
+                            <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
+                                    Riesgo
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => onRiskFilterChange('urgent')}>
+                                    Atención Urgente
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onRiskFilterChange('review')}>
+                                    En Riesgo
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onRiskFilterChange('on_track')}>
+                                    On Track
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
                             <DropdownMenuSeparator />
-                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                Programa
-                            </DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onProgramFilterChange('with_program')}>
-                                Con Programa
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onProgramFilterChange('no_program')}>
-                                Sin Programa
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onProgramFilterChange('expired')}>
-                                Vencido
-                            </DropdownMenuItem>
+                            <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
+                                    Programa
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => onProgramFilterChange('with_program')}>
+                                    Con Programa
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onProgramFilterChange('no_program')}>
+                                    Sin Programa
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onProgramFilterChange('expired')}>
+                                    Vencido
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                         <DropdownMenuTrigger
                             type="button"
                             className={cn(
@@ -249,19 +259,24 @@ export function DirectoryActionBar({
                             <ArrowUpDown className="h-4 w-4 shrink-0" />
                             <span className="truncate">{currentSortLabel}</span>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="min-w-[14rem] rounded-xl" align="start">
-                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                Ordenar
-                            </DropdownMenuLabel>
-                            {SORT_OPTIONS.map((opt) => (
-                                <DropdownMenuItem
-                                    key={opt.value}
-                                    onClick={() => onSortChange(opt.value)}
-                                    className={sortKey === opt.value ? 'bg-primary/10' : ''}
-                                >
-                                    {opt.label}
-                                </DropdownMenuItem>
-                            ))}
+                        <DropdownMenuContent
+                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-xl"
+                            align="start"
+                        >
+                            <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
+                                    Ordenar
+                                </DropdownMenuLabel>
+                                {SORT_OPTIONS.map((opt) => (
+                                    <DropdownMenuItem
+                                        key={opt.value}
+                                        onClick={() => onSortChange(opt.value)}
+                                        className={sortKey === opt.value ? 'bg-primary/10' : ''}
+                                    >
+                                        {opt.label}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
 

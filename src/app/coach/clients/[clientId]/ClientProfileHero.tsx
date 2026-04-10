@@ -190,7 +190,7 @@ export function ClientProfileHero({
                         className="flex-1 md:flex-none h-12 px-5 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary"
                     >
                         <Link
-                            href={`/coach/nutrition-builder/${clientId}${nutritionPlansLength > 0 && nutritionFirstPlanId ? `?planId=${nutritionFirstPlanId}` : ''}`}
+                            href={`/coach/nutrition-plans/client/${clientId}`}
                         >
                             <span className="font-bold uppercase tracking-widest text-[10px]">Nutrición</span>
                         </Link>

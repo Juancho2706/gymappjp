@@ -114,7 +114,7 @@ export function ClientsDirectoryClient({
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() =>
         defaultSortDir('attention_score')
     )
-    const [view, setView] = useState<'grid' | 'table'>('grid')
+    const [view, setView] = useState<'grid' | 'table'>('table')
     const [statusFilter, setStatusFilter] = useState<StatusDirectoryFilter>('any')
     const [programFilter, setProgramFilter] = useState<ProgramDirectoryFilter>('any')
 
@@ -131,9 +131,9 @@ export function ClientsDirectoryClient({
     const filteredClients = useMemo(() => {
         return clients.filter((client) => {
             const q = search.toLowerCase()
-            const matchesSearch =
-                client.full_name.toLowerCase().includes(q) ||
-                client.email.toLowerCase().includes(q)
+            const name = (client.full_name ?? '').toLowerCase()
+            const mail = (client.email ?? '').toLowerCase()
+            const matchesSearch = name.includes(q) || mail.includes(q)
             const pulse = pulseByClientId[client.id]
             return (
                 matchesSearch &&

@@ -138,7 +138,19 @@ export const getTodayNutritionBundle = cache(async (clientId: string, planId: st
             .eq('plan_id', planId)
             .eq('log_date', todayISO)
             .maybeSingle(),
-        supabase.from('nutrition_meals').select('id, name, order_index').eq('plan_id', planId).order('order_index', { ascending: true }),
+        supabase
+            .from('nutrition_meals')
+            .select(
+                `
+            id, name, order_index,
+            food_items (
+              quantity, unit,
+              foods ( name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
+            )
+          `
+            )
+            .eq('plan_id', planId)
+            .order('order_index', { ascending: true }),
     ])
     return { dailyLog, meals: meals ?? [] }
 })

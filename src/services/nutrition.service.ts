@@ -9,6 +9,9 @@ type TemplateData = {
     fats_g: number | null;
     instructions: string | null;
     coach_id: string;
+    goal_type?: string | null;
+    tags?: string[] | null;
+    is_favorite?: boolean | null;
 };
 
 export class NutritionService {

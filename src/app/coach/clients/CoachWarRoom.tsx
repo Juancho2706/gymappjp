@@ -96,7 +96,9 @@ export function CoachWarRoom({
     const expiredProgramsCount = pulse.filter(
         (p) => p.planDaysRemaining !== null && p.planDaysRemaining <= 0
     ).length
-    const noCheckin7d = pulse.filter((p) => p.attentionFlags.includes('SIN_CHECKIN_7D')).length
+    const noCheckin7d = pulse.filter((p) =>
+        (p.attentionFlags ?? []).includes('SIN_CHECKIN_7D')
+    ).length
     const pendingPassword = clients.filter((c) => c.force_password_change).length
 
     const handleCopy = () => {

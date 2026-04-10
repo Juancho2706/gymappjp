@@ -3,6 +3,7 @@ import { Apple } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { getActiveNutritionPlan, getTodayNutritionBundle } from '../../_data/dashboard.queries'
 import { getTodayInSantiago } from '@/lib/date-utils'
+import { calculateConsumedMacros, normalizeMealForMacros } from '@/lib/nutrition-utils'
 import { MacroBar } from './MacroBar'
 import { MealCompletionRow } from './MealCompletionRow'
 
@@ -24,19 +25,22 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
     const mealLogs = (dailyLog as { nutrition_meal_logs?: { meal_id: string; is_completed: boolean }[] } | null)?.nutrition_meal_logs ?? []
     const doneByMeal = new Map(mealLogs.map((m) => [m.meal_id, m.is_completed]))
 
-    const completedCount = meals.filter((m) => doneByMeal.get(m.id) === true).length
     const totalMeals = meals.length
-    const ratio = totalMeals > 0 ? completedCount / totalMeals : 0
 
     const tCal = plan.daily_calories ?? 0
     const tP = plan.protein_g ?? 0
     const tC = plan.carbs_g ?? 0
     const tF = plan.fats_g ?? 0
 
-    const consumedCal = Math.round(ratio * tCal)
-    const consumedP = ratio * tP
-    const consumedC = ratio * tC
-    const consumedF = ratio * tF
+    const completedIds = new Set(
+        mealLogs.filter((m) => m.is_completed).map((m) => m.meal_id)
+    )
+    const mealsForMacros = meals.map((m) => normalizeMealForMacros(m))
+    const realConsumed = calculateConsumedMacros(mealsForMacros, completedIds)
+    const consumedCal = Math.round(realConsumed.calories)
+    const consumedP = realConsumed.protein
+    const consumedC = realConsumed.carbs
+    const consumedF = realConsumed.fats
 
     return (
         <GlassCard className="space-y-4 p-4">

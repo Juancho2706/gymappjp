@@ -440,35 +440,38 @@ export type Database = {
         Row: {
           calories: number
           carbs_g: number
+          category: string | null
           coach_id: string | null
           fats_g: number
           id: string
           name: string
           protein_g: number
           serving_size: number
-          serving_unit: string
+          serving_unit: string | null
         }
         Insert: {
           calories: number
           carbs_g: number
+          category?: string | null
           coach_id?: string | null
           fats_g: number
           id?: string
           name: string
           protein_g: number
           serving_size: number
-          serving_unit: string
+          serving_unit?: string | null
         }
         Update: {
           calories?: number
           carbs_g?: number
+          category?: string | null
           coach_id?: string | null
           fats_g?: number
           id?: string
           name?: string
           protein_g?: number
           serving_size?: number
-          serving_unit?: string
+          serving_unit?: string | null
         }
         Relationships: [
           {
@@ -569,6 +572,7 @@ export type Database = {
           name: string
           protein_g: number | null
           template_id: string | null
+          template_version_id: string | null
           updated_at: string
         }
         Insert: {
@@ -585,6 +589,7 @@ export type Database = {
           name: string
           protein_g?: number | null
           template_id?: string | null
+          template_version_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -601,6 +606,7 @@ export type Database = {
           name?: string
           protein_g?: number | null
           template_id?: string | null
+          template_version_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -635,10 +641,13 @@ export type Database = {
           daily_calories: number | null
           description: string | null
           fats_g: number | null
+          goal_type: string | null
           id: string
           instructions: string | null
+          is_favorite: boolean | null
           name: string
           protein_g: number | null
+          tags: string[] | null
           updated_at: string
         }
         Insert: {
@@ -648,10 +657,13 @@ export type Database = {
           daily_calories?: number | null
           description?: string | null
           fats_g?: number | null
+          goal_type?: string | null
           id?: string
           instructions?: string | null
+          is_favorite?: boolean | null
           name: string
           protein_g?: number | null
+          tags?: string[] | null
           updated_at?: string
         }
         Update: {
@@ -661,10 +673,13 @@ export type Database = {
           daily_calories?: number | null
           description?: string | null
           fats_g?: number | null
+          goal_type?: string | null
           id?: string
           instructions?: string | null
+          is_favorite?: boolean | null
           name?: string
           protein_g?: number | null
+          tags?: string[] | null
           updated_at?: string
         }
         Relationships: [
@@ -1205,13 +1220,14 @@ export type Database = {
         Returns: {
           calories: number
           carbs_g: number
+          category: string | null
           coach_id: string | null
           fats_g: number
           id: string
           name: string
           protein_g: number
           serving_size: number
-          serving_unit: string
+          serving_unit: string | null
         }[]
         SetofOptions: {
           from: "*"

@@ -165,37 +165,44 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
     const trainingDensity = estimatedTrainingMinutes > 0 ? (totalVolume / estimatedTrainingMinutes).toFixed(1) : 0;
 
     // --- MÓDULO DE NUTRICIÓN E INTELIGENCIA FORENSE ---
-    const activeNutritionPlan = data.nutritionPlans?.[0];
-    const targetCalories = activeNutritionPlan?.target_calories || 0;
-    const targetProtein = activeNutritionPlan?.target_protein || 0;
-    const targetCarbs = activeNutritionPlan?.target_carbs || 0;
-    const targetFats = activeNutritionPlan?.target_fats || 0;
+    const activeNutritionPlan = data.activeNutritionPlanWithMeals ?? data.nutritionPlans?.[0]
+    const targetCalories =
+        activeNutritionPlan?.daily_calories ?? activeNutritionPlan?.target_calories ?? 0
+    const targetProtein = activeNutritionPlan?.protein_g ?? activeNutritionPlan?.target_protein ?? 0
+    const targetCarbs = activeNutritionPlan?.carbs_g ?? activeNutritionPlan?.target_carbs ?? 0
+    const targetFats = activeNutritionPlan?.fats_g ?? activeNutritionPlan?.target_fats ?? 0
 
-    // Procesar logs de nutrición (últimos 7-14 días)
-    const nutritionHistory = [...(data.nutritionLogs || [])]
+    const nutritionLogsSource = data.nutritionLogsEnriched ?? data.nutritionLogs ?? []
+
+    // Procesar logs de nutrición (ventana ampliada en servidor; consumos reales por comidas completadas)
+    const nutritionHistory = [...nutritionLogsSource]
         .sort((a, b) => new Date(a.log_date).getTime() - new Date(b.log_date).getTime())
-        .map(log => {
-            const mealLogs: any[] = log.nutrition_meal_logs || [];
-            const total = mealLogs.length;
-            const done = mealLogs.filter((ml: any) => ml.is_completed).length;
-            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        .map((log: Record<string, unknown>) => {
+            const mealLogs: unknown[] = (log.nutrition_meal_logs as unknown[]) || []
+            const total = mealLogs.length
+            const done = mealLogs.filter((ml: unknown) => (ml as { is_completed?: boolean }).is_completed).length
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0
+            const logDate = String(log.log_date)
             return {
-                date: new Date(log.log_date + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-                log_date: log.log_date,
-                plan_name: log.plan_name_at_log || '',
-                target_calories: log.target_calories_at_log || 0,
-                target_protein: log.target_protein_at_log || 0,
-                target_carbs: log.target_carbs_at_log || 0,
-                target_fats: log.target_fats_at_log || 0,
+                date: new Date(logDate + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+                log_date: logDate,
+                plan_name: (log.plan_name_at_log as string) || '',
+                target_calories: (log.target_calories_at_log as number) || 0,
+                target_protein: (log.target_protein_at_log as number) || 0,
+                target_carbs: (log.target_carbs_at_log as number) || 0,
+                target_fats: (log.target_fats_at_log as number) || 0,
+                consumed_calories: (log.consumed_calories as number) || 0,
+                consumed_protein: (log.consumed_protein as number) || 0,
+                consumed_carbs: (log.consumed_carbs as number) || 0,
+                consumed_fats: (log.consumed_fats as number) || 0,
                 mealsTotal: total,
                 mealsDone: done,
                 compliancePct: pct,
                 mealLogs,
-                // Legacy fields for charts (no real macro data available - only completion)
                 diferencial: 0,
                 isAdherent: pct >= 80,
-            };
-        });
+            }
+        })
 
     // Calcular Diferencial Acumulado
     let runningDiff = 0;
@@ -872,9 +879,20 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     >
                     <div className="md:col-span-12 space-y-6 animate-in fade-in duration-500">
                         <NutritionTabB5
+                            clientId={client.id}
+                            coachSlug={coachSlug}
+                            santiagoTodayIso={data.todayIso ?? ''}
                             activeNutritionPlan={activeNutritionPlan}
                             nutritionTimeline={nutritionHistory}
                             mealDetails={data.mealDetails}
+                            adherence30d={data.nutritionAdherence30d}
+                            adherenceTotalMeals={activeNutritionPlan?.nutrition_meals?.length ?? 0}
+                            todayMacros={data.todayConsumedMacros}
+                            hasTodayNutritionLog={data.hasTodayNutritionLog}
+                            nutritionMonthlyAvgPct={data.nutritionMonthlyAvgPct}
+                            nutritionStreakDays={data.nutritionStreakDays}
+                            nutritionWeeklyAvgPct={compliance.nutritionWeeklyAvgPct}
+                            nutritionPrevWeeklyAvgPct={compliance.nutritionPrevWeeklyAvgPct}
                             chartGridColor={chartGridColor}
                             chartAxisColor={chartAxisColor}
                             tooltipBgColor={tooltipBgColor}

@@ -10,7 +10,7 @@ import {
     Eye,
     Dumbbell,
     Apple,
-    MoreVertical,
+    MoreHorizontal,
     Calendar,
     Activity,
     AlertTriangle,
@@ -192,7 +192,7 @@ export function ClientCardV2({
 
     const profileHref = `/coach/clients/${client.id}`
     const builderHref = `/coach/builder/${client.id}`
-    const nutritionHref = `/coach/nutrition-builder/${client.id}`
+    const nutritionHref = `/coach/nutrition-plans/client/${client.id}`
 
     return (
         <motion.div
@@ -262,13 +262,17 @@ export function ClientCardV2({
                                         clientName={client.full_name}
                                         isActive={client.is_active !== false}
                                     />
-                                    <DropdownMenu>
+                                    <DropdownMenu modal={false}>
                                         <DropdownMenuTrigger
                                             type="button"
-                                            className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
-                                            aria-label="Más acciones"
+                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/50 text-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/[0.14]"
+                                            aria-label="Más opciones"
                                         >
-                                            <MoreVertical className="h-5 w-5" />
+                                            <MoreHorizontal
+                                                className="h-5 w-5 text-foreground/80 dark:text-foreground/90"
+                                                strokeWidth={2.25}
+                                                aria-hidden
+                                            />
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl">
                                             <DropdownMenuItem

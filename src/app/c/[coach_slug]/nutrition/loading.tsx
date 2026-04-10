@@ -1,51 +1,51 @@
-import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft } from 'lucide-react'
-
-export default function LoadingClientNutrition() {
-    return (
-        <div className="min-h-screen bg-background animate-in fade-in duration-500">
-            <header className="border-b border-border px-4 py-4 flex items-center gap-3">
-                <div className="p-2 -ml-2 text-muted-foreground">
-                    <ArrowLeft className="w-5 h-5" />
-                </div>
-                <Skeleton className="h-7 w-48" />
-            </header>
-
-            <main className="px-4 py-6 space-y-8 max-w-2xl mx-auto">
-                <section className="space-y-4">
-                    <Skeleton className="h-9 w-64" />
-                    <div className="bg-card/50 border border-border rounded-xl p-4 space-y-3">
-                        <Skeleton className="h-3 w-32" />
-                        <div className="space-y-2">
-                            <Skeleton className="h-4 w-full" />
-                            <Skeleton className="h-4 w-full" />
-                            <Skeleton className="h-4 w-2/3" />
-                        </div>
-                    </div>
-                </section>
-
-                <hr className="border-border" />
-
-                <section className="space-y-6">
-                    <Skeleton className="h-7 w-40" />
-                    
-                    {[...Array(3)].map((_, i) => (
-                        <div key={i} className="bg-card border border-border rounded-2xl p-5 space-y-4">
-                            <div className="flex justify-between items-center">
-                                <div className="space-y-1.5">
-                                    <Skeleton className="h-5 w-32" />
-                                    <Skeleton className="h-4 w-24" />
-                                </div>
-                                <Skeleton className="h-8 w-8 rounded-full" />
-                            </div>
-                            <div className="space-y-2">
-                                <Skeleton className="h-3 w-full" />
-                                <Skeleton className="h-3 w-full" />
-                            </div>
-                        </div>
-                    ))}
-                </section>
-            </main>
+export default function NutritionLoading() {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="sticky top-0 px-4 py-3.5 border-b border-border/10 bg-background/80 backdrop-blur-xl z-40">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-muted rounded-xl animate-pulse" />
+          <div className="space-y-1">
+            <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+            <div className="h-3 w-24 bg-muted rounded animate-pulse" />
+          </div>
         </div>
-    )
+      </div>
+
+      <div className="max-w-lg mx-auto px-4 py-5 space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="w-11 h-11 bg-muted rounded-xl animate-pulse" />
+          <div className="h-6 w-28 bg-muted rounded animate-pulse" />
+          <div className="w-11 h-11 bg-muted rounded-xl animate-pulse" />
+        </div>
+
+        <div className="bg-card border border-border rounded-3xl p-5 space-y-4 animate-pulse">
+          <div className="space-y-2">
+            <div className="h-3 w-24 bg-muted rounded" />
+            <div className="h-10 w-40 bg-muted rounded" />
+            <div className="h-3 w-full bg-muted rounded-full" />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex flex-col items-center gap-2">
+                <div className="w-20 h-20 bg-muted rounded-full" />
+                <div className="h-3 w-12 bg-muted rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="bg-card border border-border rounded-2xl p-4 animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-muted rounded-full" />
+              <div className="flex-1 space-y-2">
+                <div className="h-5 w-32 bg-muted rounded" />
+                <div className="h-3 w-48 bg-muted rounded" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }

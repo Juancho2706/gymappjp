@@ -269,93 +269,100 @@ export function ClientsDirectoryTable({
     }
 
     return (
-        <div className="rounded-2xl border border-border/50 bg-white/40 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/40">
-            <div
-                role="row"
-                className="sticky top-0 z-[1] grid grid-cols-[minmax(180px,1.2fr)_88px_72px_100px_100px_minmax(90px,0.8fr)_minmax(120px,1fr)_72px_100px] gap-2 border-b border-border/60 bg-background/90 px-3 py-3 text-left dark:border-white/10 dark:bg-zinc-950/95"
-            >
-                <HeaderBtn
-                    label="Alumno"
-                    col="name"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSortChange}
-                />
-                <HeaderBtn
-                    label="Estado"
-                    col="status"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSortChange}
-                />
-                <HeaderBtn
-                    label="Score"
-                    col="score"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSortChange}
-                />
-                <HeaderBtn
-                    label="Adh."
-                    col="adherence"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSortChange}
-                />
-                <HeaderBtn
-                    label="Peso"
-                    col="weight"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSortChange}
-                />
-                <HeaderBtn
-                    label="Último"
-                    col="last"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSortChange}
-                />
-                <span className="hidden text-[10px] font-black uppercase tracking-widest text-muted-foreground lg:inline">
-                    Programa
-                </span>
-                <HeaderBtn
-                    label="Días"
-                    col="days"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSort={onSortChange}
-                />
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Acc.
-                </span>
-            </div>
+        <div className="overflow-hidden rounded-2xl border border-border/50 bg-white/40 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/40">
+            {/* Una sola zona de scroll horizontal: encabezado y filas comparten el mismo ancho mínimo */}
+            <div className="touch-pan-x overscroll-x-contain overflow-x-auto">
+                <div className="min-w-[920px]">
+                    <div
+                        role="row"
+                        className="sticky top-0 z-[1] grid grid-cols-[minmax(180px,1.2fr)_88px_72px_100px_100px_minmax(90px,0.8fr)_minmax(120px,1fr)_72px_100px] gap-2 border-b border-border/60 bg-background/90 px-3 py-3 text-left dark:border-white/10 dark:bg-zinc-950/95"
+                    >
+                        <HeaderBtn
+                            label="Alumno"
+                            col="name"
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={onSortChange}
+                        />
+                        <HeaderBtn
+                            label="Estado"
+                            col="status"
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={onSortChange}
+                        />
+                        <HeaderBtn
+                            label="Score"
+                            col="score"
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={onSortChange}
+                        />
+                        <HeaderBtn
+                            label="Adh."
+                            col="adherence"
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={onSortChange}
+                        />
+                        <HeaderBtn
+                            label="Peso"
+                            col="weight"
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={onSortChange}
+                        />
+                        <HeaderBtn
+                            label="Último"
+                            col="last"
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={onSortChange}
+                        />
+                        <span className="hidden text-[10px] font-black uppercase tracking-widest text-muted-foreground lg:inline">
+                            Programa
+                        </span>
+                        <HeaderBtn
+                            label="Días"
+                            col="days"
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={onSortChange}
+                        />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                            Acc.
+                        </span>
+                    </div>
 
-            <div
-                ref={parentRef}
-                className={cn('overflow-x-auto', useVirtual && 'max-h-[70vh] overflow-y-auto')}
-            >
-                <div
-                    className="min-w-[920px]"
-                    style={
-                        useVirtual ?
-                            { height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }
-                        : undefined
-                    }
-                >
-                    {useVirtual && virtualItems ?
-                        virtualItems.map((vi) => {
-                            const client = sorted[vi.index]
-                            return renderRow(client, {
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '100%',
-                                height: `${vi.size}px`,
-                                transform: `translateY(${vi.start}px)`,
-                            })
-                        })
-                    :   sorted.map((c) => renderRow(c))}
+                    <div
+                        ref={parentRef}
+                        className={cn(useVirtual && 'max-h-[70vh] overflow-y-auto')}
+                    >
+                        <div
+                            style={
+                                useVirtual ?
+                                    {
+                                        height: `${rowVirtualizer.getTotalSize()}px`,
+                                        position: 'relative',
+                                    }
+                                : undefined
+                            }
+                        >
+                            {useVirtual && virtualItems ?
+                                virtualItems.map((vi) => {
+                                    const client = sorted[vi.index]
+                                    return renderRow(client, {
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: `${vi.size}px`,
+                                        transform: `translateY(${vi.start}px)`,
+                                    })
+                                })
+                            :   sorted.map((c) => renderRow(c))}
+                        </div>
+                    </div>
                 </div>
             </div>
 

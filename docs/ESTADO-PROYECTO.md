@@ -1,7 +1,13 @@
 # Estado del Proyecto — GymApp JP
 
 > Documento vivo. Actualizar cada vez que se cierre un rework, se agregue deuda técnica, o cambie la prioridad de algo pendiente.
-> **Última actualización:** 2026-04-09
+
+### Biblia del proyecto (junto a [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md))
+
+- Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
+- Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
+
+**Última actualización:** 2026-04-10 19:00 America/Santiago — Post nutrición: board hub, actions unificadas, RLS fase 2 `saved_meals`, lista compacta alimentos, gatillo QA RLS; norma biblia explícita.
 
 ---
 
@@ -76,7 +82,7 @@
 - **TabNav:** sticky, badges por tab, indicador spring animado, `useReducedMotion`, offset mobile corregido (`top-[3.5rem] md:top-0`)
 - **Overview (B3):** alerta prioritaria, compliance rings, heatmap actividad, KPI grid, resumen programa con `ProgramPhasesBar` y próximo entrenamiento, check-in snapshot con foto ampliable
 - **Entrenamiento (B4):** PR banner + confetti, RadarChart volumen muscular, BarChart tonelaje con **media móvil 7 sesiones**, StrengthCards con 1RM estimado (Epley) y AreaChart
-- **Nutrición (B5):** macro rings circulares, pie chart distribución, heatmap 30d adherencia, acordeón comidas, historial logs con highlight <60%
+- **Nutrición (B5):** macro rings y adherencia con **datos reales** (comidas completadas + `food_items`), gráficos consumo vs meta, pie plan/consumido, heatmap o `AdherenceStrip`, acordeón comidas, historial con kcal consumidas donde aplica (Plan H)
 - **Progreso (B6):** weight AreaChart + proyección 4 sem (regresión lineal), IMC + franja visual, gauge energía RadialBar, photo comparison slider, timeline check-ins
 - **Programa (B7):** grid semanal/cíclico, variante A/B por semana, sheet ejercicio (GIF + prescripción + historial), enlace al builder
 - **Facturación (B8):** timeline pagos, resumen CLP, agregar/eliminar pagos
@@ -88,6 +94,78 @@
 - `src/app/coach/clients/[clientId]/` — TrainingTabB4Panels, NutritionTabB5, ProgressBodyCompositionB6, ProgramTabB7, BillingTabB8, ProfileOverviewB3, ProfileFloatingActions, ProfileCheckInSnapshot, ProfileProgramSummaryCard
 - `src/app/coach/clients/[clientId]/profileTrainingAnalytics.ts`
 - `src/app/coach/clients/[clientId]/loading.tsx`
+
+---
+
+### Dashboard del Alumno — Rework Total (`jaunty-fluttering-spark`)
+**Fecha:** 2026-04-09
+
+**Qué se hizo:**
+- Reescritura total de `page.tsx` — server component con Suspense por sección (9 boundaries independientes)
+- Arquitectura nueva: `_data/` (React.cache), `_components/` (por dominio), `_actions/`
+- `dashboard.queries.ts` — todas las queries cacheadas con timezone Santiago
+- `heroComplianceBundle.ts` — bundle cacheado que calcula hero + 3 scores de compliance (§10 del plan maestro). `planned_days` calculado iterando días reales (no hardcoded)
+- `DashboardShell` — grid responsive 1 col mobile / 2 cols desktop con sidebar sticky 280–300px
+- `DashboardHeader` + `ClientGreeting` + `StreakWidget` (flame, confetti ≥ 30 días)
+- `WeekCalendar` + `CalendarDay` — con variante A/B vía `resolveActiveWeekVariantForDisplay`
+- `CheckInBanner` — lógica urgente/warning/normal con `prefers-reduced-motion`
+- `HeroSection` + `WorkoutHeroCard` + `RestDayCard` + `QuickLogSheet` (log rápido sin navegar)
+- `ComplianceRingCluster` + `ComplianceRing` — anillo gris si sin datos nutrición
+- `NutritionDailySummary` + `MacroBar` + `MealCompletionRow` — macros **reales** (`calculateConsumedMacros` + bundle con `food_items`/`foods`)
+- `WeightWidget` + `WeightSparkline` + `TrendArrow` + `WeightQuickLog`
+- `PersonalRecordsBanner` + `PRBadge` — confetti si PR < 24h
+- `ActiveProgramSection` + `ProgramPhaseBar` + `WorkoutPlanCard` (stagger animado)
+- `RecentWorkoutsSection` + `WorkoutLogItem`
+- `DashboardPullToRefresh` — PWA-first, pull en mobile
+- `loading.tsx` con skeletons por sección, replicando grid de dos columnas (sin layout shift)
+- `quickLogWeightAction` server action (validación 20–400 kg)
+- `src/lib/animation-presets.ts` + `src/lib/date-utils.ts` creados como utilidades compartidas
+- E2E smoke test (Playwright, Chromium) — `npm run test:e2e` OK
+- `npm run build` OK
+
+**Deuda residual (baja):**
+- §12 QA manual: Lighthouse PWA, iOS/Android real, auditoría contraste
+- `goal_weight` no existe en schema — sin línea target en `WeightProgressChart`
+- `StudentDashboardPreview` en coach settings sigue mostrando una vista desactualizada del dashboard alumno
+
+**Archivos clave:**
+- `src/app/c/[coach_slug]/dashboard/page.tsx` (rewrite)
+- `src/app/c/[coach_slug]/dashboard/_data/dashboard.queries.ts`
+- `src/app/c/[coach_slug]/dashboard/_data/heroComplianceBundle.ts`
+- `src/app/c/[coach_slug]/dashboard/_components/` (30+ componentes)
+- `src/app/c/[coach_slug]/dashboard/_actions/dashboard.actions.ts`
+- `src/app/c/[coach_slug]/dashboard/loading.tsx`
+- `src/lib/animation-presets.ts`
+- `src/lib/date-utils.ts`
+
+---
+
+### Rework Nutrición — Alumno + Coach (planes A–H + cierre hacia maestro)
+**Fecha inicio núcleo:** 2026-04-09 · **Ampliaciones:** 2026-04-10
+
+**Qué se hizo (resumen):**
+- **Alumno** (`/c/[slug]/nutrition`): arquitectura `_data` / `_actions` / `_components`; `NutritionShell` con día navegable, macros reales, adherencia 30 días, streak; eliminado `NutritionTracker` monolítico. Dashboard: `NutritionDailySummary` con consumo real alineado al plan + comidas completadas. Fix Motion en `MealCard` (spring vs keyframes).
+- **Coach — hub**: `NutritionHub` (layout ancho 2000px), plantillas, alumnos SYNCED/CUSTOM, **`getActivePlansBoardData`** (barras 7d + kcal hoy en tarjetas), biblioteca alimentos con **`FoodListCompact`** (lista densa responsive en hub y `/coach/foods`).
+- **Coach — PlanBuilder** y rutas `new` / `edit` / `client/[clientId]`; queries `nutrition-coach.queries.ts`; **todas** las server actions del hub en `_actions/nutrition-coach.actions.ts` (eliminado barrel `nutrition-plans/actions.ts` por límite Next/Turbopack); `unassignNutritionPlan` con sesión y chequeo de plan.
+- **Redirect** desde `/coach/nutrition-builder/[clientId]`; `/coach/foods` con `FoodBrowser` + `AddFoodSheet`.
+- **Perfil coach** tab Nutrición (B5): datos reales — `MacroRingSummary`, `AdherenceStrip`, kcal en gráficos/tabla, enlaces a editor y vista alumno.
+- **BD / Supabase:** `nutrition-utils`; migraciones RLS **fase 1** (`daily_nutrition_logs`, `nutrition_meal_logs`, `nutrition_plans`, `nutrition_meals`, `food_items`, `foods`) y **fase 2** (`saved_meals`, `saved_meal_items`). Aplicación en proyecto vinculado vía MCP donde corresponda; copia en `supabase/migrations/`.
+
+**Backlog futuro (sin urgencia acordada):** código de barras / `FoodImportRow`; rework `/coach/meals`, UX `/coach/meal-groups`, `/coach/recipes`. Detalle y checklist: [`docs/progreso cursor/PROGRESO-nutricion-rework.md`](progreso%20cursor/PROGRESO-nutricion-rework.md).
+
+**QA RLS nutrición (E2E alumno + coach):** se ejecutará cuando [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md) supere **~90%** en TOTAL ESTIMADO global (acordado 2026-04-10).
+
+**Archivos clave:**
+- `src/app/c/[coach_slug]/nutrition/` (`NutritionShell`, queries, actions)
+- `src/app/c/[coach_slug]/dashboard/_components/nutrition/NutritionDailySummary.tsx`
+- `src/app/coach/nutrition-plans/_components/` (hub, PlanBuilder, `ActivePlansBoard`, `FoodLibrary`, …)
+- `src/app/coach/nutrition-plans/_data/nutrition-coach.queries.ts`, `_actions/nutrition-coach.actions.ts`
+- `src/components/coach/FoodListCompact.tsx`
+- `src/components/coach/CoachMainWrapper.tsx` (ancho nutrición)
+- `src/app/coach/clients/[clientId]/NutritionTabB5.tsx`, `actions.ts` (`getClientProfileData`)
+- `src/app/coach/foods/`
+- `src/lib/nutrition-utils.ts`
+- `supabase/migrations/20260410000000_nutrition_rls_phase1.sql`, `20260410120000_nutrition_rls_phase2_saved_meals.sql`
 
 ---
 
@@ -106,21 +184,21 @@
 
 ### Media prioridad
 
-#### `consumedCals` en tab Nutrición del perfil
-El chart de Nutrición muestra solo calorías objetivo vs % adherencia. No hay calorías consumidas reales porque el alumno no loguea alimentos desde su dashboard todavía.
-
-**Trabajo cuando aplique:**
-1. Que el alumno pueda loguear alimentos desde su dashboard (parte del rework módulo nutrición)
-2. Calcular `consumed_calories` sumando kcal de `food_items` de comidas completadas, o agregar columna en `daily_nutrition_logs`
-3. Actualizar `NutritionTabB5.tsx` para mostrar `consumedCals` vs `targetCals` en ComposedChart
-
-**Dependencia:** Rework del módulo de nutrición del alumno
+#### ~~`consumedCals` en tab Nutrición del perfil~~ *(cerrado 2026-04-09)*
+El alumno marca comidas en `/nutrition`; el perfil coach agrega kcal consumidas estimadas por `food_items` de comidas completadas (`nutritionLogsEnriched` + `NutritionTabB5`). Opcional futuro: persistir `consumed_*` en `daily_nutrition_logs` para historial sin recomputar con el plan actual.
 
 ---
 
 #### Unificar `LIBRARY_PROGRAM_LIST_SELECT`
 El string de select de la biblioteca está duplicado en `actions.ts` y en `page.tsx`.
 **Trabajo:** Extraer a `src/lib/supabase/queries/workout-programs-library.ts`.
+
+---
+
+#### `goal_weight` en tabla `clients` — línea target en chart de peso
+El `WeightProgressChart` del dashboard del alumno no tiene línea de objetivo porque el campo `goal_weight` no existe en el schema de `clients`.
+**Trabajo cuando aplique:** Agregar columna `goal_weight_kg numeric` en `clients` (migración Supabase) y pasar el valor al componente para mostrar `<ReferenceLine>` en el chart.
+**Dependencia:** Decisión de producto sobre si se expone al coach en el perfil del alumno o en onboarding.
 
 ---
 
@@ -153,8 +231,9 @@ Aplicado en tab transitions, FAB y grid del directorio. No aplicado en todos los
 
 | Módulo | Descripción | Prioridad |
 |--------|-------------|-----------|
-| **Nutrición del alumno** | Dashboard del alumno para loguear alimentos, ver plan activo, adherencia. Desbloquea `consumedCals` en perfil del coach. | Alta |
-| **Dashboard del alumno** (`/c/[coach_slug]/dashboard`) | Rework general del dashboard que ve el alumno. | Media |
+| ~~**Nutrición (alumno + núcleo coach)**~~ | ~~`/nutrition`, hub, PlanBuilder, foods, tab B5, board enriquecido, RLS en repo, lista compacta alimentos.~~ | ~~Alta~~ → **COMPLETADO (núcleo)** 2026-04-09 / **refuerzos** 2026-04-10 — ver *Rework Nutrición* y [`PROGRESO-nutricion-rework.md`](progreso%20cursor/PROGRESO-nutricion-rework.md) |
+| **Extensión nutrición coach** | Barcode/import; `/coach/meals`, `/coach/recipes`, UX meal-groups | **Futura** (prioridad baja hasta decisión producto) |
+| ~~**Dashboard del alumno**~~ | ~~Rework general del dashboard que ve el alumno.~~ | ~~Media~~ → **COMPLETADO** 2026-04-09 |
 | **Workout execution** (`/c/[coach_slug]/workout/[planId]`) | Logging de series/reps durante el entrenamiento — mejoras pendientes. | Media |
 | **Check-in del alumno** | Flujo de check-in de peso + fotos + energía desde mobile. | Media |
 | **Onboarding** | Flujo inicial para nuevo alumno (intake, objetivos, foto inicial). | Baja |
