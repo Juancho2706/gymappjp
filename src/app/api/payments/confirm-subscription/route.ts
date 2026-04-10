@@ -1,23 +1,13 @@
 import { NextResponse } from 'next/server'
-import { addMonths } from 'date-fns'
 import { z } from 'zod'
-import { BILLING_CYCLE_CONFIG } from '@/lib/constants'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import type { Json, TablesInsert } from '@/lib/database.types'
+import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subscription-state'
 
 const schema = z.object({
     preapprovalId: z.string().min(1).optional(),
 })
-
-function mapProviderStatus(status?: string | null) {
-    if (!status) return 'pending_payment'
-    if (['approved', 'authorized'].includes(status)) return 'active'
-    if (['pending', 'in_process', 'in_mediation'].includes(status)) return 'pending_payment'
-    if (status === 'paused') return 'paused'
-    if (['cancelled', 'canceled'].includes(status)) return 'canceled'
-    if (['rejected', 'refunded', 'charged_back'].includes(status)) return 'expired'
-    return 'pending_payment'
-}
 
 function buildMpHeaders(accessToken: string) {
     const headers: Record<string, string> = {
@@ -30,6 +20,7 @@ function buildMpHeaders(accessToken: string) {
 
 export async function POST(request: Request) {
     try {
+        const traceId = request.headers.get('x-request-id') ?? crypto.randomUUID()
         const supabase = await createClient()
         const {
             data: { user },
@@ -57,7 +48,7 @@ export async function POST(request: Request) {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('id, billing_cycle, subscription_mp_id')
+            .select('id, billing_cycle, subscription_mp_id, current_period_end')
             .eq('id', user.id)
             .maybeSingle()
 
@@ -98,12 +89,15 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Subscription does not belong to current user.' }, { status: 403 })
         }
 
-        const billingCycle = (coach.billing_cycle || 'monthly') as keyof typeof BILLING_CYCLE_CONFIG
-        const months = BILLING_CYCLE_CONFIG[billingCycle]?.months ?? 1
         const status = mapProviderStatus(preapproval.status ?? null)
-        const nextPeriodEnd = status === 'active' ? addMonths(new Date(), months).toISOString() : null
+        const nextPeriodEnd = resolveCurrentPeriodEnd({
+            status,
+            billingCycle: coach.billing_cycle,
+            currentPeriodEnd: coach.current_period_end,
+            providerCurrentPeriodEnd: preapproval.next_payment_date ?? preapproval.auto_recurring?.end_date ?? null,
+        })
 
-        await admin
+        const { error: updateError } = await admin
             .from('coaches')
             .update({
                 subscription_status: status,
@@ -111,6 +105,49 @@ export async function POST(request: Request) {
                 payment_provider: 'mercadopago',
             })
             .eq('id', user.id)
+
+        if (updateError) {
+            return NextResponse.json({ error: updateError.message }, { status: 500 })
+        }
+
+        const payload: Json | null = (() => {
+            try {
+                return JSON.parse(JSON.stringify(preapproval)) as Json
+            } catch {
+                return null
+            }
+        })()
+
+        const eventRow: TablesInsert<'subscription_events'> = {
+            coach_id: user.id,
+            provider: 'mercadopago',
+            provider_event_id: `manual-confirm:${preapprovalId}:${String(preapproval.status ?? 'unknown')}`,
+            provider_checkout_id: preapprovalId,
+            provider_status: preapproval.status ?? null,
+            payload,
+        }
+
+        const { error: eventError } = await admin
+            .from('subscription_events')
+            .upsert(eventRow, { onConflict: 'provider_event_id' })
+
+        if (eventError) {
+            console.error('[payments.confirm-subscription] event upsert failed', {
+                traceId,
+                coachId: user.id,
+                preapprovalId,
+                message: eventError.message,
+            })
+        }
+
+        console.info('[payments.confirm-subscription] processed', {
+            traceId,
+            coachId: user.id,
+            preapprovalId,
+            providerStatus: preapproval.status ?? null,
+            internalStatus: status,
+            currentPeriodEnd: nextPeriodEnd,
+        })
 
         return NextResponse.json({
             ok: true,

@@ -148,6 +148,8 @@ export class MercadoPagoProvider implements PaymentsProvider {
                 eventId,
                 providerStatus: preapproval.status ?? undefined,
                 coachId: coach?.coachId,
+                providerCheckoutId: String(preapproval.id ?? eventId),
+                currentPeriodEnd: preapproval.next_payment_date ?? preapproval.auto_recurring?.end_date ?? null,
             }
         }
 
@@ -163,6 +165,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
             eventId,
             providerStatus: payment.status ?? undefined,
             coachId: coach?.coachId,
+            providerCheckoutId: payment.order?.id ? String(payment.order.id) : undefined,
         }
     }
 }

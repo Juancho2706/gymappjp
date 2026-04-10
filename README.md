@@ -55,6 +55,7 @@ Required variables:
 | `MERCADOPAGO_ACCESS_TOKEN` | Yes (if MercadoPago) | Server token for payment API and webhooks |
 | `NEXT_PUBLIC_MP_PUBLIC_KEY` | Optional | MercadoPago client-side public key |
 | `MERCADOPAGO_TEST_PAYER_EMAIL` | Sandbox only | Required in tests (`@testuser.com`) when using TEST access token |
+| `MERCADOPAGO_WEBHOOK_TOKEN` | Recommended | Shared token validated by `/api/payments/webhook` to reject forged calls |
 | `STRIPE_SECRET_KEY` | Future | Stripe server key (provider prepared for future) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Future | Stripe client public key |
 | `STRIPE_WEBHOOK_SECRET` | Future | Stripe webhook signature secret |

@@ -7,7 +7,7 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-10 America/Santiago — Auditoría completa del código real (225+ archivos, 24 tablas BD, 38 rutas). Rework workout execution + check-in documentado. Múltiples módulos corregidos de 0% a sus valores reales: coach dashboard (~45%), coach settings (~35%), coach exercises (~40%), landing (~60%), pricing (~25%), auth coach (~40/35%). Se descubrió deuda técnica nueva (migrations ausentes en repo, sw.js con nombre viejo, inconsistencia moneda pricing vs landing, auth callback bug, cobertura de tests mínima). TOTAL global sube de ~52% a **~62%**.
+**Última actualización:** 2026-04-10 America/Santiago — Cierre técnico Sprint 2 (Pagos Core) en curso final: retorno post-checkout automático, endpoint de confirmación, hardening webhook con token compartido, consistencia de `current_period_end`, logging/auditoría de `subscription_events`, y gate `/coach/*` validado. Build de producción y tests auth OK.
 
 ---
 
@@ -305,14 +305,14 @@ No aplicado en todos los componentes hijo del perfil (hovers de imágenes, anima
 | ~~**Dashboard del alumno**~~ | Completado | ~98% | §12 QA manual | ~~Media~~ → **COMPLETADO** |
 | ~~**Workout execution rework**~~ | Rework abril 10 | ~82% | Optimistic updates, offline/retry | ~~Media~~ → **COMPLETADO (parcial)** |
 | ~~**Check-in rework**~~ | Rework abril 10 | ~80% | Medidas corporales, notas | ~~Media~~ → **COMPLETADO (parcial)** |
-| **Pagos & Suscripciones** | Sprint 2 en curso | ~65% | Webhook productivo + validación E2E sandbox/prod | **CRÍTICA (revenue)** |
+| **Pagos & Suscripciones** | Sprint 2 casi cerrado | ~85% | Validar webhook token en producción + checklist Go/No-Go final | **CRÍTICA (revenue)** |
 | **Dashboard coach** | Funcional básico | ~45% | Rework UX, KPIs globales | Media |
 | **Mi Marca / Settings** | Funcional básico | ~35% | Rework branding, preview actualizado | Media |
 | **Ejercicios coach** | Funcional básico | ~40% | Upload GIF, bulk edit | Baja |
 | **Onboarding** | Multi-step con draft | ~58% | Progress bar, foto, validación | Baja |
 | **Catálogo ejercicios alumno** | Funcional | ~68% | Rework visual, favoritos, historial | Baja |
 | **Login/Auth coach** | Funcional | ~40% | Rework visual, rate limiting | Baja |
-| **Registro coach** | Funcional con gate de suscripción | ~60% | Flujo final registro→suscripción aprobada→acceso | **Alta (con pagos)** |
+| **Registro coach** | Funcional con gate + activación automática | ~78% | Smoke E2E final en producción antes de Sprint 3 | **Alta (con pagos)** |
 | **Landing/Pricing** | Sustancial | ~60/25% | Unificar moneda, SEO, testimonios | Media |
 | **Panel CEO / Superadmin** | Inexistente | 0% | Métricas globales | Baja |
 | **Testing** | Mínimo | 10% | Cobertura razonable | Media-Alta |

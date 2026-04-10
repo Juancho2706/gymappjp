@@ -7,6 +7,13 @@ type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
 
 export async function middleware(request: NextRequest) {
+    const { pathname } = request.nextUrl
+
+    // Keep webhook endpoint lightweight and avoid auth calls in middleware.
+    if (pathname === '/api/payments/webhook') {
+        return NextResponse.next({ request })
+    }
+
     let supabaseResponse = NextResponse.next({ request })
 
     const supabase = createServerClient<Database>(
@@ -30,8 +37,6 @@ export async function middleware(request: NextRequest) {
 
     // Refresh session — IMPORTANT: do not remove
     const { data: { user } } = await supabase.auth.getUser()
-
-    const { pathname } = request.nextUrl
 
     // ============================================================
     // 1. PROTECT /coach/* routes (only for coaches)
@@ -93,7 +98,7 @@ export async function middleware(request: NextRequest) {
 
         // 1. Fetch coach branding by slug (public read — no auth required)
         // NOTE: We removed use_brand_colors from the query because it might not exist in the DB yet
-        const { data: coachData, error: coachError } = await supabase
+        const { data: coachData } = await supabase
             .from('coaches')
             .select('id, brand_name, primary_color, logo_url, slug')
             .eq('slug', coachSlug)
@@ -108,7 +113,7 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(notFoundUrl)
         }
 
-        let resolvedColor = coach.primary_color || '#007AFF'
+        const resolvedColor = coach.primary_color || '#007AFF'
 
         // Forward branding as request headers so layouts can read them
         const response = NextResponse.next({ request })
@@ -242,8 +247,6 @@ export async function middleware(request: NextRequest) {
     // EXCEPT for /reset-password which needs the session
     // ============================================================
     const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
-    const isResetPasswordPage = pathname.startsWith('/reset-password')
-
     if (isAuthPage && user) {
         const { data: coachData } = await supabase
             .from('coaches')

@@ -27,6 +27,7 @@ export default function ReactivatePage() {
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     const monthlyBase = useMemo(() => TIER_CONFIG[tier].monthlyPriceClp, [tier])
+    const paymentStatus = searchParams.get('payment')
     const rawSubscriptionParam = searchParams.get('subscription') ?? ''
     const decodedSubscriptionParam = (() => {
         try {
@@ -148,6 +149,18 @@ export default function ReactivatePage() {
                 <p className="mt-2 text-sm text-muted-foreground">
                     Tu acceso de coach está pausado. Elige un plan y continúa al checkout para reactivar tu cuenta.
                 </p>
+
+                {paymentStatus === 'failure' ? (
+                    <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                        El pago no se completó. Puedes intentarlo nuevamente.
+                    </p>
+                ) : null}
+
+                {paymentStatus === 'pending' ? (
+                    <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                        Tu pago quedó pendiente. Espera unos minutos y vuelve a verificar.
+                    </p>
+                ) : null}
 
                 <section className="mt-6">
                     <h2 className="text-sm font-semibold text-foreground">Tier</h2>

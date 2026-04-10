@@ -41,6 +41,10 @@ export async function POST(request: Request) {
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
         const provider = getPaymentsProvider()
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
+        const webhookUrl = webhookToken
+            ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
+            : `${appUrl}/api/payments/webhook`
 
         const checkout = await provider.createCheckout({
             coachId: user.id,
@@ -52,7 +56,7 @@ export async function POST(request: Request) {
             successUrl: `${appUrl}/coach/subscription/processing`,
             failureUrl: `${appUrl}/coach/reactivate?payment=failure`,
             pendingUrl: `${appUrl}/coach/reactivate?payment=pending`,
-            webhookUrl: `${appUrl}/api/payments/webhook`,
+            webhookUrl,
         })
 
         const { error: updateError } = await supabase

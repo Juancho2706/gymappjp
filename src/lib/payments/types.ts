@@ -23,6 +23,8 @@ export type WebhookProcessResult = {
     eventId?: string
     providerStatus?: string
     coachId?: string
+    providerCheckoutId?: string
+    currentPeriodEnd?: string | null
 }
 
 export interface PaymentsProvider {
