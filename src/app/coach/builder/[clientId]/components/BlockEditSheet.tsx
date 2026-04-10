@@ -121,7 +121,7 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
     return (
         <Sheet open={!!block} onOpenChange={onClose}>
             <SheetContent side="right" className="w-full max-w-full bg-background/95 p-0 shadow-2xl backdrop-blur-2xl sm:w-[540px] sm:max-w-[540px] border-l border-border">
-                <SheetHeader className="px-6 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))] border-b border-border bg-muted/20">
+                <SheetHeader className="border-b border-border bg-muted/20 pb-6 pl-6 pr-14 pt-[max(1.5rem,env(safe-area-inset-top))]">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0">
                             {block.gif_url || (block.video_url && !block.video_url.includes('youtube') && !block.video_url.includes('youtu.be')) ? (
@@ -136,8 +136,8 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                                 </span>
                             )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <SheetTitle className="text-lg font-display uppercase tracking-widest text-foreground leading-tight">
+                        <div className="min-w-0 flex-1">
+                            <SheetTitle className="text-lg font-display uppercase tracking-widest text-foreground leading-tight break-words">
                                 {block.exercise_name}
                             </SheetTitle>
                             <p className="text-xs font-bold uppercase tracking-widest mt-1 text-muted-foreground flex items-center gap-2">

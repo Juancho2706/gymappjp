@@ -17,7 +17,6 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
             <main
                 className={cn(
                     'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-                    MOBILE_TOP_CHROME_PT,
                     'md:pt-0'
                 )}
             >

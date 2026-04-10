@@ -100,8 +100,13 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
 
     return (
         <>
-            {/* Mobile Top Header — fija en todo el panel coach (incl. creador de planes) para tema / cerrar sesión */}
-            <div className="md:hidden fixed top-0 left-0 right-0 z-[55] flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 pt-safe pb-3">
+            {/* Mobile Top Header — oculto en builder para evitar doble barra fija */}
+            <div
+                className={cn(
+                    "md:hidden fixed top-0 left-0 right-0 z-[55] flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 pt-safe pb-3",
+                    isBuilder && "hidden"
+                )}
+            >
                 <div className="flex items-center gap-2.5">
                     <GymAppLogo className="w-8 h-8 flex-shrink-0" />
                     <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
