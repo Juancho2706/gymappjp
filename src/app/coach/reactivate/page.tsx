@@ -27,8 +27,32 @@ export default function ReactivatePage() {
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     const monthlyBase = useMemo(() => TIER_CONFIG[tier].monthlyPriceClp, [tier])
-    const preapprovalIdFromUrl = searchParams.get('preapproval_id') ?? undefined
-    const fromSuccessfulCheckout = searchParams.get('subscription') === 'success'
+    const rawSubscriptionParam = searchParams.get('subscription') ?? ''
+    const decodedSubscriptionParam = (() => {
+        try {
+            return decodeURIComponent(rawSubscriptionParam)
+        } catch {
+            return rawSubscriptionParam
+        }
+    })()
+    const fromSuccessfulCheckout =
+        rawSubscriptionParam === 'success' ||
+        decodedSubscriptionParam === 'success' ||
+        rawSubscriptionParam.startsWith('success%3F') ||
+        decodedSubscriptionParam.startsWith('success?')
+
+    const preapprovalIdFromUrl = (() => {
+        const direct = searchParams.get('preapproval_id')
+        if (direct) return direct
+
+        // MercadoPago can sometimes return `subscription=success?preapproval_id=...`
+        const nestedIndex = decodedSubscriptionParam.indexOf('preapproval_id=')
+        if (nestedIndex === -1) return undefined
+
+        const nested = decodedSubscriptionParam.slice(nestedIndex + 'preapproval_id='.length)
+        const ampIndex = nested.indexOf('&')
+        return ampIndex === -1 ? nested : nested.slice(0, ampIndex)
+    })()
 
     const confirmSubscription = useCallback(async (preapprovalId?: string, silent = false) => {
         setIsConfirming(true)
