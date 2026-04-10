@@ -47,7 +47,7 @@ export default function RegisterPage() {
                     Crea tu cuenta
                 </h1>
                 <p className="mt-2 text-muted-foreground text-sm">
-                    Únete a COACH OP y empieza a escalar tu negocio hoy
+                    Únete a EVA y empieza a escalar tu negocio hoy
                 </p>
             </div>
 
@@ -167,3 +167,4 @@ export default function RegisterPage() {
         </div>
     )
 }
+

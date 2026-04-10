@@ -32,9 +32,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             statusBarStyle: 'black-translucent',
             title: brandName,
         },
-        icons: coach?.logo_url ? {
-            apple: coach.logo_url,
-        } : undefined,
+        icons: coach?.logo_url
+            ? { apple: coach.logo_url }
+            : { apple: '/eva-app-icon.png' },
     }
 }
 

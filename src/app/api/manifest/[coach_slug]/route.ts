@@ -18,8 +18,8 @@ export async function GET(
     .single();
 
   const manifest = {
-    name: coach?.brand_name || "COACH OP",
-    short_name: coach?.brand_name || "COACH OP",
+    name: coach?.brand_name || "EVA",
+    short_name: coach?.brand_name || "EVA",
     description: `Entrena con ${coach?.brand_name || 'tu coach'}`,
     start_url: `/c/${slug}/dashboard`,
     display: "standalone",
@@ -27,25 +27,25 @@ export async function GET(
     theme_color: coach?.primary_color || "#000000",
     icons: [
       {
-        src: coach?.logo_url || "/LOGO CUADRADO FINAL FONDO NEGRO.png",
+        src: coach?.logo_url || "/eva-app-icon.png",
         sizes: "192x192",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "any"
       },
       {
-        src: coach?.logo_url || "/LOGO CUADRADO FINAL FONDO NEGRO.png",
+        src: coach?.logo_url || "/eva-app-icon.png",
         sizes: "512x512",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "any"
       },
       {
-        src: coach?.logo_url ? coach.logo_url : "/icon-maskable.png", // Para coaches, asume que el logo subido tiene padding, sino cae al maskable por defecto
+        src: coach?.logo_url ? coach.logo_url : "/eva-app-icon.png",
         sizes: "192x192",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "maskable"
       },
       {
-        src: coach?.logo_url ? coach.logo_url : "/icon-maskable.png",
+        src: coach?.logo_url ? coach.logo_url : "/eva-app-icon.png",
         sizes: "512x512",
         type: coach?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
         purpose: "maskable"

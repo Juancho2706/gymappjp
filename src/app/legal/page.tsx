@@ -27,7 +27,7 @@ export default function AvisoLegalPage() {
             <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2 group">
                     <GymAppLogo className="w-8 h-8 group-hover:scale-105 transition-transform" />
-                    <span className="text-white font-bold text-sm tracking-tight font-display">COACH OP</span>
+                    <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
                 </Link>
                 <Link href="/" className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors">
                     <ArrowLeft className="w-4 h-4" />
@@ -54,7 +54,7 @@ export default function AvisoLegalPage() {
                   {`En cumplimiento con el deber de información dispuesto en la normativa vigente, se hace constar que esta aplicación web (en adelante, "la Plataforma") está diseñada para ser utilizada por entrenadores personales y sus clientes. `}
                   Los datos identificativos del responsable de la plataforma son:
                   <br /><br />
-                  <strong>Nombre de la empresa / Titular:</strong> COACH OP
+                  <strong>Nombre de la empresa / Titular:</strong> EVA
                   <br />
                   <strong>Correo electrónico de contacto:</strong> opcoach49@gmail.com
                   <br />
@@ -107,7 +107,7 @@ export default function AvisoLegalPage() {
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-2">
                         <GymAppLogo className="w-8 h-8" />
-                        <span className="text-white font-bold text-sm tracking-tight font-display">COACH OP</span>
+                        <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
                     </div>
 
                     <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-zinc-400">

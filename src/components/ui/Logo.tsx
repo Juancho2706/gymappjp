@@ -10,8 +10,8 @@ export const GymAppLogo = ({ className = "w-32 h-32" }: LogoProps) => {
   return (
     <div className={cn("relative flex items-center justify-center rounded-2xl overflow-hidden", className)}>
       <Image
-        src="/LOGO CUADRADO FINAL SIN FONDO.png"
-        alt="COACH OP Logo"
+        src="/eva-logo.png"
+        alt="EVA Logo"
         fill
         sizes="(max-width: 768px) 100vw, 128px"
         className="object-contain"
@@ -20,3 +20,4 @@ export const GymAppLogo = ({ className = "w-32 h-32" }: LogoProps) => {
     </div>
   );
 };
+

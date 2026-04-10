@@ -8,7 +8,7 @@ type Coach = Tables<'coaches'>
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Mi Marca | COACH OP',
+    title: 'Mi Marca | EVA',
 }
 
 export default async function CoachSettingsPage() {
@@ -50,3 +50,4 @@ export default async function CoachSettingsPage() {
         </div>
     )
 }
+

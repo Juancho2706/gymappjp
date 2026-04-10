@@ -8,7 +8,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
     title: {
         default: 'Panel Coach',
-        template: '%s | COACH OP',
+        template: '%s | EVA',
     },
 }
 
@@ -61,3 +61,4 @@ export default async function CoachLayout({
         </>
     )
 }
+

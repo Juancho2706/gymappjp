@@ -4,7 +4,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { GymAppLogo } from '@/components/ui/Logo'
 
 export const metadata: Metadata = {
-    title: 'COACH OP',
+    title: 'EVA',
     description: 'Accede a tu cuenta',
 }
 
@@ -20,7 +20,7 @@ export default function AuthLayout({
                 <Link href="/" className="flex items-center gap-2.5">
                     <GymAppLogo className="w-8 h-8" />
                     <span className="font-bold text-foreground font-display">
-                        COACH OP
+                        EVA
                     </span>
                 </Link>
                 <ThemeToggle />
@@ -43,3 +43,4 @@ export default function AuthLayout({
         </div>
     )
 }
+

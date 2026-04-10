@@ -182,7 +182,7 @@ function PillNav() {
         >
             <Link href="/" className="flex items-center gap-2">
                 <GymAppLogo className="w-8 h-8" />
-                <span className="text-foreground font-bold text-sm tracking-tight font-display">COACH OP</span>
+                <span className="text-foreground font-bold text-sm tracking-tight font-display">EVA</span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -860,7 +860,7 @@ export default function LandingPage() {
                                     ))}
                                 </div>
                                 <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
-                                    {`"COACH OP revolucionó mi negocio. Pasé de Excels caóticos a gestionar 50 clientes sin esfuerzo."`}
+                                    {`"EVA revolucionó mi negocio. Pasé de Excels caóticos a gestionar 50 clientes sin esfuerzo."`}
                                 </p>
                             </div>
                             <div className="relative z-10 border-t border-border pt-6 mt-auto">
@@ -958,7 +958,7 @@ export default function LandingPage() {
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                         <div className="flex items-center gap-2">
                             <GymAppLogo className="w-8 h-8" />
-                            <span className="text-foreground font-bold text-sm tracking-tight font-display">COACH OP</span>
+                            <span className="text-foreground font-bold text-sm tracking-tight font-display">EVA</span>
                         </div>
 
                         <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">

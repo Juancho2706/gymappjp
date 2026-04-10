@@ -17,7 +17,7 @@ interface ClientWithProgram extends Client {
 }
 
 export const metadata: Metadata = {
-    title: 'Alumnos | COACH OP',
+    title: 'Alumnos | EVA',
 }
 
 export default async function CoachClientsPage() {
@@ -52,3 +52,4 @@ export default async function CoachClientsPage() {
         </div>
     )
 }
+

@@ -115,7 +115,7 @@ export default function CoachLoginPage() {
                 {/* Divider */}
                 <div className="mt-6 flex items-center gap-3">
                     <div className="flex-1 h-px bg-border" />
-                    <span className="text-xs text-muted-foreground">¿Nuevo en COACH OP?</span>
+                    <span className="text-xs text-muted-foreground">¿Nuevo en EVA?</span>
                     <div className="flex-1 h-px bg-border" />
                 </div>
 
@@ -131,8 +131,9 @@ export default function CoachLoginPage() {
 
             {/* Footer */}
             <p className="mt-6 text-center text-xs text-muted-foreground">
-                &copy; {new Date().getFullYear()} COACH OP. Todos los derechos reservados.
+                &copy; {new Date().getFullYear()} EVA. Todos los derechos reservados.
             </p>
         </div>
     )
 }
+

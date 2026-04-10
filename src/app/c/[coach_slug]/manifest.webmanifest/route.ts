@@ -54,12 +54,12 @@ export async function GET(request: NextRequest, { params }: Params) {
             ]
             : [
                 {
-                    src: '/icon-192x192.png',
+                    src: '/eva-app-icon.png',
                     sizes: '192x192',
                     type: 'image/png',
                 },
                 {
-                    src: '/icon-512x512.png',
+                    src: '/eva-app-icon.png',
                     sizes: '512x512',
                     type: 'image/png',
                 },

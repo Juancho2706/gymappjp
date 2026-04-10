@@ -133,7 +133,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                                     className="text-[10px] font-bold uppercase tracking-[0.2em] mb-0.5"
                                     style={{ color: 'var(--theme-primary, #007AFF)' }}
                                 >
-                                    COACH OP
+                                    EVA
                                 </p>
                                 <p className="text-sm font-bold text-sidebar-foreground truncate uppercase tracking-tight font-display">
                                     {coachBrand || coachName}
@@ -232,3 +232,4 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
         </>
     )
 }
+

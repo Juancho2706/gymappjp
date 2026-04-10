@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const manifest = {
-    name: "COACH OP",
-    short_name: "COACH OP",
+    name: "EVA",
+    short_name: "EVA",
     description: "Plataforma de entrenamiento inteligente y gestión para coaches",
     start_url: "/",
     display: "standalone",
@@ -12,19 +12,19 @@ export async function GET() {
     theme_color: "#10B981",
     icons: [
       {
-        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
+        src: "/eva-app-icon.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any"
       },
       {
-        src: "/LOGO CUADRADO FINAL FONDO NEGRO.png",
+        src: "/eva-app-icon.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "any"
       },
       {
-        src: "/icon-maskable.png", // Requiere un icono con 20% de padding para Android
+        src: "/eva-app-icon.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable"

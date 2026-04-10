@@ -30,32 +30,30 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'COACH OP | Escala tu Negocio de Personal Training y Coaching',
-    template: '%s | COACH OP',
+    default: 'EVA | Escala tu Negocio de Personal Training y Coaching',
+    template: '%s | EVA',
   },
-  description: 'COACH OP es la plataforma definitiva para Personal Trainers y Coaches. Crea rutinas profesionales, planes de nutrición, gestiona alumnos, automatiza check-ins y ten tu propia app móvil white-label.',
+  description: 'EVA es la plataforma definitiva para Personal Trainers y Coaches. Crea rutinas profesionales, planes de nutrición, gestiona alumnos, automatiza check-ins y ten tu propia app móvil white-label.',
   keywords: ['fitness', 'coaching', 'entrenamiento', 'SaaS', 'personal trainer', 'gym', 'rutinas', 'nutrición', 'white label', 'software entrenadores'],
-  authors: [{ name: 'COACH OP' }],
-  applicationName: 'COACH OP',
+  authors: [{ name: 'EVA' }],
+  applicationName: 'EVA',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'COACH OP',
+    title: 'EVA',
   },
   formatDetection: {
     telephone: false,
   },
   openGraph: {
-    title: 'COACH OP | La plataforma definitiva para Personal Trainers',
+    title: 'EVA | La plataforma definitiva para Personal Trainers',
     description: 'Transforma y escala tu negocio de fitness. Herramientas premium para crear rutinas, asignar planes de nutrición y llevar el control de tus alumnos en tu propia app white-label.',
     url: 'https://coachop.app',
-    siteName: 'COACH OP',
+    siteName: 'EVA',
     images: [
       {
-        url: '/og-image.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'COACH OP Dashboard',
+        url: '/eva-seo.png',
+        alt: 'EVA',
       },
     ],
     locale: 'es_ES',
@@ -63,14 +61,14 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'COACH OP | Escala tu Negocio de Fitness',
+    title: 'EVA | Escala tu Negocio de Fitness',
     description: 'Rutinas, nutrición y app propia. Todo lo que necesitas para profesionalizar tu servicio de coaching.',
-    images: ['/og-image.jpg'],
+    images: ['/eva-seo.png'],
   },
   metadataBase: new URL('https://coachop.app'),
   manifest: '/api/manifest/default',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.png',
     apple: '/apple-icon.png',
   },
 }
@@ -92,7 +90,7 @@ export default function RootLayout({
           <LanguageProvider>
             <PwaRegister />
             <ScrollRestoration />
-            <InstallPrompt brandName="COACH OP" />
+            <InstallPrompt brandName="EVA" />
             {children}
             <Toaster richColors position="bottom-center" />
           </LanguageProvider>

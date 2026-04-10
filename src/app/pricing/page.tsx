@@ -3,7 +3,7 @@ import { Check, Zap, Crown, Dumbbell } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Precios | COACH OP',
+    title: 'Precios | EVA',
     description: 'Elige el plan perfecto para tu negocio de coaching fitness.',
 }
 
@@ -86,7 +86,7 @@ export default function PricingPage() {
                         className="font-bold text-foreground text-sm"
                         style={{ fontFamily: 'var(--font-outfit)' }}
                     >
-                        COACH OP
+                        EVA
                     </span>
                 </Link>
                 <Link
@@ -111,7 +111,7 @@ export default function PricingPage() {
                     <span className="text-violet-400">valor sin límites</span>
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                    Tu marca. Tus alumnos. Tu app. COACH OP le da a tu negocio
+                    Tu marca. Tus alumnos. Tu app. EVA le da a tu negocio
                     la tecnología de una startup sin el costo de una.
                 </p>
             </div>

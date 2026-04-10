@@ -27,7 +27,7 @@ export default function PrivacidadPage() {
             <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2 group">
                     <GymAppLogo className="w-8 h-8 group-hover:scale-105 transition-transform" />
-                    <span className="text-white font-bold text-sm tracking-tight font-display">COACH OP</span>
+                    <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
                 </Link>
                 <Link href="/" className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors">
                     <ArrowLeft className="w-4 h-4" />
@@ -53,7 +53,7 @@ export default function PrivacidadPage() {
                 <p className="leading-relaxed text-sm md:text-base">
                   {`Los datos personales recopilados a través de esta plataforma (la "Plataforma") serán incorporados y tratados bajo la responsabilidad del titular de la Plataforma. `}
                   <br /><br />
-                  <strong>Nombre:</strong> COACH OP
+                  <strong>Nombre:</strong> EVA
                   <br />
                   <strong>Contacto:</strong> opcoach49@gmail.com
                 </p>
@@ -131,7 +131,7 @@ export default function PrivacidadPage() {
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-2">
                         <GymAppLogo className="w-8 h-8" />
-                        <span className="text-white font-bold text-sm tracking-tight font-display">COACH OP</span>
+                        <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
                     </div>
 
                     <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-zinc-400">

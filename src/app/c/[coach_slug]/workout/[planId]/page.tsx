@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 
-export const metadata: Metadata = { title: 'Rutina | COACH OP' }
+export const metadata: Metadata = { title: 'Rutina | EVA' }
 
 interface Props {
     params: Promise<{ coach_slug: string; planId: string }>

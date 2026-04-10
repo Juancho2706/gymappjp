@@ -5,7 +5,7 @@ import { ClientExerciseCatalog } from "./ClientExerciseCatalog";
 import { Dumbbell } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Catálogo de Ejercicios | COACH OP",
+  title: "Catálogo de Ejercicios | EVA",
 };
 
 interface Props {

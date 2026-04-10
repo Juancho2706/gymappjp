@@ -13,7 +13,7 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-export function InstallPrompt({ brandName = 'COACH OP' }: { brandName?: string }) {
+export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
   const [isIOS, setIsIOS] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
@@ -162,3 +162,4 @@ export function InstallPrompt({ brandName = 'COACH OP' }: { brandName?: string }
     </AnimatePresence>
   )
 }
+
