@@ -441,7 +441,7 @@ export function WorkoutExecutionClient({
                     </div>
                 </div>
 
-                <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/20 p-4 z-40">
+                <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border/20 bg-background/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
                     <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
                         <ManualTimerButton defaultTime={'90'} onSettingsClick={() => setShowTimerSettings(true)} />
                         <button

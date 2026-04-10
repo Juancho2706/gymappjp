@@ -604,7 +604,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 </div>
             )}
 
-            <header className="flex-shrink-0 border-b border-border bg-background/50 backdrop-blur-xl z-20">
+            <header className="z-20 flex-shrink-0 border-b border-border bg-background/50 pt-safe backdrop-blur-xl">
                 <div className="h-16 px-4 md:px-6 flex items-center justify-between max-w-[2000px] mx-auto gap-4">
                     <div className="flex items-center gap-4">
                         <Link href={client ? `/coach/clients/${client.id}` : '/coach/templates'}>

@@ -3,8 +3,8 @@
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-/** Altura reservada bajo el header móvil fijo (logo + texto + pb-3); el safe-area va aparte en el calc. */
-const MOBILE_TOP_CHROME_PT = 'pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]'
+/** Offset superior móvil compartido (safe-area + altura de chrome). */
+const MOBILE_TOP_CHROME_PT = 'pt-[var(--mobile-content-top-offset)]'
 
 export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
@@ -28,7 +28,7 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
     return (
         <main
             className={cn(
-                'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[72px] md:pb-0',
+                'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[var(--mobile-content-bottom-offset)] md:pb-0',
                 MOBILE_TOP_CHROME_PT,
                 'md:pt-0'
             )}
