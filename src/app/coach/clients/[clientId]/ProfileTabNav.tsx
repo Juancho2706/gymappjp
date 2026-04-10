@@ -37,12 +37,12 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
     return (
         <div
             className={cn(
-                'sticky z-20 -mx-1 px-1 mb-2 border-b border-border/50 dark:border-white/10',
+                'sticky z-20 mx-0 mb-2 w-full max-w-full min-w-0 border-b border-border/50 px-0 dark:border-white/10',
                 'bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75',
                 'top-[3.5rem] md:top-0 print:static print:border-0 print:bg-transparent'
             )}
         >
-            <div className="relative z-10 flex gap-0 overflow-x-auto sm:gap-2">
+            <div className="relative z-10 flex min-w-0 gap-0 overflow-x-auto sm:gap-2">
                 {TABS.map((tab) => {
                     const Icon = tab.icon
                     const active = activeTab === tab.id

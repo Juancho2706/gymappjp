@@ -26,6 +26,7 @@ const navItems = [
     {
         href: '/coach/dashboard',
         label: 'Dashboard',
+        shortLabel: 'Inicio',
         icon: LayoutDashboard,
     },
     {
@@ -36,11 +37,13 @@ const navItems = [
     {
         href: '/coach/workout-programs',
         label: 'Programas',
+        shortLabel: 'Planes',
         icon: ClipboardList,
     },
     {
         href: '/coach/exercises',
         label: 'Ejercicios',
+        shortLabel: 'Ejer.',
         icon: Dumbbell,
     },
     {
@@ -52,6 +55,7 @@ const navItems = [
     {
         href: '/coach/settings',
         label: 'Mi Marca',
+        shortLabel: 'Marca',
         icon: Settings,
     },
 ]
@@ -159,18 +163,20 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                 )}
 
                 {/* Navigation Links */}
-                <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 py-2 md:px-4 md:py-6 gap-2 md:space-y-2 overflow-x-auto overflow-y-auto custom-scrollbar">
+                <nav className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
                     {navItems.map((item) => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                         const Icon = item.icon
+                        const short = item.shortLabel
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                title={isCollapsed ? item.label : undefined}
+                                title={item.label}
                                 className={cn(
-                                    'flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-xl text-[10px] md:text-sm font-semibold transition-all duration-300 group flex-1 md:flex-none border border-transparent',
-                                    isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start md:px-4',
+                                    'flex shrink-0 flex-col items-center gap-1 rounded-xl border border-transparent px-2 py-2 text-[10px] font-semibold transition-all duration-300 group md:w-full md:flex-none md:flex-row md:gap-3 md:px-4 md:py-3 md:text-sm',
+                                    'min-w-[3.5rem] max-w-[5.25rem] md:min-w-0 md:max-w-none',
+                                    isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start',
                                     isActive
                                         ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.4)]'
                                         : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
@@ -184,9 +190,14 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
                                     )}
                                     style={isActive ? activeColorStyle : undefined}
                                 />
-                                <span className={cn("truncate tracking-wide", isCollapsed && "md:hidden")}>
-                                    <span className="hidden md:inline uppercase text-[11px]">{item.label}</span>
-                                    <span className="md:hidden inline">{(item as any).shortLabel || item.label}</span>
+                                <span
+                                    className={cn(
+                                        'max-w-full text-center leading-tight tracking-wide line-clamp-2 md:truncate md:text-left',
+                                        isCollapsed && 'md:hidden'
+                                    )}
+                                >
+                                    <span className="hidden uppercase md:inline md:text-[11px]">{item.label}</span>
+                                    <span className="inline md:hidden">{short || item.label}</span>
                                 </span>
                             </Link>
                         )

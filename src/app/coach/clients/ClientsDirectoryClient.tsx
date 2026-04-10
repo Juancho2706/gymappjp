@@ -161,7 +161,7 @@ export function ClientsDirectoryClient({
     }
 
     return (
-        <div className="space-y-6 md:space-y-8">
+        <div className="min-w-0 max-w-full space-y-6 md:space-y-8">
             <DirectoryActionBar
                 search={search}
                 onSearchChange={setSearch}

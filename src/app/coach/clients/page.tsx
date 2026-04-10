@@ -47,7 +47,7 @@ export default async function CoachClientsPage() {
     const appUrl = `${protocol}://${host}`
 
     return (
-        <div className="max-w-[1600px] animate-fade-in mb-24 md:mb-0 space-y-12">
+        <div className="mx-auto max-w-[1600px] w-full min-w-0 animate-fade-in space-y-12 overflow-x-hidden mb-24 md:mb-0">
             <CoachClientsShell clients={clients} coach={coach} appUrl={appUrl} pulse={pulse} />
         </div>
     )

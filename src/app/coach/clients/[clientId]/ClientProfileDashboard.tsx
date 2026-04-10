@@ -300,12 +300,12 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="min-w-0 max-w-full space-y-6">
             <ProfileTabNav activeTab={activeTab} onChange={handleTabChange} badges={tabBadges} />
 
             {isPending && (
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-pulse">
-                    <div className="md:col-span-8 space-y-4">
+                <div className="grid min-w-0 animate-pulse grid-cols-1 gap-6 md:grid-cols-12">
+                    <div className="min-w-0 space-y-4 md:col-span-8">
                         <Skeleton className="h-16 rounded-xl" />
                         <Skeleton className="h-40 rounded-xl" />
                         <div className="grid grid-cols-2 gap-4">
@@ -313,7 +313,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             <Skeleton className="h-32 rounded-xl" />
                         </div>
                     </div>
-                    <div className="md:col-span-4 space-y-4">
+                    <div className="min-w-0 space-y-4 md:col-span-4">
                         <Skeleton className="h-64 rounded-xl" />
                     </div>
                 </div>
@@ -324,10 +324,10 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     <motion.div
                         key="overview"
                         {...tabMotion}
-                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
                         {/* Task 2: Rediseño de Overview */}
-                        <div className="md:col-span-8 space-y-6">
+                        <div className="min-w-0 space-y-6 md:col-span-8">
                             <ProfileTopAlertBanner alert={topAlert} />
 
                             <ProfileOverviewB3
@@ -379,7 +379,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                 )}
                             </GlassCard>
                         </div>
-                        <div className="md:col-span-4 space-y-6">
+                        <div className="min-w-0 space-y-6 md:col-span-4">
                             {/* Task 2: Dynamic Metrics Card */}
                             <GlassCard className="p-6 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-full">
                                 <div className="absolute bottom-0 right-0 -mr-16 -mb-16 w-48 h-48 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
@@ -457,9 +457,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     <motion.div
                         key="progress"
                         {...tabMotion}
-                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
-                    <div className="md:col-span-12 space-y-6">
+                    <div className="min-w-0 space-y-6 md:col-span-12">
                         <ProgressBodyCompositionB6
                             checkIns={checkIns || []}
                             heightCm={client?.client_intake?.height_cm}
@@ -694,9 +694,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     <motion.div
                         key="workout"
                         {...tabMotion}
-                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
-                    <div className="md:col-span-12 space-y-6">
+                    <div className="min-w-0 space-y-6 md:col-span-12">
                         <TrainingTabB4Panels
                             workoutHistory={data.workoutHistory || []}
                             muscleVolumeByGroup={data.muscleVolumeByGroup || []}
@@ -855,9 +855,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     <motion.div
                         key="program"
                         {...tabMotion}
-                        className="relative z-10 grid grid-cols-1 gap-6 md:grid-cols-12"
+                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
-                        <div className="animate-in fade-in space-y-6 duration-500 md:col-span-12">
+                        <div className="animate-in fade-in min-w-0 space-y-6 duration-500 md:col-span-12">
                             <ProgramTabB7
                                 clientId={client.id}
                                 activeProgram={data.activeProgram}
@@ -875,9 +875,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     <motion.div
                         key="nutrition"
                         {...tabMotion}
-                        className="grid grid-cols-1 md:grid-cols-12 gap-6 relative z-10"
+                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
-                    <div className="md:col-span-12 space-y-6 animate-in fade-in duration-500">
+                    <div className="min-w-0 space-y-6 animate-in fade-in duration-500 md:col-span-12">
                         <NutritionTabB5
                             clientId={client.id}
                             coachSlug={coachSlug}
@@ -907,9 +907,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     <motion.div
                         key="billing"
                         {...tabMotion}
-                        className="relative z-10 grid grid-cols-1 gap-6 md:grid-cols-12"
+                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
-                        <div className="animate-in fade-in duration-500 md:col-span-12">
+                        <div className="animate-in fade-in min-w-0 duration-500 md:col-span-12">
                             <BillingTabB8 payments={payments || []} clientId={client.id} />
                         </div>
                     </motion.div>

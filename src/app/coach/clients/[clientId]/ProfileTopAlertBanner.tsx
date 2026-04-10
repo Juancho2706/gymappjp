@@ -43,15 +43,22 @@ export function ProfileTopAlertBanner({ alert }: { alert: ProfileTopAlert | null
     return (
         <div
             className={cn(
-                'relative overflow-hidden rounded-2xl border p-4 md:p-5',
+                'relative w-full max-w-full min-w-0 overflow-hidden rounded-2xl border p-4 md:p-5',
                 'bg-gradient-to-br',
                 s.border,
                 s.bg
             )}
         >
-            <div className="relative z-10 flex gap-3">
+            <div className="relative z-10 flex min-w-0 gap-3">
                 {s.icon}
-                <p className={cn('text-sm font-bold leading-snug md:text-base', s.text)}>{alert.message}</p>
+                <p
+                    className={cn(
+                        'min-w-0 flex-1 text-sm font-bold leading-snug break-words [overflow-wrap:anywhere] md:text-base',
+                        s.text
+                    )}
+                >
+                    {alert.message}
+                </p>
             </div>
         </div>
     )

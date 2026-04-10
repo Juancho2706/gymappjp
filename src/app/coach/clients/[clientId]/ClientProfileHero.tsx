@@ -100,7 +100,7 @@ export function ClientProfileHero({
     }
 
     return (
-        <div className="flex flex-col gap-6 relative">
+        <div className="relative flex min-w-0 max-w-full flex-col gap-6">
             <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 blur-[100px] pointer-events-none z-0" />
 
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 relative z-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -125,7 +125,7 @@ export function ClientProfileHero({
                     </div>
                     <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                            <h1 className="text-2xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display leading-none truncate">
+                            <h1 className="font-display max-w-full text-2xl font-black uppercase leading-none tracking-tighter text-foreground break-words md:text-5xl">
                                 {client.full_name}
                             </h1>
                             <Badge
@@ -143,10 +143,10 @@ export function ClientProfileHero({
                                 Score: {attentionScore} · {ab.label}
                             </Badge>
                         </div>
-                        <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest truncate">
+                        <p className="break-all text-xs font-bold uppercase tracking-widest text-muted-foreground">
                             {client.email}
                         </p>
-                        <p className="text-[11px] md:text-xs text-muted-foreground font-medium normal-case tracking-normal flex flex-wrap gap-x-3 gap-y-1">
+                        <p className="flex w-full min-w-0 flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium normal-case tracking-normal text-muted-foreground [overflow-wrap:anywhere] break-words md:text-xs">
                             <span className="inline-flex items-center gap-1">
                                 <Flame className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                                 Racha: {streakDays} día{streakDays === 1 ? '' : 's'}
@@ -163,7 +163,7 @@ export function ClientProfileHero({
                     </div>
                 </div>
 
-                <div className="flex flex-row flex-wrap items-center gap-2 md:gap-3 relative z-10 print:hidden">
+                <div className="relative z-10 flex w-full min-w-0 max-w-full flex-row flex-wrap items-center gap-2 print:hidden md:gap-3">
                     <GlassButton
                         asChild
                         className={cn(
@@ -216,7 +216,7 @@ export function ClientProfileHero({
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 relative z-10">
+            <div className="relative z-10 grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
                 <HeroStatChip
                     label="Peso"
                     value={currentWeightKg > 0 ? `${currentWeightKg} kg` : '—'}
@@ -286,16 +286,18 @@ function HeroStatChip({
     return (
         <div
             className={cn(
-                'rounded-2xl border border-border/60 dark:border-white/10 bg-card/80 dark:bg-white/[0.03] p-4 shadow-sm backdrop-blur-sm',
+                'min-w-0 max-w-full rounded-2xl border border-border/60 bg-card/80 p-3 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.03] sm:p-4',
                 className
             )}
         >
-            <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{label}</span>
+            <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                    {label}
+                </span>
                 {icon}
             </div>
-            <div className="text-lg font-black text-foreground leading-tight">{value}</div>
-            <div className="text-[10px] mt-1 font-medium">{sub}</div>
+            <div className="min-w-0 break-words text-base font-black leading-tight text-foreground sm:text-lg">{value}</div>
+            <div className="mt-1 min-w-0 text-[10px] font-medium [overflow-wrap:anywhere]">{sub}</div>
         </div>
     )
 }

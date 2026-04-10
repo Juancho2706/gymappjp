@@ -169,17 +169,17 @@ export function CoachWarRoom({
 
     return (
         <>
-            <div className="space-y-8 mb-8 md:mb-12">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative">
-                    <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 blur-[100px] pointer-events-none z-0" />
+            <div className="mb-8 min-w-0 max-w-full space-y-8 overflow-x-hidden md:mb-12">
+                <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+                    <div className="pointer-events-none absolute -left-10 -top-10 z-0 h-64 w-64 bg-primary/10 blur-[100px]" />
 
-                    <div className="relative z-10 space-y-3">
+                    <div className="relative z-10 min-w-0 max-w-full space-y-3">
                         <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="text-3xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display">
+                            <h1 className="font-display max-w-full text-2xl font-black uppercase tracking-tighter text-foreground break-words text-balance sm:text-3xl md:text-5xl">
                                 Directorio de Alumnos
                             </h1>
                         </div>
-                        <p className="text-muted-foreground text-sm font-medium max-w-lg leading-relaxed">
+                        <p className="max-w-lg text-sm font-medium leading-relaxed text-muted-foreground">
                             Gestión centralizada · panel operativo tipo War Room
                         </p>
                         <p className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-widest">
@@ -200,23 +200,35 @@ export function CoachWarRoom({
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="mt-2 inline-flex items-center gap-3 bg-white/50 dark:bg-white/[0.03] backdrop-blur-md border border-border dark:border-white/10 rounded-full px-4 py-2 cursor-pointer hover:bg-white/80 dark:hover:bg-white/[0.06] transition-all group"
+                                className="group mt-2 w-full max-w-full min-w-0 cursor-pointer rounded-2xl border border-border bg-white/50 px-3 py-3 backdrop-blur-md transition-all hover:bg-white/80 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06] sm:rounded-full sm:px-4 sm:py-2"
                                 onClick={handleCopy}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault()
+                                        handleCopy()
+                                    }
+                                }}
                             >
-                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                                    Portal alumnos:
-                                </span>
-                                <span className="text-xs text-primary font-bold truncate max-w-[200px]">
-                                    {loginUrl}
-                                </span>
-                                <div className="p-1 rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform">
-                                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                        Portal alumnos:
+                                    </span>
+                                    <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
+                                        <span className="break-all text-xs font-bold text-primary [overflow-wrap:anywhere]">
+                                            {loginUrl}
+                                        </span>
+                                        <div className="mt-0.5 shrink-0 rounded-full bg-primary/10 p-1 text-primary transition-transform group-hover:scale-110 sm:mt-0">
+                                            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                        </div>
+                                    </div>
                                 </div>
                             </motion.div>
                         )}
                     </div>
 
-                    <div className="relative z-10 w-full md:w-auto">
+                    <div className="relative z-10 min-w-0 w-full md:w-auto">
                         <GlassButton
                             onClick={() => setOpen(true)}
                             className="w-full md:w-auto px-8 h-14 text-white hover:opacity-90 transition-all border-none"
@@ -232,7 +244,7 @@ export function CoachWarRoom({
                 </div>
 
                 <motion.div
-                    className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 relative z-10"
+                    className="relative z-10 grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:gap-4 lg:grid-cols-5"
                     variants={cardContainer}
                     initial="hidden"
                     animate="show"
@@ -243,7 +255,7 @@ export function CoachWarRoom({
                                 ? stat.key === 'total'
                                 : stat.filter !== 'all' && stat.filter === activeFilter
                         return (
-                            <motion.div key={stat.key} variants={cardItem}>
+                            <motion.div key={stat.key} variants={cardItem} className="min-w-0">
                                 <GlassCard
                                     role="button"
                                     tabIndex={0}
@@ -254,22 +266,22 @@ export function CoachWarRoom({
                                             onFilterChange(stat.filter)
                                         }
                                     }}
-                                    className={`group relative overflow-hidden bg-white/80 dark:bg-zinc-950/50 cursor-pointer transition-all ${
+                                    className={`group relative cursor-pointer overflow-hidden bg-white/80 transition-all dark:bg-zinc-950/50 ${
                                         selected
-                                            ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-background'
+                                            ? 'ring-2 ring-primary/40 ring-offset-0 ring-offset-background sm:ring-offset-2'
                                             : ''
                                     }`}
                                 >
                                     <motion.div
-                                        whileHover={{ scale: 1.03, y: -3 }}
+                                        whileHover={{ y: -2 }}
                                         transition={{ type: 'spring', stiffness: 350, damping: 28 }}
                                         className="h-full"
                                     >
                                         <div
                                             className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-50`}
                                         />
-                                        <div className="relative z-10 p-4 md:p-5 flex items-center gap-4">
-                                            <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/50 dark:bg-white/5 border border-border dark:border-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                                        <div className="relative z-10 flex min-w-0 items-center gap-2 p-3 sm:gap-3 sm:p-4 md:gap-4 md:p-5">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-white/50 transition-transform group-hover:scale-105 dark:border-white/10 dark:bg-white/5 sm:h-10 sm:w-10 md:h-12 md:w-12 md:group-hover:scale-110">
                                                 <stat.icon className={`w-5 h-5 md:w-6 h-6 ${stat.color}`} />
                                             </div>
                                             <div className="min-w-0">
@@ -306,16 +318,16 @@ export function CoachWarRoom({
                     <motion.div
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+                        className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3"
                     >
-                        <p className="text-sm font-bold text-rose-600 dark:text-rose-400">
+                        <p className="min-w-0 flex-1 text-sm font-bold break-words text-rose-600 dark:text-rose-400">
                             {urgentCount} cliente{urgentCount !== 1 ? 's' : ''} con atención urgente
                             (score ≥ 50)
                         </p>
                         <button
                             type="button"
                             onClick={() => onFilterChange('urgent')}
-                            className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 flex items-center gap-1 hover:gap-2 transition-all"
+                            className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-widest text-rose-600 transition-all hover:gap-2 dark:text-rose-400"
                         >
                             Ver <ChevronRight className="w-4 h-4" />
                         </button>
@@ -326,9 +338,9 @@ export function CoachWarRoom({
                     <motion.div
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+                        className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3"
                     >
-                        <p className="text-sm font-bold text-orange-700 dark:text-orange-400">
+                        <p className="min-w-0 flex-1 break-words text-sm font-bold text-orange-700 dark:text-orange-400">
                             {expiredProgramsCount} programa
                             {expiredProgramsCount !== 1 ? 's' : ''} vencido
                             {expiredProgramsCount !== 1 ? 's' : ''}
@@ -336,7 +348,7 @@ export function CoachWarRoom({
                         <button
                             type="button"
                             onClick={() => onFilterChange('expired_program')}
-                            className="text-[10px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-400 flex items-center gap-1 hover:gap-2 transition-all"
+                            className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-widest text-orange-700 transition-all hover:gap-2 dark:text-orange-400"
                         >
                             Ver <ChevronRight className="w-4 h-4" />
                         </button>
@@ -347,16 +359,16 @@ export function CoachWarRoom({
                     <motion.div
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+                        className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3"
                     >
-                        <p className="text-sm font-bold text-amber-800 dark:text-amber-400">
+                        <p className="min-w-0 flex-1 break-words text-sm font-bold text-amber-800 dark:text-amber-400">
                             {pendingPassword} alumno{pendingPassword !== 1 ? 's' : ''} con cambio de
                             contraseña pendiente
                         </p>
                         <button
                             type="button"
                             onClick={() => onFilterChange('password_reset')}
-                            className="text-[10px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-400 flex items-center gap-1 hover:gap-2 transition-all"
+                            className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-800 transition-all hover:gap-2 dark:text-amber-400"
                         >
                             Ver <ChevronRight className="w-4 h-4" />
                         </button>
@@ -367,16 +379,16 @@ export function CoachWarRoom({
                     <motion.div
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+                        className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3"
                     >
-                        <p className="text-sm font-bold text-foreground">
+                        <p className="min-w-0 flex-1 break-words text-sm font-bold text-foreground">
                             ALERTA: {noCheckin7d} cliente{noCheckin7d !== 1 ? 's' : ''} llevan más de 7
                             días sin check-in
                         </p>
                         <button
                             type="button"
                             onClick={() => onFilterChange('urgent')}
-                            className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1 hover:gap-2 transition-all"
+                            className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-widest text-primary transition-all hover:gap-2"
                             style={{ color: 'var(--theme-primary)' }}
                         >
                             Ver <ChevronRight className="w-4 h-4" />

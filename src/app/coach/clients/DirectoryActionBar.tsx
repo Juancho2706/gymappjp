@@ -166,7 +166,7 @@ export function DirectoryActionBar({
     return (
         <div
             className={cn(
-                'sticky top-0 z-10 -mx-4 md:mx-0 rounded-2xl border border-border/60 bg-background/75 px-4 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/70',
+                'sticky top-0 z-10 mx-0 w-full max-w-full min-w-0 rounded-2xl border border-border/60 bg-background/75 px-3 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/70 sm:px-4',
                 className
             )}
         >

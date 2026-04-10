@@ -108,3 +108,12 @@ Documento creado/actualizado con el detalle anterior. Próximos pasos opcionales
 - **`DashboardHeader.tsx`:** en móvil/tablet (`< lg`) el encabezado pasa a **`fixed`** `top-0 left-0 right-0 z-40`, `pt-safe`, `bg-background/95`; en `lg:` vuelve a flujo normal (`lg:static`) sin borde/fondo de barra.
 - **`DashboardShell.tsx` + `dashboard/loading.tsx`:** `pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]` para que el scroll empiece bajo el header fijo + `lg:pt-4` en escritorio.
 - **`pt-safe` añadido** en cabeceras o contenedores: nutrición (`page` + `EmptyNutritionState`), ejercicios, check-in, workout (`WorkoutExecutionClient`), suspended, change-password, login y onboarding.
+
+## 21:20 — Coach: directorio de alumnos + ficha alumno responsive (móvil)
+
+- **`CoachWarRoom.tsx`:** contenedor `min-w-0 max-w-full overflow-x-hidden`; título con `break-words` / `text-balance` y tamaños `text-2xl`→`md:text-5xl`; bloque “Portal alumnos” en columna en móvil con URL `break-all` y caja ancho completo; banners de alerta con `min-w-0 break-words` y botones `shrink-0`.
+- **`coach/clients/page.tsx` + `[clientId]/page.tsx`:** `w-full min-w-0 overflow-x-hidden`; enlace “Directorio…” con `max-w-full break-words`.
+- **`ClientsDirectoryClient.tsx`**, **`ClientProfileDashboard.tsx`**, **`ClientProfileHero.tsx`:** `min-w-0 max-w-full`; nombre y email sin truncar de forma rígida (`break-words` / `break-all`).
+- **`ProfileTopAlertBanner.tsx`:** texto del aviso con `min-w-0 flex-1 break-words [overflow-wrap:anywhere]` para que no se corte a la derecha.
+- **`ProfileTabNav.tsx`:** `max-w-full min-w-0` en el contenedor sticky y en la fila con scroll.
+- **`CoachSidebar.tsx` (nav móvil):** deja de usar `flex-1` por ítem (aplastaba etiquetas); `flex-nowrap overflow-x-auto` + ítems `shrink-0`; `shortLabel` para Inicio, Planes, Ejer., Marca; `title={item.label}` en cada `Link`.
