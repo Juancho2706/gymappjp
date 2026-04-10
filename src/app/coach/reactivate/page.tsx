@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
@@ -21,15 +21,18 @@ export default function ReactivatePage() {
     const [isLoading, setIsLoading] = useState(false)
     const [isConfirming, setIsConfirming] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const hasAutoCheckedRef = useRef(false)
+    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     const monthlyBase = useMemo(() => TIER_CONFIG[tier].monthlyPriceClp, [tier])
     const preapprovalIdFromUrl = searchParams.get('preapproval_id') ?? undefined
+    const fromSuccessfulCheckout = searchParams.get('subscription') === 'success'
 
-    async function confirmSubscription(preapprovalId?: string) {
+    const confirmSubscription = useCallback(async (preapprovalId?: string, silent = false) => {
         setIsConfirming(true)
-        setError(null)
+        if (!silent) setError(null)
         try {
             const response = await fetch('/api/payments/confirm-subscription', {
                 method: 'POST',
@@ -41,17 +44,57 @@ export default function ReactivatePage() {
             if (!response.ok) throw new Error(payload.error ?? 'No se pudo confirmar la suscripción.')
 
             if (payload.subscriptionStatus === 'active') {
+                if (pollingIntervalRef.current) {
+                    clearInterval(pollingIntervalRef.current)
+                    pollingIntervalRef.current = null
+                }
                 router.replace('/coach/dashboard?subscription=active')
                 return
             }
 
-            setError('Tu pago fue creado, pero la suscripción aún aparece pendiente. Reintenta en unos segundos.')
+            if (!silent) {
+                setError('Tu pago fue creado, pero la suscripción aún aparece pendiente. Reintenta en unos segundos.')
+            }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Error inesperado')
+            if (!silent) {
+                setError(err instanceof Error ? err.message : 'Error inesperado')
+            }
         } finally {
             setIsConfirming(false)
         }
-    }
+    }, [router])
+
+    useEffect(() => {
+        if (!fromSuccessfulCheckout || hasAutoCheckedRef.current) return
+        hasAutoCheckedRef.current = true
+
+        void confirmSubscription(preapprovalIdFromUrl, true)
+
+        pollingIntervalRef.current = setInterval(async () => {
+            try {
+                const response = await fetch('/api/payments/subscription-status')
+                const raw = await response.text()
+                const payload = raw ? JSON.parse(raw) : {}
+                if (!response.ok) return
+                if (payload?.coach?.subscription_status === 'active') {
+                    if (pollingIntervalRef.current) {
+                        clearInterval(pollingIntervalRef.current)
+                        pollingIntervalRef.current = null
+                    }
+                    router.replace('/coach/dashboard?subscription=active')
+                }
+            } catch {
+                // Ignore transient polling errors.
+            }
+        }, 4000)
+
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+            }
+        }
+    }, [confirmSubscription, fromSuccessfulCheckout, preapprovalIdFromUrl, router])
 
     async function handleCheckout() {
         setIsLoading(true)
