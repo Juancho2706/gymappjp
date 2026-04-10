@@ -9,6 +9,32 @@ import { ScrollRestoration } from '@/components/ScrollRestoration'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { BRAND_APP_ICON, BRAND_OG_IMAGE } from '@/lib/brand-assets'
 
+/** Base para resolver URLs absolutas (OG/Twitter); prioriza dominio real del despliegue. */
+function resolveMetadataBase(): URL {
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  if (fromEnv) {
+    try {
+      return new URL(fromEnv.endsWith('/') ? fromEnv.slice(0, -1) : fromEnv)
+    } catch {
+      /* ignore */
+    }
+  }
+  const vercel = process.env.VERCEL_URL?.trim()
+  if (vercel) {
+    const origin = vercel.startsWith('http') ? vercel : `https://${vercel}`
+    try {
+      return new URL(origin)
+    } catch {
+      /* ignore */
+    }
+  }
+  return new URL('https://www.eva-app.cl')
+}
+
+const metadataBase = resolveMetadataBase()
+/** Crawlers (WhatsApp, X) suelen exigir URL absoluta y sin caracteres problemáticos en la ruta. */
+const openGraphImageAbsoluteUrl = new URL(BRAND_OG_IMAGE, metadataBase).href
+
 const inter = Inter({
   variable: '--font-inter',
   subsets: ['latin'],
@@ -49,12 +75,17 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'EVA | La plataforma definitiva para Personal Trainers',
     description: 'Transforma y escala tu negocio de fitness. Herramientas premium para crear rutinas, asignar planes de nutrición y llevar el control de tus alumnos en tu propia app white-label.',
-    url: 'https://coachop.app',
+    url: metadataBase.href.endsWith('/')
+      ? metadataBase.href.slice(0, -1)
+      : metadataBase.href,
     siteName: 'EVA',
     images: [
       {
-        url: BRAND_OG_IMAGE,
+        url: openGraphImageAbsoluteUrl,
+        width: 1920,
+        height: 1080,
         alt: 'EVA',
+        type: 'image/png',
       },
     ],
     locale: 'es_ES',
@@ -64,9 +95,9 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'EVA | Escala tu Negocio de Fitness',
     description: 'Rutinas, nutrición y app propia. Todo lo que necesitas para profesionalizar tu servicio de coaching.',
-    images: [BRAND_OG_IMAGE],
+    images: [openGraphImageAbsoluteUrl],
   },
-  metadataBase: new URL('https://coachop.app'),
+  metadataBase,
   manifest: '/api/manifest/default',
   icons: {
     icon: [{ url: BRAND_APP_ICON, type: 'image/png' }],
