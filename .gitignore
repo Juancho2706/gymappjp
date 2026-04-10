@@ -58,16 +58,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 scripts/enrich-exercises.mjs
-supabase/migrations/001_initial_schema.sql
-supabase/migrations/002_rls_policies.sql
-supabase/migrations/003_seed_exercises.sql
-supabase/migrations/004_storage_rls.sql
-supabase/migrations/005_checkin_storage.sql
-supabase/migrations/006_subscription_fields.sql
-supabase/migrations/007_enrich_exercises.sql
-supabase/migrations/008_client_intake.sql
 vertex.json
-/supabase
 
 # Playwright
 /test-results/

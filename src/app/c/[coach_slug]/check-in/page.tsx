@@ -59,11 +59,14 @@ export default async function ClientCheckInPage({ params }: Props) {
                     <ArrowLeft className="w-4 h-4" />
                     Volver
                 </Link>
-                <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: 'var(--font-outfit)' }}>
+                <h1 className="text-2xl font-bold text-foreground">
                     Check-in Mensual
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
                     Registra tu progreso para que tu coach pueda ajustar tu plan.
+                </p>
+                <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
                 </p>
             </header>
 

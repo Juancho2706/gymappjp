@@ -34,13 +34,24 @@ npm install
 ```
 
 ### 2. Environment Variables
-Create a `.env.local` file in the root of the project with your Supabase credentials:
+Copy `.env.example` to `.env.local` and replace placeholder values.
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+```bash
+cp .env.example .env.local
 ```
+
+Required variables:
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Public anon key for client and middleware sessions |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side admin operations only |
+| `NEXT_PUBLIC_SITE_URL` | No (recommended) | Canonical base URL for metadata and links |
+| `VERCEL_URL` | No | Auto-set in Vercel deployments |
+| `EDAMAM_APP_ID` | Optional | Recipe search integration |
+| `EDAMAM_APP_KEY` | Optional | Recipe search integration |
+| `PLAYWRIGHT_BASE_URL` | Optional | Playwright base URL override |
 
 ### 3. Run the Development Server
 
@@ -49,6 +60,38 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the app.
+
+### Supabase migration workflow
+This repository keeps migration SQL under `supabase/migrations`.
+
+1. Authenticate with Supabase CLI:
+```bash
+npx supabase login
+```
+2. Link the local repo to the right remote project:
+```bash
+npx supabase link --project-ref <project-ref>
+```
+3. Pull the current remote migration history:
+```bash
+npx supabase db pull
+```
+4. Create and edit new migration files:
+```bash
+npx supabase migration new <name_in_snake_case>
+```
+5. Apply local migrations to the linked project:
+```bash
+npx supabase db push
+```
+
+Security hardening:
+- Keep `Enable email signups` disabled in Supabase Auth if registration is managed by server-side admin flows only.
+- Never commit real secret values. Use `.env.example` for placeholders.
+- To disable public signup via Management API, set `SUPABASE_ACCESS_TOKEN` and run:
+```bash
+npm run supabase:disable-signup
+```
 
 ## 📚 Learn More
 

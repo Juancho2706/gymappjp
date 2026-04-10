@@ -32,6 +32,9 @@ export default async function OnboardingPage({ params }: Props) {
                     <p className="mt-3 text-sm text-muted-foreground">
                         Tu coach necesita estos datos para personalizar tu entrenamiento y nutrición.
                     </p>
+                    <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                        EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
+                    </p>
                 </div>
                 <OnboardingForm coachSlug={coach_slug} />
             </div>

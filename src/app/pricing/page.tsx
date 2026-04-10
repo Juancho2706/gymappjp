@@ -82,10 +82,7 @@ export default function PricingPage() {
                     <div className="w-8 h-8 rounded-lg bg-violet-500/15 border border-violet-500/25 flex items-center justify-center">
                         <Dumbbell className="w-4 h-4 text-violet-400" />
                     </div>
-                    <span
-                        className="font-bold text-foreground text-sm"
-                        style={{ fontFamily: 'var(--font-outfit)' }}
-                    >
+                    <span className="font-bold text-foreground text-sm">
                         EVA
                     </span>
                 </Link>
@@ -103,10 +100,7 @@ export default function PricingPage() {
                     <Zap className="w-3 h-3" />
                     Elige el plan ideal para ti
                 </div>
-                <h1
-                    className="text-4xl sm:text-5xl font-bold text-zinc-50 mb-4 leading-tight"
-                    style={{ fontFamily: 'var(--font-outfit)' }}
-                >
+                <h1 className="text-4xl sm:text-5xl font-bold text-zinc-50 mb-4 leading-tight">
                     Precios simples,<br />
                     <span className="text-violet-400">valor sin límites</span>
                 </h1>
@@ -144,10 +138,7 @@ export default function PricingPage() {
 
                                 <div className="flex items-baseline gap-1 mb-6">
                                     <span className="text-muted-foreground text-sm">USD</span>
-                                    <span
-                                        className="text-4xl font-bold text-zinc-50"
-                                        style={{ fontFamily: 'var(--font-outfit)' }}
-                                    >
+                                    <span className="text-4xl font-bold text-zinc-50">
                                         ${plan.price}
                                     </span>
                                     <span className="text-muted-foreground text-sm">{plan.period}</span>
