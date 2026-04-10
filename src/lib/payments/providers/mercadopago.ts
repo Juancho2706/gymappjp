@@ -21,10 +21,13 @@ function getMpAccessToken() {
 
 function resolvePayerEmail(accessToken: string, coachEmail: string) {
     const isSandbox = accessToken.startsWith('TEST-')
-    const configuredTestEmail = process.env.MERCADOPAGO_TEST_PAYER_EMAIL?.trim()
-    const payerEmail = isSandbox && configuredTestEmail ? configuredTestEmail : coachEmail
+    const configured = process.env.MERCADOPAGO_TEST_PAYER_EMAIL?.trim()
+    const normalizedConfigured = configured
+        ? (configured.includes('@') ? configured : `${configured.toLowerCase()}@testuser.com`)
+        : ''
+    const payerEmail = isSandbox && normalizedConfigured ? normalizedConfigured : coachEmail
 
-    if (isSandbox && !payerEmail.includes('@testuser.com')) {
+    if (isSandbox && !payerEmail.toLowerCase().endsWith('@testuser.com')) {
         throw new Error(
             'MercadoPago sandbox requiere payer_email @testuser.com. Configura MERCADOPAGO_TEST_PAYER_EMAIL con un test user de MP.'
         )
