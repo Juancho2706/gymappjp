@@ -43,6 +43,7 @@ export default async function CoachLayout({
                 coachName={coach.full_name}
                 coachBrand={coach.brand_name}
                 primaryColor={primaryColor}
+                subscriptionStatus={coach.subscription_status}
             />
             <CoachMainWrapper>
                 {/* Background ambient glow */}

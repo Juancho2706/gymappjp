@@ -10,10 +10,8 @@ import {
     Settings,
     LogOut,
     Apple,
-    ChevronRight,
     PanelLeftClose,
     PanelLeft,
-    LayoutGrid,
     ClipboardList
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -21,6 +19,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { GymAppLogo } from '@/components/ui/Logo'
+import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 
 const navItems = [
     {
@@ -64,9 +63,10 @@ interface CoachSidebarProps {
     coachName: string
     coachBrand: string
     primaryColor?: string
+    subscriptionStatus?: string | null
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -97,6 +97,17 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
     }
 
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
+    const isSubscriptionBlocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has(subscriptionStatus ?? '')
+    const visibleNavItems = isSubscriptionBlocked
+        ? [
+            {
+                href: '/coach/reactivate',
+                label: 'Reactivar',
+                shortLabel: 'Pago',
+                icon: LayoutDashboard,
+            },
+        ]
+        : navItems
 
     return (
         <>
@@ -172,7 +183,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor }: CoachSideb
 
                 {/* Navigation Links */}
                 <nav className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
-                    {navItems.map((item) => {
+                    {visibleNavItems.map((item) => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                         const Icon = item.icon
                         const short = item.shortLabel

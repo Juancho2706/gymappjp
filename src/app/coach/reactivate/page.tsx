@@ -1,7 +1,13 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import {
+    BILLING_CYCLE_CONFIG,
+    getTierPriceClp,
+    TIER_CONFIG,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 
 const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [BillingCycle, (typeof BILLING_CYCLE_CONFIG)[BillingCycle]][]
@@ -13,6 +19,8 @@ export default function ReactivatePage() {
     const [error, setError] = useState<string | null>(null)
 
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
+    const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
+    const monthlyBase = useMemo(() => TIER_CONFIG[tier].monthlyPriceClp, [tier])
 
     async function handleCheckout() {
         setIsLoading(true)
@@ -23,7 +31,8 @@ export default function ReactivatePage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tier, billingCycle }),
             })
-            const payload = await response.json()
+            const raw = await response.text()
+            const payload = raw ? JSON.parse(raw) : {}
             if (!response.ok) throw new Error(payload.error ?? 'No se pudo iniciar el pago.')
             if (!payload.checkoutUrl) throw new Error('No se recibió URL de pago.')
             window.location.href = payload.checkoutUrl
@@ -57,6 +66,9 @@ export default function ReactivatePage() {
                             >
                                 <p className="font-semibold text-foreground">{option.label}</p>
                                 <p className="text-xs text-muted-foreground">Hasta {option.maxClients} alumnos</p>
+                                <p className="mt-1 text-sm font-semibold text-foreground">
+                                    ${option.monthlyPriceClp.toLocaleString('es-CL')} CLP / mes
+                                </p>
                             </button>
                         ))}
                     </div>
@@ -79,6 +91,9 @@ export default function ReactivatePage() {
                                 <p className="text-xs text-muted-foreground">
                                     {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
                                 </p>
+                                <p className="mt-1 text-sm font-semibold text-foreground">
+                                    ${getTierPriceClp(tier, key).toLocaleString('es-CL')} CLP
+                                </p>
                             </button>
                         ))}
                     </div>
@@ -87,6 +102,12 @@ export default function ReactivatePage() {
                 <section className="mt-6 rounded-xl border border-border p-4">
                     <p className="text-sm text-muted-foreground">
                         Plan seleccionado: <span className="font-semibold text-foreground">{selectedTier.label}</span>
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Precio: <span className="font-semibold text-foreground">${selectedPrice.toLocaleString('es-CL')} CLP</span>
+                        {billingCycle !== 'monthly' ? (
+                            <span className="ml-2 text-xs">(mensual base ${monthlyBase.toLocaleString('es-CL')} CLP)</span>
+                        ) : null}
                     </p>
                     <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
                         {selectedTier.features.map((feature) => (

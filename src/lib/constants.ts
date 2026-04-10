@@ -59,6 +59,14 @@ export type TierConfig = {
 
 const QUARTERLY_DISCOUNT = 0.1
 const ANNUAL_DISCOUNT = 0.2
+const SHARED_TIER_FEATURES = [
+    'Rutinas y ejercicios',
+    'Programas de entrenamiento',
+    'Check-in y progreso',
+    'Dashboard coach',
+    'Nutrición',
+    'Branding personalizado',
+] as const
 
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     starter_lite: {
@@ -66,52 +74,31 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
         maxClients: 5,
         monthlyPriceClp: 7990,
         isMostAffordable: true,
-        features: [
-            'Rutinas y ejercicios',
-            'Check-in básico',
-            'Dashboard coach',
-        ],
+        features: [...SHARED_TIER_FEATURES],
     },
     starter: {
         label: 'Starter',
         maxClients: 10,
         monthlyPriceClp: 14990,
-        features: [
-            'Todo en Starter Lite',
-            'Programas de entrenamiento',
-            'Seguimiento de progreso',
-        ],
+        features: [...SHARED_TIER_FEATURES],
     },
     pro: {
         label: 'Pro',
         maxClients: 25,
         monthlyPriceClp: 24990,
-        features: [
-            'Todo en Starter',
-            'Nutrición',
-            'Branding personalizado',
-            'Exportación PDF',
-        ],
+        features: [...SHARED_TIER_FEATURES],
     },
     elite: {
         label: 'Elite',
         maxClients: 50,
         monthlyPriceClp: 39990,
-        features: [
-            'Todo en Pro',
-            'Analytics avanzados',
-            'Attention scores',
-        ],
+        features: [...SHARED_TIER_FEATURES],
     },
     scale: {
         label: 'Scale',
         maxClients: 100,
         monthlyPriceClp: 59990,
-        features: [
-            'Todo en Elite',
-            'Soporte prioritario',
-            'Multi-programa',
-        ],
+        features: [...SHARED_TIER_FEATURES],
     },
 }
 
