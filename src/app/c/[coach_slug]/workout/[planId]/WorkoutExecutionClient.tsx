@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@
 import Image from 'next/image'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
+import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
@@ -92,7 +93,7 @@ function ManualTimerButton({ defaultTime, onSettingsClick }: { defaultTime: stri
             <button 
                 onClick={onSettingsClick}
                 className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
-                title="Configuración del Cronómetro"
+                title="Descanso y alarma"
             >
                 <Settings className="w-4 h-4" />
             </button>
@@ -261,7 +262,7 @@ export function WorkoutExecutionClient({
                                     type="button"
                                     onClick={() => setShowTimerSettings(true)}
                                     className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
-                                    title="Cronómetro"
+                                    title="Descanso y alarma"
                                 >
                                     <Settings className="w-5 h-5" />
                                 </button>
@@ -453,34 +454,20 @@ export function WorkoutExecutionClient({
                     </div>
                 </div>
 
-                {/* Timer Settings Modal */}
+                {/* Descanso, alarma y auto-timer (tuerca header / footer) */}
                 <Dialog open={showTimerSettings} onOpenChange={setShowTimerSettings}>
-                    <DialogContent className="max-w-xs rounded-3xl p-6 bg-card border-border">
+                    <DialogContent className="max-w-sm rounded-3xl p-6 bg-card border-border max-h-[min(90dvh,32rem)] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle className="text-xl font-bold">Cronómetro Automático</DialogTitle>
+                            <DialogTitle className="text-xl font-bold">Descanso y alarma</DialogTitle>
                         </DialogHeader>
-                        <p className="text-sm text-muted-foreground mt-2 mb-6">
-                            Si está activado, el cronómetro de descanso comenzará a correr automáticamente cada vez que guardes una serie.
-                        </p>
-                        
+                        <WorkoutTimerSettingsPanel
+                            autoTimerEnabled={autoTimerEnabled}
+                            onToggleAutoTimer={toggleAutoTimer}
+                        />
                         <button
-                            onClick={() => {
-                                toggleAutoTimer()
-                            }}
-                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-border bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                            <span className="font-semibold">{autoTimerEnabled ? 'Activado' : 'Desactivado'}</span>
-                            <div className={`w-12 h-7 rounded-full transition-colors flex items-center px-1 ${autoTimerEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`} style={autoTimerEnabled ? { backgroundColor: 'var(--theme-primary)' } : {}}>
-                                <motion.div 
-                                    className="w-5 h-5 bg-white rounded-full shadow-sm"
-                                    animate={{ x: autoTimerEnabled ? 20 : 0 }}
-                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                                />
-                            </div>
-                        </button>
-                        <button
+                            type="button"
                             onClick={() => setShowTimerSettings(false)}
-                            className="w-full mt-4 py-3 rounded-xl bg-secondary text-secondary-foreground font-bold"
+                            className="w-full mt-6 py-3 rounded-xl bg-secondary text-secondary-foreground font-bold"
                         >
                             Cerrar
                         </button>
