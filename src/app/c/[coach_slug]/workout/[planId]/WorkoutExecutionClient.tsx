@@ -1,9 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion } from 'framer-motion'
-import confetti from 'canvas-confetti'
+import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Zap, Info, Dumbbell, Timer, X, Settings, CheckCircle2 } from 'lucide-react'
@@ -13,9 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@
 import Image from 'next/image'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
-import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { cn } from '@/lib/utils'
+import { formatRelativeDate } from '@/lib/date-utils'
+import { springs } from '@/lib/animation-presets'
 
 interface ExerciseType {
     id: string
@@ -75,6 +75,8 @@ interface Props {
     }>
     previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
     coachSlug: string
+    exerciseMaxes?: Record<string, number>
+    activeWeekVariant?: 'A' | 'B' | null
 }
 
 function ManualTimerButton({ defaultTime, onSettingsClick }: { defaultTime: string | null, onSettingsClick: () => void }) {
@@ -99,9 +101,29 @@ function ManualTimerButton({ defaultTime, onSettingsClick }: { defaultTime: stri
     )
 }
 
-export function WorkoutExecutionClient({ plan, program, logs, previousHistory = {}, coachSlug }: Props) {
+function isBlockComplete(
+    block: BlockType,
+    logs: Array<{ block_id: string; set_number: number }>
+) {
+    let done = 0
+    for (let i = 1; i <= block.sets; i += 1) {
+        if (logs.some((log) => log.block_id === block.id && log.set_number === i)) done += 1
+    }
+    return done >= block.sets
+}
+
+export function WorkoutExecutionClient({
+    plan,
+    program,
+    logs,
+    previousHistory = {},
+    coachSlug,
+    exerciseMaxes = {},
+    activeWeekVariant = null,
+}: Props) {
     const router = useRouter()
-    const { t } = useTranslation()
+    const reducedMotion = useReducedMotion()
+    const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
     const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
@@ -157,13 +179,7 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
     const completionPct = requiredSets === 0 ? 0 : Math.round((completedSetCount / requiredSets) * 100)
 
     const isSetLogged = (blockId: string, setNumber: number) => sessionLogs.some((log) => log.block_id === blockId && log.set_number === setNumber)
-    const isBlockCompleted = (block: BlockType) => {
-        let done = 0
-        for (let i = 1; i <= block.sets; i += 1) {
-            if (isSetLogged(block.id, i)) done += 1
-        }
-        return done >= block.sets
-    }
+    const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
 
     const toggleAutoTimer = () => {
         const newValue = !autoTimerEnabled
@@ -177,6 +193,7 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
     }
     const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null }) => {
         setSessionLogs((prev) => {
+            const wasComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, prev))
             const next = prev.filter((log) => !(log.block_id === payload.blockId && log.set_number === payload.setNumber))
             next.push({
                 block_id: payload.blockId,
@@ -185,12 +202,22 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                 reps_done: payload.repsDone,
                 rpe: payload.rpe,
             })
+            const nowComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, next))
+            if (!wasComplete && nowComplete) {
+                setTimeout(() => {
+                    const nextIncomplete = blocks.find((b) => !isBlockComplete(b, next))
+                    if (nextIncomplete) {
+                        blockRefs.current
+                            .get(nextIncomplete.id)
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                }, 350)
+            }
             return next
         })
     }
     const handleFinish = () => {
         setShowCompleted(true)
-        confetti({ particleCount: 130, spread: 80, origin: { y: 0.6 } })
     }
 
     return (
@@ -203,45 +230,62 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                     className="sticky top-0 z-20 bg-background/95 pt-safe backdrop-blur border-b border-border/60"
                 >
                     <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
-                        <div className="flex items-center justify-between mb-3">
-                            <Link href={`/c/${coachSlug}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors">
+                        <div className="flex items-center justify-between mb-3 gap-2">
+                            <Link href={`/c/${coachSlug}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors shrink-0">
                                 <ArrowLeft className="w-6 h-6" />
                             </Link>
-                            <div className="min-w-0 px-2 text-center">
-                                <h1 className="text-lg md:text-xl font-bold text-foreground truncate">
-                                    {plan.title}
-                                </h1>
+                            <div className="min-w-0 px-2 text-center flex-1">
+                                <div className="flex items-center justify-center gap-2 flex-wrap">
+                                    <h1 className="text-lg md:text-xl font-bold text-foreground truncate">
+                                        {plan.title}
+                                    </h1>
+                                    {activeWeekVariant != null && (
+                                        <span
+                                            className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border shrink-0"
+                                            style={{
+                                                borderColor: 'color-mix(in srgb, var(--theme-primary) 40%, transparent)',
+                                                color: 'var(--theme-primary)',
+                                            }}
+                                        >
+                                            Semana {activeWeekVariant}
+                                        </span>
+                                    )}
+                                </div>
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                                     {program?.program_structure_type === 'cycle'
                                         ? `Día ${plan.day_of_week || 1} de ${program.cycle_length || '?'}`
                                         : 'Programa semanal'}
-                                    {program?.ab_mode && plan.week_variant ? ` · Variante ${plan.week_variant}` : ''}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTimerSettings(true)}
+                                    className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
+                                    title="Cronómetro"
+                                >
+                                    <Settings className="w-5 h-5" />
+                                </button>
                                 <ThemeToggle />
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                            <div className="rounded-xl border border-border p-2 text-center">
-                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bloques</p>
-                                <p className="font-bold">{blocks.length}</p>
-                            </div>
-                            <div className="rounded-xl border border-border p-2 text-center">
-                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sets completados</p>
-                                <p className="font-bold">{completedSetCount}/{requiredSets}</p>
-                            </div>
-                            <div className="rounded-xl border border-border p-2 text-center">
-                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Progreso</p>
-                                <p className="font-bold">{completionPct}%</p>
-                            </div>
-                            <div className="rounded-xl border border-border p-2 text-center">
-                                <button onClick={() => setShowTimerSettings(true)} className="w-full h-full font-semibold text-sm flex items-center justify-center gap-1">
-                                    <Settings className="w-4 h-4" />
-                                    Cronometro
-                                </button>
-                            </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <motion.div
+                                className="h-full rounded-full"
+                                style={{ backgroundColor: 'var(--theme-primary)' }}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${completionPct}%` }}
+                                transition={reducedMotion ? { duration: 0 } : springs.smooth}
+                            />
+                        </div>
+                        <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
+                            <span>
+                                <strong className="text-foreground">{completedSetCount}</strong>/{requiredSets} series
+                            </span>
+                            <span style={{ color: 'var(--theme-primary)' }} className="font-bold">
+                                {completionPct}%
+                            </span>
                         </div>
                     </div>
                 </motion.div>
@@ -250,9 +294,24 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                     <div className="space-y-6">
                         {sectioned.map((section) => (
                             <section key={section.sectionKey} className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{section.title}</h2>
-                                    <span className="text-xs text-muted-foreground">{section.groups.length} bloque(s)</span>
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className="w-1 self-stretch min-h-[1.25rem] rounded-full shrink-0"
+                                        style={{
+                                            backgroundColor: 'var(--theme-primary)',
+                                            opacity:
+                                                section.sectionKey === 'warmup' || section.sectionKey === 'cooldown'
+                                                    ? 0.4
+                                                    : 1,
+                                        }}
+                                    />
+                                    <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground shrink-0">
+                                        {section.title}
+                                    </h2>
+                                    <hr className="flex-1 h-px bg-border/50 border-0 min-w-[2rem]" />
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                        {section.groups.length} bloque(s)
+                                    </span>
                                 </div>
                                 <div className="space-y-3">
                                     {section.groups.map((group, groupIndex) => (
@@ -270,7 +329,32 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                                                     const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
                                                     const complete = isBlockCompleted(block)
                                                     return (
-                                                        <div key={block.id} className="rounded-xl border border-border/70 bg-background/60 p-3 space-y-3">
+                                                        <motion.div
+                                                            key={block.id}
+                                                            layout
+                                                            ref={(el) => {
+                                                                if (el) blockRefs.current.set(block.id, el)
+                                                                else blockRefs.current.delete(block.id)
+                                                            }}
+                                                            animate={{ opacity: complete ? 0.6 : 1 }}
+                                                            transition={reducedMotion ? { duration: 0 } : springs.smooth}
+                                                            className={cn(
+                                                                'rounded-xl border bg-background/60 p-3 space-y-3 relative',
+                                                                complete
+                                                                    ? 'border-emerald-500/30'
+                                                                    : 'border-border/70'
+                                                            )}
+                                                        >
+                                                            {complete && (
+                                                                <motion.div
+                                                                    initial={reducedMotion ? false : { scale: 0 }}
+                                                                    animate={{ scale: 1 }}
+                                                                    transition={reducedMotion ? { duration: 0 } : springs.elastic}
+                                                                    className="absolute top-2 right-2 text-emerald-500"
+                                                                >
+                                                                    <CheckCircle2 className="w-6 h-6" />
+                                                                </motion.div>
+                                                            )}
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div>
                                                                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -308,7 +392,8 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                                                             {previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (
                                                                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-2">
                                                                     <p className="text-[10px] font-semibold uppercase tracking-wider text-primary mb-1">
-                                                                        Sesion anterior
+                                                                        Sesión anterior ·{' '}
+                                                                        {formatRelativeDate(previousHistory[exercise.id][0].date)}
                                                                     </p>
                                                                     <div className="flex flex-wrap gap-1.5">
                                                                         {previousHistory[exercise.id].map((log, idx) => (
@@ -344,7 +429,7 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                                                                     })}
                                                                 </div>
                                                             </div>
-                                                        </div>
+                                                        </motion.div>
                                                     )
                                                 })}
                                             </div>
@@ -408,6 +493,8 @@ export function WorkoutExecutionClient({ plan, program, logs, previousHistory = 
                     <WorkoutSummaryOverlay
                         planTitle={plan.title}
                         logs={sessionLogs}
+                        blocks={plan.workout_blocks}
+                        exerciseMaxes={exerciseMaxes}
                         onDone={() => router.push(`/c/${coachSlug}/dashboard`)}
                     />,
                     document.body

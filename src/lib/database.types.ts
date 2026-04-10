@@ -41,6 +41,7 @@ export type Database = {
     Tables: {
       check_ins: {
         Row: {
+          back_photo_url: string | null
           client_id: string
           created_at: string
           date: string
@@ -51,6 +52,7 @@ export type Database = {
           weight: number | null
         }
         Insert: {
+          back_photo_url?: string | null
           client_id: string
           created_at?: string
           date?: string
@@ -61,6 +63,7 @@ export type Database = {
           weight?: number | null
         }
         Update: {
+          back_photo_url?: string | null
           client_id?: string
           created_at?: string
           date?: string

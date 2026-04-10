@@ -91,5 +91,6 @@ export async function logSetAction(
     if (dbError) return { error: dbError.message }
 
     revalidatePath('/c', 'layout')
+    revalidatePath(`/coach/clients/${user.id}`)
     return { success: true }
 }

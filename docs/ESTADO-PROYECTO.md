@@ -7,7 +7,7 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-09 20:27 America/Santiago — Docs alineados al código: nutrición coach núcleo vs extensiones; directorio coach móvil/PWA; nota safe area; enlaces de bitácora corregidos.
+**Última actualización:** 2026-04-10 America/Santiago — Revisión completa del código real: corregidos porcentajes de check-in (~63%), workout execution (~68%), catálogo ejercicios alumno (~68%), onboarding (~58%), auth alumno (~50%). Módulos pendientes actualizados. TOTAL global sube a ~52%.
 
 ---
 
@@ -218,6 +218,12 @@ El `WeightProgressChart` del dashboard del alumno no tiene línea de objetivo po
 
 ---
 
+#### Workout execution — variante A/B en `page.tsx`
+`/c/[coach_slug]/workout/[planId]/page.tsx` carga el plan pero no resuelve la variante A/B activa de la semana. El dashboard sí lo hace vía `resolveActiveWeekVariantForDisplay`. Alinear la página de ejecución para que sepa si el alumno está en semana A o B.
+**Trabajo:** Pasar `week_variant` resuelto desde la query de `page.tsx` al cliente, y mostrarlo como contexto en el header.
+
+---
+
 ### Baja prioridad / UX futura
 
 #### `ProgramPhasesBar` en filas de biblioteca
@@ -239,14 +245,23 @@ Aplicado en tab transitions, FAB y grid del directorio. No aplicado en todos los
 
 ## Módulos pendientes de rework (próximos planes)
 
-| Módulo | Descripción | Prioridad |
-|--------|-------------|-----------|
-| ~~**Nutrición (alumno + núcleo coach)**~~ | ~~`/nutrition`, hub, PlanBuilder, foods, tab B5, board enriquecido, RLS en repo, lista compacta alimentos.~~ | ~~Alta~~ → **COMPLETADO (núcleo)** 2026-04-09 / **refuerzos** 2026-04-10 — ver *Rework Nutrición* y [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md) (módulo nutrición coach) |
-| **Extensión nutrición coach** | Barcode/import; `/coach/meals`, `/coach/recipes`, UX meal-groups | **Futura** (prioridad baja hasta decisión producto) |
-| ~~**Dashboard del alumno**~~ | ~~Rework general del dashboard que ve el alumno.~~ | ~~Media~~ → **COMPLETADO** 2026-04-09 |
-| **Workout execution** (`/c/[coach_slug]/workout/[planId]`) | Logging de series/reps durante el entrenamiento — mejoras pendientes. | Media |
-| **Check-in del alumno** | Flujo de check-in de peso + fotos + energía desde mobile. | Media |
-| **Onboarding** | Flujo inicial para nuevo alumno (intake, objetivos, foto inicial). | Baja |
+> Estado revisado contra código real 2026-04-10. Los módulos "pendientes" ya tienen implementación base; el % indica cuánto queda para considerarlos "reworkeados".
+
+| Módulo | Estado actual | Pendiente | Prioridad |
+|--------|--------------|-----------|-----------|
+| ~~**Nutrición (alumno + núcleo coach)**~~ | ~~`/nutrition`, hub, PlanBuilder, foods, tab B5, board enriquecido, RLS en repo, lista compacta alimentos.~~ | — | ~~Alta~~ → **COMPLETADO (núcleo)** 2026-04-09/10 |
+| **Extensión nutrición coach** | Stub / parcial | Barcode/import; `/coach/meals`, `/coach/recipes`, UX meal-groups | **Futura** (baja prioridad) |
+| ~~**Dashboard del alumno**~~ | ~98% | §12 QA manual (Lighthouse, iOS/Android real) | ~~Media~~ → **COMPLETADO** 2026-04-09 |
+| **Workout execution** (`/c/[coach_slug]/workout/[planId]`) | ~68% funcional | Optimistic updates, PRs en summary, A/B en page, confetti al completar | Media |
+| **Check-in del alumno** (`/c/[coach_slug]/check-in`) | ~63% funcional | Múltiples fotos, medidas corporales, UX step wizard mobile | Media |
+| **Dashboard coach principal** (`/coach/dashboard`) | ~0% rework | Rework completo UX + queries enriquecidas | Media |
+| **Mi Marca / Settings** (`/coach/settings`) | ~0% rework | Rework branding, `StudentDashboardPreview` alineado al dashboard actual | Media |
+| **Onboarding** (`/c/[coach_slug]/onboarding`) | ~58% funcional | Progress bar visual, foto inicial, validación por paso | Baja |
+| **Catálogo ejercicios alumno** (`/c/[coach_slug]/exercises`) | ~68% funcional | Rework visual, favoritos, historial por ejercicio | Baja |
+| **Ejercicios coach** (`/coach/exercises`) | Funcional básico, sin rework | Rework UX: upload GIF, bulk edit, organización | Baja |
+| **Login / auth alumno** | ~50% | Rework visual con branding avanzado | Baja |
+| **Pagos & Suscripciones** | 0% | Stripe/MercadoPago, webhook, feature flags por tier | **Alta (producto)** |
+| **Panel CEO / Superadmin** | 0% | Métricas globales: coaches, MRR, churn, actividad | Baja |
 
 ---
 

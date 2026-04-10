@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import { resolveActiveWeekVariantForDisplay } from '@/lib/workout/programWeekVariant'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 
 export const metadata: Metadata = { title: 'Rutina | EVA' }
@@ -104,6 +105,10 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         program = (rawProgram as ProgramType | null) ?? null
     }
 
+    const activeWeekVariant = program?.ab_mode
+        ? resolveActiveWeekVariantForDisplay(program)
+        : null
+
     // Fetch logs for this plan to show completion status
     const blockIds = plan.workout_blocks.map(b => b.id)
     let logs: Array<{
@@ -165,5 +170,33 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         }
     }
 
-    return <WorkoutExecutionClient plan={plan} program={program} logs={logs} previousHistory={previousHistory} coachSlug={coach_slug} />
+    const blockIdsSet = new Set(plan.workout_blocks.map((b) => b.id))
+    const exerciseMaxes: Record<string, number> = {}
+
+    const { data: maxData } = await supabase
+        .from('workout_logs')
+        .select('block_id, weight_kg, workout_blocks!inner(exercise_id)')
+        .eq('client_id', user.id)
+        .not('weight_kg', 'is', null)
+
+    maxData?.forEach((log: { block_id: string; weight_kg: number | null; workout_blocks: { exercise_id: string } | null }) => {
+        if (blockIdsSet.has(log.block_id)) return
+        const exId = log.workout_blocks?.exercise_id
+        if (!exId || log.weight_kg == null) return
+        if (exerciseMaxes[exId] == null || log.weight_kg > exerciseMaxes[exId]) {
+            exerciseMaxes[exId] = log.weight_kg
+        }
+    })
+
+    return (
+        <WorkoutExecutionClient
+            plan={plan}
+            program={program}
+            logs={logs}
+            previousHistory={previousHistory}
+            coachSlug={coach_slug}
+            exerciseMaxes={exerciseMaxes}
+            activeWeekVariant={activeWeekVariant}
+        />
+    )
 }
