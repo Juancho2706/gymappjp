@@ -1,6 +1,73 @@
 # Progreso Cursor — sesión 2026-04-09
 
-Zona horaria de referencia: **America/Santiago**.
+Zona horaria de referencia: **America/Santiago** (los timestamps de Git en esta máquina pueden verse en **-0400**).
+
+## Dónde está este archivo
+
+- **Ruta en el repo:** `progreso cursor/PROGRESO-sesion-2026-04-09.md`
+- Es decir: carpeta **`progreso cursor`** en la **raíz** del proyecto `gymappjp` (junto a `src/`, `docs/`, etc.).
+
+---
+
+## Consolidado Git (2026-04-09) + últimas ~3 h
+
+Commits en `master` relevantes para “hoy” (orden del más reciente al más antiguo de la tarde):
+
+| Hora (Git) | Hash | Mensaje |
+|------------|------|---------|
+| 21:45 -0400 | `9b474b3` | Actualización de componentes y mejoras en la interfaz de usuario |
+| 21:11 -0400 | `d525996` | Mejoras en la interfaz móvil y ajustes de layout en el directorio de alumnos |
+| 20:55 -0400 | `7777d50` | Implementación de mejoras en la interfaz móvil y ajustes en el layout |
+| 20:44 -0400 | `7d42ff1` | Actualización de documentos de estado y mejoras en la interfaz de nutrición coach |
+| 20:20 -0400 | `ba2c6f1` | feat: nutrición coach/alumno, directorio alumnos y UX móvil coach |
+
+### `9b474b3` — Safe area, sheets, toasts, IMC, builder (último push típico)
+
+- **`WeeklyPlanBuilder.tsx`**: banner “Tienes cambios sin guardar” en **móvil** como tarjeta **fija abajo** (`fixed`, `z-[72]`, `safe-area-inset-bottom` + hueco sobre nav ~`5rem`); en **`md:`** vuelve al estilo barra superior original.
+- **`BlockEditSheet.tsx`**: sheet ancho **`w-full`** en móvil (`sm:w-[540px]`); sección **Progresión automática** en columna en móvil (`flex-col` → `sm:flex-row`); botones `+Peso/+Reps` en **grid 2 columnas**; input de valor **full width** en móvil (`sm:w-24`).
+- **`sheet.tsx`**: overlay y contenido suben a **`z-[70]` / `z-[71]`** para quedar **por encima** del header móvil coach (`z-[55]`); botón cerrar con **`top` + `env(safe-area-inset-top)`**.
+- **`FoodSearchDrawer.tsx`**: **`normalizeCategory()`** (NFD, sin acentos, mapeo proteína/carb/grasa/lácteo/etc.) para que los filtros coincidan con valores reales de BD; header con **padding-top** según safe-area.
+- **`layout.tsx`**: `<Toaster />` pasa a **`position="bottom-center"`**.
+- **`sonner.tsx`**: margen inferior con **`safe-area-inset-bottom`** + espacio sobre barra inferior (`~5rem` móvil, `md:mb-4`).
+- **`profileBodyCompositionUtils.ts`**: **`bmiFromMetric`** tolera altura en **metros** (`height < 3` → ×100) y rechaza rangos absurdos (80–260 cm) para evitar IMC gigantes.
+
+### `d525996` — Directorio + ficha alumno: causa raíz overflow
+
+- **`CoachMainWrapper.tsx`**: `<main>` con **`min-w-0`**, **`overflow-x-hidden overflow-y-auto`**; contenedor interior **`w-full min-w-0 max-w-full`** + `max-w-[1600px|2000px]`.
+- **`coach/layout.tsx`**: contenedor flex con **`min-w-0`**.
+- **`DirectoryActionBar.tsx`**: eliminado **`-mx-4`**; **`w-full max-w-full min-w-0`**; padding móvil ajustado.
+- **`CoachWarRoom.tsx`**: grid stats **`min-w-0`**, sin **`scale` en hover** (solo `y`), `ring-offset` móvil 0; tarjetas más compactas en pantalla chica.
+- **`ClientProfileDashboard.tsx`**: grids y columnas **`min-w-0`** en overview, progress, workout, program, nutrition, billing; skeleton mantiene `animate-pulse`.
+- **`ProfileTabNav.tsx`**: sin márgenes negativos problemáticos; **`w-full min-w-0`**.
+- **`ProfileTopAlertBanner.tsx`**: **`w-full max-w-full min-w-0`** en contenedor externo.
+- **`ClientProfileHero.tsx`**: metadata con **`break-words` / `[overflow-wrap:anywhere]`**; grid de chips stats responsive; **`HeroStatChip`** con **`min-w-0`**.
+- **`coach/clients/page.tsx`**, **`[clientId]/page.tsx`**: contenedores con **`overflow-x-hidden`** / **`min-w-0`** según ya aplicado en ese commit.
+
+### `7777d50` — Alumno (PWA/layout) + builder chips catálogo
+
+- **`c/[coach_slug]/layout.tsx`**: quitar **`pt-safe` duplicado** en contenedor global.
+- **`DashboardHeader` / `DashboardShell` / `loading`**: header fijo móvil + **`pt-[calc(safe-area + altura header)]`** en contenido.
+- Varias pantallas alumno: **`pt-safe`** donde corresponde (nutrición, ejercicios, check-in, workout, login, onboarding, suspended, change-password).
+- **`WeeklyPlanBuilder.tsx` + `DraggableExerciseCatalog.tsx`**: **`catalogMuscleFilter`** compartido; chips del sheet aplican el mismo filtro que el select.
+
+### `7d42ff1` — Docs ESTADO + inputs numéricos + coach chrome builder
+
+- **`docs/ESTADO-COMPONENTES.md`**, **`docs/ESTADO-PROYECTO.md`**: actualización de estado del proyecto.
+- **`clamped-int-input.tsx`**: nuevo componente para enteros con borrado correcto en móvil.
+- **`ProgramConfigHeader.tsx`**, **`PlanBuilderSidebar.tsx`**, **`BlockEditSheet.tsx`**: integración clamped / progresión texto.
+- **`CoachMainWrapper.tsx`**, **`CoachSidebar.tsx`**: padding top móvil bajo header fijo; header builder visible; ajustes altura/`min-h-0`.
+- **`WeeklyPlanBuilder.tsx`**: menos doble safe-area en padding inferior del carrusel.
+
+### `ba2c6f1` — Feature grande (resumen)
+
+- Nutrición coach: hub, plan builder, plantillas, asignación, catálogo, acciones y queries; alumno: tracker, queries, componentes (MealCard, anillos, adherencia, etc.).
+- Directorio alumnos: tabla virtualizada, War Room, filtros, pulse cache, tarjetas V2.
+- PWA: **`PwaRegister`** viewport en standalone.
+- Planes Claude y docs de planes A–F, `database.types`, `nutrition.service`, etc.
+
+### Fuera del repo (seguimiento manual)
+
+- **Dominio / Supabase / Vercel:** orientación al usuario sobre **Site URL**, **Redirect URLs**, **`NEXT_PUBLIC_APP_URL`** (no referenciada en código actual), claves Supabase sin cambiar con dominio, revisar webhooks Mercado Pago. *No hay commits asociados.*
 
 ---
 

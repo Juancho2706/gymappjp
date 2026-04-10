@@ -30,6 +30,9 @@ import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 import type { BuilderBlock, DayState, ProgramPhase } from './types'
 import { getMuscleColor } from './muscle-colors'
 
+type Client = Tables<'clients'>
+type Exercise = Tables<'exercises'>
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function parseProgramPhases(raw: unknown): ProgramPhase[] {
@@ -45,6 +48,71 @@ function parseProgramPhases(raw: unknown): ProgramPhase[] {
     } catch {
         return []
     }
+}
+
+type EmbeddedExercise = {
+    name?: string | null
+    muscle_group?: string | null
+    gif_url?: string | null
+    video_url?: string | null
+}
+
+/** PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento. */
+function embeddedExerciseRow(raw: unknown): EmbeddedExercise | null {
+    if (raw == null) return null
+    if (Array.isArray(raw)) {
+        const first = raw[0]
+        if (first && typeof first === 'object') return first as EmbeddedExercise
+        return null
+    }
+    if (typeof raw === 'object') return raw as EmbeddedExercise
+    return null
+}
+
+function mapDbBlockToBuilderBlock(
+    b: any,
+    exerciseById: Map<string, Exercise>,
+    uid: string,
+    dayId: number,
+): BuilderBlock {
+    const exRel = embeddedExerciseRow(b.exercises)
+    const cat = b.exercise_id ? exerciseById.get(b.exercise_id) : undefined
+    return {
+        uid,
+        exercise_id: b.exercise_id,
+        exercise_name: exRel?.name || cat?.name || 'Unknown',
+        muscle_group: exRel?.muscle_group || cat?.muscle_group || 'Unknown',
+        gif_url: (exRel?.gif_url || cat?.gif_url) || undefined,
+        video_url: (exRel?.video_url || cat?.video_url) || undefined,
+        sets: b.sets,
+        reps: b.reps,
+        target_weight_kg: b.target_weight_kg?.toString() || '',
+        tempo: b.tempo || '',
+        rir: b.rir || '',
+        rest_time: b.rest_time || '',
+        notes: b.notes || '',
+        superset_group: b.superset_group || null,
+        progression_type: b.progression_type || null,
+        progression_value: b.progression_value ?? null,
+        section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+        is_override: !!b.is_override,
+        dayId,
+    }
+}
+
+function enrichDaysWithExerciseMedia(days: DayState[], exerciseById: Map<string, Exercise>): DayState[] {
+    return days.map(d => ({
+        ...d,
+        blocks: d.blocks.map(blk => {
+            const cat = exerciseById.get(blk.exercise_id)
+            if (!cat) return blk
+            return {
+                ...blk,
+                gif_url: blk.gif_url || (cat.gif_url || undefined),
+                video_url: blk.video_url || (cat.video_url || undefined),
+            }
+        }),
+    }))
 }
 
 function createDefaultBlock(exercise: Exercise): BuilderBlock {
@@ -77,14 +145,11 @@ function trackRecentExercise(exerciseId: string) {
     } catch { /* silently ignore storage errors */ }
 }
 
-type Client = Tables<'clients'>
-type Exercise = Tables<'exercises'>
-type BaseDays = typeof DAYS_OF_WEEK
-
 export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any }) {
     const router = useRouter()
 
     const getInitialDays = (variant: 'A' | 'B' = 'A', structureType?: string, cyclLen?: number): DayState[] => {
+        const exerciseById = new Map(exercises.map(e => [e.id, e]))
         // Determine structure type and cycle length (prefer passed params over initialProgram)
         const sType = structureType ?? initialProgram?.program_structure_type ?? 'weekly'
         const cLen = cyclLen ?? initialProgram?.cycle_length ?? 7
@@ -105,27 +170,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 return {
                     ...d,
                     title: plan?.title || '',
-                    blocks: (plan?.workout_blocks ?? []).map((b: any) => ({
-                        uid: `block-${b.id || Math.random().toString()}`,
-                        exercise_id: b.exercise_id,
-                        exercise_name: b.exercises?.name || 'Unknown',
-                        muscle_group: b.exercises?.muscle_group || 'Unknown',
-                        gif_url: b.exercises?.gif_url || undefined,
-                        video_url: b.exercises?.video_url || undefined,
-                        sets: b.sets,
-                        reps: b.reps,
-                        target_weight_kg: b.target_weight_kg?.toString() || '',
-                        tempo: b.tempo || '',
-                        rir: b.rir || '',
-                        rest_time: b.rest_time || '',
-                        notes: b.notes || '',
-                        superset_group: b.superset_group || null,
-                        progression_type: b.progression_type || null,
-                        progression_value: b.progression_value ?? null,
-                        section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
-                        is_override: !!b.is_override,
-                        dayId: d.id
-                    }))
+                    blocks: (plan?.workout_blocks ?? []).map((b: any) =>
+                        mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
+                    ),
                 }
             })
         }
@@ -140,27 +187,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
             return {
                 ...d,
                 title: plan?.title || '',
-                blocks: (plan?.workout_blocks ?? []).map((b: any) => ({
-                    uid: `block-${b.id || Math.random().toString()}`,
-                    exercise_id: b.exercise_id,
-                    exercise_name: b.exercises?.name || 'Unknown',
-                    muscle_group: b.exercises?.muscle_group || 'Unknown',
-                    gif_url: b.exercises?.gif_url || undefined,
-                    video_url: b.exercises?.video_url || undefined,
-                    sets: b.sets,
-                    reps: b.reps,
-                    target_weight_kg: b.target_weight_kg?.toString() || '',
-                    tempo: b.tempo || '',
-                    rir: b.rir || '',
-                    rest_time: b.rest_time || '',
-                    notes: b.notes || '',
-                    superset_group: b.superset_group || null,
-                    progression_type: b.progression_type || null,
-                    progression_value: b.progression_value ?? null,
-                    section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
-                    is_override: !!b.is_override,
-                    dayId: d.id
-                }))
+                blocks: (plan?.workout_blocks ?? []).map((b: any) =>
+                    mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
+                ),
             }
         })
     }
@@ -1149,7 +1178,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 onClose={() => setShowTemplatePicker(false)}
                 hasExistingData={days.some(d => d.blocks.length > 0)}
                 onApply={(newDays, name, meta) => {
-                    dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
+                    const byId = new Map(exercises.map(e => [e.id, e]))
+                    dispatchWithHistory({ type: 'SET_DAYS', payload: enrichDaysWithExerciseMedia(newDays, byId) })
                     setProgramName((prev: string) => prev || name)
                     setWeeksToRepeat(meta.weeks_to_repeat)
                     setDurationType(meta.duration_type as any)
