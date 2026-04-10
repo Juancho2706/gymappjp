@@ -19,12 +19,34 @@ function getMpAccessToken() {
     return accessToken
 }
 
+function buildMpHeaders(accessToken: string) {
+    const headers: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+    }
+    if (accessToken.startsWith('TEST-')) {
+        headers['X-scope'] = 'stage'
+    }
+    return headers
+}
+
 function resolvePayerEmail(accessToken: string, coachEmail: string) {
     const isSandbox = accessToken.startsWith('TEST-')
     const configured = process.env.MERCADOPAGO_TEST_PAYER_EMAIL?.trim()
-    const normalizedConfigured = configured
-        ? (configured.includes('@') ? configured : `${configured.toLowerCase()}@testuser.com`)
-        : ''
+    let normalizedConfigured = ''
+    if (configured) {
+        if (configured.includes('@')) {
+            normalizedConfigured = configured.toLowerCase()
+        } else {
+            const match = configured.match(/^testuser(\d+)$/i)
+            if (match) {
+                // MP test usernames usually map to test_user_<id>@testuser.com
+                normalizedConfigured = `test_user_${match[1]}@testuser.com`
+            } else {
+                normalizedConfigured = `${configured.toLowerCase()}@testuser.com`
+            }
+        }
+    }
     const payerEmail = isSandbox && normalizedConfigured ? normalizedConfigured : coachEmail
 
     if (isSandbox && !payerEmail.toLowerCase().endsWith('@testuser.com')) {
@@ -50,14 +72,12 @@ function parseExternalReference(reference?: string | null) {
 async function mpRequest(path: string) {
     const accessToken = getMpAccessToken()
     const response = await fetch(`https://api.mercadopago.com${path}`, {
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-        },
+        headers: buildMpHeaders(accessToken),
     })
     if (!response.ok) {
         const text = await response.text()
-        throw new Error(`MercadoPago request failed (${response.status}): ${text}`)
+        const requestId = response.headers.get('x-request-id')
+        throw new Error(`MercadoPago request failed (${response.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`)
     }
     return response.json()
 }
@@ -75,10 +95,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
 
         const response = await fetch('https://api.mercadopago.com/preapproval', {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-            },
+            headers: buildMpHeaders(accessToken),
             body: JSON.stringify({
                 reason: input.title,
                 external_reference: externalReference,
@@ -99,7 +116,10 @@ export class MercadoPagoProvider implements PaymentsProvider {
         })
         if (!response.ok) {
             const text = await response.text()
-            throw new Error(`MercadoPago subscription creation failed (${response.status}): ${text}`)
+            const requestId = response.headers.get('x-request-id')
+            throw new Error(
+                `MercadoPago subscription creation failed (${response.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`
+            )
         }
         const payload = await response.json()
 
