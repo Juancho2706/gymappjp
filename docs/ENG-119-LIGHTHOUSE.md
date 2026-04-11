@@ -17,9 +17,12 @@ Ejecutar Lighthouse (Chrome) o CLI contra entorno estable (staging o `npm run bu
 
 | Ruta | Fecha | Perf | A11y | Best practices | SEO | Notas |
 |------|-------|------|------|----------------|-----|-------|
-| / | | | | | | |
-| /pricing | | | | | | |
-| … | | | | | | |
+| / | 2026-04-11 | 73 | 88 | 100 | 63 | Preview deployment (Vercel). |
+| /login | 2026-04-11 | 79 | 94 | 100 | 63 | Preview deployment (Vercel). |
+| /register | 2026-04-11 | 91 | 94 | 100 | 63 | Preview deployment (Vercel). |
+| /pricing | 2026-04-11 | Error (NO_LCP) | 86 | 100 | 63 | Lighthouse report muestra `Largest Contentful Paint: Error / NO_LCP`. |
+| /coach/dashboard | 2026-04-11 | 76 | 90 | 100 | 63 | Sesion coach autenticada. |
+| /c/[slug]/dashboard | 2026-04-11 | 56 | 96 | 100 | 50 | Sesion alumno autenticada (`/c/josefit/dashboard`). |
 
 ## CLI (opcional)
 
