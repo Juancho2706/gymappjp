@@ -9,9 +9,10 @@ interface DashboardHeaderProps {
     coachSlug: string
     initialUseBrandColors: boolean
     brandName: string | null | undefined
+    welcomeMessage?: string | null
 }
 
-export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors, brandName }: DashboardHeaderProps) {
+export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors, brandName, welcomeMessage }: DashboardHeaderProps) {
     const { client } = await getClientProfile(userId)
     const firstName = client?.full_name?.split(' ')[0] ?? 'Atleta'
     const streak = await getDashboardStreak(userId)
@@ -29,6 +30,9 @@ export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors
                         <p className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">{brandName}</p>
                     ) : null}
                     <ClientGreeting greeting={greeting} dateLabel={dateLabel} key={iso} />
+                    {welcomeMessage ? (
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{welcomeMessage}</p>
+                    ) : null}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
                     <StreakWidget streak={streak} />

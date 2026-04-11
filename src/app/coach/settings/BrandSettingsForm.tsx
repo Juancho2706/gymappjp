@@ -1,9 +1,10 @@
 'use client'
 
-import { useActionState, useEffect, useRef, useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Save, Palette, ExternalLink } from 'lucide-react'
 import { updateBrandSettingsAction, type BrandSettingsState } from './actions'
 import { cn } from '@/lib/utils'
@@ -134,6 +135,27 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     </p>
                     {state.fieldErrors?.slug && (
                         <p className="text-xs text-destructive">{state.fieldErrors.slug[0]}</p>
+                    )}
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label htmlFor="welcome_message" className="text-sm text-foreground font-semibold">
+                        Mensaje de bienvenida para alumnos
+                    </Label>
+                    <Textarea
+                        id="welcome_message"
+                        name="welcome_message"
+                        defaultValue={coach.welcome_message ?? ''}
+                        rows={3}
+                        maxLength={240}
+                        placeholder="Ej: Bienvenido/a. Esta semana nos enfocamos en consistencia y buena tecnica."
+                        className="bg-secondary border-border text-foreground rounded-xl focus:border-primary resize-none"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Este texto aparece en el inicio del alumno para reforzar tu marca y direccion semanal.
+                    </p>
+                    {state.fieldErrors?.welcome_message && (
+                        <p className="text-xs text-destructive">{state.fieldErrors.welcome_message[0]}</p>
                     )}
                 </div>
             </div>

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
 import { getTodayInSantiago } from '@/lib/date-utils'
 
-type CoachBrand = Pick<Tables<'coaches'>, 'brand_name' | 'primary_color' | 'logo_url'>
+type CoachBrand = Pick<Tables<'coaches'>, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message'>
 
 export type DashboardClient = Pick<Tables<'clients'>, 'id' | 'full_name' | 'coach_id'> & {
     coaches: CoachBrand | CoachBrand[] | null
@@ -14,7 +14,7 @@ export const getClientProfile = cache(async (userId: string) => {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('clients')
-        .select('id, full_name, coach_id, coaches ( brand_name, primary_color, logo_url )')
+        .select('id, full_name, coach_id, coaches ( brand_name, primary_color, logo_url, welcome_message )')
         .eq('id', userId)
         .maybeSingle()
     return { client: data as DashboardClient | null, error }

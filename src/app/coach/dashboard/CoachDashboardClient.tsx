@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-    Users,
     Activity,
     ArrowRight,
     TriangleAlert,
@@ -30,6 +29,7 @@ import { Progress } from "@/components/ui/progress"
 import { Apple } from 'lucide-react'
 import { CreateClientModal } from '../clients/CreateClientModal'
 import { CoachOnboardingChecklist } from './CoachOnboardingChecklist'
+import type { RiskAlertItem } from './_data/dashboard.queries'
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -62,6 +62,7 @@ interface CoachDashboardClientProps {
     nutritionStats: any[]
     recentActivities: any[]
     expiringPrograms: any[]
+    topRiskClients: RiskAlertItem[]
     areaData: any[]
     barData: any[]
 }
@@ -75,6 +76,7 @@ export default function CoachDashboardClient({
     nutritionStats,
     recentActivities,
     expiringPrograms,
+    topRiskClients,
     areaData,
     barData
 }: CoachDashboardClientProps) {
@@ -134,6 +136,18 @@ export default function CoachDashboardClient({
                         <UserPlus className="w-4 h-4 mr-2" />
                         REGISTRAR ALUMNO
                     </GlassButton>
+                    <GlassButton asChild variant="ghost" className="w-full sm:w-auto">
+                        <Link href="/coach/workout-programs">
+                            <Dumbbell className="w-4 h-4 mr-2" />
+                            PROGRAMAS
+                        </Link>
+                    </GlassButton>
+                    <GlassButton asChild variant="ghost" className="w-full sm:w-auto">
+                        <Link href="/coach/nutrition">
+                            <Utensils className="w-4 h-4 mr-2" />
+                            NUTRICION
+                        </Link>
+                    </GlassButton>
                 </div>
             </motion.div>
 
@@ -149,29 +163,59 @@ export default function CoachDashboardClient({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 relative z-10">
                 {/* Alerts Section (Takes space of 2 cards) */}
                 <motion.div variants={itemVariants} className="col-span-2">
-                    <GlassCard className={`h-full bg-white/80 dark:bg-zinc-950 ${expiringPrograms.length > 0 ? "border-rose-500/20 shadow-rose-500/5" : ""}`}>
+                    <GlassCard className={`h-full bg-white/80 dark:bg-zinc-950 ${topRiskClients.length > 0 || expiringPrograms.length > 0 ? "border-rose-500/20 shadow-rose-500/5" : ""}`}>
                         <div className="px-6 py-5 border-b border-border dark:border-white/10 flex items-center justify-between bg-muted/30 dark:bg-white/[0.02]">
                             <div className="flex items-center gap-3">
-                                <TriangleAlert className={`w-4 h-4 ${expiringPrograms.length > 0 ? 'text-rose-500' : 'text-muted-foreground'}`} />
+                                <TriangleAlert className={`w-4 h-4 ${topRiskClients.length > 0 || expiringPrograms.length > 0 ? 'text-rose-500' : 'text-muted-foreground'}`} />
                                 <h2 className="text-xs font-bold text-foreground uppercase tracking-widest font-display">
                                     Alertas Críticas
                                 </h2>
                             </div>
-                            {expiringPrograms.length > 0 && (
+                            {topRiskClients.length > 0 || expiringPrograms.length > 0 ? (
                                 <Badge variant="destructive" className="bg-rose-500/20 text-rose-500 border-rose-500/30 font-bold">
-                                    {expiringPrograms.length}
+                                    {topRiskClients.length + expiringPrograms.length}
                                 </Badge>
-                            )}
+                            ) : null}
                         </div>
                         <div className="p-2">
-                            {expiringPrograms.length === 0 ? (
+                            {topRiskClients.length === 0 && expiringPrograms.length === 0 ? (
                                 <div className="p-8 text-center flex flex-col items-center justify-center">
                                     <CheckCircle className="w-10 h-10 text-emerald-500/50 mb-3" />
                                     <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">Todo bajo control</p>
-                                    <p className="text-[10px] text-muted-foreground/60 mt-1">No hay planes por vencer en los próximos 3 días</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">No hay alumnos en riesgo ni planes por vencer</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {topRiskClients.map((alert) => (
+                                        <div key={`risk-${alert.clientId}`} className="p-3 rounded-xl hover:bg-secondary/50 dark:hover:bg-white/[0.02] transition-colors border border-transparent hover:border-border dark:hover:border-white/5">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 border border-amber-500/20">
+                                                    <TriangleAlert className="w-4 h-4 text-amber-500" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-xs font-bold text-foreground truncate">{alert.clientName}</p>
+                                                    <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mt-0.5">
+                                                        Riesgo {alert.attentionScore} - {alert.label}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2 mt-3">
+                                                <Link
+                                                    href={`/coach/clients/${alert.clientId}`}
+                                                    className="flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg bg-secondary border border-border text-[9px] font-bold hover:opacity-90 transition-all"
+                                                >
+                                                    Revisar alumno
+                                                </Link>
+                                                <Link
+                                                    href={`/coach/builder/${alert.clientId}`}
+                                                    className="flex items-center justify-center w-8 h-7 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-colors"
+                                                    style={{ backgroundColor: 'var(--theme-primary)' }}
+                                                >
+                                                    <ArrowRight className="w-3 h-3" />
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    ))}
                                     {expiringPrograms.map((program) => (
                                         <div key={program.id} className="p-3 rounded-xl hover:bg-secondary/50 dark:hover:bg-white/[0.02] transition-colors border border-transparent hover:border-border dark:hover:border-white/5">
                                             <div className="flex items-start gap-3">

@@ -15,6 +15,7 @@ const brandSchema = z.object({
         .regex(/^[a-z0-9-]+$/, 'Solo letras minúsculas, números y guiones'),
     primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color hexadecimal inválido'),
     use_brand_colors_coach: z.boolean().default(false),
+    welcome_message: z.string().max(240, 'El mensaje debe tener maximo 240 caracteres').optional(),
 })
 
 export type BrandSettingsState = {
@@ -33,6 +34,7 @@ export async function updateBrandSettingsAction(
         slug: formData.get('slug') as string,
         primary_color: formData.get('primary_color') as string,
         use_brand_colors_coach: formData.get('use_brand_colors_coach') === 'on',
+        welcome_message: (formData.get('welcome_message') as string | null)?.trim() ?? '',
     }
 
     const parsed = brandSchema.safeParse(raw)
@@ -65,6 +67,7 @@ export async function updateBrandSettingsAction(
             slug: parsed.data.slug,
             primary_color: parsed.data.primary_color,
             use_brand_colors_coach: parsed.data.use_brand_colors_coach,
+            welcome_message: parsed.data.welcome_message || null,
         })
         .eq('id', user.id)
 

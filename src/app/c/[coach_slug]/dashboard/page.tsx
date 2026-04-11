@@ -59,6 +59,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                     coachSlug={coach_slug}
                     initialUseBrandColors={initialUseBrandColors}
                     brandName={coachBranding?.brand_name}
+                    welcomeMessage={coachBranding?.welcome_message}
                 />
             </Suspense>
 

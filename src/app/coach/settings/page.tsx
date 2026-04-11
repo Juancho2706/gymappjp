@@ -57,7 +57,7 @@ export default async function CoachSettingsPage() {
                     Mi Marca
                 </h1>
                 <p className="text-muted-foreground text-sm mt-1">
-                    Personaliza la experiencia que verán tus alumnos en su app.
+                    Define lo minimo que tus alumnos deben ver: nombre, logo, color y mensaje de bienvenida.
                 </p>
             </div>
 

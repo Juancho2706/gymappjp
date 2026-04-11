@@ -259,6 +259,7 @@ export type Database = {
           trial_used_email: string | null
           updated_at: string
           use_brand_colors_coach: boolean
+          welcome_message: string | null
         }
         Insert: {
           brand_name: string
@@ -279,6 +280,7 @@ export type Database = {
           trial_used_email?: string | null
           updated_at?: string
           use_brand_colors_coach?: boolean
+          welcome_message?: string | null
         }
         Update: {
           brand_name?: string
@@ -299,6 +301,7 @@ export type Database = {
           trial_used_email?: string | null
           updated_at?: string
           use_brand_colors_coach?: boolean
+          welcome_message?: string | null
         }
         Relationships: []
       }

@@ -45,11 +45,11 @@ export default async function ClientLoginPage({ params }: Props) {
 
     const { data } = await supabase
         .from('coaches')
-        .select('brand_name, primary_color, logo_url')
+        .select('brand_name, primary_color, logo_url, welcome_message')
         .eq('slug', coach_slug)
         .maybeSingle()
 
-    const coach = data as Pick<Coach, 'brand_name' | 'primary_color' | 'logo_url'> | null
+    const coach = data as Pick<Coach, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message'> | null
 
     if (!coach) notFound()
 
@@ -96,7 +96,9 @@ export default async function ClientLoginPage({ params }: Props) {
                     >
                         {coach.brand_name}
                     </h1>
-                    <p className="mt-1 text-muted-foreground text-sm">Tu plataforma de entrenamiento</p>
+                    <p className="mt-1 text-muted-foreground text-sm">
+                        {coach.welcome_message?.trim() || 'Tu plataforma de entrenamiento'}
+                    </p>
                 </div>
 
                 {/* Login form — client component */}

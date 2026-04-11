@@ -6,6 +6,8 @@ import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
 
 // ────────────────────────────────────────────────────────────────
 // Create Client Action
@@ -52,11 +54,11 @@ export async function createClientAction(
 
     const { data: rawCoachData } = await supabase
         .from('coaches')
-        .select('id, slug, subscription_tier, max_clients')
+        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients')
         .eq('id', coachUser.id)
         .maybeSingle()
 
-    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'subscription_tier' | 'max_clients'> | null
+    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients'> | null
 
     if (!coach) return { error: 'Coach no encontrado.' }
 
@@ -108,6 +110,25 @@ export async function createClientAction(
         await admin.auth.admin.deleteUser(newAuthUser.user.id)
         console.error('DB insert client error:', dbError)
         return { error: 'Error al guardar el alumno en la base de datos.' }
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
+    const loginUrl = appUrl ? `${appUrl}/c/${coach.slug}/login` : `https://app.tu-dominio.com/c/${coach.slug}/login`
+    const welcomeEmail = buildClientWelcomeEmail({
+        brandName: coach.brand_name,
+        coachName: coach.full_name,
+        clientName: parsed.data.full_name,
+        loginUrl,
+        tempPassword: parsed.data.temp_password,
+        welcomeMessage: coach.welcome_message,
+    })
+    const emailResult = await sendTransactionalEmail({
+        to: parsed.data.email,
+        subject: welcomeEmail.subject,
+        html: welcomeEmail.html,
+    })
+    if (!emailResult.ok) {
+        console.error('Welcome email delivery error:', emailResult.error)
     }
 
     revalidatePath('/coach/clients')

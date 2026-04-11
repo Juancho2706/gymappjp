@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-programs-library'
 import type { ProgramListModel } from '../../workout-programs/libraryStats'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildProgramAssignedEmail } from '@/lib/email/transactional-templates'
 
 // --- SCHEMAS ---
 
@@ -555,13 +557,14 @@ export async function assignProgramToClientsAction(
 
         const { data: ownedClients, error: ownedClientsError } = await adminDb
             .from('clients')
-            .select('id')
+            .select('id, full_name, email')
             .eq('coach_id', user.id)
             .in('id', clientIds)
 
         if (ownedClientsError) throw new Error('No se pudo validar los alumnos seleccionados.')
 
-        const ownedClientIdSet = new Set((ownedClients || []).map(c => c.id))
+        const ownedClientMap = new Map((ownedClients || []).map((c) => [c.id, c]))
+        const ownedClientIdSet = new Set((ownedClients || []).map((c) => c.id))
         const failedClients: { clientId: string; reason: string }[] = []
         const validClientIds = clientIds.filter(id => {
             const allowed = ownedClientIdSet.has(id)
@@ -588,6 +591,14 @@ export async function assignProgramToClientsAction(
         const endDate = end.toISOString().split('T')[0]
 
         let assignedCount = 0
+        const coachBrand = await adminDb
+            .from('coaches')
+            .select('brand_name, slug')
+            .eq('id', user.id)
+            .maybeSingle()
+        const brandName = coachBrand.data?.brand_name || 'Tu Coach'
+        const coachSlug = coachBrand.data?.slug || 'coach'
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
 
         // Iterar por cada cliente
         for (const clientId of validClientIds) {
@@ -667,6 +678,28 @@ export async function assignProgramToClientsAction(
                 }
 
                 assignedCount += 1
+
+                const clientInfo = ownedClientMap.get(clientId)
+                if (clientInfo?.email) {
+                    const dashboardUrl = appUrl
+                        ? `${appUrl}/c/${coachSlug}/dashboard`
+                        : `https://app.tu-dominio.com/c/${coachSlug}/dashboard`
+                    const assignedEmail = buildProgramAssignedEmail({
+                        brandName,
+                        clientName: clientInfo.full_name,
+                        programName: template.name,
+                        startDate: dateToUse,
+                        dashboardUrl,
+                    })
+                    const emailResult = await sendTransactionalEmail({
+                        to: clientInfo.email,
+                        subject: assignedEmail.subject,
+                        html: assignedEmail.html,
+                    })
+                    if (!emailResult.ok) {
+                        console.error(`Program assigned email error for ${clientId}:`, emailResult.error)
+                    }
+                }
                 revalidatePath(`/coach/clients/${clientId}`)
             } catch (clientError: any) {
                 failedClients.push({
