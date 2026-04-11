@@ -29,6 +29,7 @@ export default function ReactivatePage() {
     const [isConfirming, setIsConfirming] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const hasAutoCheckedRef = useRef(false)
+    const hasAutoStartedCheckoutRef = useRef(false)
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
@@ -128,7 +129,7 @@ export default function ReactivatePage() {
         }
     }, [confirmSubscription, fromSuccessfulCheckout, preapprovalIdFromUrl])
 
-    async function handleCheckout() {
+    const handleCheckout = useCallback(async () => {
         setIsLoading(true)
         setError(null)
         try {
@@ -147,7 +148,15 @@ export default function ReactivatePage() {
         } finally {
             setIsLoading(false)
         }
-    }
+    }, [billingCycle, tier])
+
+    useEffect(() => {
+        const fromRegister = searchParams.get('from') === 'register'
+        const canAutostart = fromRegister && !fromSuccessfulCheckout && !paymentStatus
+        if (!canAutostart || hasAutoStartedCheckoutRef.current) return
+        hasAutoStartedCheckoutRef.current = true
+        void handleCheckout()
+    }, [fromSuccessfulCheckout, handleCheckout, paymentStatus, searchParams])
 
     return (
         <main className="mx-auto max-w-3xl px-4 py-10">

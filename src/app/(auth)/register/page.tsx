@@ -231,7 +231,8 @@ export default function RegisterPage() {
                                             <p className="font-semibold text-foreground">{option.label}</p>
                                             <p className="text-xs text-muted-foreground">Hasta {option.maxClients} alumnos</p>
                                             <p className="text-sm text-foreground mt-1">
-                                                ${option.monthlyPriceClp.toLocaleString('es-CL')} CLP / mes
+                                                ${getTierPriceClp(key, billingCycle).toLocaleString('es-CL')} CLP /{' '}
+                                                {BILLING_CYCLE_CONFIG[billingCycle].label.toLowerCase()}
                                             </p>
                                         </button>
                                     ))}

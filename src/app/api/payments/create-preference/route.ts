@@ -45,6 +45,7 @@ export async function POST(request: Request) {
         const webhookUrl = webhookToken
             ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
             : `${appUrl}/api/payments/webhook`
+        const retryQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`
 
         const checkout = await provider.createCheckout({
             coachId: user.id,
@@ -54,8 +55,8 @@ export async function POST(request: Request) {
             amountClp,
             title: `Suscripción ${TIER_CONFIG[tier].label} ${cycle.label} (${cycle.months} mes/es)`,
             successUrl: `${appUrl}/coach/subscription/processing`,
-            failureUrl: `${appUrl}/coach/reactivate?payment=failure`,
-            pendingUrl: `${appUrl}/coach/reactivate?payment=pending`,
+            failureUrl: `${appUrl}/coach/reactivate?payment=failure&${retryQuery}`,
+            pendingUrl: `${appUrl}/coach/reactivate?payment=pending&${retryQuery}`,
             webhookUrl,
         })
 
