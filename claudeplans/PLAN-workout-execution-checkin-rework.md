@@ -579,7 +579,7 @@ const handleInputFocus = (e: React.FocusEvent<HTMLElement>) => {
 | Título "Mensual" | Consistencia con la realidad del producto |
 
 ---
-
+         
 ## Archivos a crear/modificar
 
 | Archivo | Acción |
