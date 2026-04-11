@@ -60,6 +60,9 @@ Required variables:
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Future | Stripe client public key |
 | `STRIPE_WEBHOOK_SECRET` | Future | Stripe webhook signature secret |
 | `PLAYWRIGHT_BASE_URL` | Optional | Playwright base URL override |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Recommended in production | Rate limiting for auth and payment POSTs (middleware); if unset, limits are disabled |
+| `NEXT_PUBLIC_DEMO_VIDEO_URL` | Optional | YouTube id or URL for the embedded demo on the landing page |
+| `E2E_*` | Optional (CI) | See **GitHub Actions** below for Playwright QA-014/015 |
 
 ### 3. Run the Development Server
 
@@ -68,6 +71,19 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the app.
+
+### GitHub Actions (CI)
+
+Workflow: `.github/workflows/ci.yml`.
+
+- **Quality job:** `npm run lint`, `npm run typecheck`, `npx vitest run` (unit tests under `src/**/*.test.*` and `tests/**/*.test.*`; Playwright specs under `tests/*.spec.ts` are excluded from Vitest).
+- **E2E job:** Playwright headless with `npm run dev` (see `playwright.config.ts`). Configure repository **Secrets** for a real Supabase project at minimum:
+  - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (and `SUPABASE_SERVICE_ROLE_KEY` if the app reads it at startup).
+  - Optional for **QA-014 / QA-015:** `E2E_COACH_SLUG`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD`, `E2E_WORKOUT_PLAN_ID` (alumno con programa activo y plan de entreno válido; sin ellos esas pruebas se omiten pero el resto de E2E sigue ejecutándose).
+
+### Vercel preview deployments (OPS-004)
+
+Con el repositorio conectado a Vercel, cada pull request recibe una **Preview URL** en el comentario/check de despliegue. Usa ese enlace para validar cambios antes de fusionar; las variables sensibles se configuran en el proyecto Vercel (Environment Variables → Preview).
 
 ### Supabase migration workflow
 This repository keeps migration SQL under `supabase/migrations`.
@@ -95,6 +111,7 @@ npx supabase db push
 
 Security hardening:
 - Keep `Enable email signups` disabled in Supabase Auth if registration is managed by server-side admin flows only.
+- RLS audit and matrix: `docs/SEC-001-RLS-AUDIT.md`, `docs/QA-RLS-MATRIX.md`. Integration tests: set `SUPABASE_RLS_INTEGRATION=1` and variables listed in `.env.example`.
 - Never commit real secret values. Use `.env.example` for placeholders.
 - To disable public signup via Management API, set `SUPABASE_ACCESS_TOKEN` and run:
 ```bash

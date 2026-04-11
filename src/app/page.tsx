@@ -6,7 +6,21 @@ import Image from 'next/image'
 import { GymAppLogo } from '@/components/ui/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
-import { DashboardMockup } from '@/components/landing/DashboardMockup'
+import dynamic from 'next/dynamic'
+import { DemoVideoSection } from '@/components/landing/DemoVideoSection'
+
+const DashboardMockup = dynamic(
+    () => import('@/components/landing/DashboardMockup').then((m) => ({ default: m.DashboardMockup })),
+    {
+        ssr: false,
+        loading: () => (
+            <div
+                className="w-full max-w-5xl mx-auto mt-12 rounded-2xl bg-muted/25 border border-border/30 min-h-[280px] animate-pulse"
+                aria-hidden
+            />
+        ),
+    }
+)
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring, AnimatePresence } from 'framer-motion'
 import {
@@ -455,6 +469,8 @@ export default function LandingPage() {
 
                 </motion.div>
             </section>
+
+            <DemoVideoSection />
 
             {/* ── STATS BAR ── */}
             <section className="relative py-16 border-y border-white/[0.04]">

@@ -144,7 +144,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
         }
       })
     },
-    [userId, plan.id, currentLog?.id, coachSlug, selectedDate]
+    [setOptimisticCompletion, userId, plan.id, currentLog, coachSlug, selectedDate]
   )
 
   const totalMeals = mealsSorted.length

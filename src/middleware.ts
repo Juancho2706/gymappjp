@@ -2,6 +2,12 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
 import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
+import {
+    clientIpFromRequest,
+    jsonRateLimited,
+    rateLimitAuth,
+    rateLimitPayment,
+} from '@/lib/rate-limit'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
@@ -12,6 +18,28 @@ export async function middleware(request: NextRequest) {
     // Keep webhook endpoint lightweight and avoid auth calls in middleware.
     if (pathname === '/api/payments/webhook') {
         return NextResponse.next({ request })
+    }
+
+    const ip = clientIpFromRequest(request)
+
+    // SEC-002: rate limit auth-related POSTs (login, register, password flows, client login).
+    if (request.method === 'POST') {
+        const authPost =
+            pathname === '/login' ||
+            pathname === '/register' ||
+            pathname === '/forgot-password' ||
+            pathname === '/reset-password' ||
+            /^\/c\/[^/]+\/login$/.test(pathname)
+        if (authPost) {
+            const rl = await rateLimitAuth(ip)
+            if (!rl.ok) return jsonRateLimited(rl.retryAfter)
+        }
+
+        // SEC-003: rate limit payment mutation endpoints (excluding webhook).
+        if (pathname.startsWith('/api/payments/')) {
+            const rl = await rateLimitPayment(ip)
+            if (!rl.ok) return jsonRateLimited(rl.retryAfter)
+        }
     }
 
     let supabaseResponse = NextResponse.next({ request })
