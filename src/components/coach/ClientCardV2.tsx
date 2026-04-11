@@ -265,12 +265,12 @@ export function ClientCardV2({
                                     <DropdownMenu modal={false}>
                                         <DropdownMenuTrigger
                                             type="button"
-                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/50 text-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/[0.14]"
+                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/50 px-0 text-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/[0.14]"
                                             aria-label="Más opciones"
                                         >
                                             <MoreHorizontal
-                                                className="h-5 w-5 text-foreground/80 dark:text-foreground/90"
-                                                strokeWidth={2.25}
+                                                className="pointer-events-none h-5 w-5 shrink-0 text-foreground dark:text-foreground"
+                                                strokeWidth={2.5}
                                                 aria-hidden
                                             />
                                         </DropdownMenuTrigger>
