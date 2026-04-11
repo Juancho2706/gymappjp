@@ -150,6 +150,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+    if (!isWebhookAuthorized(request)) {
+        return NextResponse.json({ ok: false, error: 'Unauthorized webhook' }, { status: 401 })
+    }
     return NextResponse.json({ ok: true })
 }
