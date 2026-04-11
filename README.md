@@ -65,9 +65,9 @@ Required variables:
 | `EDAMAM_APP_KEY` | Optional | Recipe search integration |
 | `PAYMENT_PROVIDER` | Recommended | `mercadopago` (default) or `stripe` |
 | `MERCADOPAGO_ACCESS_TOKEN` | Yes (if MercadoPago) | Server token for payment API and webhooks |
-| `NEXT_PUBLIC_MP_PUBLIC_KEY` | Optional | MercadoPago client-side public key |
 | `MERCADOPAGO_TEST_PAYER_EMAIL` | Sandbox only | Required in tests (`@testuser.com`) when using TEST access token |
-| `MERCADOPAGO_WEBHOOK_TOKEN` | Recommended | Shared token validated by `/api/payments/webhook` to reject forged calls |
+| `MERCADOPAGO_WEBHOOK_TOKEN` | **Required in production** | Shared token for `/api/payments/webhook` query `token` or `x-webhook-token` header |
+| `MERCADOPAGO_WEBHOOK_SIGNING_SECRET` | Optional | Mercado Pago webhook signing secret for `x-signature` HMAC verification |
 | `STRIPE_SECRET_KEY` | Future | Stripe server key (provider prepared for future) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Future | Stripe client public key |
 | `STRIPE_WEBHOOK_SECRET` | Future | Stripe webhook signature secret |
@@ -75,6 +75,7 @@ Required variables:
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Recommended in production | Rate limiting for auth and payment POSTs (middleware); if unset, limits are disabled |
 | `NEXT_PUBLIC_DEMO_VIDEO_URL` | Optional | YouTube id or URL for the embedded demo on the landing page |
 | `E2E_*` | Optional (CI) | See **GitHub Actions** below for Playwright QA-014/015 |
+| `E2E_PAYMENT_COACH_EMAIL` / `E2E_PAYMENT_COACH_PASSWORD` | Optional | Coach user (`pending_payment` ideal) for mocked payment flow spec |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Optional (Sprint 5) | Provider + sender identity for RET-002 email drip |
 | `DRIP_CRON_TOKEN` | Optional (Sprint 5) | Protects `POST /api/internal/email-drip/run` |
 | `BETA_MONITOR_TOKEN` | Optional (Sprint 5) | Protects `GET /api/ops/beta-health` |

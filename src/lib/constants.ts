@@ -102,7 +102,12 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     },
 }
 
-type TierCapabilities = {
+/**
+ * Feature gates by tier. Product policy (2026): paid tiers differ mainly by `maxClients` in {@link TIER_CONFIG};
+ * marketing lists the same core features for all. Keeping all capabilities `true` avoids fake paywalls and matches
+ * that policy. Use `max_clients` / subscription UI for upsell on capacity, not branding/nutrition locks.
+ */
+export type TierCapabilities = {
     canUseNutrition: boolean
     canUseBranding: boolean
     canUseAdvancedReports: boolean

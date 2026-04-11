@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
-import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
+import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
 import {
     clientIpFromRequest,
     jsonRateLimited,
@@ -92,21 +92,10 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
-        const isReactivatePage = pathname.startsWith('/coach/reactivate')
-        const isSubscriptionProcessingPage = pathname.startsWith('/coach/subscription/processing')
-        const isSubscriptionGatePage = isReactivatePage || isSubscriptionProcessingPage
-        const blockedStatuses = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES)
-        const isBlocked = blockedStatuses.has(coach.subscription_status ?? '')
-
-        if (isBlocked && !isSubscriptionGatePage) {
+        const redirectPath = resolveCoachSubscriptionRedirect(pathname, coach.subscription_status)
+        if (redirectPath) {
             const redirectUrl = request.nextUrl.clone()
-            redirectUrl.pathname = '/coach/reactivate'
-            return NextResponse.redirect(redirectUrl)
-        }
-
-        if (!isBlocked && isSubscriptionGatePage) {
-            const redirectUrl = request.nextUrl.clone()
-            redirectUrl.pathname = '/coach/dashboard'
+            redirectUrl.pathname = redirectPath
             return NextResponse.redirect(redirectUrl)
         }
 

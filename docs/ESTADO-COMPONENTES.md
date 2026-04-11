@@ -9,7 +9,7 @@
 - Cada actualización debe llevar **fecha y hora** en **America/Santiago** en la línea **Última actualización** de ambos documentos (formato recomendado: `YYYY-MM-DD HH:mm America/Santiago`).
 - Bitácoras Cursor (sesiones): [`progreso cursor/PROGRESO-workout-checkin-rework-2026-04-10.md`](../progreso%20cursor/PROGRESO-workout-checkin-rework-2026-04-10.md).
 
-**Última actualización:** 2026-04-11 America/Santiago — Quick wins doc/código: `.env.example`, `font-display` en títulos alumno (sin `--font-outfit`), filas de directorio sin ClientCard V1, biblioteca con select unificado, PWA cache `eva`; docs históricos en `docs/archive/`. Mantiene Sprint 6: dashboard coach `_data/_components`, `welcome_message`, emails transaccionales, íconos alumno.
+**Última actualización:** 2026-04-11 America/Santiago — **Go/No-Go revenue (código):** migración BD `trialing`; cancel real MP + `confirm-subscription` vía provider; webhook token obligatorio en `NODE_ENV=production`; firma MP opcional (`MERCADOPAGO_WEBHOOK_SIGNING_SECRET`); tests Vitest (webhook auth, subscription gate, `mapProviderStatus` trialing); E2E mock `tests/payment-flow-mock.spec.ts` (vars `E2E_PAYMENT_COACH_*`); removida dependencia npm `mercadopago` no usada. Docs MAPA/ESTADO alineados. Quick wins previos: `.env.example`, `font-display`, PWA `eva`, Sprint 6 branding/emails.
 
 ---
 
@@ -322,13 +322,13 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| Método de pago real (coach) | 🔶 | 80% | MercadoPago core operativo con estado de suscripción y flujo productivo base. |
-| Registro + pago obligatorio | 🔶 | 70% | Flujo de activación comercial operativo con trabajo pendiente de UX/funnels. |
-| Webhooks de suscripción | 🔶 | 80% | Webhook hardening y trazabilidad implementados; requiere monitoreo continuo. |
-| Gestión de suscripción (coach dashboard) | 🔶 | 65% | Estado y bloqueo principal por suscripción funcional. |
-| Control de acceso por plan | 🔶 | 75% | Actualmente orientado a límites de alumnos; features abiertas por decisión de producto. |
+| Método de pago real (coach) | 🔶 | 88% | MP REST (`fetch`); `cancelCheckoutAtProvider` + `fetchCheckoutSnapshot` en provider; sin SDK npm `mercadopago`. |
+| Registro + pago obligatorio | 🔶 | 75% | Registro → `pending_payment` → processing/reactivate; UX/funnels comerciales pendientes. |
+| Webhooks de suscripción | 🔶 | 88% | Token **obligatorio** en producción; verificación HMAC `x-signature` opcional si `MERCADOPAGO_WEBHOOK_SIGNING_SECRET`. |
+| Gestión de suscripción (coach dashboard) | 🔶 | 72% | `/coach/subscription`, processing, reactivate; `subscription_events`. |
+| Control de acceso por plan | 🔶 | 75% | Límites por `max_clients`; `TIER_CAPABILITIES` alineado a política “mismas features, distinto cupo”. |
 
-**Resultado del módulo: ~74% — Base revenue activa, falta cierre de UX/automatización comercial.**
+**Resultado del módulo: ~82% — Listo para validación en producción con checklist de env/secrets y smoke sandbox.**
 
 ---
 
@@ -350,7 +350,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | UI primitives (shadcn) | ✅ | 100% | button, card, dialog, input, form, sheet, select, dropdown, alert-dialog, etc. |
 | PWA / manifests | 🔶 | 55% | `sw.js` manual (`eva-pwa-cache-v1`), manifests dinámicos por coach, `PwaRegister`, `InstallPrompt`. Sin offline real, sin push notifications |
 | i18n | 🔶 | 40% | `LanguageContext` + `en.json`/`es.json`. Implementado en landing pero no consistente en toda la app |
-| Testing | ❌ | 10% | 1 unit test (`Button.test.tsx`), 1 Playwright spec (`auth.spec.ts`). Vitest + Playwright configurados pero cobertura mínima |
+| Testing | 🔶 | 25% | Vitest: auth/register/clients actions, constants, Button, RLS (opcional), **webhook-authorization**, **coach-subscription-gate**, **subscription-state**. Playwright: `auth`, `workout-flow`, `checkin-flow`, `sprint3-register-pricing`, **payment-flow-mock** (opcional `E2E_PAYMENT_COACH_*`). |
 
 ---
 
@@ -381,11 +381,11 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | Registro Coach ** | **35%** (antes 0%) |
 | Login Coach ** | **40%** (antes 0%) |
 | Forgot/Reset Password ** | **40%** (antes 0%) |
-| **Pagos & Suscripciones** | **~74%** |
+| **Pagos & Suscripciones** | **~82%** |
 | **Panel CEO / Superadmin** | **0%** |
 | Templates | N/A (redirect) |
-| Testing | 10% |
-| **TOTAL ESTIMADO** | **~72%** |
+| Testing | ~25% |
+| **TOTAL ESTIMADO** | **~73%** |
 
 ---
 
@@ -398,7 +398,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 ### 🟠 Media (Core Loop)
 3. **Workout Execution** (~82%) — optimistic updates completos, offline/retry, vibración nativa, batch logging.
 4. **Check-in del alumno** (~80%) — campos de medidas corporales, notas libres, fotos extra (perfil lateral).
-5. **Dashboard principal del coach** (~45%) — rework UX al nivel War Room, KPIs globales, tendencias, comparativas, attention scores agregados.
+5. **Dashboard principal del coach** (~68%) — comparativas avanzadas, KPIs globales, tendencias (ENG-037+).
 6. **Mi Marca** (~35%) — rework del flow de branding, crop de logo, `StudentDashboardPreview` alineado al dashboard actual, más opciones de personalización.
 
 ### 🟡 Baja (Polish)
@@ -417,7 +417,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 ### ⏳ Condicionado (calidad / seguridad)
 - **QA E2E nutrición con RLS** (sesión alumno + coach, toggles, planes, `saved_meals`): ejecutar cuando **TOTAL ESTIMADO** sea **> ~90%**.
 - **§12 QA manual dashboard alumno:** Lighthouse PWA, iOS/Android real, auditoría contraste.
-- **Testing:** escalar de 10% a cobertura razonable (crítico antes de monetización).
+- **Testing:** escalar de ~25% a cobertura razonable (crítico antes de monetización); añadir E2E pago con sandbox MP real opcional.
 
 ### ✅ Cerrado en esta iteración (referencia)
 - **Nutrición alumno** `/c/[slug]/nutrition` + integración dashboard — completado 2026-04-09.

@@ -1003,11 +1003,13 @@ Dashboard | Entrenar | Nutricion | Progreso | Mas (ejercicios, settings)
 | # | Decision | Fecha | Contexto |
 |---|----------|-------|----------|
 | 1 | Moneda principal: CLP | Pendiente | Landing usa CLP, pricing USD. Resolver |
-| 2 | Payment provider: MercadoPago vs Stripe | Pendiente | Chile → MercadoPago tiene mejor penetracion |
+| 2 | Payment provider: MercadoPago vs Stripe | **MercadoPago activo** | Implementación REST en `src/lib/payments/providers/mercadopago.ts`; Stripe stub |
 | 3 | Trial: 14 dias con todos los features | Propuesta | Maximizar activation |
 | 4 | Extensiones nutricion (meals, recipes, barcode): fuera de scope | 2026-04-09 | Baja prioridad hasta nueva decision |
 | 5 | QA RLS formal: cuando TOTAL >90% | 2026-04-10 | Antes se valida informalmente |
 | 6 | App nativa: evaluar despues de 50 coaches | Propuesta | PWA primero |
+| 7 | `trialing` en BD + webhook prod | 2026-04-11 | CHECK constraint ampliado; token webhook obligatorio en producción |
+| 8 | Capabilities por tier | 2026-04-11 | Misma feature set; diferenciación por `max_clients` (`TIER_CAPABILITIES` documentado en código) |
 
 ---
 

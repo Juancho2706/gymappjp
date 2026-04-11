@@ -3,6 +3,7 @@ import { BILLING_CYCLE_CONFIG } from '@/lib/constants'
 
 export function mapProviderStatus(status?: string | null) {
     if (!status) return 'pending_payment'
+    if (status === 'trialing') return 'trialing'
     if (['approved', 'authorized'].includes(status)) return 'active'
     if (['pending', 'in_process', 'in_mediation'].includes(status)) return 'pending_payment'
     if (status === 'paused') return 'paused'
@@ -23,7 +24,7 @@ export function resolveCurrentPeriodEnd(input: {
     currentPeriodEnd?: string | null
     providerCurrentPeriodEnd?: string | null
 }) {
-    if (input.status !== 'active') return null
+    if (input.status !== 'active' && input.status !== 'trialing') return null
 
     const providerDate = parseDate(input.providerCurrentPeriodEnd)
     if (providerDate) return providerDate.toISOString()

@@ -2,6 +2,7 @@
 
 > Radiografia completa de donde estamos y hacia donde vamos.
 > **Generado:** 2026-04-10 America/Santiago — basado en auditoria de 225+ archivos, 24 tablas BD, 38 rutas.
+> **Actualizado:** 2026-04-11 America/Santiago — alineacion mapa vs codigo (pagos, APIs, tests); sprint hardening revenue.
 
 ---
 
@@ -22,6 +23,7 @@ graph LR
     end
 
     subgraph avanzado ["En Progreso (50-89%)"]
+        Pagos["Pagos y Suscripciones<br/>~88%"]
         WorkoutExec["Workout Execution<br/>82%"]
         CheckIn["Check-in Alumno<br/>80%"]
         Infra["Infraestructura<br/>80%"]
@@ -29,10 +31,11 @@ graph LR
         Landing["Landing Page<br/>60%"]
         Onboarding["Onboarding Alumno<br/>58%"]
         AuthAlumno["Auth Alumno<br/>50%"]
+        Testing["Testing<br/>~25%"]
     end
 
     subgraph parcial ["Parcial (25-49%)"]
-        DashCoach["Dashboard Coach<br/>45%"]
+        DashCoach["Dashboard Coach<br/>~68%"]
         LoginCoach["Login Coach<br/>40%"]
         EjercCoach["Ejercicios Coach<br/>40%"]
         ResetPw["Forgot/Reset PW<br/>40%"]
@@ -42,9 +45,7 @@ graph LR
     end
 
     subgraph pendiente ["No Implementado (0%)"]
-        Pagos["Pagos y Suscripciones<br/>0%"]
         PanelCEO["Panel CEO<br/>0%"]
-        Testing["Testing<br/>10%"]
     end
 ```
 
@@ -66,18 +67,18 @@ graph LR
 | 12 | Landing Page | 60% | ~970 | 1 | **Critico** (adquisición) |
 | 13 | Onboarding Alumno | 58% | ~500 | 3 | Medio (activación) |
 | 14 | Auth Alumno | 50% | ~400 | 6 | Medio |
-| 15 | Dashboard Coach | 45% | ~700 | 4 | Alto (retención coach) |
+| 15 | Dashboard Coach | ~68% | ~700 | 4+ | Alto (retención coach) |
 | 16 | Ejercicios Coach | 40% | ~400 | 4 | Bajo |
 | 17 | Login Coach | 40% | ~200 | 2 | Medio (adquisición) |
 | 18 | Forgot/Reset PW | 40% | ~300 | 4 | Bajo |
 | 19 | Mi Marca Settings | 35% | ~500 | 7 | Medio (diferenciación) |
 | 20 | Registro Coach | 78% | ~480 | 4 | **Critico** (adquisición) |
 | 21 | Pricing | 25% | ~200 | 1 | **Critico** (conversión) |
-| 22 | Pagos & Suscripciones | 85% | ~820 | 11 | **BLOQUEANTE** (monetización) |
+| 22 | Pagos & Suscripciones | ~88% | ~900+ | 11+ | **BLOQUEANTE** (monetización / operación en prod) |
 | 23 | Panel CEO | 0% | 0 | 0 | Alto (operaciones) |
-| 24 | Testing | 10% | ~50 | 2 | Critico (calidad) |
+| 24 | Testing | ~25% | — | 10+ archivos test | Critico (calidad) |
 
-**TOTAL ESTIMADO: ~62%**
+**TOTAL ESTIMADO: ~72%** (alineado con [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md))
 
 ---
 
@@ -88,15 +89,15 @@ graph LR
 | Archivos TypeScript/TSX | 225+ |
 | Tablas Supabase | 24 |
 | Rutas (pages) | 38 |
-| API Routes | 5 |
+| API Routes (`src/app/api/**/route.ts`) | 11+ |
 | Layouts | 4 |
 | Loading states | 11 |
 | Componentes UI (shadcn) | 25+ |
 | Componentes compartidos | 53 |
-| Dependencias production | 36 |
+| Dependencias production | ~35 |
 | Dependencias dev | 17 |
-| Unit tests | 1 |
-| E2E tests | 1 |
+| Unit / integration (Vitest) | 30+ casos en varios archivos (`*.test.ts`) |
+| E2E (Playwright) | 5+ specs (`tests/*.spec.ts`) |
 | Idiomas soportados | 2 (es, en) parcial |
 
 ---
@@ -173,8 +174,8 @@ graph LR
 
 ## 5. Hacia Donde Vamos — Fases del Producto
 
-### Fase 0: Pre-Revenue (ACTUAL — ~62%)
-> Producto funcional para demos y testing interno. Sin monetizacion.
+### Fase 0: Pre-Revenue (ACTUAL — ~72%)
+> Producto funcional para demos y beta. **Pagos Mercado Pago** (preapproval + webhooks + gating) implementados; falta operación estable en producción y más cobertura de tests.
 
 **Logros:**
 - Core loop completo: coach crea programa → alumno ejecuta → coach revisa
@@ -182,11 +183,11 @@ graph LR
 - Dashboard alumno premium (compliance, PRs, streaks, nutricion)
 - Directorio coach con attention scores y War Room
 - PWA funcional (instalar, branding por coach)
+- Suscripción coach: API `/api/payments/*`, middleware, `subscription_events`, estado `trialing` en BD
 
 **Gaps criticos:**
-- Sin pagos = sin revenue
-- Sin tests = sin confianza para produccion
-- Inconsistencias (moneda, auth callback, sw.js naming)
+- Moneda landing vs `/pricing` (CLP vs USD) pendiente de alineación
+- Cobertura de tests aún baja para confianza plena en producción
 
 ---
 
@@ -301,10 +302,10 @@ Estado revisado contra el repo (no solo el plan original).
 
 ## 8. Resumen Ejecutivo
 
-**EVA** es una plataforma SaaS de fitness coaching con un **core product solido al ~62%**. Los modulos de mayor valor (constructor de planes, dashboard alumno, nutricion, directorio con attention scores) estan al **90-98%** de completitud y representan una ventaja competitiva real.
+**EVA** es una plataforma SaaS de fitness coaching con un **core product solido al ~72%**. Los modulos de mayor valor (constructor de planes, dashboard alumno, nutricion, directorio con attention scores) estan al **90-98%** de completitud y representan una ventaja competitiva real.
 
-**El bloqueante numero uno es la monetizacion:** sin pagos integrados, no hay revenue. Todo lo demas (polish de UX, features nuevas, testing) es secundario hasta que un coach pueda pagar.
+**Monetización:** integración **Mercado Pago** (checkout recurrente, webhooks, reactivate/processing) está en producción técnica; el foco pasa a **Go/No-Go**: variables de entorno en prod, webhooks firmados/token, smoke en sandbox, y alinear pricing/landing.
 
-**Siguiente paso inmediato:** Fase 1 (Revenue MVP) — estimacion 18-26 dias de desarrollo para tener el primer coach pagando.
+**Siguiente paso inmediato:** operar Fase 1 (Revenue MVP) — validar cobros reales, monitoreo, y cierre de UX comercial (pricing unificado, tests E2E de pago con credenciales).
 
 **Ventaja competitiva:** White-label real (cada coach tiene su propia "app" con su marca), mercado Chile/LATAM desatendido por competidores anglosajones, stack moderno (Next.js 16, RSC, Supabase), UX premium en los modulos completados.

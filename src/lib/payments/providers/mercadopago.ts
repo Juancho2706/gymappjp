@@ -3,6 +3,7 @@ import type {
     CreateCheckoutInput,
     CreateCheckoutResult,
     PaymentsProvider,
+    ProviderCheckoutSnapshot,
     WebhookProcessResult,
 } from '@/lib/payments/types'
 
@@ -82,6 +83,32 @@ async function mpRequest(path: string) {
         throw new Error(`MercadoPago request failed (${response.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`)
     }
     return response.json()
+}
+
+async function mpPutJson(path: string, body: Record<string, unknown>) {
+    const accessToken = getMpAccessToken()
+    const response = await fetch(`https://api.mercadopago.com${path}`, {
+        method: 'PUT',
+        headers: buildMpHeaders(accessToken),
+        body: JSON.stringify(body),
+    })
+    if (!response.ok) {
+        const text = await response.text()
+        const requestId = response.headers.get('x-request-id')
+        throw new Error(`MercadoPago PUT failed (${response.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`)
+    }
+    return response.json().catch(() => ({}))
+}
+
+function toSnapshot(preapproval: Record<string, unknown>, fallbackId: string): ProviderCheckoutSnapshot {
+    const ar = preapproval.auto_recurring as { end_date?: string | null } | undefined
+    return {
+        id: String(preapproval.id ?? fallbackId),
+        external_reference: (preapproval.external_reference as string | null | undefined) ?? null,
+        status: (preapproval.status as string | null | undefined) ?? null,
+        next_payment_date: (preapproval.next_payment_date as string | null | undefined) ?? null,
+        auto_recurring: ar,
+    }
 }
 
 export class MercadoPagoProvider implements PaymentsProvider {
@@ -167,5 +194,16 @@ export class MercadoPagoProvider implements PaymentsProvider {
             coachId: coach?.coachId,
             providerCheckoutId: payment.order?.id ? String(payment.order.id) : undefined,
         }
+    }
+
+    async fetchCheckoutSnapshot(checkoutId: string): Promise<ProviderCheckoutSnapshot> {
+        const encoded = encodeURIComponent(checkoutId)
+        const preapproval = (await mpRequest(`/preapproval/${encoded}`)) as Record<string, unknown>
+        return toSnapshot(preapproval, checkoutId)
+    }
+
+    async cancelCheckoutAtProvider(checkoutId: string): Promise<void> {
+        const encoded = encodeURIComponent(checkoutId)
+        await mpPutJson(`/preapproval/${encoded}`, { status: 'cancelled' })
     }
 }

@@ -1,12 +1,13 @@
 # Arquitectura de Componentes — GymApp JP (EVA)
 
 > Diagrama de jerarquía y comunicación entre componentes principales.
-> **Última actualización:** 2026-04-11 00:15 America/Santiago — Sprint 6 + hotfixes post-sprint (dashboard coach `_data/_components`, branding `welcome_message`, emails transaccionales, tiers por capacidad, fix favicon alumno).
+> **Última actualización:** 2026-04-11 America/Santiago — Sprint 6 + hotfixes + **hardening pagos** (`fetchCheckoutSnapshot` / `cancelCheckoutAtProvider` en provider MP, webhook token obligatorio en prod, firma `x-signature` opcional, `confirm-subscription` vía provider, gate de suscripción extraído a `coach-subscription-gate.ts`).
 
 ---
 
 ## Cambios recientes (delta)
 
+- **Pagos:** `PaymentsProvider` incluye `fetchCheckoutSnapshot` y `cancelCheckoutAtProvider`; MP cancela preapproval vía `PUT` + `status: cancelled`. Webhook: `webhook-authorization.ts` (token prod + HMAC opcional). Migración `trialing` en `subscription_status`.
 - **Dashboard coach:** `page.tsx` ahora delega en `_components/DashboardContent.tsx` y `_data/dashboard.queries.ts`.
 - **Branding MVP:** `coaches.welcome_message` se persiste desde settings y se consume en login/dashboard alumno.
 - **Emails transaccionales:** plantillas en `src/lib/email/transactional-templates.ts`; disparo en acciones de alta alumno y asignación de programa.

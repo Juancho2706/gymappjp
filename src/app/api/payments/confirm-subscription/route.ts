@@ -4,19 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subscription-state'
+import { getPaymentsProvider } from '@/lib/payments/provider'
 
 const schema = z.object({
     preapprovalId: z.string().min(1).optional(),
 })
-
-function buildMpHeaders(accessToken: string) {
-    const headers: Record<string, string> = {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-    }
-    if (accessToken.startsWith('TEST-')) headers['X-scope'] = 'stage'
-    return headers
-}
 
 export async function POST(request: Request) {
     try {
@@ -61,40 +53,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No subscription id to confirm.' }, { status: 400 })
         }
 
-        const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
-        if (!accessToken) {
-            return NextResponse.json({ error: 'Missing MERCADOPAGO_ACCESS_TOKEN' }, { status: 500 })
+        const provider = getPaymentsProvider()
+        let snapshot
+        try {
+            snapshot = await provider.fetchCheckoutSnapshot(preapprovalId)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Provider fetch failed'
+            return NextResponse.json({ error: message }, { status: 502 })
         }
 
-        const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
-            headers: buildMpHeaders(accessToken),
-        })
-
-        if (!mpRes.ok) {
-            const text = await mpRes.text()
-            const requestId = mpRes.headers.get('x-request-id')
-            return NextResponse.json(
-                {
-                    error: `MercadoPago confirm failed (${mpRes.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`,
-                },
-                { status: 502 }
-            )
-        }
-
-        const preapproval = await mpRes.json()
-        const externalReference = String(preapproval.external_reference ?? '')
+        const externalReference = String(snapshot.external_reference ?? '')
         const [coachIdFromRef] = externalReference.split('|')
 
         if (coachIdFromRef && coachIdFromRef !== user.id) {
             return NextResponse.json({ error: 'Subscription does not belong to current user.' }, { status: 403 })
         }
 
-        const status = mapProviderStatus(preapproval.status ?? null)
+        const status = mapProviderStatus(snapshot.status ?? null)
         const nextPeriodEnd = resolveCurrentPeriodEnd({
             status,
             billingCycle: coach.billing_cycle,
             currentPeriodEnd: coach.current_period_end,
-            providerCurrentPeriodEnd: preapproval.next_payment_date ?? preapproval.auto_recurring?.end_date ?? null,
+            providerCurrentPeriodEnd: snapshot.next_payment_date ?? snapshot.auto_recurring?.end_date ?? null,
         })
 
         const { error: updateError } = await admin
@@ -102,7 +82,7 @@ export async function POST(request: Request) {
             .update({
                 subscription_status: status,
                 current_period_end: nextPeriodEnd,
-                payment_provider: 'mercadopago',
+                payment_provider: provider.name,
             })
             .eq('id', user.id)
 
@@ -112,7 +92,7 @@ export async function POST(request: Request) {
 
         const payload: Json | null = (() => {
             try {
-                return JSON.parse(JSON.stringify(preapproval)) as Json
+                return JSON.parse(JSON.stringify(snapshot)) as Json
             } catch {
                 return null
             }
@@ -120,10 +100,10 @@ export async function POST(request: Request) {
 
         const eventRow: TablesInsert<'subscription_events'> = {
             coach_id: user.id,
-            provider: 'mercadopago',
-            provider_event_id: `manual-confirm:${preapprovalId}:${String(preapproval.status ?? 'unknown')}`,
+            provider: provider.name,
+            provider_event_id: `manual-confirm:${preapprovalId}:${String(snapshot.status ?? 'unknown')}`,
             provider_checkout_id: preapprovalId,
-            provider_status: preapproval.status ?? null,
+            provider_status: snapshot.status ?? null,
             payload,
         }
 
@@ -144,7 +124,7 @@ export async function POST(request: Request) {
             traceId,
             coachId: user.id,
             preapprovalId,
-            providerStatus: preapproval.status ?? null,
+            providerStatus: snapshot.status ?? null,
             internalStatus: status,
             currentPeriodEnd: nextPeriodEnd,
         })
@@ -152,7 +132,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
             ok: true,
             subscriptionStatus: status,
-            providerStatus: preapproval.status ?? null,
+            providerStatus: snapshot.status ?? null,
         })
     } catch (error) {
         const message = error instanceof Error ? error.message : 'No se pudo confirmar la suscripción.'

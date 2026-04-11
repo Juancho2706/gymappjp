@@ -14,7 +14,9 @@ describe('subscription constants', () => {
 
     it('returns max clients and capabilities by tier', () => {
         expect(getTierMaxClients('starter_lite')).toBe(5)
-        expect(getTierCapabilities('starter_lite').canUseNutrition).toBe(false)
+        // Product policy: same core features for all tiers; limits differ by maxClients.
+        expect(getTierCapabilities('starter_lite').canUseNutrition).toBe(true)
+        expect(getTierCapabilities('starter_lite').canUseBranding).toBe(true)
         expect(getTierCapabilities('pro').canUseBranding).toBe(true)
     })
 })

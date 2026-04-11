@@ -3,14 +3,11 @@ import { getPaymentsProvider } from '@/lib/payments/provider'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subscription-state'
-
-function isWebhookAuthorized(request: Request) {
-    const expectedToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
-    if (!expectedToken) return true
-    const url = new URL(request.url)
-    const candidate = url.searchParams.get('token') ?? request.headers.get('x-webhook-token')
-    return candidate === expectedToken
-}
+import {
+    extractMercadoPagoNotificationId,
+    isPaymentsWebhookTokenValid,
+    verifyMercadoPagoSignatureIfConfigured,
+} from '@/lib/payments/webhook-authorization'
 
 function buildPayload(request: Request, body: unknown) {
     if (body && typeof body === 'object') return body
@@ -30,23 +27,29 @@ function toJsonPayload(value: unknown): Json | null {
     }
 }
 
-export async function POST(request: Request) {
-    if (!isWebhookAuthorized(request)) {
+async function handleWebhook(request: Request, rawBody: string) {
+    let parsed: unknown = {}
+    try {
+        parsed = rawBody ? JSON.parse(rawBody) : {}
+    } catch {
+        parsed = {}
+    }
+
+    const notificationId = extractMercadoPagoNotificationId(request, parsed)
+
+    if (!isPaymentsWebhookTokenValid(request)) {
         return NextResponse.json({ ok: false, error: 'Unauthorized webhook' }, { status: 401 })
+    }
+
+    if (!verifyMercadoPagoSignatureIfConfigured(request, notificationId)) {
+        return NextResponse.json({ ok: false, error: 'Invalid webhook signature' }, { status: 401 })
     }
 
     const provider = getPaymentsProvider()
     const admin = createServiceRoleClient()
     const traceId = request.headers.get('x-request-id') ?? crypto.randomUUID()
 
-    let body: unknown = {}
-    try {
-        body = await request.json()
-    } catch {
-        // MercadoPago may send query params only.
-    }
-
-    const payload = buildPayload(request, body)
+    const payload = buildPayload(request, parsed)
     console.info('[payments.webhook] received', { traceId, provider: provider.name, payload })
 
     let result
@@ -150,9 +153,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
 }
 
+export async function POST(request: Request) {
+    const rawBody = await request.text()
+    return handleWebhook(request, rawBody)
+}
+
 export async function GET(request: Request) {
-    if (!isWebhookAuthorized(request)) {
-        return NextResponse.json({ ok: false, error: 'Unauthorized webhook' }, { status: 401 })
-    }
-    return NextResponse.json({ ok: true })
+    return handleWebhook(request, '')
 }

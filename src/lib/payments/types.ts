@@ -27,8 +27,21 @@ export type WebhookProcessResult = {
     currentPeriodEnd?: string | null
 }
 
+/** Normalized preapproval / recurring checkout snapshot (Mercado Pago preapproval shape). */
+export type ProviderCheckoutSnapshot = {
+    id: string
+    external_reference?: string | null
+    status?: string | null
+    next_payment_date?: string | null
+    auto_recurring?: { end_date?: string | null }
+}
+
 export interface PaymentsProvider {
     name: 'mercadopago' | 'stripe'
     createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult>
     processWebhook(payload: unknown): Promise<WebhookProcessResult>
+    /** Fetch current state of a recurring checkout / preapproval by provider id. */
+    fetchCheckoutSnapshot(checkoutId: string): Promise<ProviderCheckoutSnapshot>
+    /** Cancel recurring billing at the provider (e.g. MP preapproval cancelled). */
+    cancelCheckoutAtProvider(checkoutId: string): Promise<void>
 }

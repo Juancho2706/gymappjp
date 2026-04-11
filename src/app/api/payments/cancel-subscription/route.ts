@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
+import { getPaymentsProvider } from '@/lib/payments/provider'
+
+function isAlreadyCanceledError(message: string) {
+    return /already|cancelled|canceled|cancelado|invalid status|not authorized|cannot be modified/i.test(message)
+}
 
 export async function POST(request: Request) {
     try {
@@ -23,6 +28,36 @@ export async function POST(request: Request) {
         }
 
         const admin = createServiceRoleClient()
+        const { data: coach } = await admin
+            .from('coaches')
+            .select('id, subscription_mp_id, payment_provider')
+            .eq('id', user.id)
+            .maybeSingle()
+
+        if (!coach) {
+            return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
+        }
+
+        const provider = getPaymentsProvider()
+        const checkoutId = coach.subscription_mp_id?.trim()
+
+        const providerMatches =
+            !coach.payment_provider || coach.payment_provider === provider.name
+
+        if (checkoutId && providerMatches) {
+            try {
+                await provider.cancelCheckoutAtProvider(checkoutId)
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                if (!isAlreadyCanceledError(msg)) {
+                    return NextResponse.json(
+                        { error: msg || 'No se pudo cancelar la suscripción en el proveedor de pagos.' },
+                        { status: 502 }
+                    )
+                }
+            }
+        }
+
         const { error: updateError } = await admin
             .from('coaches')
             .update({
@@ -39,7 +74,7 @@ export async function POST(request: Request) {
 
         const eventRow: TablesInsert<'subscription_events'> = {
             coach_id: user.id,
-            provider: 'mercadopago',
+            provider: provider.name,
             provider_event_id: `manual-cancel:${user.id}:${Date.now()}`,
             provider_status: 'canceled',
             payload,

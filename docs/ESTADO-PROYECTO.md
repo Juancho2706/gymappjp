@@ -7,7 +7,7 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-11 America/Santiago — Quick wins §7 MAPA-MAESTRO: `.env.example` en raíz, títulos alumno con `font-display` (sin `var(--font-outfit)`), documentación canónica en `docs/` y material histórico movido a `docs/archive/`. Deuda técnica alineada con el código (callback auth, sw.js, puppeteer, select biblioteca, ClientCard V1).
+**Última actualización:** 2026-04-11 America/Santiago — **Sprint Go/No-Go revenue (código):** migración `subscription_status` incluye `trialing` (coherente con email-drip); cancelación de suscripción llama a Mercado Pago `PUT preapproval` + `cancelled`; `confirm-subscription` usa `PaymentsProvider.fetchCheckoutSnapshot`; webhook exige `MERCADOPAGO_WEBHOOK_TOKEN` en `NODE_ENV=production`; verificación opcional de firma MP (`MERCADOPAGO_WEBHOOK_SIGNING_SECRET`, `webhook-authorization.ts`); gate de suscripción en `coach-subscription-gate.ts` + tests; removido paquete npm `mercadopago` no usado; E2E mock `tests/payment-flow-mock.spec.ts`; README/`.env.example` actualizados. Quick wins previos: `.env.example`, `font-display`, docs en `docs/archive/`.
 
 ---
 
@@ -15,6 +15,11 @@
 
 > Nota: esta sección registra cambios recientes sin rehacer todavía la auditoría total 225+ archivos.
 
+- **Pagos / suscripción coach (2026-04-11):**
+  - BD: `trialing` permitido en `coaches.subscription_status` (migración nueva).
+  - Provider MP: `fetchCheckoutSnapshot`, `cancelCheckoutAtProvider` (cancel real en MP).
+  - Webhook: token obligatorio en producción; HMAC `x-signature` opcional.
+  - Tests Vitest + E2E mock de flujo processing (vars opcionales).
 - **Dashboard coach (ENG-035/038/041):**
   - Refactor a patrón `_data/_components` en `src/app/coach/dashboard/`.
   - Alertas top 5 alumnos en riesgo (`attentionScore`) + quick actions visibles.
@@ -321,7 +326,7 @@ Títulos en login / change-password / exercises / suspended del alumno usan la c
 | ~~**Dashboard del alumno**~~ | Completado | ~98% | §12 QA manual | ~~Media~~ → **COMPLETADO** |
 | ~~**Workout execution rework**~~ | Rework abril 10 | ~82% | Optimistic updates, offline/retry | ~~Media~~ → **COMPLETADO (parcial)** |
 | ~~**Check-in rework**~~ | Rework abril 10 | ~80% | Medidas corporales, notas | ~~Media~~ → **COMPLETADO (parcial)** |
-| **Pagos & Suscripciones** | Sprint 2 casi cerrado | ~85% | Validar webhook token en producción + checklist Go/No-Go final | **CRÍTICA (revenue)** |
+| **Pagos & Suscripciones** | Hardening 2026-04-11 | ~88% | Smoke sandbox MP en prod + monitoreo webhooks + checklist Go/No-Go | **CRÍTICA (revenue)** |
 | **Dashboard coach** | Sprint 6 comercial base | ~68% | Completar comparativas avanzadas (ENG-037/039/042/043/044) | Media |
 | **Mi Marca / Settings** | Sprint 6 branding MVP | ~62% | Preview actualizado + branding extendido (secondary/font) | Media |
 | **Ejercicios coach** | Funcional básico | ~40% | Upload GIF, bulk edit | Baja |
@@ -331,7 +336,7 @@ Títulos en login / change-password / exercises / suspended del alumno usan la c
 | **Registro coach** | Funcional con gate + activación automática | ~78% | Smoke E2E final en producción antes de Sprint 3 | **Alta (con pagos)** |
 | **Landing/Pricing** | Sustancial | ~60/25% | Unificar moneda, SEO, testimonios | Media |
 | **Panel CEO / Superadmin** | Inexistente | 0% | Métricas globales | Baja |
-| **Testing** | Mínimo | 10% | Cobertura razonable | Media-Alta |
+| **Testing** | En progreso | ~25% | Cobertura razonable + E2E pago | Media-Alta |
 
 ---
 
