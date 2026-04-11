@@ -3,7 +3,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { redirect } from 'next/navigation'
-import { getTierMaxClients } from '@/lib/constants'
+import {
+    BILLING_CYCLE_CONFIG,
+    getTierMaxClients,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 
 export type RegisterState = {
     error?: string
@@ -18,6 +23,11 @@ export async function registerAction(
     const password = formData.get('password') as string
     const brandName = formData.get('brand_name') as string
     const acceptLegal = formData.get('accept_legal')
+    const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'starter'
+    const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
+
+    const isTierValid = ['starter_lite', 'starter', 'pro', 'elite', 'scale'].includes(selectedTier)
+    const isCycleValid = ['monthly', 'quarterly', 'annual'].includes(selectedBillingCycle)
 
     if (!fullName || !email || !password || !brandName) {
         return { error: 'Todos los campos son obligatorios' }
@@ -29,6 +39,9 @@ export async function registerAction(
 
     if (!acceptLegal) {
         return { error: 'Debes aceptar los términos para crear tu cuenta.' }
+    }
+    if (!isTierValid || !isCycleValid) {
+        return { error: 'Debes seleccionar un plan y una frecuencia válidos.' }
     }
 
     // Generate slug from brand name
@@ -75,10 +88,10 @@ export async function registerAction(
             slug,
             primary_color: '#10B981',
             subscription_status: 'pending_payment',
-            subscription_tier: 'starter_lite',
-            billing_cycle: 'monthly',
+            subscription_tier: selectedTier,
+            billing_cycle: selectedBillingCycle,
             payment_provider: process.env.PAYMENT_PROVIDER ?? 'mercadopago',
-            max_clients: getTierMaxClients('starter_lite'),
+            max_clients: getTierMaxClients(selectedTier),
         })
 
     if (coachError) {
@@ -91,5 +104,8 @@ export async function registerAction(
     const supabase = await createClient()
     await supabase.auth.signInWithPassword({ email, password })
 
-    redirect('/coach/reactivate?from=register')
+    const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
+    redirect(
+        `/coach/reactivate?from=register&tier=${encodeURIComponent(selectedTier)}&cycle=${encodeURIComponent(selectedBillingCycle)}&plan=${encodeURIComponent(selectedCycleLabel)}`
+    )
 }

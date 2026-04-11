@@ -15,8 +15,16 @@ const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [BillingCycle, (typ
 
 export default function ReactivatePage() {
     const searchParams = useSearchParams()
-    const [tier, setTier] = useState<SubscriptionTier>('starter')
-    const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
+    const [tier, setTier] = useState<SubscriptionTier>(() => {
+        const queryTier = searchParams.get('tier')
+        if (queryTier && queryTier in TIER_CONFIG) return queryTier as SubscriptionTier
+        return 'starter'
+    })
+    const [billingCycle, setBillingCycle] = useState<BillingCycle>(() => {
+        const queryCycle = searchParams.get('cycle')
+        if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) return queryCycle as BillingCycle
+        return 'monthly'
+    })
     const [isLoading, setIsLoading] = useState(false)
     const [isConfirming, setIsConfirming] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -148,6 +156,11 @@ export default function ReactivatePage() {
                 <p className="mt-2 text-sm text-muted-foreground">
                     Tu acceso de coach está pausado. Elige un plan y continúa al checkout para reactivar tu cuenta.
                 </p>
+                {searchParams.get('from') === 'register' ? (
+                    <p className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+                        Cuenta creada. Te falta completar el pago para activar acceso total al dashboard.
+                    </p>
+                ) : null}
 
                 {paymentStatus === 'failure' ? (
                     <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">

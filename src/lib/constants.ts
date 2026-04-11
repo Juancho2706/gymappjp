@@ -102,6 +102,40 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     },
 }
 
+type TierCapabilities = {
+    canUseNutrition: boolean
+    canUseBranding: boolean
+    canUseAdvancedReports: boolean
+}
+
+const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
+    starter_lite: {
+        canUseNutrition: false,
+        canUseBranding: false,
+        canUseAdvancedReports: false,
+    },
+    starter: {
+        canUseNutrition: true,
+        canUseBranding: false,
+        canUseAdvancedReports: false,
+    },
+    pro: {
+        canUseNutrition: true,
+        canUseBranding: true,
+        canUseAdvancedReports: false,
+    },
+    elite: {
+        canUseNutrition: true,
+        canUseBranding: true,
+        canUseAdvancedReports: true,
+    },
+    scale: {
+        canUseNutrition: true,
+        canUseBranding: true,
+        canUseAdvancedReports: true,
+    },
+}
+
 function applyDiscount(price: number, discount: number) {
     return Math.round(price * (1 - discount))
 }
@@ -115,6 +149,10 @@ export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
 
 export function getTierMaxClients(tier: SubscriptionTier) {
     return TIER_CONFIG[tier].maxClients
+}
+
+export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
+    return TIER_CAPABILITIES[tier]
 }
 
 export const BILLING_CYCLE_CONFIG: Record<

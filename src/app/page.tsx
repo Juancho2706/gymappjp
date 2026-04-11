@@ -20,14 +20,15 @@ import {
     SheetTrigger,
     SheetTitle
 } from "@/components/ui/sheet"
+import { TIER_CONFIG, type SubscriptionTier } from '@/lib/constants'
 
 /* ─── Constants ─── */
-const clientTiers = [
-    { label: '1–10 alumnos', price: 14990 },
-    { label: '11–25 alumnos', price: 24990 },
-    { label: '26–50 alumnos', price: 39990 },
-    { label: '51–100 alumnos', price: 59990 },
-    { label: '101–200 alumnos', price: 89990 },
+const clientTiers: Array<{ id: SubscriptionTier; label: string; price: number }> = [
+    { id: 'starter_lite', label: '1–5 alumnos', price: TIER_CONFIG.starter_lite.monthlyPriceClp },
+    { id: 'starter', label: '6–10 alumnos', price: TIER_CONFIG.starter.monthlyPriceClp },
+    { id: 'pro', label: '11–25 alumnos', price: TIER_CONFIG.pro.monthlyPriceClp },
+    { id: 'elite', label: '26–50 alumnos', price: TIER_CONFIG.elite.monthlyPriceClp },
+    { id: 'scale', label: '51–100 alumnos', price: TIER_CONFIG.scale.monthlyPriceClp },
 ]
 
 const premiumFeatures = [
@@ -211,7 +212,7 @@ function PillNav() {
                     {t('landing.nav.login')}
                 </Link>
                 <Link
-                    href="/register"
+                    href="/register?tier=pro&cycle=monthly"
                     className="bg-[#007AFF] text-white hover:bg-[#007AFF]/90 text-xs font-bold px-5 py-2.5 rounded-full transition-all glow-primary shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)]"
                 >
                     {t('landing.nav.register')}
@@ -259,7 +260,7 @@ function PillNav() {
                             
                             <div className="flex flex-col gap-3">
                                 <Link
-                                    href="/register"
+                                    href="/register?tier=pro&cycle=monthly"
                                     className="text-center w-full py-3 rounded-xl bg-cyan-500 text-background font-bold hover:bg-cyan-400 hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
                                 >
                                     {t('landing.nav.register')}
@@ -434,7 +435,7 @@ export default function LandingPage() {
                         className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
                     >
                         <Link
-                            href="/register"
+                            href="/register?tier=pro&cycle=monthly"
                             className="w-full sm:w-auto bg-[#007AFF] text-white hover:bg-[#007AFF]/90 font-bold px-8 py-4 rounded-full text-base transition-all duration-300 flex items-center justify-center gap-2 glow-primary shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)] group/btn"
                         >
                             {t('landing.hero.cta')}
@@ -827,7 +828,7 @@ export default function LandingPage() {
                             {/* CTA */}
                             <div className="text-center">
                                 <Link
-                                    href="/register"
+                                    href={`/register?tier=${clientTiers[selectedTier].id}&cycle=monthly`}
                                     className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/25"
                                 >
                                     Empieza ahora
@@ -942,7 +943,7 @@ export default function LandingPage() {
                         Configura tu plataforma en minutos y empieza a escalar tu negocio.
                     </p>
                     <Link
-                        href="/register"
+                        href="/register?tier=pro&cycle=monthly"
                         className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background font-bold px-10 py-5 rounded-full text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-cyan-500/30"
                     >
                         Crear cuenta

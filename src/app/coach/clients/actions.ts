@@ -5,6 +5,7 @@ import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 
 // ────────────────────────────────────────────────────────────────
 // Create Client Action
@@ -51,13 +52,29 @@ export async function createClientAction(
 
     const { data: rawCoachData } = await supabase
         .from('coaches')
-        .select('id, slug')
+        .select('id, slug, subscription_tier, max_clients')
         .eq('id', coachUser.id)
         .maybeSingle()
 
-    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug'> | null
+    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'subscription_tier' | 'max_clients'> | null
 
     if (!coach) return { error: 'Coach no encontrado.' }
+
+    const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+    const maxClients = coach.max_clients ?? getTierMaxClients(tier)
+    const { count: activeClientsCount, error: countError } = await supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', coach.id)
+
+    if (countError) {
+        return { error: 'No pudimos validar el límite de alumnos de tu plan.' }
+    }
+    if ((activeClientsCount ?? 0) >= maxClients) {
+        return {
+            error: `Alcanzaste el límite de ${maxClients} alumnos de tu plan actual. Haz upgrade para seguir agregando alumnos.`,
+        }
+    }
 
     // Create the auth user with Admin API (does NOT sign out the coach)
     const admin = await createRawAdminClient()

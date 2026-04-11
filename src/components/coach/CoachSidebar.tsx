@@ -12,7 +12,8 @@ import {
     Apple,
     PanelLeftClose,
     PanelLeft,
-    ClipboardList
+    ClipboardList,
+    CreditCard
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -56,6 +57,12 @@ const navItems = [
         label: 'Mi Marca',
         shortLabel: 'Marca',
         icon: Settings,
+    },
+    {
+        href: '/coach/subscription',
+        label: 'Suscripción',
+        shortLabel: 'Plan',
+        icon: CreditCard,
     },
 ]
 

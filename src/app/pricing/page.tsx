@@ -6,6 +6,13 @@ import { BILLING_CYCLE_CONFIG, getTierPriceClp, TIER_CONFIG, type BillingCycle, 
 export const metadata: Metadata = {
     title: 'Precios | EVA',
     description: 'Elige el plan perfecto para tu negocio de coaching fitness.',
+    openGraph: {
+        title: 'Precios EVA',
+        description: 'Planes en CLP con cobro mensual, trimestral o anual para coaches.',
+        url: 'https://www.eva-app.cl/pricing',
+        siteName: 'EVA',
+        type: 'website',
+    },
 }
 
 const planDisplay: Array<{
@@ -154,7 +161,7 @@ export default function PricingPage() {
                                 </ul>
 
                                 <Link
-                                    href="/register"
+                                    href={`/register?tier=${plan.id}&cycle=monthly`}
                                     className={`w-full py-3 rounded-xl text-sm font-semibold text-center transition-all duration-200 block ${plan.popular
                                         ? 'bg-violet-600 hover:bg-violet-500 text-white'
                                         : 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent'
@@ -167,13 +174,32 @@ export default function PricingPage() {
                     })}
                 </div>
 
-                {/* FAQ teaser */}
-                <p className="text-center text-muted-foreground text-sm mt-12">
-                    ¿Tienes preguntas?{' '}
-                    <Link href="/register" className="text-violet-400 hover:text-violet-300 transition-colors">
-                        Contáctanos
-                    </Link>
-                </p>
+                <section className="mt-12 grid gap-4 md:grid-cols-2">
+                    <article className="rounded-2xl border border-border bg-card p-5">
+                        <h3 className="text-sm font-semibold text-foreground">¿Cuándo se cobra?</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            El primer cobro se realiza al registrarte y luego se renueva según el ciclo elegido.
+                        </p>
+                    </article>
+                    <article className="rounded-2xl border border-border bg-card p-5">
+                        <h3 className="text-sm font-semibold text-foreground">¿Puedo cambiar de plan?</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Sí. Desde tu panel en <code>/coach/subscription</code> puedes hacer upgrade o downgrade.
+                        </p>
+                    </article>
+                    <article className="rounded-2xl border border-border bg-card p-5">
+                        <h3 className="text-sm font-semibold text-foreground">¿Puedo cancelar?</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Sí, puedes cancelar la renovación desde la sección de suscripción dentro de la app.
+                        </p>
+                    </article>
+                    <article className="rounded-2xl border border-border bg-card p-5">
+                        <h3 className="text-sm font-semibold text-foreground">¿Hay soporte?</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Soporte por correo con respuesta priorizada en tiers superiores.
+                        </p>
+                    </article>
+                </section>
             </div>
         </div>
     )

@@ -106,6 +106,15 @@ export default function PrivacidadPage() {
               </section>
 
               <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-white">6.1 Pagos y Suscripción</h2>
+                <p className="leading-relaxed text-sm md:text-base">
+                  Para procesar suscripciones, EVA utiliza proveedores externos de pago (ej. MercadoPago). EVA no
+                  almacena datos completos de tarjeta. Solo se guardan identificadores de suscripción y eventos
+                  necesarios para validar el estado de pago, prevenir fraude y auditar incidencias.
+                </p>
+              </section>
+
+              <section className="space-y-4">
                 <h2 className="text-2xl font-bold text-white">7. Derechos de los Usuarios</h2>
                 <p className="leading-relaxed text-sm md:text-base">
                   El usuario tiene derecho a:

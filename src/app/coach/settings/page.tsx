@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { BrandSettingsForm } from './BrandSettingsForm'
 import { LogoUploadForm } from './LogoUploadForm'
 import type { Tables } from '@/lib/database.types'
+import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 
 type Coach = Tables<'coaches'>
 import type { Metadata } from 'next'
@@ -25,6 +27,28 @@ export default async function CoachSettingsPage() {
 
     if (!rawCoach) redirect('/login')
     const coach = rawCoach as Coach
+    const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+    const capabilities = getTierCapabilities(tier)
+
+    if (!capabilities.canUseBranding) {
+        return (
+            <div className="p-8 max-w-3xl animate-fade-in">
+                <div className="rounded-2xl border border-border bg-card p-6">
+                    <h1 className="text-2xl font-extrabold text-foreground">Mi Marca</h1>
+                    <p className="text-muted-foreground text-sm mt-2">
+                        Tu plan actual no incluye branding personalizado. Haz upgrade para desbloquear logo, color y
+                        configuración visual de marca.
+                    </p>
+                    <Link
+                        href="/coach/subscription"
+                        className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground"
+                    >
+                        Ver planes disponibles
+                    </Link>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="p-8 max-w-3xl animate-fade-in">

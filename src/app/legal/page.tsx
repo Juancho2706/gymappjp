@@ -113,6 +113,15 @@ export default function AvisoLegalPage() {
               </section>
 
               <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-white">8.1 Gestión de plan</h2>
+                <p className="leading-relaxed text-sm md:text-base">
+                  El coach puede solicitar cambio de tier (upgrade/downgrade) y cancelación desde el panel de
+                  suscripción dentro de la app. Los cambios quedan sujetos a confirmación del proveedor de pagos y
+                  disponibilidad técnica del ciclo de facturación vigente.
+                </p>
+              </section>
+
+              <section className="space-y-4">
                 <h2 className="text-2xl font-bold text-white">9. Límites de Uso por Tier</h2>
                 <p className="leading-relaxed text-sm md:text-base">
                   Cada plan incluye un límite de alumnos y funciones habilitadas. El uso fuera de los límites del tier contratado puede requerir upgrade del plan para continuar operando sin restricciones.

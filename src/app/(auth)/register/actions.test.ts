@@ -28,6 +28,8 @@ function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
     email: 'coach@example.com',
     password: 'super-secret-123',
     brand_name: 'Antigravity Pro',
+    subscription_tier: 'starter',
+    billing_cycle: 'monthly',
     ...overrides,
   }
 
@@ -36,6 +38,8 @@ function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
   formData.set('email', base.email)
   formData.set('password', base.password)
   formData.set('brand_name', base.brand_name)
+  formData.set('subscription_tier', base.subscription_tier)
+  formData.set('billing_cycle', base.billing_cycle)
   formData.set('accept_legal', 'on')
   return formData
 }
@@ -75,6 +79,14 @@ describe('registerAction', () => {
     formData.delete('accept_legal')
     const result = await registerAction({}, formData)
     expect(result).toEqual({ error: 'Debes aceptar los términos para crear tu cuenta.' })
+  })
+
+  it('rejects invalid tier or billing cycle', async () => {
+    const result = await registerAction(
+      {},
+      buildRegisterFormData({ subscription_tier: 'invalid-tier', billing_cycle: 'weekly' })
+    )
+    expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.' })
   })
 
   it('rolls back auth user when coach insert fails', async () => {
@@ -149,13 +161,13 @@ describe('registerAction', () => {
     createClientMock.mockResolvedValue(userSupabase)
 
     await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(
-      'REDIRECT:/coach/reactivate?from=register'
+      'REDIRECT:/coach/reactivate?from=register&tier=starter&cycle=monthly&plan=mensual'
     )
 
     expect(userSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
       email: 'coach@example.com',
       password: 'super-secret-123',
     })
-    expect(redirectMock).toHaveBeenCalledWith('/coach/reactivate?from=register')
+    expect(redirectMock).toHaveBeenCalledWith('/coach/reactivate?from=register&tier=starter&cycle=monthly&plan=mensual')
   })
 })

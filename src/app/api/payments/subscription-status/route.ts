@@ -27,5 +27,12 @@ export async function GET() {
         return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ coach })
+    const { data: events } = await supabase
+        .from('subscription_events')
+        .select('id, provider_status, provider, created_at')
+        .eq('coach_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+    return NextResponse.json({ coach, events: events ?? [] })
 }
