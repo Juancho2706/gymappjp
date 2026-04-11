@@ -161,13 +161,13 @@ describe('registerAction', () => {
     createClientMock.mockResolvedValue(userSupabase)
 
     await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(
-      'REDIRECT:/coach/reactivate?from=register&tier=starter&cycle=monthly&plan=mensual'
+      'REDIRECT:/coach/subscription/processing?from=register&tier=starter&cycle=monthly&plan=mensual'
     )
 
     expect(userSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
       email: 'coach@example.com',
       password: 'super-secret-123',
     })
-    expect(redirectMock).toHaveBeenCalledWith('/coach/reactivate?from=register&tier=starter&cycle=monthly&plan=mensual')
+    expect(redirectMock).toHaveBeenCalledWith('/coach/subscription/processing?from=register&tier=starter&cycle=monthly&plan=mensual')
   })
 })

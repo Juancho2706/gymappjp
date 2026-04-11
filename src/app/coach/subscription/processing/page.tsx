@@ -34,9 +34,40 @@ export default function SubscriptionProcessingPage() {
         () => extractPreapprovalId(searchParams.get('subscription') ?? '', searchParams),
         [searchParams]
     )
+    const fromRegister = searchParams.get('from') === 'register'
+    const tierFromUrl = searchParams.get('tier')
+    const cycleFromUrl = searchParams.get('cycle')
 
     useEffect(() => {
         let alive = true
+
+        async function startCheckoutFromRegister() {
+            setStatusText('Creando suscripción y redirigiendo al checkout...')
+            try {
+                const response = await fetch('/api/payments/create-preference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tier: tierFromUrl ?? 'starter',
+                        billingCycle: cycleFromUrl ?? 'monthly',
+                    }),
+                })
+                const raw = await response.text()
+                const payload = raw ? JSON.parse(raw) : {}
+                if (!alive) return
+                if (!response.ok) {
+                    throw new Error(payload.error ?? 'No se pudo iniciar el checkout.')
+                }
+                if (!payload.checkoutUrl) {
+                    throw new Error('No se recibió URL de checkout.')
+                }
+                window.location.href = payload.checkoutUrl
+            } catch (err) {
+                if (alive) {
+                    setError(err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.')
+                }
+            }
+        }
 
         async function confirmNow() {
             try {
@@ -58,6 +89,17 @@ export default function SubscriptionProcessingPage() {
             } catch (err) {
                 if (alive) {
                     setError(err instanceof Error ? err.message : 'Error inesperado al validar el pago.')
+                }
+            }
+        }
+
+        if (fromRegister && !preapprovalId) {
+            void startCheckoutFromRegister()
+            return () => {
+                alive = false
+                if (pollRef.current) {
+                    clearInterval(pollRef.current)
+                    pollRef.current = null
                 }
             }
         }
@@ -92,7 +134,7 @@ export default function SubscriptionProcessingPage() {
                 pollRef.current = null
             }
         }
-    }, [preapprovalId, router])
+    }, [cycleFromUrl, fromRegister, preapprovalId, router, tierFromUrl])
 
     return (
         <main className="mx-auto max-w-2xl px-4 py-12">
