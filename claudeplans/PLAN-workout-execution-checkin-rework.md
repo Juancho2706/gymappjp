@@ -569,7 +569,7 @@ const handleInputFocus = (e: React.FocusEvent<HTMLElement>) => {
 
 ## Armonía con otros componentes (tabla de impacto)  
 
-| Cambio en este plan | Componente que recibe el beneficio |
+| Cambio en este plan | Componente que recibe el beneficio | 
 |--------------------|------------------------------------|
 | Fix `revalidatePath` en `logSetAction` + `/coach/clients/[id]` | `TrainingTabB4Panels` (PRs frescos), `profileTrainingAnalytics` (tonelaje actualizado) |
 | `exerciseMaxes` en `page.tsx` | `WorkoutSummaryOverlay` (PRs sesión) |
