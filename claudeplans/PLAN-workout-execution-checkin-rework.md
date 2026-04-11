@@ -567,7 +567,7 @@ const handleInputFocus = (e: React.FocusEvent<HTMLElement>) => {
 
 ---
 
-## Armonía con otros componentes (tabla de impacto)
+## Armonía con otros componentes (tabla de impacto)  
 
 | Cambio en este plan | Componente que recibe el beneficio |
 |--------------------|------------------------------------|
