@@ -27,7 +27,7 @@ export function getProfileTopAlert(data: {
     const lastCheckin = checkIns[0]
     const daysSinceCheckin = lastCheckin?.created_at
         ? differenceInDays(new Date(), new Date(lastCheckin.created_at))
-        : 999
+        : null
 
     const c = data.compliance || {}
     const target = Math.max(1, c.workoutsTarget ?? 1)
@@ -40,11 +40,11 @@ export function getProfileTopAlert(data: {
     const streak = c.currentStreak ?? 0
     const oneRMDelta = data.oneRMDelta ?? null
 
-    if (daysSinceCheckin > 7) {
+    if (checkIns.length > 0 && daysSinceCheckin !== null && daysSinceCheckin > 30) {
         return {
             type: 'warning',
             message:
-                'Hace más de 7 días sin check-in — considera enviarle un mensaje.',
+                'Hace más de 30 días desde su último check-in — conviene contactarle.',
         }
     }
     if (adherence < 50) {

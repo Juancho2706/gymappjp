@@ -7,8 +7,7 @@ import {
 } from '@/services/dashboard.service'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
-    SIN_CHECKIN_7D: 'Sin check-in en 7 dias',
-    CHECKIN_TARDIO: 'Check-in tardio',
+    SIN_CHECKIN_30D: 'Sin check-in en 30 dias',
     ADHERENCIA_CRITICA: 'Adherencia critica',
     ADHERENCIA_BAJA: 'Adherencia baja',
     NUTRICION_RIESGO: 'Nutricion en riesgo',

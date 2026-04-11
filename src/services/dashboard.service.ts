@@ -2,11 +2,13 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { differenceInDays, subDays } from 'date-fns';
 import { Database } from '@/lib/database.types';
 
+// Check-ins mensuales: alertar solo si ya hubo al menos un check-in y pasaron >30 días desde el último.
+const CHECKIN_OVERDUE_AFTER_DAYS = 30
+
 // ─── TASK A0: Attention Score ─────────────────────────────────────────────
 
 export type AttentionFlag =
-    | 'SIN_CHECKIN_7D'
-    | 'CHECKIN_TARDIO'
+    | 'SIN_CHECKIN_30D'
     | 'ADHERENCIA_CRITICA'
     | 'ADHERENCIA_BAJA'
     | 'NUTRICION_RIESGO'
@@ -30,16 +32,12 @@ export function calculateAttentionScore(client: ClientDataForAttention): {
     let score = 0;
     const flags: AttentionFlag[] = [];
 
-    const daysSinceCheckin = client.lastCheckinDate
-        ? differenceInDays(new Date(), new Date(client.lastCheckinDate))
-        : 999;
-
-    if (daysSinceCheckin > 7) {
-        score += 25;
-        flags.push('SIN_CHECKIN_7D');
-    } else if (daysSinceCheckin > 3) {
-        score += 10;
-        flags.push('CHECKIN_TARDIO');
+    if (client.lastCheckinDate) {
+        const daysSinceCheckin = differenceInDays(new Date(), new Date(client.lastCheckinDate));
+        if (daysSinceCheckin > CHECKIN_OVERDUE_AFTER_DAYS) {
+            score += 25;
+            flags.push('SIN_CHECKIN_30D');
+        }
     }
 
     if (client.adherence < 50) {

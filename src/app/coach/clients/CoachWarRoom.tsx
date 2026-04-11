@@ -96,8 +96,8 @@ export function CoachWarRoom({
     const expiredProgramsCount = pulse.filter(
         (p) => p.planDaysRemaining !== null && p.planDaysRemaining <= 0
     ).length
-    const noCheckin7d = pulse.filter((p) =>
-        (p.attentionFlags ?? []).includes('SIN_CHECKIN_7D')
+    const noCheckin30d = pulse.filter((p) =>
+        (p.attentionFlags ?? []).includes('SIN_CHECKIN_30D')
     ).length
     const pendingPassword = clients.filter((c) => c.force_password_change).length
 
@@ -375,15 +375,15 @@ export function CoachWarRoom({
                     </motion.div>
                 )}
 
-                {noCheckin7d > 0 && urgentCount === 0 && (
+                {noCheckin30d > 0 && urgentCount === 0 && (
                     <motion.div
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3"
                     >
                         <p className="min-w-0 flex-1 break-words text-sm font-bold text-foreground">
-                            ALERTA: {noCheckin7d} cliente{noCheckin7d !== 1 ? 's' : ''} llevan más de 7
-                            días sin check-in
+                            ALERTA: {noCheckin30d} cliente{noCheckin30d !== 1 ? 's' : ''} llevan más de 30
+                            días sin check-in (desde el último registrado)
                         </p>
                         <button
                             type="button"
