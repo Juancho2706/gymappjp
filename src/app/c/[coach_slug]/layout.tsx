@@ -46,8 +46,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             title: brandName,
         },
         icons: coach?.logo_url
-            ? { apple: coach.logo_url }
-            : { apple: BRAND_APP_ICON },
+            ? {
+                icon: [{ url: coach.logo_url }],
+                shortcut: [{ url: coach.logo_url }],
+                apple: [{ url: coach.logo_url }],
+            }
+            : {
+                icon: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+                shortcut: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+                apple: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+            },
         openGraph: {
             title: brandName,
             description: `Entrena con ${brandName}. Rutinas, nutrición y seguimiento desde tu móvil.`,

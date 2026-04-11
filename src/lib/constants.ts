@@ -110,19 +110,19 @@ type TierCapabilities = {
 
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     starter_lite: {
-        canUseNutrition: false,
-        canUseBranding: false,
-        canUseAdvancedReports: false,
+        canUseNutrition: true,
+        canUseBranding: true,
+        canUseAdvancedReports: true,
     },
     starter: {
         canUseNutrition: true,
-        canUseBranding: false,
-        canUseAdvancedReports: false,
+        canUseBranding: true,
+        canUseAdvancedReports: true,
     },
     pro: {
         canUseNutrition: true,
         canUseBranding: true,
-        canUseAdvancedReports: false,
+        canUseAdvancedReports: true,
     },
     elite: {
         canUseNutrition: true,

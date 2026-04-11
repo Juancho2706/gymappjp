@@ -2,6 +2,18 @@
 
 GymAppJP (also known as OmniCoach OS) is an advanced web application designed to empower gym coaches, personal trainers, and fitness professionals. It provides a comprehensive suite of tools to manage clients, build customized workout and nutrition plans, track progress, and operate under a professional white-label experience.
 
+## Documentación canónica (estado del producto y arquitectura)
+
+| Documento | Contenido |
+|-----------|-----------|
+| [docs/ESTADO-COMPONENTES.md](docs/ESTADO-COMPONENTES.md) | Por módulo: % completitud y notas |
+| [docs/ESTADO-PROYECTO.md](docs/ESTADO-PROYECTO.md) | Reworks cerrados, deuda técnica, stack |
+| [docs/ARQUITECTURA-COMPONENTES.md](docs/ARQUITECTURA-COMPONENTES.md) | Rutas, flujos, modelo de datos |
+| [docs/MAPA-MAESTRO.md](docs/MAPA-MAESTRO.md) | Mapa de completitud, fases, riesgos, quick wins |
+| [docs/PLAN-MAESTRO-ESTRATEGICO.md](docs/PLAN-MAESTRO-ESTRATEGICO.md) | Roadmap por rol (PM, UX, eng, QA, ops, legal) |
+
+Runbooks, sprints y reportes históricos: [docs/archive/](docs/archive/) (ver [docs/archive/README.md](docs/archive/README.md)).
+
 ## 🚀 Features
 
 - **Workout Builder:** Create professional routines using a catalog of 230+ exercises, each with animated GIFs and instructions.
@@ -90,18 +102,18 @@ Workflow: `.github/workflows/ci.yml`.
   - scheduler workflow: `.github/workflows/email-drip.yml`
   - required secrets: `BETA_APP_URL`, `DRIP_CRON_TOKEN`
 - **Beta health monitor:** `GET /api/ops/beta-health` with `Authorization: Bearer $BETA_MONITOR_TOKEN`.
-- Operational docs:
-  - `docs/BIZ-004-MP-PROD-RUNBOOK.md`
-  - `docs/BIZ-004-MP-PROD-CHECKLIST.md`
-  - `docs/RET-002-EMAIL-DRIP-OPS.md`
-  - `docs/SPRINT5-MONITORING-SUPPORT.md`
+- Operational docs (archivo):
+  - `docs/archive/BIZ-004-MP-PROD-RUNBOOK.md`
+  - `docs/archive/BIZ-004-MP-PROD-CHECKLIST.md`
+  - `docs/archive/RET-002-EMAIL-DRIP-OPS.md`
+  - `docs/archive/SPRINT5-MONITORING-SUPPORT.md`
 
 ### Vercel preview deployments (OPS-004)
 
 Con el repositorio conectado a Vercel, cada pull request recibe una **Preview URL** en el comentario/check de despliegue. Usa ese enlace para validar cambios antes de fusionar; las variables sensibles se configuran en el proyecto Vercel (Environment Variables → Preview).
 
 ### Supabase migration workflow
-This repository keeps migration SQL under `supabase/migrations`.
+This repository keeps migration SQL under `supabase/migrations` (snapshots y copias históricas adicionales en `supabase/migrations_backup/`). Guía detallada: `docs/archive/SUPABASE-MIGRATION-WORKFLOW.md`.
 
 1. Authenticate with Supabase CLI:
 ```bash
@@ -126,7 +138,7 @@ npx supabase db push
 
 Security hardening:
 - Keep `Enable email signups` disabled in Supabase Auth if registration is managed by server-side admin flows only.
-- RLS audit and matrix: `docs/SEC-001-RLS-AUDIT.md`, `docs/QA-RLS-MATRIX.md`. Integration tests: set `SUPABASE_RLS_INTEGRATION=1` and variables listed in `.env.example`.
+- RLS audit and matrix: `docs/archive/SEC-001-RLS-AUDIT.md`, `docs/archive/QA-RLS-MATRIX.md`. Integration tests: set `SUPABASE_RLS_INTEGRATION=1` and variables listed in `.env.example`.
 - Never commit real secret values. Use `.env.example` for placeholders.
 - To disable public signup via Management API, set `SUPABASE_ACCESS_TOKEN` and run:
 ```bash

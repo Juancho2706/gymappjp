@@ -1,7 +1,17 @@
 # Arquitectura de Componentes — GymApp JP (EVA)
 
 > Diagrama de jerarquía y comunicación entre componentes principales.
-> **Última actualización:** 2026-04-10 — Auditoría completa: 225+ archivos, 24 tablas, 38 rutas, 5 API routes.
+> **Última actualización:** 2026-04-11 00:15 America/Santiago — Sprint 6 + hotfixes post-sprint (dashboard coach `_data/_components`, branding `welcome_message`, emails transaccionales, tiers por capacidad, fix favicon alumno).
+
+---
+
+## Cambios recientes (delta)
+
+- **Dashboard coach:** `page.tsx` ahora delega en `_components/DashboardContent.tsx` y `_data/dashboard.queries.ts`.
+- **Branding MVP:** `coaches.welcome_message` se persiste desde settings y se consume en login/dashboard alumno.
+- **Emails transaccionales:** plantillas en `src/lib/email/transactional-templates.ts`; disparo en acciones de alta alumno y asignación de programa.
+- **Política de planes:** tiers mantienen mismas features; diferencia principal por `max_clients`.
+- **Favicon/íconos alumno:** metadata usa `icon` + `shortcut` + `apple` para evitar fallback al icono viejo.
 
 ---
 
@@ -26,7 +36,10 @@ src/app/
 ├── api/
 │   ├── manifest/default/              # PWA manifest genérico EVA
 │   ├── manifest/[coach_slug]/         # PWA manifest por coach (DB-backed)
-│   └── recipes/search/               # API búsqueda recetas
+│   ├── coach/onboarding-events/       # Tracking onboarding coach (Sprint 5)
+│   ├── internal/email-drip/run/       # Cron drip email (Sprint 5)
+│   ├── ops/beta-health/               # Health endpoint operativo beta
+│   └── recipes/search/                # API búsqueda recetas
 │
 ├── pricing/                           # Página pricing estática (USD — pendiente alinear)
 ├── legal/                             # Términos y condiciones
@@ -121,24 +134,18 @@ Request
 ```
 page.tsx (Server Component)
 ├── Suspense → DashboardSkeleton
-└── MainDashboardData (Server)
-    ├── Promise.all:
-    │   ├── clients count (exact)
-    │   ├── workout_plans count (exact)
-    │   ├── getAdherenceStats() → dashboard.service.ts
-    │   ├── getNutritionStats() → dashboard.service.ts
-    │   ├── recent clients (last 5)
-    │   ├── recent check-ins (last 5, !inner join clients)
-    │   ├── expiring programs (is_active + end_date, ≤3 days)
-    │   ├── clients growth (all created_at for chart)
-    │   └── weekly check-ins (last 7 days)
+└── DashboardContent (Server, _components/)
+    ├── getCoachDashboardData(userId) (_data/dashboard.queries.ts)
+    │   ├── Promise.all: counts + actividad + programas + growth + pulse
+    │   ├── mapDirectoryPulseToAdherenceStats / NutritionStats
+    │   ├── topRiskClients (attentionScore desc, top 5)
+    │   └── datasets area/bar + KPIs agregados
     └── CoachDashboardClient (Client)
-        ├── Stat Cards (alumnos, planes, adherencia, nutrición)
-        ├── Activity Feed (nuevo alumno / check-in)
-        ├── Alertas programas por vencer
-        ├── DashboardCharts (AreaChart crecimiento, BarChart check-ins)
-        ├── Dialog compliance detalles
-        └── CreateClientModal (integrado)
+        ├── Quick actions: registrar alumno / programas / nutrición
+        ├── Alertas críticas: riesgo + programas por vencer
+        ├── Stat cards + modales adherence/nutrition
+        ├── Activity feed reciente
+        └── Charts crecimiento + check-ins
 ```
 
 ---
@@ -542,7 +549,7 @@ Manifests:
 └── /c/[slug]/manifest.webmanifest/route.ts → similar, typed, caching headers
 
 Service Worker (public/sw.js):
-├── Cache: 'omnicoach-pwa-cache-v1' (pendiente renombrar a 'eva-*')
+├── Cache: `eva-pwa-cache-v1`
 ├── Precache: /, offline fallback
 ├── Fetch: skip Supabase, /_next/, /api/, /coach, /c/
 └── Sin offline real, sin push notifications

@@ -34,8 +34,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             title: brandName,
         },
         icons: coach?.logo_url
-            ? { apple: coach.logo_url }
-            : { apple: BRAND_APP_ICON },
+            ? {
+                icon: [{ url: coach.logo_url }],
+                shortcut: [{ url: coach.logo_url }],
+                apple: [{ url: coach.logo_url }],
+            }
+            : {
+                icon: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+                shortcut: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+                apple: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+            },
     }
 }
 
@@ -90,10 +98,7 @@ export default async function ClientLoginPage({ params }: Props) {
                             <Dumbbell className="w-8 h-8" style={{ color: coach.primary_color }} />
                         </div>
                     )}
-                    <h1
-                        className="text-3xl font-bold tracking-tight text-foreground"
-                        style={{ fontFamily: 'var(--font-outfit)' }}
-                    >
+                    <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
                         {coach.brand_name}
                     </h1>
                     <p className="mt-1 text-muted-foreground text-sm">

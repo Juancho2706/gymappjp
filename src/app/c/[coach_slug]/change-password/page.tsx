@@ -48,10 +48,7 @@ export default function ChangePasswordPage({ params }: Props) {
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-theme-subtle border border-theme mb-4">
                         <ShieldCheck className="w-8 h-8 text-theme" />
                     </div>
-                    <h1
-                        className="text-2xl font-bold text-foreground"
-                        style={{ fontFamily: 'var(--font-outfit)' }}
-                    >
+                    <h1 className="font-display text-2xl font-bold text-foreground">
                         Crea tu contraseña
                     </h1>
                     <p className="mt-2 text-muted-foreground text-sm max-w-xs mx-auto">

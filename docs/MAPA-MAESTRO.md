@@ -282,16 +282,20 @@ graph LR
 
 ## 7. Quick Wins (alto impacto, bajo esfuerzo)
 
-| # | Quick Win | Esfuerzo | Impacto |
-|---|-----------|----------|---------|
-| 1 | Crear `.env.example` | 15 min | Desarrollo |
-| 2 | Borrar `ClientCard.tsx` V1 huerfano | 5 min | Limpieza |
-| 3 | Fix auth callback redirect (`/auth/login` → `/login`) | 10 min | Bug fix |
-| 4 | Renombrar cache sw.js (`omnicoach` → `eva`) | 10 min | Branding |
-| 5 | Unificar `LIBRARY_PROGRAM_LIST_SELECT` | 30 min | DRY |
-| 6 | Mover `puppeteer` a devDependencies | 5 min | Deploy size |
-| 7 | Agregar `font-outfit` al root layout o eliminar referencias | 20 min | Visual fix |
-| 8 | Commit migraciones SQL al repo | 1 hr | Seguridad |
+Estado revisado contra el repo (no solo el plan original).
+
+| # | Quick Win | Estado | Notas |
+|---|-----------|--------|-------|
+| 1 | Crear `.env.example` | **Hecho** | Raíz del repo, alineado con README y vars usadas en código |
+| 2 | Borrar `ClientCard.tsx` V1 | **Hecho** | Archivo ya no existe; directorio usa `ClientCardV2` |
+| 3 | Auth callback (`/login` en error) | **Hecho** | `src/app/auth/callback/route.ts` → `/login?error=auth_callback_failed` |
+| 4 | Cache `sw.js` (`eva`) | **Hecho** | `public/sw.js` → `eva-pwa-cache-v1` |
+| 5 | `LIBRARY_PROGRAM_LIST_SELECT` | **Hecho** | Import único desde `workout-programs-library.ts` |
+| 6 | `puppeteer` en devDependencies | **Hecho** | `package.json` |
+| 7 | `font-outfit` / tipografía alumno | **Hecho** | Login, change-password, exercises, suspended: clase `font-display` |
+| 8 | Migraciones SQL en repo | **Hecho (seguimiento)** | `supabase/migrations/` + `migrations_backup/`; disciplina: commitear cada cambio aplicado en prod |
+
+**Documentación:** los 5 `.md` canónicos viven en `docs/`; runbooks y sprints en `docs/archive/` (ver `docs/archive/README.md`).
 
 ---
 

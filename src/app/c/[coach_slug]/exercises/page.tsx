@@ -74,10 +74,7 @@ export default async function ClientExercisesPage({ params }: Props) {
           />
         </div>
         <div>
-          <h1
-            className="text-xl md:text-2xl font-bold text-foreground"
-            style={{ fontFamily: "var(--font-outfit)" }}
-          >
+          <h1 className="font-display text-xl md:text-2xl font-bold text-foreground">
             Aprender Técnica
           </h1>
           <p className="text-xs text-muted-foreground">

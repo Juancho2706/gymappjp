@@ -7,7 +7,28 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-10 America/Santiago — Cierre técnico Sprint 2 (Pagos Core) en curso final: retorno post-checkout automático, endpoint de confirmación, hardening webhook con token compartido, consistencia de `current_period_end`, logging/auditoría de `subscription_events`, y gate `/coach/*` validado. Build de producción y tests auth OK.
+**Última actualización:** 2026-04-11 America/Santiago — Quick wins §7 MAPA-MAESTRO: `.env.example` en raíz, títulos alumno con `font-display` (sin `var(--font-outfit)`), documentación canónica en `docs/` y material histórico movido a `docs/archive/`. Deuda técnica alineada con el código (callback auth, sw.js, puppeteer, select biblioteca, ClientCard V1).
+
+---
+
+## Actualización incremental (Sprint 6 + hotfixes)
+
+> Nota: esta sección registra cambios recientes sin rehacer todavía la auditoría total 225+ archivos.
+
+- **Dashboard coach (ENG-035/038/041):**
+  - Refactor a patrón `_data/_components` en `src/app/coach/dashboard/`.
+  - Alertas top 5 alumnos en riesgo (`attentionScore`) + quick actions visibles.
+- **Mi Marca / Branding MVP (ENG-045/047/050 mínimo):**
+  - Nuevo campo `coaches.welcome_message` + migración.
+  - Form de branding actualizado y mensaje aplicado en login/dashboard del alumno.
+- **Emails transaccionales (ENG-071/072/074):**
+  - Templates en `src/lib/email/transactional-templates.ts`.
+  - Hook de envío en alta de alumno y asignación de programa.
+  - Evidencia y smoke en `docs/archive/RET-003-TRANSACTIONAL-EMAILS-SMOKE.md`.
+- **Operación beta interna (post-sprint):**
+  - Migración para subir coaches actuales a tier `scale` por 3 años.
+  - Tiers ajustados para diferenciarse por límite de alumnos (no por features bloqueadas).
+  - Metadata de íconos/favicons en rutas alumno corregida (`icon`, `shortcut`, `apple`).
 
 ---
 
@@ -32,7 +53,7 @@
 | i18n | Custom LanguageContext + JSON (es/en) | — |
 | PWA | Manual sw.js + dynamic manifests (no next-pwa) | — |
 | Testing | Vitest + Testing Library + Playwright | — |
-| PDF | puppeteer (evaluación pendiente — dep pesada) | — |
+| PDF | puppeteer (`devDependencies` — PrintProgramDialog) | — |
 
 ---
 
@@ -152,7 +173,7 @@
 - **Coach — hub**: `NutritionHub` (layout ancho 2000px), plantillas, alumnos SYNCED/CUSTOM, board enriquecido con sparklines 7d + kcal hoy, biblioteca alimentos con lista compacta.
 - **Coach — PlanBuilder** y rutas `new` / `edit` / `client/[clientId]`; queries + actions unificadas.
 - **Perfil coach** tab Nutrición (B5): datos reales — macros, adherencia, kcal, enlaces editor.
-- **BD / Supabase:** migraciones RLS fase 1+2 referenciadas pero **no presentes en el repo** (ver deuda técnica).
+- **BD / Supabase:** migraciones versionadas en `supabase/migrations/`; historial y snapshots adicionales en `supabase/migrations_backup/`. Workflow: README + `docs/archive/SUPABASE-MIGRATION-WORKFLOW.md`.
 
 **Archivos clave:**
 - `src/app/c/[coach_slug]/nutrition/`, `src/app/coach/nutrition-plans/`, `src/app/coach/foods/`
@@ -209,21 +230,20 @@
 
 ### Alta prioridad (bloquea monetización o producción)
 
-#### Migraciones SQL ausentes del repositorio
-Los docs y bitácoras referencian archivos de migración (`supabase/migrations/20260410000000_nutrition_rls_phase1.sql`, `20260410120000_nutrition_rls_phase2_saved_meals.sql`, `20260410200000_add_back_photo_url_to_check_ins.sql`) pero **no existe** la carpeta `supabase/migrations/` en el repo. Las migraciones se aplicaron vía MCP al proyecto Supabase pero no se commitearon.
-**Trabajo:** `supabase db pull` o exportar DDL desde dashboard, guardar en `supabase/migrations/`, agregar a `.gitignore` si es necesario. Establecer workflow de migraciones versionadas.
+#### Workflow de migraciones SQL (seguimiento)
+La carpeta `supabase/migrations/` ya existe y se está usando en sprints recientes (incluye migraciones Sprint 5/6).  
+**Trabajo pendiente:** mantener disciplina de versionado y asegurar que toda migración aplicada en producción quede commiteada en el mismo sprint.
 
 ---
 
-#### Sin `.env.example` en el repositorio
-No hay archivo de ejemplo de variables de entorno. El `README.md` menciona 3 vars necesarias pero no hay `.env.example` formal.
-**Trabajo:** Crear `.env.example` con todas las vars necesarias (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, PLAYWRIGHT_BASE_URL, etc.) y documentar.
+#### Higiene de variables de entorno
+`.env.example` en la raíz del repo (alineado con README y `process.env` usado en código).  
+**Trabajo pendiente:** revisar trimestralmente variables huérfanas y alinear ejemplos con Vercel/GitHub Secrets activos.
 
 ---
 
-#### Auth callback error redirect incorrecto
-`src/app/auth/callback/route.ts` redirige a `/auth/login?error=...` en caso de fallo, pero la ruta real de login coach es `/login`. El alumno usa `/c/[slug]/login`.
-**Trabajo:** Cambiar el redirect de error a `/login` o a la ruta apropiada según contexto.
+#### ~~Auth callback error redirect~~ *(cerrado)*
+`src/app/auth/callback/route.ts` redirige en error a `/login?error=auth_callback_failed` (ruta correcta para coach).
 
 ---
 
@@ -235,9 +255,8 @@ No hay archivo de ejemplo de variables de entorno. El `README.md` menciona 3 var
 
 ---
 
-#### `sw.js` cache name desactualizado
-`public/sw.js` usa `omnicoach-pwa-cache-v1` como nombre de cache. La marca es "EVA".
-**Trabajo:** Renombrar a `eva-pwa-cache-v1` y verificar que no haya caches huérfanos en browsers existentes.
+#### ~~`sw.js` cache name~~ *(cerrado)*
+`public/sw.js` usa `eva-pwa-cache-v1`.
 
 ---
 
@@ -247,9 +266,8 @@ Solo existe 1 unit test (`Button.test.tsx`) y 1 Playwright spec (`auth.spec.ts` 
 
 ---
 
-#### `puppeteer` en dependencies
-`puppeteer` está en `dependencies` (no `devDependencies`). Se usa para `PrintProgramDialog`. Es una dependencia pesada (~400MB con Chromium) que infla el deploy.
-**Trabajo:** Evaluar alternativa ligera (html2canvas + jsPDF, o API route con headless Chrome preinstalado en Vercel). Si se mantiene, mover a `devDependencies` o excluir de producción.
+#### ~~`puppeteer` en dependencies~~ *(cerrado)*
+`puppeteer` está en `devDependencies`. **Opcional futuro:** alternativa ligera para PDF si se quiere evitar Chromium en entornos de build.
 
 ---
 
@@ -258,9 +276,8 @@ Cerrado — kcal consumidas implementadas via `food_items` de comidas completada
 
 ---
 
-#### Unificar `LIBRARY_PROGRAM_LIST_SELECT`
-El string de select de la biblioteca está duplicado en `actions.ts` y en `page.tsx`.
-**Trabajo:** Extraer a `src/lib/supabase/queries/workout-programs-library.ts` (archivo ya existe pero no unifica).
+#### ~~Unificar `LIBRARY_PROGRAM_LIST_SELECT`~~ *(cerrado)*
+`page.tsx` de biblioteca e `actions.ts` del builder importan el mismo fragmento desde `src/lib/supabase/queries/workout-programs-library.ts`.
 
 ---
 
@@ -270,9 +287,8 @@ El `WeightProgressChart` no tiene línea de objetivo porque `goal_weight` no exi
 
 ---
 
-#### `ClientCard.tsx` V1 — archivo huérfano
-`src/components/coach/ClientCard.tsx` sigue en el repo pero nada lo importa.
-**Trabajo:** Confirmar con grep y borrar.
+#### ~~`ClientCard.tsx` V1~~ *(cerrado)*
+Eliminado del repo; el directorio usa `ClientCardV2`.
 
 ---
 
@@ -287,8 +303,8 @@ El orden actual viene del servidor (`created_at DESC`). Opciones: nombre, últim
 #### `useReducedMotion` en todos los child components del perfil
 No aplicado en todos los componentes hijo del perfil (hovers de imágenes, animaciones internas de B3–B8).
 
-#### `font-outfit` referenciado pero no cargado
-`/pricing` y `/coach/exercises` usan `var(--font-outfit)` pero root layout solo carga Inter + Montserrat. Posible mismatch visual.
+#### ~~`font-outfit` en rutas alumno~~ *(cerrado)*
+Títulos en login / change-password / exercises / suspended del alumno usan la clase `font-display` (Montserrat vía `--font-display` en tema).
 
 #### `admin-raw.ts` untyped client
 `src/lib/supabase/admin-raw.ts` usa `any` para el service-role client. Deuda de tipado.
@@ -306,8 +322,8 @@ No aplicado en todos los componentes hijo del perfil (hovers de imágenes, anima
 | ~~**Workout execution rework**~~ | Rework abril 10 | ~82% | Optimistic updates, offline/retry | ~~Media~~ → **COMPLETADO (parcial)** |
 | ~~**Check-in rework**~~ | Rework abril 10 | ~80% | Medidas corporales, notas | ~~Media~~ → **COMPLETADO (parcial)** |
 | **Pagos & Suscripciones** | Sprint 2 casi cerrado | ~85% | Validar webhook token en producción + checklist Go/No-Go final | **CRÍTICA (revenue)** |
-| **Dashboard coach** | Funcional básico | ~45% | Rework UX, KPIs globales | Media |
-| **Mi Marca / Settings** | Funcional básico | ~35% | Rework branding, preview actualizado | Media |
+| **Dashboard coach** | Sprint 6 comercial base | ~68% | Completar comparativas avanzadas (ENG-037/039/042/043/044) | Media |
+| **Mi Marca / Settings** | Sprint 6 branding MVP | ~62% | Preview actualizado + branding extendido (secondary/font) | Media |
 | **Ejercicios coach** | Funcional básico | ~40% | Upload GIF, bulk edit | Baja |
 | **Onboarding** | Multi-step con draft | ~58% | Progress bar, foto, validación | Baja |
 | **Catálogo ejercicios alumno** | Funcional | ~68% | Rework visual, favoritos, historial | Baja |

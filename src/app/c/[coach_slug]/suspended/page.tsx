@@ -28,7 +28,7 @@ export default async function SuspendedPage({ params }: Props) {
             <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
                 <AlertCircle className="w-10 h-10 text-red-500" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground mb-3" style={{ fontFamily: 'var(--font-outfit)' }}>
+            <h1 className="font-display text-2xl font-bold text-foreground mb-3">
                 Acceso Pausado
             </h1>
             <p className="text-muted-foreground mb-8 max-w-sm leading-relaxed">
