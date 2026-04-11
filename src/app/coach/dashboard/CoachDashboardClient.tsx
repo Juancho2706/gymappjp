@@ -29,6 +29,7 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { Apple } from 'lucide-react'
 import { CreateClientModal } from '../clients/CreateClientModal'
+import { CoachOnboardingChecklist } from './CoachOnboardingChecklist'
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -79,6 +80,7 @@ export default function CoachDashboardClient({
 }: CoachDashboardClientProps) {
     const [modalType, setModalType] = useState<'adherence' | 'nutrition' | null>(null)
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+    const hasRecentCheckin = recentActivities.some((activity) => activity.type === 'check-in')
 
     const stats = [
         {
@@ -133,6 +135,14 @@ export default function CoachDashboardClient({
                         REGISTRAR ALUMNO
                     </GlassButton>
                 </div>
+            </motion.div>
+
+            <motion.div variants={itemVariants}>
+                <CoachOnboardingChecklist
+                    totalClients={totalClients}
+                    activePlans={activePlans}
+                    hasRecentCheckin={hasRecentCheckin}
+                />
             </motion.div>
 
             {/* Stats & Alerts Grid */}

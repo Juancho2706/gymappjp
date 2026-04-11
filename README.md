@@ -63,6 +63,9 @@ Required variables:
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Recommended in production | Rate limiting for auth and payment POSTs (middleware); if unset, limits are disabled |
 | `NEXT_PUBLIC_DEMO_VIDEO_URL` | Optional | YouTube id or URL for the embedded demo on the landing page |
 | `E2E_*` | Optional (CI) | See **GitHub Actions** below for Playwright QA-014/015 |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Optional (Sprint 5) | Provider + sender identity for RET-002 email drip |
+| `DRIP_CRON_TOKEN` | Optional (Sprint 5) | Protects `POST /api/internal/email-drip/run` |
+| `BETA_MONITOR_TOKEN` | Optional (Sprint 5) | Protects `GET /api/ops/beta-health` |
 
 ### 3. Run the Development Server
 
@@ -80,6 +83,18 @@ Workflow: `.github/workflows/ci.yml`.
 - **E2E job:** Playwright headless with `npm run dev` (see `playwright.config.ts`). Configure repository **Secrets** for a real Supabase project at minimum:
   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (and `SUPABASE_SERVICE_ROLE_KEY` if the app reads it at startup).
   - Optional for **QA-014 / QA-015:** `E2E_COACH_SLUG`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD`, `E2E_WORKOUT_PLAN_ID` (alumno con programa activo y plan de entreno válido; sin ellos esas pruebas se omiten pero el resto de E2E sigue ejecutándose).
+
+### Sprint 5 beta operations
+
+- **Email drip runner (RET-002):** `POST /api/internal/email-drip/run` (token required).
+  - scheduler workflow: `.github/workflows/email-drip.yml`
+  - required secrets: `BETA_APP_URL`, `DRIP_CRON_TOKEN`
+- **Beta health monitor:** `GET /api/ops/beta-health` with `Authorization: Bearer $BETA_MONITOR_TOKEN`.
+- Operational docs:
+  - `docs/BIZ-004-MP-PROD-RUNBOOK.md`
+  - `docs/BIZ-004-MP-PROD-CHECKLIST.md`
+  - `docs/RET-002-EMAIL-DRIP-OPS.md`
+  - `docs/SPRINT5-MONITORING-SUPPORT.md`
 
 ### Vercel preview deployments (OPS-004)
 
