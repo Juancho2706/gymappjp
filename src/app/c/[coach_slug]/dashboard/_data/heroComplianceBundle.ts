@@ -52,6 +52,7 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         getCheckInHistory30Days(userId),
         getNutritionLogDays30(userId),
     ])
+    const activePlans = allPlans.filter((p) => !p.program_id || p.program_id === program?.id)
 
     const todayCtx = getTodayInSantiago()
     const { date: userLocalDate, iso: today, dayOfWeek: todayDow } = todayCtx
@@ -59,10 +60,10 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
     const weekIdx = program ? programWeekIndex1Based(program, userLocalDate) : null
     const activeVariant = resolveActiveWeekVariantForDisplay(program, weekIdx, userLocalDate)
 
-    let todayPlan = allPlans.find((p) => p.assigned_date === today) ?? null
+    let todayPlan = activePlans.find((p) => p.assigned_date === today) ?? null
     if (!todayPlan && program) {
         todayPlan =
-            allPlans.find(
+            activePlans.find(
                 (p) =>
                     p.program_id === program.id &&
                     p.day_of_week === todayDow &&
@@ -92,7 +93,7 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
     let nextTitle: string | null = null
     let nextLabel: string | null = null
     if (!todayPlan && program) {
-        const candidates = allPlans
+        const candidates = activePlans
             .filter(
                 (p) =>
                     p.program_id === program.id &&
@@ -114,10 +115,10 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         const d = subDays(anchor, i)
         const iso = format(d, 'yyyy-MM-dd')
         const dow = d.getDay() === 0 ? 7 : d.getDay()
-        const hasAssigned = allPlans.some((p) => p.assigned_date === iso)
+        const hasAssigned = activePlans.some((p) => p.assigned_date === iso)
         const hasProg =
             !!program &&
-            allPlans.some(
+            activePlans.some(
                 (p) =>
                     p.program_id === program.id &&
                     p.day_of_week === dow &&

@@ -17,6 +17,7 @@ export async function WeekCalendar({ userId }: { userId: string }) {
         getClientWorkoutPlans(userId),
         getRecentWorkoutLogs(userId),
     ])
+    const activePlans = allPlans.filter((p) => !p.program_id || p.program_id === program?.id)
 
     const { date: userLocalDate, iso: today } = getTodayInSantiago()
     const abMode = !!program?.ab_mode
@@ -36,10 +37,10 @@ export async function WeekCalendar({ userId }: { userId: string }) {
         const dStr = `${dYear}-${dMonth}-${dDay}`
         const dDow = d.getDay() === 0 ? 7 : d.getDay()
 
-        const hasAssigned = allPlans.some((p) => p.assigned_date === dStr)
+        const hasAssigned = activePlans.some((p) => p.assigned_date === dStr)
         const hasProgram =
             !!program &&
-            allPlans.some(
+            activePlans.some(
                 (p) =>
                     p.program_id === program.id &&
                     p.day_of_week === dDow &&

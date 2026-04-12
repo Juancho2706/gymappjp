@@ -332,6 +332,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
             revalidatePath(`/coach/clients/${clientId}`)
         }
         revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
         
         return { programId: finalProgramId }
     } catch (error: any) {
@@ -361,6 +362,7 @@ export async function deleteWorkoutProgramAction(programId: string, clientId: st
         revalidatePath(`/coach/clients/${clientId}`)
     }
     revalidatePath('/coach/workout-programs')
+    revalidatePath('/c', 'layout')
     return {}
 }
 
@@ -710,6 +712,7 @@ export async function assignProgramToClientsAction(
         }
 
         revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
         if (assignedCount === 0) {
             return {
                 error: 'No se pudo asignar el programa a ningún alumno.',

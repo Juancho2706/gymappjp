@@ -17,6 +17,7 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
         getClientWorkoutPlans(userId),
         getRecentWorkoutLogs(userId),
     ])
+    const activePlans = allPlans.filter((p) => !p.program_id || p.program_id === program?.id)
 
     if (!program) {
         return (
@@ -33,7 +34,7 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
     const weekIdx = programWeekIndex1Based(program, userLocalDate)
     const activeVariant = resolveActiveWeekVariantForDisplay(program, weekIdx, userLocalDate)
 
-    const programPlans = allPlans
+    const programPlans = activePlans
         .filter((p) => p.program_id === program.id && workoutPlanMatchesVariant(p, activeVariant, abMode))
         .sort((a, b) => (a.day_of_week ?? 0) - (b.day_of_week ?? 0))
 
@@ -45,10 +46,10 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
         )
     }
 
-    let todayPlan = allPlans.find((p) => p.assigned_date === today) ?? null
+    let todayPlan = activePlans.find((p) => p.assigned_date === today) ?? null
     if (!todayPlan) {
         todayPlan =
-            allPlans.find(
+            activePlans.find(
                 (p) =>
                     p.program_id === program.id &&
                     p.day_of_week === todayDow &&
