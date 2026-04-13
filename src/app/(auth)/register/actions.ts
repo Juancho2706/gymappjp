@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
+    isBillingCycleAllowedForTier,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
@@ -42,6 +43,9 @@ export async function registerAction(
     }
     if (!isTierValid || !isCycleValid) {
         return { error: 'Debes seleccionar un plan y una frecuencia válidos.' }
+    }
+    if (!isBillingCycleAllowedForTier(selectedTier, selectedBillingCycle)) {
+        return { error: 'La frecuencia elegida no está disponible para ese plan.' }
     }
 
     // Generate slug from brand name

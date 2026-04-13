@@ -21,6 +21,7 @@ export function getProfileTopAlert(data: {
     } | null | undefined
     /** Adherencia entreno última semana 0–100; si no se pasa, se deriva de compliance */
     weeklyWorkoutAdherencePct?: number
+    lastWorkoutDate?: string | null
     oneRMDelta?: number | null
 }): ProfileTopAlert | null {
     const checkIns = data.checkIns || []
@@ -30,10 +31,10 @@ export function getProfileTopAlert(data: {
         : null
 
     const c = data.compliance || {}
-    const target = Math.max(1, c.workoutsTarget ?? 1)
-    const adherence =
-        data.weeklyWorkoutAdherencePct ??
-        Math.min(100, Math.round(((c.workoutsThisWeek ?? 0) / target) * 100))
+    const lastWorkoutDate = data.lastWorkoutDate ?? null
+    const daysSinceWorkout = lastWorkoutDate
+        ? differenceInDays(new Date(), new Date(lastWorkoutDate))
+        : null
 
     const nutritionCompliance = c.nutritionCompliancePercent ?? 0
     const planDaysRemaining = c.planDaysRemaining
@@ -44,13 +45,13 @@ export function getProfileTopAlert(data: {
         return {
             type: 'warning',
             message:
-                'Hace más de 30 días desde su último check-in — conviene contactarle.',
+                'Hace más de 1 mes desde su ultimo check-in — conviene contactarle.',
         }
     }
-    if (adherence < 50) {
+    if (daysSinceWorkout === null || daysSinceWorkout >= 7) {
         return {
             type: 'danger',
-            message: `Adherencia crítica esta semana en entrenamiento: ${adherence}%.`,
+            message: 'Adherencia critica: no registra ejercicios en la ultima semana.',
         }
     }
     if (nutritionCompliance < 60) {
@@ -77,10 +78,10 @@ export function getProfileTopAlert(data: {
             message: 'Fuerza cayendo esta semana — revisar carga y recuperación.',
         }
     }
-    if (streak >= 10 && adherence > 80) {
+    if (streak >= 10) {
         return {
             type: 'success',
-            message: `🔥 ${streak} días de racha con ${adherence}% adherencia al entreno.`,
+            message: `🔥 ${streak} dias de racha activa.`,
         }
     }
 

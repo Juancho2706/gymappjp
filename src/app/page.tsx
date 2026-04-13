@@ -34,31 +34,34 @@ import {
     SheetTrigger,
     SheetTitle
 } from "@/components/ui/sheet"
-import { TIER_CONFIG, type SubscriptionTier } from '@/lib/constants'
+import {
+    BILLING_CYCLE_CONFIG,
+    getDefaultBillingCycleForTier,
+    getTierAllowedBillingCycles,
+    getTierBillingCycleSummary,
+    getTierNutritionSummary,
+    getTierPriceClp,
+    TIER_CONFIG,
+    TIER_STUDENT_RANGE_LABEL,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 
 /* ─── Constants ─── */
-const clientTiers: Array<{ id: SubscriptionTier; label: string; price: number }> = [
-    { id: 'starter_lite', label: '1–5 alumnos', price: TIER_CONFIG.starter_lite.monthlyPriceClp },
-    { id: 'starter', label: '6–10 alumnos', price: TIER_CONFIG.starter.monthlyPriceClp },
-    { id: 'pro', label: '11–25 alumnos', price: TIER_CONFIG.pro.monthlyPriceClp },
-    { id: 'elite', label: '26–50 alumnos', price: TIER_CONFIG.elite.monthlyPriceClp },
-    { id: 'scale', label: '51–100 alumnos', price: TIER_CONFIG.scale.monthlyPriceClp },
-]
-
-const premiumFeatures = [
-    'Rutinas ilimitadas con videos',
-    'Catálogo de 129 ejercicios',
-    'Planes de nutrición',
-    'Check-ins de progreso con fotos',
-    'App White-Label con tu marca',
-    'Soporte prioritario',
-]
+const tierOrder: SubscriptionTier[] = ['starter_lite', 'starter', 'pro', 'elite', 'scale']
+const clientTiers: Array<{ id: SubscriptionTier; label: string; price: number }> = tierOrder.map(
+    (id) => ({
+        id,
+        label: TIER_STUDENT_RANGE_LABEL[id],
+        price: TIER_CONFIG[id].monthlyPriceClp,
+    })
+)
 
 const features = [
     {
         icon: Dumbbell,
         title: 'Constructor de rutinas',
-        desc: 'Crea rutinas profesionales con 129 ejercicios, cada uno con video de demostración e instrucciones.',
+        desc: 'Crea rutinas profesionales con un catálogo de ejercicios, cada uno con GIF de demostración e instrucciones.',
         color: '#00e5ff',
     },
     {
@@ -94,7 +97,6 @@ const features = [
 ]
 
 const stats = [
-    { value: '129', label: 'Ejercicios con video' },
     { value: '10', label: 'Grupos musculares' },
     { value: '100%', label: 'Tu marca' },
     { value: '24/7', label: 'Soporte' },
@@ -379,6 +381,36 @@ export default function LandingPage() {
     const heroY = useTransform(scrollYProgress, [0, 1], [0, 100])
 
     const [selectedTier, setSelectedTier] = useState(0)
+    const [exerciseCount, setExerciseCount] = useState(129)
+
+    useEffect(() => {
+        let mounted = true
+        ;(async () => {
+            try {
+                const response = await fetch('/api/public/exercises-count')
+                const payload = await response.json()
+                if (!response.ok || typeof payload.count !== 'number') return
+                if (mounted && payload.count > 0) {
+                    setExerciseCount(payload.count)
+                }
+            } catch {
+                // Keep fallback count.
+            }
+        })()
+        return () => {
+            mounted = false
+        }
+    }, [])
+
+    const statsWithExercises = [
+        { value: String(exerciseCount), label: 'Ejercicios en GIF' },
+        ...stats,
+    ]
+    const selectedTierId = clientTiers[selectedTier].id
+    const selectedTierConfig = TIER_CONFIG[selectedTierId]
+    const allowedCyclesForCard = getTierAllowedBillingCycles(selectedTierId)
+    const isMonthlyOnlyCard =
+        allowedCyclesForCard.length === 1 && allowedCyclesForCard[0] === 'monthly'
 
     return (
         <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -475,7 +507,7 @@ export default function LandingPage() {
             {/* ── STATS BAR ── */}
             <section className="relative py-16 border-y border-white/[0.04]">
                 <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-                    {stats.map((stat, i) => (
+                    {statsWithExercises.map((stat, i) => (
                         <AnimatedCounter key={i} value={stat.value} label={stat.label} />
                     ))}
                 </div>
@@ -626,9 +658,9 @@ export default function LandingPage() {
                                 Ejercicios
                             </span>
                             <h2 className="text-3xl md:text-5xl font-black text-foreground mb-6 leading-tight">
-                                129 ejercicios
+                                {exerciseCount} ejercicios
                                 <br />
-                                <span className="text-foreground/30">con video de demostración</span>
+                                <span className="text-foreground/30">con GIF de demostración</span>
                             </h2>
                             <p className="text-foreground/40 text-base leading-relaxed mb-8 max-w-md">
                                 Cada ejercicio incluye demostración visual, instrucciones paso a paso,
@@ -636,7 +668,7 @@ export default function LandingPage() {
                             </p>
 
                             <div className="space-y-3">
-                                {['Video de demostración', 'Instrucciones en español', '10 grupos musculares', 'Agrega ejercicios propios'].map(item => (
+                                {['GIF de demostración', 'Instrucciones en español', '10 grupos musculares', 'Agrega ejercicios propios'].map(item => (
                                     <div key={item} className="flex items-center gap-3">
                                         <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
                                             <Check className="w-3 h-3 text-cyan-400" />
@@ -776,10 +808,11 @@ export default function LandingPage() {
                             Precios
                         </span>
                         <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
-                            Un solo plan. Todo incluido.
+                            Precios por cupo de alumnos
                         </h2>
                         <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto">
-                            Solo pagas por la cantidad de alumnos. Todas las funciones siempre incluidas.
+                            Los planes 1–5, 6–10 y 11–30 se cobran solo en mensualidad. Los planes 31–60 y 61–100,
+                            solo en trimestral o anual. Starter Lite y Starter no incluyen módulo de nutrición.
                         </p>
                     </motion.div>
 
@@ -810,6 +843,21 @@ export default function LandingPage() {
                                 ))}
                             </div>
 
+                            <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
+                                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                                    {getTierBillingCycleSummary(selectedTierId)}
+                                </span>
+                                <span
+                                    className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                                        getTierNutritionSummary(selectedTierId).startsWith('Sin')
+                                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                    }`}
+                                >
+                                    {getTierNutritionSummary(selectedTierId)}
+                                </span>
+                            </div>
+
                             {/* Price display */}
                             <div className="text-center mb-10">
                                 <motion.div
@@ -817,21 +865,62 @@ export default function LandingPage() {
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.3 }}
-                                    className="flex items-end justify-center gap-1"
+                                    className="space-y-4"
                                 >
-                                    <span className="text-5xl md:text-7xl font-black text-foreground">
-                                        ${clientTiers[selectedTier].price.toLocaleString('es-CL')}
-                                    </span>
-                                    <span className="text-foreground/30 text-lg mb-2">/mes CLP</span>
+                                    {isMonthlyOnlyCard ? (
+                                        <>
+                                            <div className="flex items-end justify-center gap-1">
+                                                <span className="text-5xl md:text-7xl font-black text-foreground">
+                                                    ${clientTiers[selectedTier].price.toLocaleString('es-CL')}
+                                                </span>
+                                                <span className="text-foreground/30 text-lg mb-2">/mes CLP</span>
+                                            </div>
+                                            <p className="text-foreground/30 text-sm">
+                                                Cancela cuando quieras
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">
+                                                Montos por periodo (prepago)
+                                            </p>
+                                            <div className="mx-auto max-w-md space-y-2 text-left">
+                                                {allowedCyclesForCard.map((cycle: BillingCycle) => {
+                                                    const info = BILLING_CYCLE_CONFIG[cycle]
+                                                    const amount = getTierPriceClp(selectedTierId, cycle)
+                                                    return (
+                                                        <div
+                                                            key={cycle}
+                                                            className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/30 px-4 py-3"
+                                                        >
+                                                            <span className="text-sm font-semibold text-foreground">
+                                                                {info.label}
+                                                                {info.discountPercent > 0 ? (
+                                                                    <span className="ml-2 text-xs font-normal text-emerald-500">
+                                                                        −{info.discountPercent}%
+                                                                    </span>
+                                                                ) : null}
+                                                            </span>
+                                                            <span className="text-sm font-black text-foreground tabular-nums">
+                                                                ${amount.toLocaleString('es-CL')} CLP
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                            <p className="text-foreground/30 text-xs px-2">
+                                                Referencia mensual del plan: $
+                                                {TIER_CONFIG[selectedTierId].monthlyPriceClp.toLocaleString('es-CL')}{' '}
+                                                CLP/mes (el cobro es trimestral o anual según elijas).
+                                            </p>
+                                        </>
+                                    )}
                                 </motion.div>
-                                <p className="text-foreground/30 text-sm mt-3">
-                                    Cancela cuando quieras
-                                </p>
                             </div>
 
                             {/* Features */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto mb-10">
-                                {premiumFeatures.map((feat, i) => (
+                                {selectedTierConfig.features.map((feat, i) => (
                                     <div key={i} className="flex items-center gap-2.5">
                                         <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
                                             <Check className="w-3 h-3 text-cyan-400" />
@@ -844,7 +933,7 @@ export default function LandingPage() {
                             {/* CTA */}
                             <div className="text-center">
                                 <Link
-                                    href={`/register?tier=${clientTiers[selectedTier].id}&cycle=monthly`}
+                                    href={`/register?tier=${clientTiers[selectedTier].id}&cycle=${getDefaultBillingCycleForTier(clientTiers[selectedTier].id)}`}
                                     className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/25"
                                 >
                                     Empieza ahora

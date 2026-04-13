@@ -5,6 +5,7 @@ import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
     getTierPriceClp,
+    isBillingCycleAllowedForTier,
     TIER_CONFIG,
     type BillingCycle,
     type SubscriptionTier,
@@ -37,6 +38,12 @@ export async function POST(request: Request) {
 
         const tier = parsed.data.tier as SubscriptionTier
         const billingCycle = parsed.data.billingCycle as BillingCycle
+        if (!isBillingCycleAllowedForTier(tier, billingCycle)) {
+            return NextResponse.json(
+                { error: 'La frecuencia de pago no está disponible para ese plan.' },
+                { status: 400 }
+            )
+        }
         const amountClp = getTierPriceClp(tier, billingCycle)
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
         const provider = getPaymentsProvider()

@@ -8,7 +8,10 @@ import { registerAction, type RegisterState } from './actions'
 import { cn } from '@/lib/utils'
 import {
     BILLING_CYCLE_CONFIG,
+    getDefaultBillingCycleForTier,
+    getTierAllowedBillingCycles,
     getTierPriceClp,
+    isBillingCycleAllowedForTier,
     TIER_CONFIG,
     type BillingCycle,
     type SubscriptionTier,
@@ -16,7 +19,10 @@ import {
 
 const initialState: RegisterState = {}
 const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
-const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [BillingCycle, (typeof BILLING_CYCLE_CONFIG)[BillingCycle]][]
+const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
+    BillingCycle,
+    (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
+][]
 
 function SubmitButton() {
     const { pending } = useFormStatus()
@@ -55,18 +61,36 @@ export default function RegisterPage() {
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
+    const allowedCycles = useMemo(() => getTierAllowedBillingCycles(tier), [tier])
+    const allowedCycleOptions = useMemo(
+        () => cycleOptions.filter(([key]) => allowedCycles.includes(key)),
+        [allowedCycles]
+    )
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
         const queryTier = params.get('tier')
         const queryCycle = params.get('cycle')
-        if (queryTier && queryTier in TIER_CONFIG) {
-            setTier(queryTier as SubscriptionTier)
-        }
+        const nextTier =
+            queryTier && queryTier in TIER_CONFIG ? (queryTier as SubscriptionTier) : 'starter'
+        setTier(nextTier)
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) {
-            setBillingCycle(queryCycle as BillingCycle)
+            const candidateCycle = queryCycle as BillingCycle
+            setBillingCycle(
+                isBillingCycleAllowedForTier(nextTier, candidateCycle)
+                    ? candidateCycle
+                    : getDefaultBillingCycleForTier(nextTier)
+            )
+            return
         }
+        setBillingCycle(getDefaultBillingCycleForTier(nextTier))
     }, [])
+
+    useEffect(() => {
+        if (!isBillingCycleAllowedForTier(tier, billingCycle)) {
+            setBillingCycle(getDefaultBillingCycleForTier(tier))
+        }
+    }, [tier, billingCycle])
 
     function nextStep() {
         if (step === 1) {
@@ -241,8 +265,8 @@ export default function RegisterPage() {
 
                             <section className="space-y-2">
                                 <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {cycleOptions.map(([key, option]) => (
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                    {allowedCycleOptions.map(([key, option]) => (
                                         <button
                                             key={key}
                                             type="button"

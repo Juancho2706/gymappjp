@@ -3,6 +3,7 @@ import { getPaymentsProvider } from '@/lib/payments/provider'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subscription-state'
+import { isBillingCycleAllowedForTier, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
 import {
     extractMercadoPagoNotificationId,
     isPaymentsWebhookTokenValid,
@@ -77,7 +78,7 @@ async function handleWebhook(request: Request, rawBody: string) {
 
     const { data: coach } = await admin
         .from('coaches')
-        .select('id, billing_cycle, current_period_end')
+        .select('id, subscription_tier, billing_cycle, current_period_end')
         .eq('id', result.coachId)
         .maybeSingle()
 
@@ -87,9 +88,15 @@ async function handleWebhook(request: Request, rawBody: string) {
     }
 
     const status = mapProviderStatus(result.providerStatus)
+    const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+    const billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+    const statusForUpdate =
+        status === 'active' && !isBillingCycleAllowedForTier(tier, billingCycle)
+            ? 'pending_payment'
+            : status
     const nextPeriodEnd = resolveCurrentPeriodEnd({
-        status,
-        billingCycle: coach.billing_cycle,
+        status: statusForUpdate,
+        billingCycle,
         currentPeriodEnd: coach.current_period_end,
         providerCurrentPeriodEnd: result.currentPeriodEnd,
     })
@@ -97,7 +104,7 @@ async function handleWebhook(request: Request, rawBody: string) {
     const { error: coachUpdateError } = await admin
         .from('coaches')
         .update({
-            subscription_status: status,
+            subscription_status: statusForUpdate,
             current_period_end: nextPeriodEnd,
             payment_provider: provider.name,
         })
@@ -146,7 +153,7 @@ async function handleWebhook(request: Request, rawBody: string) {
         coachId: coach.id,
         providerEventId: stableEventId,
         providerStatus: result.providerStatus ?? null,
-        internalStatus: status,
+        internalStatus: statusForUpdate,
         currentPeriodEnd: nextPeriodEnd,
     })
 

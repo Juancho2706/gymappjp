@@ -491,13 +491,23 @@ export const getClientProfileData = cache(async (clientId: string) => {
     const profileLastActivityAt =
         lastActivityMs > 0 ? new Date(lastActivityMs).toISOString() : null
 
-    const adherencePct = Math.min(
-        100,
-        Math.round((completedWorkoutsCount / weeklyWorkoutTarget) * 100)
+    const lastWorkoutDateFromHistory = (workoutLogs || []).reduce<string | null>(
+        (latest, plan: any) => {
+            for (const block of plan.workout_blocks || []) {
+                for (const log of block.workout_logs || []) {
+                    if (!log.logged_at) continue
+                    if (!latest || new Date(log.logged_at) > new Date(latest)) {
+                        latest = log.logged_at
+                    }
+                }
+            }
+            return latest
+        },
+        null
     )
     const { score: attentionScore } = calculateAttentionScore({
         lastCheckinDate: lastCheckInRow?.created_at ?? null,
-        adherence: adherencePct,
+        lastWorkoutDate: lastWorkoutDateFromHistory,
         nutritionCompliance: nutritionCompliancePercent,
         planDaysRemaining: daysRemaining,
         oneRMDelta: null,

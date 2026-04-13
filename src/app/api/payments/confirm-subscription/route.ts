@@ -5,6 +5,12 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subscription-state'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import {
+    getDefaultBillingCycleForTier,
+    isBillingCycleAllowedForTier,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 
 const schema = z.object({
     preapprovalId: z.string().min(1).optional(),
@@ -40,7 +46,7 @@ export async function POST(request: Request) {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('id, billing_cycle, subscription_mp_id, current_period_end')
+            .select('id, subscription_tier, billing_cycle, subscription_mp_id, current_period_end')
             .eq('id', user.id)
             .maybeSingle()
 
@@ -69,10 +75,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Subscription does not belong to current user.' }, { status: 403 })
         }
 
+        const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+        const billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+        if (!isBillingCycleAllowedForTier(tier, billingCycle)) {
+            return NextResponse.json(
+                {
+                    error: `El ciclo ${billingCycle} no está permitido para el plan ${tier}. Selecciona una combinación válida antes de confirmar.`,
+                    suggestedBillingCycle: getDefaultBillingCycleForTier(tier),
+                },
+                { status: 409 }
+            )
+        }
+
         const status = mapProviderStatus(snapshot.status ?? null)
         const nextPeriodEnd = resolveCurrentPeriodEnd({
             status,
-            billingCycle: coach.billing_cycle,
+            billingCycle,
             currentPeriodEnd: coach.current_period_end,
             providerCurrentPeriodEnd: snapshot.next_payment_date ?? snapshot.auto_recurring?.end_date ?? null,
         })

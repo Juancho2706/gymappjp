@@ -228,10 +228,22 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
         : null;
     const weeklyWeightVariation = prevWeightCheckIn ? currentWeight - prevWeightCheckIn.weight : 0;
     const interactionStreak = compliance.currentStreak || 0
+    const lastWorkoutDate = (data.workoutHistory || []).reduce((latest: string | null, plan: any) => {
+        for (const block of plan.workout_blocks || []) {
+            for (const log of block.workout_logs || []) {
+                if (!log.logged_at) continue
+                if (!latest || new Date(log.logged_at) > new Date(latest)) {
+                    latest = log.logged_at
+                }
+            }
+        }
+        return latest
+    }, null as string | null)
 
     const topAlert = getProfileTopAlert({
         checkIns,
         compliance,
+        lastWorkoutDate,
     })
 
     const chartTabs = [

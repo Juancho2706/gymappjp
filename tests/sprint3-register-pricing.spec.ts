@@ -7,7 +7,7 @@ test('pricing CTA sends tier/cycle to register', async ({ page }) => {
 })
 
 test('register multi-step keeps selected plan from query', async ({ page }) => {
-  await page.goto('/register?tier=pro&cycle=annual')
+  await page.goto('/register?tier=elite&cycle=annual')
 
   await expect(page.getByText('Paso 1 de 3')).toBeVisible()
   await page.getByLabel('Nombre completo').fill('Coach QA')
@@ -17,7 +17,7 @@ test('register multi-step keeps selected plan from query', async ({ page }) => {
   await page.getByRole('button', { name: 'Continuar' }).click()
 
   await expect(page.getByText('Elige tu plan')).toBeVisible()
-  await expect(page.locator('input[name="subscription_tier"]')).toHaveValue('pro')
+  await expect(page.locator('input[name="subscription_tier"]')).toHaveValue('elite')
   await expect(page.locator('input[name="billing_cycle"]')).toHaveValue('annual')
   await page.getByRole('button', { name: 'Continuar' }).click()
 

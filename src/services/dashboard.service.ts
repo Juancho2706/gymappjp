@@ -4,13 +4,13 @@ import { Database } from '@/lib/database.types';
 
 // Check-ins mensuales: alertar solo si ya hubo al menos un check-in y pasaron >30 días desde el último.
 const CHECKIN_OVERDUE_AFTER_DAYS = 30
+const WORKOUT_INACTIVE_AFTER_DAYS = 7
 
 // ─── TASK A0: Attention Score ─────────────────────────────────────────────
 
 export type AttentionFlag =
-    | 'SIN_CHECKIN_30D'
-    | 'ADHERENCIA_CRITICA'
-    | 'ADHERENCIA_BAJA'
+    | 'SIN_CHECKIN_1M'
+    | 'SIN_EJERCICIO_7D'
     | 'NUTRICION_RIESGO'
     | 'PROGRAMA_VENCIDO'
     | 'PROGRAMA_POR_VENCER'
@@ -19,7 +19,7 @@ export type AttentionFlag =
 /** Inputs for attention scoring (plan: ClientData) */
 export interface ClientDataForAttention {
     lastCheckinDate: string | null;
-    adherence: number;
+    lastWorkoutDate: string | null;
     nutritionCompliance: number;
     planDaysRemaining: number | null;
     oneRMDelta: number | null;
@@ -36,16 +36,19 @@ export function calculateAttentionScore(client: ClientDataForAttention): {
         const daysSinceCheckin = differenceInDays(new Date(), new Date(client.lastCheckinDate));
         if (daysSinceCheckin > CHECKIN_OVERDUE_AFTER_DAYS) {
             score += 25;
-            flags.push('SIN_CHECKIN_30D');
+            flags.push('SIN_CHECKIN_1M');
         }
     }
 
-    if (client.adherence < 50) {
+    if (!client.lastWorkoutDate) {
         score += 25;
-        flags.push('ADHERENCIA_CRITICA');
-    } else if (client.adherence < 70) {
-        score += 15;
-        flags.push('ADHERENCIA_BAJA');
+        flags.push('SIN_EJERCICIO_7D');
+    } else {
+        const daysSinceWorkout = differenceInDays(new Date(), new Date(client.lastWorkoutDate));
+        if (daysSinceWorkout >= WORKOUT_INACTIVE_AFTER_DAYS) {
+            score += 25;
+            flags.push('SIN_EJERCICIO_7D');
+        }
     }
 
     if (client.nutritionCompliance < 60) {
@@ -479,7 +482,7 @@ export class DashboardService {
 
             const { score, flags } = calculateAttentionScore({
                 lastCheckinDate,
-                adherence: percentage,
+                lastWorkoutDate,
                 nutritionCompliance: nutritionPercentage,
                 planDaysRemaining,
                 oneRMDelta,

@@ -89,6 +89,14 @@ describe('registerAction', () => {
     expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.' })
   })
 
+  it('rejects billing cycle not allowed for selected tier', async () => {
+    const result = await registerAction(
+      {},
+      buildRegisterFormData({ subscription_tier: 'elite', billing_cycle: 'monthly' })
+    )
+    expect(result).toEqual({ error: 'La frecuencia elegida no está disponible para ese plan.' })
+  })
+
   it('rolls back auth user when coach insert fails', async () => {
     const slugQuery = {
       select: vi.fn().mockReturnThis(),

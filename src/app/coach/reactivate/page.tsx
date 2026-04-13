@@ -4,14 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
+    getDefaultBillingCycleForTier,
+    getTierAllowedBillingCycles,
     getTierPriceClp,
+    isBillingCycleAllowedForTier,
     TIER_CONFIG,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
 
 const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
-const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [BillingCycle, (typeof BILLING_CYCLE_CONFIG)[BillingCycle]][]
+const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
+    BillingCycle,
+    (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
+][]
 
 export default function ReactivatePage() {
     const searchParams = useSearchParams()
@@ -35,6 +41,13 @@ export default function ReactivatePage() {
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     const monthlyBase = useMemo(() => TIER_CONFIG[tier].monthlyPriceClp, [tier])
+    const allowedCycleOptions = useMemo(
+        () =>
+            cycleOptions.filter(([key]) =>
+                getTierAllowedBillingCycles(tier).includes(key)
+            ),
+        [tier]
+    )
     const paymentStatus = searchParams.get('payment')
     const rawSubscriptionParam = searchParams.get('subscription') ?? ''
     const decodedSubscriptionParam = (() => {
@@ -96,6 +109,12 @@ export default function ReactivatePage() {
             setIsConfirming(false)
         }
     }, [])
+
+    useEffect(() => {
+        if (!isBillingCycleAllowedForTier(tier, billingCycle)) {
+            setBillingCycle(getDefaultBillingCycleForTier(tier))
+        }
+    }, [tier, billingCycle])
 
     useEffect(() => {
         if (!fromSuccessfulCheckout || hasAutoCheckedRef.current) return
@@ -209,7 +228,7 @@ export default function ReactivatePage() {
                 <section className="mt-6">
                     <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
                     <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        {cycleOptions.map(([key, option]) => (
+                        {allowedCycleOptions.map(([key, option]) => (
                             <button
                                 key={key}
                                 type="button"

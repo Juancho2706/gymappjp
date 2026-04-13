@@ -7,9 +7,8 @@ import {
 } from '@/services/dashboard.service'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
-    SIN_CHECKIN_30D: 'Sin check-in en 30 dias',
-    ADHERENCIA_CRITICA: 'Adherencia critica',
-    ADHERENCIA_BAJA: 'Adherencia baja',
+    SIN_CHECKIN_1M: 'Adherencia critica · sin check-in en 1 mes',
+    SIN_EJERCICIO_7D: 'Adherencia critica · sin ejercicio en 7 dias',
     NUTRICION_RIESGO: 'Nutricion en riesgo',
     PROGRAMA_VENCIDO: 'Programa vencido',
     PROGRAMA_POR_VENCER: 'Programa por vencer',
@@ -144,8 +143,9 @@ export async function getCoachDashboardData(userId: string) {
         })
         .filter((p) => p.daysLeft <= 3)
 
+    const criticalFlags: AttentionFlag[] = ['SIN_CHECKIN_1M', 'SIN_EJERCICIO_7D']
     const topRiskClients: RiskAlertItem[] = pulse
-        .filter((row) => row.attentionScore > 0)
+        .filter((row) => row.attentionFlags.some((flag) => criticalFlags.includes(flag)))
         .sort((a, b) => b.attentionScore - a.attentionScore)
         .slice(0, 5)
         .map((row) => ({

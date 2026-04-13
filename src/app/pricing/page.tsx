@@ -1,7 +1,18 @@
 import Link from 'next/link'
 import { Check, Zap, Crown, Dumbbell, Rocket } from 'lucide-react'
 import type { Metadata } from 'next'
-import { BILLING_CYCLE_CONFIG, getTierPriceClp, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import {
+    BILLING_CYCLE_CONFIG,
+    getDefaultBillingCycleForTier,
+    getTierAllowedBillingCycles,
+    getTierBillingCycleSummary,
+    getTierNutritionSummary,
+    getTierPriceClp,
+    TIER_CONFIG,
+    TIER_STUDENT_RANGE_LABEL,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 
 export const metadata: Metadata = {
     title: 'Precios | EVA',
@@ -98,12 +109,29 @@ export default function PricingPage() {
                 </div>
                 <h1 className="text-4xl sm:text-5xl font-bold text-zinc-50 mb-4 leading-tight">
                     Precios en CLP,<br />
-                    <span className="text-violet-400">mensual, trimestral o anual</span>
+                    <span className="text-violet-400">según el ciclo de cada plan</span>
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto">
                     Incluye nuevo tier Starter Lite para mayor accesibilidad y
-                    descuentos por prepago trimestral y anual.
+                    descuentos por prepago en planes trimestrales y anuales.
                 </p>
+                <div className="mt-8 mx-auto max-w-2xl rounded-2xl border border-violet-500/20 bg-violet-500/5 p-5 text-left text-sm text-muted-foreground">
+                    <p className="font-semibold text-foreground mb-2">Resumen rápido</p>
+                    <ul className="list-disc space-y-1 pl-5">
+                        <li>
+                            <strong className="text-foreground">Solo mensual:</strong> Starter Lite (1–5), Starter
+                            (6–10) y Pro (11–30).
+                        </li>
+                        <li>
+                            <strong className="text-foreground">Solo trimestral o anual:</strong> Elite (31–60) y Scale
+                            (61–100).
+                        </li>
+                        <li>
+                            <strong className="text-foreground">Nutrición:</strong> no incluida en Starter Lite ni Starter;
+                            sí a partir de Pro.
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             {/* Plans */}
@@ -132,23 +160,39 @@ export default function PricingPage() {
 
                                 <h2 className="text-lg font-bold text-foreground mb-1">{tier.label}</h2>
                                 <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
-                                <p className="text-xs text-muted-foreground mb-3">
-                                    Hasta {tier.maxClients} alumnos
+                                <p className="text-xs text-muted-foreground mb-2">
+                                    {TIER_STUDENT_RANGE_LABEL[plan.id]} · Hasta {tier.maxClients} alumnos
                                 </p>
+                                <div className="mb-4 flex flex-wrap gap-1.5">
+                                    <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        {getTierBillingCycleSummary(plan.id)}
+                                    </span>
+                                    <span
+                                        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                            getTierNutritionSummary(plan.id).startsWith('Sin')
+                                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                        }`}
+                                    >
+                                        {getTierNutritionSummary(plan.id)}
+                                    </span>
+                                </div>
 
                                 <div className="space-y-2 mb-6">
-                                    {cycleOrder.map((cycle) => {
-                                        const cycleInfo = BILLING_CYCLE_CONFIG[cycle]
-                                        const price = getTierPriceClp(plan.id, cycle)
-                                        return (
-                                            <div key={cycle} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-                                                <span className="text-sm text-muted-foreground">{cycleInfo.label}</span>
-                                                <span className="text-sm font-semibold text-foreground">
-                                                    ${price.toLocaleString('es-CL')} CLP
-                                                </span>
-                                            </div>
-                                        )
-                                    })}
+                                    {cycleOrder
+                                        .filter((cycle) => getTierAllowedBillingCycles(plan.id).includes(cycle))
+                                        .map((cycle) => {
+                                            const cycleInfo = BILLING_CYCLE_CONFIG[cycle]
+                                            const price = getTierPriceClp(plan.id, cycle)
+                                            return (
+                                                <div key={cycle} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                                                    <span className="text-sm text-muted-foreground">{cycleInfo.label}</span>
+                                                    <span className="text-sm font-semibold text-foreground">
+                                                        ${price.toLocaleString('es-CL')} CLP
+                                                    </span>
+                                                </div>
+                                            )
+                                        })}
                                 </div>
 
                                 <ul className="space-y-3 mb-8 flex-1">
@@ -161,7 +205,7 @@ export default function PricingPage() {
                                 </ul>
 
                                 <Link
-                                    href={`/register?tier=${plan.id}&cycle=monthly`}
+                                    href={`/register?tier=${plan.id}&cycle=${getDefaultBillingCycleForTier(plan.id)}`}
                                     className={`w-full py-3 rounded-xl text-sm font-semibold text-center transition-all duration-200 block ${plan.popular
                                         ? 'bg-violet-600 hover:bg-violet-500 text-white'
                                         : 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent'

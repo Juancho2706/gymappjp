@@ -3,8 +3,14 @@
 import { useEffect, useState } from 'react'
 import {
     BILLING_CYCLE_CONFIG,
+    getDefaultBillingCycleForTier,
+    getTierAllowedBillingCycles,
+    getTierBillingCycleSummary,
+    getTierNutritionSummary,
     getTierPriceClp,
+    isBillingCycleAllowedForTier,
     TIER_CONFIG,
+    TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
@@ -53,7 +59,13 @@ export default function CoachSubscriptionPage() {
                 const tier = payload.coach.subscription_tier as SubscriptionTier
                 const cycle = payload.coach.billing_cycle as BillingCycle
                 if (tier && tier in TIER_CONFIG) setSelectedTier(tier)
-                if (cycle && cycle in BILLING_CYCLE_CONFIG) setSelectedCycle(cycle)
+                if (tier && tier in TIER_CONFIG && cycle && cycle in BILLING_CYCLE_CONFIG) {
+                    setSelectedCycle(
+                        isBillingCycleAllowedForTier(tier, cycle)
+                            ? cycle
+                            : getDefaultBillingCycleForTier(tier)
+                    )
+                }
             } catch (err) {
                 if (isMounted) setError(err instanceof Error ? err.message : 'Error inesperado')
             } finally {
@@ -64,6 +76,15 @@ export default function CoachSubscriptionPage() {
             isMounted = false
         }
     }, [])
+
+    const allowedCycles = getTierAllowedBillingCycles(selectedTier)
+    const allowedCycleOptions = cycleOptions.filter((cycle) => allowedCycles.includes(cycle))
+
+    useEffect(() => {
+        if (!isBillingCycleAllowedForTier(selectedTier, selectedCycle)) {
+            setSelectedCycle(getDefaultBillingCycleForTier(selectedTier))
+        }
+    }, [selectedTier, selectedCycle])
 
     async function handleChangePlan() {
         setSaving(true)
@@ -123,6 +144,20 @@ export default function CoachSubscriptionPage() {
                 Gestiona tu plan, frecuencia de cobro y ajustes de suscripción.
             </p>
 
+            <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+                <h2 className="text-sm font-semibold text-foreground">Cómo funcionan los planes</h2>
+                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    <li>
+                        <span className="font-semibold text-foreground">Solo mensual:</span> Starter Lite (1–5), Starter
+                        (6–10) y Pro (11–30). Sin nutrición en Starter Lite y Starter; Pro incluye nutrición.
+                    </li>
+                    <li>
+                        <span className="font-semibold text-foreground">Solo trimestral o anual:</span> Elite (31–60) y
+                        Scale (61–100). Incluyen nutrición.
+                    </li>
+                </ul>
+            </section>
+
             {loading ? (
                 <p className="mt-6 text-sm text-muted-foreground">Cargando estado de suscripción...</p>
             ) : null}
@@ -133,7 +168,14 @@ export default function CoachSubscriptionPage() {
                         Estado actual: <span className="font-semibold text-foreground">{coach.subscription_status}</span>
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Plan actual: <span className="font-semibold text-foreground">{coach.subscription_tier}</span>
+                        Plan actual:{' '}
+                        <span className="font-semibold text-foreground">
+                            {(() => {
+                                const t = coach.subscription_tier as SubscriptionTier
+                                if (!(t in TIER_CONFIG)) return coach.subscription_tier
+                                return `${TIER_CONFIG[t].label} · ${TIER_STUDENT_RANGE_LABEL[t]}`
+                            })()}
+                        </span>
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
                         Próximo corte:{' '}
@@ -157,13 +199,29 @@ export default function CoachSubscriptionPage() {
                             }`}
                         >
                             <p className="font-semibold text-foreground">{TIER_CONFIG[tier].label}</p>
-                            <p className="text-xs text-muted-foreground">Hasta {TIER_CONFIG[tier].maxClients} alumnos</p>
+                            <p className="text-xs text-muted-foreground">
+                                {TIER_STUDENT_RANGE_LABEL[tier]} · Hasta {TIER_CONFIG[tier].maxClients} alumnos
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {getTierBillingCycleSummary(tier)}
+                                </span>
+                                <span
+                                    className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                        getTierNutritionSummary(tier).startsWith('Sin')
+                                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                                            : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                    }`}
+                                >
+                                    {getTierNutritionSummary(tier)}
+                                </span>
+                            </div>
                         </button>
                     ))}
                 </div>
 
                 <div className="mt-4 grid gap-2 md:grid-cols-3">
-                    {cycleOptions.map((cycle) => (
+                    {allowedCycleOptions.map((cycle) => (
                         <button
                             key={cycle}
                             type="button"

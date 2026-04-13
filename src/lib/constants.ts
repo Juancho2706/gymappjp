@@ -60,13 +60,22 @@ export type TierConfig = {
 const QUARTERLY_DISCOUNT = 0.1
 const ANNUAL_DISCOUNT = 0.2
 const SHARED_TIER_FEATURES = [
-    'Rutinas y ejercicios',
+    'Rutinas ilimitadas con GIFs',
+    'Catálogo de ejercicios con GIF',
     'Programas de entrenamiento',
     'Check-in y progreso',
     'Dashboard coach',
-    'Nutrición',
     'Branding personalizado',
 ] as const
+
+/** Rango de alumnos por tier (copy marketing / UI). */
+export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
+    starter_lite: '1–5 alumnos',
+    starter: '6–10 alumnos',
+    pro: '11–30 alumnos',
+    elite: '31–60 alumnos',
+    scale: '61–100 alumnos',
+}
 
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     starter_lite: {
@@ -79,33 +88,32 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     starter: {
         label: 'Starter',
         maxClients: 10,
-        monthlyPriceClp: 14990,
+        monthlyPriceClp: 19990,
         features: [...SHARED_TIER_FEATURES],
     },
     pro: {
         label: 'Pro',
-        maxClients: 25,
-        monthlyPriceClp: 24990,
-        features: [...SHARED_TIER_FEATURES],
+        maxClients: 30,
+        monthlyPriceClp: 29990,
+        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
     },
     elite: {
         label: 'Elite',
-        maxClients: 50,
-        monthlyPriceClp: 39990,
-        features: [...SHARED_TIER_FEATURES],
+        maxClients: 60,
+        monthlyPriceClp: 44990,
+        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
     },
     scale: {
         label: 'Scale',
         maxClients: 100,
-        monthlyPriceClp: 59990,
-        features: [...SHARED_TIER_FEATURES],
+        monthlyPriceClp: 64990,
+        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
     },
 }
 
 /**
- * Feature gates by tier. Product policy (2026): paid tiers differ mainly by `maxClients` in {@link TIER_CONFIG};
- * marketing lists the same core features for all. Keeping all capabilities `true` avoids fake paywalls and matches
- * that policy. Use `max_clients` / subscription UI for upsell on capacity, not branding/nutrition locks.
+ * Feature gates by tier.
+ * Business policy: starter_lite and starter do not include nutrition plans.
  */
 export type TierCapabilities = {
     canUseNutrition: boolean
@@ -115,12 +123,12 @@ export type TierCapabilities = {
 
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     starter_lite: {
-        canUseNutrition: true,
+        canUseNutrition: false,
         canUseBranding: true,
         canUseAdvancedReports: true,
     },
     starter: {
-        canUseNutrition: true,
+        canUseNutrition: false,
         canUseBranding: true,
         canUseAdvancedReports: true,
     },
@@ -167,6 +175,45 @@ export const BILLING_CYCLE_CONFIG: Record<
     monthly: { months: 1, label: 'Mensual', discountPercent: 0 },
     quarterly: { months: 3, label: 'Trimestral', discountPercent: 10 },
     annual: { months: 12, label: 'Anual', discountPercent: 20 },
+}
+
+export const TIER_ALLOWED_BILLING_CYCLES: Record<SubscriptionTier, BillingCycle[]> = {
+    starter_lite: ['monthly'],
+    starter: ['monthly'],
+    pro: ['monthly'],
+    elite: ['quarterly', 'annual'],
+    scale: ['quarterly', 'annual'],
+}
+
+export function getTierAllowedBillingCycles(tier: SubscriptionTier): BillingCycle[] {
+    return TIER_ALLOWED_BILLING_CYCLES[tier]
+}
+
+export function isBillingCycleAllowedForTier(
+    tier: SubscriptionTier,
+    cycle: BillingCycle
+): boolean {
+    return TIER_ALLOWED_BILLING_CYCLES[tier].includes(cycle)
+}
+
+export function getDefaultBillingCycleForTier(tier: SubscriptionTier): BillingCycle {
+    return TIER_ALLOWED_BILLING_CYCLES[tier][0] ?? 'monthly'
+}
+
+/** Texto corto para badges: cobro permitido por plan. */
+export function getTierBillingCycleSummary(tier: SubscriptionTier): string {
+    const cycles = TIER_ALLOWED_BILLING_CYCLES[tier]
+    if (cycles.length === 1 && cycles[0] === 'monthly') {
+        return 'Solo cobro mensual'
+    }
+    return 'Solo cobro trimestral o anual'
+}
+
+/** Texto corto para badges: nutrición en el plan. */
+export function getTierNutritionSummary(tier: SubscriptionTier): string {
+    return getTierCapabilities(tier).canUseNutrition
+        ? 'Incluye planes de nutrición'
+        : 'Sin módulo de nutrición'
 }
 
 export const SUBSCRIPTION_BLOCKED_STATUSES = [
