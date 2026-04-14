@@ -20,6 +20,7 @@ export type AttentionFlag =
 export interface ClientDataForAttention {
     lastCheckinDate: string | null;
     lastWorkoutDate: string | null;
+    hasActiveWorkoutProgram: boolean;
     nutritionCompliance: number;
     planDaysRemaining: number | null;
     oneRMDelta: number | null;
@@ -40,14 +41,16 @@ export function calculateAttentionScore(client: ClientDataForAttention): {
         }
     }
 
-    if (!client.lastWorkoutDate) {
-        score += 25;
-        flags.push('SIN_EJERCICIO_7D');
-    } else {
-        const daysSinceWorkout = differenceInDays(new Date(), new Date(client.lastWorkoutDate));
-        if (daysSinceWorkout >= WORKOUT_INACTIVE_AFTER_DAYS) {
+    if (client.hasActiveWorkoutProgram) {
+        if (!client.lastWorkoutDate) {
             score += 25;
             flags.push('SIN_EJERCICIO_7D');
+        } else {
+            const daysSinceWorkout = differenceInDays(new Date(), new Date(client.lastWorkoutDate));
+            if (daysSinceWorkout >= WORKOUT_INACTIVE_AFTER_DAYS) {
+                score += 25;
+                flags.push('SIN_EJERCICIO_7D');
+            }
         }
     }
 
@@ -483,6 +486,7 @@ export class DashboardService {
             const { score, flags } = calculateAttentionScore({
                 lastCheckinDate,
                 lastWorkoutDate,
+                hasActiveWorkoutProgram: activeProgram != null,
                 nutritionCompliance: nutritionPercentage,
                 planDaysRemaining,
                 oneRMDelta,

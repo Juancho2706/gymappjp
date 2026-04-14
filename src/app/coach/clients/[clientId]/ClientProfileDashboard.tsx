@@ -702,6 +702,8 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     >
                     <div className="min-w-0 space-y-6 md:col-span-12">
                         <TrainingTabB4Panels
+                            clientId={client.id}
+                            santiagoTodayIso={data.todayIso ?? ''}
                             workoutHistory={data.workoutHistory || []}
                             muscleVolumeByGroup={data.muscleVolumeByGroup || []}
                             chartGridColor={chartGridColor}

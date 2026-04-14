@@ -3,7 +3,7 @@
 > Documento exhaustivo de planificacion desde todas las perspectivas profesionales.
 > Cada tarea tiene: ID unico, prioridad (P0-P3), esfuerzo estimado, dependencias.
 > **Generado:** 2026-04-10 America/Santiago
-> **Actualizado:** 2026-04-13 America/Santiago — BUG-001 cerrado; nuevas tareas BUG-001, FEAT-H01, FEAT-F01, FEAT-F02, UX-013, UX-014; estado real ~75%.
+> **Actualizado:** 2026-04-14 America/Santiago — BUG-002/003/004/005 cerrados (nutrición quantity+unit, alertas críticas alumnos nuevos, onboarding dismiss); FEAT-F01 unidades g+un completado; FEAT-F02 seed 250 alimentos completado; estado real ~76%.
 > **Base:** Auditoria completa de 225+ archivos, 24 tablas BD, 38 rutas.
 
 ---
@@ -118,6 +118,10 @@
 | ID | Area | Problema | Impacto |
 |----|------|----------|---------|
 | ~~BUG-001~~ | Workout Execution | ~~Semana nueva mostraba logs de la semana anterior como "ya completados"~~ | ~~Alumno no podía registrar entrenamientos correctamente~~ → **CERRADO 2026-04-13** |
+| ~~BUG-002~~ | Nutrición | ~~`quantity` input snapeaba a 0 al borrar el campo~~ | **CERRADO 2026-04-14** — State cambiado a `string`, parse en preview/add |
+| ~~BUG-003~~ | Nutrición | ~~Selector de unidad g/un no respondía dentro del Sheet~~ | **CERRADO 2026-04-14** — Reemplazado por button toggle (fix portal Radix) |
+| ~~BUG-004~~ | Dashboard Coach | ~~Alertas críticas aparecían para alumnos nuevos sin planes~~ | **CERRADO 2026-04-14** — Guard `hasActiveWorkoutProgram` en `calculateAttentionScore` |
+| ~~BUG-005~~ | Dashboard Coach | ~~Onboarding coach sin botón para cerrar/ocultar~~ | **CERRADO 2026-04-14** — Botón X + `dismissed` persistido en localStorage |
 | UX-001 | Pricing/Landing | Moneda inconsistente (USD en /pricing vs CLP en landing) | Confusion total del usuario, destruye confianza |
 | UX-002 | Registro coach | Sin flujo de pago, sin confirmacion visual de "que estoy comprando" | No hay conversion |
 | UX-003 | Login coach | UI basica sin branding premium | Primera impresion pobre |
@@ -126,8 +130,8 @@
 
 | ID | Area | Problema | Impacto |
 |----|------|----------|---------|
-| FEAT-F01 | BD Alimentos | Solo 54 alimentos. Pocos para uso real de nutrición. | Coach y alumno no encuentran alimentos comunes → seed 250+ via OpenFoodFacts/USDA |
-| FEAT-F02 | Unidades nutrición | 7 unidades inconsistentes (g, ml, gr, un, cda, cdta, taza, porción). Sin validación. | Confusión al asignar planes → simplificar a `g` + `un` |
+| ~~FEAT-F01~~ | BD Alimentos | ~~Solo 54 alimentos. Pocos para uso real de nutrición.~~ | **CERRADO 2026-04-14** — Seed 250+ alimentos completado |
+| ~~FEAT-F02~~ | Unidades nutrición | ~~7 unidades inconsistentes (g, ml, gr, un, cda, cdta, taza, porción). Sin validación.~~ | **CERRADO 2026-04-14** — Simplificado a `g` + `un`. BUG-002/003 quantity+unit corregidos |
 | FEAT-H01 | Perfil alumno coach | Coach no puede ver qué comió/entrenó un alumno en una fecha específica del pasado | Dificulta seguimiento individualizado → DayNavigator en tabs Nutrición + Análisis |
 | UX-004 | Dashboard coach | UI no refleja el nivel del resto de la app | Coach siente que la app es "a medias" |
 | UX-005 | Mi Marca | Preview desactualizado del dashboard alumno | Coach no sabe que vera su alumno |

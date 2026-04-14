@@ -7,7 +7,7 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-13 America/Santiago — **Análisis completo + bug fix workout + plan 250 alimentos + historial fecha coach + optimización tabs perfil:** bug BUG-001 (workout weekly reset) corregido en `page.tsx` + `actions.ts`; plan de 250+ alimentos vía seed offline OpenFoodFacts/USDA; simplificación unidades nutrición a `g`+`un`; nuevo feature historial por fecha en tabs Nutrición/Análisis del perfil coach; propuesta de renaming tabs (Entrenamiento→Análisis, Programa→Plan) + fix KPI card Overview; actualizaciones 2026-04-11→13: billing cycle validation, check-in threshold 30d, ClientCardV2 accessibility, 3 migraciones nuevas tiers/pagos (`trialing`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`).
+**Última actualización:** 2026-04-14 America/Santiago — **4 bugs cerrados (nutrición + dashboard):** BUG-002 cantidad input nutrición (string state), BUG-003 selector unidad g/un (reemplazado por button toggle — fix portal Radix), BUG-004 alertas críticas para alumnos sin plan (guard `hasActiveWorkoutProgram`), BUG-005 onboarding sin botón cerrar (dismiss + localStorage persistido). Unidades nutrición g+un implementadas (seed 250+ alimentos completado en sprint anterior).
 
 ---
 
@@ -18,6 +18,11 @@
 - **Bug fix crítico (2026-04-13 — BUG-001):**
   - `workout/[planId]/page.tsx`: query logs ahora filtra por fecha de hoy (timezone Santiago). Logs de semanas anteriores ya no se muestran como "completados esta semana".
   - `workout/[planId]/actions.ts`: upsert de logs ahora busca solo el log de HOY. Semanas anteriores se preservan como historial.
+- **Bugs cerrados (2026-04-14):**
+  - **BUG-002:** `FoodSearchDrawer` — `quantity` state cambiado a `string`; `onChange` guarda raw string, parse solo en preview y en `handleAdd`. Permite borrar y reescribir la cantidad sin que se pegue en 0.
+  - **BUG-003:** `FoodSearchDrawer` — selector de unidad `<Select>` reemplazado por button toggle (g | un). Fix para el conflicto de portal Radix UI Select dentro de Sheet.
+  - **BUG-004:** `dashboard.service.ts` — `SIN_EJERCICIO_7D` ahora solo se activa si `hasActiveWorkoutProgram: true`. Alumnos nuevos sin plan no generan alerta crítica.
+  - **BUG-005:** `CoachOnboardingChecklist` — botón X para cerrar el card de onboarding. Estado `dismissed` persistido en localStorage (`eva:coach-onboarding:v1`). Render `null` cuando dismissed.
 - **Tiers y pagos post-hardening (2026-04-11→13):**
   - 3 nuevas migraciones: `trialing` en `subscription_status`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`.
   - Billing cycle validation mejorado (`bbf98b4`).
@@ -26,9 +31,10 @@
   - Check-in alerts threshold: 30 días (antes 7) — `8a992d3`.
   - `ClientCardV2` estilos accessibility finales — `3d33d7d`.
   - Workout plan handling refactor en dashboard — `ccf5fb6`.
+- **Completado en sprint (movido de P1):**
+  - Simplificación unidades nutrición: `g` + `un` implementado.
+  - Seed 250+ alimentos globales + chilenos completado.
 - **Próximo trabajo planificado (P1):**
-  - Simplificación unidades nutrición: `g` + `un` únicamente.
-  - Seed 250+ alimentos globales + chilenos (OpenFoodFacts/USDA offline).
   - Historial por fecha en perfil del alumno (tabs Nutrición + Análisis).
   - Optimización tabs: Entrenamiento→Análisis, Programa→Plan, KPI card Overview reducida.
   - Alinear `/pricing` de USD a CLP.

@@ -670,3 +670,59 @@ export async function getDynamicMetrics(clientId: string) {
         currentStreak: currentStreak || 0
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Historial por fecha — coach ve lo que comió / entrenó un alumno en un día
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getClientNutritionForDate(clientId: string, date: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+
+    const { data } = await supabase
+        .from('daily_nutrition_logs')
+        .select(`
+            id, log_date, plan_name_at_log,
+            target_calories_at_log, target_protein_at_log,
+            target_carbs_at_log, target_fats_at_log,
+            nutrition_meal_logs (
+                id, is_completed,
+                nutrition_meals (
+                    id, name, order_index,
+                    food_items (
+                        id, quantity, unit,
+                        foods (name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit)
+                    )
+                )
+            )
+        `)
+        .eq('client_id', clientId)
+        .eq('log_date', date)
+        .maybeSingle()
+
+    return data
+}
+
+export async function getClientWorkoutForDate(clientId: string, date: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+
+    const { data } = await supabase
+        .from('workout_logs')
+        .select(`
+            set_number, weight_kg, reps_done, rpe, logged_at,
+            workout_blocks!inner (
+                section, order_index,
+                exercises (name, muscle_group),
+                workout_plans (title, day_of_week)
+            )
+        `)
+        .eq('client_id', clientId)
+        .gte('logged_at', `${date}T00:00:00`)
+        .lte('logged_at', `${date}T23:59:59`)
+        .order('logged_at')
+
+    return data ?? []
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Circle, Sparkles } from 'lucide-react'
+import { CheckCircle2, Circle, Sparkles, X } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 
 type StepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_checkin'
@@ -9,6 +9,7 @@ type StepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_check
 type PersistedState = {
     completed: Partial<Record<StepKey, boolean>>
     ahaMomentSent?: boolean
+    dismissed?: boolean
 }
 
 const STORAGE_KEY = 'eva:coach-onboarding:v1'
@@ -49,6 +50,7 @@ export function CoachOnboardingChecklist({
     hasRecentCheckin: boolean
 }) {
     const [ready, setReady] = useState(false)
+    const [dismissed, setDismissed] = useState(false)
     const [manualCompleted, setManualCompleted] = useState<Partial<Record<StepKey, boolean>>>({})
     const previousStateRef = useRef<Partial<Record<StepKey, boolean>>>({})
     const ahaRef = useRef(false)
@@ -57,6 +59,7 @@ export function CoachOnboardingChecklist({
         const persisted = readPersistedState()
         setManualCompleted(persisted.completed ?? {})
         ahaRef.current = Boolean(persisted.ahaMomentSent)
+        setDismissed(Boolean(persisted.dismissed))
         setReady(true)
     }, [])
 
@@ -104,8 +107,8 @@ export function CoachOnboardingChecklist({
         }
 
         previousStateRef.current = completed
-        writePersistedState({ completed: manualCompleted, ahaMomentSent: ahaRef.current })
-    }, [allDone, completed, manualCompleted, progressPct, ready])
+        writePersistedState({ completed: manualCompleted, ahaMomentSent: ahaRef.current, dismissed })
+    }, [allDone, completed, dismissed, manualCompleted, progressPct, ready])
 
     function toggleProfileStep() {
         setManualCompleted((prev) => ({
@@ -114,6 +117,13 @@ export function CoachOnboardingChecklist({
         }))
     }
 
+    function dismiss() {
+        setDismissed(true)
+        writePersistedState({ completed: manualCompleted, ahaMomentSent: ahaRef.current, dismissed: true })
+    }
+
+    if (!ready || dismissed) return null
+
     return (
         <GlassCard className="p-5 border-border bg-white/90 dark:bg-zinc-950">
             <div className="flex items-start justify-between gap-4">
@@ -121,9 +131,19 @@ export function CoachOnboardingChecklist({
                     <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Onboarding coach</p>
                     <h3 className="text-lg font-black tracking-tight text-foreground mt-1">Activa tu beta en 4 pasos</h3>
                 </div>
-                <div className="text-right">
-                    <p className="text-2xl font-black text-[color:var(--theme-primary)]">{progressPct}%</p>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Completado</p>
+                <div className="flex items-start gap-3">
+                    <div className="text-right">
+                        <p className="text-2xl font-black text-[color:var(--theme-primary)]">{progressPct}%</p>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Completado</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={dismiss}
+                        className="mt-1 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                        aria-label="Cerrar onboarding"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 

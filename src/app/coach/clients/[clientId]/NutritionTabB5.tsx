@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
@@ -42,6 +42,9 @@ import {
 } from 'lucide-react'
 import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
+import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
+import { getClientNutritionForDate } from './actions'
+import { calculateFoodItemMacros } from '@/lib/nutrition-utils'
 
 export type NutritionTimelineRow = {
   date: string
@@ -199,6 +202,24 @@ export function NutritionTabB5({
 }: NutritionTabB5Props) {
   const reduceMotion = useReducedMotion()
   const [openMealId, setOpenMealId] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const [historyDate, setHistoryDate] = useState(santiagoTodayIso)
+  const [historyData, setHistoryData] = useState<Awaited<ReturnType<typeof getClientNutritionForDate>>>(null)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+
+  const handleHistoryDateChange = (date: string) => {
+    setHistoryDate(date)
+    if (date === santiagoTodayIso) {
+      setHistoryData(null)
+      setHistoryLoaded(false)
+      return
+    }
+    startTransition(async () => {
+      const data = await getClientNutritionForDate(clientId, date)
+      setHistoryData(data)
+      setHistoryLoaded(true)
+    })
+  }
 
   const plan = activeNutritionPlan
   const kcal =
@@ -930,6 +951,122 @@ export function NutritionTabB5({
           </div>
         )}
       </GlassCard>
+
+      {/* ── Historial por fecha ── */}
+      <GlassCard className="p-4 space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+          <Calendar className="w-3.5 h-3.5" /> Ver día específico
+        </h3>
+        <DayNavigator
+          selectedDate={historyDate}
+          onDateChange={handleHistoryDateChange}
+          adherenceDates={new Set<string>()}
+          isLoading={isPending}
+        />
+        {historyDate !== santiagoTodayIso && (
+          <div className="pt-1">
+            {isPending && (
+              <p className="text-sm text-muted-foreground text-center py-6 animate-pulse">Cargando…</p>
+            )}
+            {!isPending && historyLoaded && !historyData && (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Sin registros de nutrición para este día.
+              </p>
+            )}
+            {!isPending && historyData && (
+              <NutritionDayReadOnly log={historyData} />
+            )}
+          </div>
+        )}
+      </GlassCard>
+    </div>
+  )
+}
+
+// ── Sub-componente: vista de nutrición de un día (solo lectura) ──────────────
+type NutritionDayLog = NonNullable<Awaited<ReturnType<typeof getClientNutritionForDate>>>
+
+function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
+  const mealLogs = (log.nutrition_meal_logs ?? []) as any[]
+
+  // Calcular macros consumidos del día
+  let totalCal = 0, totalP = 0, totalC = 0, totalF = 0
+  for (const ml of mealLogs) {
+    if (!ml.is_completed) continue
+    const items = ml.nutrition_meals?.food_items ?? []
+    for (const fi of items) {
+      if (!fi.foods) continue
+      const m = calculateFoodItemMacros({
+        quantity: Number(fi.quantity) || 0,
+        unit: fi.unit ?? 'g',
+        foods: {
+          name: fi.foods.name ?? '',
+          calories: fi.foods.calories ?? 0,
+          protein_g: fi.foods.protein_g ?? 0,
+          carbs_g: fi.foods.carbs_g ?? 0,
+          fats_g: fi.foods.fats_g ?? 0,
+          serving_size: fi.foods.serving_size ?? 100,
+          serving_unit: fi.foods.serving_unit ?? null,
+        },
+      })
+      totalCal += m.calories; totalP += m.protein; totalC += m.carbs; totalF += m.fats
+    }
+  }
+
+  const sortedMeals = [...mealLogs].sort(
+    (a, b) => (a.nutrition_meals?.order_index ?? 0) - (b.nutrition_meals?.order_index ?? 0)
+  )
+
+  return (
+    <div className="space-y-4">
+      {/* Resumen macros del día */}
+      <div className="grid grid-cols-4 gap-2 text-center rounded-xl bg-muted/30 p-3">
+        {[
+          { label: 'Kcal', value: Math.round(totalCal), color: 'text-primary' },
+          { label: 'P', value: `${Math.round(totalP)}g`, color: 'text-blue-500' },
+          { label: 'C', value: `${Math.round(totalC)}g`, color: 'text-amber-500' },
+          { label: 'G', value: `${Math.round(totalF)}g`, color: 'text-rose-400' },
+        ].map((m) => (
+          <div key={m.label}>
+            <p className={cn('text-base font-black', m.color)}>{m.value}</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{m.label}</p>
+          </div>
+        ))}
+      </div>
+      {/* Lista de comidas */}
+      <div className="space-y-2">
+        {sortedMeals.map((ml: any) => {
+          const meal = ml.nutrition_meals
+          if (!meal) return null
+          return (
+            <div
+              key={ml.id}
+              className={cn(
+                'rounded-xl border p-3 space-y-1.5',
+                ml.is_completed
+                  ? 'border-emerald-500/30 bg-emerald-500/5'
+                  : 'border-border/40 bg-muted/10 opacity-60'
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-black uppercase tracking-widest">{meal.name}</p>
+                <span className={cn('text-[10px] font-bold', ml.is_completed ? 'text-emerald-500' : 'text-muted-foreground')}>
+                  {ml.is_completed ? 'Completada' : 'No completada'}
+                </span>
+              </div>
+              {(meal.food_items ?? []).length > 0 && (
+                <ul className="space-y-0.5">
+                  {(meal.food_items as any[]).map((fi: any) => (
+                    <li key={fi.id} className="text-[11px] text-muted-foreground">
+                      {fi.foods?.name ?? '—'} — {fi.quantity} {fi.unit}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

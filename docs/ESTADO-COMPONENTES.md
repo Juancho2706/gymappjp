@@ -9,7 +9,7 @@
 - Cada actualización debe llevar **fecha y hora** en **America/Santiago** en la línea **Última actualización** de ambos documentos (formato recomendado: `YYYY-MM-DD HH:mm America/Santiago`).
 - Bitácoras Cursor (sesiones): [`progreso cursor/PROGRESO-workout-checkin-rework-2026-04-10.md`](../progreso%20cursor/PROGRESO-workout-checkin-rework-2026-04-10.md).
 
-**Última actualización:** 2026-04-13 America/Santiago — **Análisis + bug fix + roadmap:** BUG-001 workout weekly reset corregido (`page.tsx`+`actions.ts` con filtro fecha); hotfixes 2026-04-11→13: billing cycle validation, check-in alerts 30d, ClientCardV2 accessibility, 3 migraciones tiers/pagos; gaps nuevos identificados: historial por fecha coach (0%), tabs solapadas Entrenamiento+Programa (0%), KPI card Overview grande, unidades nutrición inconsistentes; plan 250 alimentos + unidades g/un pendiente implementación.
+**Última actualización:** 2026-04-14 America/Santiago — **4 bugs nutrición/dashboard cerrados:** BUG-002 quantity input (string state), BUG-003 unit selector (button toggle), BUG-004 alertas críticas alumnos sin plan (`hasActiveWorkoutProgram` guard), BUG-005 onboarding dismiss button + localStorage. Unidades g+un y seed 250 alimentos ya implementados.
 
 ---
 
@@ -44,11 +44,13 @@
 |------------|--------|---|-------|
 | `page.tsx` (server) | 🔶 | 70% | Streaming con `Suspense` + `DashboardContent`; consulta principal movida a `_data/dashboard.queries.ts` (patrón estable). |
 | `_data/dashboard.queries.ts` | ✅ | 85% | `Promise.all` paralelo + top 5 riesgo por `attentionScore`, actividades, KPIs y datasets de charts en una sola capa de datos. |
-| `CoachDashboardClient` | 🔶 | 65% | Quick actions visibles (crear alumno/programas/nutrición), alertas críticas enriquecidas (riesgo + programas por vencer), charts y activity feed. |
+| `CoachDashboardClient` | 🔶 | 70% | Quick actions visibles (crear alumno/programas/nutrición), alertas críticas enriquecidas (riesgo + programas por vencer), charts y activity feed. |
+| `CoachOnboardingChecklist` | ✅ | 95% | Botón X dismiss + `dismissed` persistido en localStorage. Render null cuando dismissed o !ready. Auto-write al hacer dismiss. |
+| `dashboard.service.ts` (attention) | ✅ | 90% | `SIN_EJERCICIO_7D` guardado con `hasActiveWorkoutProgram` — alumnos nuevos sin plan no generan alerta crítica. |
 | `actions.ts` | 🔶 | 60% | `getAdherenceStats`/`getNutritionStats` sigue operativo; menor prioridad tras consolidar `_data`. |
 | `loading.tsx` | ✅ | 100% | Skeleton con stat cards + chart placeholder |
 
-**Resultado del módulo: ~68% — Entró en fase comercial usable para Sprint 6. Pendiente: comparativas avanzadas, calendarios y análisis extendido.**
+**Resultado del módulo: ~72% — Alertas críticas y onboarding corregidos. Pendiente: comparativas avanzadas, calendarios y análisis extendido.**
 
 ---
 
@@ -153,7 +155,7 @@
 | Componente | Ruta | Estado | % | Notas |
 |------------|------|--------|---|-------|
 | Hub + tabs | `/coach/nutrition-plans` | ✅ | 95% | `NutritionHub` (ancho 2000px), `TemplateLibrary`, `ActivePlansBoard` (**sparkline 7d + kcal hoy** vía `getActivePlansBoardData`), `FoodLibrary`, `AssignModal`; `page.tsx` + `loading.tsx`; datos vía `nutrition-coach.queries` |
-| PlanBuilder + rutas | `/coach/nutrition-plans/new`, `…/[id]/edit`, `…/client/[clientId]` | ✅ | 95% | dnd-kit, `FoodSearchDrawer`, persistencia JSON vía `_actions/nutrition-coach.actions.ts` (incl. assign, delete/duplicate template, custom food, `unassign` con sesión); orden móvil sidebar→canvas; validación plan vacío; toasts / `AlertDialog` / `useReducedMotion` (auditoría 2026-04-09) |
+| PlanBuilder + rutas | `/coach/nutrition-plans/new`, `…/[id]/edit`, `…/client/[clientId]` | ✅ | 97% | dnd-kit, `FoodSearchDrawer`, persistencia JSON vía `_actions/nutrition-coach.actions.ts` (incl. assign, delete/duplicate template, custom food, `unassign` con sesión); orden móvil sidebar→canvas; validación plan vacío; toasts / `AlertDialog` / `useReducedMotion` (auditoría 2026-04-09). **BUG-002+003 cerrados:** quantity como `string` (evita snap a 0), unit selector reemplazado por button toggle (fix portal Radix+Sheet). |
 | Redirect legacy | `/coach/nutrition-builder/[clientId]` | 🔶 | 40% | Solo redirect a `nutrition-plans/client/...`; forms/modal legacy eliminados |
 | Alimentos | `/coach/foods` | ✅ | 95% | `FoodBrowser` + **`FoodListCompact`** (lista densa responsive), `AddFoodSheet`, `getFoodLibrary`; `FoodSearch.tsx` (RPC) compartido con meal-groups |
 

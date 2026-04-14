@@ -5,13 +5,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -49,8 +42,6 @@ const CATEGORIES = [
   { id: 'verdura', label: 'Verdura' },
   { id: 'snack', label: 'Snack' },
 ]
-
-const UNITS = ['g', 'un']
 
 /** Normaliza unidades legacy a las dos unidades canónicas: 'g' o 'un' */
 function normalizeUnit(raw: string | null | undefined): 'g' | 'un' {
@@ -95,8 +86,8 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
   const [loading, setLoading] = useState(false)
   const [category, setCategory] = useState('todos')
   const [picked, setPicked] = useState<FoodRow | null>(null)
-  const [quantity, setQuantity] = useState(100)
-  const [unit, setUnit] = useState('g')
+  const [quantity, setQuantity] = useState('100')
+  const [unit, setUnit] = useState<'g' | 'un'>('g')
 
   useEffect(() => {
     if (!open) {
@@ -104,7 +95,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
       setResults([])
       setLoading(false)
       setPicked(null)
-      setQuantity(100)
+      setQuantity('100')
       setUnit('g')
       setCategory('todos')
     }
@@ -144,16 +135,23 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
     return normalizeCategory(f.category) === category
   })
 
+  const parsedQuantity = parseFloat(quantity) || 0
+
   const preview = picked
-    ? previewMacrosForQuantity(toFoodDraftShape(picked), quantity, unit)
+    ? previewMacrosForQuantity(toFoodDraftShape(picked), parsedQuantity, unit)
     : null
 
   const handleAdd = useCallback(() => {
     if (!picked) return
+    const qty = parseFloat(quantity)
+    if (isNaN(qty) || qty <= 0) {
+      toast.error('Ingresa una cantidad válida mayor a 0')
+      return
+    }
     onConfirm({
       food_id: picked.id,
       food: toFoodDraftShape(picked),
-      quantity,
+      quantity: qty,
       unit,
     })
   }, [picked, quantity, unit, onConfirm])
@@ -220,7 +218,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                     onClick={() => {
                       setPicked(f)
                       setUnit(normalizeUnit(f.serving_unit))
-                      setQuantity(f.serving_size || 100)
+                      setQuantity(String(f.serving_size || 100))
                     }}
                     className="w-full text-left rounded-xl border border-border p-3 hover:bg-muted/40 transition-colors"
                   >
@@ -242,22 +240,31 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                     type="number"
                     min={0}
                     step="any"
+                    inputMode="decimal"
                     className="mt-1"
                     value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
+                    onChange={(e) => setQuantity(e.target.value)}
                   />
                 </div>
                 <div>
                   <Label>Unidad</Label>
-                  <Select value={unit} onValueChange={(v) => setUnit(v ?? 'g')}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="g">g — gramos (pesable)</SelectItem>
-                      <SelectItem value="un">un — unidades (contable)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex rounded-lg border border-border overflow-hidden mt-1">
+                    {(['g', 'un'] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setUnit(u)}
+                        className={cn(
+                          'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                          unit === u
+                            ? 'bg-[color:var(--theme-primary)] text-primary-foreground'
+                            : 'bg-transparent text-muted-foreground hover:bg-muted/40'
+                        )}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               {preview && (

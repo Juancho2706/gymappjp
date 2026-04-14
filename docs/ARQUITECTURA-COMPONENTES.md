@@ -1,12 +1,15 @@
 # Arquitectura de Componentes — GymApp JP (EVA)
 
 > Diagrama de jerarquía y comunicación entre componentes principales.
-> **Última actualización:** 2026-04-13 America/Santiago — BUG-001 workout weekly reset corregido; nuevos gaps documentados: historial por fecha coach (§16), tabs optimización (§5); 3 migraciones tiers/pagos. (`fetchCheckoutSnapshot` / `cancelCheckoutAtProvider` en provider MP, webhook token obligatorio en prod, firma `x-signature` opcional, `confirm-subscription` vía provider, gate de suscripción extraído a `coach-subscription-gate.ts`).
+> **Última actualización:** 2026-04-14 America/Santiago — 4 bugs cerrados: BUG-002 (`FoodSearchDrawer` quantity→string), BUG-003 (`FoodSearchDrawer` unit Select→button toggle, fix portal Radix+Sheet), BUG-004 (`dashboard.service.ts` `hasActiveWorkoutProgram` guard para `SIN_EJERCICIO_7D`), BUG-005 (`CoachOnboardingChecklist` dismiss + X button + localStorage).
 
 ---
 
 ## Cambios recientes (delta)
 
+- **BUG-002/003 cerrados (2026-04-14):** `FoodSearchDrawer.tsx` — `quantity` state cambiado a `string` (BUG-002: evita snap a 0 al borrar). Selector de unidad `<Select>` reemplazado por button toggle inline `g | un` (BUG-003: fix conflicto portal Radix UI `Select` dentro de `Sheet`).
+- **BUG-004 cerrado (2026-04-14):** `dashboard.service.ts` — `calculateAttentionScore` ahora recibe `hasActiveWorkoutProgram: boolean`; la flag `SIN_EJERCICIO_7D` solo se activa si el alumno tiene un programa activo asignado. Alumnos nuevos sin plan no aparecen en alertas críticas.
+- **BUG-005 cerrado (2026-04-14):** `CoachOnboardingChecklist.tsx` — botón X para cerrar el card. Estado `dismissed` persistido en `localStorage` (`eva:coach-onboarding:v1`). Render `null` cuando dismissed.
 - **BUG-001 cerrado (2026-04-13):** `workout/[planId]/page.tsx` ahora filtra logs por fecha HOY (timezone Santiago) usando `.gte/.lt`. `actions.ts` también filtra por HOY antes de hacer upsert. Logs de semanas anteriores quedan como historial (ya estaban en `previousHistory`).
 - **Tiers/Pagos (2026-04-11→13):** 3 migraciones nuevas: `trialing` en `subscription_status`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`. Billing cycle validation.
 - **Hotfixes:** Check-in alerts a 30 días; `ClientCardV2` accessibility final.

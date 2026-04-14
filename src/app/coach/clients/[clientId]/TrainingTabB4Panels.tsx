@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import confetti from 'canvas-confetti'
 import { useReducedMotion } from 'framer-motion'
 import {
@@ -20,8 +20,11 @@ import {
 } from 'recharts'
 import { GlassCard } from '@/components/ui/glass-card'
 import { cn } from '@/lib/utils'
-import { Trophy, AlertTriangle, BarChart3, Target } from 'lucide-react'
+import { Trophy, AlertTriangle, BarChart3, Target, Calendar } from 'lucide-react'
 import type { MuscleVolumeRow } from './profileDataHelpers'
+import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
+import { getClientWorkoutForDate } from './actions'
+import { getTodayInSantiago } from '@/lib/date-utils'
 import {
     findWeeklyWeightPRs,
     buildDailyTonnageSeries,
@@ -32,6 +35,8 @@ import {
 import { TrainingStrengthCards } from './TrainingStrengthCards'
 
 type TrainingTabB4PanelsProps = {
+    clientId: string
+    santiagoTodayIso: string
     workoutHistory: any[]
     muscleVolumeByGroup: MuscleVolumeRow[]
     chartGridColor: string
@@ -111,6 +116,8 @@ function WeeklyPRBanner({ prs }: { prs: WeeklyWeightPR[] }) {
 }
 
 export function TrainingTabB4Panels({
+    clientId,
+    santiagoTodayIso,
     workoutHistory,
     muscleVolumeByGroup,
     chartGridColor,
@@ -119,6 +126,24 @@ export function TrainingTabB4Panels({
     tooltipBorderColor,
     tooltipTextColor,
 }: TrainingTabB4PanelsProps) {
+    const [isPending, startTransition] = useTransition()
+    const [historyDate, setHistoryDate] = useState(santiagoTodayIso)
+    const [historyData, setHistoryData] = useState<Awaited<ReturnType<typeof getClientWorkoutForDate>>>([])
+    const [historyLoaded, setHistoryLoaded] = useState(false)
+
+    const handleHistoryDateChange = (date: string) => {
+        setHistoryDate(date)
+        if (date === santiagoTodayIso) {
+            setHistoryData([])
+            setHistoryLoaded(false)
+            return
+        }
+        startTransition(async () => {
+            const data = await getClientWorkoutForDate(clientId, date)
+            setHistoryData(data)
+            setHistoryLoaded(true)
+        })
+    }
     const weeklyPRs = useMemo(
         () => findWeeklyWeightPRs(workoutHistory || [], new Date()),
         [workoutHistory]
@@ -330,6 +355,90 @@ export function TrainingTabB4Panels({
                     )}
                 </div>
             )}
+
+            {/* ── Historial por fecha ── */}
+            <GlassCard className="p-4 space-y-4">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5" /> Ver sesión por fecha
+                </h3>
+                <DayNavigator
+                    selectedDate={historyDate}
+                    onDateChange={handleHistoryDateChange}
+                    adherenceDates={new Set<string>()}
+                    isLoading={isPending}
+                />
+                {historyDate !== santiagoTodayIso && (
+                    <div className="pt-1">
+                        {isPending && (
+                            <p className="text-sm text-muted-foreground text-center py-6 animate-pulse">Cargando…</p>
+                        )}
+                        {!isPending && historyLoaded && historyData.length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-6">
+                                Sin entrenamiento registrado para este día.
+                            </p>
+                        )}
+                        {!isPending && historyData.length > 0 && (
+                            <WorkoutDayReadOnly logs={historyData} />
+                        )}
+                    </div>
+                )}
+            </GlassCard>
+        </div>
+    )
+}
+
+// ── Sub-componente: vista de sesión de entrenamiento (solo lectura) ──────────
+type WorkoutLog = Awaited<ReturnType<typeof getClientWorkoutForDate>>[number]
+
+function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
+    // Agrupar sets por ejercicio
+    const byExercise = new Map<string, { name: string; muscle: string; sets: WorkoutLog[] }>()
+
+    for (const log of logs) {
+        const block = (log as any).workout_blocks
+        const exercise = block?.exercises
+        const key = exercise?.name ?? 'Ejercicio'
+        if (!byExercise.has(key)) {
+            byExercise.set(key, {
+                name: exercise?.name ?? 'Ejercicio',
+                muscle: exercise?.muscle_group ?? '',
+                sets: [],
+            })
+        }
+        byExercise.get(key)!.sets.push(log)
+    }
+
+    const planTitle = (logs[0] as any)?.workout_blocks?.workout_plans?.title
+
+    return (
+        <div className="space-y-3">
+            {planTitle && (
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                    Plan: {planTitle}
+                </p>
+            )}
+            {[...byExercise.values()].map(({ name, muscle, sets }) => (
+                <div key={name} className="rounded-xl border border-border/40 bg-muted/10 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <p className="text-xs font-black">{name}</p>
+                        {muscle && (
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                {muscle}
+                            </span>
+                        )}
+                    </div>
+                    <ul className="space-y-0.5">
+                        {sets
+                            .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
+                            .map((s, i) => (
+                                <li key={i} className="text-[11px] font-mono text-muted-foreground">
+                                    #{s.set_number ?? i + 1} · {s.weight_kg ?? '—'} kg × {s.reps_done ?? '—'} reps
+                                    {s.rpe != null ? ` · RPE ${s.rpe}` : ''}
+                                </li>
+                            ))}
+                    </ul>
+                </div>
+            ))}
         </div>
     )
 }

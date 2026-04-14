@@ -2,7 +2,7 @@
 
 > Radiografia completa de donde estamos y hacia donde vamos.
 > **Generado:** 2026-04-10 America/Santiago — basado en auditoria de 225+ archivos, 24 tablas BD, 38 rutas.
-> **Actualizado:** 2026-04-13 America/Santiago — BUG-001 workout weekly reset cerrado; 3 migraciones nuevas tiers/pagos; nuevos gaps: historial fecha coach, tabs optimización, 250 alimentos, unidades g+un; % global ~75%.
+> **Actualizado:** 2026-04-14 America/Santiago — 4 bugs cerrados: BUG-002/003 nutrición (quantity+unit toggle), BUG-004 alertas críticas alumnos nuevos, BUG-005 onboarding dismiss. Unidades g+un y seed 250 alimentos completados. % global ~76%.
 
 ---
 
@@ -17,7 +17,7 @@ graph LR
         PerfilAlumno["Perfil Alumno Coach<br/>95%"]
         Builder["Constructor Planes<br/>95%"]
         BiblioProgs["Biblioteca Programas<br/>95%"]
-        NutriCoach["Nutricion Coach<br/>93%"]
+        NutriCoach["Nutricion Coach<br/>95%"]
         DashAlumno["Dashboard Alumno<br/>98%"]
         NutriAlumno["Nutricion Alumno<br/>96%"]
     end
@@ -35,7 +35,7 @@ graph LR
     end
 
     subgraph parcial ["Parcial (25-49%)"]
-        DashCoach["Dashboard Coach<br/>~68%"]
+        DashCoach["Dashboard Coach<br/>~72%"]
         LoginCoach["Login Coach<br/>40%"]
         EjercCoach["Ejercicios Coach<br/>40%"]
         ResetPw["Forgot/Reset PW<br/>40%"]
@@ -58,7 +58,7 @@ graph LR
 | 3 | Constructor Planes | 95% | ~4,000 | 17 | Alto (valor coach) |
 | 4 | Biblioteca Programas | 95% | ~1,800 | 9 | Medio (eficiencia coach) |
 | 5 | Perfil Alumno Coach | 95% | ~5,000 | 40 | Alto (decisiones coach) |
-| 6 | Nutricion Coach | 93% | ~3,000 | 24 | Alto (valor coach) |
+| 6 | Nutricion Coach | 95% | ~3,000 | 24 | Alto (valor coach) |
 | 7 | Directorio Clientes | 92% | ~3,500 | 15 | Alto (gestión) |
 | 8 | Pagos & Suscripciones | **91%** | ~900+ | 11+ | **BLOQUEANTE** (monetización) |
 | 9 | Workout Execution | **84%** ✅ | ~2,000 | 10 | **Critico** (core loop alumno) |
@@ -68,7 +68,7 @@ graph LR
 | 13 | Landing Page | 60% | ~970 | 1 | **Critico** (adquisición) |
 | 14 | Onboarding Alumno | 58% | ~500 | 3 | Medio (activación) |
 | 15 | Auth Alumno | 50% | ~400 | 6 | Medio |
-| 16 | Dashboard Coach | ~70% | ~700 | 4+ | Alto (retención coach) |
+| 16 | Dashboard Coach | ~72% | ~700 | 4+ | Alto (retención coach) |
 | 17 | Ejercicios Coach | 40% | ~400 | 4 | Bajo |
 | 18 | Login Coach | 40% | ~200 | 2 | Medio (adquisición) |
 | 19 | Forgot/Reset PW | 40% | ~300 | 4 | Bajo |
