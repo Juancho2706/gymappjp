@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
+import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 import {
     clientIpFromRequest,
     jsonRateLimited,
@@ -130,7 +131,7 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(notFoundUrl)
         }
 
-        const resolvedColor = coach.primary_color || '#007AFF'
+        const resolvedColor = coach.primary_color || BRAND_PRIMARY_COLOR
 
         // Forward branding as request headers so layouts can read them
         const response = NextResponse.next({ request })
@@ -145,7 +146,7 @@ export async function middleware(request: NextRequest) {
         response.headers.set('x-coach-slug', coach.slug)
         response.headers.set('x-coach-brand-name', coach.brand_name)
         response.headers.set('x-coach-primary-color', resolvedColor)
-        response.headers.set('x-coach-logo-url', coach.logo_url ?? '')
+        response.headers.set('x-coach-logo-url', coach.logo_url?.trim() || BRAND_APP_ICON)
 
         // Check if client is authenticated for protected /c/* routes (not login page)
         const isLoginPage = pathname.endsWith('/login')
@@ -199,7 +200,7 @@ export async function middleware(request: NextRequest) {
             response.headers.set('x-client-use-brand-colors', String(useBrandColors))
 
             if (!useBrandColors) {
-                response.headers.set('x-coach-primary-color', '#007AFF')
+                response.headers.set('x-coach-primary-color', BRAND_PRIMARY_COLOR)
             }
 
             // Suspend access if inactive

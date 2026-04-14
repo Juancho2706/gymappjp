@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
     Home,
@@ -23,14 +24,16 @@ import { GymAppLogo } from '@/components/ui/Logo'
 import { toggleClientBrandColors } from '@/app/c/[coach_slug]/actions'
 import { toast } from 'sonner'
 import { Switch } from '@/components/ui/switch'
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 
 interface Props {
     coachSlug: string
     coachBrand: string
+    coachLogoUrl: string
     initialUseBrandColors?: boolean
 }
 
-export function ClientNav({ coachSlug, coachBrand, initialUseBrandColors = true }: Props) {
+export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrandColors = true }: Props) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -113,10 +116,24 @@ export function ClientNav({ coachSlug, coachBrand, initialUseBrandColors = true 
                 {/* Logo area (Desktop only) */}
                 <div className={cn("hidden md:flex py-6 border-b border-border/10 items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
                     <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
-                        <GymAppLogo className={cn(
-                            'h-10 flex-shrink-0',
-                            isCollapsed ? 'w-14' : 'w-[6.75rem]'
-                        )} />
+                        <div
+                            className={cn(
+                                'relative h-10 flex-shrink-0',
+                                isCollapsed ? 'w-10' : 'w-[6.75rem]'
+                            )}
+                        >
+                            <Image
+                                src={coachLogoUrl === BRAND_APP_ICON ? BRAND_APP_ICON : coachLogoUrl}
+                                alt={`${coachBrand} logo`}
+                                fill
+                                sizes={isCollapsed ? '40px' : '108px'}
+                                className={cn(
+                                    'object-contain',
+                                    isCollapsed && 'p-1'
+                                )}
+                                priority
+                            />
+                        </div>
                         {!isCollapsed && (
                             <div>
                                 <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">

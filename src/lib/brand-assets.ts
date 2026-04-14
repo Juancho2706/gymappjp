@@ -5,6 +5,7 @@
 export const BRAND_LOGO_WEB = '/LOGOS/eva-wordmark-outline.png'
 
 export const BRAND_APP_ICON = '/LOGOS/eva-icon.png'
+export const BRAND_PRIMARY_COLOR = '#10B981'
 
 /** Debe coincidir con las dimensiones reales del PNG (scrapers son sensibles a width/height erróneos). */
 export const BRAND_OG_IMAGE = '/LOGOS/eva-og.png'

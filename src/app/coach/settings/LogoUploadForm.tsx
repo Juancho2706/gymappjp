@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { Upload, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { updateLogoAction, type BrandSettingsState } from './actions'
+import { BRAND_LOGO_WEB } from '@/lib/brand-assets'
 
 const initialState: BrandSettingsState = {}
 
@@ -57,9 +58,14 @@ export function LogoUploadForm({
                             unoptimized={true}
                         />
                     ) : (
-                        <span className="text-3xl font-bold text-muted-foreground">
-                            {brandName[0]?.toUpperCase()}
-                        </span>
+                        <Image
+                            src={BRAND_LOGO_WEB}
+                            alt="EVA"
+                            fill
+                            sizes="80px"
+                            className="object-contain p-2"
+                            priority
+                        />
                     )}
                 </div>
 

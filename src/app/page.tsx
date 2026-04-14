@@ -815,6 +815,15 @@ export default function LandingPage() {
                             y los de mayor escala se facturan trimestral o anual para que sea más simple de administrar.
                             En los planes de entrada el módulo de nutrición no viene incluido; en los superiores sí.
                         </p>
+                        <div className="mt-6">
+                            <Link
+                                href="/pricing"
+                                className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-600 transition-colors hover:text-cyan-500 dark:text-cyan-400 dark:hover:text-cyan-300"
+                            >
+                                Ver todos los planes
+                                <ArrowRight className="h-4 w-4" />
+                            </Link>
+                        </div>
                     </motion.div>
 
                     <motion.div

@@ -4,6 +4,7 @@ import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { SuccessAnimationProvider } from '@/components/SuccessAnimationProvider'
 import { getCoach } from '@/lib/coach/get-coach'
 import type { Metadata } from 'next'
+import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 
 export const metadata: Metadata = {
     title: {
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 
 function hexToRgb(hex: string): string {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    if (!result) return '0, 122, 255'
+    if (!result) return '16, 185, 129'
     return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
 }
 
@@ -29,7 +30,10 @@ export default async function CoachLayout({
         redirect('/login')
     }
 
-    const primaryColor = coach.use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF')
+    const primaryColor =
+        coach.use_brand_colors_coach === false
+            ? BRAND_PRIMARY_COLOR
+            : (coach.primary_color || BRAND_PRIMARY_COLOR)
     const primaryRgb = hexToRgb(primaryColor)
 
     return (

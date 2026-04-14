@@ -5,7 +5,13 @@ import type { Metadata, Viewport } from 'next'
 import type { Tables } from '@/lib/database.types'
 
 type Coach = Tables<'coaches'>
-import { BRAND_APP_ICON, BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
+import {
+    BRAND_APP_ICON,
+    BRAND_OG_IMAGE,
+    BRAND_OG_IMAGE_HEIGHT,
+    BRAND_OG_IMAGE_WIDTH,
+    BRAND_PRIMARY_COLOR,
+} from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { InstallPrompt } from '@/components/InstallPrompt'
@@ -87,7 +93,7 @@ export async function generateViewport({ params }: Props): Promise<Viewport> {
     const headersList = await headers()
     
     // Use the same logic as the main layout to get the primary color
-    const primaryColor = headersList.get('x-coach-primary-color') ?? '#8B5CF6'
+    const primaryColor = headersList.get('x-coach-primary-color') ?? BRAND_PRIMARY_COLOR
     
     return {
         themeColor: primaryColor,
@@ -99,7 +105,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const headersList = await headers()
 
     // Read branding from middleware headers (set in middleware.ts)
-    const primaryColor = headersList.get('x-coach-primary-color') ?? '#8B5CF6'
+    const primaryColor = headersList.get('x-coach-primary-color') ?? BRAND_PRIMARY_COLOR
+    const logoUrl = headersList.get('x-coach-logo-url') || BRAND_APP_ICON
     const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
     const coachId = headersList.get('x-coach-id') ?? ''
     const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
@@ -109,7 +116,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const hexMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(primaryColor)
     const primaryRgb = hexMatch
         ? `${parseInt(hexMatch[1], 16)}, ${parseInt(hexMatch[2], 16)}, ${parseInt(hexMatch[3], 16)}`
-        : '0, 122, 255'
+        : '16, 185, 129'
 
     if (!coachId) {
         redirect('/not-found')
@@ -124,7 +131,12 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
             >
-                <ClientNav coachSlug={coach_slug} coachBrand={brandName} initialUseBrandColors={initialUseBrandColors} />
+                <ClientNav
+                    coachSlug={coach_slug}
+                    coachBrand={brandName}
+                    coachLogoUrl={logoUrl}
+                    initialUseBrandColors={initialUseBrandColors}
+                />
                 <InstallPrompt brandName={brandName} />
 
                 <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">

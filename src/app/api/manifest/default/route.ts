@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { BRAND_APP_ICON } from '@/lib/brand-assets';
+import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR } from '@/lib/brand-assets';
 
 export async function GET() {
   const manifest = {
@@ -10,7 +10,7 @@ export async function GET() {
     display: "standalone",
     orientation: "portrait",
     background_color: "#000000",
-    theme_color: "#10B981",
+    theme_color: BRAND_PRIMARY_COLOR,
     icons: [
       {
         src: BRAND_APP_ICON,

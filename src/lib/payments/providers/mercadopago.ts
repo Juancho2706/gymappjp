@@ -48,17 +48,27 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
             }
         }
     }
-    // If a test payer email is explicitly configured, always prefer it.
-    // This allows testing with APP_USR credentials from test seller accounts.
-    const payerEmail = normalizedConfigured || coachEmail
+    if (isSandbox) {
+        const payerEmail = normalizedConfigured || coachEmail
+        if (!payerEmail.toLowerCase().endsWith('@testuser.com')) {
+            throw new Error(
+                'MercadoPago sandbox requiere payer_email @testuser.com. Configura MERCADOPAGO_TEST_PAYER_EMAIL con un test user de MP.'
+            )
+        }
+        return payerEmail
+    }
 
-    if ((isSandbox || Boolean(normalizedConfigured)) && !payerEmail.toLowerCase().endsWith('@testuser.com')) {
+    if (normalizedConfigured) {
         throw new Error(
-            'MercadoPago sandbox requiere payer_email @testuser.com. Configura MERCADOPAGO_TEST_PAYER_EMAIL con un test user de MP.'
+            'MERCADOPAGO_TEST_PAYER_EMAIL solo aplica a sandbox con token TEST-. En produccion debe estar vacio para usar un payer real.'
         )
     }
 
-    return payerEmail
+    if (coachEmail.toLowerCase().endsWith('@testuser.com')) {
+        throw new Error('Con token de produccion, el payer_email no puede ser un test user (@testuser.com).')
+    }
+
+    return coachEmail
 }
 
 function buildExternalReference(input: CreateCheckoutInput) {
