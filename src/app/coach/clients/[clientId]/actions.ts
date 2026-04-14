@@ -508,6 +508,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
     const { score: attentionScore } = calculateAttentionScore({
         lastCheckinDate: lastCheckInRow?.created_at ?? null,
         lastWorkoutDate: lastWorkoutDateFromHistory,
+        hasActiveWorkoutProgram: activeProgram != null,
         nutritionCompliance: nutritionCompliancePercent,
         planDaysRemaining: daysRemaining,
         oneRMDelta: null,
