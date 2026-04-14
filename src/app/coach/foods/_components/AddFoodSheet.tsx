@@ -157,7 +157,7 @@ function AddFoodFormBody({
         </div>
         <div className="space-y-2">
           <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Unidad de medición</Label>
-          <Select value={unit} onValueChange={(v: 'g' | 'un') => setUnit(v)}>
+          <Select value={unit} onValueChange={(v) => setUnit(v as 'g' | 'un')}>
             <SelectTrigger className="h-11 rounded-xl">
               <SelectValue />
             </SelectTrigger>
