@@ -4,13 +4,31 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download, X, Share, PlusSquare } from 'lucide-react'
 
+const STORAGE_KEY = 'eva-pwa-install-dismissed'
+
 interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: Array<string>;
+  readonly platforms: Array<string>
   readonly userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed',
+    outcome: 'accepted' | 'dismissed'
     platform: string
-  }>;
-  prompt(): Promise<void>;
+  }>
+  prompt(): Promise<void>
+}
+
+function isEligibleMobileClient(): boolean {
+  if (typeof window === 'undefined') return false
+  const narrow = window.matchMedia('(max-width: 768px)').matches
+  const coarse = window.matchMedia('(pointer: coarse)').matches
+  const mobileUa = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  return narrow && (coarse || mobileUa)
+}
+
+function isDismissedPersistent(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
 }
 
 export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
@@ -20,45 +38,51 @@ export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   useEffect(() => {
-    // Check if it's already installed
-    const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || 
-                            (window.navigator as any).standalone || 
-                            document.referrer.includes('android-app://')
-    setIsStandalone(isStandaloneMode)
+    const standaloneMode =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone ||
+      document.referrer.includes('android-app://')
+    setIsStandalone(standaloneMode)
 
-    // Detect iOS
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
+    const isIOSDevice =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+      !(window as Window & { MSStream?: unknown }).MSStream
     setIsIOS(isIOSDevice)
 
-    // Handle Android/Chrome install prompt
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault()
-      setDeferredPrompt(e)
-      
-      // Only show if not dismissed before in this session
-      const isDismissed = sessionStorage.getItem('pwa-prompt-dismissed')
-      if (!isDismissed && !isStandaloneMode) {
-        setIsVisible(true)
-      }
+    if (standaloneMode || isDismissedPersistent() || !isEligibleMobileClient()) {
+      return
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      if (!isEligibleMobileClient() || isDismissedPersistent()) return
+      const evt = e as BeforeInstallPromptEvent
+      evt.preventDefault()
+      setDeferredPrompt(evt)
+      setIsVisible(true)
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
 
-    // For iOS, show after a short delay if not standalone
-    if (isIOSDevice && !isStandaloneMode) {
-      const isDismissed = sessionStorage.getItem('pwa-prompt-dismissed')
-      if (!isDismissed) {
-        const timer = setTimeout(() => setIsVisible(true), 3000)
-        return () => clearTimeout(timer)
-      }
-    }
+    const iosDelayTimer = isIOSDevice
+      ? window.setTimeout(() => {
+          if (isDismissedPersistent() || !isEligibleMobileClient()) return
+          setIsVisible(true)
+        }, 3000)
+      : undefined
 
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-  }, [isStandalone])
+    return () => {
+      if (iosDelayTimer !== undefined) window.clearTimeout(iosDelayTimer)
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    }
+  }, [])
 
   const handleDismiss = () => {
     setIsVisible(false)
-    sessionStorage.setItem('pwa-prompt-dismissed', 'true')
+    try {
+      localStorage.setItem(STORAGE_KEY, 'true')
+    } catch {
+      /* ignore quota / private mode */
+    }
   }
 
   const handleInstallClick = async () => {
@@ -66,7 +90,7 @@ export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
 
     deferredPrompt.prompt()
     const { outcome } = await deferredPrompt.userChoice
-    
+
     if (outcome === 'accepted') {
       setIsVisible(false)
     }
@@ -87,7 +111,7 @@ export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
               exit={{ opacity: 0, y: 50 }}
               className="w-full max-w-sm bg-card/95 backdrop-blur-xl border border-border rounded-3xl shadow-2xl p-6 pointer-events-auto relative"
             >
-              <button 
+              <button
                 onClick={handleDismiss}
                 className="absolute top-4 right-4 p-1 hover:bg-muted rounded-full transition-colors"
                 aria-label="Cerrar"
@@ -135,7 +159,7 @@ export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
               <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center shrink-0">
                 <Download className="w-6 h-6 text-primary" />
               </div>
-              
+
               <div className="flex-1 min-w-0 pr-2">
                 <h3 className="font-extrabold text-sm text-foreground truncate">¿Instalar {brandName}?</h3>
                 <p className="text-[11px] text-muted-foreground leading-tight">Experiencia más fluida y rápida.</p>
@@ -162,4 +186,3 @@ export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
     </AnimatePresence>
   )
 }
-

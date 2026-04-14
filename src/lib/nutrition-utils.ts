@@ -19,10 +19,27 @@ export type FoodItemForMacros = {
   foods: FoodMacrosRow
 }
 
+/**
+ * Calcula macros de un ítem de comida según cantidad y unidad.
+ *
+ * Unidades canónicas (2 tipos):
+ *   'g'  → gramos: proporcional directo → factor = qty / 100
+ *   'un' → unidades contables: usa serving_size → factor = (qty × serving_size) / 100
+ *
+ * Unidades legacy compatibles (migración pendiente a 'g' o 'un'):
+ *   'ml', 'gr' → tratadas como peso ('g')
+ *   'cda', 'cdta', 'taza', 'porción' → tratadas como unidades ('un')
+ *
+ * Ejemplo:
+ *   Huevo: protein_g=13 por 100g, serving_size=60 (1 huevo ≈ 60g)
+ *   - 1 un → factor = (1 × 60) / 100 = 0.6 → proteína = 7.8g
+ *   - 100 g → factor = 1.0 → proteína = 13g
+ */
 export function calculateFoodItemMacros(item: FoodItemForMacros) {
   const { quantity, unit, foods } = item
 
-  const isWeight = ['g', 'ml', 'gr'].includes(unit?.toLowerCase() ?? '')
+  const unitLower = unit?.toLowerCase() ?? 'g'
+  const isWeight = unitLower === 'g' || unitLower === 'ml' || unitLower === 'gr'
   const factor = isWeight
     ? quantity / 100
     : (quantity * foods.serving_size) / 100

@@ -393,8 +393,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                         </div>
                         <div className="min-w-0 space-y-6 md:col-span-4">
                             {/* Task 2: Dynamic Metrics Card */}
-                            <GlassCard className="p-6 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-full">
-                                <div className="absolute bottom-0 right-0 -mr-16 -mb-16 w-48 h-48 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+                            <GlassCard className="p-4 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-full">
                                 <div className="flex justify-between items-center mb-6 relative z-10">
                                     <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
                                         <Activity className="w-4 h-4" /> Métricas Clave
@@ -452,13 +451,6 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                         </div>
                                     </div>
 
-                                    {/* Racha */}
-                                    <div className="flex items-center justify-between bg-secondary/30 p-3 rounded-lg border border-border/50">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1"><Flame className="w-3 h-3"/> Racha Interact.</span>
-                                            <span className="text-lg font-black text-orange-500 flex items-center gap-1">{interactionStreak} Días <Flame className="w-4 h-4 fill-orange-500"/></span>
-                                        </div>
-                                    </div>
                                 </div>
                             </GlassCard>
                         </div>

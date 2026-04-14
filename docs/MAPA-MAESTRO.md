@@ -2,7 +2,7 @@
 
 > Radiografia completa de donde estamos y hacia donde vamos.
 > **Generado:** 2026-04-10 America/Santiago — basado en auditoria de 225+ archivos, 24 tablas BD, 38 rutas.
-> **Actualizado:** 2026-04-11 America/Santiago — alineacion mapa vs codigo (pagos, APIs, tests); sprint hardening revenue.
+> **Actualizado:** 2026-04-13 America/Santiago — BUG-001 workout weekly reset cerrado; 3 migraciones nuevas tiers/pagos; nuevos gaps: historial fecha coach, tabs optimización, 250 alimentos, unidades g+un; % global ~75%.
 
 ---
 
@@ -54,31 +54,34 @@ graph LR
 | # | Modulo | % | Linea de Codigo | Archivos | Impacto en Revenue |
 |---|--------|---|----------------|----------|-------------------|
 | 1 | Dashboard Alumno | 98% | ~3,500 | 39 | Alto (retención) |
-| 2 | Nutricion Alumno | 96% | ~1,200 | 12 | Alto (retención) |
+| 2 | Nutricion Alumno | 97% | ~1,200 | 12 | Alto (retención) |
 | 3 | Constructor Planes | 95% | ~4,000 | 17 | Alto (valor coach) |
 | 4 | Biblioteca Programas | 95% | ~1,800 | 9 | Medio (eficiencia coach) |
 | 5 | Perfil Alumno Coach | 95% | ~5,000 | 40 | Alto (decisiones coach) |
 | 6 | Nutricion Coach | 93% | ~3,000 | 24 | Alto (valor coach) |
-| 7 | Directorio Clientes | 90% | ~3,500 | 15 | Alto (gestión) |
-| 8 | Workout Execution | 82% | ~2,000 | 10 | **Critico** (core loop alumno) |
-| 9 | Infraestructura | 80% | ~1,500 | 15 | Critico (base) |
-| 10 | Check-in Alumno | 80% | ~1,100 | 4 | Alto (seguimiento) |
-| 11 | Catalogo Ejerc Alumno | 68% | ~500 | 3 | Bajo |
-| 12 | Landing Page | 60% | ~970 | 1 | **Critico** (adquisición) |
-| 13 | Onboarding Alumno | 58% | ~500 | 3 | Medio (activación) |
-| 14 | Auth Alumno | 50% | ~400 | 6 | Medio |
-| 15 | Dashboard Coach | ~68% | ~700 | 4+ | Alto (retención coach) |
-| 16 | Ejercicios Coach | 40% | ~400 | 4 | Bajo |
-| 17 | Login Coach | 40% | ~200 | 2 | Medio (adquisición) |
-| 18 | Forgot/Reset PW | 40% | ~300 | 4 | Bajo |
-| 19 | Mi Marca Settings | 35% | ~500 | 7 | Medio (diferenciación) |
-| 20 | Registro Coach | 78% | ~480 | 4 | **Critico** (adquisición) |
-| 21 | Pricing | 25% | ~200 | 1 | **Critico** (conversión) |
-| 22 | Pagos & Suscripciones | ~88% | ~900+ | 11+ | **BLOQUEANTE** (monetización / operación en prod) |
-| 23 | Panel CEO | 0% | 0 | 0 | Alto (operaciones) |
-| 24 | Testing | ~25% | — | 10+ archivos test | Critico (calidad) |
+| 7 | Directorio Clientes | 92% | ~3,500 | 15 | Alto (gestión) |
+| 8 | Pagos & Suscripciones | **91%** | ~900+ | 11+ | **BLOQUEANTE** (monetización) |
+| 9 | Workout Execution | **84%** ✅ | ~2,000 | 10 | **Critico** (core loop alumno) |
+| 10 | Infraestructura | 80% | ~1,500 | 15 | Critico (base) |
+| 11 | Check-in Alumno | **82%** | ~1,100 | 4 | Alto (seguimiento) |
+| 12 | Catalogo Ejerc Alumno | 68% | ~500 | 3 | Bajo |
+| 13 | Landing Page | 60% | ~970 | 1 | **Critico** (adquisición) |
+| 14 | Onboarding Alumno | 58% | ~500 | 3 | Medio (activación) |
+| 15 | Auth Alumno | 50% | ~400 | 6 | Medio |
+| 16 | Dashboard Coach | ~70% | ~700 | 4+ | Alto (retención coach) |
+| 17 | Ejercicios Coach | 40% | ~400 | 4 | Bajo |
+| 18 | Login Coach | 40% | ~200 | 2 | Medio (adquisición) |
+| 19 | Forgot/Reset PW | 40% | ~300 | 4 | Bajo |
+| 20 | Mi Marca Settings | 62% | ~500 | 7 | Medio (diferenciación) |
+| 21 | Registro Coach | 78% | ~480 | 4 | **Critico** (adquisición) |
+| 22 | Pricing | 25% | ~200 | 1 | **Critico** (conversión) |
+| 23 | **BD Alimentos 250+** | seed (54 now) | — | 1 migración | Alto (nutrición) |
+| 24 | **Historial fecha coach** | 0% | — | 3-4 archivos | Alto (analytics coach) |
+| 25 | **Tabs optimización perfil** | 0% | — | 3 archivos | Medio (UX) |
+| 26 | Panel CEO | 0% | 0 | 0 | Alto (operaciones) |
+| 27 | Testing | ~28% | — | 10+ archivos test | Critico (calidad) |
 
-**TOTAL ESTIMADO: ~72%** (alineado con [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md))
+**TOTAL ESTIMADO: ~75%** (alineado con [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md))
 
 ---
 

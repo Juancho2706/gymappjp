@@ -7,9 +7,31 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-11 America/Santiago — **Sprint Go/No-Go revenue (código):** migración `subscription_status` incluye `trialing` (coherente con email-drip); cancelación de suscripción llama a Mercado Pago `PUT preapproval` + `cancelled`; `confirm-subscription` usa `PaymentsProvider.fetchCheckoutSnapshot`; webhook exige `MERCADOPAGO_WEBHOOK_TOKEN` en `NODE_ENV=production`; verificación opcional de firma MP (`MERCADOPAGO_WEBHOOK_SIGNING_SECRET`, `webhook-authorization.ts`); gate de suscripción en `coach-subscription-gate.ts` + tests; removido paquete npm `mercadopago` no usado; E2E mock `tests/payment-flow-mock.spec.ts`; README/`.env.example` actualizados. Quick wins previos: `.env.example`, `font-display`, docs en `docs/archive/`.
+**Última actualización:** 2026-04-13 America/Santiago — **Análisis completo + bug fix workout + plan 250 alimentos + historial fecha coach + optimización tabs perfil:** bug BUG-001 (workout weekly reset) corregido en `page.tsx` + `actions.ts`; plan de 250+ alimentos vía seed offline OpenFoodFacts/USDA; simplificación unidades nutrición a `g`+`un`; nuevo feature historial por fecha en tabs Nutrición/Análisis del perfil coach; propuesta de renaming tabs (Entrenamiento→Análisis, Programa→Plan) + fix KPI card Overview; actualizaciones 2026-04-11→13: billing cycle validation, check-in threshold 30d, ClientCardV2 accessibility, 3 migraciones nuevas tiers/pagos (`trialing`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`).
 
 ---
+
+## Actualización incremental (Sprint 7 — análisis + bugs + road 100%)
+
+> Nota: esta sección registra cambios recientes sin rehacer todavía la auditoría total 225+ archivos.
+
+- **Bug fix crítico (2026-04-13 — BUG-001):**
+  - `workout/[planId]/page.tsx`: query logs ahora filtra por fecha de hoy (timezone Santiago). Logs de semanas anteriores ya no se muestran como "completados esta semana".
+  - `workout/[planId]/actions.ts`: upsert de logs ahora busca solo el log de HOY. Semanas anteriores se preservan como historial.
+- **Tiers y pagos post-hardening (2026-04-11→13):**
+  - 3 nuevas migraciones: `trialing` en `subscription_status`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`.
+  - Billing cycle validation mejorado (`bbf98b4`).
+  - Pagos → ~91%.
+- **Hotfixes de sprint (2026-04-11→13):**
+  - Check-in alerts threshold: 30 días (antes 7) — `8a992d3`.
+  - `ClientCardV2` estilos accessibility finales — `3d33d7d`.
+  - Workout plan handling refactor en dashboard — `ccf5fb6`.
+- **Próximo trabajo planificado (P1):**
+  - Simplificación unidades nutrición: `g` + `un` únicamente.
+  - Seed 250+ alimentos globales + chilenos (OpenFoodFacts/USDA offline).
+  - Historial por fecha en perfil del alumno (tabs Nutrición + Análisis).
+  - Optimización tabs: Entrenamiento→Análisis, Programa→Plan, KPI card Overview reducida.
+  - Alinear `/pricing` de USD a CLP.
 
 ## Actualización incremental (Sprint 6 + hotfixes)
 
@@ -235,6 +257,11 @@
 
 ### Alta prioridad (bloquea monetización o producción)
 
+#### ~~BUG-001: Workout weekly reset~~ *(cerrado 2026-04-13)*
+El workout page cargaba TODOS los logs históricos de los `block_id` del plan, sin filtro de fecha. Al empezar una semana nueva, el alumno veía los sets de la semana anterior como "ya completados". Corregido en `page.tsx` (filtro `.gte/.lt` por fecha hoy) y `actions.ts` (upsert solo busca log de hoy).
+
+---
+
 #### Workflow de migraciones SQL (seguimiento)
 La carpeta `supabase/migrations/` ya existe y se está usando en sprints recientes (incluye migraciones Sprint 5/6).  
 **Trabajo pendiente:** mantener disciplina de versionado y asegurar que toda migración aplicada en producción quede commiteada en el mismo sprint.
@@ -253,6 +280,24 @@ La carpeta `supabase/migrations/` ya existe y se está usando en sprints recient
 ---
 
 ### Media prioridad
+
+#### Tabs del perfil del alumno: solapamiento Entrenamiento + Programa
+Las tabs "Entrenamiento" (`TrainingTabB4Panels`) y "Programa" (`ProgramTabB7`) tienen solapamiento: ambas muestran logs históricos de ejercicios desde distintos ángulos. La distinción semántica es correcta (analytics vs blueprint), pero la presencia de logs en ambas confunde.
+**Trabajo:** Renombrar "Entrenamiento" → "Análisis" y "Programa" → "Plan". Quitar mini-logs del Sheet de ejercicio en ProgramTabB7 (esos logs pertenecen a Análisis). P2.
+
+---
+
+#### KPI card "Métricas Clave" en Overview demasiado grande
+La card sidebar en `ClientProfileDashboard.tsx` (~líneas 396-462) muestra solo 3 métricas (Peso Actual, Var. Semanal, Racha Interact.) con `p-6` y efectos decorativos. "Racha" aparece también en el grid de 6 KPIs de `ProfileOverviewB3.tsx`.
+**Trabajo:** Reducir padding, eliminar blur decorativo, quitar "Racha Interact." (duplicado), dejar solo Peso Actual + Var. Semanal. P2.
+
+---
+
+#### Vista de historial por fecha — coach no puede ver día específico
+El coach no puede navegar a una fecha concreta y ver qué comió/entrenó un alumno. Los datos existen (`daily_nutrition_logs`, `nutrition_meal_logs`, `workout_logs`). Solo falta la UI del coach.
+**Trabajo:** Agregar `DayNavigator` (ya existe en nutrición alumno) a tabs Nutrición y Análisis del perfil. Nuevas queries `getClientNutritionForDate` + `getClientWorkoutForDate` en `actions.ts`. P1.
+
+---
 
 #### Inconsistencia de moneda Pricing vs Landing
 `/pricing` muestra tiers en USD (Starter $49, Pro $99, Elite $199). La landing (`/page.tsx`) muestra tiers en CLP (14.990–89.990). Deben alinearse antes de monetizar.
@@ -318,25 +363,29 @@ Títulos en login / change-password / exercises / suspended del alumno usan la c
 
 ## Módulos pendientes de rework (próximos planes)
 
-> Estado revisado contra código real 2026-04-10 (auditoría completa).
+> Estado revisado contra código real 2026-04-13 (auditoría completa + sesión análisis).
 
 | Módulo | Estado actual | % | Pendiente | Prioridad |
 |--------|--------------|---|-----------|-----------|
-| ~~**Nutrición (alumno + núcleo coach)**~~ | Completado | ~93-96% | — | ~~Alta~~ → **COMPLETADO** |
-| ~~**Dashboard del alumno**~~ | Completado | ~98% | §12 QA manual | ~~Media~~ → **COMPLETADO** |
-| ~~**Workout execution rework**~~ | Rework abril 10 | ~82% | Optimistic updates, offline/retry | ~~Media~~ → **COMPLETADO (parcial)** |
-| ~~**Check-in rework**~~ | Rework abril 10 | ~80% | Medidas corporales, notas | ~~Media~~ → **COMPLETADO (parcial)** |
-| **Pagos & Suscripciones** | Hardening 2026-04-11 | ~88% | Smoke sandbox MP en prod + monitoreo webhooks + checklist Go/No-Go | **CRÍTICA (revenue)** |
-| **Dashboard coach** | Sprint 6 comercial base | ~68% | Completar comparativas avanzadas (ENG-037/039/042/043/044) | Media |
-| **Mi Marca / Settings** | Sprint 6 branding MVP | ~62% | Preview actualizado + branding extendido (secondary/font) | Media |
+| ~~**Nutrición (alumno + núcleo coach)**~~ | Completado | ~97% | — | **COMPLETADO** |
+| ~~**Dashboard del alumno**~~ | Completado | ~98% | §12 QA manual | **COMPLETADO** |
+| ~~**Workout execution rework**~~ | ~~Bug~~ corregido 2026-04-13 | ~84% | Optimistic updates, offline/retry | **BUG CERRADO** |
+| ~~**Check-in rework**~~ | Rework abril 10 | ~82% | Medidas corporales, notas | **COMPLETADO (parcial)** |
+| **Pagos & Suscripciones** | Hardening 2026-04-13 | ~91% | Smoke sandbox MP en prod + Go/No-Go | **CRÍTICA (revenue)** |
+| **BD Alimentos** | 54 alimentos globales | seed | Seed 250+ alimentos (OpenFoodFacts/USDA offline) | **Alta (P1)** |
+| **Unidades nutrición** | 7 unidades inconsistentes | — | Simplificar a `g` + `un` + migración SQL | **Alta (P1)** |
+| **Historial fecha coach** | No implementado | 0% | DayNavigator en tabs Nutrición + Análisis del perfil | **Alta (P1)** |
+| **Dashboard coach** | Sprint 6 comercial base | ~70% | Comparativas avanzadas (ENG-037/039/042/043/044) | Media |
+| **Mi Marca / Settings** | Sprint 6 branding MVP | ~62% | Preview actualizado + branding extendido | Media |
+| **Tabs perfil alumno** | Solapamiento parcial | — | Rename + quitar mini-logs duplicados + KPI card fix | **Media (P2)** |
 | **Ejercicios coach** | Funcional básico | ~40% | Upload GIF, bulk edit | Baja |
 | **Onboarding** | Multi-step con draft | ~58% | Progress bar, foto, validación | Baja |
-| **Catálogo ejercicios alumno** | Funcional | ~68% | Rework visual, favoritos, historial | Baja |
+| **Catálogo ejercicios alumno** | Funcional | ~68% | Favoritos, historial | Baja |
 | **Login/Auth coach** | Funcional | ~40% | Rework visual, rate limiting | Baja |
-| **Registro coach** | Funcional con gate + activación automática | ~78% | Smoke E2E final en producción antes de Sprint 3 | **Alta (con pagos)** |
-| **Landing/Pricing** | Sustancial | ~60/25% | Unificar moneda, SEO, testimonios | Media |
+| **Registro coach** | Funcional con gate | ~78% | Gate de pago obligatorio en flujo | **Alta (con pagos)** |
+| **Landing/Pricing** | Sustancial | ~60/25% | Unificar moneda CLP, SEO, testimonios | Media |
 | **Panel CEO / Superadmin** | Inexistente | 0% | Métricas globales | Baja |
-| **Testing** | En progreso | ~25% | Cobertura razonable + E2E pago | Media-Alta |
+| **Testing** | En progreso | ~28% | Cobertura razonable + E2E pago | Media-Alta |
 
 ---
 

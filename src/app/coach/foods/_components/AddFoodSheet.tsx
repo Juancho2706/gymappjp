@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFormStatus } from 'react-dom'
 import { saveCustomFood } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
 import { toast } from 'sonner'
@@ -65,6 +66,7 @@ function AddFoodFormBody({
   formAction: (payload: FormData) => void
   state: { error?: string; success?: boolean }
 }) {
+  const [unit, setUnit] = useState<'g' | 'un'>('g')
   const [calories, setCalories] = useState('')
   const [protein, setProtein] = useState('')
   const [carbs, setCarbs] = useState('')
@@ -154,23 +156,35 @@ function AddFoodFormBody({
           <Input name="category" placeholder="Opcional" className="h-11 rounded-xl" />
         </div>
         <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Unidad de referencia</Label>
-          <Input name="unit" defaultValue="g" placeholder="g, un, ml…" className="h-11 rounded-xl" />
+          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Unidad de medición</Label>
+          <Select value={unit} onValueChange={(v: 'g' | 'un') => setUnit(v)}>
+            <SelectTrigger className="h-11 rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="g">g — gramos (pesable: pollo, arroz)</SelectItem>
+              <SelectItem value="un">un — unidades (contable: huevo, manzana)</SelectItem>
+            </SelectContent>
+          </Select>
+          <input type="hidden" name="unit" value={unit} />
         </div>
         <div className="space-y-2 col-span-2">
           <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-            Gramos en 1 unidad (opcional)
+            {unit === 'un' ? 'Gramos que pesa 1 unidad' : 'Porción de referencia (g)'}
           </Label>
           <Input
             name="serving_size"
             type="number"
             min={1}
             step="1"
-            defaultValue={100}
+            defaultValue={unit === 'un' ? 60 : 100}
+            key={unit}
             className="h-11 rounded-xl"
           />
           <p className="text-[11px] text-muted-foreground">
-            Si en el plan usarás <span className="font-medium text-foreground">un</span>, pon aquí los gramos de 1 unidad (ej. huevo ~55). Si solo usarás gramos en el plan, deja <span className="font-mono">100</span>.
+            {unit === 'un'
+              ? 'Indica cuántos gramos pesa 1 unidad (ej: huevo ≈ 60, manzana ≈ 150). Se usa para calcular macros proporcionales.'
+              : 'Los macros de arriba son por 100g. Puedes dejarlo en 100.'}
           </p>
         </div>
       </div>

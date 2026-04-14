@@ -811,8 +811,9 @@ export default function LandingPage() {
                             Precios por cupo de alumnos
                         </h2>
                         <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto">
-                            Los planes 1–5, 6–10 y 11–30 se cobran solo en mensualidad. Los planes 31–60 y 61–100,
-                            solo en trimestral o anual. Starter Lite y Starter no incluyen módulo de nutrición.
+                            Pagás según cuántos alumnos quieras tener en la app: los cupos más chicos van mes a mes,
+                            y los de mayor escala se facturan trimestral o anual para que sea más simple de administrar.
+                            En los planes de entrada el módulo de nutrición no viene incluido; en los superiores sí.
                         </p>
                     </motion.div>
 

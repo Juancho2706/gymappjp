@@ -47,13 +47,20 @@ export async function logSetAction(
 
     const adminDb = await createRawAdminClient()
 
-    // Comprobar si ya existe un registro para actualizarlo
+    // Only look for logs from TODAY to avoid updating previous weeks' entries
+    const now = new Date()
+    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+    const tomorrowStr = new Date(now.getTime() + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+
+    // Comprobar si ya existe un registro de HOY para actualizarlo
     const { data: existingRows } = await adminDb
         .from('workout_logs')
         .select('id')
         .eq('block_id', parsed.data.block_id)
         .eq('client_id', user.id)
         .eq('set_number', parsed.data.set_number)
+        .gte('logged_at', `${todayStr}T00:00:00`)
+        .lt('logged_at', `${tomorrowStr}T00:00:00`)
         .order('logged_at', { ascending: false })
 
     let dbError

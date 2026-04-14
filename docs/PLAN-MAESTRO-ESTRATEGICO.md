@@ -3,7 +3,8 @@
 > Documento exhaustivo de planificacion desde todas las perspectivas profesionales.
 > Cada tarea tiene: ID unico, prioridad (P0-P3), esfuerzo estimado, dependencias.
 > **Generado:** 2026-04-10 America/Santiago
-> **Base:** Auditoria completa de 225+ archivos, 24 tablas BD, 38 rutas, estado real ~62%.
+> **Actualizado:** 2026-04-13 America/Santiago — BUG-001 cerrado; nuevas tareas BUG-001, FEAT-H01, FEAT-F01, FEAT-F02, UX-013, UX-014; estado real ~75%.
+> **Base:** Auditoria completa de 225+ archivos, 24 tablas BD, 38 rutas.
 
 ---
 
@@ -116,6 +117,7 @@
 
 | ID | Area | Problema | Impacto |
 |----|------|----------|---------|
+| ~~BUG-001~~ | Workout Execution | ~~Semana nueva mostraba logs de la semana anterior como "ya completados"~~ | ~~Alumno no podía registrar entrenamientos correctamente~~ → **CERRADO 2026-04-13** |
 | UX-001 | Pricing/Landing | Moneda inconsistente (USD en /pricing vs CLP en landing) | Confusion total del usuario, destruye confianza |
 | UX-002 | Registro coach | Sin flujo de pago, sin confirmacion visual de "que estoy comprando" | No hay conversion |
 | UX-003 | Login coach | UI basica sin branding premium | Primera impresion pobre |
@@ -124,10 +126,13 @@
 
 | ID | Area | Problema | Impacto |
 |----|------|----------|---------|
-| UX-004 | Dashboard coach | UI no refleja el nivel del resto de la app. Cards planas vs War Room del directorio | Coach siente que la app es "a medias" |
+| FEAT-F01 | BD Alimentos | Solo 54 alimentos. Pocos para uso real de nutrición. | Coach y alumno no encuentran alimentos comunes → seed 250+ via OpenFoodFacts/USDA |
+| FEAT-F02 | Unidades nutrición | 7 unidades inconsistentes (g, ml, gr, un, cda, cdta, taza, porción). Sin validación. | Confusión al asignar planes → simplificar a `g` + `un` |
+| FEAT-H01 | Perfil alumno coach | Coach no puede ver qué comió/entrenó un alumno en una fecha específica del pasado | Dificulta seguimiento individualizado → DayNavigator en tabs Nutrición + Análisis |
+| UX-004 | Dashboard coach | UI no refleja el nivel del resto de la app | Coach siente que la app es "a medias" |
 | UX-005 | Mi Marca | Preview desactualizado del dashboard alumno | Coach no sabe que vera su alumno |
 | UX-006 | Onboarding alumno | Sin progress bar visual, saltos bruscos entre pasos | Abandono en primer uso |
-| UX-007 | Workout execution | Scroll largo en entrenamientos con muchos ejercicios. Sin navegacion por bloque | Frustracion alumno |
+| UX-007 | Workout execution | Scroll largo en entrenamientos con muchos ejercicios | Frustracion alumno |
 | UX-008 | Check-in | Sin campos de medidas corporales (cintura, pecho, brazo, etc.) | Coach no puede trackear composicion corporal |
 
 ### P2 — Importante para retención
@@ -138,6 +143,8 @@
 | UX-010 | Ejercicios coach | Sin upload de GIF propios. Solo usa banco global | Coach no puede personalizar |
 | UX-011 | Ejercicios alumno | Sin favoritos ni historial por ejercicio | Alumno no puede ver su progreso por movimiento |
 | UX-012 | Email transaccional | No hay emails: bienvenida, reminder check-in, programa nuevo | Coach debe comunicar todo manual |
+| UX-013 | Tabs perfil alumno | "Entrenamiento" y "Programa" se solapan. Logs duplicados. Coach confundido sobre qué tab usar. | Rename → Análisis + Plan; quitar mini-logs de ProgramTabB7 |
+| UX-014 | KPI card Overview | Card sidebar "Métricas Clave" muestra 3 métricas con estilos muy grandes. "Racha" duplicada en grid de 6 KPIs. | Reducir padding, quitar blur decorativo, eliminar "Racha Interact." |
 
 ---
 

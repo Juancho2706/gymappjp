@@ -50,7 +50,14 @@ const CATEGORIES = [
   { id: 'snack', label: 'Snack' },
 ]
 
-const UNITS = ['g', 'ml', 'un', 'cda', 'cdta', 'taza', 'porción']
+const UNITS = ['g', 'un']
+
+/** Normaliza unidades legacy a las dos unidades canónicas: 'g' o 'un' */
+function normalizeUnit(raw: string | null | undefined): 'g' | 'un' {
+  const u = (raw ?? 'g').toLowerCase().trim()
+  if (u === 'un' || u === 'unidades' || u === 'unidad' || u === 'porción' || u === 'porciones') return 'un'
+  return 'g' // g, ml, gr, cda, cdta, taza → gramos
+}
 
 function normalizeCategory(raw: string | null | undefined): string {
   const value = (raw ?? '')
@@ -212,7 +219,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                     type="button"
                     onClick={() => {
                       setPicked(f)
-                      setUnit((f.serving_unit || 'g').toLowerCase())
+                      setUnit(normalizeUnit(f.serving_unit))
                       setQuantity(f.serving_size || 100)
                     }}
                     className="w-full text-left rounded-xl border border-border p-3 hover:bg-muted/40 transition-colors"
@@ -247,11 +254,8 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {UNITS.map((u) => (
-                        <SelectItem key={u} value={u}>
-                          {u}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="g">g — gramos (pesable)</SelectItem>
+                      <SelectItem value="un">un — unidades (contable)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

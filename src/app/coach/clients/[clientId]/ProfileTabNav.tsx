@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import {
     LayoutDashboard,
     TrendingUp,
-    Dumbbell,
+    BarChart2,
     LayoutGrid,
     Apple,
     CreditCard,
@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils'
 const TABS = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'progress', label: 'Progreso', icon: TrendingUp },
-    { id: 'workout', label: 'Entrenamiento', icon: Dumbbell },
-    { id: 'program', label: 'Programa', icon: LayoutGrid },
+    { id: 'workout', label: 'Análisis', icon: BarChart2 },
+    { id: 'program', label: 'Plan', icon: LayoutGrid },
     { id: 'nutrition', label: 'Nutrición', icon: Apple },
     { id: 'billing', label: 'Facturación', icon: CreditCard },
 ] as const

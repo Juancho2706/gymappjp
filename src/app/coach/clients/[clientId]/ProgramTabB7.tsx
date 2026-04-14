@@ -410,48 +410,6 @@ export function ProgramTabB7({
                             ) : null}
                         </div>
 
-                        <div>
-                            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                                Historial reciente (logs)
-                            </p>
-                            {historySessions.length === 0 ? (
-                                <p className="text-xs text-zinc-500">
-                                    Sin series registradas para este ejercicio en el historial.
-                                </p>
-                            ) : (
-                                <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
-                                    {historySessions.map((s, idx) => (
-                                        <div
-                                            key={`${s.assignedDate}-${idx}`}
-                                            className="rounded-lg border border-white/10 bg-white/[0.02] p-3"
-                                        >
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                                                {s.assignedDate
-                                                    ? new Date(s.assignedDate).toLocaleDateString(
-                                                          'es-ES',
-                                                          {
-                                                              day: '2-digit',
-                                                              month: 'short',
-                                                              year: 'numeric',
-                                                          }
-                                                      )
-                                                    : '—'}{' '}
-                                                · {s.planTitle}
-                                            </p>
-                                            <ul className="mt-2 space-y-1 text-[11px] font-mono text-zinc-300">
-                                                {s.rows.map((r) => (
-                                                    <li key={r.set}>
-                                                        #{r.set} · {r.kg ?? '—'} kg · {r.reps ?? '—'} reps
-                                                        {r.rpe != null ? ` · RPE ${r.rpe}` : ''}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
                         <Button
                             type="button"
                             variant="outline"

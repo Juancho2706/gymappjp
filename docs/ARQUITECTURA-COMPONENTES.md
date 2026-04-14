@@ -1,12 +1,16 @@
 # Arquitectura de Componentes — GymApp JP (EVA)
 
 > Diagrama de jerarquía y comunicación entre componentes principales.
-> **Última actualización:** 2026-04-11 America/Santiago — Sprint 6 + hotfixes + **hardening pagos** (`fetchCheckoutSnapshot` / `cancelCheckoutAtProvider` en provider MP, webhook token obligatorio en prod, firma `x-signature` opcional, `confirm-subscription` vía provider, gate de suscripción extraído a `coach-subscription-gate.ts`).
+> **Última actualización:** 2026-04-13 America/Santiago — BUG-001 workout weekly reset corregido; nuevos gaps documentados: historial por fecha coach (§16), tabs optimización (§5); 3 migraciones tiers/pagos. (`fetchCheckoutSnapshot` / `cancelCheckoutAtProvider` en provider MP, webhook token obligatorio en prod, firma `x-signature` opcional, `confirm-subscription` vía provider, gate de suscripción extraído a `coach-subscription-gate.ts`).
 
 ---
 
 ## Cambios recientes (delta)
 
+- **BUG-001 cerrado (2026-04-13):** `workout/[planId]/page.tsx` ahora filtra logs por fecha HOY (timezone Santiago) usando `.gte/.lt`. `actions.ts` también filtra por HOY antes de hacer upsert. Logs de semanas anteriores quedan como historial (ya estaban en `previousHistory`).
+- **Tiers/Pagos (2026-04-11→13):** 3 migraciones nuevas: `trialing` en `subscription_status`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`. Billing cycle validation.
+- **Hotfixes:** Check-in alerts a 30 días; `ClientCardV2` accessibility final.
+- **Gaps nuevos identificados:** Historial por fecha en perfil coach (§16 nuevo); tabs solapadas Entrenamiento+Programa (§5 nota); KPI card Overview grande.
 - **Pagos:** `PaymentsProvider` incluye `fetchCheckoutSnapshot` y `cancelCheckoutAtProvider`; MP cancela preapproval vía `PUT` + `status: cancelled`. Webhook: `webhook-authorization.ts` (token prod + HMAC opcional). Migración `trialing` en `subscription_status`.
 - **Dashboard coach:** `page.tsx` ahora delega en `_components/DashboardContent.tsx` y `_data/dashboard.queries.ts`.
 - **Branding MVP:** `coaches.welcome_message` se persiste desde settings y se consume en login/dashboard alumno.
@@ -625,4 +629,93 @@ Client components:
 4. force_password_change → /c/[slug]/change-password
 5. !onboarding_completed → /c/[slug]/onboarding
 6. Completa → /c/[slug]/dashboard
+```
+
+---
+
+## 16. Historial por Fecha — Coach ve día específico del alumno (PENDIENTE P1)
+
+### Gap actual
+
+El coach no puede ver qué comió o qué entrenó un alumno en un día específico del pasado. Solo tiene gráficos de tendencia y métricas agregadas.
+
+### Infraestructura existente (solo falta UI del coach)
+
+- `daily_nutrition_logs.log_date` → fecha del registro de nutrición
+- `nutrition_meal_logs.is_completed` → si una comida se completó ese día
+- `workout_logs.logged_at` → timestamp de cada set logueado
+- `DayNavigator.tsx` — ya existe en `src/app/c/[coach_slug]/nutrition/_components/` — reutilizable
+
+### Arquitectura propuesta
+
+```
+/coach/clients/[clientId]
+
+NutritionTabB5 (tab Nutrición del perfil)
+├── [Sección actual: macro rings agregados, charts, adherencia] ← sin cambios
+└── [Nueva sección: "Ver día específico"]
+    ├── DayNavigator (reutilizado de /c/.../nutrition/_components/)
+    └── selectedDate state → llamada a getClientNutritionForDate(clientId, date)
+        ├── Retorna: daily_nutrition_logs + nutrition_meal_logs + food_items + foods
+        ├── MacroRingSummary (read-only)
+        └── Lista de comidas del día con alimentos (sin toggle — solo lectura)
+
+TrainingTabB4Panels (tab Análisis del perfil)
+├── [Sección actual: PRs, tonelaje, radar] ← sin cambios
+└── [Nueva sección: "Ver sesión por fecha"]
+    ├── DayNavigator
+    └── selectedDate state → llamada a getClientWorkoutForDate(clientId, date)
+        ├── Retorna: workout_logs + workout_blocks + exercises + workout_plans
+        └── Por ejercicio: nombre, grupo muscular, sets/reps/peso/RPE
+```
+
+### Nuevas Server Actions en `src/app/coach/clients/[clientId]/actions.ts`
+
+```typescript
+// Ver nutrición de un día específico
+export async function getClientNutritionForDate(clientId: string, date: string)
+  → FROM daily_nutrition_logs WHERE client_id = clientId AND log_date = date
+  → JOIN nutrition_meal_logs → nutrition_meals → food_items → foods
+
+// Ver entrenamiento de un día específico
+export async function getClientWorkoutForDate(clientId: string, date: string)
+  → FROM workout_logs WHERE client_id = clientId AND logged_at BETWEEN dateStart AND dateEnd
+  → JOIN workout_blocks → exercises + workout_plans
+```
+
+### RLS
+El coach ya puede leer datos de sus propios alumnos. No se requieren cambios en RLS ni middleware.
+
+---
+
+## 17. Optimización de Tabs del Perfil del Alumno (PENDIENTE P2)
+
+### Situación actual
+
+El perfil del alumno tiene 6 tabs: Overview | Progreso | Entrenamiento | Programa | Nutrición | Facturación
+
+**Solapamiento identificado:**
+- "Entrenamiento" (`TrainingTabB4Panels`) = analytics (PRs, tonelaje, radar, historial sesiones)
+- "Programa" (`ProgramTabB7`) = blueprint (grid semanal, prescripciones, link builder)
+- Ambas muestran logs históricos de ejercicios (desde ángulos distintos)
+- "Programa" tiene un Sheet por ejercicio que muestra "sesiones recientes" → duplica Entrenamiento
+
+**KPI card "Métricas Clave" en Overview:**
+- Sidebar de Overview tiene 3 métricas (Peso Actual, Var. Semanal, Racha Interact.) con estilos grandes
+- "Racha" aparece duplicada también en el grid de 6 KPIs de `ProfileOverviewB3.tsx`
+
+### Propuesta
+
+```
+Rename tabs (sin cambiar IDs internos — son strings):
+  "Entrenamiento" → "Análisis"   (ícono: BarChart / TrendingUp)
+  "Programa"     → "Plan"        (ícono: LayoutGrid — actual)
+
+En ProgramTabB7: quitar sección "Sesiones recientes" del Sheet de ejercicio
+  → esas sesiones pertenecen a la tab Análisis
+
+En ClientProfileDashboard.tsx (~líneas 396-462):
+  → Reducir KPI card sidebar: p-6 → p-4, quitar blur decorativo
+  → Quitar "Racha Interact." (ya está en el grid de 6 KPIs)
+  → Dejar solo: Peso Actual + Var. Semanal
 ```

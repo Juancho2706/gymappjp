@@ -9,7 +9,7 @@
 - Cada actualización debe llevar **fecha y hora** en **America/Santiago** en la línea **Última actualización** de ambos documentos (formato recomendado: `YYYY-MM-DD HH:mm America/Santiago`).
 - Bitácoras Cursor (sesiones): [`progreso cursor/PROGRESO-workout-checkin-rework-2026-04-10.md`](../progreso%20cursor/PROGRESO-workout-checkin-rework-2026-04-10.md).
 
-**Última actualización:** 2026-04-11 America/Santiago — **Go/No-Go revenue (código):** migración BD `trialing`; cancel real MP + `confirm-subscription` vía provider; webhook token obligatorio en `NODE_ENV=production`; firma MP opcional (`MERCADOPAGO_WEBHOOK_SIGNING_SECRET`); tests Vitest (webhook auth, subscription gate, `mapProviderStatus` trialing); E2E mock `tests/payment-flow-mock.spec.ts` (vars `E2E_PAYMENT_COACH_*`); removida dependencia npm `mercadopago` no usada. Docs MAPA/ESTADO alineados. Quick wins previos: `.env.example`, `font-display`, PWA `eva`, Sprint 6 branding/emails.
+**Última actualización:** 2026-04-13 America/Santiago — **Análisis + bug fix + roadmap:** BUG-001 workout weekly reset corregido (`page.tsx`+`actions.ts` con filtro fecha); hotfixes 2026-04-11→13: billing cycle validation, check-in alerts 30d, ClientCardV2 accessibility, 3 migraciones tiers/pagos; gaps nuevos identificados: historial por fecha coach (0%), tabs solapadas Entrenamiento+Programa (0%), KPI card Overview grande, unidades nutrición inconsistentes; plan 250 alimentos + unidades g/un pendiente implementación.
 
 ---
 
@@ -262,7 +262,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | `loading.tsx` | ✅ | 100% | Skeleton |
 | `actions.ts` | 🔶 | 75% | `logSetAction` upsert funcional + `revalidatePath` del perfil coach. Falta: manejo offline/retry, batch logging |
 
-**Resultado del módulo: ~82% — Avanzado significativamente con el rework del 2026-04-10. PRs en summary, A/B en page, confetti, progress bar. Pendiente: optimistic updates completos, offline/retry, vibración**
+**Resultado del módulo: ~84% — BUG-001 cerrado 2026-04-13: filtro de fecha en query de logs y en upsert de `logSetAction`. PRs en summary, A/B en page, confetti, progress bar. Pendiente: optimistic updates completos, offline/retry, vibración.**
 
 ---
 
@@ -275,7 +275,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | `actions.ts` | 🔶 | 75% | `submitCheckinAction`: schema con `back_photo`, upload a bucket `checkins` con path `-back-`, insert `back_photo_url`; `revalidatePath` coach con path concreto. Pendiente: validación server-side más robusta, manejo de errores de Storage con rollback |
 | `loading.tsx` | ✅ | 100% | Skeleton dedicado (nuevo en rework 2026-04-10) |
 
-**Resultado del módulo: ~80% — Avanzado significativamente con el rework del 2026-04-10. Wizard 3 pasos, dual photos. Pendiente: medidas corporales, notas libres, fotos extra**
+**Resultado del módulo: ~82% — Rework 2026-04-10 + threshold 30 días para alertas (commit 8a992d3). Wizard 3 pasos, dual photos. Pendiente: medidas corporales, notas libres, fotos extra.**
 
 ---
 
@@ -328,7 +328,7 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | Gestión de suscripción (coach dashboard) | 🔶 | 72% | `/coach/subscription`, processing, reactivate; `subscription_events`. |
 | Control de acceso por plan | 🔶 | 75% | Límites por `max_clients`; `TIER_CAPABILITIES` alineado a política “mismas features, distinto cupo”. |
 
-**Resultado del módulo: ~82% — Listo para validación en producción con checklist de env/secrets y smoke sandbox.**
+**Resultado del módulo: ~91% — 3 migraciones nuevas: `trialing`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`. Billing cycle validation mejorado. Listo para smoke sandbox MP en producción.**
 
 ---
 
@@ -356,62 +356,69 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 ## Resumen General
 
-> Porcentajes revisados contra el código real (auditoría completa 2026-04-10). Los módulos marcados con `*` tenían % incorrectos en la versión anterior; `**` indica correcciones nuevas en esta auditoría.
+> Porcentajes revisados contra el código real (auditoría completa 2026-04-13). BUG-001 cerrado; tiers/pagos actualizados; nuevos gaps documentados.
 
 | Módulo | % Completado |
 |--------|-------------|
-| Directorio de Clientes (coach) | 90% |
-| Perfil del Alumno (coach) | 94% |
+| Directorio de Clientes (coach) | 92% |
+| Perfil del Alumno (coach) | 95% |
 | Constructor de Planes | 95% |
 | Biblioteca de Programas | 95% |
 | Infraestructura / Shared | 80% |
 | Módulo Nutrición Coach (núcleo) | ~93% |
 | Dashboard Alumno | ~98% |
-| Nutrición Alumno | ~96% |
-| Workout Execution (alumno) ** | **82%** (antes 68%) |
-| Check-in Alumno ** | **80%** (antes 63%) |
+| Nutrición Alumno | ~97% |
+| Workout Execution (alumno) | **84%** (BUG-001 cerrado 2026-04-13) |
+| Check-in Alumno | **82%** (threshold 30d aplicado) |
 | Catálogo Ejercicios Alumno | 68% |
 | Onboarding Alumno | 58% |
 | Login / Auth Alumno | 50% |
-| Dashboard Coach Principal ** | **~68%** |
-| Ejercicios Coach ** | **40%** (antes 0%) |
-| Mi Marca / Brand Settings ** | **~62%** |
-| Landing / Marketing ** | **60%** (antes 0%) |
-| Pricing ** | **25%** (antes 0%) |
-| Registro Coach ** | **35%** (antes 0%) |
-| Login Coach ** | **40%** (antes 0%) |
-| Forgot/Reset Password ** | **40%** (antes 0%) |
-| **Pagos & Suscripciones** | **~82%** |
+| Dashboard Coach Principal | **~70%** |
+| Ejercicios Coach | **40%** |
+| Mi Marca / Brand Settings | **~62%** |
+| Landing / Marketing | **60%** |
+| Pricing | **25%** |
+| Registro Coach | **78%** |
+| Login Coach | **40%** |
+| Forgot/Reset Password | **40%** |
+| **Pagos & Suscripciones** | **~91%** |
+| **BD Alimentos** | **54 foods** (→ 250+ pendiente P1) |
+| **Historial fecha coach** | **0%** (nuevo gap P1) |
+| **Tabs optimización perfil** | **0%** (nuevo gap P2) |
 | **Panel CEO / Superadmin** | **0%** |
 | Templates | N/A (redirect) |
-| Testing | ~25% |
-| **TOTAL ESTIMADO** | **~73%** |
+| Testing | ~28% |
+| **TOTAL ESTIMADO** | **~75%** |
 
 ---
 
 ## Próximos Reworks (por prioridad)
 
-### 🔴 Alta (Revenue-critical)
+### 🔴 Alta — P1 (Revenue-critical + core UX)
 1. **Alineación Pricing/Landing** — unificar moneda (CLP) y oferta comercial final.
-2. **Optimizar conversión de pago** — mejorar UX de activación, recovery y reporting.
+2. **Seed 250+ alimentos** — OpenFoodFacts/USDA offline, migración SQL idempotente. Unidades `g`+`un`.
+3. **Simplificación unidades nutrición** — `g`+`un` en `FoodSearchDrawer`, `nutrition-utils`, `AddFoodSheet` + migración normalización.
+4. **Historial por fecha en perfil del alumno** — `DayNavigator` en tabs Nutrición + Análisis. Nuevas queries `getClientNutritionForDate` + `getClientWorkoutForDate` en `actions.ts` del perfil.
+5. **Smoke sandbox MercadoPago** — validar en producción con checklist BIZ-004.
 
-### 🟠 Media (Core Loop)
-3. **Workout Execution** (~82%) — optimistic updates completos, offline/retry, vibración nativa, batch logging.
-4. **Check-in del alumno** (~80%) — campos de medidas corporales, notas libres, fotos extra (perfil lateral).
-5. **Dashboard principal del coach** (~68%) — comparativas avanzadas, KPIs globales, tendencias (ENG-037+).
-6. **Mi Marca** (~35%) — rework del flow de branding, crop de logo, `StudentDashboardPreview` alineado al dashboard actual, más opciones de personalización.
+### 🟠 Media — P2 (Core Loop)
+6. **Workout Execution** (~84%) — optimistic updates completos, offline/retry, vibración nativa, batch logging.
+7. **Check-in del alumno** (~82%) — campos de medidas corporales, notas libres, fotos extra (perfil lateral).
+8. **Dashboard principal del coach** (~70%) — comparativas avanzadas, KPIs globales, tendencias (ENG-037+).
+9. **Mi Marca** (~62%) — preview moderno (usa dashboard alumno real), crop de logo, más opciones de identidad.
+10. **Tabs perfil alumno** — rename Entrenamiento→Análisis, Programa→Plan; quitar mini-logs de ProgramTabB7; reducir KPI card sidebar Overview.
+11. **goal_weight** — columna en `clients`, línea target en `WeightProgressChart`.
 
-### 🟡 Baja (Polish)
-7. **Ejercicios Coach** (~40%) — rework UX: upload GIF, bulk edit, organización por tags.
-8. **Onboarding alumno** (~58%) — rework UX: progress bar visual, foto inicial, validación por paso, skip de opcionales.
-9. **Catálogo Ejercicios Alumno** (~68%) — rework visual: animaciones, favoritos, historial del ejercicio, filtro por equipo.
-10. **Landing / Marketing** (~60%) — testimonios reales, optimización LCP, SEO técnico, A/B testing copy.
-11. **Login/Register Coach** (~40/35%) — rework visual, rate limiting, verificación email, "remember me".
-12. **Panel CEO / Superadmin** — ruta secreta para supervisión global de la plataforma.
+### 🟡 Baja — P3 (Polish)
+12. **Ejercicios Coach** (~40%) — upload GIF, bulk edit, organización por tags.
+13. **Onboarding alumno** (~58%) — progress bar visual, foto inicial, validación por paso.
+14. **Catálogo Ejercicios Alumno** (~68%) — favoritos, historial del ejercicio.
+15. **Landing / Marketing** (~60%) — testimonios reales, SEO técnico.
+16. **Login/Register Coach** (~40/78%) — rework visual, rate limiting, gate de pago.
+17. **Panel CEO / Superadmin** — ruta secreta para supervisión global de la plataforma.
 
 ### 🔵 Futuro (sin urgencia acordada)
-- **Código de barras / import rápido de alimentos** (`FoodImportRow` o similar).
-- **Extensión nutrición coach:** rework `/coach/meals`, UX `/coach/meal-groups`, `/coach/recipes` si el producto los reabre.
+- **Extensión nutrición coach:** rework `/coach/meals`, `/coach/meal-groups`, `/coach/recipes`.
 - **App móvil nativa** (Capacitor/React Native) si la PWA no alcanza.
 
 ### ⏳ Condicionado (calidad / seguridad)

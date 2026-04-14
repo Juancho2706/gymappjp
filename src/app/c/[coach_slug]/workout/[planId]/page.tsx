@@ -120,11 +120,16 @@ export default async function WorkoutExecutionPage({ params }: Props) {
     }> = []
 
     if (blockIds.length > 0) {
+        // Only load logs from TODAY to avoid showing previous weeks' data as "already completed"
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+        const tomorrowStr = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
         const { data: rawLogs } = await supabase
             .from('workout_logs')
             .select('block_id, set_number, weight_kg, reps_done, rpe')
             .in('block_id', blockIds)
-        
+            .gte('logged_at', `${todayStr}T00:00:00`)
+            .lt('logged_at', `${tomorrowStr}T00:00:00`)
+
         logs = (rawLogs || []) as typeof logs
     }
 
