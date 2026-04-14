@@ -80,11 +80,11 @@ export async function middleware(request: NextRequest) {
         // Verify the user has a coaches record
         const { data: coachData } = await supabase
             .from('coaches')
-            .select('id, subscription_status')
+            .select('id, subscription_status, current_period_end')
             .eq('id', user.id)
             .maybeSingle()
 
-        const coach = coachData as Pick<Coach, 'id' | 'subscription_status'> | null
+        const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end'> | null
 
         if (!coach) {
             // User is logged in but isn't a coach → redirect
@@ -93,7 +93,7 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
-        const redirectPath = resolveCoachSubscriptionRedirect(pathname, coach.subscription_status)
+        const redirectPath = resolveCoachSubscriptionRedirect(pathname, coach.subscription_status, coach.current_period_end)
         if (redirectPath) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = redirectPath

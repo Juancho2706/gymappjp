@@ -216,10 +216,11 @@ export function getTierNutritionSummary(tier: SubscriptionTier): string {
         : 'Sin módulo de nutrición'
 }
 
+// Note: 'canceled' is NOT in this list. A canceled coach still has access until
+// current_period_end. The gate in coach-subscription-gate.ts handles that date check.
 export const SUBSCRIPTION_BLOCKED_STATUSES = [
     'pending_payment',
     'expired',
-    'canceled',
     'past_due',
     'paused',
 ] as const

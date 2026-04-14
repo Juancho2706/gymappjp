@@ -7,7 +7,42 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-14 America/Santiago — **4 bugs cerrados (nutrición + dashboard):** BUG-002 cantidad input nutrición (string state), BUG-003 selector unidad g/un (reemplazado por button toggle — fix portal Radix), BUG-004 alertas críticas para alumnos sin plan (guard `hasActiveWorkoutProgram`), BUG-005 onboarding sin botón cerrar (dismiss + localStorage persistido). Unidades nutrición g+un implementadas (seed 250+ alimentos completado en sprint anterior).
+**Última actualización:** 2026-04-14 America/Santiago — **Sprint 8 — Pagos/Suscripción hardening + Pricing clarity:** grace period al cancelar (acceso hasta `current_period_end`), upgrade/downgrade modal con transición al fin del ciclo, pricing visual con grupos sin/con nutrición, UX registro→checkout mejorada, banners trial+cancelado en dashboard, sidebar "Nutrición", historial por fecha coach ya implementado.
+
+---
+
+## Actualización incremental (Sprint 8 — Pagos hardening + Pricing clarity + UX)
+
+> Trabajo del 2026-04-14 segunda sesión.
+
+### Suscripción — Grace period en cancelación (TASK-P1)
+- `src/app/api/payments/cancel-subscription/route.ts`: ya **no nullea** `current_period_end` al cancelar. El coach conserva la fecha.
+- `src/lib/constants.ts`: `'canceled'` eliminado de `SUBSCRIPTION_BLOCKED_STATUSES`. El gate maneja el acceso por fecha.
+- `src/lib/coach-subscription-gate.ts`: nueva función `hasEffectiveAccess(status, currentPeriodEnd)`. Si status es `'canceled'` y `current_period_end > now`, el acceso está permitido.
+- `src/middleware.ts`: ahora fetcha y pasa `current_period_end` al gate.
+- `src/lib/payments/subscription-state.ts`: `resolveCurrentPeriodEnd` preserva la fecha cuando status viene de cancelación.
+- `src/app/coach/dashboard/CoachDashboardClient.tsx`: banner amarillo "Tu suscripción fue cancelada. Acceso hasta [fecha]." + banner azul countdown de trial.
+- `src/app/coach/dashboard/_data/dashboard.queries.ts`: incluye `subscription_status`, `current_period_end`, `trial_ends_at` en la query.
+- `src/app/coach/subscription/page.tsx`: dialog de cancelación muestra "conservarás acceso hasta el [fecha]".
+
+### Upgrade/Downgrade — Transición limpia al fin del ciclo (TASK-P2)
+- `src/lib/payments/types.ts`: `CreateCheckoutInput` acepta `startDate?: string`.
+- `src/lib/payments/providers/mercadopago.ts`: usa `input.startDate` en `auto_recurring.start_date` cuando viene.
+- `src/app/api/payments/create-preference/route.ts`: detecta upgrade mid-cycle (status `active` + `current_period_end` futuro), pasa `startDate = current_period_end` al provider, mantiene `subscription_status = 'active'` (el coach no pierde acceso).
+- `src/app/coach/subscription/page.tsx`: modal de confirmación mostrando "Tu plan [X] continúa hasta [fecha]. El nuevo plan [Y] arranca esa fecha por $Z".
+
+### Pricing más claro (TASK-P3)
+- `src/app/pricing/page.tsx`: dos grupos visuales "Planes de entrenamiento (sin nutrición)" y "Planes completos con nutrición", separadores con badges de categoría, FAQs extendidos con respuestas sobre cambio de plan y cancelación con acceso, callout empresarial (`contacto@eva-app.cl`). Componente `PlanCard` extraído.
+- `src/app/page.tsx`: callout empresarial en sección `#precios`.
+
+### Register → Checkout UX (TASK-P4)
+- `src/app/coach/subscription/processing/page.tsx`: muestra plan elegido (badge tier/ciclo), loading state claro con spinner, timeout 5 min con mensaje, botón "Reintentar" en fallos de checkout, botón "Verificar acceso" en timeout de polling.
+- `src/app/(auth)/register/page.tsx`: paso 2 muestra badge de nutrición (verde/ámbar) y ciclo de facturación en cada opción de tier; paso 3 muestra tabla resumen (plan, facturación, nutrición sí/no, total).
+
+### Otros (TASK-26.1 / TASK-06-07 verificados)
+- `src/components/coach/CoachSidebar.tsx`: "Planes Nutricionales" → "Nutrición".
+- **TASK-06** confirmado implementado: `DayNavigator` en `NutritionTabB5.tsx` y `TrainingTabB4Panels.tsx` (commit anterior `feat: implement nutrition and workout history by date for clients`).
+- **TASK-07** confirmado implementado: tabs "Análisis" y "Plan" ya renombradas (commit anterior).
 
 ---
 
@@ -287,9 +322,8 @@ La carpeta `supabase/migrations/` ya existe y se está usando en sprints recient
 
 ### Media prioridad
 
-#### Tabs del perfil del alumno: solapamiento Entrenamiento + Programa
-Las tabs "Entrenamiento" (`TrainingTabB4Panels`) y "Programa" (`ProgramTabB7`) tienen solapamiento: ambas muestran logs históricos de ejercicios desde distintos ángulos. La distinción semántica es correcta (analytics vs blueprint), pero la presencia de logs en ambas confunde.
-**Trabajo:** Renombrar "Entrenamiento" → "Análisis" y "Programa" → "Plan". Quitar mini-logs del Sheet de ejercicio en ProgramTabB7 (esos logs pertenecen a Análisis). P2.
+#### ~~Tabs del perfil del alumno: solapamiento Entrenamiento + Programa~~ *(cerrado Sprint 8)*
+Tabs renombradas: "Entrenamiento" → "Análisis", "Programa" → "Plan". Mini-logs pendientes de quitar de `ProgramTabB7` (P2 menor).
 
 ---
 
@@ -299,15 +333,13 @@ La card sidebar en `ClientProfileDashboard.tsx` (~líneas 396-462) muestra solo 
 
 ---
 
-#### Vista de historial por fecha — coach no puede ver día específico
-El coach no puede navegar a una fecha concreta y ver qué comió/entrenó un alumno. Los datos existen (`daily_nutrition_logs`, `nutrition_meal_logs`, `workout_logs`). Solo falta la UI del coach.
-**Trabajo:** Agregar `DayNavigator` (ya existe en nutrición alumno) a tabs Nutrición y Análisis del perfil. Nuevas queries `getClientNutritionForDate` + `getClientWorkoutForDate` en `actions.ts`. P1.
+#### ~~Vista de historial por fecha — coach no puede ver día específico~~ *(cerrado Sprint 8)*
+`DayNavigator` ya implementado en `NutritionTabB5.tsx` y `TrainingTabB4Panels.tsx`. Queries `getClientNutritionForDate` + `getClientWorkoutForDate` en `actions.ts`. Pendiente: dots de actividad en el calendario.
 
 ---
 
-#### Inconsistencia de moneda Pricing vs Landing
-`/pricing` muestra tiers en USD (Starter $49, Pro $99, Elite $199). La landing (`/page.tsx`) muestra tiers en CLP (14.990–89.990). Deben alinearse antes de monetizar.
-**Trabajo:** Decisión de producto sobre moneda y tiers definitivos. Actualizar ambas páginas.
+#### ~~Inconsistencia de moneda Pricing vs Landing~~ *(cerrado Sprint 7)*
+`/pricing` y landing usan CLP. Tiers alineados (5 planes, CLP, `TIER_CONFIG`).
 
 ---
 
@@ -377,19 +409,19 @@ Títulos en login / change-password / exercises / suspended del alumno usan la c
 | ~~**Dashboard del alumno**~~ | Completado | ~98% | §12 QA manual | **COMPLETADO** |
 | ~~**Workout execution rework**~~ | ~~Bug~~ corregido 2026-04-13 | ~84% | Optimistic updates, offline/retry | **BUG CERRADO** |
 | ~~**Check-in rework**~~ | Rework abril 10 | ~82% | Medidas corporales, notas | **COMPLETADO (parcial)** |
-| **Pagos & Suscripciones** | Hardening 2026-04-13 | ~91% | Smoke sandbox MP en prod + Go/No-Go | **CRÍTICA (revenue)** |
-| **BD Alimentos** | 54 alimentos globales | seed | Seed 250+ alimentos (OpenFoodFacts/USDA offline) | **Alta (P1)** |
-| **Unidades nutrición** | 7 unidades inconsistentes | — | Simplificar a `g` + `un` + migración SQL | **Alta (P1)** |
-| **Historial fecha coach** | No implementado | 0% | DayNavigator en tabs Nutrición + Análisis del perfil | **Alta (P1)** |
-| **Dashboard coach** | Sprint 6 comercial base | ~70% | Comparativas avanzadas (ENG-037/039/042/043/044) | Media |
-| **Mi Marca / Settings** | Sprint 6 branding MVP | ~62% | Preview actualizado + branding extendido | Media |
-| **Tabs perfil alumno** | Solapamiento parcial | — | Rename + quitar mini-logs duplicados + KPI card fix | **Media (P2)** |
+| ~~**Historial fecha coach**~~ | Implementado 2026-04-14 | ~85% | Indicadores de días con actividad (dots) | **COMPLETADO** |
+| ~~**Tabs perfil alumno**~~ | Renombradas (Análisis/Plan) | ~90% | Quitar mini-logs ProgramTabB7, KPI card fix | **COMPLETADO (parcial)** |
+| **Pagos & Suscripciones** | Hardening Sprint 8 | ~96% | Smoke sandbox MP en prod, upgrade webhook confirmar | **CRÍTICA (revenue)** |
+| **BD Alimentos** | 250+ alimentos seed | ~95% | — | **COMPLETADO** |
+| ~~**Unidades nutrición**~~ | g+un implementado | ~95% | — | **COMPLETADO** |
+| **Landing/Pricing** | Sprint 8 visual | ~75% | SEO técnico, testimonios reales, OG tags | Media |
+| **Dashboard coach** | Sprint 6 + banners Sprint 8 | ~78% | Comparativas avanzadas (MRR, adherencia 30d) | Media |
+| **Mi Marca / Settings** | MVP branding | ~62% | Preview moderno, branding extendido | Media |
+| **Registro coach** | Sprint 8 UX mejorada | ~88% | Smoke test pago, verificación email | Alta |
 | **Ejercicios coach** | Funcional básico | ~40% | Upload GIF, bulk edit | Baja |
 | **Onboarding** | Multi-step con draft | ~58% | Progress bar, foto, validación | Baja |
 | **Catálogo ejercicios alumno** | Funcional | ~68% | Favoritos, historial | Baja |
 | **Login/Auth coach** | Funcional | ~40% | Rework visual, rate limiting | Baja |
-| **Registro coach** | Funcional con gate | ~78% | Gate de pago obligatorio en flujo | **Alta (con pagos)** |
-| **Landing/Pricing** | Sustancial | ~60/25% | Unificar moneda CLP, SEO, testimonios | Media |
 | **Panel CEO / Superadmin** | Inexistente | 0% | Métricas globales | Baja |
 | **Testing** | En progreso | ~28% | Cobertura razonable + E2E pago | Media-Alta |
 

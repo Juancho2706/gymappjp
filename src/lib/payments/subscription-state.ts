@@ -24,6 +24,11 @@ export function resolveCurrentPeriodEnd(input: {
     currentPeriodEnd?: string | null
     providerCurrentPeriodEnd?: string | null
 }) {
+    // Canceled coaches keep their period_end so they can still use the app
+    // until the date they paid through. Only hard-blocked statuses get null.
+    if (input.status === 'canceled') {
+        return parseDate(input.currentPeriodEnd)?.toISOString() ?? null
+    }
     if (input.status !== 'active' && input.status !== 'trialing') return null
 
     const providerDate = parseDate(input.providerCurrentPeriodEnd)

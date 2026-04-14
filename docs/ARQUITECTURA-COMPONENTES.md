@@ -7,19 +7,29 @@
 
 ## Cambios recientes (delta)
 
-- **BUG-002/003 cerrados (2026-04-14):** `FoodSearchDrawer.tsx` — `quantity` state cambiado a `string` (BUG-002: evita snap a 0 al borrar). Selector de unidad `<Select>` reemplazado por button toggle inline `g | un` (BUG-003: fix conflicto portal Radix UI `Select` dentro de `Sheet`).
-- **BUG-004 cerrado (2026-04-14):** `dashboard.service.ts` — `calculateAttentionScore` ahora recibe `hasActiveWorkoutProgram: boolean`; la flag `SIN_EJERCICIO_7D` solo se activa si el alumno tiene un programa activo asignado. Alumnos nuevos sin plan no aparecen en alertas críticas.
-- **BUG-005 cerrado (2026-04-14):** `CoachOnboardingChecklist.tsx` — botón X para cerrar el card. Estado `dismissed` persistido en `localStorage` (`eva:coach-onboarding:v1`). Render `null` cuando dismissed.
-- **BUG-001 cerrado (2026-04-13):** `workout/[planId]/page.tsx` ahora filtra logs por fecha HOY (timezone Santiago) usando `.gte/.lt`. `actions.ts` también filtra por HOY antes de hacer upsert. Logs de semanas anteriores quedan como historial (ya estaban en `previousHistory`).
-- **Tiers/Pagos (2026-04-11→13):** 3 migraciones nuevas: `trialing` en `subscription_status`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`. Billing cycle validation.
-- **Hotfixes:** Check-in alerts a 30 días; `ClientCardV2` accessibility final.
-- **Gaps nuevos identificados:** Historial por fecha en perfil coach (§16 nuevo); tabs solapadas Entrenamiento+Programa (§5 nota); KPI card Overview grande.
-- **Pagos:** `PaymentsProvider` incluye `fetchCheckoutSnapshot` y `cancelCheckoutAtProvider`; MP cancela preapproval vía `PUT` + `status: cancelled`. Webhook: `webhook-authorization.ts` (token prod + HMAC opcional). Migración `trialing` en `subscription_status`.
-- **Dashboard coach:** `page.tsx` ahora delega en `_components/DashboardContent.tsx` y `_data/dashboard.queries.ts`.
-- **Branding MVP:** `coaches.welcome_message` se persiste desde settings y se consume en login/dashboard alumno.
-- **Emails transaccionales:** plantillas en `src/lib/email/transactional-templates.ts`; disparo en acciones de alta alumno y asignación de programa.
-- **Política de planes:** tiers mantienen mismas features; diferencia principal por `max_clients`.
-- **Favicon/íconos alumno:** metadata usa `icon` + `shortcut` + `apple` para evitar fallback al icono viejo.
+### Sprint 8 — 2026-04-14 (Pagos hardening + Pricing clarity)
+
+- **Grace period cancelación:** `cancel-subscription/route.ts` ya no nullea `current_period_end`. `'canceled'` fuera de `SUBSCRIPTION_BLOCKED_STATUSES`. `coach-subscription-gate.ts` → nueva `hasEffectiveAccess(status, periodEnd)`. `middleware.ts` → pasa `current_period_end` al gate. `subscription-state.ts` → preserva fecha al cancelar. Dashboard → banners amarillo/azul para cancelado-con-acceso y trial.
+- **Upgrade/downgrade mid-cycle:** `types.ts` → `CreateCheckoutInput.startDate?`. `mercadopago.ts` → usa `input.startDate` si viene. `create-preference/route.ts` → detecta coach activo con período futuro, pasa `startDate = current_period_end`, mantiene `status='active'`. `subscription/page.tsx` → modal de confirmación con "plan X hasta [fecha], plan Y desde [fecha] por $Z".
+- **Pricing:** `pricing/page.tsx` → dos grupos visuales "sin nutrición" (starter_lite, starter) y "con nutrición" (pro, elite, scale) con separadores y badges de categoría. FAQs extendidos. Callout empresarial. Componente `PlanCard` extraído.
+- **Landing:** `page.tsx` → callout empresarial `contacto@eva-app.cl` en sección `#precios`.
+- **Register UX:** `processing/page.tsx` → badge plan elegido, timeout 5 min, reintentar. `register/page.tsx` → paso 2 con badges nutrición/ciclo por tier, paso 3 tabla resumen.
+- **Sidebar:** `CoachSidebar.tsx` → "Planes Nutricionales" → "Nutrición".
+- **Historial fecha coach:** Confirmado implementado — `NutritionTabB5.tsx` y `TrainingTabB4Panels.tsx` tienen `DayNavigator`.
+- **Tabs perfil:** Confirmado implementado — "Análisis" y "Plan" renombradas.
+
+### Sprint 7 — 2026-04-14 (Bugs + Branding + Datos)
+
+- **BUG-002/003 cerrados:** `FoodSearchDrawer.tsx` — `quantity` state → `string`; unit `<Select>` → button toggle `g | un`.
+- **BUG-004 cerrado:** `dashboard.service.ts` — `SIN_EJERCICIO_7D` solo con `hasActiveWorkoutProgram`.
+- **BUG-005 cerrado:** `CoachOnboardingChecklist.tsx` — dismiss + localStorage.
+- **BUG-001 cerrado (2026-04-13):** `workout/[planId]/page.tsx` — filtro logs por HOY.
+- **Tiers/Pagos (2026-04-11→13):** 3 migraciones: `trialing`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`.
+- **Branding EVA por defecto:** `brand-assets.ts` (`BRAND_PRIMARY_COLOR`), middleware fallback logo/color, `ClientNav`, layouts, `LogoUploadForm`.
+- **Pagos:** `fetchCheckoutSnapshot`, `cancelCheckoutAtProvider`; webhook HMAC opcional.
+- **Dashboard coach:** `_components/DashboardContent.tsx` + `_data/dashboard.queries.ts`.
+- **Emails transaccionales:** `src/lib/email/transactional-templates.ts`.
+- **Favicon/íconos alumno:** metadata `icon` + `shortcut` + `apple`.
 
 ---
 

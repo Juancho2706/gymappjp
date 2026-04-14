@@ -44,6 +44,7 @@ export async function getCoachDashboardData(userId: string) {
         clientsGrowthRaw,
         weeklyCheckinsRaw,
         pulse,
+        coachSubscriptionRaw,
     ] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact', head: true }).eq('coach_id', userId),
         supabase.from('workout_plans').select('*', { count: 'exact', head: true }).eq('coach_id', userId),
@@ -73,6 +74,11 @@ export async function getCoachDashboardData(userId: string) {
             .eq('clients.coach_id', userId)
             .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
         getCachedDirectoryPulse(userId),
+        supabase
+            .from('coaches')
+            .select('subscription_status, current_period_end, trial_ends_at')
+            .eq('id', userId)
+            .maybeSingle(),
     ])
 
     const adherenceStats = mapDirectoryPulseToAdherenceStats(pulse)
@@ -202,5 +208,8 @@ export async function getCoachDashboardData(userId: string) {
         topRiskClients,
         areaData,
         barData,
+        subscriptionStatus: coachSubscriptionRaw.data?.subscription_status ?? null,
+        currentPeriodEnd: coachSubscriptionRaw.data?.current_period_end ?? null,
+        trialEndsAt: coachSubscriptionRaw.data?.trial_ends_at ?? null,
     }
 }

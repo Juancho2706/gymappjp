@@ -65,6 +65,9 @@ interface CoachDashboardClientProps {
     topRiskClients: RiskAlertItem[]
     areaData: any[]
     barData: any[]
+    subscriptionStatus?: string | null
+    currentPeriodEnd?: string | null
+    trialEndsAt?: string | null
 }
 
 export default function CoachDashboardClient({
@@ -78,11 +81,38 @@ export default function CoachDashboardClient({
     expiringPrograms,
     topRiskClients,
     areaData,
-    barData
+    barData,
+    subscriptionStatus,
+    currentPeriodEnd,
+    trialEndsAt,
 }: CoachDashboardClientProps) {
     const [modalType, setModalType] = useState<'adherence' | 'nutrition' | null>(null)
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const hasRecentCheckin = recentActivities.some((activity) => activity.type === 'check-in')
+
+    // Grace period: canceled but still has access
+    const isCanceledWithAccess =
+        subscriptionStatus === 'canceled' &&
+        currentPeriodEnd != null &&
+        new Date(currentPeriodEnd).getTime() > Date.now()
+
+    // Trial countdown
+    const isTrialing =
+        subscriptionStatus === 'trialing' &&
+        trialEndsAt != null &&
+        new Date(trialEndsAt).getTime() > Date.now()
+
+    const trialDaysLeft = isTrialing
+        ? Math.max(0, Math.ceil((new Date(trialEndsAt!).getTime() - Date.now()) / 86400000))
+        : 0
+
+    const canceledUntilLabel = isCanceledWithAccess
+        ? new Date(currentPeriodEnd!).toLocaleDateString('es-CL', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+          })
+        : ''
 
     const stats = [
         {
@@ -108,12 +138,56 @@ export default function CoachDashboardClient({
     ]
 
     return (
-        <motion.div 
+        <motion.div
             className="space-y-8"
             variants={containerVariants}
             initial="hidden"
             animate="visible"
         >
+            {/* Canceled-with-access banner */}
+            {isCanceledWithAccess && (
+                <motion.div variants={itemVariants}>
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-300">
+                        <div className="flex items-center gap-2">
+                            <TriangleAlert className="h-4 w-4 shrink-0" />
+                            <span>
+                                Tu suscripción fue cancelada. Tienes acceso hasta el{' '}
+                                <strong>{canceledUntilLabel}</strong>. Después de esa fecha tu cuenta quedará suspendida.
+                            </span>
+                        </div>
+                        <Link
+                            href="/coach/subscription"
+                            className="shrink-0 font-semibold underline underline-offset-2 hover:opacity-80"
+                        >
+                            Reactivar
+                        </Link>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Trial countdown banner */}
+            {isTrialing && (
+                <motion.div variants={itemVariants}>
+                    <div className="flex items-center justify-between gap-4 rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
+                        <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 shrink-0" />
+                            <span>
+                                Estás en período de prueba.{' '}
+                                {trialDaysLeft === 0
+                                    ? 'Tu prueba termina hoy.'
+                                    : `Te quedan ${trialDaysLeft} día${trialDaysLeft !== 1 ? 's' : ''} de prueba.`}
+                            </span>
+                        </div>
+                        <Link
+                            href="/coach/subscription"
+                            className="shrink-0 font-semibold underline underline-offset-2 hover:opacity-80"
+                        >
+                            Ver planes
+                        </Link>
+                    </div>
+                </motion.div>
+            )}
+
             {/* Header */}
             <motion.div variants={itemVariants} className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative">
                 <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 dark:bg-primary/10 blur-[100px] pointer-events-none z-0" />

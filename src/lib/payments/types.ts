@@ -11,6 +11,8 @@ export type CreateCheckoutInput = {
     failureUrl: string
     pendingUrl: string
     webhookUrl: string
+    /** ISO date string — if provided, the subscription starts on that date (used for mid-cycle upgrades). */
+    startDate?: string
 }
 
 export type CreateCheckoutResult = {

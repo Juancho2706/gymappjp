@@ -3,7 +3,7 @@
 > Documento exhaustivo de planificacion desde todas las perspectivas profesionales.
 > Cada tarea tiene: ID unico, prioridad (P0-P3), esfuerzo estimado, dependencias.
 > **Generado:** 2026-04-10 America/Santiago
-> **Actualizado:** 2026-04-14 America/Santiago — BUG-002/003/004/005 cerrados (nutrición quantity+unit, alertas críticas alumnos nuevos, onboarding dismiss); FEAT-F01 unidades g+un completado; FEAT-F02 seed 250 alimentos completado; estado real ~76%.
+> **Actualizado:** 2026-04-14 America/Santiago — Sprint 8: BUG-002/003/004/005 cerrados; FEAT-F01/F02 completados; UX-001/002/013 cerrados (pricing CLP, registro→pago, tabs renombrados); grace period cancelación implementado (P1.1-P1.6); upgrade mid-cycle start_date (P2.1-P2.3); pricing dual-section badges (P3.1-P3.4); register summary table + processing page rewrite (P4.1-P4.5); estado real ~82%.
 > **Base:** Auditoria completa de 225+ archivos, 24 tablas BD, 38 rutas.
 
 ---
@@ -122,8 +122,8 @@
 | ~~BUG-003~~ | Nutrición | ~~Selector de unidad g/un no respondía dentro del Sheet~~ | **CERRADO 2026-04-14** — Reemplazado por button toggle (fix portal Radix) |
 | ~~BUG-004~~ | Dashboard Coach | ~~Alertas críticas aparecían para alumnos nuevos sin planes~~ | **CERRADO 2026-04-14** — Guard `hasActiveWorkoutProgram` en `calculateAttentionScore` |
 | ~~BUG-005~~ | Dashboard Coach | ~~Onboarding coach sin botón para cerrar/ocultar~~ | **CERRADO 2026-04-14** — Botón X + `dismissed` persistido en localStorage |
-| UX-001 | Pricing/Landing | Moneda inconsistente (USD en /pricing vs CLP en landing) | Confusion total del usuario, destruye confianza |
-| UX-002 | Registro coach | Sin flujo de pago, sin confirmacion visual de "que estoy comprando" | No hay conversion |
+| ~~UX-001~~ | Pricing/Landing | ~~Moneda inconsistente (USD en /pricing vs CLP en landing)~~ | **CERRADO 2026-04-14** — `/pricing` rediseñado con dual-section (básicos / completos), todos los precios en CLP, badges por categoría |
+| ~~UX-002~~ | Registro coach | ~~Sin flujo de pago, sin confirmacion visual de "que estoy comprando"~~ | **CERRADO 2026-04-14** — Register paso 2 con badges de nutrición y ciclo, paso 3 con summary table; processing page con spinner, reintentar, y redirect automático a MP |
 | UX-003 | Login coach | UI basica sin branding premium | Primera impresion pobre |
 
 ### P1 — Critica para primeros coaches
@@ -132,7 +132,7 @@
 |----|------|----------|---------|
 | ~~FEAT-F01~~ | BD Alimentos | ~~Solo 54 alimentos. Pocos para uso real de nutrición.~~ | **CERRADO 2026-04-14** — Seed 250+ alimentos completado |
 | ~~FEAT-F02~~ | Unidades nutrición | ~~7 unidades inconsistentes (g, ml, gr, un, cda, cdta, taza, porción). Sin validación.~~ | **CERRADO 2026-04-14** — Simplificado a `g` + `un`. BUG-002/003 quantity+unit corregidos |
-| FEAT-H01 | Perfil alumno coach | Coach no puede ver qué comió/entrenó un alumno en una fecha específica del pasado | Dificulta seguimiento individualizado → DayNavigator en tabs Nutrición + Análisis |
+| ~~FEAT-H01~~ | Perfil alumno coach | ~~Coach no puede ver qué comió/entrenó un alumno en una fecha específica del pasado~~ | **CERRADO** — DayNavigator implementado en tabs Nutrición + Análisis (commits previos); historial por fecha operativo |
 | UX-004 | Dashboard coach | UI no refleja el nivel del resto de la app | Coach siente que la app es "a medias" |
 | UX-005 | Mi Marca | Preview desactualizado del dashboard alumno | Coach no sabe que vera su alumno |
 | UX-006 | Onboarding alumno | Sin progress bar visual, saltos bruscos entre pasos | Abandono en primer uso |
@@ -147,7 +147,7 @@
 | UX-010 | Ejercicios coach | Sin upload de GIF propios. Solo usa banco global | Coach no puede personalizar |
 | UX-011 | Ejercicios alumno | Sin favoritos ni historial por ejercicio | Alumno no puede ver su progreso por movimiento |
 | UX-012 | Email transaccional | No hay emails: bienvenida, reminder check-in, programa nuevo | Coach debe comunicar todo manual |
-| UX-013 | Tabs perfil alumno | "Entrenamiento" y "Programa" se solapan. Logs duplicados. Coach confundido sobre qué tab usar. | Rename → Análisis + Plan; quitar mini-logs de ProgramTabB7 |
+| ~~UX-013~~ | Tabs perfil alumno | ~~"Entrenamiento" y "Programa" se solapan. Logs duplicados.~~ | **CERRADO 2026-04-14** — Tabs renombrados a "Análisis" + "Plan"; mini-logs quitados de ProgramTabB7 |
 | UX-014 | KPI card Overview | Card sidebar "Métricas Clave" muestra 3 métricas con estilos muy grandes. "Racha" duplicada en grid de 6 KPIs. | Reducir padding, quitar blur decorativo, eliminar "Racha Interact." |
 
 ---
@@ -982,7 +982,33 @@ Dashboard | Entrenar | Nutricion | Progreso | Mas (ejercicios, settings)
 - RET-001, RET-002 (Onboarding coach + email drip)
 - Monitoreo y soporte
 
-### Sprint 6+ (ongoing): Phase 2
+### Sprint 7 — COMPLETADO (2026-04-13/14)
+- ~~BUG-001~~ Workout execution semana nueva (cerrado)
+- ~~BUG-002/003~~ Nutrición quantity+unit toggle (cerrado)
+- ~~BUG-004~~ Alertas críticas alumnos nuevos (cerrado)
+- ~~BUG-005~~ Onboarding dismiss (cerrado)
+- ~~FEAT-F01~~ Unidades g+un normalizadas (cerrado)
+- ~~FEAT-F02~~ Seed 250 alimentos (cerrado)
+- ~~FEAT-H01~~ DayNavigator historial por fecha en perfil coach (cerrado)
+- ~~UX-013~~ Tabs "Análisis" + "Plan" (cerrado)
+
+### Sprint 8 — COMPLETADO (2026-04-14)
+- ~~UX-001~~ Pricing: dual-section con badges, CLP, enterprise callout (cerrado)
+- ~~UX-002~~ Register: step 2 badges nutrición+ciclo, step 3 summary table; processing page rewrite (cerrado)
+- **TASK-P1** Grace period cancelación: `cancel-subscription` preserva fecha, `canceled` fuera de `SUBSCRIPTION_BLOCKED_STATUSES`, `hasEffectiveAccess()` en gate, middleware pasa `current_period_end`, `subscription-state.ts` preserva fecha, banners en dashboard coach
+- **TASK-P2 (parcial)** Upgrade mid-cycle: modal de confirmación, `create-preference` detecta upgrade activo y pasa `startDate = current_period_end`, status permanece `active` durante upgrade; **pendiente P2.4** (webhook activación)
+- **TASK-P3** Pricing clarity: `/pricing` dual-section, badges, FAQs actualizados, enterprise callout; landing `#precios` enterprise callout
+- **TASK-P4** Register+processing UX: processing page con plan label, spinner, timeout 5min, botón reintentar, register steps mejorados
+- Sidebar label "Nutrición" (era "Planes Nutricionales")
+
+### Sprint 9 (próximo): Smoke Tests + Webhook Activación
+- TASK-P1.7: smoke test grace period
+- TASK-P2.4: webhook activación upgrade (cancel old preapproval, update tier on authorized event)
+- TASK-P2.6: edge case reactivación desde canceled
+- TASK-04: auditoría registro + gate completo
+- TASK-05: subscription page historial formateo
+
+### Sprint 10+ (ongoing): Phase 2
 - ENG-035 a ENG-044 (Dashboard coach rework)
 - ENG-045 a ENG-050 (Mi Marca rework)
 - ENG-051 a ENG-058 (Workout polish)

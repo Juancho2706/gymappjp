@@ -58,11 +58,12 @@ export async function POST(request: Request) {
             }
         }
 
+        // Preserve current_period_end so the coach keeps access until the end
+        // of the period they already paid for. The gate logic checks this date.
         const { error: updateError } = await admin
             .from('coaches')
             .update({
                 subscription_status: 'canceled',
-                current_period_end: null,
             })
             .eq('id', user.id)
 

@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+
+const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 function extractPreapprovalId(rawSubscriptionParam: string, searchParams: URLSearchParams) {
     const direct = searchParams.get('preapproval_id')
@@ -26,48 +30,54 @@ function extractPreapprovalId(rawSubscriptionParam: string, searchParams: URLSea
 export default function SubscriptionProcessingPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const [statusText, setStatusText] = useState('Validando pago con MercadoPago...')
+    const [statusText, setStatusText] = useState('')
     const [error, setError] = useState<string | null>(null)
+    const [canRetry, setCanRetry] = useState(false)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const pollStartRef = useRef<number>(0)
 
     const preapprovalId = useMemo(
         () => extractPreapprovalId(searchParams.get('subscription') ?? '', searchParams),
         [searchParams]
     )
     const fromRegister = searchParams.get('from') === 'register'
-    const tierFromUrl = searchParams.get('tier')
-    const cycleFromUrl = searchParams.get('cycle')
+    const tierFromUrl = (searchParams.get('tier') ?? 'starter') as SubscriptionTier
+    const cycleFromUrl = (searchParams.get('cycle') ?? 'monthly') as BillingCycle
+
+    const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl
+    const cycleLabel = BILLING_CYCLE_CONFIG[cycleFromUrl]?.label ?? cycleFromUrl
+
+    async function startCheckoutFromRegister() {
+        setError(null)
+        setCanRetry(false)
+        setStatusText('Preparando tu suscripción...')
+        try {
+            const response = await fetch('/api/payments/create-preference', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tier: tierFromUrl,
+                    billingCycle: cycleFromUrl,
+                }),
+            })
+            const raw = await response.text()
+            const payload = raw ? JSON.parse(raw) : {}
+            if (!response.ok) {
+                throw new Error(payload.error ?? 'No se pudo iniciar el checkout.')
+            }
+            if (!payload.checkoutUrl) {
+                throw new Error('No se recibió URL de checkout.')
+            }
+            setStatusText('Redirigiendo a MercadoPago...')
+            window.location.href = payload.checkoutUrl
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.')
+            setCanRetry(true)
+        }
+    }
 
     useEffect(() => {
         let alive = true
-
-        async function startCheckoutFromRegister() {
-            setStatusText('Creando suscripción y redirigiendo al checkout...')
-            try {
-                const response = await fetch('/api/payments/create-preference', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        tier: tierFromUrl ?? 'starter',
-                        billingCycle: cycleFromUrl ?? 'monthly',
-                    }),
-                })
-                const raw = await response.text()
-                const payload = raw ? JSON.parse(raw) : {}
-                if (!alive) return
-                if (!response.ok) {
-                    throw new Error(payload.error ?? 'No se pudo iniciar el checkout.')
-                }
-                if (!payload.checkoutUrl) {
-                    throw new Error('No se recibió URL de checkout.')
-                }
-                window.location.href = payload.checkoutUrl
-            } catch (err) {
-                if (alive) {
-                    setError(err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.')
-                }
-            }
-        }
 
         async function confirmNow() {
             try {
@@ -84,11 +94,11 @@ export default function SubscriptionProcessingPage() {
                 }
                 if (payload.subscriptionStatus === 'active') {
                     window.location.href = '/coach/dashboard?subscription=active'
-                    return
                 }
             } catch (err) {
                 if (alive) {
                     setError(err instanceof Error ? err.message : 'Error inesperado al validar el pago.')
+                    setCanRetry(true)
                 }
             }
         }
@@ -105,9 +115,23 @@ export default function SubscriptionProcessingPage() {
         }
 
         void confirmNow()
-        setStatusText('Esperando confirmación de suscripción...')
+        setStatusText('Esperando confirmación de tu pago...')
+        pollStartRef.current = Date.now()
 
         pollRef.current = setInterval(async () => {
+            // Timeout: if polling too long, stop and show error
+            if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
+                if (pollRef.current) {
+                    clearInterval(pollRef.current)
+                    pollRef.current = null
+                }
+                if (alive) {
+                    setError('El pago está tardando más de lo esperado. Si ya completaste el pago, haz clic en "Verificar acceso".')
+                    setCanRetry(true)
+                }
+                return
+            }
+
             try {
                 const response = await fetch('/api/payments/subscription-status')
                 const raw = await response.text()
@@ -123,7 +147,7 @@ export default function SubscriptionProcessingPage() {
                     window.location.href = '/coach/dashboard?subscription=active'
                 }
             } catch {
-                // Keep polling.
+                // Keep polling — transient network error
             }
         }, 3000)
 
@@ -134,30 +158,61 @@ export default function SubscriptionProcessingPage() {
                 pollRef.current = null
             }
         }
-    }, [cycleFromUrl, fromRegister, preapprovalId, router, tierFromUrl])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cycleFromUrl, fromRegister, preapprovalId, tierFromUrl])
 
     return (
-        <main className="mx-auto max-w-2xl px-4 py-12">
-            <div className="rounded-2xl border border-border bg-card p-8 text-center">
-                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <h1 className="text-2xl font-bold text-foreground">Validando tu pago</h1>
-                <p className="mt-3 text-sm text-muted-foreground">
-                    {statusText} Te redirigiremos automáticamente al dashboard cuando tu suscripción esté activa.
+        <main className="flex min-h-screen items-center justify-center px-4 py-12 bg-background">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl">
+                {!error && (
+                    <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />
+                )}
+
+                {/* Plan info */}
+                {(tierFromUrl || cycleFromUrl) && (
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                        {tierLabel} · {cycleLabel}
+                    </div>
+                )}
+
+                <h1 className="text-xl font-bold text-foreground">
+                    {error ? 'Problema al procesar' : 'Procesando tu suscripción'}
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                    {error ?? statusText}
                 </p>
 
-                {error ? (
-                    <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                        {error}
+                {!error && (
+                    <p className="mt-3 text-xs text-muted-foreground/60">
+                        Te redirigiremos automáticamente cuando tu suscripción esté activa.
                     </p>
-                ) : null}
+                )}
 
-                <button
-                    type="button"
-                    onClick={() => router.replace('/coach/reactivate')}
-                    className="mt-6 inline-flex h-11 items-center justify-center rounded-xl border border-border px-6 text-sm font-semibold text-foreground hover:bg-secondary/40"
-                >
-                    Volver a reactivación
-                </button>
+                <div className="mt-6 flex flex-col gap-3">
+                    {canRetry && fromRegister && !preapprovalId ? (
+                        <button
+                            type="button"
+                            onClick={() => void startCheckoutFromRegister()}
+                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                            Reintentar
+                        </button>
+                    ) : canRetry ? (
+                        <Link
+                            href="/coach/reactivate"
+                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                            Verificar acceso
+                        </Link>
+                    ) : null}
+
+                    <Link
+                        href="/coach/reactivate"
+                        className="inline-flex h-11 items-center justify-center rounded-xl border border-border px-6 text-sm font-semibold text-foreground hover:bg-secondary/40 transition-colors"
+                    >
+                        Ir a reactivación
+                    </Link>
+                </div>
             </div>
         </main>
     )

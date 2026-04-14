@@ -44,6 +44,7 @@ export default function CoachSubscriptionPage() {
     const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('starter')
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
+    const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false)
 
     useEffect(() => {
         let isMounted = true
@@ -125,8 +126,9 @@ export default function CoachSubscriptionPage() {
                 const payload = await response.json()
                 throw new Error(payload.error ?? 'No se pudo procesar la cancelación.')
             }
-            setSuccessMessage('Suscripción cancelada. Puedes reactivarla cuando quieras desde esta misma página.')
-            setCoach((prev) => (prev ? { ...prev, subscription_status: 'canceled', current_period_end: null } : prev))
+            setSuccessMessage('Suscripción cancelada. Conservas acceso hasta el final del período que ya pagaste.')
+            // Preserve current_period_end — the grace period logic depends on it
+            setCoach((prev) => (prev ? { ...prev, subscription_status: 'canceled' } : prev))
             setReason('')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error inesperado')
@@ -241,13 +243,74 @@ export default function CoachSubscriptionPage() {
 
                 <button
                     type="button"
-                    onClick={handleChangePlan}
+                    onClick={() => setShowUpgradeConfirm(true)}
                     disabled={saving}
                     className="mt-4 inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                 >
-                    {saving ? 'Procesando...' : 'Continuar cambio de plan'}
+                    Continuar cambio de plan
                 </button>
             </section>
+
+            {/* Upgrade confirmation modal */}
+            {showUpgradeConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+                        <h2 className="text-lg font-bold text-foreground">Confirmar cambio de plan</h2>
+                        <div className="mt-4 space-y-2 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+                            {coach?.current_period_end && (
+                                <p className="text-muted-foreground">
+                                    Tu plan actual{' '}
+                                    <strong className="text-foreground">
+                                        ({coach.subscription_tier in TIER_CONFIG
+                                            ? TIER_CONFIG[coach.subscription_tier as SubscriptionTier].label
+                                            : coach.subscription_tier})
+                                    </strong>{' '}
+                                    continúa hasta el{' '}
+                                    <strong className="text-foreground">
+                                        {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
+                                            day: 'numeric', month: 'long', year: 'numeric',
+                                        })}
+                                    </strong>
+                                    .
+                                </p>
+                            )}
+                            <p className="text-muted-foreground">
+                                A partir de esa fecha, tu nuevo plan{' '}
+                                <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
+                                se activará por{' '}
+                                <strong className="text-foreground">
+                                    ${selectedPrice.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
+                                </strong>
+                                .
+                            </p>
+                            {!TIER_CONFIG[selectedTier].features.includes('Planes de nutrición') &&
+                             coach?.subscription_tier &&
+                             TIER_CONFIG[coach.subscription_tier as SubscriptionTier]?.features.includes('Planes de nutrición') && (
+                                <p className="text-amber-600 dark:text-amber-400 text-xs font-medium">
+                                    ⚠ El nuevo plan no incluye el módulo de nutrición. Perderás ese acceso al cambiar.
+                                </p>
+                            )}
+                        </div>
+                        <div className="mt-4 flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowUpgradeConfirm(false)}
+                                className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan() }}
+                                disabled={saving}
+                                className="flex-1 h-10 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                            >
+                                {saving ? 'Procesando...' : 'Confirmar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <section className="mt-6 rounded-2xl border border-border bg-card p-5">
                 <h2 className="text-lg font-semibold text-foreground">Historial reciente</h2>
@@ -274,9 +337,22 @@ export default function CoachSubscriptionPage() {
 
             <section className="mt-6 rounded-2xl border border-border bg-card p-5">
                 <h2 className="text-lg font-semibold text-foreground">Cancelar suscripción</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                    Cuéntanos el motivo para ayudarnos a mejorar.
-                </p>
+                {coach?.current_period_end ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Al cancelar,{' '}
+                        <strong className="text-foreground">conservarás acceso hasta el{' '}
+                        {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                        })}</strong>
+                        . Después de esa fecha tu cuenta quedará suspendida.
+                    </p>
+                ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Cuéntanos el motivo para ayudarnos a mejorar.
+                    </p>
+                )}
                 <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}

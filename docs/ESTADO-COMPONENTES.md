@@ -9,7 +9,7 @@
 - Cada actualización debe llevar **fecha y hora** en **America/Santiago** en la línea **Última actualización** de ambos documentos (formato recomendado: `YYYY-MM-DD HH:mm America/Santiago`).
 - Bitácoras Cursor (sesiones): [`progreso cursor/PROGRESO-workout-checkin-rework-2026-04-10.md`](../progreso%20cursor/PROGRESO-workout-checkin-rework-2026-04-10.md).
 
-**Última actualización:** 2026-04-14 America/Santiago — **4 bugs nutrición/dashboard cerrados:** BUG-002 quantity input (string state), BUG-003 unit selector (button toggle), BUG-004 alertas críticas alumnos sin plan (`hasActiveWorkoutProgram` guard), BUG-005 onboarding dismiss button + localStorage. Unidades g+un y seed 250 alimentos ya implementados.
+**Última actualización:** 2026-04-14 America/Santiago (Sprint 8) — **Pagos hardening + Pricing clarity:** grace period cancelación (acceso hasta `current_period_end`), upgrade/downgrade con modal + `startDate`, pricing groups visuales, UX registro→checkout, banners trial/cancelado en dashboard, sidebar Nutrición, historial fecha coach confirmado implementado.
 
 ---
 
@@ -28,9 +28,9 @@
 
 | Componente | Ruta | Estado | % | Notas |
 |------------|------|--------|---|-------|
-| Landing Page | `/` | 🔶 | 60% | 972 líneas: hero con animaciones Framer Motion, stats, features grid, pricing por tiers CLP (14.990–89.990), testimonios, CTAs, i18n (es/en), `StickyBrandingCard` lee `last_coach_slug` de localStorage, menú mobile Sheet. Pendiente: integración pago real, testimonios reales, optimización LCP, SEO técnico |
-| Pricing / Planes | `/pricing` | 🔶 | 25% | Página estática con 3 tiers USD (Starter $49, Pro $99, Elite $199) — **inconsistente con landing que usa CLP**. Sin integración de pago. Header con links a `/login`. Necesita alineación de moneda y conexión al flujo de registro+pago |
-| Registro coach | `/register` | 🔶 | 35% | Funcional: `createRawAdminClient()` crea auth user + row en `coaches`, slugifica brand name, verifica unicidad de slug. Zod (nombre, marca, email, password min 8). Sin payment gate, sin cuentas free, sin verificación email real |
+| Landing Page | `/` | 🔶 | 72% | Hero animado, stats, features, pricing CLP 5 tiers, testimonios, CTAs, i18n. **Sprint 8:** callout empresarial `contacto@eva-app.cl` en sección #precios. Pendiente: SEO técnico, testimonios reales, LCP |
+| Pricing / Planes | `/pricing` | 🔶 | 78% | **Sprint 7:** CLP, 5 tiers. **Sprint 8:** agrupación visual "sin nutrición / con nutrición", separadores con badges, FAQs extendidos (cambio de plan + cancelación con gracia), callout empresarial, componente `PlanCard`. Pendiente: testimonios, métricas |
+| Registro coach | `/register` | 🔶 | 88% | **Sprint 8:** paso 2 badges nutrición (verde/ámbar) + ciclo por tier; paso 3 tabla resumen (plan/facturación/nutrición/total). Redirige a `/coach/subscription/processing` que auto-inicia checkout. Pendiente: verificación email real |
 | Login coach | `/login` | 🔶 | 40% | Funcional: `useActionState` + `signInWithPassword`, verifica existencia de coach row. UI básica con logo + ThemeToggle. Sin rework visual, sin "remember me", sin rate limiting |
 | Forgot / Reset password | `/forgot-password`, `/reset-password` | 🔶 | 40% | Funcional: `resetPasswordForEmail` con `redirectTo` correcto, soporta `coach_slug` para redirigir al login del alumno. `reset-password` usa `updateUser`. Auth callback de error usa `/login` (coach) |
 
@@ -43,14 +43,14 @@
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
 | `page.tsx` (server) | 🔶 | 70% | Streaming con `Suspense` + `DashboardContent`; consulta principal movida a `_data/dashboard.queries.ts` (patrón estable). |
-| `_data/dashboard.queries.ts` | ✅ | 85% | `Promise.all` paralelo + top 5 riesgo por `attentionScore`, actividades, KPIs y datasets de charts en una sola capa de datos. |
-| `CoachDashboardClient` | 🔶 | 70% | Quick actions visibles (crear alumno/programas/nutrición), alertas críticas enriquecidas (riesgo + programas por vencer), charts y activity feed. |
-| `CoachOnboardingChecklist` | ✅ | 95% | Botón X dismiss + `dismissed` persistido en localStorage. Render null cuando dismissed o !ready. Auto-write al hacer dismiss. |
-| `dashboard.service.ts` (attention) | ✅ | 90% | `SIN_EJERCICIO_7D` guardado con `hasActiveWorkoutProgram` — alumnos nuevos sin plan no generan alerta crítica. |
-| `actions.ts` | 🔶 | 60% | `getAdherenceStats`/`getNutritionStats` sigue operativo; menor prioridad tras consolidar `_data`. |
+| `_data/dashboard.queries.ts` | ✅ | 90% | `Promise.all` paralelo + top 5 riesgo + actividades + charts + **subscription_status + current_period_end + trial_ends_at** (Sprint 8). |
+| `CoachDashboardClient` | 🔶 | 80% | Quick actions visibles, alertas críticas, charts. **Sprint 8:** banner amarillo "cancelado con acceso hasta [fecha]", banner azul countdown trial. Props `subscriptionStatus`, `currentPeriodEnd`, `trialEndsAt`. |
+| `CoachOnboardingChecklist` | ✅ | 95% | Botón X dismiss + `dismissed` persistido en localStorage. Render null cuando dismissed o !ready. |
+| `dashboard.service.ts` (attention) | ✅ | 90% | `SIN_EJERCICIO_7D` guardado con `hasActiveWorkoutProgram`. |
+| `actions.ts` | 🔶 | 60% | `getAdherenceStats`/`getNutritionStats` operativo. |
 | `loading.tsx` | ✅ | 100% | Skeleton con stat cards + chart placeholder |
 
-**Resultado del módulo: ~72% — Alertas críticas y onboarding corregidos. Pendiente: comparativas avanzadas, calendarios y análisis extendido.**
+**Resultado del módulo: ~78% — Sprint 8: banners de estado de suscripción (cancelado/trial). Pendiente: comparativas avanzadas, MRR, adherencia 30d.**
 
 ---
 
@@ -324,13 +324,15 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 
 | Componente | Estado | % | Notas |
 |------------|--------|---|-------|
-| Método de pago real (coach) | 🔶 | 88% | MP REST (`fetch`); `cancelCheckoutAtProvider` + `fetchCheckoutSnapshot` en provider; sin SDK npm `mercadopago`. |
-| Registro + pago obligatorio | 🔶 | 75% | Registro → `pending_payment` → processing/reactivate; UX/funnels comerciales pendientes. |
-| Webhooks de suscripción | 🔶 | 88% | Token **obligatorio** en producción; verificación HMAC `x-signature` opcional si `MERCADOPAGO_WEBHOOK_SIGNING_SECRET`. |
-| Gestión de suscripción (coach dashboard) | 🔶 | 72% | `/coach/subscription`, processing, reactivate; `subscription_events`. |
-| Control de acceso por plan | 🔶 | 75% | Límites por `max_clients`; `TIER_CAPABILITIES` alineado a política “mismas features, distinto cupo”. |
+| Método de pago real (coach) | 🔶 | 90% | MP REST (`fetch`); `cancelCheckoutAtProvider` + `fetchCheckoutSnapshot`; **Sprint 8:** `createCheckout` acepta `startDate` para upgrades mid-cycle. |
+| Registro + pago obligatorio | ✅ | 90% | **Sprint 8:** UX mejorada: paso 2 con badges nutrición, paso 3 resumen tabla, processing con spinner/timeout/retry. |
+| Webhooks de suscripción | 🔶 | 88% | Token obligatorio producción; HMAC `x-signature` opcional. Pendiente: smoke sandbox en prod. |
+| Gestión de suscripción (coach dashboard) | 🔶 | 85% | **Sprint 8:** modal upgrade con “arranca en [fecha]”; dialog cancelación con “acceso hasta [fecha]”; `canceled` preserva `current_period_end`. |
+| Grace period cancelación | ✅ | 100% | **Sprint 8 nuevo:** `'canceled'` fuera de `SUBSCRIPTION_BLOCKED_STATUSES`. Gate chequea `current_period_end > now`. Dashboard muestra banner. |
+| Upgrade/downgrade mid-cycle | ✅ | 85% | **Sprint 8 nuevo:** `create-preference` detecta coach activo con periodo futuro, pasa `startDate`, mantiene `status='active'`. Pendiente: cancelar preapproval anterior al activarse el nuevo. |
+| Control de acceso por plan | 🔶 | 85% | Límites por `max_clients`; `TIER_CAPABILITIES`; gate por fecha en `coach-subscription-gate.ts`. |
 
-**Resultado del módulo: ~91% — 3 migraciones nuevas: `trialing`, `align_tiers_pricing_cycles`, `promote_all_coaches_to_scale`. Billing cycle validation mejorado. Listo para smoke sandbox MP en producción.**
+**Resultado del módulo: ~96% — Sprint 8: grace period, upgrade/downgrade limpio, UX checkout. Pendiente: smoke sandbox en prod, webhook para activar plan en fecha de upgrade.**
 
 ---
 
@@ -380,13 +382,14 @@ Perfil coach tab Nutrición (B5) y nutrición alumno (`/c/[slug]/nutrition`): da
 | Mi Marca / Brand Settings | **~62%** |
 | Landing / Marketing | **60%** |
 | Pricing | **25%** |
-| Registro Coach | **78%** |
+| Registro Coach | **88%** (Sprint 8 UX mejorada) |
 | Login Coach | **40%** |
 | Forgot/Reset Password | **40%** |
-| **Pagos & Suscripciones** | **~91%** |
-| **BD Alimentos** | **54 foods** (→ 250+ pendiente P1) |
-| **Historial fecha coach** | **0%** (nuevo gap P1) |
-| **Tabs optimización perfil** | **0%** (nuevo gap P2) |
+| **Pagos & Suscripciones** | **~96%** (Sprint 8 hardening) |
+| **BD Alimentos** | **250+ foods** ✅ |
+| **Historial fecha coach** | **~85%** ✅ implementado |
+| **Tabs optimización perfil** | **~90%** ✅ renombradas |
+| **Pricing / Landing** | **~75%** (Sprint 8 grupos visual) |
 | **Panel CEO / Superadmin** | **0%** |
 | Templates | N/A (redirect) |
 | Testing | ~28% |

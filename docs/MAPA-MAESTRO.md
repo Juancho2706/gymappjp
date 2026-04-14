@@ -2,7 +2,7 @@
 
 > Radiografia completa de donde estamos y hacia donde vamos.
 > **Generado:** 2026-04-10 America/Santiago — basado en auditoria de 225+ archivos, 24 tablas BD, 38 rutas.
-> **Actualizado:** 2026-04-14 America/Santiago — 4 bugs cerrados: BUG-002/003 nutrición (quantity+unit toggle), BUG-004 alertas críticas alumnos nuevos, BUG-005 onboarding dismiss. Unidades g+un y seed 250 alimentos completados. % global ~76%.
+> **Actualizado:** 2026-04-14 America/Santiago — Sprint 8: grace period cancelación (P1.1-P1.6), upgrade mid-cycle con start_date (P2.1-P2.3), pricing grouping visual (P3.1-P3.4), register UX mejorado (P4.1-P4.5), processing page rewrite, sidebar label Nutrición. % global ~82%.
 
 ---
 
@@ -23,25 +23,25 @@ graph LR
     end
 
     subgraph avanzado ["En Progreso (50-89%)"]
-        Pagos["Pagos y Suscripciones<br/>~88%"]
+        Pagos["Pagos y Suscripciones<br/>~96%"]
         WorkoutExec["Workout Execution<br/>82%"]
         CheckIn["Check-in Alumno<br/>80%"]
         Infra["Infraestructura<br/>80%"]
+        DashCoach["Dashboard Coach<br/>~80%"]
+        RegCoach["Registro Coach<br/>~88%"]
+        Pricing["Pricing Page<br/>~78%"]
+        Landing["Landing Page<br/>~75%"]
         CatEjAlumno["Catalogo Ejerc Alumno<br/>68%"]
-        Landing["Landing Page<br/>60%"]
         Onboarding["Onboarding Alumno<br/>58%"]
         AuthAlumno["Auth Alumno<br/>50%"]
         Testing["Testing<br/>~25%"]
     end
 
     subgraph parcial ["Parcial (25-49%)"]
-        DashCoach["Dashboard Coach<br/>~72%"]
         LoginCoach["Login Coach<br/>40%"]
         EjercCoach["Ejercicios Coach<br/>40%"]
         ResetPw["Forgot/Reset PW<br/>40%"]
-        RegCoach["Registro Coach<br/>35%"]
         MiMarca["Mi Marca Settings<br/>35%"]
-        Pricing["Pricing Page<br/>25%"]
     end
 
     subgraph pendiente ["No Implementado (0%)"]
@@ -60,28 +60,28 @@ graph LR
 | 5 | Perfil Alumno Coach | 95% | ~5,000 | 40 | Alto (decisiones coach) |
 | 6 | Nutricion Coach | 95% | ~3,000 | 24 | Alto (valor coach) |
 | 7 | Directorio Clientes | 92% | ~3,500 | 15 | Alto (gestión) |
-| 8 | Pagos & Suscripciones | **91%** | ~900+ | 11+ | **BLOQUEANTE** (monetización) |
+| 8 | Pagos & Suscripciones | **96%** ✅ | ~1,100+ | 13+ | **BLOQUEANTE** (monetización) |
 | 9 | Workout Execution | **84%** ✅ | ~2,000 | 10 | **Critico** (core loop alumno) |
 | 10 | Infraestructura | 80% | ~1,500 | 15 | Critico (base) |
 | 11 | Check-in Alumno | **82%** | ~1,100 | 4 | Alto (seguimiento) |
 | 12 | Catalogo Ejerc Alumno | 68% | ~500 | 3 | Bajo |
-| 13 | Landing Page | 60% | ~970 | 1 | **Critico** (adquisición) |
+| 13 | Landing Page | **~75%** ✅ | ~1,050 | 1 | **Critico** (adquisición) |
 | 14 | Onboarding Alumno | 58% | ~500 | 3 | Medio (activación) |
 | 15 | Auth Alumno | 50% | ~400 | 6 | Medio |
-| 16 | Dashboard Coach | ~72% | ~700 | 4+ | Alto (retención coach) |
+| 16 | Dashboard Coach | **~80%** ✅ | ~900 | 5+ | Alto (retención coach) |
 | 17 | Ejercicios Coach | 40% | ~400 | 4 | Bajo |
 | 18 | Login Coach | 40% | ~200 | 2 | Medio (adquisición) |
 | 19 | Forgot/Reset PW | 40% | ~300 | 4 | Bajo |
 | 20 | Mi Marca Settings | 62% | ~500 | 7 | Medio (diferenciación) |
-| 21 | Registro Coach | 78% | ~480 | 4 | **Critico** (adquisición) |
-| 22 | Pricing | 25% | ~200 | 1 | **Critico** (conversión) |
-| 23 | **BD Alimentos 250+** | seed (54 now) | — | 1 migración | Alto (nutrición) |
-| 24 | **Historial fecha coach** | 0% | — | 3-4 archivos | Alto (analytics coach) |
-| 25 | **Tabs optimización perfil** | 0% | — | 3 archivos | Medio (UX) |
+| 21 | Registro Coach | **~88%** ✅ | ~600 | 5 | **Critico** (adquisición) |
+| 22 | Pricing | **~78%** ✅ | ~350 | 1 | **Critico** (conversión) |
+| 23 | **BD Alimentos 250+** | ✅ seed completado | — | 1 migración | Alto (nutrición) |
+| 24 | **Historial fecha coach** | **~85%** ✅ | ~1,200 | 4 archivos | Alto (analytics coach) |
+| 25 | **Tabs optimización perfil** | **~85%** ✅ | — | 3 archivos | Medio (UX) |
 | 26 | Panel CEO | 0% | 0 | 0 | Alto (operaciones) |
 | 27 | Testing | ~28% | — | 10+ archivos test | Critico (calidad) |
 
-**TOTAL ESTIMADO: ~75%** (alineado con [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md))
+**TOTAL ESTIMADO: ~82%** (alineado con [`ESTADO-COMPONENTES.md`](ESTADO-COMPONENTES.md))
 
 ---
 
@@ -177,8 +177,8 @@ graph LR
 
 ## 5. Hacia Donde Vamos — Fases del Producto
 
-### Fase 0: Pre-Revenue (ACTUAL — ~72%)
-> Producto funcional para demos y beta. **Pagos Mercado Pago** (preapproval + webhooks + gating) implementados; falta operación estable en producción y más cobertura de tests.
+### Fase 0: Pre-Revenue (COMPLETADA — ~82%)
+> Producto funcional para demos y beta. **Pagos Mercado Pago** (preapproval + webhooks + gating + grace period + upgrade mid-cycle) implementados. UX comercial alineada: pricing, registro, processing page.
 
 **Logros:**
 - Core loop completo: coach crea programa → alumno ejecuta → coach revisa
@@ -187,14 +187,16 @@ graph LR
 - Directorio coach con attention scores y War Room
 - PWA funcional (instalar, branding por coach)
 - Suscripción coach: API `/api/payments/*`, middleware, `subscription_events`, estado `trialing` en BD
+- **Sprint 8:** Grace period on cancel (acceso hasta `current_period_end`), upgrade mid-cycle (`start_date = current_period_end`), pricing dual-section con badges, register step 2/3 con summary table, processing page con retry, sidebar label "Nutrición", banner cancelado-con-acceso y trial countdown
 
-**Gaps criticos:**
-- Moneda landing vs `/pricing` (CLP vs USD) pendiente de alineación
+**Gaps restantes para Fase 1:**
+- Smoke test webhook MP en producción con credenciales reales
 - Cobertura de tests aún baja para confianza plena en producción
+- Webhook de activación de upgrade (P2.4) pendiente
 
 ---
 
-### Fase 1: Revenue MVP (~75%)
+### Fase 1: Revenue MVP (~82% → objetivo 85%)
 > Primer coach real pagando. Monetizacion basica operativa.
 
 **Objetivos:**
@@ -305,10 +307,10 @@ Estado revisado contra el repo (no solo el plan original).
 
 ## 8. Resumen Ejecutivo
 
-**EVA** es una plataforma SaaS de fitness coaching con un **core product solido al ~72%**. Los modulos de mayor valor (constructor de planes, dashboard alumno, nutricion, directorio con attention scores) estan al **90-98%** de completitud y representan una ventaja competitiva real.
+**EVA** es una plataforma SaaS de fitness coaching con un **core product solido al ~82%**. Los modulos de mayor valor (constructor de planes, dashboard alumno, nutricion, directorio con attention scores) estan al **90-98%** de completitud y representan una ventaja competitiva real.
 
-**Monetización:** integración **Mercado Pago** (checkout recurrente, webhooks, reactivate/processing) está en producción técnica; el foco pasa a **Go/No-Go**: variables de entorno en prod, webhooks firmados/token, smoke en sandbox, y alinear pricing/landing.
+**Monetización (Sprint 8 — completado):** integración **Mercado Pago** con grace period al cancelar, upgrade mid-cycle sin doble cobro, pricing visual por categorías, register con summary table, processing page con retry. El flujo commercial está alineado.
 
-**Siguiente paso inmediato:** operar Fase 1 (Revenue MVP) — validar cobros reales, monitoreo, y cierre de UX comercial (pricing unificado, tests E2E de pago con credenciales).
+**Siguiente paso inmediato:** operar Fase 1 (Revenue MVP) — validar cobros reales con credenciales de producción MP, smoke test de webhook, y webhook de activación de upgrade (P2.4 pendiente).
 
 **Ventaja competitiva:** White-label real (cada coach tiene su propia "app" con su marca), mercado Chile/LATAM desatendido por competidores anglosajones, stack moderno (Next.js 16, RSC, Supabase), UX premium en los modulos completados.

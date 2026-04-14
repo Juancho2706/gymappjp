@@ -129,7 +129,8 @@ export class MercadoPagoProvider implements PaymentsProvider {
         const payerEmail = resolvePayerEmail(accessToken, input.coachEmail)
         const externalReference = buildExternalReference(input)
         const cycle = BILLING_CYCLE_CONFIG[input.billingCycle]
-        const startDate = new Date(Date.now() + 60_000).toISOString()
+        // Use provided startDate (mid-cycle upgrades) or default to 60s from now
+        const startDate = input.startDate ?? new Date(Date.now() + 60_000).toISOString()
         const endDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 5).toISOString()
 
         const response = await fetch('https://api.mercadopago.com/preapproval', {

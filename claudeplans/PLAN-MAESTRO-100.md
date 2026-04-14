@@ -1,4 +1,4 @@
-# Plan Maestro — EVA al 100%
+DELETE FROM public.coaches WHERE id = 'd6cf4ea8-8848-4e9e-8022-deeadc0f1a41';# Plan Maestro — EVA al 100%
 
 > Generado: 2026-04-14 | Estado base: ~76% | Meta: 100%
 > Divide el trabajo en fases ordenadas por impacto en revenue y experiencia de usuario.

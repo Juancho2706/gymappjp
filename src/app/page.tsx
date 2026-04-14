@@ -952,6 +952,15 @@ export default function LandingPage() {
                             </div>
                         </div>
                     </motion.div>
+                    {/* Enterprise callout */}
+                    <p className="mt-6 text-center text-xs text-foreground/40">
+                        ¿Necesitas más de 100 alumnos o funciones personalizadas? Tenemos{' '}
+                        <strong className="text-foreground/60">planes empresariales</strong>.{' '}
+                        Escríbenos a{' '}
+                        <a href="mailto:contacto@eva-app.cl" className="underline hover:text-foreground/80 transition-colors">
+                            contacto@eva-app.cl
+                        </a>
+                    </p>
                 </div>
             </section>
 

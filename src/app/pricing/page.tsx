@@ -136,105 +136,47 @@ export default function PricingPage() {
 
             {/* Plans */}
             <div className="px-6 pb-20 max-w-5xl mx-auto">
+                {/* Group 1: Without nutrition */}
+                <div className="mb-3 flex items-center gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Planes de entrenamiento</span>
+                    <div className="flex-1 border-t border-border" />
+                    <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Sin módulo de nutrición · Solo mensual</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    {planDisplay.filter((p) => ['starter_lite', 'starter'].includes(p.id)).map((plan) => (
+                        <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
+                    ))}
+                </div>
+
+                {/* Group 2: With nutrition */}
+                <div className="mb-3 flex items-center gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Planes completos con nutrición</span>
+                    <div className="flex-1 border-t border-border" />
+                    <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Incluye nutrición</span>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {planDisplay.map((plan) => {
-                        const Icon = plan.icon
-                        const tier = TIER_CONFIG[plan.id]
-                        return (
-                            <div
-                                key={plan.id}
-                                className={`relative bg-card border rounded-2xl p-6 flex flex-col ${plan.popular
-                                    ? 'border-violet-500/40 shadow-[0_0_40px_rgba(139,92,246,0.12)]'
-                                    : 'border-border'
-                                    }`}
-                            >
-                                {plan.popular && (
-                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
-                                        Más popular
-                                    </div>
-                                )}
-
-                                <div className={`w-10 h-10 rounded-xl ${plan.bg} border ${plan.border} flex items-center justify-center mb-4`}>
-                                    <Icon className={`w-5 h-5 ${plan.color}`} />
-                                </div>
-
-                                <h2 className="text-lg font-bold text-foreground mb-1">{tier.label}</h2>
-                                <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
-                                <p className="text-xs text-muted-foreground mb-2">
-                                    {TIER_STUDENT_RANGE_LABEL[plan.id]} · Hasta {tier.maxClients} alumnos
-                                </p>
-                                <div className="mb-4 flex flex-wrap gap-1.5">
-                                    <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                        {getTierBillingCycleSummary(plan.id)}
-                                    </span>
-                                    <span
-                                        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                                            getTierNutritionSummary(plan.id).startsWith('Sin')
-                                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                        }`}
-                                    >
-                                        {getTierNutritionSummary(plan.id)}
-                                    </span>
-                                </div>
-
-                                <div className="space-y-2 mb-6">
-                                    {cycleOrder
-                                        .filter((cycle) => getTierAllowedBillingCycles(plan.id).includes(cycle))
-                                        .map((cycle) => {
-                                            const cycleInfo = BILLING_CYCLE_CONFIG[cycle]
-                                            const price = getTierPriceClp(plan.id, cycle)
-                                            return (
-                                                <div key={cycle} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-                                                    <span className="text-sm text-muted-foreground">{cycleInfo.label}</span>
-                                                    <span className="text-sm font-semibold text-foreground">
-                                                        ${price.toLocaleString('es-CL')} CLP
-                                                    </span>
-                                                </div>
-                                            )
-                                        })}
-                                </div>
-
-                                <ul className="space-y-3 mb-8 flex-1">
-                                    {tier.features.map((feat) => (
-                                        <li key={feat} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                                            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                                            {feat}
-                                        </li>
-                                    ))}
-                                </ul>
-
-                                <Link
-                                    href={`/register?tier=${plan.id}&cycle=${getDefaultBillingCycleForTier(plan.id)}`}
-                                    className={`w-full py-3 rounded-xl text-sm font-semibold text-center transition-all duration-200 block ${plan.popular
-                                        ? 'bg-violet-600 hover:bg-violet-500 text-white'
-                                        : 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent'
-                                        }`}
-                                >
-                                    Elegir plan
-                                </Link>
-                            </div>
-                        )
-                    })}
+                    {planDisplay.filter((p) => ['pro', 'elite', 'scale'].includes(p.id)).map((plan) => (
+                        <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
+                    ))}
                 </div>
 
                 <section className="mt-12 grid gap-4 md:grid-cols-2">
                     <article className="rounded-2xl border border-border bg-card p-5">
                         <h3 className="text-sm font-semibold text-foreground">¿Cuándo se cobra?</h3>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            El primer cobro se realiza al registrarte y luego se renueva según el ciclo elegido.
+                            El primer cobro se realiza al registrarte y luego se renueva según el ciclo elegido: mensual, trimestral o anual según el plan.
                         </p>
                     </article>
                     <article className="rounded-2xl border border-border bg-card p-5">
                         <h3 className="text-sm font-semibold text-foreground">¿Puedo cambiar de plan?</h3>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Sí. Desde tu panel en <code>/coach/subscription</code> puedes hacer upgrade o downgrade.
+                            Sí. Desde tu panel puedes hacer upgrade o downgrade. El nuevo plan se activa al término de tu ciclo actual: sin cobros dobles, sin perder días ya pagados.
                         </p>
                     </article>
                     <article className="rounded-2xl border border-border bg-card p-5">
-                        <h3 className="text-sm font-semibold text-foreground">¿Puedo cancelar?</h3>
+                        <h3 className="text-sm font-semibold text-foreground">¿Puedo cancelar en cualquier momento?</h3>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Sí, puedes cancelar la renovación desde la sección de suscripción dentro de la app.
+                            Sí. Al cancelar la renovación, conservas acceso completo hasta el último día del período que ya pagaste. No hay corte inmediato.
                         </p>
                     </article>
                     <article className="rounded-2xl border border-border bg-card p-5">
@@ -244,7 +186,106 @@ export default function PricingPage() {
                         </p>
                     </article>
                 </section>
+
+                {/* Enterprise callout */}
+                <p className="mt-10 text-center text-xs text-muted-foreground">
+                    ¿Necesitas más de 100 alumnos o funciones personalizadas? Tenemos{' '}
+                    <strong className="text-foreground">planes empresariales</strong>.{' '}
+                    Escríbenos a{' '}
+                    <a href="mailto:contacto@eva-app.cl" className="underline hover:text-foreground transition-colors">
+                        contacto@eva-app.cl
+                    </a>
+                </p>
             </div>
+        </div>
+    )
+}
+
+function PlanCard({
+    plan,
+    cycleOrder,
+}: {
+    plan: (typeof planDisplay)[0]
+    cycleOrder: BillingCycle[]
+}) {
+    const Icon = plan.icon
+    const tier = TIER_CONFIG[plan.id]
+    return (
+        <div
+            className={`relative bg-card border rounded-2xl p-6 flex flex-col ${
+                plan.popular
+                    ? 'border-violet-500/40 shadow-[0_0_40px_rgba(139,92,246,0.12)]'
+                    : 'border-border'
+            }`}
+        >
+            {plan.popular && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                    Más popular
+                </div>
+            )}
+
+            <div className={`w-10 h-10 rounded-xl ${plan.bg} border ${plan.border} flex items-center justify-center mb-4`}>
+                <Icon className={`w-5 h-5 ${plan.color}`} />
+            </div>
+
+            <h2 className="text-lg font-bold text-foreground mb-1">{tier.label}</h2>
+            <p className="text-muted-foreground text-sm mb-3">{plan.description}</p>
+            <p className="text-xs text-muted-foreground mb-3">
+                {TIER_STUDENT_RANGE_LABEL[plan.id]} · Hasta {tier.maxClients} alumnos
+            </p>
+
+            {/* Billing cycle + nutrition badges — prominent */}
+            <div className="mb-4 flex flex-wrap gap-1.5">
+                <span className="rounded-md bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {getTierBillingCycleSummary(plan.id)}
+                </span>
+                <span
+                    className={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                        getTierNutritionSummary(plan.id).startsWith('Sin')
+                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    }`}
+                >
+                    {getTierNutritionSummary(plan.id)}
+                </span>
+            </div>
+
+            <div className="space-y-2 mb-6">
+                {cycleOrder
+                    .filter((cycle) => getTierAllowedBillingCycles(plan.id).includes(cycle))
+                    .map((cycle) => {
+                        const cycleInfo = BILLING_CYCLE_CONFIG[cycle]
+                        const price = getTierPriceClp(plan.id, cycle)
+                        return (
+                            <div key={cycle} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                                <span className="text-sm text-muted-foreground">{cycleInfo.label}</span>
+                                <span className="text-sm font-semibold text-foreground">
+                                    ${price.toLocaleString('es-CL')} CLP
+                                </span>
+                            </div>
+                        )
+                    })}
+            </div>
+
+            <ul className="space-y-3 mb-8 flex-1">
+                {tier.features.map((feat) => (
+                    <li key={feat} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                        <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                        {feat}
+                    </li>
+                ))}
+            </ul>
+
+            <Link
+                href={`/register?tier=${plan.id}&cycle=${getDefaultBillingCycleForTier(plan.id)}`}
+                className={`w-full py-3 rounded-xl text-sm font-semibold text-center transition-all duration-200 block ${
+                    plan.popular
+                        ? 'bg-violet-600 hover:bg-violet-500 text-white'
+                        : 'bg-secondary hover:bg-zinc-700 text-foreground border border-border hover:border-accent'
+                }`}
+            >
+                Elegir plan
+            </Link>
         </div>
     )
 }

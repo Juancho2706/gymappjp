@@ -44,6 +44,21 @@ export async function POST(request: Request) {
                 { status: 400 }
             )
         }
+        // Check if this is a mid-cycle upgrade (coach already active)
+        const { data: currentCoach } = await supabase
+            .from('coaches')
+            .select('subscription_status, current_period_end')
+            .eq('id', user.id)
+            .maybeSingle()
+
+        const isActiveUpgrade =
+            currentCoach?.subscription_status === 'active' &&
+            currentCoach.current_period_end != null &&
+            new Date(currentCoach.current_period_end).getTime() > Date.now()
+
+        // For mid-cycle upgrades, schedule the new plan to start at the end of the current period
+        const upgradeStartDate = isActiveUpgrade ? currentCoach!.current_period_end! : undefined
+
         const amountClp = getTierPriceClp(tier, billingCycle)
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
         const provider = getPaymentsProvider()
@@ -65,13 +80,19 @@ export async function POST(request: Request) {
             failureUrl: `${appUrl}/coach/reactivate?payment=failure&${retryQuery}`,
             pendingUrl: `${appUrl}/coach/reactivate?payment=pending&${retryQuery}`,
             webhookUrl,
+            startDate: upgradeStartDate,
         })
+
+        // For active-coach upgrades: keep status = 'active' so they don't lose access.
+        // The webhook will update status + current_period_end when the new plan activates.
+        // For new / reactivating coaches: set 'pending_payment' as usual.
+        const newStatus = isActiveUpgrade ? 'active' : 'pending_payment'
 
         const { error: updateError } = await supabase
             .from('coaches')
             .update({
                 subscription_tier: tier,
-                subscription_status: 'pending_payment',
+                subscription_status: newStatus,
                 billing_cycle: billingCycle,
                 max_clients: getTierMaxClients(tier),
                 payment_provider: provider.name,

@@ -10,6 +10,9 @@ import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
+    getTierCapabilities,
+    getTierBillingCycleSummary,
+    getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
     TIER_CONFIG,
@@ -240,71 +243,103 @@ export default function RegisterPage() {
                             <section className="space-y-2">
                                 <h2 className="text-sm font-semibold text-foreground">Elige tu plan</h2>
                                 <div className="grid gap-2">
-                                    {tierOptions.map(([key, option]) => (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            onClick={() => setTier(key)}
-                                            className={cn(
-                                                'rounded-xl border p-3 text-left transition',
-                                                tier === key
-                                                    ? 'border-primary bg-primary/10'
-                                                    : 'border-border hover:border-primary/40'
-                                            )}
-                                        >
-                                            <p className="font-semibold text-foreground">{option.label}</p>
-                                            <p className="text-xs text-muted-foreground">Hasta {option.maxClients} alumnos</p>
-                                            <p className="text-sm text-foreground mt-1">
-                                                ${getTierPriceClp(key, billingCycle).toLocaleString('es-CL')} CLP /{' '}
-                                                {BILLING_CYCLE_CONFIG[billingCycle].label.toLowerCase()}
-                                            </p>
-                                        </button>
-                                    ))}
+                                    {tierOptions.map(([key, option]) => {
+                                        const caps = getTierCapabilities(key)
+                                        const nutritionText = getTierNutritionSummary(key)
+                                        const cycleText = getTierBillingCycleSummary(key)
+                                        const defaultCycleForKey = getDefaultBillingCycleForTier(key)
+                                        const displayPrice = getTierPriceClp(key, defaultCycleForKey)
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                onClick={() => setTier(key)}
+                                                className={cn(
+                                                    'rounded-xl border p-3 text-left transition',
+                                                    tier === key
+                                                        ? 'border-primary bg-primary/10'
+                                                        : 'border-border hover:border-primary/40'
+                                                )}
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="font-semibold text-foreground">{option.label}</p>
+                                                    <span
+                                                        className={cn(
+                                                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                                                            caps.canUseNutrition
+                                                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                                        )}
+                                                    >
+                                                        {nutritionText}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    Hasta {option.maxClients} alumnos · {cycleText}
+                                                </p>
+                                                <p className="text-sm text-foreground mt-1 font-medium">
+                                                    ${displayPrice.toLocaleString('es-CL')} CLP /{' '}
+                                                    {BILLING_CYCLE_CONFIG[defaultCycleForKey].label.toLowerCase()}
+                                                </p>
+                                            </button>
+                                        )
+                                    })}
                                 </div>
                             </section>
 
-                            <section className="space-y-2">
-                                <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
-                                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                                    {allowedCycleOptions.map(([key, option]) => (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            onClick={() => setBillingCycle(key)}
-                                            className={cn(
-                                                'rounded-xl border p-3 text-left transition',
-                                                billingCycle === key
-                                                    ? 'border-primary bg-primary/10'
-                                                    : 'border-border hover:border-primary/40'
-                                            )}
-                                        >
-                                            <p className="font-semibold text-foreground text-sm">{option.label}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
-                                            </p>
-                                        </button>
-                                    ))}
-                                </div>
-                            </section>
+                            {allowedCycleOptions.length > 1 && (
+                                <section className="space-y-2">
+                                    <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
+                                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                        {allowedCycleOptions.map(([key, option]) => (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                onClick={() => setBillingCycle(key)}
+                                                className={cn(
+                                                    'rounded-xl border p-3 text-left transition',
+                                                    billingCycle === key
+                                                        ? 'border-primary bg-primary/10'
+                                                        : 'border-border hover:border-primary/40'
+                                                )}
+                                            >
+                                                <p className="font-semibold text-foreground text-sm">{option.label}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
+                                                </p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
                         </>
                     ) : null}
 
                     {step === 3 ? (
                         <section className="rounded-xl border border-border p-4 space-y-3">
                             <h2 className="font-semibold text-foreground">Resumen antes de pagar</h2>
-                            <p className="text-sm text-muted-foreground">
-                                Plan: <span className="text-foreground font-semibold">{selectedTier.label}</span>
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                Precio: <span className="text-foreground font-semibold">${selectedPrice.toLocaleString('es-CL')} CLP</span>
-                            </p>
-                            <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
-                                {selectedTier.features.slice(0, 4).map((feature) => (
-                                    <li key={feature}>{feature}</li>
-                                ))}
-                            </ul>
-                            <p className="text-xs text-muted-foreground">
-                                Al crear tu cuenta, te llevaremos al checkout para completar la suscripción.
+                            <div className="space-y-1.5 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Plan</span>
+                                    <span className="font-semibold text-foreground">{selectedTier.label}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Facturación</span>
+                                    <span className="font-semibold text-foreground">{BILLING_CYCLE_CONFIG[billingCycle].label}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Nutrición</span>
+                                    <span className={cn('font-semibold', getTierCapabilities(tier).canUseNutrition ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>
+                                        {getTierCapabilities(tier).canUseNutrition ? 'Incluida' : 'No incluida'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between border-t border-border pt-2 mt-2">
+                                    <span className="text-muted-foreground">Total a pagar</span>
+                                    <span className="text-lg font-black text-foreground">${selectedPrice.toLocaleString('es-CL')} CLP</span>
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground pt-1">
+                                Al crear tu cuenta, te llevaremos directamente al checkout de MercadoPago para completar el pago.
                             </p>
                         </section>
                     ) : null}

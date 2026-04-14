@@ -48,7 +48,7 @@ const navItems = [
     },
     {
         href: '/coach/nutrition-plans',
-        label: 'Planes Nutricionales',
+        label: 'Nutrición',
         shortLabel: 'Nutri',
         icon: Apple,
     },
