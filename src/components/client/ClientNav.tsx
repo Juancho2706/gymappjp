@@ -145,10 +145,10 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                             </div>
                         )}
                     </div>
-                    <button 
+                    <button
                         onClick={() => setIsCollapsed(!isCollapsed)}
+                        aria-label={isCollapsed ? "Expandir menú" : "Contraer menú"}
                         className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted/50"
-                        title={isCollapsed ? "Expandir" : "Contraer"}
                     >
                         {isCollapsed ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
                     </button>

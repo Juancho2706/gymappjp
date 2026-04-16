@@ -131,12 +131,6 @@ export function ProfileOverviewB3({
 
     const kpiItems = [
         {
-            icon: Flame,
-            label: 'Racha actual',
-            value: `${streak} día${streak === 1 ? '' : 's'}`,
-            hint: 'interacción',
-        },
-        {
             icon: Star,
             label: 'Mejor racha',
             value: `${longestStreak} día${longestStreak === 1 ? '' : 's'}`,
@@ -253,18 +247,18 @@ export function ProfileOverviewB3({
                     >
                         <GlassCard
                             className={cn(
-                                'p-4 h-full border border-border/50 dark:border-white/10',
+                                'p-3 h-full border border-border/50 dark:border-white/10',
                                 'hover:shadow-[0_0_24px_-8px_hsl(var(--primary)/0.35)] transition-shadow duration-300'
                             )}
                         >
-                            <div className="flex items-center gap-2 text-primary mb-2">
-                                <item.icon className="w-4 h-4" />
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                                <item.icon className="w-3.5 h-3.5 text-primary shrink-0" />
                                 <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                                     {item.label}
                                 </span>
                             </div>
                             <p className="text-xl font-black text-foreground">{item.value}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1 font-medium">{item.hint}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{item.hint}</p>
                         </GlassCard>
                     </motion.div>
                 ))}

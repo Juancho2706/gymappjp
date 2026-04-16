@@ -7,10 +7,12 @@ import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subsc
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import {
     getDefaultBillingCycleForTier,
+    getTierMaxClients,
     isBillingCycleAllowedForTier,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
+import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
 
 const schema = z.object({
     preapprovalId: z.string().min(1).optional(),
@@ -68,15 +70,17 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: message }, { status: 502 })
         }
 
-        const externalReference = String(snapshot.external_reference ?? '')
-        const [coachIdFromRef] = externalReference.split('|')
-
-        if (coachIdFromRef && coachIdFromRef !== user.id) {
+        const parsedRef = parseCheckoutExternalReference(snapshot.external_reference ?? null)
+        if (parsedRef?.coachId && parsedRef.coachId !== user.id) {
             return NextResponse.json({ error: 'Subscription does not belong to current user.' }, { status: 403 })
         }
 
-        const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
-        const billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+        let tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+        let billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+        if (parsedRef?.tier && parsedRef.billingCycle) {
+            tier = parsedRef.tier
+            billingCycle = parsedRef.billingCycle
+        }
         if (!isBillingCycleAllowedForTier(tier, billingCycle)) {
             return NextResponse.json(
                 {
@@ -101,6 +105,10 @@ export async function POST(request: Request) {
                 subscription_status: status,
                 current_period_end: nextPeriodEnd,
                 payment_provider: provider.name,
+                subscription_tier: tier,
+                billing_cycle: billingCycle,
+                max_clients: getTierMaxClients(tier),
+                subscription_mp_id: preapprovalId,
             })
             .eq('id', user.id)
 

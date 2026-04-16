@@ -6,9 +6,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 function isAuthorized(request: Request) {
     const token = process.env.DRIP_CRON_TOKEN
     if (!token) return false
-    const url = new URL(request.url)
-    const queryToken = url.searchParams.get('token')
-    if (queryToken && queryToken === token) return true
+    // Only accept Authorization: Bearer header (not query param — avoids token in server logs)
     const auth = request.headers.get('authorization')
     return auth === `Bearer ${token}`
 }

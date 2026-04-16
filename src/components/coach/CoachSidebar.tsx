@@ -168,8 +168,9 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         )}
                     </div>
                     {!isCollapsed && (
-                        <button 
+                        <button
                             onClick={toggleSidebar}
+                            aria-label="Contraer menú"
                             className="p-1.5 rounded-lg hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
                         >
                             <PanelLeftClose className="w-5 h-5" />
@@ -179,8 +180,9 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
 
                 {isCollapsed && (
                     <div className="hidden md:flex justify-center py-4 border-b border-sidebar-border">
-                        <button 
+                        <button
                             onClick={toggleSidebar}
+                            aria-label="Expandir menú"
                             className="p-1.5 rounded-lg hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
                         >
                             <PanelLeft className="w-5 h-5" />

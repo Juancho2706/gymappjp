@@ -126,7 +126,25 @@ export default function SubscriptionProcessingPage() {
                     pollRef.current = null
                 }
                 if (alive) {
-                    setError('El pago está tardando más de lo esperado. Si ya completaste el pago, haz clic en "Verificar acceso".')
+                    try {
+                        const response = await fetch('/api/payments/subscription-status')
+                        const raw = await response.text()
+                        const payload = raw ? JSON.parse(raw) : {}
+                        const currentStatus = payload?.coach?.subscription_status
+                        if (currentStatus === 'pending_payment') {
+                            setError(
+                                'Hubo un problema al confirmar tu pago. Vuelve a intentarlo desde reactivación o contacta soporte si el cargo aparece en Mercado Pago.'
+                            )
+                        } else {
+                            setError(
+                                'El pago está tardando más de lo esperado. Si ya completaste el pago, haz clic en "Verificar acceso".'
+                            )
+                        }
+                    } catch {
+                        setError(
+                            'El pago está tardando más de lo esperado. Si ya completaste el pago, haz clic en "Verificar acceso".'
+                        )
+                    }
                     setCanRetry(true)
                 }
                 return
@@ -202,7 +220,7 @@ export default function SubscriptionProcessingPage() {
                             href="/coach/reactivate"
                             className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
                         >
-                            Verificar acceso
+                            Ir a reactivación
                         </Link>
                     ) : null}
 

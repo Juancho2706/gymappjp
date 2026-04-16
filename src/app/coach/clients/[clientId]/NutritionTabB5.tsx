@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
@@ -43,7 +43,7 @@ import {
 import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
 import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
-import { getClientNutritionForDate } from './actions'
+import { getClientNutritionForDate, getClientNutritionActivityDates } from './actions'
 import { calculateFoodItemMacros } from '@/lib/nutrition-utils'
 
 export type NutritionTimelineRow = {
@@ -206,6 +206,11 @@ export function NutritionTabB5({
   const [historyDate, setHistoryDate] = useState(santiagoTodayIso)
   const [historyData, setHistoryData] = useState<Awaited<ReturnType<typeof getClientNutritionForDate>>>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [activityDates, setActivityDates] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    getClientNutritionActivityDates(clientId).then((dates) => setActivityDates(new Set(dates)))
+  }, [clientId])
 
   const handleHistoryDateChange = (date: string) => {
     setHistoryDate(date)
@@ -960,7 +965,7 @@ export function NutritionTabB5({
         <DayNavigator
           selectedDate={historyDate}
           onDateChange={handleHistoryDateChange}
-          adherenceDates={new Set<string>()}
+          adherenceDates={activityDates}
           isLoading={isPending}
         />
         {historyDate !== santiagoTodayIso && (

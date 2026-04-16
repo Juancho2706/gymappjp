@@ -12,6 +12,7 @@ function redisFromEnv(): Redis | null {
 
 let authRatelimit: Ratelimit | null | undefined
 let paymentRatelimit: Ratelimit | null | undefined
+let recipesRatelimit: Ratelimit | null | undefined
 
 function getAuthRatelimit(): Ratelimit | null {
     if (authRatelimit !== undefined) return authRatelimit
@@ -43,6 +44,21 @@ function getPaymentRatelimit(): Ratelimit | null {
     return paymentRatelimit
 }
 
+function getRecipesRatelimit(): Ratelimit | null {
+    if (recipesRatelimit !== undefined) return recipesRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        recipesRatelimit = null
+        return null
+    }
+    recipesRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(30, '1 m'),
+        prefix: 'ratelimit:recipes',
+    })
+    return recipesRatelimit
+}
+
 export function clientIpFromRequest(request: NextRequest | Request): string {
     const xf = request.headers.get('x-forwarded-for')
     if (xf) return xf.split(',')[0]!.trim()
@@ -69,6 +85,18 @@ export async function rateLimitPayment(
     const limiter = getPaymentRatelimit()
     if (!limiter) return { ok: true }
     const res = await limiter.limit(`pay:${identifier}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+export async function rateLimitRecipesSearch(
+    identifier: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getRecipesRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`recipes:${identifier}`)
     await res.pending.catch(() => undefined)
     if (res.success) return { ok: true }
     const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))

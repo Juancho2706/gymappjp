@@ -70,7 +70,7 @@ describe('registerAction', () => {
 
     const result = await registerAction({}, buildRegisterFormData({ brand_name: 'Mi Marca' }))
 
-    expect(result.error).toContain('ya está en uso')
+    expect(result.error).toMatch(/identificador único|ya está en uso/i)
     expect(adminDb.auth.admin.createUser).not.toHaveBeenCalled()
   })
 

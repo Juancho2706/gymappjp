@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCallback, useMemo, useState } from 'react'
 import {
   DndContext,
@@ -13,9 +14,14 @@ import {
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PlanBuilderSidebar } from './PlanBuilderSidebar'
 import { MealCanvas } from './MealCanvas'
-import { FoodSearchDrawer } from './FoodSearchDrawer'
+
+const FoodSearchDrawer = dynamic(
+    () => import('./FoodSearchDrawer').then((m) => ({ default: m.FoodSearchDrawer })),
+    { loading: () => <Skeleton className="fixed inset-x-0 bottom-0 z-50 h-48 border-t border-border bg-card md:left-auto md:right-4 md:bottom-4 md:h-[min(32rem,80vh)] md:w-full md:max-w-lg md:rounded-xl md:border" /> }
+)
 import { totalsFromMealDrafts } from './MacroCalculator'
 import {
   upsertCoachNutritionTemplate,

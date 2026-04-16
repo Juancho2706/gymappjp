@@ -272,8 +272,9 @@ function ExerciseBlockInner({
                     e.stopPropagation();
                     onRemove(dayId, block.uid);
                 }}
+                    aria-label="Eliminar ejercicio"
                     className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
-                    title="Remover Unidad">
+                >
                     <X className="w-5 h-5 stroke-[2.5px]" />
                 </button>
             </div>

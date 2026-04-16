@@ -49,7 +49,7 @@ export async function registerAction(
     }
 
     // Generate slug from brand name
-    const slug = brandName
+    const baseSlug = brandName
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -58,15 +58,14 @@ export async function registerAction(
 
     const adminDb = await createRawAdminClient()
 
-    // Check if slug is already taken
-    const { data: existingCoach } = await adminDb
-        .from('coaches')
-        .select('id')
-        .eq('slug', slug)
-        .maybeSingle()
-
-    if (existingCoach) {
-        return { error: `El slug "${slug}" ya está en uso. Prueba con otro nombre de marca.` }
+    let slug = baseSlug
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const { data: existingCoach } = await adminDb.from('coaches').select('id').eq('slug', slug).maybeSingle()
+        if (!existingCoach) break
+        if (attempt === 7) {
+            return { error: 'No se pudo generar un identificador único para tu marca. Prueba con otro nombre.' }
+        }
+        slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
 

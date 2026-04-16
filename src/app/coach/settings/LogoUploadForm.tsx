@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useRef, useEffect } from 'react'
+import { useActionState, useRef, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useFormStatus } from 'react-dom'
 import Image from 'next/image'
 import { Upload, Loader2 } from 'lucide-react'
@@ -34,12 +35,37 @@ export function LogoUploadForm({
     const [state, formAction] = useActionState(updateLogoAction, initialState)
     const fileRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
     useEffect(() => {
         if (state.success) {
+            toast.success('Logo actualizado', { id: 'coach-logo-saved' })
+            setPreviewUrl(null)
             router.refresh()
         }
     }, [state.success, router])
+
+    useEffect(() => {
+        if (state.error) toast.error(state.error, { id: 'coach-logo-err' })
+    }, [state.error])
+
+    // Revoke object URL on unmount to avoid memory leaks
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl)
+        }
+    }, [previewUrl])
+
+    function handleFileChange() {
+        const file = fileRef.current?.files?.[0]
+        if (file) {
+            if (previewUrl) URL.revokeObjectURL(previewUrl)
+            setPreviewUrl(URL.createObjectURL(file))
+            fileRef.current?.form?.requestSubmit()
+        }
+    }
+
+    const displayUrl = previewUrl ?? currentLogoUrl
 
     return (
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
@@ -47,9 +73,9 @@ export function LogoUploadForm({
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                 <div className="w-20 h-20 rounded-2xl bg-muted border border-border flex items-center justify-center flex-shrink-0 overflow-hidden relative">
-                    {currentLogoUrl ? (
+                    {displayUrl ? (
                         <Image
-                            src={currentLogoUrl}
+                            src={displayUrl}
                             alt={brandName}
                             fill
                             sizes="80px"
@@ -66,6 +92,13 @@ export function LogoUploadForm({
                             className="object-contain p-2"
                             priority
                         />
+                    )}
+                    {previewUrl && (
+                        <div className="absolute inset-0 flex items-end justify-center pb-1 bg-black/20">
+                            <span className="text-[9px] font-bold text-white bg-black/60 px-1.5 py-0.5 rounded">
+                                Vista previa
+                            </span>
+                        </div>
                     )}
                 </div>
 
@@ -86,9 +119,7 @@ export function LogoUploadForm({
                             aria-hidden="true"
                             tabIndex={-1}
                             className="sr-only"
-                            onChange={() => {
-                                fileRef.current?.form?.requestSubmit()
-                            }}
+                            onChange={handleFileChange}
                         />
                         <UploadButton />
                         <button

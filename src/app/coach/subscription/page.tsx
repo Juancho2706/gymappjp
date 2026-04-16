@@ -29,6 +29,23 @@ type SubscriptionEvent = {
     provider_status: string | null
     provider: string
     created_at: string
+    provider_checkout_id: string | null
+    payload: unknown
+}
+
+function extractAmountClpFromEventPayload(payload: unknown): number | null {
+    if (!payload || typeof payload !== 'object') return null
+    const root = payload as Record<string, unknown>
+    const candidates = [
+        root.transaction_amount,
+        (root.auto_recurring as Record<string, unknown> | undefined)?.transaction_amount,
+        (root.data as Record<string, unknown> | undefined)?.transaction_amount,
+    ]
+    for (const c of candidates) {
+        const n = typeof c === 'number' ? c : typeof c === 'string' ? Number.parseFloat(c) : Number.NaN
+        if (!Number.isNaN(n) && n > 0) return Math.round(n)
+    }
+    return null
 }
 
 const tierOptions = Object.keys(TIER_CONFIG) as SubscriptionTier[]
@@ -146,7 +163,7 @@ export default function CoachSubscriptionPage() {
                 Gestiona tu plan, frecuencia de cobro y ajustes de suscripción.
             </p>
 
-            <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
                 <h2 className="text-sm font-semibold text-foreground">Cómo funcionan los planes</h2>
                 <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                     <li>
@@ -165,7 +182,7 @@ export default function CoachSubscriptionPage() {
             ) : null}
 
             {coach ? (
-                <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+                <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
                     <p className="text-sm text-muted-foreground">
                         Estado actual: <span className="font-semibold text-foreground">{coach.subscription_status}</span>
                     </p>
@@ -188,7 +205,7 @@ export default function CoachSubscriptionPage() {
                 </section>
             ) : null}
 
-            <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
                 <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
                     {tierOptions.map((tier) => (
@@ -254,7 +271,7 @@ export default function CoachSubscriptionPage() {
             {/* Upgrade confirmation modal */}
             {showUpgradeConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-                    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+                    <div className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 shadow-2xl">
                         <h2 className="text-lg font-bold text-foreground">Confirmar cambio de plan</h2>
                         <div className="mt-4 space-y-2 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
                             {coach?.current_period_end && (
@@ -312,30 +329,56 @@ export default function CoachSubscriptionPage() {
                 </div>
             )}
 
-            <section className="mt-6 rounded-2xl border border-border bg-card p-5">
-                <h2 className="text-lg font-semibold text-foreground">Historial reciente</h2>
+            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
+                <h2 className="text-lg font-semibold text-foreground">Historial de pagos</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                    Eventos registrados por Mercado Pago y confirmaciones manuales (zona horaria local en fechas).
+                </p>
                 {events.length === 0 ? (
-                    <p className="mt-2 text-sm text-muted-foreground">Sin eventos recientes de suscripción.</p>
+                    <p className="mt-2 text-sm text-muted-foreground">Aún no hay movimientos de suscripción registrados.</p>
                 ) : (
-                    <div className="mt-3 space-y-2">
-                        {events.map((event) => (
-                            <div
-                                key={event.id}
-                                className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-                            >
-                                <p className="text-sm text-foreground">
-                                    {event.provider} · {event.provider_status ?? 'sin estado'}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                    {new Date(event.created_at).toLocaleString('es-CL')}
-                                </p>
-                            </div>
-                        ))}
+                    <div className="mt-4 overflow-x-auto">
+                        <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+                            <thead>
+                                <tr className="border-b border-border dark:border-white/10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    <th className="py-2 pr-3">Fecha</th>
+                                    <th className="py-2 pr-3">Estado</th>
+                                    <th className="py-2 pr-3">Monto</th>
+                                    <th className="py-2">Referencia</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {events.map((event) => {
+                                    const amount = extractAmountClpFromEventPayload(event.payload)
+                                    const dateLabel = new Date(event.created_at).toLocaleString('es-CL', {
+                                        dateStyle: 'short',
+                                        timeStyle: 'short',
+                                    })
+                                    const ref = event.provider_checkout_id?.trim()
+                                    return (
+                                        <tr key={event.id} className="border-b border-border/80 dark:border-white/5 last:border-0">
+                                            <td className="py-2.5 pr-3 text-foreground">{dateLabel}</td>
+                                            <td className="py-2.5 pr-3">
+                                                <span className="rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-foreground">
+                                                    {event.provider_status ?? '—'}
+                                                </span>
+                                            </td>
+                                            <td className="py-2.5 pr-3 text-foreground">
+                                                {amount != null ? `$${amount.toLocaleString('es-CL')} CLP` : '—'}
+                                            </td>
+                                            <td className="py-2.5 text-xs text-muted-foreground">
+                                                {ref ? `${event.provider} · ${ref}` : event.provider}
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </section>
 
-            <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
                 <h2 className="text-lg font-semibold text-foreground">Cancelar suscripción</h2>
                 {coach?.current_period_end ? (
                     <p className="mt-2 text-sm text-muted-foreground">

@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         // Check if this is a mid-cycle upgrade (coach already active)
         const { data: currentCoach } = await supabase
             .from('coaches')
-            .select('subscription_status, current_period_end')
+            .select('subscription_status, current_period_end, subscription_mp_id')
             .eq('id', user.id)
             .maybeSingle()
 
@@ -58,6 +58,16 @@ export async function POST(request: Request) {
 
         // For mid-cycle upgrades, schedule the new plan to start at the end of the current period
         const upgradeStartDate = isActiveUpgrade ? currentCoach!.current_period_end! : undefined
+
+        // P2.6: canceled (or expired) reactivation must not inherit a prior MP start_date
+        const mustUseFreshStart =
+            currentCoach?.subscription_status === 'canceled' ||
+            currentCoach?.subscription_status === 'expired'
+        const reactivationStartDate = mustUseFreshStart
+            ? new Date(Date.now() + 60_000).toISOString()
+            : undefined
+
+        const previousMpId = currentCoach?.subscription_mp_id?.trim() || null
 
         const amountClp = getTierPriceClp(tier, billingCycle)
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
@@ -80,8 +90,12 @@ export async function POST(request: Request) {
             failureUrl: `${appUrl}/coach/reactivate?payment=failure&${retryQuery}`,
             pendingUrl: `${appUrl}/coach/reactivate?payment=pending&${retryQuery}`,
             webhookUrl,
-            startDate: upgradeStartDate,
+            startDate: upgradeStartDate ?? reactivationStartDate,
         })
+
+        const newMpId = checkout.checkoutId.trim()
+        const supersededMpPreapprovalId =
+            previousMpId && previousMpId !== newMpId ? previousMpId : null
 
         // For active-coach upgrades: keep status = 'active' so they don't lose access.
         // The webhook will update status + current_period_end when the new plan activates.
@@ -97,6 +111,7 @@ export async function POST(request: Request) {
                 max_clients: getTierMaxClients(tier),
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
+                superseded_mp_preapproval_id: supersededMpPreapprovalId,
             })
             .eq('id', user.id)
 

@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -9,14 +10,24 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
-import { TemplatePickerDialog } from './components/TemplatePickerDialog'
-import { ProgramPreviewDialog } from './components/ProgramPreviewDialog'
-import { AssignToClientsDialog } from './components/AssignToClientsDialog'
+const TemplatePickerDialog = dynamic(
+    () => import('./components/TemplatePickerDialog').then((m) => ({ default: m.TemplatePickerDialog })),
+    { loading: () => <Skeleton className="mx-auto h-96 w-full max-w-lg rounded-xl" /> }
+)
+const ProgramPreviewDialog = dynamic(
+    () => import('./components/ProgramPreviewDialog').then((m) => ({ default: m.ProgramPreviewDialog })),
+    { loading: () => <Skeleton className="mx-auto h-96 w-full max-w-lg rounded-xl" /> }
+)
+const AssignToClientsDialog = dynamic(
+    () => import('./components/AssignToClientsDialog').then((m) => ({ default: m.AssignToClientsDialog })),
+    { loading: () => <Skeleton className="mx-auto h-96 w-full max-w-lg rounded-xl" /> }
+)
 import { MuscleBalancePanel } from './components/MuscleBalancePanel'
 import { PrintProgramDialog } from './components/PrintProgramDialog'
 

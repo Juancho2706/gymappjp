@@ -51,7 +51,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                                 <TrendingUp className="w-4 h-4 text-blue-500" />
                             </div>
                             <h2 className="text-xs font-bold text-foreground uppercase tracking-[0.2em] font-display">
-                                Crecimiento de Alumnos
+                                Sesiones 30 Días
                             </h2>
                         </div>
                     </div>
@@ -59,40 +59,43 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={areaData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
-                                    <linearGradient id="colorAlumnos" x1="0" y1="0" x2="0" y2="1">
+                                    <linearGradient id="colorSesiones" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
                                         <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />
-                                <XAxis 
-                                    dataKey="name" 
-                                    axisLine={false} 
-                                    tickLine={false} 
-                                    tick={{ fill: 'currentColor', fontSize: 12, opacity: 0.4 }}
+                                <XAxis
+                                    dataKey="name"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.4 }}
                                     dy={10}
                                 />
-                                <YAxis 
-                                    axisLine={false} 
-                                    tickLine={false} 
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
                                     tick={{ fill: 'currentColor', fontSize: 12, opacity: 0.4 }}
+                                    allowDecimals={false}
                                 />
-                                <Tooltip 
-                                    contentStyle={{ 
-                                        backgroundColor: 'rgba(0, 0, 0, 0.8)', 
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
                                         border: '1px solid rgba(255,255,255,0.1)',
                                         borderRadius: '12px',
                                         color: '#fff'
                                     }}
+                                    labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ''}
                                     itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }}
                                 />
-                                <Area 
-                                    type="monotone" 
-                                    dataKey="alumnos" 
-                                    stroke="#3b82f6" 
+                                <Area
+                                    type="monotone"
+                                    dataKey="sesiones"
+                                    name="Sesiones"
+                                    stroke="#3b82f6"
                                     strokeWidth={3}
-                                    fillOpacity={1} 
-                                    fill="url(#colorAlumnos)" 
+                                    fillOpacity={1}
+                                    fill="url(#colorSesiones)"
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -112,7 +115,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                                 <BarChart3 className="w-4 h-4 text-cyan-400" />
                             </div>
                             <h2 className="text-xs font-bold text-foreground uppercase tracking-[0.2em] font-display">
-                                Check-ins Semanales
+                                Crecimiento de Alumnos
                             </h2>
                         </div>
                     </div>
@@ -120,31 +123,33 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />
-                                <XAxis 
-                                    dataKey="name" 
-                                    axisLine={false} 
-                                    tickLine={false} 
+                                <XAxis
+                                    dataKey="name"
+                                    axisLine={false}
+                                    tickLine={false}
                                     tick={{ fill: 'currentColor', fontSize: 12, opacity: 0.4 }}
                                     dy={10}
                                 />
-                                <YAxis 
-                                    axisLine={false} 
-                                    tickLine={false} 
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
                                     tick={{ fill: 'currentColor', fontSize: 12, opacity: 0.4 }}
+                                    allowDecimals={false}
                                 />
-                                <Tooltip 
+                                <Tooltip
                                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                                    contentStyle={{ 
-                                        backgroundColor: 'rgba(0, 0, 0, 0.8)', 
+                                    contentStyle={{
+                                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
                                         border: '1px solid rgba(255,255,255,0.1)',
                                         borderRadius: '12px',
                                         color: '#fff'
                                     }}
                                     itemStyle={{ color: '#22d3ee', fontWeight: 'bold' }}
                                 />
-                                <Bar 
-                                    dataKey="checkins" 
-                                    fill="#22d3ee" 
+                                <Bar
+                                    dataKey="alumnos"
+                                    name="Nuevos alumnos"
+                                    fill="#22d3ee"
                                     radius={[4, 4, 0, 0]}
                                 />
                             </BarChart>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useFormStatus } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -40,8 +41,16 @@ function SaveButton() {
 export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [state, formAction] = useActionState(updateBrandSettingsAction, initialState)
     const [selectedColor, setSelectedColor] = useState(coach.primary_color)
-
     const [useCoachColors, setUseCoachColors] = useState((coach as any).use_brand_colors_coach ?? false)
+
+    useEffect(() => {
+        if (state.success) {
+            toast.success('Marca actualizada', { id: 'coach-brand-saved' })
+        }
+        if (state.error) {
+            toast.error(state.error, { id: 'coach-brand-err' })
+        }
+    }, [state.success, state.error])
 
     // Live Preview Effect — updates both :root and the container so portals/modals also preview
     useEffect(() => {

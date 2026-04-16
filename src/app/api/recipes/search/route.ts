@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { clientIpFromRequest, jsonRateLimited, rateLimitRecipesSearch } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
+    const ip = clientIpFromRequest(request)
+    const rl = await rateLimitRecipesSearch(ip)
+    if (!rl.ok) return jsonRateLimited(rl.retryAfter)
+
     const searchParams = request.nextUrl.searchParams
     const query = searchParams.get('q')
 

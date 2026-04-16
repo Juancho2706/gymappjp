@@ -97,6 +97,9 @@ export async function middleware(request: NextRequest) {
         if (redirectPath) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = redirectPath
+            if (redirectPath === '/coach/reactivate') {
+                redirectUrl.searchParams.set('reason', 'subscription_blocked')
+            }
             return NextResponse.redirect(redirectUrl)
         }
 

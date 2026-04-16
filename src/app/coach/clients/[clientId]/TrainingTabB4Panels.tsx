@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 import { Trophy, AlertTriangle, BarChart3, Target, Calendar } from 'lucide-react'
 import type { MuscleVolumeRow } from './profileDataHelpers'
 import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
-import { getClientWorkoutForDate } from './actions'
+import { getClientWorkoutForDate, getClientWorkoutActivityDates } from './actions'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import {
     findWeeklyWeightPRs,
@@ -130,6 +130,11 @@ export function TrainingTabB4Panels({
     const [historyDate, setHistoryDate] = useState(santiagoTodayIso)
     const [historyData, setHistoryData] = useState<Awaited<ReturnType<typeof getClientWorkoutForDate>>>([])
     const [historyLoaded, setHistoryLoaded] = useState(false)
+    const [activityDates, setActivityDates] = useState<Set<string>>(new Set())
+
+    useEffect(() => {
+        getClientWorkoutActivityDates(clientId).then((dates) => setActivityDates(new Set(dates)))
+    }, [clientId])
 
     const handleHistoryDateChange = (date: string) => {
         setHistoryDate(date)
@@ -364,7 +369,7 @@ export function TrainingTabB4Panels({
                 <DayNavigator
                     selectedDate={historyDate}
                     onDateChange={handleHistoryDateChange}
-                    adherenceDates={new Set<string>()}
+                    adherenceDates={activityDates}
                     isLoading={isPending}
                 />
                 {historyDate !== santiagoTodayIso && (

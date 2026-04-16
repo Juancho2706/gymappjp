@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
 import Image from 'next/image'
@@ -49,6 +50,15 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
             setIsSubmitting(false)
         }
     }, [state.error, state.success])
+
+    useEffect(() => {
+        if (state.success) {
+            toast.success('Check-in enviado', { id: 'client-checkin-ok' })
+        }
+        if (state.error) {
+            toast.error(state.error, { id: 'client-checkin-err' })
+        }
+    }, [state.success, state.error])
 
     const frontInputRef = useRef<HTMLInputElement>(null)
     const backInputRef = useRef<HTMLInputElement>(null)
@@ -191,7 +201,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                             exit="exit"
                             className="space-y-4"
                         >
-                            {lastCheckIn && (
+                            {lastCheckIn ? (
                                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm mb-4">
                                     <p className="text-xs text-muted-foreground">Tu último check-in</p>
                                     <p className="font-bold">
@@ -200,6 +210,13 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                     </p>
                                     <p className="text-xs text-muted-foreground">
                                         {formatRelativeDate(lastCheckIn.created_at.slice(0, 10))}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="rounded-xl border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground mb-4">
+                                    <p className="font-medium text-foreground">Tu primer check-in</p>
+                                    <p className="mt-1 text-xs leading-relaxed">
+                                        Registra peso y energía; las fotos ayudan a tu coach a ver el progreso.
                                     </p>
                                 </div>
                             )}

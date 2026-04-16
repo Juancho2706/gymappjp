@@ -11,8 +11,12 @@ import {
     Utensils,
     Dumbbell,
     Info,
-    UserPlus
+    UserPlus,
+    TrendingUp,
+    Users,
+    Layers,
 } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -65,6 +69,8 @@ interface CoachDashboardClientProps {
     topRiskClients: RiskAlertItem[]
     areaData: any[]
     barData: any[]
+    mrrCurrentMonth: number
+    mrrPreviousMonth: number
     subscriptionStatus?: string | null
     currentPeriodEnd?: string | null
     trialEndsAt?: string | null
@@ -82,6 +88,8 @@ export default function CoachDashboardClient({
     topRiskClients,
     areaData,
     barData,
+    mrrCurrentMonth,
+    mrrPreviousMonth,
     subscriptionStatus,
     currentPeriodEnd,
     trialEndsAt,
@@ -113,6 +121,37 @@ export default function CoachDashboardClient({
               year: 'numeric',
           })
         : ''
+
+    const mrrDelta = mrrPreviousMonth > 0
+        ? Math.round(((mrrCurrentMonth - mrrPreviousMonth) / mrrPreviousMonth) * 100)
+        : null
+    const mrrLabel = mrrCurrentMonth > 0
+        ? `$${mrrCurrentMonth.toLocaleString('es-CL')} CLP`
+        : '—'
+
+    const topStats = [
+        {
+            label: 'MRR Estimado',
+            value: mrrLabel,
+            icon: TrendingUp,
+            trend: mrrDelta !== null ? `${mrrDelta >= 0 ? '+' : ''}${mrrDelta}% vs mes anterior` : 'Mes actual',
+            trendColor: mrrDelta !== null && mrrDelta >= 0 ? 'text-emerald-500' : 'text-rose-500',
+        },
+        {
+            label: 'Total Alumnos',
+            value: String(totalClients),
+            icon: Users,
+            trend: 'Activos',
+            trendColor: 'text-primary',
+        },
+        {
+            label: 'Planes Activos',
+            value: String(activePlans),
+            icon: Layers,
+            trend: 'Programas vigentes',
+            trendColor: 'text-primary',
+        },
+    ]
 
     const stats = [
         {
@@ -232,6 +271,43 @@ export default function CoachDashboardClient({
                     hasRecentCheckin={hasRecentCheckin}
                 />
             </motion.div>
+
+            {/* Top KPI Row: MRR, Alumnos, Planes */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 relative z-10">
+                {topStats.map((stat, i) => {
+                    const Icon = stat.icon
+                    return (
+                        <motion.div key={i} variants={itemVariants}>
+                            <GlassCard className="relative overflow-hidden bg-white/90 dark:bg-zinc-950 border-border dark:border-white/5">
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,color-mix(in_srgb,var(--theme-primary),transparent_96%),transparent_70%)] pointer-events-none" />
+                                <div className="relative p-4 md:p-5 flex items-center gap-4">
+                                    <div
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
+                                        style={{
+                                            backgroundColor: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)',
+                                            borderColor: 'color-mix(in srgb, var(--theme-primary) 25%, transparent)',
+                                            color: 'var(--theme-primary)',
+                                        }}
+                                    >
+                                        <Icon className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-0.5">
+                                            {stat.label}
+                                        </p>
+                                        <p className="text-2xl font-black tracking-tighter font-display" style={{ color: 'var(--theme-primary)' }}>
+                                            {stat.value}
+                                        </p>
+                                        <p className={`text-[10px] font-bold mt-0.5 ${stat.trendColor}`}>
+                                            {stat.trend}
+                                        </p>
+                                    </div>
+                                </div>
+                            </GlassCard>
+                        </motion.div>
+                    )
+                })}
+            </div>
 
             {/* Stats & Alerts Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 relative z-10">
@@ -458,36 +534,53 @@ export default function CoachDashboardClient({
                                 </div>
                             ) : (
                                 <div className="divide-y divide-border/50 dark:divide-white/5 p-2 md:p-4 space-y-1">
-                                    {recentActivities.map((activity) => (
-                                        <Link key={activity.id} href={activity.href} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 p-3 hover:bg-primary/5 dark:hover:bg-white/5 transition-colors rounded-lg group">
-                                            <div className="flex items-start gap-3 flex-1 min-w-0">
-                                                <div className="text-emerald-500 mt-0.5 opacity-70 group-hover:opacity-100 shrink-0">
-                                                    <ArrowRight className="w-4 h-4" />
-                                                </div>
-                                                <div className="flex flex-col gap-0.5 min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="text-primary font-bold whitespace-nowrap">[{activity.type.toUpperCase()}]</span>
-                                                        <span className="text-zinc-700 dark:text-zinc-300 font-medium truncate">{activity.title}</span>
+                                    {recentActivities.map((activity) => {
+                                        const typeColor =
+                                            activity.type === 'check-in' ? 'text-emerald-500' :
+                                            activity.type === 'workout' ? 'text-blue-400' :
+                                            'text-amber-400'
+                                        return (
+                                            <Link key={activity.id} href={activity.href} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 p-3 hover:bg-primary/5 dark:hover:bg-white/5 transition-colors rounded-lg group">
+                                                <div className="flex items-start gap-3 flex-1 min-w-0">
+                                                    <div className={`mt-0.5 opacity-70 group-hover:opacity-100 shrink-0 ${typeColor}`}>
+                                                        <ArrowRight className="w-4 h-4" />
                                                     </div>
-                                                    <div className="text-zinc-500 text-xs truncate">
-                                                        {activity.subtitle}
+                                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className={`font-bold whitespace-nowrap ${typeColor}`}>[{activity.type.toUpperCase()}]</span>
+                                                            <span className="text-zinc-700 dark:text-zinc-300 font-medium truncate">{activity.title}</span>
+                                                        </div>
+                                                        <div className="text-zinc-500 text-xs truncate">
+                                                            {activity.subtitle}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            
-                                            <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pl-7 sm:pl-0">
-                                                <div className="text-zinc-400 dark:text-zinc-600 text-[10px] md:text-xs">
-                                                    {new Date(activity.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+
+                                                <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pl-7 sm:pl-0">
+                                                    {activity.photoUrl && (
+                                                        <div className="w-8 h-8 rounded-md overflow-hidden border border-border shrink-0">
+                                                            <Image
+                                                                src={activity.photoUrl}
+                                                                alt="Check-in"
+                                                                width={32}
+                                                                height={32}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    <div className="text-zinc-400 dark:text-zinc-600 text-[10px] md:text-xs">
+                                                        {new Date(activity.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                                                    </div>
+                                                    <div
+                                                        className="text-[9px] font-bold uppercase tracking-tight px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity border"
+                                                        style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
+                                                    >
+                                                        Gestionar
+                                                    </div>
                                                 </div>
-                                                <div 
-                                                    className="text-[9px] font-bold text-primary uppercase tracking-tight px-2 py-0.5 rounded bg-primary/10 border border-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
-                                                >
-                                                    Gestionar
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    ))}
+                                            </Link>
+                                        )
+                                    })}
                                 </div>
                             )}
                         </div>

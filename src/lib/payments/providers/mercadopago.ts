@@ -1,4 +1,5 @@
 import { BILLING_CYCLE_CONFIG } from '@/lib/constants'
+import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
 import type {
     CreateCheckoutInput,
     CreateCheckoutResult,
@@ -73,13 +74,6 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
 
 function buildExternalReference(input: CreateCheckoutInput) {
     return `${input.coachId}|${input.tier}|${input.billingCycle}`
-}
-
-function parseExternalReference(reference?: string | null) {
-    if (!reference) return null
-    const [coachId] = reference.split('|')
-    if (!coachId) return null
-    return { coachId }
 }
 
 async function mpRequest(path: string) {
@@ -180,14 +174,19 @@ export class MercadoPagoProvider implements PaymentsProvider {
         const isPreapprovalEvent = eventType.includes('preapproval') || eventType.includes('subscription')
         if (isPreapprovalEvent) {
             const preapproval = await mpRequest(`/preapproval/${eventId}`)
-            const coach = parseExternalReference(preapproval.external_reference)
+            const extRef =
+                typeof preapproval.external_reference === 'string' ? preapproval.external_reference : null
+            const parsed = parseCheckoutExternalReference(extRef)
             return {
                 accepted: true,
                 eventId,
                 providerStatus: preapproval.status ?? undefined,
-                coachId: coach?.coachId,
+                coachId: parsed?.coachId,
                 providerCheckoutId: String(preapproval.id ?? eventId),
                 currentPeriodEnd: preapproval.next_payment_date ?? preapproval.auto_recurring?.end_date ?? null,
+                externalReference: extRef,
+                subscriptionTier: parsed?.tier ?? undefined,
+                billingCycle: parsed?.billingCycle ?? undefined,
             }
         }
 
@@ -196,14 +195,18 @@ export class MercadoPagoProvider implements PaymentsProvider {
         }
 
         const payment = await mpRequest(`/v1/payments/${eventId}`)
-        const coach = parseExternalReference(payment.external_reference)
+        const extRef = typeof payment.external_reference === 'string' ? payment.external_reference : null
+        const parsed = parseCheckoutExternalReference(extRef)
 
         return {
             accepted: true,
             eventId,
             providerStatus: payment.status ?? undefined,
-            coachId: coach?.coachId,
+            coachId: parsed?.coachId,
             providerCheckoutId: payment.order?.id ? String(payment.order.id) : undefined,
+            externalReference: extRef,
+            subscriptionTier: parsed?.tier ?? undefined,
+            billingCycle: parsed?.billingCycle ?? undefined,
         }
     }
 

@@ -17,11 +17,30 @@ const FLAG_LABELS: Record<AttentionFlag, string> = {
 
 export interface ActivityItemClient {
     id: string
-    type: 'nuevo alumno' | 'check-in'
+    type: 'nuevo alumno' | 'check-in' | 'workout'
     title: string
     subtitle: string
     date: string
     href: string
+    photoUrl?: string | null
+}
+
+function extractAmountClp(payload: unknown): number | null {
+    if (!payload || typeof payload !== 'object') return null
+    const root = payload as Record<string, unknown>
+    const candidates = [
+        root.transaction_amount,
+        (root.auto_recurring as Record<string, unknown> | undefined)?.transaction_amount,
+        (root.data as Record<string, unknown> | undefined)?.transaction_amount,
+    ]
+    for (const c of candidates) {
+        if (typeof c === 'number' && c > 0) return c
+        if (typeof c === 'string') {
+            const n = parseFloat(c)
+            if (!Number.isNaN(n) && n > 0) return n
+        }
+    }
+    return null
 }
 
 export interface RiskAlertItem {
@@ -35,6 +54,11 @@ export interface RiskAlertItem {
 export async function getCoachDashboardData(userId: string) {
     const supabase = await createClient()
 
+    const now = new Date()
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
     const [
         clientsCount,
         workoutPlansCount,
@@ -42,7 +66,9 @@ export async function getCoachDashboardData(userId: string) {
         recentCheckinsRaw,
         expiringProgramsRaw,
         clientsGrowthRaw,
-        weeklyCheckinsRaw,
+        workoutLogs30dRaw,
+        recentWorkoutsRaw,
+        subscriptionEventsRaw,
         pulse,
         coachSubscriptionRaw,
     ] = await Promise.all([
@@ -56,7 +82,7 @@ export async function getCoachDashboardData(userId: string) {
             .limit(5),
         supabase
             .from('check_ins')
-            .select('id, created_at, clients!inner(id, full_name, coach_id)')
+            .select('id, created_at, photos, clients!inner(id, full_name, coach_id)')
             .eq('clients.coach_id', userId)
             .order('created_at', { ascending: false })
             .limit(5),
@@ -68,11 +94,25 @@ export async function getCoachDashboardData(userId: string) {
             .not('end_date', 'is', null)
             .order('end_date', { ascending: true }),
         supabase.from('clients').select('created_at').eq('coach_id', userId),
+        // 30-day workout sessions for AreaChart
         supabase
-            .from('check_ins')
-            .select('created_at, clients!inner(coach_id)')
+            .from('workout_logs')
+            .select('logged_at, clients!inner(coach_id)')
             .eq('clients.coach_id', userId)
-            .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+            .gte('logged_at', thirtyDaysAgo),
+        // Recent workout completions for activity feed
+        supabase
+            .from('workout_logs')
+            .select('id, logged_at, client_id, clients!inner(id, full_name, coach_id)')
+            .eq('clients.coach_id', userId)
+            .order('logged_at', { ascending: false })
+            .limit(50),
+        // Subscription events for MRR (last 60 days)
+        supabase
+            .from('subscription_events')
+            .select('created_at, payload, provider_status')
+            .eq('coach_id', userId)
+            .gte('created_at', startOfPrevMonth),
         getCachedDirectoryPulse(userId),
         supabase
             .from('coaches')
@@ -93,10 +133,20 @@ export async function getCoachDashboardData(userId: string) {
             : 0
 
     const rawRecentClients = recentClientsRaw.data || []
-    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; clients: { id: string; full_name: string } }[] | null) || []
+    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; photos: string[] | null; clients: { id: string; full_name: string } }[] | null) || []
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
     const allClientsData = clientsGrowthRaw.data || []
-    const weeklyCheckinsData = weeklyCheckinsRaw.data || []
+    const workoutLogs30d = workoutLogs30dRaw.data || []
+    const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string } }[] | null) || []
+    const subscriptionEvents = subscriptionEventsRaw.data || []
+
+    // MRR: sum amounts from subscription_events in current and previous month
+    const mrrCurrentMonth = subscriptionEvents
+        .filter((e) => e.created_at >= startOfCurrentMonth)
+        .reduce((sum, e) => sum + (extractAmountClp(e.payload) ?? 0), 0)
+    const mrrPreviousMonth = subscriptionEvents
+        .filter((e) => e.created_at >= startOfPrevMonth && e.created_at < startOfCurrentMonth)
+        .reduce((sum, e) => sum + (extractAmountClp(e.payload) ?? 0), 0)
 
     const activities: ActivityItemClient[] = []
 
@@ -112,6 +162,7 @@ export async function getCoachDashboardData(userId: string) {
     })
 
     rawRecentCheckins.forEach((c) => {
+        const firstPhoto = Array.isArray(c.photos) && c.photos.length > 0 ? c.photos[0] : null
         activities.push({
             id: `checkin-${c.id}`,
             type: 'check-in',
@@ -119,11 +170,30 @@ export async function getCoachDashboardData(userId: string) {
             subtitle: 'Revisa su progreso semanal',
             date: c.created_at,
             href: `/coach/clients/${c.clients.id}`,
+            photoUrl: firstPhoto,
         })
     })
 
+    // Deduplicate workout entries: one activity per (client_id + day)
+    const seenWorkoutSessions = new Set<string>()
+    rawRecentWorkouts.forEach((w) => {
+        const dayStr = w.logged_at.slice(0, 10)
+        const sessionKey = `${w.client_id}|${dayStr}`
+        if (!seenWorkoutSessions.has(sessionKey)) {
+            seenWorkoutSessions.add(sessionKey)
+            activities.push({
+                id: `workout-${w.client_id}-${dayStr}`,
+                type: 'workout',
+                title: `${w.clients.full_name} completó una sesión`,
+                subtitle: 'Workout registrado',
+                date: w.logged_at,
+                href: `/coach/clients/${w.clients.id}`,
+            })
+        }
+    })
+
     activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    const recentActivities = activities.slice(0, 5)
+    const recentActivities = activities.slice(0, 8)
 
     const nowUTC = new Date()
     const todayMidnight = new Date(nowUTC.getFullYear(), nowUTC.getMonth(), nowUTC.getDate())
@@ -162,39 +232,47 @@ export async function getCoachDashboardData(userId: string) {
             label: row.attentionFlags.length > 0 ? FLAG_LABELS[row.attentionFlags[0]] : 'Seguimiento recomendado',
         }))
 
+    // AreaChart: unique workout sessions per day (last 30 days, deduplicated by client+day)
+    const sessionsByDay: Record<string, number> = {}
+    for (let i = 29; i >= 0; i -= 1) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        const key = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
+        sessionsByDay[key] = 0
+    }
+    const seenSessionKeys = new Set<string>()
+    workoutLogs30d.forEach((w) => {
+        const d = new Date(w.logged_at)
+        const dayKey = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
+        // Use a composite key to deduplicate by client per day
+        const sessionKey = `${(w as any).client_id ?? ''}|${dayKey}`
+        if (!seenSessionKeys.has(sessionKey)) {
+            seenSessionKeys.add(sessionKey)
+            if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] += 1
+        }
+    })
+    // Show every 5th label to avoid crowding
+    const areaData = Object.entries(sessionsByDay).map(([name, sesiones], idx) => ({
+        name: idx % 5 === 0 ? name : '',
+        fullName: name,
+        sesiones,
+    }))
+
+    // BarChart: new clients per month (last 6 months, non-cumulative)
     const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
     const growthMap: Record<string, number> = {}
     for (let i = 5; i >= 0; i -= 1) {
         const d = new Date()
         d.setMonth(d.getMonth() - i)
-        const key = `${monthNames[d.getMonth()]}`
+        const key = monthNames[d.getMonth()]
         growthMap[key] = 0
     }
     allClientsData.forEach((c) => {
         const d = new Date(c.created_at)
-        const key = `${monthNames[d.getMonth()]}`
+        const key = monthNames[d.getMonth()]
         if (growthMap[key] !== undefined) growthMap[key] += 1
     })
-    let total = 0
-    const areaData = Object.entries(growthMap).map(([name, count]) => {
-        total += count
-        return { name, alumnos: total }
-    })
-
-    const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
-    const checkinsMap: Record<string, number> = {}
-    for (let i = 6; i >= 0; i -= 1) {
-        const d = new Date()
-        d.setDate(d.getDate() - i)
-        const key = dayNames[d.getDay()]
-        checkinsMap[key] = 0
-    }
-    weeklyCheckinsData.forEach((c) => {
-        const d = new Date(c.created_at)
-        const key = dayNames[d.getDay()]
-        if (checkinsMap[key] !== undefined) checkinsMap[key] += 1
-    })
-    const barData = Object.entries(checkinsMap).map(([name, checkins]) => ({ name, checkins }))
+    const barData = Object.entries(growthMap).map(([name, alumnos]) => ({ name, alumnos }))
 
     return {
         totalClients: clientsCount.count ?? 0,
@@ -208,6 +286,8 @@ export async function getCoachDashboardData(userId: string) {
         topRiskClients,
         areaData,
         barData,
+        mrrCurrentMonth,
+        mrrPreviousMonth,
         subscriptionStatus: coachSubscriptionRaw.data?.subscription_status ?? null,
         currentPeriodEnd: coachSubscriptionRaw.data?.current_period_end ?? null,
         trialEndsAt: coachSubscriptionRaw.data?.trial_ends_at ?? null,

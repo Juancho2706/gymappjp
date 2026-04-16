@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Activity, Dumbbell, User, Edit2, Plus, ChevronDown, ChevronUp, CheckCircle2, PieChart as PieChartIcon, Flame, TrendingUp, Camera, ArrowUpRight, ArrowDownRight, Minus, Trophy, Layers } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart, ReferenceLine } from 'recharts'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -30,6 +30,7 @@ import {
     resolveActiveWeekVariantForDisplay,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
+import { updateClientGoalWeight } from './actions'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
@@ -49,6 +50,11 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
     const [expandedWorkouts, setExpandedWorkouts] = useState<string[]>([])
     const { resolvedTheme } = useTheme()
     const { client, checkIns, payments } = data
+    const [goalWeight, setGoalWeight] = useState<number | null>(
+        typeof client?.goal_weight_kg === 'number' ? client.goal_weight_kg : null
+    )
+    const [goalWeightInput, setGoalWeightInput] = useState(goalWeight?.toString() ?? '')
+    const [isSavingGoal, setIsSavingGoal] = useState(false)
 
     const coachSlug =
         client?.coaches == null
@@ -476,11 +482,46 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
 
                         {/* Task 3: Panel de Progreso Unificado */}
                         <GlassCard id="profile-progress-panel" className="p-6 md:p-8 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-[35rem]">
-                            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 relative z-10">
-                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                                    <Activity className="w-4 h-4" /> Panel de Progreso Unificado
-                                </h3>
+                                <div className="flex flex-col gap-2">
+                                    <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                                        <Activity className="w-4 h-4" /> Panel de Progreso Unificado
+                                    </h3>
+                                    {/* Peso objetivo inline */}
+                                    <form
+                                        className="flex items-center gap-1.5"
+                                        onSubmit={async (e) => {
+                                            e.preventDefault()
+                                            const val = parseFloat(goalWeightInput)
+                                            const newVal = Number.isFinite(val) && val > 0 ? val : null
+                                            setIsSavingGoal(true)
+                                            await updateClientGoalWeight(client.id, newVal)
+                                            setGoalWeight(newVal)
+                                            setIsSavingGoal(false)
+                                        }}
+                                    >
+                                        <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground whitespace-nowrap">
+                                            Objetivo (kg)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            min="30"
+                                            max="300"
+                                            value={goalWeightInput}
+                                            onChange={(e) => setGoalWeightInput(e.target.value)}
+                                            placeholder="—"
+                                            className="w-16 text-[11px] font-bold text-center bg-muted/50 border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:border-primary"
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={isSavingGoal}
+                                            className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded hover:bg-primary/20 transition-colors uppercase tracking-wider disabled:opacity-50"
+                                        >
+                                            {isSavingGoal ? '…' : 'OK'}
+                                        </button>
+                                    </form>
+                                </div>
                                 {/* ToggleBar Superior de píldoras */}
                                 <div className="flex flex-wrap gap-2">
                                     {chartTabs.map(tab => (
@@ -515,6 +556,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                                 <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                                                 <Line yAxisId="left" type="monotone" dataKey="peso" name="Peso (kg)" stroke="var(--theme-primary)" strokeWidth={3} dot={{ fill: 'var(--theme-primary)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                                                 <Line yAxisId="right" type="monotone" dataKey="energia" name="Energía (1-10)" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ fill: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                                {goalWeight != null && (
+                                                    <ReferenceLine yAxisId="left" y={goalWeight} stroke="#f59e0b" strokeDasharray="6 3" strokeWidth={1.5} label={{ value: `Objetivo ${goalWeight}kg`, position: 'insideTopRight', fontSize: 9, fill: '#f59e0b' }} />
+                                                )}
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     ) : (
@@ -774,7 +818,6 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                         )}
 
                         <GlassCard className="p-8 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                            <div className="absolute bottom-0 left-1/4 -ml-16 -mb-16 w-64 h-64 bg-primary/5 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none" />
                             <h3 className="text-xs font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-2 relative z-10">
                                 <Dumbbell className="w-4 h-4" /> Historial de Entrenamientos
                             </h3>

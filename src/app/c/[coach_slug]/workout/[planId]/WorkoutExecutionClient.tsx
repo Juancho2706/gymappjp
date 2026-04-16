@@ -364,7 +364,7 @@ export function WorkoutExecutionClient({
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
                                                                     {(exercise.gif_url || exercise.video_url) && (
-                                                                        <button onClick={() => openTechnique(exercise)} className="h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground">
+                                                                        <button onClick={() => openTechnique(exercise)} aria-label="Ver técnica del ejercicio" className="h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground">
                                                                             <Info className="w-4 h-4" />
                                                                         </button>
                                                                     )}

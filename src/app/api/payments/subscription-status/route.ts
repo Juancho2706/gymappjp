@@ -14,7 +14,7 @@ export async function GET() {
     const { data: coach, error } = await supabase
         .from('coaches')
         .select(
-            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider'
+            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_mp_id, superseded_mp_preapproval_id'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -29,10 +29,10 @@ export async function GET() {
 
     const { data: events } = await supabase
         .from('subscription_events')
-        .select('id, provider_status, provider, created_at')
+        .select('id, provider_status, provider, created_at, provider_checkout_id, payload')
         .eq('coach_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(50)
 
     return NextResponse.json({ coach, events: events ?? [] })
 }

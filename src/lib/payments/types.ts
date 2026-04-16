@@ -27,6 +27,10 @@ export type WebhookProcessResult = {
     coachId?: string
     providerCheckoutId?: string
     currentPeriodEnd?: string | null
+    /** Raw Mercado Pago `external_reference` when available */
+    externalReference?: string | null
+    subscriptionTier?: SubscriptionTier
+    billingCycle?: BillingCycle
 }
 
 /** Normalized preapproval / recurring checkout snapshot (Mercado Pago preapproval shape). */

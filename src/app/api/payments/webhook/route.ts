@@ -3,7 +3,12 @@ import { getPaymentsProvider } from '@/lib/payments/provider'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subscription-state'
-import { isBillingCycleAllowedForTier, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import {
+    getTierMaxClients,
+    isBillingCycleAllowedForTier,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 import {
     extractMercadoPagoNotificationId,
     isPaymentsWebhookTokenValid,
@@ -78,7 +83,9 @@ async function handleWebhook(request: Request, rawBody: string) {
 
     const { data: coach } = await admin
         .from('coaches')
-        .select('id, subscription_tier, billing_cycle, current_period_end')
+        .select(
+            'id, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id'
+        )
         .eq('id', result.coachId)
         .maybeSingle()
 
@@ -87,9 +94,41 @@ async function handleWebhook(request: Request, rawBody: string) {
         return NextResponse.json({ ok: true })
     }
 
+    const checkoutId = result.providerCheckoutId?.trim() ?? null
+    const coachMpId = coach.subscription_mp_id?.trim() ?? null
+    const appliesToTrackedSubscription =
+        !checkoutId || !coachMpId || checkoutId === coachMpId
+
+    if (!appliesToTrackedSubscription) {
+        console.info('[payments.webhook] skipping coach row update for non-current checkout', {
+            traceId,
+            coachId: coach.id,
+            checkoutId,
+            coachMpId,
+        })
+        const staleEventRow: TablesInsert<'subscription_events'> = {
+            coach_id: coach.id,
+            provider: provider.name,
+            provider_event_id:
+                result.eventId ??
+                `${provider.name}:stale:${checkoutId}:${result.providerStatus ?? 'unknown'}`,
+            provider_checkout_id: checkoutId,
+            provider_status: result.providerStatus ?? null,
+            payload: toJsonPayload(payload),
+        }
+        await admin.from('subscription_events').upsert(staleEventRow, { onConflict: 'provider_event_id' })
+        return NextResponse.json({ ok: true })
+    }
+
     const status = mapProviderStatus(result.providerStatus)
-    const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
-    const billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+    let tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+    let billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+
+    if (result.subscriptionTier && result.billingCycle) {
+        tier = result.subscriptionTier
+        billingCycle = result.billingCycle
+    }
+
     const statusForUpdate =
         status === 'active' && !isBillingCycleAllowedForTier(tier, billingCycle)
             ? 'pending_payment'
@@ -101,14 +140,42 @@ async function handleWebhook(request: Request, rawBody: string) {
         providerCurrentPeriodEnd: result.currentPeriodEnd,
     })
 
-    const { error: coachUpdateError } = await admin
-        .from('coaches')
-        .update({
-            subscription_status: statusForUpdate,
-            current_period_end: nextPeriodEnd,
-            payment_provider: provider.name,
-        })
-        .eq('id', coach.id)
+    const coachUpdate: Record<string, unknown> = {
+        subscription_status: statusForUpdate,
+        current_period_end: nextPeriodEnd,
+        payment_provider: provider.name,
+    }
+
+    const isPaidLike = statusForUpdate === 'active' || statusForUpdate === 'trialing'
+    if (isPaidLike && checkoutId) {
+        coachUpdate.subscription_tier = tier
+        coachUpdate.billing_cycle = billingCycle
+        coachUpdate.max_clients = getTierMaxClients(tier)
+        coachUpdate.subscription_mp_id = checkoutId
+
+        const superseded = coach.superseded_mp_preapproval_id?.trim()
+        if (superseded && superseded !== checkoutId) {
+            try {
+                await provider.cancelCheckoutAtProvider(superseded)
+                console.info('[payments.webhook] cancelled superseded preapproval', {
+                    traceId,
+                    coachId: coach.id,
+                    superseded,
+                })
+            } catch (cancelErr) {
+                const msg = cancelErr instanceof Error ? cancelErr.message : String(cancelErr)
+                console.warn('[payments.webhook] failed to cancel superseded preapproval', {
+                    traceId,
+                    coachId: coach.id,
+                    superseded,
+                    message: msg,
+                })
+            }
+            coachUpdate.superseded_mp_preapproval_id = null
+        }
+    }
+
+    const { error: coachUpdateError } = await admin.from('coaches').update(coachUpdate).eq('id', coach.id)
 
     if (coachUpdateError) {
         console.error('[payments.webhook] failed to update coach', {

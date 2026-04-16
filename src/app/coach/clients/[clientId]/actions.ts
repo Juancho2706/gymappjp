@@ -727,3 +727,65 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
 
     return data ?? []
 }
+
+/** Actualiza el peso objetivo del cliente (solo el coach dueño puede hacerlo). */
+export async function updateClientGoalWeight(clientId: string, goalWeightKg: number | null) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Unauthorized' }
+
+    const { error } = await supabase
+        .from('clients')
+        .update({ goal_weight_kg: goalWeightKg })
+        .eq('id', clientId)
+        .eq('coach_id', user.id)
+
+    if (error) return { error: error.message }
+    return { ok: true }
+}
+
+/** Días (YYYY-MM-DD) con workout_logs para el cliente en los últimos 90 días. */
+export async function getClientWorkoutActivityDates(clientId: string): Promise<string[]> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const from = new Date()
+    from.setDate(from.getDate() - 90)
+    const fromIso = from.toISOString().slice(0, 10)
+
+    const { data } = await supabase
+        .from('workout_logs')
+        .select('logged_at')
+        .eq('client_id', clientId)
+        .gte('logged_at', `${fromIso}T00:00:00`)
+        .order('logged_at')
+
+    if (!data) return []
+    const seen = new Set<string>()
+    for (const row of data) {
+        seen.add((row.logged_at as string).slice(0, 10))
+    }
+    return [...seen]
+}
+
+/** Días (YYYY-MM-DD) con daily_nutrition_logs para el cliente en los últimos 90 días. */
+export async function getClientNutritionActivityDates(clientId: string): Promise<string[]> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const from = new Date()
+    from.setDate(from.getDate() - 90)
+    const fromIso = from.toISOString().slice(0, 10)
+
+    const { data } = await supabase
+        .from('daily_nutrition_logs')
+        .select('log_date')
+        .eq('client_id', clientId)
+        .gte('log_date', fromIso)
+        .order('log_date')
+
+    if (!data) return []
+    return [...new Set(data.map((r) => r.log_date as string))]
+}
