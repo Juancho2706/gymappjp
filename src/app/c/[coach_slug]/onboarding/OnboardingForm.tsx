@@ -28,6 +28,7 @@ export function OnboardingForm({ coachSlug }: Props) {
         injuries: '',
         medical_conditions: ''
     })
+    const [touched, setTouched] = useState<Record<string, boolean>>({})
 
     // Load from localStorage on mount
     useEffect(() => {
@@ -54,11 +55,36 @@ export function OnboardingForm({ coachSlug }: Props) {
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
         setFormData(prev => ({ ...prev, [name]: value }))
+        // Clear error once user starts typing/selecting
+        if (touched[name]) setTouched(prev => ({ ...prev, [name]: true }))
+    }
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        setTouched(prev => ({ ...prev, [e.target.name]: true }))
+    }
+
+    const fieldError = (name: string): string | null => {
+        if (!touched[name]) return null
+        if (formData[name as keyof typeof formData] === '') return 'Este campo es requerido'
+        if ((name === 'weight' || name === 'height') && Number(formData[name as keyof typeof formData]) <= 0) {
+            return 'Ingresa un valor válido'
+        }
+        return null
+    }
+
+    const STEP_REQUIRED_FIELDS: Record<number, string[]> = {
+        1: ['weight', 'height'],
+        2: ['goals', 'experience_level', 'availability'],
+        3: [],
     }
 
     const nextStep = () => {
         if (validateCurrentStep()) {
             setCurrentStep(prev => Math.min(prev + 1, 3))
+        } else {
+            // Mark all required fields of current step as touched to show errors
+            const fields = STEP_REQUIRED_FIELDS[currentStep] ?? []
+            setTouched(prev => ({ ...prev, ...Object.fromEntries(fields.map(f => [f, true])) }))
         }
     }
 
@@ -146,30 +172,34 @@ export function OnboardingForm({ coachSlug }: Props) {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="weight" className="text-muted-foreground">Peso actual (kg)*</Label>
-                                    <Input 
-                                        id="weight" 
-                                        name="weight" 
-                                        type="number" 
-                                        step="0.1" 
-                                        placeholder="Ej. 75.5" 
-                                        required 
+                                    <Input
+                                        id="weight"
+                                        name="weight"
+                                        type="number"
+                                        step="0.1"
+                                        placeholder="Ej. 75.5"
+                                        required
                                         value={formData.weight}
                                         onChange={handleInputChange}
-                                        className="bg-background/50 border-border text-foreground focus:border-[var(--theme-primary)]"
+                                        onBlur={handleBlur}
+                                        className={`bg-background/50 border-border text-foreground focus:border-[var(--theme-primary)] ${fieldError('weight') ? 'border-red-500 focus:border-red-500' : ''}`}
                                     />
+                                    {fieldError('weight') && <p className="text-xs text-red-400">{fieldError('weight')}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="height" className="text-muted-foreground">Estatura (cm)*</Label>
-                                    <Input 
-                                        id="height" 
-                                        name="height" 
-                                        type="number" 
-                                        placeholder="Ej. 178" 
-                                        required 
+                                    <Input
+                                        id="height"
+                                        name="height"
+                                        type="number"
+                                        placeholder="Ej. 178"
+                                        required
                                         value={formData.height}
                                         onChange={handleInputChange}
-                                        className="bg-background/50 border-border text-foreground focus:border-[var(--theme-primary)]"
+                                        onBlur={handleBlur}
+                                        className={`bg-background/50 border-border text-foreground focus:border-[var(--theme-primary)] ${fieldError('height') ? 'border-red-500 focus:border-red-500' : ''}`}
                                     />
+                                    {fieldError('height') && <p className="text-xs text-red-400">{fieldError('height')}</p>}
                                 </div>
                             </div>
                         </motion.div>
@@ -191,13 +221,14 @@ export function OnboardingForm({ coachSlug }: Props) {
 
                             <div className="space-y-2">
                                 <Label htmlFor="goals" className="text-muted-foreground">¿Cuál es tu objetivo principal?*</Label>
-                                <select 
-                                    id="goals" 
-                                    name="goals" 
+                                <select
+                                    id="goals"
+                                    name="goals"
                                     required
                                     value={formData.goals}
                                     onChange={handleInputChange}
-                                    className="flex h-10 w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+                                    onBlur={handleBlur}
+                                    className={`flex h-10 w-full rounded-md border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] ${fieldError('goals') ? 'border-red-500' : 'border-border'}`}
                                 >
                                     <option value="">Selecciona tu meta</option>
                                     <option value="Perder grasa">Perder grasa / Definición</option>
@@ -206,34 +237,38 @@ export function OnboardingForm({ coachSlug }: Props) {
                                     <option value="Mantenimiento general">Mantenimiento general / Salud</option>
                                     <option value="Rendimiento deportivo">Mejorar rendimiento deportivo</option>
                                 </select>
+                                {fieldError('goals') && <p className="text-xs text-red-400">{fieldError('goals')}</p>}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="experience_level" className="text-muted-foreground">Experiencia*</Label>
-                                    <select 
-                                        id="experience_level" 
-                                        name="experience_level" 
+                                    <select
+                                        id="experience_level"
+                                        name="experience_level"
                                         required
                                         value={formData.experience_level}
                                         onChange={handleInputChange}
-                                        className="flex h-10 w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+                                        onBlur={handleBlur}
+                                        className={`flex h-10 w-full rounded-md border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] ${fieldError('experience_level') ? 'border-red-500' : 'border-border'}`}
                                     >
                                         <option value="">Nivel</option>
                                         <option value="Principiante">Principiante</option>
                                         <option value="Intermedio">Intermedio</option>
                                         <option value="Avanzado">Avanzado</option>
                                     </select>
+                                    {fieldError('experience_level') && <p className="text-xs text-red-400">{fieldError('experience_level')}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="availability" className="text-muted-foreground">Días/semana*</Label>
-                                    <select 
-                                        id="availability" 
-                                        name="availability" 
+                                    <select
+                                        id="availability"
+                                        name="availability"
                                         required
                                         value={formData.availability}
                                         onChange={handleInputChange}
-                                        className="flex h-10 w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+                                        onBlur={handleBlur}
+                                        className={`flex h-10 w-full rounded-md border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] ${fieldError('availability') ? 'border-red-500' : 'border-border'}`}
                                     >
                                         <option value="">Días</option>
                                         <option value="2 días">2 días</option>
@@ -242,6 +277,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         <option value="5 días">5 días</option>
                                         <option value="6+ días">6+ días</option>
                                     </select>
+                                    {fieldError('availability') && <p className="text-xs text-red-400">{fieldError('availability')}</p>}
                                 </div>
                             </div>
                         </motion.div>
@@ -333,10 +369,9 @@ export function OnboardingForm({ coachSlug }: Props) {
                     )}
                     
                     {currentStep < 3 ? (
-                        <Button 
+                        <Button
                             type="button"
                             onClick={nextStep}
-                            disabled={!validateCurrentStep()}
                             className="flex-1 h-12 text-white bg-[var(--theme-primary)] hover:opacity-90 ml-auto"
                         >
                             Siguiente

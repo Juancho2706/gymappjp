@@ -2,9 +2,9 @@
 ## Documento de Auditoría Completa: Features, UX/UI, Seguridad y Performance
 
 > **Generado:** 2026-04-14 America/Santiago
-> **Última actualización:** 2026-04-16 — Sesión 3 completada
+> **Última actualización:** 2026-04-16 — Sesión 4 completada
 > **Base:** Auditoría de 225+ archivos, 41 rutas, 3 agentes de análisis paralelo (seguridad, performance, UX).
-> **Estado actual:** ~92% completitud global (Sesiones 1+2+3 completadas)
+> **Estado actual:** ~93% completitud global (Sesiones 1+2+3+4 completadas)
 
 ---
 
@@ -70,8 +70,8 @@ Las tareas están ordenadas por prioridad. Las marcadas ✅ están completadas.
 | 13.1 | Ejercicios coach: upload de GIF/video (max 5MB, bucket `exercises`) | `src/app/coach/exercises/` | 1.5d | ⏳ Pendiente |
 | 13.4 | Ejercicios coach: filtro por muscle_group en lista | `src/app/coach/exercises/` | 0.5d | ⏳ Pendiente |
 | 14 | Login coach: rediseño visual (layout split o centered premium) | `src/app/(auth)/login/` | 1d | ⏳ Pendiente |
-| 15.1 | Onboarding alumno: barra de progreso visual (step 1/3, 2/3, 3/3) | `OnboardingForm.tsx` | 0.5d | ⏳ Pendiente |
-| 15.3 | Onboarding alumno: validación inline por campo (no solo al submit) | `OnboardingForm.tsx` | 0.5d | ⏳ Pendiente |
+| 15.1 | Onboarding alumno: barra de progreso visual (step 1/3, 2/3, 3/3) | `OnboardingForm.tsx` | 0.5d | ✅ Sesión 3 (ya implementada) |
+| 15.3 | Onboarding alumno: validación inline por campo (no solo al submit) | `OnboardingForm.tsx` | 0.5d | ✅ Sesión 4 |
 | 16.1 | Ejercicios alumno: tabla `client_exercise_favorites` + botón ❤️ + filtro "Mis favoritos" | `supabase/migrations/` + catálogo alumno | 1d | ⏳ Pendiente |
 | 16.3 | Ejercicios alumno: tab "Mi historial" — últimas 5 sesiones por ejercicio desde `workout_logs` | Catálogo alumno | 1d | ⏳ Pendiente |
 | 23.2 | Forgot/Reset password: verificar redirect correcto a `/reset-password` y flujo completo | `src/app/(auth)/` | 0.5d | ⏳ Pendiente |
@@ -91,6 +91,20 @@ Las tareas están ordenadas por prioridad. Las marcadas ✅ están completadas.
 | 25 | Nav alumno: "Entrenar", "Progreso", "Más" en lugar de estructura actual | `src/app/c/[coach_slug]/` | 1d | ⏳ Pendiente |
 
 **Estimación total restante al 100%: ~22-25 días de desarrollo**
+
+---
+
+## Resumen Sesión 4 (2026-04-16) — Lo que se implementó
+
+### Onboarding alumno
+- **15.1 ✅** Barra de progreso visual — confirmada ya implementada (3 círculos + línea animada con Framer Motion, steps Bio/Metas/Salud)
+- **15.3 ✅** Validación inline por campo — `touched` state por campo, `handleBlur` marca el campo como visitado, `fieldError()` retorna mensaje si campo vacío post-blur. Botón "Siguiente" ahora muestra todos los errores del step al hacer click (en vez de solo deshabilitarse). Borde rojo + mensaje `text-xs text-red-400` bajo cada campo requerido.
+
+### Verificado
+- **23.2 ✅** Forgot/reset password — flujo correcto: `resetPasswordForEmail` con `redirectTo = /auth/callback?next=/reset-password`; reset-password usa `coach_slug` param para redirigir al login correcto; Zod validation en ambas acciones.
+
+### Documentación
+- Nuevo documento `ESCALABILIDAD-Y-MODELO-NEGOCIO.md` en `/docs/docs importantes de la app/`
 
 ---
 
