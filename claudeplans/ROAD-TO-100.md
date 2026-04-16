@@ -2,9 +2,9 @@
 ## Documento de Auditoría Completa: Features, UX/UI, Seguridad y Performance
 
 > **Generado:** 2026-04-14 America/Santiago
-> **Última actualización:** 2026-04-15 — Sesión 2 completada
+> **Última actualización:** 2026-04-16 — Sesión 3 completada
 > **Base:** Auditoría de 225+ archivos, 41 rutas, 3 agentes de análisis paralelo (seguridad, performance, UX).
-> **Estado actual:** ~89% completitud global (Sesiones 1+2 completadas)
+> **Estado actual:** ~92% completitud global (Sesiones 1+2+3 completadas)
 
 ---
 
@@ -36,7 +36,7 @@ Las tareas están ordenadas por prioridad. Las marcadas ✅ están completadas.
 | 04.1 | Auditar register action: slug generation, race condition duplicate check, redirect correcto con query params | `src/app/(auth)/register/` | 0.5d | ✅ Sesión 1 |
 | 04.2 | Processing page: si polling detecta `pending_payment` tras 5 min, mostrar "Hubo un problema" + link a `/coach/reactivate` | `src/app/coach/subscription/processing/page.tsx` | 0.5d | ✅ Sesión 1 |
 | 04.3 | Login bloqueado: verificar que cuando status es bloqueado el middleware redirige a `/coach/reactivate` con mensaje claro (no error genérico) | `src/middleware.ts` + `/coach/reactivate/` | 0.5d | ✅ Sesión 1 |
-| 04.4 | Banner trial: en dashboard, si `subscription_status === 'trialing'` y `trial_ends_at`, mostrar días restantes | `src/app/coach/dashboard/CoachDashboardClient.tsx` | 0.5d | ⏳ Pendiente |
+| 04.4 | Banner trial: en dashboard, si `subscription_status === 'trialing'` y `trial_ends_at`, mostrar días restantes | `src/app/coach/dashboard/CoachDashboardClient.tsx` | 0.5d | ✅ Sesión 3 (confirmado ya implementado) |
 | 05.2 | Historial de pagos: formatear fechas en español (`es-CL`), mostrar monto y estado de cada `subscription_event` | `src/app/coach/subscription/page.tsx` | 1d | ✅ Sesión 1 |
 | RLS | **CRÍTICO**: Habilitar RLS en todas las tablas del proyecto + políticas de ownership coach → datos propios | Supabase migrations | 2d | ✅ Sesión 1 (migración `20260414183000`) |
 
@@ -91,6 +91,29 @@ Las tareas están ordenadas por prioridad. Las marcadas ✅ están completadas.
 | 25 | Nav alumno: "Entrenar", "Progreso", "Más" en lugar de estructura actual | `src/app/c/[coach_slug]/` | 1d | ⏳ Pendiente |
 
 **Estimación total restante al 100%: ~22-25 días de desarrollo**
+
+---
+
+## Resumen Sesión 3 (2026-04-16) — Lo que se implementó
+
+### Bug Fixes críticos
+- **Fix ✅** 404 botón NUTRICION: `href="/coach/nutrition"` → `href="/coach/nutrition-plans"`
+- **Fix ✅** Sistema de colores verde/azul: `SYSTEM_PRIMARY_COLOR = '#007AFF'` en `brand-assets.ts`; `coach/layout.tsx` y `middleware.ts` usan el nuevo valor cuando `use_brand_colors_coach === false` (antes usaban `BRAND_PRIMARY_COLOR` verde #10B981)
+- **Fix ✅** NutritionModal ("Cumplimiento de Macros") responsive: `w-[95vw] sm:max-w-2xl md:max-w-4xl`, grid `2→4 cols`, header `flex-wrap`, `MacroItem` sin corte de texto
+- **Fix ✅** Emails legales: `opcoach49@gmail.com` → `contacto@eva-app.cl` en `/legal` y `/privacidad`
+
+### Confirmaciones
+- **04.4 ✅** Banner trial ya estaba implementado en `CoachDashboardClient.tsx` (líneas 207-228) — confirmado y documentado
+
+### Cuentas de prueba (Supabase)
+- Creadas 2 cuentas coach con plan **pro activo hasta 2026-05-16**:
+  - `Joaquinamr7@gmail.com` (slug: `joaquinamr7`)
+  - `robertocarrasco154@gmail.com` (slug: `robertocarrasco154`)
+  - Password provisional: `evaprueba123`, `max_clients: 50`
+
+### Build fixes (2026-04-15 — sesión previa en Cursor)
+- **Fix ✅** `database.types.ts`: reescrito de UTF-16 LE a UTF-8 (fix build Vercel "is not a module")
+- **Fix ✅** Tipos `video_start_time` y `video_end_time` añadidos a `exercises` en `database.types.ts`
 
 ---
 
@@ -259,7 +282,7 @@ Remover dependencias sin uso real.
 |-----------|------|-----------|----------|--------|
 | Pagos | Smoke test grace period + reactivar | 🔴 P0 | 0.5d | ⏳ |
 | DB | `supabase db push` (RLS + goal_weight_kg) | 🔴 P0 | — | ⏳ (usuario) |
-| Features | Banner trial en dashboard | 🟠 P1 | 0.5d | ⏳ |
+| Features | Banner trial en dashboard | 🟠 P1 | 0.5d | ✅ |
 | Features | Check-in medidas corporales | 🟠 P1 | 2d | ⏳ |
 | Features | Workout optimistic updates + retry + offline | 🟠 P1 | 2d | ⏳ |
 | UX | Onboarding barra progreso + validación inline | 🟡 P2 | 1d | ⏳ |
