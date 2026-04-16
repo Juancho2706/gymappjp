@@ -90,8 +90,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .eq('client_id', clientId)
         .order('assigned_date', { ascending: false })
 
-    // Fetch real payment history
-    const paymentsPromise = supabase
+    // Fetch real payment history (table not yet in generated types)
+    const paymentsPromise = (supabase as any)
         .from('client_payments')
         .select('*')
         .eq('client_id', clientId)
