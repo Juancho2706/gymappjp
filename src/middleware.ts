@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
-import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
+import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import {
     clientIpFromRequest,
     jsonRateLimited,
@@ -203,7 +203,7 @@ export async function middleware(request: NextRequest) {
             response.headers.set('x-client-use-brand-colors', String(useBrandColors))
 
             if (!useBrandColors) {
-                response.headers.set('x-coach-primary-color', BRAND_PRIMARY_COLOR)
+                response.headers.set('x-coach-primary-color', SYSTEM_PRIMARY_COLOR)
             }
 
             // Suspend access if inactive

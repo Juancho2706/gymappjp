@@ -256,7 +256,7 @@ export default function CoachDashboardClient({
                         </Link>
                     </GlassButton>
                     <GlassButton asChild variant="ghost" className="w-full sm:w-auto">
-                        <Link href="/coach/nutrition">
+                        <Link href="/coach/nutrition-plans">
                             <Utensils className="w-4 h-4 mr-2" />
                             NUTRICION
                         </Link>
@@ -639,49 +639,51 @@ function AdherenceModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: (
 function NutritionModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: () => void, data: any[] }) {
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+            <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-2xl md:max-w-4xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 p-4 sm:p-6">
                 <DialogHeader>
-                    <DialogTitle className="text-2xl font-black tracking-tighter uppercase font-display flex items-center gap-3 text-foreground">
-                        <Apple className="w-6 h-6 text-emerald-500" />
+                    <DialogTitle className="text-lg sm:text-2xl font-black tracking-tighter uppercase font-display flex items-center gap-2 text-foreground">
+                        <Apple className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-500 shrink-0" />
                         Monitoreo de Nutrición Real-Time
                     </DialogTitle>
-                    <DialogDescription className="text-muted-foreground">Comparativa entre el plan asignado y el consumo reportado hoy.</DialogDescription>
+                    <DialogDescription className="text-muted-foreground text-xs sm:text-sm">Comparativa entre el plan asignado y el consumo reportado hoy.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
                     {data.length === 0 ? (
                         <div className="py-10 text-center text-muted-foreground uppercase font-black text-xs tracking-widest">
                             No hay reportes de nutrición para hoy
                         </div>
                     ) : data.map((stat) => (
-                        <div key={stat.clientId} className="p-6 rounded-2xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/5 space-y-5 shadow-sm dark:shadow-none">
-                            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-4">
-                                <div className="space-y-1">
-                                    <h4 className="font-black text-xl text-foreground uppercase tracking-tight">{stat.clientName}</h4>
-                                    <div className="flex items-center gap-3">
-                                        <Badge variant="outline" className="text-[10px] uppercase font-black py-0 border-primary/20 bg-primary/5 text-primary" style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
+                        <div key={stat.clientId} className="p-4 sm:p-5 rounded-2xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/5 space-y-4 shadow-sm dark:shadow-none">
+                            {/* Client header */}
+                            <div className="flex flex-wrap items-start justify-between gap-y-2 gap-x-3 border-b border-zinc-200 dark:border-white/10 pb-3">
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                    <h4 className="font-black text-base sm:text-lg text-foreground uppercase tracking-tight truncate">{stat.clientName}</h4>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="outline" className="text-[10px] uppercase font-black py-0 max-w-[140px] truncate" style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}>
                                             {stat.lastPlan}
                                         </Badge>
-                                        <div className="flex items-center gap-1.5 text-emerald-500 font-black text-[10px] uppercase tracking-widest">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                            {stat.percentage}% Adherencia Hoy
+                                        <div className="flex items-center gap-1 text-emerald-500 font-black text-[10px] uppercase tracking-wider whitespace-nowrap">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                                            {stat.percentage}% Adherencia
                                         </div>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className="text-2xl font-black text-foreground tabular-nums">{Math.round(stat.consumed.cal)}</div>
+                                <div className="text-right shrink-0">
+                                    <div className="text-xl sm:text-2xl font-black text-foreground tabular-nums">{Math.round(stat.consumed.cal)}</div>
                                     <div className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Kcal Consumidas</div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            {/* Macros grid — 2 cols on mobile, 4 on md+ */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
                                 <MacroItem label="Calorías" consumed={stat.consumed.cal} target={stat.target.cal} unit="kcal" color="text-primary" />
                                 <MacroItem label="Proteína" consumed={stat.consumed.prot} target={stat.target.prot} unit="g" color="text-rose-500" />
                                 <MacroItem label="Carbs" consumed={stat.consumed.carb} target={stat.target.carb} unit="g" color="text-amber-500" />
                                 <MacroItem label="Grasas" consumed={stat.consumed.fat} target={stat.target.fat} unit="g" color="text-emerald-500" />
                             </div>
 
-                            <div className="pt-2 flex justify-end">
-                                <Link href={`/coach/clients/${stat.clientId}`} className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all" style={{ color: 'var(--theme-primary)' }}>
+                            <div className="pt-1 flex justify-end">
+                                <Link href={`/coach/clients/${stat.clientId}`} className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all" style={{ color: 'var(--theme-primary)' }}>
                                     Ver Historial Completo <ArrowRight className="w-3 h-3" />
                                 </Link>
                             </div>
@@ -696,19 +698,17 @@ function NutritionModal({ isOpen, onClose, data }: { isOpen: boolean, onClose: (
 function MacroItem({ label, consumed, target, unit, color }: { label: string, consumed: number, target: number, unit: string, color: string }) {
     const percentage = target > 0 ? Math.min(Math.round((consumed / target) * 100), 100) : 0
     return (
-        <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{label}</span>
-                <span className={`text-[11px] font-black ${color} tabular-nums`}>{Math.round(consumed)} {unit}</span>
-            </div>
-            <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                <div 
-                    className={`h-full transition-all duration-700 ease-out ${color.replace('text-', 'bg-')}`} 
+        <div className="space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">{label}</span>
+            <span className={`text-sm font-black ${color} tabular-nums block`}>{Math.round(consumed)} {unit}</span>
+            <div className="h-1.5 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                    className={`h-full transition-all duration-700 ease-out ${color.replace('text-', 'bg-')}`}
                     style={{ width: `${percentage}%` }}
                 />
             </div>
             <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter opacity-70">
-                Objetivo: {Math.round(target)}{unit}
+                Obj: {Math.round(target)}{unit}
             </div>
         </div>
     )

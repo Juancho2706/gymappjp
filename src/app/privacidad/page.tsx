@@ -55,7 +55,7 @@ export default function PrivacidadPage() {
                   <br /><br />
                   <strong>Nombre:</strong> EVA
                   <br />
-                  <strong>Contacto:</strong> opcoach49@gmail.com
+                  <strong>Contacto:</strong> contacto@eva-app.cl
                 </p>
               </section>
 

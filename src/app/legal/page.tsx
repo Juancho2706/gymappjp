@@ -56,7 +56,7 @@ export default function AvisoLegalPage() {
                   <br /><br />
                   <strong>Nombre de la empresa / Titular:</strong> EVA
                   <br />
-                  <strong>Correo electrónico de contacto:</strong> opcoach49@gmail.com
+                  <strong>Correo electrónico de contacto:</strong> contacto@eva-app.cl
                   <br />
                   <strong>País/Jurisdicción:</strong> CHILE
                 </p>
