@@ -23,6 +23,8 @@ type FoodRow = {
   fats_g: number
   coach_id: string | null
   category?: string | null
+  is_liquid?: boolean | null
+  brand?: string | null
 }
 
 interface Props {
@@ -43,11 +45,12 @@ const CATEGORIES = [
   { id: 'snack', label: 'Snack' },
 ]
 
-/** Normaliza unidades legacy a las dos unidades canónicas: 'g' o 'un' */
-function normalizeUnit(raw: string | null | undefined): 'g' | 'un' {
+/** Normaliza unidades legacy a las tres unidades canónicas: 'g', 'ml' o 'un' */
+function normalizeUnit(raw: string | null | undefined): 'g' | 'ml' | 'un' {
   const u = (raw ?? 'g').toLowerCase().trim()
   if (u === 'un' || u === 'unidades' || u === 'unidad' || u === 'porción' || u === 'porciones') return 'un'
-  return 'g' // g, ml, gr, cda, cdta, taza → gramos
+  if (u === 'ml') return 'ml'
+  return 'g' // g, gr, cda, cdta, taza → gramos
 }
 
 function normalizeCategory(raw: string | null | undefined): string {
@@ -77,6 +80,8 @@ function toFoodDraftShape(f: FoodRow): FoodItemDraft['food'] {
     fats_g: f.fats_g,
     serving_size: f.serving_size,
     serving_unit: f.serving_unit ?? 'g',
+    is_liquid: f.is_liquid ?? false,
+    brand: f.brand ?? null,
   }
 }
 
@@ -87,7 +92,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
   const [category, setCategory] = useState('todos')
   const [picked, setPicked] = useState<FoodRow | null>(null)
   const [quantity, setQuantity] = useState('100')
-  const [unit, setUnit] = useState<'g' | 'un'>('g')
+  const [unit, setUnit] = useState<'g' | 'ml' | 'un'>('g')
 
   useEffect(() => {
     if (!open) {
@@ -96,7 +101,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
       setLoading(false)
       setPicked(null)
       setQuantity('100')
-      setUnit('g')
+      setUnit('g' as 'g' | 'ml' | 'un')
       setCategory('todos')
     }
   }, [open])
@@ -217,14 +222,17 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                     type="button"
                     onClick={() => {
                       setPicked(f)
-                      setUnit(normalizeUnit(f.serving_unit))
-                      setQuantity(String(f.serving_size || 100))
+                      const defaultUnit = f.is_liquid ? 'ml' : normalizeUnit(f.serving_unit)
+                      setUnit(defaultUnit)
+                      setQuantity(String(f.serving_size || (f.is_liquid ? 200 : 100)))
                     }}
                     className="w-full text-left rounded-xl border border-border p-3 hover:bg-muted/40 transition-colors"
                   >
                     <p className="font-bold text-sm">{f.name}</p>
                     <p className="text-[10px] text-muted-foreground mt-1">
+                      {f.brand && <span className="font-medium">{f.brand} · </span>}
                       {f.calories} kcal · P{f.protein_g} C{f.carbs_g} G{f.fats_g}
+                      {f.is_liquid && <span className="ml-1 text-blue-500">· ml</span>}
                     </p>
                   </button>
                 ))}
@@ -249,7 +257,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                 <div>
                   <Label>Unidad</Label>
                   <div className="flex rounded-lg border border-border overflow-hidden mt-1">
-                    {(['g', 'un'] as const).map((u) => (
+                    {(picked?.is_liquid ? (['ml', 'un'] as const) : (['g', 'un'] as const)).map((u) => (
                       <button
                         key={u}
                         type="button"
@@ -261,7 +269,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                             : 'bg-transparent text-muted-foreground hover:bg-muted/40'
                         )}
                       >
-                        {u}
+                        {u === 'un' && picked?.is_liquid ? `un (${picked.serving_size ?? 200}ml)` : u}
                       </button>
                     ))}
                   </div>

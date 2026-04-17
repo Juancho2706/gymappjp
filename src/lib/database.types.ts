@@ -568,36 +568,42 @@ export type Database = {
       }
       foods: {
         Row: {
+          brand: string | null
           calories: number
           carbs_g: number
           category: string | null
           coach_id: string | null
           fats_g: number
           id: string
+          is_liquid: boolean
           name: string
           protein_g: number
           serving_size: number
           serving_unit: string | null
         }
         Insert: {
+          brand?: string | null
           calories: number
           carbs_g: number
           category?: string | null
           coach_id?: string | null
           fats_g: number
           id?: string
+          is_liquid?: boolean
           name: string
           protein_g: number
           serving_size: number
           serving_unit?: string | null
         }
         Update: {
+          brand?: string | null
           calories?: number
           carbs_g?: number
           category?: string | null
           coach_id?: string | null
           fats_g?: number
           id?: string
+          is_liquid?: boolean
           name?: string
           protein_g?: number
           serving_size?: number
@@ -1476,12 +1482,14 @@ export type Database = {
       search_foods: {
         Args: { search_term: string }
         Returns: {
+          brand: string | null
           calories: number
           carbs_g: number
           category: string | null
           coach_id: string | null
           fats_g: number
           id: string
+          is_liquid: boolean
           name: string
           protein_g: number
           serving_size: number

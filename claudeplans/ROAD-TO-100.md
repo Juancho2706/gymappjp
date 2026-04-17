@@ -2,9 +2,9 @@
 ## Documento de Auditoría Completa: Features, UX/UI, Seguridad y Performance
 
 > **Generado:** 2026-04-14 America/Santiago
-> **Última actualización:** 2026-04-16 — Sesión 4 completada
+> **Última actualización:** 2026-04-16 — Sesión 5 completada
 > **Base:** Auditoría de 225+ archivos, 41 rutas, 3 agentes de análisis paralelo (seguridad, performance, UX).
-> **Estado actual:** ~93% completitud global (Sesiones 1+2+3+4 completadas)
+> **Estado actual:** ~94% completitud global (Sesiones 1+2+3+4+5 completadas)
 
 ---
 
@@ -39,6 +39,20 @@ Las tareas están ordenadas por prioridad. Las marcadas ✅ están completadas.
 | 04.4 | Banner trial: en dashboard, si `subscription_status === 'trialing'` y `trial_ends_at`, mostrar días restantes | `src/app/coach/dashboard/CoachDashboardClient.tsx` | 0.5d | ✅ Sesión 3 (confirmado ya implementado) |
 | 05.2 | Historial de pagos: formatear fechas en español (`es-CL`), mostrar monto y estado de cada `subscription_event` | `src/app/coach/subscription/page.tsx` | 1d | ✅ Sesión 1 |
 | RLS | **CRÍTICO**: Habilitar RLS en todas las tablas del proyecto + políticas de ownership coach → datos propios | Supabase migrations | 2d | ✅ Sesión 1 (migración `20260414183000`) |
+
+## BLOQUE P1.5 — BD Alimentos Chilenos (Sesión 5)
+
+| ID | Tarea | Archivo | Estado |
+|----|-------|---------|--------|
+| N1.1 | Migración `is_liquid` + `brand` en tabla `foods` | `supabase/migrations/20260416120000_add_liquid_and_brand_support.sql` | ✅ Sesión 5 |
+| N1.2 | Líquidos marcados con `is_liquid=true`, `serving_unit='ml'`, `serving_size=200` | Migración aplicada en Supabase | ✅ Sesión 5 |
+| N1.3 | Script auditoría USDA FoodData Central para alimentos frescos | `scripts/audit-fresh-foods.mjs` | ✅ Sesión 5 |
+| N1.4 | Script fetch productos de marca chilena (OpenFoodFacts) | `scripts/fetch-chilean-branded-foods.mjs` | ✅ Sesión 5 |
+| N1.5 | Script generador de migración desde CSV revisado por coach | `scripts/generate-branded-migration.mjs` | ✅ Sesión 5 |
+| N1.6 | UI FoodSearchDrawer: unidad 'ml' para líquidos, 'g' para sólidos | `FoodSearchDrawer.tsx` + `FoodItemRow.tsx` | ✅ Sesión 5 |
+| N1.7 | Obtener USDA API key + ejecutar auditoría frescos | Manual + `node scripts/audit-fresh-foods.mjs` | ⏳ Pendiente (usuario) |
+| N1.8 | Ejecutar fetch OpenFoodFacts + revisar CSV con coach | Manual + `node scripts/fetch-chilean-branded-foods.mjs` | ⏳ Pendiente (usuario) |
+| N1.9 | Aprobar CSV (columna APROBADO=S) + generar migración de marca | Manual + `node scripts/generate-branded-migration.mjs` | ⏳ Pendiente (usuario) |
 
 ## BLOQUE P2 — Core Loop Polish
 
@@ -91,6 +105,39 @@ Las tareas están ordenadas por prioridad. Las marcadas ✅ están completadas.
 | 25 | Nav alumno: "Entrenar", "Progreso", "Más" en lugar de estructura actual | `src/app/c/[coach_slug]/` | 1d | ⏳ Pendiente |
 
 **Estimación total restante al 100%: ~22-25 días de desarrollo**
+
+---
+
+## Resumen Sesión 5 (2026-04-16) — Lo que se implementó
+
+### Base de datos de alimentos — Auditoría nutricional + soporte de líquidos
+
+**Motivación:** Coach detectó inconsistencias en valores nutricionales. Productos de marca chilena (Colún, Quaker, Soprole) no existían en la base. Líquidos como la leche usaban `g` en lugar de `ml`, lo que confundía a usuarios y coaches.
+
+**Schema (migración `20260416120000_add_liquid_and_brand_support.sql`):**
+- Columna `is_liquid boolean NOT NULL DEFAULT false` añadida a `foods`
+- Columna `brand text` añadida a `foods` (para mostrar "Colún", "Quaker", etc.)
+- Todos los alimentos de categoría `'bebida'` + nombres con `leche%`, `jugo%`, `caldo%`, `kombucha`, `kéfir` marcados como `is_liquid=true`, `serving_unit='ml'`, `serving_size=200`
+- Excepciones (queso, crema, helado) revertidas a `'g'`
+
+**Scripts de auditoría nutricional (en `scripts/`):**
+- `audit-fresh-foods.mjs` — compara ~250 alimentos frescos contra USDA FoodData Central API. Genera `fresh-foods-audit.md` + `fresh-foods-corrections.sql` (solo ítems con delta > 10%)
+- `fetch-chilean-branded-foods.mjs` — busca productos de marca en OpenFoodFacts filtrando por país Chile. Genera `branded-foods-review.csv` con 30+ búsquedas (avenas, leches, proteínas, panes, snacks). El coach revisa y marca `APROBADO=S`
+- `generate-branded-migration.mjs` — lee el CSV aprobado y genera la migración SQL final con los productos de marca
+
+**UI (food picker):**
+- `FoodSearchDrawer.tsx` — `normalizeUnit` ahora retorna `'ml'` para líquidos. Al seleccionar un líquido, unidad default = 'ml', cantidad default = serving_size. Selector unidades: `[ml, un]` para líquidos, `[g, un]` para sólidos. Badge `ml` azul en resultado de búsqueda
+- `FoodItemRow.tsx` — `UNITS_SOLID = ['g', 'un']` y `UNITS_LIQUID = ['ml', 'un']`. Muestra brand name si existe
+- `types.ts` — `FoodItemDraft.food` incluye `is_liquid` y `brand`
+- `nutrition-coach.queries.ts` — `getFoodLibrary` y `getCoachFoodsCatalog` ahora retornan `is_liquid` y `brand`
+
+**Tipos regenerados:** `database.types.ts` actualizado con `is_liquid: boolean` y `brand: string | null` en `foods.Row/Insert/Update` y función `search_foods`
+
+**Próximos pasos (usuario):**
+1. Obtener USDA API key gratis en `fdc.nal.usda.gov/api-key-signup.html` → `USDA_API_KEY` en `.env.local`
+2. `node scripts/audit-fresh-foods.mjs` → revisar `scripts/output/fresh-foods-audit.md` → aplicar correcciones si delta > 10%
+3. `node scripts/fetch-chilean-branded-foods.mjs` → revisar CSV con el coach → marcar `APROBADO=S`
+4. `node scripts/generate-branded-migration.mjs` → aplicar migración generada con `supabase db push`
 
 ---
 
@@ -251,7 +298,7 @@ Migración `20260414183000_superseded_preapproval_and_rls.sql` cubre 24 tablas c
 # 4. Performance
 
 ## ✅ SELECT * → columnas específicas — solucionado
-`getFoodLibrary()` y `getCoachFoodsCatalog()` ahora especifican columnas exactas (`id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id`).
+`getFoodLibrary()` y `getCoachFoodsCatalog()` ahora especifican columnas exactas (`id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id, is_liquid, brand`).
 
 ## ✅ loading.tsx — 6 nuevos creados (Sesión 1)
 `/coach/builder/[clientId]/`, `/coach/meals/`, `/coach/nutrition-plans/[templateId]/edit/`, `/coach/nutrition-plans/new/`, `/coach/recipes/`, `/coach/workout-programs/builder/`

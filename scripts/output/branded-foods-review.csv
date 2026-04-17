@@ -1,0 +1,45 @@
+nombre_openff,marca,calorias_100,proteina_100,carbos_100,grasas_100,serving_size,serving_unit,categoria,barcode,url_imagen,APROBADO,nombre_app,notas
+Avena cocida (porridge),Quaker,71.0,2.5,12.1,1.5,250,g,carbohidrato,,,S,Avena cocida,100g de avena cocida en agua. Valores tipicos porridge.
+Avena instantanea seca,Quaker,367.0,12.5,62.6,6.9,40,g,carbohidrato,,,S,Avena instantánea Quaker,100g avena seca Quaker. Serving = 1 sobre/porcion 40g.
+Corn Flakes,Kelloggs,375.0,7.5,84.0,0.9,30,g,carbohidrato,,,S,Corn Flakes Kellogg's,100g cereal. Serving = 30g (tazon pequeño).
+Cereal Integral Fitness,Nestle,378.0,10.0,74.0,3.0,30,g,carbohidrato,,,S,Cereal Integral Nestlé Fitness,100g cereal integral. Serving = 30g.
+Granola,Kelloggs,396.0,8.0,71.0,9.0,45,g,snack,,,S,Granola,100g granola clasica. Serving = 45g.
+Muesli,Generico,352.0,10.0,65.0,6.0,45,g,carbohidrato,,,S,Muesli,100g muesli con frutas secas. Serving = 45g.
+Mi leche entera,Colun,59.0,3.1,4.6,3.1,200,ml,lacteo,7802920777542,https://images.openfoodfacts.org/images/products/780/292/077/7542/front_es.23.200.jpg,S,Leche entera Colún,Datos validados OpenFoodFacts. 59 cal/100ml es correcto leche entera.
+Leche entera en polvo,Colun,117.0,6.0,9.1,6.2,200,ml,lacteo,7802920009858,https://images.openfoodfacts.org/images/products/780/292/000/9858/front_en.3.200.jpg,N,,Polvo reconstituido - distinto producto. No incluir.
+Mi LECHE SEMIDESCREMADA,COLUN,42.0,3.2,4.6,1.2,200,ml,lacteo,7802920000091,https://images.openfoodfacts.org/images/products/780/292/000/0091/front_es.26.200.jpg,S,Leche semidescremada Colún,Datos validados OpenFoodFacts. 42 cal/100ml es correcto leche semidescremada.
+Leche semidescremada con chocolate,Colun,78.0,3.1,12.8,1.6,200,ml,lacteo,7802920007120,https://images.openfoodfacts.org/images/products/780/292/000/7120/front_fr.3.200.jpg,N,,Sabor chocolate - distinto producto
+Mi leche natural semidescremada No Reconstituida,COLUN,45.0,3.2,4.6,1.5,200,ml,lacteo,7802920007410,https://images.openfoodfacts.org/images/products/780/292/000/7410/front_en.7.200.jpg,N,,Duplicado - usar Mi LECHE SEMIDESCREMADA
+LECHE SEMIDESCREMADA CHOCOLATE Original,COLUN,78.0,3.1,12.8,1.6,200,ml,lacteo,7802920007182,https://images.openfoodfacts.org/images/products/780/292/000/7182/front_es.20.200.jpg,N,,Sabor chocolate - distinto producto
+Leche semidescremada chocolate,Colun,47.0,3.2,5.6,1.3,200,ml,lacteo,0801354378414,https://images.openfoodfacts.org/images/products/080/135/437/8414/front_es.8.200.jpg,N,,Sabor chocolate - distinto producto
+[buscar manualmente: leche descremada],,,,,,200,ml,lacteo,,,N,,Ver fila siguiente con datos OpenFoodFacts
+Leche natural descremada,Colún,33.0,3.3,4.7,0.1,200,ml,lacteo,7802920009339,https://images.openfoodfacts.org/images/products/780/292/000/9339/front_es.15.200.jpg,S,Leche descremada Colún,Datos validados OpenFoodFacts. 33 cal/100ml correcto leche descremada.
+leche,Colun,42.0,3.2,4.6,1.2,200,ml,lacteo,7802920009322,https://images.openfoodfacts.org/images/products/780/292/000/9322/front_es.14.200.jpg,N,,Duplicado de semidescremada
+yoghurt Ligh sin lactosa,Colun,53.0,4.5,8.5,0.1,200,ml,lacteo,7802920007366,https://images.openfoodfacts.org/images/products/780/292/000/7366/front_es.4.200.jpg,N,,Es yogurt no leche - agregar en otra sesion
+Colun sin lactosa,Colun,32.0,3.3,4.6,0.1,200,ml,lacteo,7802920009636,https://images.openfoodfacts.org/images/products/780/292/000/9636/front_es.15.200.jpg,S,Leche sin lactosa Colún,Datos validados. 32 cal/100ml leche descremada sin lactosa. Carbs 4.6g correcto.
+Leche descremada sin lactosa,Colun,32.0,3.3,0.1,0.1,200,ml,lacteo,7802920007403,https://images.openfoodfacts.org/images/products/780/292/000/7403/front_en.3.200.jpg,N,,Datos sospechosos: 0.1g carbs en leche sin lactosa es incorrecto (deberia ser ~4.5g)
+Yogur natural,Soprole,64.0,3.8,6.0,2.5,150,g,lacteo,,,S,Yogur natural Soprole,Valores tipicos yogur natural entero. Soprole es marca lider en Chile.
+Yogur griego,Yoplait,97.0,7.0,4.0,5.0,150,g,lacteo,,,S,Yogur griego Yoplait,Valores tipicos yogur griego. Yoplait disponible en Jumbo/Lider.
+Queso cottage,Soprole,98.0,11.0,3.5,4.5,100,g,lacteo,,,S,Queso cottage Soprole,Valores tipicos queso cottage. Soprole es la marca principal en Chile.
+Queso Gauda,Colun,356.0,26.0,1.0,28.0,30,g,lacteo,,,S,Queso Gauda Colún,Valores tipicos queso gauda semiduro. Serving = 1 tajada aprox 30g.
+Queso mantecoso,Colun,330.0,23.0,2.0,26.0,30,g,lacteo,,,S,Queso mantecoso Colún,Valores tipicos queso mantecoso chileno. Serving = 1 tajada aprox 30g.
+Whey Protein Gold Standard,Optimum Nutrition,389.0,80.0,6.0,4.0,30,g,snack,,,S,Whey Protein ON Gold Standard,ON Gold Standard es el whey mas vendido en Chile (Mercado Libre/GNC). Serving = 1 scoop 30g.
+Proteina de suero genérica,,385.0,75.0,8.0,5.0,30,g,snack,,,N,,Duplicado - usar Whey Protein ON Gold Standard arriba
+Caseina Gold Standard,Optimum Nutrition,370.0,74.0,10.0,4.0,30,g,snack,,,S,Caseína ON Gold Standard,Proteina de digestion lenta. ON Gold Casein disponible en Chile. Serving = 1 scoop 30g.
+Proteina Vegana,Garden of Life,360.0,72.0,8.0,6.0,30,g,snack,,,S,Proteína Vegana Garden of Life,Proteina vegetal certificada organica. Serving = 1 scoop 30g.
+Creatina monohidrato,Generico,0.0,0.0,0.0,0.0,5,g,snack,,,S,Creatina monohidrato,Creatina pura sin calorias ni macros relevantes. Serving = 5g (1 cucharadita).
+Pan de molde integral,Bimbo,247.0,9.0,44.0,4.0,25,un,carbohidrato,,,S,Pan integral Bimbo,Pan Bimbo integral disponible en todos los supermercados chilenos. Serving = 1 rebanada 25g.
+Pan de molde blanco,Ideal,265.0,8.0,50.0,3.0,25,un,carbohidrato,,,S,Pan blanco Ideal,Pan Ideal blanco clasico. Serving = 1 rebanada 25g.
+Pan pita,Generico,275.0,9.0,56.0,1.0,60,un,carbohidrato,,,S,Pan pita,Pan pita disponible en supermercados. Serving = 1 unidad aprox 60g.
+Tostadas integrales crispbread,Wasa,342.0,11.0,68.0,3.0,11,un,carbohidrato,,,S,Tostadas integrales Wasa,Wasa disponible en Jumbo/Santa Isabel. Serving = 1 tostada 11g.
+MANTEQUILLA DE MANI Natural,piwén,585.0,26.0,10.0,49.0,32,g,grasa,0260301401202,https://images.openfoodfacts.org/images/products/026/030/140/1202/front_es.4.200.jpg,N,,Usar Puri (mas conocida en Chile)
+Puri Mantequilla De Mani,Puri,586.7,26.0,10.0,49.3,32,g,grasa,7804660620294,https://images.openfoodfacts.org/images/products/780/466/062/0294/front_it.4.200.jpg,S,Mantequilla de maní Puri,Datos OpenFoodFacts. Puri es marca chilena clasica. Macros correctos para mantequilla natural.
+Mantequilla De Mani,El Buho,612.5,21.9,20.0,50.0,32,g,grasa,7804660694028,https://images.openfoodfacts.org/images/products/780/466/069/4028/front_es.3.200.jpg,N,,Usar Puri
+PEANUT BUTTER CRUNCHY Great Value,Great Value,600.0,25.0,20.0,50.0,32,g,grasa,0400006967992,https://images.openfoodfacts.org/images/products/040/000/696/7992/front_en.8.200.jpg,N,,Marca USA - no chilena
+MANTEQUILLA DE MANÍ,manare.,606.0,25.0,14.0,50.0,32,g,grasa,7804651860456,https://images.openfoodfacts.org/images/products/780/465/186/0456/front_es.11.200.jpg,N,,Usar Puri
+Mantequilla de almendras,Generico,614.0,21.0,22.0,56.0,32,g,grasa,,,S,Mantequilla de almendras,Valores tipicos mantequilla de almendras natural. Serving = 1 cda 32g.
+Barra proteica Quest,Quest,317.0,35.0,42.0,13.0,60,un,snack,,,S,Barra proteica Quest,Quest Bar disponible en GNC Chile / Mercado Libre. 60g barra = 190cal. Macros por 100g calculados.
+Atun en lata al agua,Van Camps,116.0,26.0,0.0,1.0,80,g,proteina,,,S,Atún en lata al agua,Van Camps disponible en todos los supers chilenos. Serving = 1 lata chica 80g aprox.
+Salmon enlatado al agua,Generico,139.0,19.8,0.0,6.5,80,g,proteina,,,S,Salmón enlatado,Salmon rosado enlatado en agua. Chile es productor. Serving = 80g aprox.
+Arroz blanco cocido,Generico,130.0,2.7,28.0,0.3,150,g,carbohidrato,,,S,Arroz blanco cocido,Arroz de grano largo cocido en agua sin sal. Serving = 1 taza aprox 150g.
+Pasta cocida,Lucchetti,158.0,5.8,31.0,0.9,200,g,carbohidrato,,,S,Pasta cocida,Pasta de semola cocida al dente. Lucchetti es marca local. Serving = 1 porcion 200g.

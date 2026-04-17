@@ -253,7 +253,7 @@ export const getFoodLibrary = cache(async (coachId: string, options: FoodLibrary
 
   let query = supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id', { count: 'exact' })
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id, is_liquid, brand', { count: 'exact' })
     .or(`coach_id.is.null,coach_id.eq.${coachId}`)
     .order('coach_id', { ascending: false })
     .order('name')
@@ -393,7 +393,7 @@ export const getCoachFoodsCatalog = cache(async (coachId: string) => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id, is_liquid, brand')
     .or(`coach_id.eq.${coachId},coach_id.is.null`)
     .order('name')
   return data ?? []

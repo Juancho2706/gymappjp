@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/select'
 import type { FoodItemDraft } from './types'
 
-const UNITS = ['g', 'ml', 'un', 'cda', 'cdta', 'taza', 'porción']
+const UNITS_SOLID = ['g', 'un']
+const UNITS_LIQUID = ['ml', 'un']
 
 interface Props {
   item: FoodItemDraft
@@ -21,10 +22,16 @@ interface Props {
 }
 
 export function FoodItemRow({ item, onUpdate, onRemove }: Props) {
+  const units = item.food.is_liquid ? UNITS_LIQUID : UNITS_SOLID
+  const defaultUnit = item.food.is_liquid ? 'ml' : 'g'
+
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
       <span className="flex-1 min-w-[120px] text-sm font-semibold text-foreground truncate">
         {item.food.name}
+        {item.food.brand && (
+          <span className="ml-1 text-[10px] font-normal text-muted-foreground">{item.food.brand}</span>
+        )}
       </span>
       <Input
         type="number"
@@ -32,17 +39,17 @@ export function FoodItemRow({ item, onUpdate, onRemove }: Props) {
         step="any"
         className="h-9 w-20 font-mono text-sm"
         value={item.quantity}
-        onChange={(e) => onUpdate(Number(e.target.value), item.unit ?? 'g')}
+        onChange={(e) => onUpdate(Number(e.target.value), item.unit ?? defaultUnit)}
       />
       <Select
-        value={item.unit ?? 'g'}
-        onValueChange={(u) => onUpdate(item.quantity, u == null ? 'g' : u)}
+        value={item.unit ?? defaultUnit}
+        onValueChange={(u) => onUpdate(item.quantity, u == null ? defaultUnit : u)}
       >
         <SelectTrigger className="h-9 w-[100px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {UNITS.map((u) => (
+          {units.map((u) => (
             <SelectItem key={u} value={u}>
               {u}
             </SelectItem>

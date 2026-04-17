@@ -8,6 +8,8 @@ export interface FoodItemDraft {
     fats_g: number
     serving_size: number
     serving_unit: string
+    is_liquid?: boolean | null
+    brand?: string | null
   }
   quantity: number
   unit: string

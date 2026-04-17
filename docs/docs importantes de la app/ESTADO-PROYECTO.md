@@ -7,7 +7,32 @@
 - Ambos documentos deben mantenerse **al día con el trabajo del día** cuando haya cambios sustanciales.
 - Incluir **fecha y hora** en **America/Santiago** en la línea **Última actualización** inferior (formato: `YYYY-MM-DD HH:mm`).
 
-**Última actualización:** 2026-04-16 America/Santiago — **Sprint 9/10 — RLS, analytics dashboard coach, goal weight, dots DayNavigator, seguridad, build fix UTF-8, color system fix, modal responsive macros, 404 nav fix, emails legales.**
+**Última actualización:** 2026-04-16 America/Santiago — **Sprint 9/10+Sesión 5 — BD Alimentos: is_liquid, brand, soporte ml, scripts auditoría USDA + OpenFoodFacts Chile, UI food picker con ml para líquidos.**
+
+---
+
+## Actualización incremental (Sesión 5 — 2026-04-16 — BD Alimentos + Líquidos)
+
+### BD Alimentos — Auditoría nutricional + soporte ml para líquidos
+
+- **Schema:** `foods` table +2 columnas: `is_liquid boolean NOT NULL DEFAULT false` + `brand text`. Migración `20260416120000_add_liquid_and_brand_support.sql` aplicada vía MCP.
+- **Datos:** Todos los alimentos con `category='bebida'` y nombres que implican líquido (`leche`, `jugo`, `caldo`, `kombucha`, `kéfir`) actualizados a `is_liquid=true`, `serving_unit='ml'`, `serving_size=200`. Excepciones (`queso`, `crema`, `helado`) explícitamente en `'g'`.
+- **Scripts de auditoría nutricional** (en `scripts/`):
+  - `audit-fresh-foods.mjs` — consulta USDA FoodData Central API para alimentos frescos, genera reporte comparativo y SQL de correcciones.
+  - `fetch-chilean-branded-foods.mjs` — busca en OpenFoodFacts productos de marca disponibles en supermercados chilenos (Quaker, Colún, Soprole, Bimbo, etc.), genera CSV para revisión del coach.
+  - `generate-branded-migration.mjs` — convierte el CSV revisado (APROBADO=S) en migración SQL.
+- **UI food picker:**
+  - `FoodSearchDrawer.tsx`: `normalizeUnit` soporta 'ml'; selector de unidades `[ml, un]` para líquidos, `[g, un]` para sólidos; badge visual "ml" en búsqueda.
+  - `FoodItemRow.tsx`: `UNITS_SOLID/UNITS_LIQUID` separados; muestra brand name cuando existe.
+  - `types.ts` (`FoodItemDraft`): añadidos `is_liquid` y `brand`.
+  - `nutrition-coach.queries.ts`: `getFoodLibrary` y `getCoachFoodsCatalog` incluyen `is_liquid` y `brand`.
+- **Tipos:** `database.types.ts` actualizado: `foods.Row` incluye `is_liquid: boolean` y `brand: string | null`; `search_foods` function ídem.
+
+**Pendiente (usuario):**
+1. `USDA_API_KEY` en `.env.local` → `node scripts/audit-fresh-foods.mjs`
+2. Revisar `scripts/output/fresh-foods-audit.md` → aplicar `fresh-foods-corrections.sql` si hay deltas grandes
+3. `node scripts/fetch-chilean-branded-foods.mjs` → revisar CSV con coach → `APROBADO=S`
+4. `node scripts/generate-branded-migration.mjs` → `supabase db push`
 
 ---
 
@@ -50,7 +75,7 @@
 - **Fix ✅** `subscription-status/route.ts` — ahora retorna `subscription_mp_id` y `superseded_mp_preapproval_id`.
 
 ### Performance (Sesión 2)
-- `getFoodLibrary` y `getCoachFoodsCatalog` — reemplazado `SELECT *` por columnas específicas: `id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id`.
+- `getFoodLibrary` y `getCoachFoodsCatalog` — reemplazado `SELECT *` por columnas específicas: `id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id, is_liquid, brand`.
 
 ### Pagos — Webhook activación upgrade (Sesión 1)
 - **P2.4 ✅** `src/app/api/payments/webhook/route.ts` — cuando un nuevo preapproval recibe evento `authorized`: cancela el preapproval anterior en MP (`cancelCheckoutAtProvider`), actualiza en BD `subscription_tier`, `billing_cycle`, `max_clients`, `subscription_mp_id`.
@@ -470,8 +495,8 @@ Títulos en login / change-password / exercises / suspended del alumno usan la c
 | ~~**Historial fecha coach**~~ | Implementado 2026-04-14 | ~85% | Indicadores de días con actividad (dots) | **COMPLETADO** |
 | ~~**Tabs perfil alumno**~~ | Renombradas (Análisis/Plan) | ~90% | Quitar mini-logs ProgramTabB7, KPI card fix | **COMPLETADO (parcial)** |
 | **Pagos & Suscripciones** | Hardening Sprint 8 | ~96% | Smoke sandbox MP en prod, upgrade webhook confirmar | **CRÍTICA (revenue)** |
-| **BD Alimentos** | 250+ alimentos seed | ~95% | — | **COMPLETADO** |
-| ~~**Unidades nutrición**~~ | g+un implementado | ~95% | — | **COMPLETADO** |
+| **BD Alimentos** | is_liquid+brand+ml, scripts auditoría | ~75% | Ejecutar scripts, revisar CSV con coach, aplicar correcciones USDA | **EN CURSO (usuario)** |
+| ~~**Unidades nutrición**~~ | g+un+ml implementado | ~98% | — | **COMPLETADO** |
 | **Landing/Pricing** | Sprint 8 visual | ~75% | SEO técnico, testimonios reales, OG tags | Media |
 | **Dashboard coach** | Sprint 6 + banners Sprint 8 | ~78% | Comparativas avanzadas (MRR, adherencia 30d) | Media |
 | **Mi Marca / Settings** | MVP branding | ~62% | Preview moderno, branding extendido | Media |
