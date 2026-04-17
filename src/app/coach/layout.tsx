@@ -1,18 +1,10 @@
 import { redirect } from 'next/navigation'
-import dynamic from 'next/dynamic'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
+import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
 import { getCoach } from '@/lib/coach/get-coach'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
-
-const SuccessAnimationProvider = dynamic(
-    () =>
-        import('@/components/SuccessAnimationProvider').then((m) => ({
-            default: m.SuccessAnimationProvider,
-        })),
-    { ssr: false }
-)
 
 export const metadata: Metadata = {
     title: {
@@ -69,7 +61,7 @@ export default async function CoachLayout({
                 />
                 {children}
             </CoachMainWrapper>
-            <SuccessAnimationProvider />
+            <CoachSuccessAnimationLazy />
         </div>
         </>
     )
