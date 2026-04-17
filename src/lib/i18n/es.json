@@ -27,5 +27,17 @@
     "tooltip.rir": "RIR (Repeticiones en Reserva): Significa cuántas repeticiones extra sentías que podías hacer antes del fallo muscular. Ej: RIR 2 es detenerse cuando aún podías hacer 2 más. RPE: Escala de esfuerzo percibido del 1 al 10, donde 1 es reposo total, 7-8 es un esfuerzo exigente pero controlable, y 10 es tu máximo esfuerzo físico (llegar al fallo).",
     "tooltip.tempo": "El ritmo o velocidad del ejercicio (bajada - pausa abajo - subida - pausa arriba). Ej: 3-1-X-1 significa 3s bajando, 1s de pausa, subida eXplosiva, y 1s de pausa arriba.",
     "tooltip.rest": "El tiempo exacto que debes descansar entre cada serie. Respetar este tiempo es fundamental para recuperarte bien y mantener el rendimiento.",
-    "tooltip.notes": "Indicaciones adicionales, detalles de postura, enfoque o cualquier corrección técnica que tu coach considera vital para tu progreso en este ejercicio."
+    "tooltip.notes": "Indicaciones adicionales, detalles de postura, enfoque o cualquier corrección técnica que tu coach considera vital para tu progreso en este ejercicio.",
+    "section.workoutHero": "Tu entrenamiento asignado para hoy. Toca la tarjeta para comenzar y registrar tus series una por una.",
+    "section.workoutExecution": "Ingresa el peso y las repeticiones de cada serie y presiona ✓ para guardar. Puedes cambiar los valores en cualquier momento y volver a presionar ✓ para actualizar.",
+    "section.checkIn": "Registro mensual de tu progreso: peso corporal, fotos front y back, y notas opcionales. Tu coach lo verá en tu perfil para hacer seguimiento de tu evolución.",
+    "section.nutrition": "Aquí ves tu plan de alimentación del día. Toca cada comida para marcarla como completada y ver los macros. El anillo te muestra cuánto del objetivo diario llevas.",
+    "section.exercises": "Catálogo completo de ejercicios. Toca cualquiera para ver la técnica, instrucciones y el video de ejecución.",
+    "section.compliance": "Tu adherencia de los últimos 30 días: qué porcentaje de entrenamientos y comidas completaste respecto al objetivo.",
+    "section.coachDashboard": "Resumen de tu negocio: ingresos mensuales recurrentes (MRR), sesiones registradas por tus alumnos en los últimos 30 días, y crecimiento de clientes en 6 meses.",
+    "section.coachClients": "Directorio de todos tus alumnos. El attention score señala quién necesita más atención según su actividad reciente. Toca un alumno para ver su perfil completo.",
+    "section.coachBuilder": "Constructor de programas semanales/ciclos. Arrastra ejercicios del catálogo y configura series, reps, peso objetivo, tempo, descanso y notas por bloque.",
+    "section.coachPrograms": "Biblioteca de programas reutilizables. Crea un programa una sola vez y asígnalo a múltiples alumnos con sus propias variantes.",
+    "section.coachNutrition": "Gestión de planes de nutrición. Define macros objetivo, comidas y alimentos para cada alumno o crea plantillas reutilizables.",
+    "section.coachBrand": "Personaliza cómo ven tu app los alumnos: logo, color principal y mensaje de bienvenida. Cada alumno ve tu marca, no la de EVA."
 }

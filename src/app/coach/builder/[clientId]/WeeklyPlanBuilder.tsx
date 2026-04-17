@@ -30,6 +30,8 @@ const AssignToClientsDialog = dynamic(
 )
 import { MuscleBalancePanel } from './components/MuscleBalancePanel'
 import { PrintProgramDialog } from './components/PrintProgramDialog'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
 import { DayColumn } from './components/DayColumn'
@@ -158,6 +160,7 @@ function trackRecentExercise(exerciseId: string) {
 
 export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any }) {
     const router = useRouter()
+    const { t } = useTranslation()
 
     const getInitialDays = (variant: 'A' | 'B' = 'A', structureType?: string, cyclLen?: number): DayState[] => {
         const exerciseById = new Map(exercises.map(e => [e.id, e]))
@@ -628,6 +631,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                 <h1 className="text-sm font-display uppercase tracking-[0.2em] text-foreground truncate max-w-[160px] md:max-w-md">
                                     {programName || 'NUEVO PROGRAMA'}
                                 </h1>
+                                <InfoTooltip content={t('section.coachBuilder')} />
                                 {hasUnsavedChanges && (
                                     <span className="hidden md:flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20 shrink-0">
                                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>

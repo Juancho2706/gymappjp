@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { ClientExerciseCatalog } from "./ClientExerciseCatalog";
 import { Dumbbell } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { EXERCISE_CATALOG_COLUMNS } from "@/lib/exercises/exercise-catalog-select";
 
 export const metadata: Metadata = {
@@ -79,13 +80,16 @@ export default async function ClientExercisesPage({ params }: Props) {
             style={{ color: "var(--theme-primary)" }}
           />
         </div>
-        <div>
-          <h1 className="font-display text-xl md:text-2xl font-bold text-foreground">
-            Aprender Técnica
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Catálogo completo de ejercicios
-          </p>
+        <div className="flex-1 flex items-center justify-between gap-2">
+          <div>
+            <h1 className="font-display text-xl md:text-2xl font-bold text-foreground">
+              Aprender Técnica
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Catálogo completo de ejercicios
+            </p>
+          </div>
+          <InfoTooltip content="Catálogo completo de ejercicios. Toca cualquiera para ver la técnica, instrucciones y el video de ejecución." />
         </div>
       </header>
 

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import type { Metadata } from 'next'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { CheckInForm } from './CheckInForm'
 
 export const metadata: Metadata = { title: 'Check-in Mensual | EVA' }
@@ -59,12 +60,17 @@ export default async function ClientCheckInPage({ params }: Props) {
                     <ArrowLeft className="w-4 h-4" />
                     Volver
                 </Link>
-                <h1 className="text-2xl font-bold text-foreground">
-                    Check-in Mensual
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                    Registra tu progreso para que tu coach pueda ajustar tu plan.
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">
+                            Check-in Mensual
+                        </h1>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Registra tu progreso para que tu coach pueda ajustar tu plan.
+                        </p>
+                    </div>
+                    <InfoTooltip content="Registro mensual de tu progreso: peso corporal, fotos front y back, y notas opcionales. Tu coach lo verá en tu perfil para hacer seguimiento de tu evolución." />
+                </div>
                 <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                     EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
                 </p>

@@ -44,6 +44,8 @@ import { Apple } from 'lucide-react'
 import { CreateClientModal } from '../clients/CreateClientModal'
 import { CoachOnboardingChecklist } from './CoachOnboardingChecklist'
 import type { RiskAlertItem } from './_data/dashboard.queries'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -104,6 +106,7 @@ export default function CoachDashboardClient({
     currentPeriodEnd,
     trialEndsAt,
 }: CoachDashboardClientProps) {
+    const { t } = useTranslation()
     const [modalType, setModalType] = useState<'adherence' | 'nutrition' | null>(null)
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const hasRecentCheckin = recentActivities.some((activity) => activity.type === 'check-in')
@@ -242,9 +245,12 @@ export default function CoachDashboardClient({
                 <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 dark:bg-primary/10 blur-[100px] pointer-events-none z-0" />
                 
                 <div className="relative z-10">
-                    <h1 className="text-4xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display">
-                        Centro de Control
-                    </h1>
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-4xl md:text-5xl font-black text-foreground uppercase tracking-tighter font-display">
+                            Centro de Control
+                        </h1>
+                        <InfoTooltip content={t('section.coachDashboard')} />
+                    </div>
                     <p className="text-muted-foreground text-sm font-medium mt-2 max-w-md leading-relaxed">
                         Análisis de rendimiento, gestión de alumnos y métricas de retención en tiempo real.
                     </p>

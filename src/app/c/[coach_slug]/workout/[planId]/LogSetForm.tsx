@@ -162,6 +162,12 @@ export function LogSetForm({
                 )}
             </form>
 
+            {isLogged && !showRpePrompt && (
+                <p className="text-[10px] text-emerald-500/50 text-center pb-1.5 px-2 leading-none">
+                    Cambia los valores y presiona ✓ para actualizar
+                </p>
+            )}
+
             <AnimatePresence initial={false}>
                 {showRpePrompt && (
                     <motion.div
@@ -211,7 +217,8 @@ function SubmitSetButton({ isLogged }: { isLogged: boolean }) {
             transition={reducedMotion ? { duration: 0 } : springs.elastic}
             className={`w-10 h-10 md:w-7 md:h-7 rounded-md flex items-center justify-center transition-all shadow-sm
             ${isLogged ? 'bg-emerald-500/20 text-emerald-400' : 'bg-secondary text-muted-foreground hover:bg-violet-600 hover:text-white'}`}
-            title={pending ? 'Guardando set...' : isLogged ? 'Set guardado' : 'Guardar set'}
+            title={pending ? 'Guardando set...' : isLogged ? 'Set guardado · toca para editar' : 'Guardar set'}
+            aria-label={pending ? 'Guardando set...' : isLogged ? 'Set guardado, toca para editar' : 'Guardar set'}
         >
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-5 h-5 md:w-4 md:h-4" />}
         </motion.button>

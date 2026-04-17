@@ -6,6 +6,8 @@ import { useTheme } from 'next-themes'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { GlassCard } from '@/components/ui/glass-card'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 interface ComplianceRingProps {
     value: number
@@ -80,9 +82,13 @@ export function ComplianceRingCluster({
     checkInScore: number
     nutritionHasLogs: boolean
 }) {
+    const { t } = useTranslation()
     return (
         <GlassCard className="p-4">
-            <p className="mb-3 text-center text-xs font-semibold text-muted-foreground">Últimos 30 días</p>
+            <div className="mb-3 flex items-center justify-center gap-1.5">
+                <p className="text-center text-xs font-semibold text-muted-foreground">Últimos 30 días</p>
+                <InfoTooltip content={t('section.compliance')} />
+            </div>
             <div className="grid grid-cols-3 gap-2">
                 <ComplianceRing value={workoutScore} label="Entrenos" color="brand" />
                 <ComplianceRing value={nutritionScore} label="Nutrición" color="emerald" empty={!nutritionHasLogs} />

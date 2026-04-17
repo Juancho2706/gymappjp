@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BrandSettingsForm } from './BrandSettingsForm'
 import { LogoUploadForm } from './LogoUploadForm'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import type { Tables } from '@/lib/database.types'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 
@@ -53,9 +54,12 @@ export default async function CoachSettingsPage() {
     return (
         <div className="p-8 max-w-3xl animate-fade-in">
             <div className="mb-8">
-                <h1 className="text-2xl font-extrabold text-foreground">
-                    Mi Marca
-                </h1>
+                <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-extrabold text-foreground">
+                        Mi Marca
+                    </h1>
+                    <InfoTooltip content="Personaliza cómo ven tu app los alumnos: logo, color principal y mensaje de bienvenida. Cada alumno ve tu marca, no la de EVA." />
+                </div>
                 <p className="text-muted-foreground text-sm mt-1">
                     Define lo minimo que tus alumnos deben ver: nombre, logo, color y mensaje de bienvenida.
                 </p>

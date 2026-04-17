@@ -6,6 +6,8 @@ import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Zap, Info, Dumbbell, Timer, X, Settings, CheckCircle2 } from 'lucide-react'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { LogSetForm } from './LogSetForm'
 import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -122,6 +124,7 @@ export function WorkoutExecutionClient({
     activeWeekVariant = null,
 }: Props) {
     const router = useRouter()
+    const { t } = useTranslation()
     const reducedMotion = useReducedMotion()
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
@@ -258,6 +261,7 @@ export function WorkoutExecutionClient({
                                 </p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
+                                <InfoTooltip content={t('section.workoutExecution')} />
                                 <button
                                     type="button"
                                     onClick={() => setShowTimerSettings(true)}

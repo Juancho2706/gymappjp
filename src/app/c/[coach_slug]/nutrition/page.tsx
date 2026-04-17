@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import type { Metadata } from 'next'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import {
   getActiveNutritionPlan,
@@ -55,9 +56,12 @@ export default async function ClientNutritionPage({ params }: Props) {
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div>
-          <h1 className="text-lg font-black tracking-tight text-foreground">Plan Nutricional</h1>
-          <p className="text-[10px] text-muted-foreground font-medium">{plan.name}</p>
+        <div className="flex-1 flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-lg font-black tracking-tight text-foreground">Plan Nutricional</h1>
+            <p className="text-[10px] text-muted-foreground font-medium">{plan.name}</p>
+          </div>
+          <InfoTooltip content="Registra tus comidas del día. Toca cada comida para marcarla como completada y ver los macros. El anillo te muestra cuánto del objetivo diario llevas." />
         </div>
       </header>
 

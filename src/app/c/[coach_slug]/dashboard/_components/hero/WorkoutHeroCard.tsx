@@ -7,6 +7,8 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { GlassButton } from '@/components/ui/glass-button'
 import { springs } from '@/lib/animation-presets'
 import { QuickLogSheet } from './QuickLogSheet'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 export interface HeroBlock {
     id: string
@@ -36,6 +38,7 @@ export function WorkoutHeroCard({
     baseLoggedPerBlock,
     coachSlug,
 }: WorkoutHeroCardProps) {
+    const { t } = useTranslation()
     const pct = totalSetsTarget > 0 ? Math.min(100, (totalSetsLogged / totalSetsTarget) * 100) : 0
     const show = blocks.slice(0, 4)
     const more = blocks.length - show.length
@@ -64,6 +67,7 @@ export function WorkoutHeroCard({
                         <p className="truncate font-display text-lg font-bold text-foreground">{title}</p>
                     </div>
                 </div>
+                <InfoTooltip content={t('section.workoutHero')} />
             </div>
             <ul className="mb-4 space-y-1.5 text-sm text-muted-foreground">
                 {show.map((b) => (

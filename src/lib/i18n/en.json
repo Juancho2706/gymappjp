@@ -27,5 +27,17 @@
     "tooltip.rir": "RIR (Reps In Reserve): how many extra reps you feel you could do before failure. E.g. RIR 2 means stopping when you could still do 2 more. RPE: rated perceived exertion from 1–10, where 1 is full rest, 7–8 is hard but controlled, and 10 is maximum effort (failure).",
     "tooltip.tempo": "Movement rhythm (eccentric – bottom pause – concentric – top pause). E.g. 3-1-X-1 means 3s down, 1s pause, eXplosive up, 1s pause at the top.",
     "tooltip.rest": "Rest time between sets. Keeping it consistent helps recovery and performance.",
-    "tooltip.notes": "Extra cues from your coach: posture, focus, or technique details that matter for this exercise."
+    "tooltip.notes": "Extra cues from your coach: posture, focus, or technique details that matter for this exercise.",
+    "section.workoutHero": "Your assigned workout for today. Tap the card to start and log your sets one by one.",
+    "section.workoutExecution": "Enter the weight and reps for each set and press ✓ to save. You can change the values at any time and press ✓ again to update.",
+    "section.checkIn": "Your monthly progress snapshot: bodyweight, front and back photos, and optional notes. Your coach will see it in your profile to track your evolution.",
+    "section.nutrition": "Your meal plan for today. Tap each meal to mark it complete and track your macros. The ring shows how much of your daily goal you've reached.",
+    "section.exercises": "Full exercise catalog. Tap any exercise to view technique, instructions, and execution video.",
+    "section.compliance": "Your 30-day adherence: what percentage of workouts and meals you completed vs. your target.",
+    "section.coachDashboard": "Business overview: monthly recurring revenue (MRR), sessions logged by your clients in the last 30 days, and client growth over 6 months.",
+    "section.coachClients": "Directory of all your clients. The attention score flags who needs the most attention based on recent activity. Tap a client to view their full profile.",
+    "section.coachBuilder": "Weekly/cycle program builder. Drag exercises from the catalog and configure sets, reps, target weight, tempo, rest time, and notes per block.",
+    "section.coachPrograms": "Reusable program library. Build a program once and assign it to multiple clients with their own variants.",
+    "section.coachNutrition": "Nutrition plan management. Define macro targets, meals, and foods for each client or create reusable templates.",
+    "section.coachBrand": "Customize how clients see your app: logo, primary color, and welcome message. Your clients see your brand, not EVA's."
 }

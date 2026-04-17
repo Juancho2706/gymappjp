@@ -3,6 +3,8 @@
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 export interface LibraryHeaderProps {
     templateCount: number
@@ -19,12 +21,16 @@ export function LibraryHeader({
     onNewTemplate,
     className,
 }: LibraryHeaderProps) {
+    const { t } = useTranslation()
     return (
         <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between', className)}>
             <div className="min-w-0 space-y-1">
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                    Biblioteca de programas
-                </h1>
+                <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                        Biblioteca de programas
+                    </h1>
+                    <InfoTooltip content={t('section.coachPrograms')} />
+                </div>
                 <p className="text-sm text-muted-foreground">
                     Crea plantillas, asígnalas y gestiona planes en curso.
                 </p>

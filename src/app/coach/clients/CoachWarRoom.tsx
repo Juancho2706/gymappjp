@@ -20,6 +20,8 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { GlassButton } from '@/components/ui/glass-button'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectoryRiskFilter } from './directory-types'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 export type { DirectoryRiskFilter } from './directory-types'
 
@@ -78,6 +80,7 @@ export function CoachWarRoom({
     onFilterChange,
 }: CoachWarRoomProps) {
     const router = useRouter()
+    const { t } = useTranslation()
     const [open, setOpen] = useState(false)
     const [copied, setCopied] = useState(false)
     const [syncing, setSyncing] = useState(false)
@@ -178,6 +181,7 @@ export function CoachWarRoom({
                             <h1 className="font-display max-w-full text-2xl font-black uppercase tracking-tighter text-foreground break-words text-balance sm:text-3xl md:text-5xl">
                                 Directorio de Alumnos
                             </h1>
+                            <InfoTooltip content={t('section.coachClients')} />
                         </div>
                         <p className="max-w-lg text-sm font-medium leading-relaxed text-muted-foreground">
                             Gestión centralizada · panel operativo tipo War Room
