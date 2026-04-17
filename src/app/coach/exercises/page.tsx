@@ -15,14 +15,25 @@ export default async function CoachExercisesPage() {
     const coach = await getCoach()
     if (!coach) redirect('/login')
 
-    const { data: rawExercises } = await supabase
+    let exercisesQuery = await supabase
         .from('exercises')
         .select(EXERCISE_CATALOG_COLUMNS)
         .or(`coach_id.is.null,coach_id.eq.${coach.id}`)
         .order('muscle_group')
         .order('name')
 
-    const allExercises = (rawExercises ?? []) as Exercise[]
+    // Compat fallback: if a newer explicit column is missing in DB,
+    // avoid leaving the exercise library empty.
+    if (exercisesQuery.error) {
+        exercisesQuery = await supabase
+            .from('exercises')
+            .select('*')
+            .or(`coach_id.is.null,coach_id.eq.${coach.id}`)
+            .order('muscle_group')
+            .order('name')
+    }
+
+    const allExercises = (exercisesQuery.data ?? []) as Exercise[]
     
     const globalExercises = allExercises.filter(ex => ex.coach_id === null)
     const customExercises = allExercises.filter(ex => ex.coach_id === coach.id)

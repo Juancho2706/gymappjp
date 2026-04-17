@@ -209,7 +209,7 @@ export function DraggableExerciseCatalog({
     })
 
     return (
-        <div className={cn("flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm relative", className)}>
+        <div className={cn("flex min-h-0 flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm relative", className)}>
             {/* Header / Filters */}
             <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-xl shrink-0">
                 <div className="flex items-center justify-between">
@@ -254,7 +254,7 @@ export function DraggableExerciseCatalog({
             {/* Virtualized list */}
             <div
                 ref={parentRef}
-                className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2"
+                className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-3 py-2"
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
                 {listItems.length === 0 ? (

@@ -855,9 +855,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex-1 flex overflow-hidden max-w-[2000px] w-full mx-auto relative bg-secondary/30 dark:bg-background/80">
+                <div className="flex min-h-0 flex-1 overflow-hidden max-w-[2000px] w-full mx-auto relative bg-secondary/30 dark:bg-background/80">
                     {/* Catalog sidebar — hidden mobile, collapsible tablet, always open desktop */}
-                    <div className={`hidden md:flex flex-col flex-shrink-0 border-r border-border bg-background/50 backdrop-blur-sm relative z-10 transition-all duration-300 lg:w-[350px] ${
+                    <div className={`hidden md:flex min-h-0 flex-col flex-shrink-0 border-r border-border bg-background/50 backdrop-blur-sm relative z-10 transition-all duration-300 lg:w-[350px] ${
                         isCatalogSidebarOpen ? 'md:max-lg:w-[300px]' : 'md:max-lg:w-[48px] md:max-lg:overflow-hidden'
                     }`}>
                         {/* Toggle button — tablet only */}
@@ -879,7 +879,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-background to-background">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-background to-background">
                         {/* A/B Mode bar */}
                         <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 flex-shrink-0">
                             <button
