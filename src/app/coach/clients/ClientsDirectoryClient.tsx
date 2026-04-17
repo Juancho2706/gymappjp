@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Users } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -117,6 +117,11 @@ export function ClientsDirectoryClient({
     const [view, setView] = useState<'grid' | 'table'>('table')
     const [statusFilter, setStatusFilter] = useState<StatusDirectoryFilter>('any')
     const [programFilter, setProgramFilter] = useState<ProgramDirectoryFilter>('any')
+    const [gridVisibleCount, setGridVisibleCount] = useState(48)
+
+    useEffect(() => {
+        setGridVisibleCount(48)
+    }, [search, riskFilter, statusFilter, programFilter, sortKey, sortDir, view])
 
     const handleSortFromBar = (k: DirectorySortKey) => {
         setSortKey(k)
@@ -154,6 +159,11 @@ export function ClientsDirectoryClient({
     const sortedClients = useMemo(
         () => sortClientsByKey(filteredClients, pulseByClientId, sortKey, sortDir),
         [filteredClients, pulseByClientId, sortKey, sortDir]
+    )
+
+    const gridClients = useMemo(
+        () => sortedClients.slice(0, gridVisibleCount),
+        [sortedClients, gridVisibleCount]
     )
 
     if (clients.length === 0) {
@@ -204,13 +214,14 @@ export function ClientsDirectoryClient({
                     coachSlug={coach?.slug}
                     appUrl={appUrl}
                 />
-            :   <motion.div
+            :   <div className="space-y-4">
+                    <motion.div
                     className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-0 xl:grid-cols-3 xl:gap-8"
                     variants={gridContainer}
                     initial="hidden"
                     animate="show"
                 >
-                    {sortedClients.map((client) => {
+                    {gridClients.map((client) => {
                         const pulse = pulseByClientId[client.id]
                         let subscriptionDaysRemaining = null
                         if (client.subscription_start_date) {
@@ -249,6 +260,22 @@ export function ClientsDirectoryClient({
                         )
                     })}
                 </motion.div>
+                {sortedClients.length > gridVisibleCount ? (
+                    <div className="flex justify-center px-4 pb-8 lg:px-0">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setGridVisibleCount((n) =>
+                                    Math.min(n + 48, sortedClients.length)
+                                )
+                            }
+                            className="rounded-full border border-border/60 bg-muted/40 px-6 py-2 text-sm font-semibold text-foreground hover:bg-muted/70"
+                        >
+                            Cargar más ({sortedClients.length - gridVisibleCount} restantes)
+                        </button>
+                    </div>
+                ) : null}
+                </div>
             }
         </div>
     )

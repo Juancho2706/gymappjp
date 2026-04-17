@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
 import type { Tables } from '@/lib/database.types'
+import { EXERCISE_CATALOG_COLUMNS } from '@/lib/exercises/exercise-catalog-select'
+import { getCoach } from '@/lib/coach/get-coach'
 
 type Exercise = Tables<'exercises'>
 import type { Metadata } from 'next'
@@ -10,21 +12,20 @@ export const metadata: Metadata = { title: 'Ejercicios | EVA' }
 
 export default async function CoachExercisesPage() {
     const supabase = await createClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/login')
+    const coach = await getCoach()
+    if (!coach) redirect('/login')
 
     const { data: rawExercises } = await supabase
         .from('exercises')
-        .select('*')
-        .or(`coach_id.is.null,coach_id.eq.${user.id}`)
+        .select(EXERCISE_CATALOG_COLUMNS)
+        .or(`coach_id.is.null,coach_id.eq.${coach.id}`)
         .order('muscle_group')
         .order('name')
 
     const allExercises = (rawExercises ?? []) as Exercise[]
     
     const globalExercises = allExercises.filter(ex => ex.coach_id === null)
-    const customExercises = allExercises.filter(ex => ex.coach_id === user.id)
+    const customExercises = allExercises.filter(ex => ex.coach_id === coach.id)
 
     const byMuscle = globalExercises.reduce<Record<string, Exercise[]>>((acc, ex) => {
         if (!acc[ex.muscle_group]) acc[ex.muscle_group] = []

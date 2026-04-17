@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { ClientExerciseCatalog } from "./ClientExerciseCatalog";
 import { Dumbbell } from "lucide-react";
+import { EXERCISE_CATALOG_COLUMNS } from "@/lib/exercises/exercise-catalog-select";
 
 export const metadata: Metadata = {
   title: "Catálogo de Ejercicios | EVA",
@@ -21,35 +22,31 @@ export default async function ClientExercisesPage({ params }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect(`/c/${coach_slug}/login`);
 
-  // Fetch client/coach branding AND exercises in parallel
-  const [clientResponse, exercisesResponse] = await Promise.all([
-    (supabase as any)
-      .from("clients")
-      .select(
-        `
+  const clientResponse = await (supabase as any)
+    .from("clients")
+    .select(
+      `
             id, coach_id,
             coaches ( brand_name, primary_color )
         `,
-      )
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("exercises")
-      .select("*")
-      .order("name")
-  ]);
+    )
+    .eq("id", user.id)
+    .maybeSingle();
 
   const client = clientResponse.data;
   if (!client) redirect(`/c/${coach_slug}/login`);
+
+  const exercisesResponse = await supabase
+    .from("exercises")
+    .select(EXERCISE_CATALOG_COLUMNS)
+    .or(`coach_id.is.null,coach_id.eq.${client.coach_id}`)
+    .order("name");
 
   const coachBranding = Array.isArray(client.coaches)
     ? client.coaches[0]
     : client.coaches;
 
-  // Filter exercises (server-side filter for security, then group)
-  const safeExercises = (exercisesResponse.data || []).filter((ex: any) => 
-    !ex.coach_id || ex.coach_id === client.coach_id
-  );
+  const safeExercises = exercisesResponse.data || [];
 
   // Group by muscle
   const byMuscle = safeExercises.reduce((acc: any, ex: any) => {

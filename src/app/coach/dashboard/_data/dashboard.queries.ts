@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCachedDirectoryPulse } from '@/lib/coach/directory-pulse-cache'
+import { measureServer } from '@/lib/perf/measure-server'
 import {
     type AttentionFlag,
     mapDirectoryPulseToAdherenceStats,
@@ -52,6 +53,10 @@ export interface RiskAlertItem {
 }
 
 export async function getCoachDashboardData(userId: string) {
+    return measureServer('getCoachDashboardData', () => getCoachDashboardDataInner(userId))
+}
+
+async function getCoachDashboardDataInner(userId: string) {
     const supabase = await createClient()
 
     const now = new Date()
@@ -66,6 +71,7 @@ export async function getCoachDashboardData(userId: string) {
         recentCheckinsRaw,
         expiringProgramsRaw,
         clientsGrowthRaw,
+        workoutSessionsSeriesRaw,
         workoutLogs30dRaw,
         recentWorkoutsRaw,
         subscriptionEventsRaw,
@@ -94,10 +100,12 @@ export async function getCoachDashboardData(userId: string) {
             .not('end_date', 'is', null)
             .order('end_date', { ascending: true }),
         supabase.from('clients').select('created_at').eq('coach_id', userId),
-        // 30-day workout sessions for AreaChart
+        // Fast SQL aggregation (if migration is applied)
+        supabase.rpc('get_coach_workout_sessions_30d' as never, { p_coach_id: userId } as never),
+        // 30-day workout sessions for AreaChart (solo columnas necesarias; join para RLS/filtro coach)
         supabase
             .from('workout_logs')
-            .select('logged_at, clients!inner(coach_id)')
+            .select('logged_at, client_id, clients!inner(coach_id)')
             .eq('clients.coach_id', userId)
             .gte('logged_at', thirtyDaysAgo),
         // Recent workout completions for activity feed
@@ -137,6 +145,7 @@ export async function getCoachDashboardData(userId: string) {
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
     const allClientsData = clientsGrowthRaw.data || []
     const workoutLogs30d = workoutLogs30dRaw.data || []
+    const workoutSessionsSeries = (workoutSessionsSeriesRaw.data as { day: string; sessions: number }[] | null) || null
     const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string } }[] | null) || []
     const subscriptionEvents = subscriptionEventsRaw.data || []
 
@@ -240,17 +249,25 @@ export async function getCoachDashboardData(userId: string) {
         const key = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
         sessionsByDay[key] = 0
     }
-    const seenSessionKeys = new Set<string>()
-    workoutLogs30d.forEach((w) => {
-        const d = new Date(w.logged_at)
-        const dayKey = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
-        // Use a composite key to deduplicate by client per day
-        const sessionKey = `${(w as any).client_id ?? ''}|${dayKey}`
-        if (!seenSessionKeys.has(sessionKey)) {
-            seenSessionKeys.add(sessionKey)
-            if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] += 1
+    if (workoutSessionsSeries && workoutSessionsSeries.length > 0) {
+        for (const row of workoutSessionsSeries) {
+            const d = new Date(row.day)
+            const dayKey = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
+            if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] = row.sessions
         }
-    })
+    } else {
+        const seenSessionKeys = new Set<string>()
+        workoutLogs30d.forEach((w) => {
+            const d = new Date(w.logged_at)
+            const dayKey = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
+            // Fallback path: deduplicate by client per day in app.
+            const sessionKey = `${(w as { client_id?: string }).client_id ?? ''}|${dayKey}`
+            if (!seenSessionKeys.has(sessionKey)) {
+                seenSessionKeys.add(sessionKey)
+                if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] += 1
+            }
+        })
+    }
     // Show every 5th label to avoid crowding
     const areaData = Object.entries(sessionsByDay).map(([name, sesiones], idx) => ({
         name: idx % 5 === 0 ? name : '',

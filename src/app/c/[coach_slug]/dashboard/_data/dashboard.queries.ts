@@ -3,6 +3,7 @@ import { format, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
 import { getTodayInSantiago } from '@/lib/date-utils'
+import { measureServer } from '@/lib/perf/measure-server'
 
 type CoachBrand = Pick<Tables<'coaches'>, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message'>
 
@@ -163,75 +164,77 @@ export type PersonalRecordItem = {
 }
 
 export const getPersonalRecords = cache(async (clientId: string): Promise<PersonalRecordItem[]> => {
-    const supabase = await createClient()
-    const { iso } = getTodayInSantiago()
-    const fourteenAgo = subDays(parseISOAnchor(iso), 14)
+    return measureServer(`getPersonalRecords client=${clientId.slice(0, 8)}`, async () => {
+        const supabase = await createClient()
+        const { iso } = getTodayInSantiago()
+        const fourteenAgo = subDays(parseISOAnchor(iso), 14)
 
-    const { data: recentLogs } = await supabase
-        .from('workout_logs')
-        .select('weight_kg, block_id, logged_at')
-        .eq('client_id', clientId)
-        .not('weight_kg', 'is', null)
-        .gte('logged_at', fourteenAgo.toISOString())
-        .order('logged_at', { ascending: false })
-        .limit(120)
+        const { data: recentLogs } = await supabase
+            .from('workout_logs')
+            .select('weight_kg, block_id, logged_at')
+            .eq('client_id', clientId)
+            .not('weight_kg', 'is', null)
+            .gte('logged_at', fourteenAgo.toISOString())
+            .order('logged_at', { ascending: false })
+            .limit(120)
 
-    const { data: histLogs } = await supabase
-        .from('workout_logs')
-        .select('weight_kg, block_id')
-        .eq('client_id', clientId)
-        .not('weight_kg', 'is', null)
-        .limit(4000)
+        const { data: histLogs } = await supabase
+            .from('workout_logs')
+            .select('weight_kg, block_id')
+            .eq('client_id', clientId)
+            .not('weight_kg', 'is', null)
+            .limit(3000)
 
-    const recent = recentLogs ?? []
-    const allW = histLogs ?? []
-    if (recent.length === 0) return []
+        const recent = recentLogs ?? []
+        const allW = histLogs ?? []
+        if (recent.length === 0) return []
 
-    const blockIds = [...new Set([...recent.map((r) => r.block_id), ...allW.map((r) => r.block_id)])]
-    if (blockIds.length === 0) return []
+        const blockIds = [...new Set([...recent.map((r) => r.block_id), ...allW.map((r) => r.block_id)])]
+        if (blockIds.length === 0) return []
 
-    const { data: blocks } = await supabase
-        .from('workout_blocks')
-        .select('id, exercise_id')
-        .in('id', blockIds)
+        const { data: blocks } = await supabase
+            .from('workout_blocks')
+            .select('id, exercise_id')
+            .in('id', blockIds)
 
-    const blockToEx = new Map<string, string>()
-    for (const b of blocks ?? []) {
-        blockToEx.set(b.id, b.exercise_id)
-    }
+        const blockToEx = new Map<string, string>()
+        for (const b of blocks ?? []) {
+            blockToEx.set(b.id, b.exercise_id)
+        }
 
-    const exIds = [...new Set([...blockToEx.values()])]
-    const { data: exercises } = await supabase.from('exercises').select('id, name').in('id', exIds)
-    const exName = new Map<string, string>()
-    for (const e of exercises ?? []) exName.set(e.id, e.name)
+        const exIds = [...new Set([...blockToEx.values()])]
+        const { data: exercises } = await supabase.from('exercises').select('id, name').in('id', exIds)
+        const exName = new Map<string, string>()
+        for (const e of exercises ?? []) exName.set(e.id, e.name)
 
-    const maxByExercise = new Map<string, number>()
-    for (const row of allW) {
-        const exId = blockToEx.get(row.block_id)
-        if (!exId || row.weight_kg == null) continue
-        const prev = maxByExercise.get(exId) ?? 0
-        if (row.weight_kg > prev) maxByExercise.set(exId, row.weight_kg)
-    }
+        const maxByExercise = new Map<string, number>()
+        for (const row of allW) {
+            const exId = blockToEx.get(row.block_id)
+            if (!exId || row.weight_kg == null) continue
+            const prev = maxByExercise.get(exId) ?? 0
+            if (row.weight_kg > prev) maxByExercise.set(exId, row.weight_kg)
+        }
 
-    const prs: PersonalRecordItem[] = []
-    const seen = new Set<string>()
-    for (const row of recent) {
-        const exId = blockToEx.get(row.block_id)
-        if (!exId || row.weight_kg == null) continue
-        const histMax = maxByExercise.get(exId)
-        if (histMax == null || row.weight_kg < histMax) continue
-        if (seen.has(exId)) continue
-        seen.add(exId)
-        prs.push({
-            exerciseId: exId,
-            exerciseName: exName.get(exId) ?? 'Ejercicio',
-            weightKg: row.weight_kg,
-            achievedAt: row.logged_at,
-        })
-    }
+        const prs: PersonalRecordItem[] = []
+        const seen = new Set<string>()
+        for (const row of recent) {
+            const exId = blockToEx.get(row.block_id)
+            if (!exId || row.weight_kg == null) continue
+            const histMax = maxByExercise.get(exId)
+            if (histMax == null || row.weight_kg < histMax) continue
+            if (seen.has(exId)) continue
+            seen.add(exId)
+            prs.push({
+                exerciseId: exId,
+                exerciseName: exName.get(exId) ?? 'Ejercicio',
+                weightKg: row.weight_kg,
+                achievedAt: row.logged_at,
+            })
+        }
 
-    prs.sort((a, b) => b.weightKg - a.weightKg)
-    return prs.slice(0, 5)
+        prs.sort((a, b) => b.weightKg - a.weightKg)
+        return prs.slice(0, 5)
+    })
 })
 
 /** Días con al menos un daily_nutrition_log en los últimos 30 días (zona Santiago). */

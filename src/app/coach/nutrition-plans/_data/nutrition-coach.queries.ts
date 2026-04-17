@@ -22,7 +22,7 @@ export const getCoachTemplateById = cache(async (coachId: string, templateId: st
     .from('nutrition_plan_templates')
     .select(
       `
-      *,
+      id, coach_id, name, description, instructions, is_favorite, tags, goal_type, daily_calories, protein_g, carbs_g, fats_g, created_at, updated_at,
       template_meals (
         id,
         name,
@@ -38,7 +38,7 @@ export const getCoachTemplateById = cache(async (coachId: string, templateId: st
               quantity,
               unit,
               food_id,
-              food:foods (*)
+              food:foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
             )
           )
         )
@@ -57,7 +57,7 @@ export const getCoachTemplates = cache(async (coachId: string) => {
     .from('nutrition_plan_templates')
     .select(
       `
-      *,
+      id, coach_id, name, description, instructions, is_favorite, tags, goal_type, daily_calories, protein_g, carbs_g, fats_g, created_at, updated_at,
       assigned_clients:nutrition_plans(
         client:clients(id, full_name),
         is_active
@@ -76,7 +76,7 @@ export const getCoachTemplates = cache(async (coachId: string) => {
               id,
               quantity,
               unit,
-              food:foods (*)
+              food:foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
             )
           )
         )
@@ -106,7 +106,7 @@ export const getActiveClientPlans = cache(async (coachId: string) => {
     .from('nutrition_plans')
     .select(
       `
-      *,
+      id, client_id, template_id, name, is_custom, is_active, daily_calories, protein_g, carbs_g, fats_g, updated_at,
       clients ( id, full_name ),
       nutrition_plan_templates ( name )
     `
@@ -283,10 +283,13 @@ export const getClientNutritionPlan = cache(async (clientId: string, coachId: st
     .from('nutrition_plans')
     .select(
       `
-      *,
+      id, client_id, coach_id, template_id, name, is_custom, is_active, daily_calories, protein_g, carbs_g, fats_g,
       nutrition_meals (
-        *,
-        food_items ( *, foods(*) )
+        id, plan_id, name, order_index,
+        food_items (
+          id, meal_id, quantity, unit,
+          foods(id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit)
+        )
       ),
       clients ( id, full_name )
     `
@@ -377,7 +380,7 @@ export const getCoachSavedMeals = cache(async (coachId: string) => {
         id,
         quantity,
         unit,
-        food:foods(*)
+        food:foods(id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit)
       )
     `
     )

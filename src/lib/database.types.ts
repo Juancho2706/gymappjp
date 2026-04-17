@@ -1475,6 +1475,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_coach_clients_streaks: {
+        Args: { p_coach_id: string }
+        Returns: {
+          client_id: string
+          streak: number
+        }[]
+      }
+      get_coach_workout_sessions_30d: {
+        Args: { p_coach_id: string }
+        Returns: {
+          day: string
+          sessions: number
+        }[]
+      }
       get_client_current_streak: {
         Args: { p_client_id: string }
         Returns: number

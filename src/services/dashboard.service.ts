@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { differenceInDays, subDays } from 'date-fns';
 import { Database } from '@/lib/database.types';
+import { measureServer } from '@/lib/perf/measure-server';
 
 // Check-ins mensuales: alertar solo si ya hubo al menos un check-in y pasaron >30 días desde el último.
 const CHECKIN_OVERDUE_AFTER_DAYS = 30
@@ -263,6 +264,12 @@ export class DashboardService {
      * Use React.cache in actions when pairing with getAdherenceStats/getNutritionStats.
      */
     async getDirectoryPulse(coachId: string): Promise<DirectoryPulseRow[]> {
+        return measureServer(`getDirectoryPulse coach=${coachId.slice(0, 8)}`, async () =>
+            this.getDirectoryPulseInner(coachId)
+        );
+    }
+
+    private async getDirectoryPulseInner(coachId: string): Promise<DirectoryPulseRow[]> {
         const { data: clients, error: clientsError } = await this.supabase
             .from('clients')
             .select('id, full_name')
@@ -331,43 +338,68 @@ export class DashboardService {
             programByClient.set(cid, p);
         }
 
-        const nutritionByClient = await Promise.all(
-            clientIds.map(async (clientId) => {
-                const { data: dailyLogs } = await this.supabase
-                    .from('daily_nutrition_logs')
-                    .select(
-                        `
-                        *,
-                        nutrition_meal_logs (
-                            *,
-                            nutrition_meals (
-                                *,
-                                food_items (
-                                    *,
-                                    foods (*)
-                                )
-                            )
+        const logDateCutoff = lastWeekStr.split('T')[0]!;
+        const nutritionMap = new Map<string, any[]>();
+        for (const id of clientIds) nutritionMap.set(id, []);
+
+        const { data: allNutritionRows, error: nutritionErr } = await this.supabase
+            .from('daily_nutrition_logs')
+            .select(
+                `
+                client_id,
+                plan_name_at_log,
+                target_calories_at_log,
+                target_protein_at_log,
+                target_carbs_at_log,
+                target_fats_at_log,
+                nutrition_meal_logs (
+                    is_completed,
+                    nutrition_meals (
+                        food_items (
+                            quantity,
+                            foods ( calories, protein_g, carbs_g, fats_g, serving_size )
                         )
-                    `
                     )
-                    .eq('client_id', clientId)
-                    .gte('log_date', lastWeekStr.split('T')[0]!);
+                )
+            `
+            )
+            .in('client_id', clientIds)
+            .gte('log_date', logDateCutoff);
 
-                return { clientId, dailyLogs: dailyLogs || [] };
-            })
-        );
-        const nutritionMap = new Map(nutritionByClient.map((n) => [n.clientId, n.dailyLogs]));
+        if (!nutritionErr) {
+            for (const row of allNutritionRows || []) {
+                const cid = row.client_id as string;
+                if (!nutritionMap.has(cid)) nutritionMap.set(cid, []);
+                nutritionMap.get(cid)!.push(row);
+            }
+        }
 
-        const streakResults = await Promise.all(
-            clientIds.map(async (clientId) => {
-                const { data, error } = await this.supabase.rpc('get_client_current_streak' as any, {
-                    p_client_id: clientId,
-                });
-                if (error) return { clientId, streak: 0 };
-                return { clientId, streak: typeof data === 'number' ? data : 0 };
-            })
+        const streakMap = new Map<string, number>();
+        const { data: streakBatch, error: streakBatchErr } = await this.supabase.rpc(
+            'get_coach_clients_streaks',
+            { p_coach_id: coachId }
         );
-        const streakMap = new Map(streakResults.map((s) => [s.clientId, s.streak]));
+
+        const batchRows = streakBatch ?? [];
+        if (!streakBatchErr && batchRows.length > 0) {
+            for (const row of batchRows) {
+                streakMap.set(row.client_id, typeof row.streak === 'number' ? row.streak : 0);
+            }
+        }
+
+        if (streakMap.size < clientIds.length) {
+            const missing = clientIds.filter((id) => !streakMap.has(id));
+            const fallback = await Promise.all(
+                missing.map(async (clientId) => {
+                    const { data, error } = await this.supabase.rpc('get_client_current_streak', {
+                        p_client_id: clientId,
+                    });
+                    if (error) return { clientId, streak: 0 };
+                    return { clientId, streak: typeof data === 'number' ? data : 0 };
+                })
+            );
+            for (const s of fallback) streakMap.set(s.clientId, s.streak);
+        }
 
         const rows: DirectoryPulseRow[] = [];
 

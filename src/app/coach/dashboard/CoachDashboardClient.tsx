@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
@@ -21,7 +22,16 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { GlassCard } from '@/components/ui/glass-card'
 import { GlassButton } from '@/components/ui/glass-button'
-import { DashboardCharts } from '@/components/coach/dashboard/DashboardCharts'
+const DashboardCharts = dynamic(
+    () =>
+        import('@/components/coach/dashboard/DashboardCharts').then((m) => ({
+            default: m.DashboardCharts,
+        })),
+    {
+        ssr: false,
+        loading: () => <div className="h-64 w-full animate-pulse rounded-xl bg-muted/40" aria-hidden />,
+    }
+)
 import {
     Dialog,
     DialogContent,

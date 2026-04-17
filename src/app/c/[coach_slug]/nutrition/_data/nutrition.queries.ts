@@ -13,12 +13,12 @@ export const getActiveNutritionPlan = cache(async (userId: string) => {
     .from('nutrition_plans')
     .select(
       `
-      *,
+      id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, is_active,
       nutrition_meals (
-        *,
+        id, name, order_index, plan_id,
         food_items (
-          *,
-          foods (*)
+          id, meal_id, quantity, unit,
+          foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
         )
       )
     `
@@ -41,7 +41,7 @@ export const getNutritionLogForDate = cache(
       .from('daily_nutrition_logs')
       .select(
         `
-      *,
+      id, client_id, plan_id, log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, plan_name_at_log,
       nutrition_meal_logs (
         meal_id,
         is_completed

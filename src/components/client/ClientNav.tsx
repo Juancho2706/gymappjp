@@ -163,7 +163,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                prefetch={true}
+                                prefetch={false}
                                 onClick={() => {
                                     if (pathname !== item.href) setIsNavigating(item.href)
                                 }}

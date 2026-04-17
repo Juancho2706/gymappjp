@@ -1,21 +1,20 @@
 import { Suspense } from 'react'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GlassCard } from '@/components/ui/glass-card'
 import { DashboardContent } from './_components/DashboardContent'
+import { getCoach } from '@/lib/coach/get-coach'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function CoachDashboardPage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/login')
+    const coach = await getCoach()
+    if (!coach) redirect('/login')
 
     return (
         <Suspense fallback={<DashboardSkeleton />}>
-            <DashboardContent userId={user.id} />
+            <DashboardContent userId={coach.id} />
         </Suspense>
     )
 }
