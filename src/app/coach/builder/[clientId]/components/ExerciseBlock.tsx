@@ -84,7 +84,7 @@ function ExerciseBlockInner({
     return (
         <div ref={setNodeRef}
             className={cn(
-                'group relative flex flex-col bg-background dark:bg-card/50 backdrop-blur-md border border-border rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none border-l-4',
+                'group relative flex min-w-0 max-w-full flex-col bg-background dark:bg-card/50 backdrop-blur-md border border-border rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none border-l-4',
                 isDragging
                     ? 'z-50 ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50'
                     : isDragPending
@@ -96,7 +96,7 @@ function ExerciseBlockInner({
                 borderLeftColor: isDragging ? 'var(--theme-primary)' : muscleColor,
             }}
         >
-            <div className="flex items-center gap-3 p-3">
+            <div className="flex min-w-0 items-center gap-3 p-3">
                 <button {...attributes} {...listeners}
                     className="text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing p-1.5 -ml-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center">
                     <GripVertical className="w-4 h-4" />
@@ -119,14 +119,14 @@ function ExerciseBlockInner({
                 </div>
 
                 <div
-                    className="flex-1 min-w-0 cursor-pointer py-1"
+                    className="min-w-0 flex-1 cursor-pointer py-1"
                     onClick={() => !isQuickEditing && onEdit(block)}
                 >
-                    <div className="font-bold text-xs uppercase tracking-widest text-foreground truncate group-hover:text-primary transition-colors pr-2">
+                    <div className="break-words font-bold text-xs uppercase leading-snug tracking-widest text-foreground group-hover:text-primary transition-colors pr-1 [overflow-wrap:anywhere]">
                         {block.exercise_name}
                     </div>
 
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 mt-1.5">
                         {isQuickEditing ? (
                             <div
                                 className="flex items-center gap-1.5"
@@ -213,8 +213,9 @@ function ExerciseBlockInner({
                                     </div>
                                 )}
                                 <div
-                                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest text-white shadow-sm"
+                                    className="max-w-full truncate px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest text-white shadow-sm"
                                     style={{ backgroundColor: muscleColor }}
+                                    title={block.muscle_group}
                                 >
                                     {block.muscle_group}
                                 </div>

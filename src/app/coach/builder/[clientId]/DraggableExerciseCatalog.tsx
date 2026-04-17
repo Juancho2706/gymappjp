@@ -42,12 +42,12 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
             {...attributes}
             onClick={() => onSelect?.(exercise)}
             className={cn(
-                "p-3 rounded-lg border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group relative",
+                "max-w-full overflow-hidden p-3 rounded-lg border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group relative",
                 isDragging && "opacity-50 ring-2 ring-primary border-primary",
                 onSelect && "cursor-pointer active:scale-95 transition-transform"
             )}
         >
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
                 <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center border border-border overflow-hidden shrink-0 group-hover:shadow-md transition-all relative"
                     style={{ backgroundColor: `color-mix(in srgb, ${getMuscleColor(exercise.muscle_group)} 15%, transparent)` }}
@@ -69,29 +69,6 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getMuscleColor(exercise.muscle_group) }} />
                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider truncate">{exercise.muscle_group}</p>
                     </div>
-                </div>
-            </div>
-
-            {/* Hover Tooltip (Desktop) */}
-            <div className="hidden lg:block absolute left-[105%] top-1/2 -translate-y-1/2 w-64 bg-background/95 backdrop-blur-xl border border-border rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] translate-x-[-10px] group-hover:translate-x-0 pointer-events-none overflow-hidden">
-                <div className="h-40 bg-muted/30 relative flex items-center justify-center">
-                    {exercise.gif_url || (exercise.video_url && !exercise.video_url.includes('youtube') && !exercise.video_url.includes('youtu.be')) ? (
-                        <img
-                            src={exercise.gif_url || exercise.video_url!}
-                            alt={exercise.name}
-                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal"
-                        />
-                    ) : (
-                        <Activity className="w-12 h-12 text-muted-foreground/30" />
-                    )}
-                    <div className="absolute top-3 left-3 bg-background/80 backdrop-blur-md px-2 py-1 rounded-md border border-border/50">
-                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: getMuscleColor(exercise.muscle_group) }}>
-                            {exercise.muscle_group}
-                        </span>
-                    </div>
-                </div>
-                <div className="p-3">
-                    <p className="text-sm font-bold leading-tight">{exercise.name}</p>
                 </div>
             </div>
 
@@ -209,7 +186,7 @@ export function DraggableExerciseCatalog({
     })
 
     return (
-        <div className={cn("flex min-h-0 flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm relative", className)}>
+        <div className={cn("flex min-h-0 min-w-0 flex-col h-full max-w-full bg-card border border-border rounded-xl overflow-hidden shadow-sm relative", className)}>
             {/* Header / Filters */}
             <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-xl shrink-0">
                 <div className="flex items-center justify-between">
@@ -254,7 +231,7 @@ export function DraggableExerciseCatalog({
             {/* Virtualized list */}
             <div
                 ref={parentRef}
-                className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-3 py-2"
+                className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-3 py-2"
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
                 {listItems.length === 0 ? (
@@ -263,12 +240,13 @@ export function DraggableExerciseCatalog({
                         <p className="text-xs font-medium">No se encontraron<br />ejercicios</p>
                     </div>
                 ) : (
-                    <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                    <div className="min-w-0 max-w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
                         {rowVirtualizer.getVirtualItems().map(virtualRow => {
                             const item = listItems[virtualRow.index]
                             return (
                                 <div
                                     key={virtualRow.key}
+                                    className="min-w-0 max-w-full overflow-x-hidden"
                                     style={{
                                         position: 'absolute',
                                         top: 0,

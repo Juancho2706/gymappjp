@@ -1023,9 +1023,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full flex px-6 py-6 gap-4">
+                            <div className="flex h-full min-w-0 items-stretch gap-4 px-6 py-6">
                                 {days.map((day) => (
-                                    <div key={day.id} className="h-full pb-8">
+                                    <div key={day.id} className="h-full shrink-0 pb-8">
                                         <DayColumn
                                             day={day}
                                             exercises={exercises}
