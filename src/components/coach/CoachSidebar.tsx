@@ -141,7 +141,10 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
 
             {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile — hidden on builder) */}
             <aside className={cn(
-                "fixed bottom-0 left-0 right-0 z-50 flex flex-col border-t border-sidebar-border bg-sidebar pb-safe shadow-2xl transition-all duration-300 [transform:translateZ(0)] md:sticky md:top-0 md:h-screen md:border-r md:border-t-0 md:pb-0 md:shadow-none supports-[height:100dvh]:md:h-[100dvh]",
+                "fixed bottom-0 left-0 right-0 z-50 flex flex-col border-t border-sidebar-border bg-sidebar pb-safe shadow-2xl transition-all duration-300 [transform:translateZ(0)] md:sticky md:top-0 md:border-r md:border-t-0 md:pb-0 md:shadow-none",
+                isBuilder
+                    ? "md:h-full md:min-h-0 md:max-h-full supports-[height:100dvh]:md:h-full"
+                    : "md:h-screen supports-[height:100dvh]:md:h-[100dvh]",
                 isCollapsed ? "md:w-20" : "md:w-64",
                 isBuilder && "hidden md:flex"
             )}>

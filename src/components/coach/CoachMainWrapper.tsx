@@ -16,7 +16,7 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
         return (
             <main
                 className={cn(
-                    'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+                    'coach-builder-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
                     'md:pt-0'
                 )}
             >
