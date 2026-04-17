@@ -1,25 +1,15 @@
 import { cache } from 'react'
-import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardService, type DirectoryPulseRow } from '@/services/dashboard.service'
 
-/** Tag global para `revalidateTag('directory-pulse')` si se necesita invalidar todo el cache de pulse. */
+/**
+ * Tag reservado para futuras invalidaciones con `revalidateTag` desde server actions.
+ * No usar `unstable_cache` aquí: el pulse depende de `cookies()` vía Supabase SSR y rompe el RSC en prod.
+ */
 export const DIRECTORY_PULSE_CACHE_TAG = 'directory-pulse'
 
-const fetchDirectoryPulse = unstable_cache(
-    async (coachId: string) => {
-        const supabase = await createClient()
-        return new DashboardService(supabase).getDirectoryPulse(coachId)
-    },
-    ['directory-pulse'],
-    { revalidate: 60, tags: [DIRECTORY_PULSE_CACHE_TAG] }
-)
-
-/**
- * Pulse deduplicado por request (React.cache) y con TTL corto entre navegaciones (unstable_cache).
- */
-export const getCachedDirectoryPulse = cache(
-    async (coachId: string): Promise<DirectoryPulseRow[]> => {
-        return fetchDirectoryPulse(coachId)
-    }
-)
+/** Una sola carga de pulse por request (dashboard stats + directorio). */
+export const getCachedDirectoryPulse = cache(async (coachId: string): Promise<DirectoryPulseRow[]> => {
+    const supabase = await createClient()
+    return new DashboardService(supabase).getDirectoryPulse(coachId)
+})

@@ -43,4 +43,4 @@ PERF_COACH_EMAIL=coach@example.com PERF_COACH_PASSWORD=secret npm run test:e2e -
 
 ## Tags de cache (pulse)
 
-El pulse de directorio usa `unstable_cache` con `revalidate: 60` segundos. Tag: `directory-pulse` (`DIRECTORY_PULSE_CACHE_TAG` en `src/lib/coach/directory-pulse-cache.ts`). Tras mutaciones críticas se puede llamar `revalidateTag('directory-pulse')` desde server actions.
+El pulse de directorio usa solo `React.cache` por request (no `unstable_cache`): el cliente Supabase SSR lee `cookies()` y **no es compatible** con `unstable_cache` en Server Components (rompe el render en producción). El tag `directory-pulse` (`DIRECTORY_PULSE_CACHE_TAG`) queda reservado para invalidaciones futuras si se introduce otra estrategia de cache.

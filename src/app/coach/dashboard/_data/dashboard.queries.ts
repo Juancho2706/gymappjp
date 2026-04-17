@@ -145,7 +145,10 @@ async function getCoachDashboardDataInner(userId: string) {
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
     const allClientsData = clientsGrowthRaw.data || []
     const workoutLogs30d = workoutLogs30dRaw.data || []
-    const workoutSessionsSeries = (workoutSessionsSeriesRaw.data as { day: string; sessions: number }[] | null) || null
+    const workoutSessionsSeries =
+        !workoutSessionsSeriesRaw.error && Array.isArray(workoutSessionsSeriesRaw.data)
+            ? (workoutSessionsSeriesRaw.data as { day: string; sessions: number }[])
+            : null
     const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string } }[] | null) || []
     const subscriptionEvents = subscriptionEventsRaw.data || []
 
