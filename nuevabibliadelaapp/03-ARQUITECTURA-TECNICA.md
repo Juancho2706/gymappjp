@@ -1,6 +1,6 @@
 # 03 — Arquitectura Técnica de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-17 America/Santiago
+> **Actualizado:** 2026-04-18 America/Santiago (Sesión 7)
 > **Fuentes:** ARQUITECTURA-COMPONENTES.md, ESTADO-COMPONENTES.md, PERFORMANCE-NAV-BASELINE.md
 
 ---
@@ -278,7 +278,7 @@ Server: re-validación obligatoria en server actions + Zod v4
 |--------|---|------------------|
 | Dashboard Alumno | 98% | page.tsx, DashboardShell, HeroSection, ComplianceRings, NutritionDailySummary, WeightWidget, PRBanner |
 | Nutrición Alumno | 96% | NutritionShell, DayNavigator, MacroRingSummary, MealCard, AdherenceStrip |
-| Constructor de Planes | 95% | WeeklyPlanBuilder, usePlanBuilder, BlockEditSheet, DraggableExerciseCatalog, MuscleBalancePanel |
+| Constructor de Planes | 97% | WeeklyPlanBuilder, usePlanBuilder, BlockEditSheet, DraggableExerciseCatalog, MuscleBalancePanel. Sesión 7: config oculto, gear button pulsante, hint banner, labels español |
 | Biblioteca Programas | 95% | WorkoutProgramsClient, ProgramPreviewPanel, LibraryToolbar, libraryStats.ts |
 | Perfil Alumno (Coach) | 95% | ClientProfileDashboard, ProfileTabNav, B3–B8 tabs, ClientProfileHero |
 | Nutrición Coach | 93% | NutritionHub, PlanBuilder, FoodSearchDrawer (con ml), FoodListCompact |
@@ -404,6 +404,88 @@ Dependencias a revisar: `framer-motion` (scope real), `browser-image-compression
 
 ---
 
+## Arquitectura Móvil (Sesión 7)
+
+### Viewport units
+Regla absoluta: **nunca usar `h-screen`/`min-h-screen`/`100vh` fuera de un breakpoint `md:`**.  
+En iOS Safari y Chrome Android, `100vh` es la altura total incluyendo barras ocultas. Cuando el usuario scrollea y las barras aparecen/desaparecen, `100vh` no se adapta → contenido tapado o cortado.
+
+| Incorrecto | Correcto |
+|-----------|---------|
+| `h-screen` | `h-dvh` |
+| `min-h-screen` | `min-h-dvh` |
+| `style={{ height: '100vh' }}` | `style={{ height: '100dvh' }}` |
+| `md:h-screen` | `md:h-dvh` (igual en desktop, correcto en tablet) |
+
+Safari < 15.4 no soporta `dvh`. Workaround: declarar `100vh` primero, luego `100dvh` lo sobreescribe en browsers modernos.
+
+### Safe areas
+Los iPhones con notch/Dynamic Island y algunos Android tienen zonas inaccesibles en los bordes. Se accede vía:
+```css
+env(safe-area-inset-top, 0px)
+env(safe-area-inset-bottom, 0px)
+env(safe-area-inset-left, 0px)
+env(safe-area-inset-right, 0px)
+```
+Requiere `viewport-fit=cover` en el meta viewport (ya configurado en `src/app/layout.tsx`).
+
+**Utilities disponibles en globals.css:**
+```
+.pt-safe    padding-top: env(safe-area-inset-top, 0px)
+.pb-safe    padding-bottom: env(safe-area-inset-bottom, 0px)
+.pl-safe    padding-left: env(safe-area-inset-left, 0px)
+.pr-safe    padding-right: env(safe-area-inset-right, 0px)
+.px-safe    pl-safe + pr-safe combinados
+.py-safe    pt-safe + pb-safe combinados
+.h-dvh-safe      100dvh - top inset - bottom inset
+.min-h-dvh-safe  igual como min-height
+.scroll-y-safe   scroll con compensación bottom nav + safe-area
+.scroll-y-plain  scroll con solo safe-area (sin bottom nav)
+```
+
+**Dónde aplicar `pl-safe pr-safe`:** Cualquier elemento `fixed` que llega al borde derecho o izquierdo: headers, navs, bottom bars. En el builder, el `<header>` lleva `pl-safe pr-safe` para que el gear button y save button no queden bajo el Dynamic Island.
+
+### overflow-x
+```css
+/* globals.css */
+html { overflow-x: hidden; overflow-x: clip; }
+```
+`overflow-x: clip` es superior a `hidden`: no crea scrollbar fantasma ni rompe `position: sticky`. Fallback `hidden` para Safari < 16.
+
+### Base UI Select — comportamiento de Value
+`SelectPrimitive.Value` de `@base-ui/react` muestra el string del `value` actual, NO el texto del option seleccionado. Para mostrar labels en español, pasar children explícitos:
+```tsx
+const DURATION_LABELS: Record<string, string> = {
+    weeks: 'Semanas',
+    async: 'Ciclos Asíncronos',
+    calendar_days: 'Días Fijos',
+}
+<SelectValue>
+    {DURATION_LABELS[durationType] ?? durationType}
+</SelectValue>
+```
+
+### Layout del coach en móvil
+```
+┌─────────────────────────────────────┐
+│  CoachSidebar top bar (fixed, 56px) │  ← pt-safe incluido, `hidden` en builder
+│  --mobile-top-bar-h: 3.5rem         │
+├─────────────────────────────────────┤
+│                                     │
+│   CoachMainWrapper                  │
+│   pt-[--mobile-content-top-offset]  │
+│   pb-[--mobile-content-bot-offset]  │
+│   (auto-compensa ambas barras)       │
+│                                     │
+├─────────────────────────────────────┤
+│  CoachSidebar bottom nav (fixed)    │  ← pb-safe incluido, `hidden` en builder
+│  --mobile-bottom-bar-h: 80px        │
+└─────────────────────────────────────┘
+```
+En el builder (`/coach/builder/*`): ambas barras se ocultan con `hidden md:flex`. El builder tiene su propio `<header>` sticky con `pt-safe pl-safe pr-safe`.
+
+---
+
 ## Decisiones Técnicas Clave
 
 | Decisión | Motivo |
@@ -414,8 +496,11 @@ Dependencias a revisar: `framer-motion` (scope real), `browser-image-compression
 | Supabase (no custom auth) | Auth + DB + Storage + RLS en uno. RLS como capa de seguridad |
 | Tailwind CSS v4 | Sin tailwind.config, `@theme` en CSS, tokens nativos |
 | shadcn/ui + Radix | Accesibilidad primitiva, sin lock-in de componentes |
+| @base-ui/react | Select, Dialog, etc. sin Radix. Ojo: `SelectValue` no hereda label automáticamente |
 | @dnd-kit (no react-beautiful-dnd) | Mantenido activamente, accesible, soporte touch |
 | PWA manual (no next-pwa) | Control total, manifests dinámicos por coach |
 | MercadoPago pre-approvals | Único gateway que soporta suscripciones + Redcompra en Chile |
 | `useOptimistic` (no SWR/RQ) | React 19 nativo, sin dependencias extra |
 | Sin Redux/Zustand | Context + useState suficiente para la complejidad actual |
+| `dvh` en vez de `vh` | Adapta la altura al viewport visual real en móvil (Sesión 7) |
+| `overflow-x: clip` en html | Evita scroll horizontal sin romper sticky ni crear scrollbar fantasma (Sesión 7) |

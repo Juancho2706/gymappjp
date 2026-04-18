@@ -1,8 +1,8 @@
 # 02 — Roadmap y Tareas Pendientes
 
-> **Actualizado:** 2026-04-17 America/Santiago (Sesión 6)
-> **Fuentes:** ROAD-TO-100.md (Sesiones 1–6), verificación directa via Supabase MCP
-> **Estado global:** ~96% completado. Estimación restante: ~15–18 días de desarrollo.
+> **Actualizado:** 2026-04-18 America/Santiago (Sesión 7)
+> **Fuentes:** ROAD-TO-100.md (Sesiones 1–7), verificación directa via Supabase MCP
+> **Estado global:** ~97% completado. Estimación restante: ~12–15 días de desarrollo.
 
 ---
 
@@ -40,6 +40,27 @@ Los siguientes archivos fueron borrados de `supabase/migrations/` el 2026-04-17.
 
 **Archivos conservados** (en `supabase_migrations` remota o base):
 `20260410202446_remote_schema.sql`, `20260411120000_subscription_core_sprint2.sql`, `20260411193000_expand_subscription_status_check.sql`, `20260413220000_normalize_food_units_to_g_un.sql`, `20260413230000_seed_foods_250.sql`
+
+**Archivo añadido en Sesión 7** (nuevo):
+`20260417_fix_duration_type_constraint.sql` — corrige constraint `workout_programs_duration_type_check` para aceptar `calendar_days` y `async` (aplicado via MCP en producción)
+
+---
+
+## BLOQUE M0 — Optimización Móvil (Sesión 7 — completado)
+
+| ID | Tarea | Estado |
+|----|-------|--------|
+| M1 | Safe areas: `pl-safe pr-safe` en headers builder + navs | ✅ Sesión 7 |
+| M2 | `h-screen` → `h-dvh` en 25+ archivos | ✅ Sesión 7 |
+| M3 | `overflow-x: clip` + `min-h-dvh` en `html`/`body` globals.css | ✅ Sesión 7 |
+| M4 | Nuevas utilities: `.h-dvh-safe`, `.scroll-y-safe`, `.px-safe`, `.py-safe` | ✅ Sesión 7 |
+| M5 | Builder config panel oculto por default | ✅ Sesión 7 |
+| M6 | Gear button icon-only + `animate-ping` permanente ámbar | ✅ Sesión 7 |
+| M7 | Hint banner primera visita (localStorage + auto-dismiss 9s) | ✅ Sesión 7 |
+| M8 | Fix constraint DB `duration_type` (`calendar_days`, `async`) | ✅ Sesión 7 |
+| M9 | Fix labels duration type en español (Base UI Select workaround) | ✅ Sesión 7 |
+| M10 | `DayColumn` con `pb-safe` en scroll container | ✅ Sesión 7 |
+| M11 | Onboarding `min-h-dvh` + `md:justify-center` | ✅ Sesión 7 |
 
 ---
 
@@ -141,8 +162,9 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 
 | Categoría | Item | Prioridad | Esfuerzo | Estado |
 |-----------|------|-----------|----------|--------|
+| Móvil | Optimización safe-areas, dvh, builder UX | 🔴 P0 | — | ✅ Sesión 7 |
+| DB | Constraint `duration_type` corregido | 🔴 P0 | — | ✅ Sesión 7 |
 | Pagos | Smoke test grace period + reactivar | 🔴 P0 | 0.5d | ⏳ |
-| DB | `supabase db push` (RLS + goal_weight_kg) | 🔴 P0 | — | ⏳ (usuario) |
 | DB | BD Alimentos: USDA key + ejecutar scripts + CSV | 🔴 P0 | — | ⏳ (usuario) |
 | Pagos | Verificar cuenta MP (KYC completo) | 🔴 P0 | — | ⏳ (usuario) |
 | Features | Check-in medidas corporales | 🟠 P1 | 2d | ⏳ |

@@ -1,8 +1,8 @@
 # 01 — Estado Actual de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-17 America/Santiago (Sesión 6)
-> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits 2026-04-15/17
-> **Completitud global estimada: ~96%** (Sesiones 1–6 completadas)
+> **Actualizado:** 2026-04-18 America/Santiago (Sesión 7)
+> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits 2026-04-15/18
+> **Completitud global estimada: ~97%** (Sesiones 1–7 completadas)
 
 ---
 
@@ -36,7 +36,7 @@
 |--------|---|-------------|
 | Dashboard Alumno | 98% | Completo. 9 Suspense boundaries, React.cache, compliance rings, PRs, nutrición |
 | Nutrición Alumno | 97% | Completo. Datos reales, DayNavigator, adherencia 30d |
-| Constructor de Planes | 95% | Completo. WeeklyPlanBuilder, DnD, A/B mode, BlockEditSheet |
+| Constructor de Planes | 97% | Completo. WeeklyPlanBuilder, DnD, A/B mode, BlockEditSheet. UX móvil mejorado (panel config oculto, gear button pulsante, hint banner, labels español) |
 | Biblioteca de Programas | 95% | Completo. Filtros, preview panel, duplicate con snapshot |
 | Perfil Alumno (Coach view) | 95% | Completo. 6 tabs (Overview/Análisis/Nutrición/Progreso/Plan/Facturación) |
 | Nutrición Coach (núcleo) | 93% | Completo. Hub, PlanBuilder, FoodLibrary, ActivePlansBoard |
@@ -60,7 +60,7 @@
 | Testing | 28% | Vitest básico + Playwright. Sin cobertura real |
 | Panel CEO / Superadmin | 0% | No implementado |
 
-**TOTAL GLOBAL: ~96%**
+**TOTAL GLOBAL: ~97%**
 
 ---
 
@@ -79,16 +79,85 @@
 - **Colores por coach:** `--theme-primary` CSS var en `CoachLayout` y `ClientLayout`. `SYSTEM_PRIMARY_COLOR = '#007AFF'` cuando coach no activa branding. `BRAND_PRIMARY_COLOR = '#10B981'` (verde) es la marca propia de EVA.
 - **Dark mode:** `ThemeProvider` default dark. Verificar variantes dark en componentes nuevos.
 - **`GlassCard`:** Base de todas las cards del perfil y directorio.
-- **Safe area iOS:** `env(safe-area-inset-top/bottom)` en fixed/sticky en mobile. El header del coach (`CoachSidebar`) lleva `pt-safe`; el contenedor del layout no debe duplicarlo.
+- **Safe areas iOS/Android (Sesión 7):** Utilities `pt-safe/pb-safe/pl-safe/pr-safe` en `globals.css` + `--safe-area-inset-*` CSS vars. Headers (`CoachSidebar`, builder) requieren `pl-safe pr-safe` para no cortar botones en Dynamic Island/notch. `CoachMainWrapper` aplica offsets top+bottom automáticamente. Ver sección de móvil abajo.
+- **Viewport units móvil (Sesión 7):** Usar siempre `h-dvh`/`min-h-dvh` en lugar de `h-screen`/`min-h-screen`. `dvh` (dynamic viewport height) se adapta cuando aparece/desaparece la barra del browser en iOS Safari y Chrome Android. `100vh` es fijo e ignora las barras dinámicas.
+- **`overflow-x: clip` en `html` (Sesión 7):** Previene scroll horizontal sin crear scrollbar fantasma ni romper `position: sticky`. Fallback `overflow-x: hidden` para Safari < 16.
+- **Base UI Select (Sesión 7):** `SelectPrimitive.Value` muestra el `value` crudo (e.g., "weeks") en lugar del label de la opción. Workaround: pasar children explícitos con un mapa de labels (`DURATION_LABELS`).
 - **Variante A/B:** Lógica centralizada en `src/lib/workout/programWeekVariant.ts`. Semana impar → A, par → B.
 - **Arquitectura `_data/_actions/_components`:** Patrón establecido en dashboard alumno y nutrición. Seguir en nuevos módulos.
 - **React.cache:** Para queries deduplicadas en RSC. No usar `unstable_cache` (incompatible con Supabase SSR en prod).
 - **PWA:** `public/sw.js` + manifests dinámicos por coach (`/api/manifest/[coach_slug]` + `/c/[slug]/manifest.webmanifest`).
 - **24 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`. 1 función RPC: `search_foods`.
 
+### Arquitectura Móvil (Sesión 7)
+
+**Layout del coach en móvil:**
+- Top bar fija: `CoachSidebar` en `md:hidden fixed top-0` con altura `--mobile-top-bar-h: 3.5rem`
+- Bottom nav fija: `CoachSidebar` en `fixed bottom-0` con altura `--mobile-bottom-bar-h: 80px`
+- `CoachMainWrapper` compensa ambas con `pt-[var(--mobile-content-top-offset)]` + `pb-[var(--mobile-content-bottom-offset)]`
+- En el builder (`/coach/builder/*`): la top bar y bottom nav del coach se ocultan (`hidden md:flex`); el builder tiene su propio header fijo
+
+**Utilities CSS disponibles (globals.css):**
+```css
+.pt-safe / .pb-safe / .pl-safe / .pr-safe   /* safe-area insets individuales */
+.px-safe / .py-safe                           /* safe-area insets en par */
+.h-dvh-safe                                   /* 100dvh - top - bottom safe areas */
+.min-h-dvh-safe                               /* igual pero min-height */
+.scroll-y-safe                                /* scroll con compensación bottom nav */
+.scroll-y-plain                               /* scroll sin compensación bottom nav */
+```
+
+**Regla global en `html`/`body`:**
+```css
+html { overflow-x: hidden; overflow-x: clip; }
+body { min-height: 100dvh; overscroll-behavior-y: none; }
+```
+
 ---
 
 ## Historial de Sesiones
+
+### Sesión 7 — 2026-04-17/18 — Optimización Móvil Completa + Builder UX
+
+**Problema raíz:** La app ignoraba el *visual viewport* real del móvil y las *safe areas* de dispositivos modernos (iPhone Dynamic Island, Android Chrome con barra dinámica). 4 bugs visibles en capturas del usuario.
+
+**Bugs corregidos:**
+
+1. **Botón guardar cortado en builder (iPhone):** Header de `WeeklyPlanBuilder` carecía de `pl-safe pr-safe`. El Dynamic Island/notch agrega 8–12px de inset que cortaba el botón de guardar y el engranaje. Fix: añadir `pl-safe pr-safe` al `<header>`.
+
+2. **Constraint DB roto al guardar programa:** Producción tenía constraint `duration_type IN ('weeks', 'days', 'indefinite')` pero el código envía `('weeks', 'calendar_days', 'async')`. Migración nunca aplicada. Fix: aplicar via MCP directo + guardar `supabase/migrations/20260417_fix_duration_type_constraint.sql`.
+
+3. **Labels de duration type en inglés:** `SelectPrimitive.Value` de Base UI muestra el valor crudo, no el label. Fix: `DURATION_LABELS` map explícito en `ProgramConfigHeader.tsx`.
+
+4. **Onboarding paso 3 con botón tapado por bottom nav:** `min-h-screen` + `justify-center` centraba en 100vh sin contar la barra del browser. Fix: `min-h-dvh` + `md:justify-center` (solo desktop centra).
+
+**Mejoras de UX en builder:**
+
+- **Config panel oculto por default:** `showConfig` inicializa en `false`; antes se abría si el programa era nuevo. Ahora siempre cerrado.
+- **Gear button icon-only con animación:** Botón de configuración cambió a `w-10 h-10` puro icono (sin texto). Color ámbar (`text-amber-500`). Cuando el panel está cerrado: `animate-ping` permanente con `bg-amber-400/20` pulsando hacia afuera. Se detiene al abrir el panel.
+- **Hint banner de primera visita:** Banner ámbar entre el header y `ProgramPhasesBar`. Se auto-descarta en 9 segundos. Se persiste en `localStorage` con key `'builder_config_hint_v1'`. Se puede cerrar manualmente.
+
+**Barrido sistemático h-screen → h-dvh (25+ archivos):**
+
+Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazados con `h-dvh`/`min-h-dvh` en: layouts de cliente y coach, workout execution, nutrition, exercises, check-in, onboarding, auth, not-found, global-error, legal, privacidad, pricing, settings preview.
+
+**Primitivas globales añadidas a globals.css:**
+- `overflow-x: clip` en `html` (no crea scrollbar fantasma, preserva `sticky`)
+- `min-height: 100dvh` en `body`
+- `overscroll-behavior-y: none` en `body`
+- Nuevas utilities: `.h-dvh-safe`, `.min-h-dvh-safe`, `.px-safe`, `.py-safe`, `.scroll-y-safe`, `.scroll-y-plain`
+
+**Navs actualizadas:**
+- `ClientNav.tsx`: añadido `pl-safe pr-safe md:pl-0 md:pr-0`, `md:h-screen` → `md:h-dvh`
+- `CoachSidebar.tsx`: mismo tratamiento
+
+**Componentes actualizados:**
+- `DayColumn.tsx`: `pb-safe` en scroll container
+- `ProgramConfigHeader.tsx`: `max-h-[60vh]` → `max-h-[80dvh] md:max-h-[60vh]`
+- `onboarding/page.tsx`: `min-h-screen` → `min-h-dvh`, `justify-center` → `md:justify-center`
+- `c/[coach_slug]/layout.tsx`: `min-h-screen` → `min-h-dvh`
+
+---
 
 ### Sesión 6 — 2026-04-17 — Botones de ayuda + Fix UX edición sets + Verificación DB completa
 
@@ -248,6 +317,19 @@
 
 ---
 
+## Commits 2026-04-17/18 — Resumen técnico
+
+| Hash | Fecha | Cambio |
+|------|-------|--------|
+| `b89acbd` | 2026-04-18 | fix(ui): ajuste tamaños de botones y layout para responsividad móvil |
+| `d92eae4` | 2026-04-17 | Merge branch 'EstiloDos': optimización móvil completa + builder UX |
+| `cbfec3e` | 2026-04-17 | fix(builder): elimina ref a setConfigPulse + config panel oculto por default |
+| `120d44d` | 2026-04-17 | fix(mobile): safe-areas (pl/pr-safe en headers), dvh viewport (25 archivos), constraint duration_type |
+| `320e97c` | 2026-04-17 | Refactor estructura código para mayor legibilidad |
+| `8aa02c6` | 2026-04-17 | Añade documentación de estrategia de negocio y operaciones de pago para EVA |
+
+---
+
 ## Commits 2026-04-15/16 — Resumen técnico
 
 | Hash | Fecha | Cambio |
@@ -291,3 +373,8 @@
 | Alimentos chilenos de marca (Colún, Quaker, etc.) | ✅ Seedeados |
 
 **Nota sobre `supabase_migrations`:** Las migraciones se aplicaron vía MCP directo, por lo que solo 9 aparecen registradas en la tabla `supabase_migrations`. Esto es normal para este flujo de trabajo. Los archivos `.sql` locales correspondientes fueron eliminados para evitar confusión.
+
+| Elemento | Estado |
+|----------|--------|
+| `workout_programs_duration_type_check` constraint (Sesión 7) | ✅ Corregido — ahora acepta `('weeks', 'calendar_days', 'async')` |
+| Migración `20260417_fix_duration_type_constraint.sql` | ✅ Guardada en `supabase/migrations/` |
