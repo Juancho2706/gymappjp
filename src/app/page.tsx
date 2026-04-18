@@ -413,12 +413,12 @@ export default function LandingPage() {
         allowedCyclesForCard.length === 1 && allowedCyclesForCard[0] === 'monthly'
 
     return (
-        <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+        <div className="min-h-dvh bg-background text-foreground overflow-x-hidden">
             <PillNav />
             <StickyBrandingCard />
 
             {/* ── HERO ── */}
-            <section ref={heroRef} className="relative min-h-screen flex flex-col items-center justify-center pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-32 bg-background">
+            <section ref={heroRef} className="relative min-h-dvh flex flex-col items-center justify-center pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-32 bg-background">
                 {/* Background glow orbs */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
                     <div className="absolute top-1/4 left-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-[#007AFF]/10 blur-[100px] md:blur-[150px]" />

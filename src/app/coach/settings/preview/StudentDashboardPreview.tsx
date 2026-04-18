@@ -23,7 +23,7 @@ export function StudentDashboardPreview({ brandName, primaryColor, logoUrl }: Pr
     const [view, setView] = useState<'mobile' | 'desktop'>('mobile')
 
     return (
-        <div className="min-h-screen bg-muted/30 dark:bg-black/20 flex flex-col">
+        <div className="min-h-dvh bg-muted/30 dark:bg-black/20 flex flex-col">
             {/* Top bar */}
             <div className="flex items-center justify-between px-4 py-3 md:py-6 md:px-8 max-w-6xl mx-auto w-full flex-shrink-0">
                 <Link

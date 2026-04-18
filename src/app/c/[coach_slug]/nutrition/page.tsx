@@ -43,7 +43,7 @@ export default async function ClientNutritionPage({ params }: Props) {
   ])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <div
         className="fixed top-0 right-0 w-72 h-72 opacity-[0.06] blur-3xl rounded-full pointer-events-none"
         style={{ backgroundColor: 'var(--theme-primary)' }}

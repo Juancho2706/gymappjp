@@ -3,7 +3,7 @@ import { ArrowLeft, Apple } from 'lucide-react'
 
 export function EmptyNutritionState({ coachSlug }: { coachSlug: string }) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <header className="px-4 py-3.5 pt-safe flex items-center gap-3 border-b border-border/10">
         <Link
           href={`/c/${coachSlug}/dashboard`}

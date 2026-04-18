@@ -66,7 +66,7 @@ export default async function ClientExercisesPage({ params }: Props) {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className="min-h-dvh bg-background pb-32">
       <header className="border-b border-border/10 px-4 py-4 md:px-8 sticky top-0 pt-safe bg-background/80 backdrop-blur-xl z-40 flex items-center gap-3 shadow-sm">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"

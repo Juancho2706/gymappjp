@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react'
 
 export default function PrivacidadPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden relative">
+    <div className="min-h-dvh bg-background text-foreground overflow-x-hidden relative">
       {/* Background glow orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-0 right-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-[#00E5FF]/10 blur-[100px] md:blur-[150px]" />

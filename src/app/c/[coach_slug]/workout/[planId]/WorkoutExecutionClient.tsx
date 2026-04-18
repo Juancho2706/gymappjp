@@ -137,7 +137,7 @@ export function WorkoutExecutionClient({
     
     if (!blocks.length) {
         return (
-            <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+            <div className="min-h-dvh bg-background flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
                     <Dumbbell className="w-8 h-8" />
                 </div>
@@ -225,7 +225,7 @@ export function WorkoutExecutionClient({
 
     return (
         <WorkoutTimerProvider>
-            <div className="min-h-screen bg-background">
+            <div className="min-h-dvh bg-background">
                 <motion.div 
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}

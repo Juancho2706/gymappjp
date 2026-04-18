@@ -63,7 +63,7 @@ export default async function ClientLoginPage({ params }: Props) {
 
     return (
         <div
-            className="min-h-screen flex items-center justify-center p-4 pt-safe bg-background"
+            className="min-h-dvh flex items-center justify-center p-4 pt-safe bg-background"
         >
             {/* Ambient glow using coach color */}
             <div
