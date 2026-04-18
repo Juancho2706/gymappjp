@@ -65,7 +65,7 @@
   --safe-area-inset-right: env(safe-area-inset-right);
   --mobile-top-bar-h: 3.5rem;
   --mobile-bottom-bar-h: 80px;
-  --mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-bar-h));
+  --mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-bar-h) + 0.5rem);
   --mobile-content-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-bar-h));
 
   /* Pale Grey Background from Brand Guidelines */
@@ -431,7 +431,7 @@ body, nav, header, aside, section, article, a, button, input, select, textarea, 
    ============================================================ */
 @layer utilities {
   .pt-safe {
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
   }
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0px);

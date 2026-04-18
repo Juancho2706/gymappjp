@@ -126,7 +126,7 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-lg bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
+            <DialogContent className="max-w-lg bg-background/95 backdrop-blur-2xl border border-border shadow-2xl overflow-hidden">
                 <DialogHeader>
                     <DialogTitle className="text-sm font-display uppercase tracking-[0.2em] text-foreground">
                         Biblioteca de Plantillas

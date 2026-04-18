@@ -81,25 +81,16 @@ interface Props {
     activeWeekVariant?: 'A' | 'B' | null
 }
 
-function ManualTimerButton({ defaultTime, onSettingsClick }: { defaultTime: string | null, onSettingsClick: () => void }) {
+function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
     const { startRest } = useWorkoutTimer()
     return (
-        <div className="flex items-center gap-1.5">
-            <button
-                onClick={() => startRest(defaultTime || '90')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-bold transition-all hover:bg-secondary/80 active:scale-95"
-            >
-                <Timer className="w-3.5 h-3.5" />
-                Descanso ({defaultTime || '90s'})
-            </button>
-            <button 
-                onClick={onSettingsClick}
-                className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
-                title="Descanso y alarma"
-            >
-                <Settings className="w-4 h-4" />
-            </button>
-        </div>
+        <button
+            onClick={() => startRest(defaultTime || '90')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-bold transition-all hover:bg-secondary/80 active:scale-95"
+        >
+            <Timer className="w-3.5 h-3.5" />
+            Descanso ({defaultTime || '90s'})
+        </button>
     )
 }
 
@@ -447,7 +438,7 @@ export function WorkoutExecutionClient({
 
                 <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border/20 bg-background/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
                     <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-                        <ManualTimerButton defaultTime={'90'} onSettingsClick={() => setShowTimerSettings(true)} />
+                        <ManualTimerButton defaultTime={'90'} />
                         <button
                             onClick={handleFinish}
                             className="h-12 px-5 flex items-center gap-2 rounded-xl bg-primary text-primary-foreground font-bold"

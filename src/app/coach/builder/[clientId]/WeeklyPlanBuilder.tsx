@@ -675,7 +675,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1 md:gap-2 shrink-0">
                         {/* Catalog toggle — tablet only (md→lg) */}
                         <Button
                             variant="ghost"
@@ -771,7 +771,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         {/* Mobile overflow menu — hidden on md+ */}
                         <DropdownMenu>
                             <DropdownMenuTrigger
-                                className="md:hidden h-10 w-10 px-0 border-0 bg-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                className="md:hidden h-8 w-8 px-0 border-0 bg-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                                 title="Más opciones"
                             >
                                 <MoreVertical className="w-5 h-5" />
@@ -813,7 +813,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className={`relative h-10 w-10 transition-all ${
+                                className={`relative h-8 w-8 md:h-10 md:w-10 transition-all ${
                                     showConfig
                                         ? 'border-amber-400/60 bg-amber-400/10 text-amber-500 dark:text-amber-400'
                                         : 'border-amber-400/40 text-amber-500 dark:text-amber-400 hover:bg-amber-400/10 hover:border-amber-400/60 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -857,7 +857,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             onClick={handleSave}
                             disabled={isPending || !programName.trim()}
                             size="sm"
-                            className="h-10 px-4 md:px-6 text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] hover:opacity-90 transition-all disabled:opacity-50"
+                            className="h-8 w-8 md:h-10 md:w-auto md:px-6 text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] hover:opacity-90 transition-all disabled:opacity-50"
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin md:mr-2" /> : <Save className="w-4 h-4 md:mr-2" />}
@@ -1211,7 +1211,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                     </div>
                                 </div>
                             ) : activeData.type === 'block' ? (
-                                <div className="opacity-80 scale-105 rotate-3 w-[260px] pointer-events-none shadow-2xl z-50">
+                                <div className="opacity-80 scale-105 rotate-3 w-[320px] pointer-events-none shadow-2xl z-50">
                                     <ExerciseBlock
                                         block={activeData.block}
                                         dayId={activeData.dayId}

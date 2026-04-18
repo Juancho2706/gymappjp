@@ -71,15 +71,15 @@ export function ProgramPreviewDialog({
                         </div>
 
                         {/* Stats rápidos */}
-                        <div className="grid grid-cols-3 gap-4 mt-4">
+                        <div className="grid grid-cols-3 gap-2 mt-4">
                             {[
                                 { label: 'Ejercicios', value: totalExercises },
-                                { label: 'Series tot.', value: totalSets },
-                                { label: 'Días/semana', value: activeDays.length },
+                                { label: 'Series', value: totalSets },
+                                { label: 'Días activos', value: activeDays.length },
                             ].map(stat => (
-                                <div key={stat.label} className="text-center p-3 bg-background rounded-xl border border-border">
+                                <div key={stat.label} className="text-center p-3 bg-background rounded-xl border border-border overflow-hidden">
                                     <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-                                    <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">{stat.label}</div>
+                                    <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mt-0.5 leading-tight break-words">{stat.label}</div>
                                 </div>
                             ))}
                         </div>

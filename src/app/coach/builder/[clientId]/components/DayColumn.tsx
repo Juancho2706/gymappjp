@@ -106,7 +106,7 @@ function DayColumnInner({
         <div className={cn(
             'flex min-w-0 max-w-full flex-col h-full backdrop-blur-xl border border-border rounded-2xl overflow-hidden shadow-sm transition-colors duration-300',
             // Ancho fijo en desktop para que nombres largos hagan wrap y no estiren el tablero
-            'w-full min-w-[200px] max-w-full md:w-[260px] md:max-w-[260px] md:flex-shrink-0 lg:w-[280px] lg:max-w-[280px]',
+            'w-full min-w-[200px] max-w-full md:w-[300px] md:max-w-[300px] md:flex-shrink-0 lg:w-[320px] lg:max-w-[320px]',
             is_rest
                 ? 'bg-muted/30 dark:bg-muted/20'
                 : 'bg-card dark:bg-card/80'
