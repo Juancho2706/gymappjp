@@ -33,6 +33,12 @@ interface ProgramConfigHeaderProps {
     onClose: () => void
 }
 
+const DURATION_LABELS: Record<string, string> = {
+    weeks: 'Semanas',
+    async: 'Ciclos Asíncronos',
+    calendar_days: 'Días Fijos',
+}
+
 export function ProgramConfigHeader({
     programName, setProgramName,
     durationType, setDurationType,
@@ -130,7 +136,9 @@ export function ProgramConfigHeader({
                                 </label>
                                 <Select value={durationType} onValueChange={v => setDurationType(v as any)}>
                                     <SelectTrigger className="h-12 rounded-xl bg-background border-border font-bold text-xs uppercase tracking-widest">
-                                        <SelectValue />
+                                        <SelectValue>
+                                            {DURATION_LABELS[durationType] ?? durationType}
+                                        </SelectValue>
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl border-border bg-background text-foreground">
                                         <SelectItem value="weeks" className="text-xs font-bold uppercase tracking-widest">Semanas</SelectItem>

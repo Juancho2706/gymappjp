@@ -285,7 +285,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const [isPending, startTransition] = useTransition()
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
-    const [showConfig, setShowConfig] = useState(!initialProgram?.id)
+    const [showConfig, setShowConfig] = useState(false)
+    const [showBuilderHint, setShowBuilderHint] = useState(false)
     const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
 
     const touchStartY = useRef(0)
@@ -305,6 +306,21 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         const checkMobile = () => setIsMobile(window.innerWidth < 768)
         checkMobile()
         window.addEventListener('resize', checkMobile)
+
+        // Hint de primera visita
+        const hintKey = 'builder_config_hint_v1'
+        if (!localStorage.getItem(hintKey)) {
+            setShowBuilderHint(true)
+            const t = setTimeout(() => {
+                setShowBuilderHint(false)
+                localStorage.setItem(hintKey, '1')
+            }, 9000)
+            return () => {
+                clearTimeout(t)
+                window.removeEventListener('resize', checkMobile)
+            }
+        }
+
         return () => window.removeEventListener('resize', checkMobile)
     }, [])
 
@@ -522,6 +538,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         setBlockSection(d, u, s)
         setHasUnsavedChanges(true)
     }, [setBlockSection])
+
+    const dismissBuilderHint = useCallback(() => {
+        setShowBuilderHint(false)
+        try { localStorage.setItem('builder_config_hint_v1', '1') } catch (e) {}
+    }, [])
 
     const handleToggleBlockOverride = useCallback((uid: string) => {
         toggleBlockOverride(uid)
@@ -784,16 +805,28 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         </DropdownMenu>
 
                         {/* Config/Settings — always visible */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-10 w-10 md:w-auto md:px-3 text-xs font-bold uppercase tracking-widest border-border hover:bg-black/5 dark:hover:bg-white/5"
-                            onClick={() => setShowConfig(!showConfig)}
-                            title="Configuración"
-                        >
-                            <Settings className="w-4 h-4 md:mr-2" />
-                            <span className="hidden md:inline">Config</span>
-                        </Button>
+                        <div className="relative">
+                            {/* Ping permanente — sólo cuando el panel está cerrado */}
+                            {!showConfig && (
+                                <span className="absolute inset-0 rounded-lg animate-ping bg-amber-400/20 pointer-events-none" />
+                            )}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className={`relative h-10 w-10 transition-all ${
+                                    showConfig
+                                        ? 'border-amber-400/60 bg-amber-400/10 text-amber-500 dark:text-amber-400'
+                                        : 'border-amber-400/40 text-amber-500 dark:text-amber-400 hover:bg-amber-400/10 hover:border-amber-400/60 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
+                                }`}
+                                onClick={() => {
+                                    setShowConfig(!showConfig)
+                                    dismissBuilderHint()
+                                }}
+                                title="Configurar programa"
+                            >
+                                <Settings className="w-4 h-4" />
+                            </Button>
+                        </div>
 
                         {client && initialProgram?.id && sourceTemplateId && (
                             <Button
@@ -832,6 +865,22 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         </Button>
                     </div>
                 </div>
+
+                {showBuilderHint && (
+                    <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 animate-in slide-in-from-top-1 duration-300">
+                        <Settings className="w-4 h-4 text-amber-500 shrink-0" />
+                        <p className="flex-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                            <strong>¡Configura tu programa!</strong> Pulsa <strong>Configurar</strong> arriba para definir nombre, tipo de duración, fases y más opciones.
+                        </p>
+                        <button
+                            onClick={dismissBuilderHint}
+                            className="shrink-0 text-amber-500/60 hover:text-amber-500 text-lg leading-none"
+                            aria-label="Cerrar"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
 
                 <ProgramPhasesBar phases={programPhases} />
 
