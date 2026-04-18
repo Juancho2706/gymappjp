@@ -180,7 +180,7 @@ export default function SubscriptionProcessingPage() {
     }, [cycleFromUrl, fromRegister, preapprovalId, tierFromUrl])
 
     return (
-        <main className="flex min-h-screen items-center justify-center px-4 py-12 bg-background">
+        <main className="flex min-h-dvh items-center justify-center px-4 py-12 bg-background">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl">
                 {!error && (
                     <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />

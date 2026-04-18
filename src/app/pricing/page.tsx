@@ -82,7 +82,7 @@ const cycleOrder: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 export default function PricingPage() {
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-dvh bg-background">
             {/* Header */}
             <header className="border-b border-border px-6 py-4 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2">

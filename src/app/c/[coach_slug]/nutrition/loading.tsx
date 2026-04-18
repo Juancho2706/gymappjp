@@ -1,6 +1,6 @@
 export default function NutritionLoading() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <div className="sticky top-0 px-4 py-3.5 border-b border-border/10 bg-background/80 backdrop-blur-xl z-40">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-muted rounded-xl animate-pulse" />

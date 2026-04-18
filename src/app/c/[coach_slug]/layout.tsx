@@ -126,7 +126,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         <>
             <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; --theme-primary-rgb: ${primaryRgb}; }` }} />
             <div
-                className="flex flex-col md:flex-row min-h-screen antialiased bg-background text-foreground"
+                className="flex flex-col md:flex-row min-h-dvh antialiased bg-background text-foreground"
                 style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}

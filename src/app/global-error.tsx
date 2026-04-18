@@ -20,7 +20,7 @@ export default function GlobalError({
   return (
     <html>
       <body>
-        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="min-h-dvh flex items-center justify-center bg-background p-4">
             <Card className="max-w-md w-full border-destructive/20 bg-destructive/5">
                 <CardHeader className="text-center pb-4">
                     <div className="mx-auto w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mb-4">

@@ -474,3 +474,67 @@ body.immersive-workout-mode main {
     display: block !important;
   }
 }
+
+/* ============================================================
+   Mobile Foundation — overflow anti-clip & dynamic viewport
+   ============================================================ */
+
+/* overflow-x: clip es superior a hidden: no crea scrollbar fantasma
+   y respeta position: sticky. Fallback a hidden en Safari < 16. */
+html {
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+body {
+  /* dvh = dynamic viewport height: se adapta cuando la barra del
+     navegador aparece/desaparece en iOS Safari y Chrome Android. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Evita que hijos directos del body empujen el ancho */
+body > * {
+  max-width: 100%;
+}
+
+/* ============================================================
+   DVH utilities (complementan las de Tailwind v4)
+   ============================================================ */
+@layer utilities {
+  /* Altura dinámica completa menos safe areas */
+  .h-dvh-safe {
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+  .min-h-dvh-safe {
+    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Padding lateral combinado (útil en landscape con notch) */
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .py-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Scroll vertical con soporte táctil y padding para bottom nav */
+  .scroll-y-safe {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-bar-h, 0px));
+  }
+
+  /* Scroll vertical sin compensar bottom nav (auth, onboarding) */
+  .scroll-y-plain {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
