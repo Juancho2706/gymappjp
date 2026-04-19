@@ -12,13 +12,19 @@ const days = [
 ];
 
 const exerciseLibrary = [
-  { name: "Press banca", tag: "Pecho", equip: "Barra" },
-  { name: "Press inclinado", tag: "Pecho", equip: "Mancuernas" },
-  { name: "Press militar", tag: "Hombro", equip: "Barra" },
-  { name: "Elevaciones laterales", tag: "Hombro", equip: "Mancuernas" },
-  { name: "Fondos", tag: "Pecho", equip: "Peso corporal" },
-  { name: "Tríceps polea", tag: "Tríceps", equip: "Polea" },
+  { name: "Press banca", tag: "Pecho", equip: "Barra", muscle: "#fb7185" },
+  { name: "Press inclinado", tag: "Pecho", equip: "Mancuernas", muscle: "#fb7185" },
+  { name: "Press militar", tag: "Hombro", equip: "Barra", muscle: "#c084fc" },
+  { name: "Elevaciones laterales", tag: "Hombro", equip: "Mancuernas", muscle: "#c084fc" },
+  { name: "Fondos", tag: "Pecho", equip: "Peso corporal", muscle: "#fb7185" },
+  { name: "Tríceps polea", tag: "Tríceps", equip: "Polea", muscle: "#38bdf8" },
 ];
+
+function muscleForExercise(name: string): string {
+  if (/pectoral|banca|inclinado|fondos/i.test(name)) return "#fb7185";
+  if (/militar|lateral|hombro/i.test(name)) return "#c084fc";
+  return "#38bdf8";
+}
 
 export default function BuilderPreview() {
   return (
@@ -28,161 +34,227 @@ export default function BuilderPreview() {
       subtitle="Plan de Lucía Fernández — Semana 8 · Día 2"
       actions={
         <>
-          <span className="chip chip-accent"><span className="dot" style={{ background: "#047F68" }} /> Guardado</span>
-          <button className="btn btn-ghost btn-sm">Previsualizar</button>
-          <button className="btn btn-primary btn-sm">Publicar cambios</button>
+          <span className="chip chip-accent">
+            <span className="dot" style={{ background: "#5eead4" }} />
+            Guardado
+          </span>
+          <button type="button" className="btn btn-ghost btn-sm">
+            Previsualizar
+          </button>
+          <button type="button" className="btn btn-primary btn-sm">
+            Publicar cambios
+          </button>
         </>
       }
     >
-      {/* Week strip */}
-      <div className="surface" style={{ padding: 20, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+      <div className="pv-glass-card mb-4 rounded-2xl p-5 md:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="label" style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-muted-fg)" }}>
+            <div className="label text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--obs-text-faint)]">
               Semana 8 de 12
             </div>
-            <div className="display" style={{ fontSize: 20, marginTop: 4 }}>Microciclo de acumulación</div>
+            <div className="display mt-1 text-lg text-[var(--obs-text)] md:text-xl">
+              Microciclo de acumulación
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-ghost btn-sm">← S7</button>
-            <button className="btn btn-ghost btn-sm">S9 →</button>
+          <div className="flex gap-2">
+            <button type="button" className="btn btn-ghost btn-sm">
+              ← S7
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm">
+              S9 →
+            </button>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
           {days.map((d) => (
             <div
               key={d.label}
+              className="rounded-xl px-3 py-3.5 transition-colors md:px-3.5"
               style={{
-                padding: "14px 12px",
-                borderRadius: 10,
-                border: d.active ? "2px solid var(--c-primary)" : "1px solid var(--c-border)",
-                background: d.active ? "rgba(107,33,254,0.08)" : d.rest ? "var(--c-muted)" : "var(--c-card)",
+                border: d.active
+                  ? "1px solid rgba(var(--theme-primary-rgb),0.45)"
+                  : "1px solid var(--obs-border)",
+                background: d.active
+                  ? "rgba(var(--theme-primary-rgb),0.06)"
+                  : d.rest
+                    ? "rgba(0,0,0,0.2)"
+                    : "rgba(255,255,255,0.02)",
+                boxShadow: d.active ? "0 0 24px -8px rgba(var(--theme-primary-rgb),0.35)" : undefined,
                 cursor: "pointer",
-                position: "relative",
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-muted-fg)" }}>
+              <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--obs-text-faint)]">
                 {d.label}
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{d.name}</div>
-              {d.done && <span className="chip chip-success" style={{ marginTop: 8, height: 20, fontSize: 10 }}>✓ Hecho</span>}
-              {d.active && <span className="chip chip-primary" style={{ marginTop: 8, height: 20, fontSize: 10 }}>Editando</span>}
+              <div className="mt-1.5 text-sm font-bold text-[var(--obs-text)]">{d.name}</div>
+              {d.done ? (
+                <span className="chip chip-success mt-2 inline-flex h-5 items-center px-2 text-[10px]">
+                  ✓ Hecho
+                </span>
+              ) : null}
+              {d.active ? (
+                <span className="chip chip-primary mt-2 inline-flex h-5 items-center px-2 text-[10px]">
+                  Editando
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Main builder layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
-        {/* Library */}
-        <div className="surface" style={{ padding: 20, height: "fit-content", position: "sticky", top: 16 }}>
-          <div className="label" style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-muted-fg)", marginBottom: 10 }}>
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        <div className="pv-glass-card h-fit rounded-2xl p-5 lg:sticky lg:top-4">
+          <div className="label mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--obs-text-faint)]">
             Biblioteca
           </div>
-          <input className="input" placeholder="Buscar ejercicio…" style={{ marginBottom: 14 }} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+          <input className="input mb-3" placeholder="Buscar ejercicio…" />
+          <div className="mb-4 flex flex-wrap gap-1.5">
             {["Todos", "Pecho", "Espalda", "Pierna", "Hombro", "Core"].map((t, i) => (
-              <span key={t} className={`chip ${i === 0 ? "chip-primary" : ""}`} style={{ cursor: "pointer" }}>{t}</span>
+              <span key={t} className={`chip cursor-pointer ${i === 0 ? "chip-primary" : ""}`}>
+                {t}
+              </span>
             ))}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="flex flex-col gap-2">
             {exerciseLibrary.map((e) => (
-              <div key={e.name} style={{
-                padding: 12,
-                border: "1px solid var(--c-border)",
-                borderRadius: 10,
-                cursor: "grab",
-                background: "var(--c-card)",
-                transition: "border-color 100ms ease, transform 100ms ease",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "var(--c-muted-fg)", fontSize: 14 }}>⋮⋮</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--c-muted-fg)", marginTop: 2 }}>{e.tag} · {e.equip}</div>
+              <div
+                key={e.name}
+                className="pv-glass-card cursor-grab rounded-xl px-3 py-3 transition-transform duration-200 hover:scale-[1.01]"
+                style={{
+                  borderLeft: `3px solid ${e.muscle}`,
+                  boxShadow: `inset 3px 0 0 -1px ${e.muscle}33`,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[var(--obs-text-faint)]">⋮⋮</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold text-[var(--obs-text)]">{e.name}</div>
+                    <div className="mt-0.5 text-[11px] text-[var(--obs-text-faint)]">
+                      {e.tag} · {e.equip}
+                    </div>
                   </div>
-                  <span style={{ color: "var(--c-primary)", fontSize: 16, fontWeight: 700 }}>+</span>
+                  <span className="text-base font-bold text-[rgb(var(--theme-primary-rgb))]">+</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Day editor */}
         <div>
-          <div className="surface-dark" style={{ padding: 24, marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="pv-glass-strong mb-4 rounded-2xl p-6 md:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.5 }}>
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--obs-text-faint)]">
                   Día en edición
                 </div>
-                <div className="display" style={{ fontSize: 34, marginTop: 6 }}>{workoutDay.name}</div>
-                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                <div className="display mt-2 text-2xl text-[var(--obs-text)] md:text-3xl">{workoutDay.name}</div>
+                <div className="mt-3 flex flex-wrap gap-2">
                   <span className="chip chip-dark">⏱ {workoutDay.duration}</span>
                   <span className="chip chip-dark">4 bloques</span>
                   <span className="chip chip-dark">9 ejercicios</span>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-ghost btn-sm" style={{ borderColor: "rgba(255,255,255,0.2)", color: "#fff" }}>Duplicar día</button>
-                <button className="btn btn-accent btn-sm">+ Bloque</button>
+              <div className="flex gap-2">
+                <button type="button" className="btn btn-ghost btn-sm">
+                  Duplicar día
+                </button>
+                <button type="button" className="btn btn-accent btn-sm">
+                  + Bloque
+                </button>
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="flex flex-col gap-3">
             {workoutDay.blocks.map((block) => (
-              <div key={block.letter} className="surface" style={{ padding: 0, overflow: "hidden" }}>
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "16px 20px",
-                  background: "var(--c-bg-2)",
-                  borderBottom: "1px solid var(--c-border)",
-                }}>
-                  <span style={{ color: "var(--c-muted-fg)" }}>⋮⋮</span>
-                  <div style={{
-                    width: 36, height: 36, borderRadius: 8,
-                    background: "var(--c-dark)", color: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontFamily: "var(--font-montserrat)", fontWeight: 800, fontSize: 16,
-                  }}>{block.letter}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{block.title}</div>
-                    <div style={{ fontSize: 11, color: "var(--c-muted-fg)" }}>{block.exercises.length} ejercicios</div>
+              <div key={block.letter} className="pv-glass-card overflow-hidden rounded-2xl">
+                <div
+                  className="flex items-center gap-3 border-b px-5 py-4"
+                  style={{ borderColor: "var(--obs-border)", background: "rgba(0,0,0,0.2)" }}
+                >
+                  <span className="text-[var(--obs-text-faint)]">⋮⋮</span>
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base font-extrabold text-[var(--obs-text)]"
+                    style={{
+                      fontFamily: "var(--font-montserrat)",
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid var(--obs-border)",
+                    }}
+                  >
+                    {block.letter}
                   </div>
-                  <button className="btn btn-ghost btn-sm">Editar</button>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] font-bold text-[var(--obs-text)]">{block.title}</div>
+                    <div className="text-[11px] text-[var(--obs-text-faint)]">
+                      {block.exercises.length} ejercicios
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-ghost btn-sm">
+                    Editar
+                  </button>
                 </div>
 
                 <div>
-                  <div className="row head" style={{ gridTemplateColumns: "24px 2fr 1fr 1.5fr 60px", borderTop: "none" }}>
-                    <div></div>
+                  <div
+                    className="row head border-t-0"
+                    style={{ gridTemplateColumns: "28px 2fr 1fr 1.5fr 52px" }}
+                  >
+                    <div />
                     <div>Ejercicio</div>
                     <div>Sets × Reps</div>
                     <div>Notas</div>
-                    <div></div>
+                    <div />
                   </div>
-                  {block.exercises.map((ex, i) => (
-                    <div key={i} className="row" style={{ gridTemplateColumns: "24px 2fr 1fr 1.5fr 60px" }}>
-                      <div style={{ color: "var(--c-muted-fg)" }}>⋮⋮</div>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{ex.name}</div>
-                      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--c-primary)" }}>{ex.sets}</div>
-                      <div style={{ fontSize: 13, color: "var(--c-muted-fg)" }}>{ex.notes}</div>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button className="btn btn-ghost btn-sm" style={{ width: 28, padding: 0 }}>⋯</button>
+                  {block.exercises.map((ex, i) => {
+                    const muscle = muscleForExercise(ex.name);
+                    const dragDemo =
+                      block.letter === "B" && ex.name === "Press banca";
+                    return (
+                      <div
+                        key={i}
+                        className={`row ${dragDemo ? "pv-kinetic-glow-strong scale-[1.02] rounded-lg" : ""}`}
+                        style={{
+                          gridTemplateColumns: "28px 2fr 1fr 1.5fr 52px",
+                          borderLeft: dragDemo ? "3px solid rgb(var(--theme-primary-rgb))" : `3px solid ${muscle}`,
+                          boxShadow: dragDemo
+                            ? undefined
+                            : `inset 3px 0 0 -1px ${muscle}40`,
+                          transition: "box-shadow 0.3s ease, transform 0.3s ease",
+                        }}
+                      >
+                        <div className="text-[var(--obs-text-faint)]">⋮⋮</div>
+                        <div className="flex items-center gap-3 text-sm font-semibold text-[var(--obs-text)]">
+                          <span
+                            className="inline-block h-9 w-9 shrink-0 rounded-md bg-[rgba(0,0,0,0.35)] ring-1 ring-[var(--obs-border)]"
+                            aria-hidden
+                          />
+                          {ex.name}
+                          {dragDemo ? (
+                            <span className="chip chip-primary text-[10px]">Arrastrando (demo)</span>
+                          ) : null}
+                        </div>
+                        <div className="mono text-[13px] font-bold text-[var(--obs-text)]">{ex.sets}</div>
+                        <div className="text-[13px] text-[var(--obs-text-dim)]">{ex.notes}</div>
+                        <div>
+                          <button type="button" className="btn btn-ghost btn-sm !h-8 !min-w-8 !px-0">
+                            ⋯
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <div style={{ padding: "12px 20px", borderTop: "1px solid var(--c-border)" }}>
-                    <button className="btn btn-ghost btn-sm">+ Agregar ejercicio al bloque</button>
+                    );
+                  })}
+                  <div className="border-t px-5 py-3" style={{ borderColor: "var(--obs-border)" }}>
+                    <button type="button" className="btn btn-ghost btn-sm">
+                      + Agregar ejercicio al bloque
+                    </button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <button className="btn btn-dark" style={{ marginTop: 16, width: "100%", height: 52 }}>
+          <button type="button" className="btn btn-ghost mt-4 h-[52px] w-full border-[var(--obs-border-strong)]">
             + Añadir bloque al día
           </button>
         </div>

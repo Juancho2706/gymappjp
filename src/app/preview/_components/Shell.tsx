@@ -1,22 +1,26 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { GymAppLogo } from "@/components/ui/Logo";
+import { cn } from "@/lib/utils";
+
+const coachBrand = "FITCOACH STUDIO";
 
 const nav = [
   { section: "Operación", items: [
-    { label: "Dashboard", icon: "◧", href: "/preview/dashboard" },
-    { label: "Clientes", icon: "◔", href: "/preview/cliente" },
-    { label: "Check-ins", icon: "✓", href: "#" },
-    { label: "Mensajes", icon: "✎", href: "#", badge: 3 },
+    { label: "Dashboard", href: "/preview/dashboard" },
+    { label: "Alumnos", href: "/preview/cliente" },
+    { label: "Check-ins", href: "#" },
+    { label: "Mensajes", href: "#", badge: 3 },
   ]},
   { section: "Construcción", items: [
-    { label: "Builder", icon: "▦", href: "/preview/builder" },
-    { label: "Templates", icon: "⬚", href: "#" },
-    { label: "Nutrición", icon: "◉", href: "#" },
-    { label: "Ejercicios", icon: "⚡", href: "#" },
+    { label: "Programas", href: "#" },
+    { label: "Builder", href: "/preview/builder" },
+    { label: "Nutrición", href: "#" },
+    { label: "Ejercicios", href: "#" },
   ]},
   { section: "Negocio", items: [
-    { label: "Planes", icon: "$", href: "#" },
-    { label: "Ajustes", icon: "⚙", href: "#" },
+    { label: "Mi marca", href: "#" },
+    { label: "Suscripción", href: "#" },
   ]},
 ];
 
@@ -28,62 +32,66 @@ export function Shell({ active, children, title, subtitle, actions }: {
   actions?: ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <aside className="side">
-        <Link href="/preview" className="side-logo">
-          <span className="mark" />
-          EVA
+    <div className="pv-shell">
+      <aside className="pv-side">
+        <Link href="/preview" className="pv-side-brand">
+          <GymAppLogo className="h-9 w-[5.5rem] flex-shrink-0" />
+          <div className="pv-side-brand-text">
+            <p className="pv-eva-mark">EVA</p>
+            <p className="pv-coach-brand">{coachBrand}</p>
+          </div>
         </Link>
 
         {nav.map((group) => (
-          <div key={group.section}>
-            <div className="side-section">{group.section}</div>
-            {group.items.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={`side-item ${active === item.label ? "active" : ""}`}
-              >
-                <span style={{ width: 18, textAlign: "center", opacity: 0.9 }}>{item.icon}</span>
-                <span style={{ flex: 1 }}>{item.label}</span>
-                {item.badge ? (
-                  <span style={{
-                    background: "var(--c-primary)",
-                    color: "#fff",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: "2px 7px",
-                    borderRadius: 999,
-                  }}>{item.badge}</span>
-                ) : null}
-              </Link>
-            ))}
+          <div key={group.section} className="pv-nav-group">
+            <div className="pv-side-section">{group.section}</div>
+            {group.items.map((item) => {
+              const isActive = active === item.label;
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={cn("pv-side-item", isActive && "pv-side-item-active")}
+                >
+                  <span
+                    className={cn("pv-nav-dot", isActive && "pv-nav-dot-active")}
+                    aria-hidden
+                  />
+                  <span className="pv-side-label">{item.label}</span>
+                  {item.badge ? (
+                    <span className="pv-badge">{item.badge}</span>
+                  ) : null}
+                </Link>
+              );
+            })}
           </div>
         ))}
 
-        <div style={{ marginTop: "auto", padding: 12, display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16 }}>
-          <div className="avatar" style={{ width: 32, height: 32, fontSize: 11 }}>JM</div>
-          <div style={{ fontSize: 13, lineHeight: 1.2 }}>
-            <div style={{ fontWeight: 600 }}>Javier Morales</div>
-            <div style={{ opacity: 0.5, fontSize: 11 }}>Head Coach</div>
+        <div className="pv-side-footer">
+          <div className="pv-terminal-label">Terminal</div>
+          <div className="pv-coach-name">Juan Villegas</div>
+          <div className="pv-theme-row" aria-hidden>
+            <span className="pv-theme-icon">☀</span>
+            <span className="pv-theme-icon dim">🌙</span>
           </div>
+          <button type="button" className="pv-disconnect">
+            → Desconectar
+          </button>
         </div>
       </aside>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <header className="topbar">
+      <div className="pv-main">
+        <header className="pv-topbar">
           <div>
-            <h1 className="display" style={{ fontSize: 24 }}>{title}</h1>
-            {subtitle && <p style={{ fontSize: 13, color: "var(--c-muted-fg)", marginTop: 2 }}>{subtitle}</p>}
+            <h1 className="display pv-title">{title}</h1>
+            {subtitle ? (
+              <p className="pv-subtitle">{subtitle}</p>
+            ) : null}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {actions}
-          </div>
+          <div className="pv-topbar-actions">{actions}</div>
         </header>
 
-        <div style={{ flex: 1, padding: "28px 32px 60px", background: "var(--c-bg)" }}>
-          {children}
-        </div>
+        <div className="pv-content">{children}</div>
       </div>
     </div>
   );
