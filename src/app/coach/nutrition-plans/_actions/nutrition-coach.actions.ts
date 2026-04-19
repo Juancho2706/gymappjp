@@ -465,20 +465,22 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
   if (!supabase) return { error: authErr ?? 'No autorizado.', success: false }
 
   try {
-    const name = formData.get('name') as string
+    const name = (formData.get('name') as string)?.trim()
     const calories = parseFloat(formData.get('calories') as string)
-    const protein = parseFloat(formData.get('protein') as string)
-    const carbs = parseFloat(formData.get('carbs') as string)
-    const fats = parseFloat(formData.get('fats') as string)
-    const categoryRaw = (formData.get('category') as string | null)?.trim()
+    const protein = parseFloat(formData.get('protein') as string) || 0
+    const carbs = parseFloat(formData.get('carbs') as string) || 0
+    const fats = parseFloat(formData.get('fats') as string) || 0
+    const categoryRaw = (formData.get('category') as string | null)?.trim() || null
     const unit = (formData.get('unit') as string | null)?.trim() || 'g'
     const servingSizeRaw = formData.get('serving_size') as string | null
     const servingParsed = parseFloat(servingSizeRaw ?? '')
     const serving_size = !isNaN(servingParsed) && servingParsed > 0 ? servingParsed : 100
 
-    if (!name || isNaN(calories)) {
-      return { error: 'Nombre y calorías son obligatorios.', success: false }
-    }
+    if (!name) return { error: 'El nombre es obligatorio.', success: false }
+    if (isNaN(calories)) return { error: 'Las calorías son obligatorias.', success: false }
+
+    const validCategories = ['proteina', 'carbohidrato', 'grasa', 'lacteo', 'fruta', 'verdura', 'legumbre', 'bebida', 'snack', 'otro']
+    const category = categoryRaw && validCategories.includes(categoryRaw) ? categoryRaw : null
 
     const { error } = await supabase.from('foods').insert({
       name,
@@ -488,7 +490,7 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       fats_g: fats,
       serving_size,
       serving_unit: unit,
-      category: categoryRaw || null,
+      category,
       coach_id: coachId,
     })
 
@@ -499,6 +501,7 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
     return { success: true }
   } catch (err: unknown) {
     console.error('[saveCustomFood] Error:', err)
-    return { error: 'Error al guardar el alimento personalizado.', success: false }
+    const msg = err instanceof Error ? err.message : String(err)
+    return { error: `Error al guardar: ${msg}`, success: false }
   }
 }

@@ -7,6 +7,7 @@ import { Search, Plus, Loader2, Save, SlidersHorizontal } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { saveCustomFood } from '../_actions/nutrition-coach.actions'
 import { toast } from 'sonner'
 import { useFormStatus } from 'react-dom'
@@ -260,6 +261,19 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   )
 }
 
+const FOOD_CATEGORIES = [
+  { value: 'proteina', label: 'Proteína' },
+  { value: 'carbohidrato', label: 'Carbohidrato' },
+  { value: 'grasa', label: 'Grasa' },
+  { value: 'lacteo', label: 'Lácteo' },
+  { value: 'fruta', label: 'Fruta' },
+  { value: 'verdura', label: 'Verdura' },
+  { value: 'legumbre', label: 'Legumbre' },
+  { value: 'bebida', label: 'Bebida' },
+  { value: 'snack', label: 'Snack' },
+  { value: 'otro', label: 'Otro' },
+]
+
 function CustomFoodForm({
   formAction,
   state,
@@ -271,10 +285,11 @@ function CustomFoodForm({
   const [protein, setProtein] = useState('')
   const [carbs, setCarbs] = useState('')
   const [fats, setFats] = useState('')
-  const c = Number(calories) || 0
-  const p = Number(protein) || 0
-  const cb = Number(carbs) || 0
-  const f = Number(fats) || 0
+  const [category, setCategory] = useState('')
+  const c = calories === '' ? 0 : Number(calories)
+  const p = protein === '' ? 0 : Number(protein)
+  const cb = carbs === '' ? 0 : Number(carbs)
+  const f = fats === '' ? 0 : Number(fats)
   const pct = macroPreviewPct(c, p, cb, f)
 
   return (
@@ -293,6 +308,7 @@ function CustomFoodForm({
             name="calories"
             type="number"
             step="0.1"
+            min="0"
             required
             placeholder="0"
             className="h-11 rounded-xl"
@@ -306,7 +322,7 @@ function CustomFoodForm({
             name="protein"
             type="number"
             step="0.1"
-            required
+            min="0"
             placeholder="0"
             className="h-11 rounded-xl"
             value={protein}
@@ -319,7 +335,7 @@ function CustomFoodForm({
             name="carbs"
             type="number"
             step="0.1"
-            required
+            min="0"
             placeholder="0"
             className="h-11 rounded-xl"
             value={carbs}
@@ -332,7 +348,7 @@ function CustomFoodForm({
             name="fats"
             type="number"
             step="0.1"
-            required
+            min="0"
             placeholder="0"
             className="h-11 rounded-xl"
             value={fats}
@@ -356,7 +372,19 @@ function CustomFoodForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categoría</Label>
-          <Input name="category" placeholder="Opcional" className="h-11 rounded-xl" />
+          <input type="hidden" name="category" value={category} />
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="h-11 rounded-xl">
+              <SelectValue placeholder="Seleccionar…" />
+            </SelectTrigger>
+            <SelectContent>
+              {FOOD_CATEGORIES.map((cat) => (
+                <SelectItem key={cat.value} value={cat.value}>
+                  {cat.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2">
           <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Unidad de referencia</Label>
