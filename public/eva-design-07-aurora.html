@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EVA · AURORA — Liquid Glass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Inter+Tight:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  @property --aurora-hue {
+    syntax: '<angle>';
+    initial-value: 270deg;
+    inherits: true;
+  }
+
+  :root {
+    --font-display: 'Inter Tight', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'Geist Mono', monospace;
+  }
+
+  /* LIGHT base palette */
+  .light {
+    --bg: #F5F5F7;
+    --bg-grad-1: #EEE8FF;
+    --bg-grad-2: #FFE8F3;
+    --bg-grad-3: #E8F4FF;
+    --surface: rgba(255, 255, 255, 0.72);
+    --surface-glass: rgba(255, 255, 255, 0.55);
+    --surface-strong: rgba(255, 255, 255, 0.88);
+    --border-glass: rgba(255, 255, 255, 0.6);
+    --border: rgba(9, 9, 20, 0.08);
+    --ink: #0A0A14;
+    --ink-2: #2C2C38;
+    --muted: #6E6E7C;
+    --dim: #A8A8B4;
+    --ring-track: rgba(9, 9, 20, 0.08);
+    --brand: #7B5CFF; /* purple coach */
+    --brand-2: #C77BFF;
+    --brand-bg: rgba(123, 92, 255, 0.08);
+  }
+
+  /* DARK base palette */
+  .dark {
+    --bg: #0A0A10;
+    --bg-grad-1: #1A0F2E;
+    --bg-grad-2: #2E0F1F;
+    --bg-grad-3: #0F1A2E;
+    --surface: rgba(22, 22, 30, 0.55);
+    --surface-glass: rgba(30, 30, 40, 0.35);
+    --surface-strong: rgba(35, 35, 45, 0.78);
+    --border-glass: rgba(255, 255, 255, 0.08);
+    --border: rgba(255, 255, 255, 0.06);
+    --ink: #F5F5FA;
+    --ink-2: #C8C8D2;
+    --muted: #8E8E9A;
+    --dim: #55555F;
+    --ring-track: rgba(255, 255, 255, 0.08);
+    --brand: #FF8A3D; /* amber coach */
+    --brand-2: #FFC14D;
+    --brand-bg: rgba(255, 138, 61, 0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: #0D0D12;
+    color: #F5F5FA;
+    font-family: var(--font-body);
+    min-height: 100dvh;
+    overflow-x: hidden;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Ambient page background */
+  body {
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(123, 92, 255, 0.25) 0%, transparent 45%),
+      radial-gradient(ellipse at 80% 30%, rgba(255, 138, 61, 0.18) 0%, transparent 50%),
+      radial-gradient(ellipse at 40% 80%, rgba(80, 200, 255, 0.15) 0%, transparent 55%),
+      #0A0A10;
+  }
+
+  /* Header */
+  .page-header {
+    padding: 56px 24px 40px;
+    max-width: 1400px;
+    margin: 0 auto;
+    position: relative;
+    color: #F5F5FA;
+  }
+  .kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 100px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #C8C8D2;
+    margin-bottom: 28px;
+  }
+  .kicker .dot {
+    width: 7px; height: 7px;
+    background: linear-gradient(135deg, #7B5CFF, #FF8A3D);
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(123, 92, 255, 0.8);
+  }
+
+  .page-header h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(60px, 12vw, 150px);
+    line-height: 0.9;
+    letter-spacing: -0.05em;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #F5F5FA 0%, #C8B8FF 50%, #FF8A3D 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .page-header h1 .dot {
+    display: inline-block;
+    width: 0.12em; height: 0.12em;
+    background: linear-gradient(135deg, #7B5CFF, #FF8A3D);
+    border-radius: 50%;
+    vertical-align: baseline;
+    margin-left: 0.05em;
+    box-shadow: 0 0 40px #7B5CFF;
+    -webkit-text-fill-color: initial;
+  }
+
+  .sub-header {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    max-width: 900px;
+  }
+  @media (min-width: 700px) {
+    .sub-header { grid-template-columns: 2fr 1fr 1fr; }
+  }
+  .sh-cell .lbl {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(200, 200, 210, 0.55);
+    margin-bottom: 8px;
+  }
+  .sh-cell .val {
+    font-size: 15px;
+    line-height: 1.5;
+    color: rgba(240, 240, 250, 0.85);
+  }
+  .sh-cell .val strong { color: #F5F5FA; font-weight: 600; }
+
+  /* White-label demo strip */
+  .wl-strip {
+    margin-top: 36px;
+    padding: 18px 20px;
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    color: #C8C8D2;
+    font-size: 13px;
+  }
+  .wl-strip .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #F5F5FA;
+    font-weight: 600;
+  }
+  .wl-chips {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .wl-chip {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 20px currentColor, inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  .wl-note { flex: 1; min-width: 240px; }
+
+  /* Screens */
+  .screens-wrap {
+    padding: 48px 24px 80px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .screens-grid {
+    display: grid;
+    gap: 52px;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  @media (min-width: 900px) {
+    .screens-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
+  }
+
+  .screen-label {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    color: #C8C8D2;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .screen-label .num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #7B5CFF, #FF8A3D);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .screen-label .title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    flex: 1;
+    color: #F5F5FA;
+  }
+  .screen-label .mode {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .screen-label .mode.light {
+    background: rgba(255, 255, 255, 0.12);
+    color: #F5F5FA;
+  }
+  .screen-label .mode.dark {
+    background: rgba(0, 0, 0, 0.4);
+    color: #C8C8D2;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Phone wrapper with ambient glow */
+  .phone-wrap { position: relative; }
+  .phone-wrap::before {
+    content: '';
+    position: absolute;
+    inset: -40px;
+    background: radial-gradient(ellipse at center, var(--glow-color, rgba(123, 92, 255, 0.3)) 0%, transparent 60%);
+    filter: blur(40px);
+    z-index: -1;
+    opacity: 0.8;
+  }
+
+  .phone {
+    width: 100%;
+    max-width: 390px;
+    margin: 0 auto;
+    background: var(--bg);
+    border-radius: 44px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.15) inset,
+      0 50px 100px -20px rgba(0, 0, 0, 0.7),
+      0 30px 60px -30px rgba(0, 0, 0, 0.5);
+    position: relative;
+  }
+  .phone-screen {
+    min-height: 820px;
+    position: relative;
+    padding-top: 14px;
+    background: var(--bg);
+  }
+
+  /* Ambient blobs inside phone */
+  .phone-screen::before, .phone-screen::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .phone-screen::before {
+    top: -50px; left: -50px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, var(--bg-grad-1) 0%, transparent 70%);
+    filter: blur(30px);
+  }
+  .phone-screen::after {
+    bottom: -80px; right: -50px;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, var(--bg-grad-2) 0%, transparent 70%);
+    filter: blur(40px);
+  }
+  .phone-screen > * { position: relative; z-index: 1; }
+
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 22px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .status-bar .right { display: flex; gap: 6px; align-items: center; }
+  .status-bar svg { width: 16px; height: 16px; }
+  .dynamic-island {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px; height: 32px;
+    background: #000;
+    border-radius: 100px;
+    z-index: 5;
+  }
+
+  /* Glass card utility */
+  .glass {
+    background: var(--surface);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid var(--border-glass);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.3) inset,
+      0 20px 40px -10px rgba(0, 0, 0, 0.08);
+  }
+  .dark .glass {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 20px 40px -10px rgba(0, 0, 0, 0.4);
+  }
+
+  /* ================ STUDENT DASHBOARD (LIGHT + PURPLE) ================ */
+  .sd-top {
+    padding: 28px 22px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sd-greet-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .sd-greet-chip .avatar {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 2px;
+    margin-left: -6px;
+  }
+  .sd-bell {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-2);
+    position: relative;
+  }
+  .sd-bell::after {
+    content: '';
+    position: absolute;
+    top: 9px; right: 11px;
+    width: 6px; height: 6px;
+    background: var(--brand);
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+  }
+
+  .sd-title {
+    padding: 8px 22px 24px;
+  }
+  .sd-title .date {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .sd-title h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: -0.035em;
+    color: var(--ink);
+  }
+  .sd-title h2 .accent {
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Hero workout glass card */
+  .wo-hero {
+    margin: 0 22px 18px;
+    border-radius: 28px;
+    padding: 22px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+    box-shadow: 0 20px 40px -10px rgba(123, 92, 255, 0.4);
+  }
+  .dark .wo-hero { box-shadow: 0 20px 40px -10px rgba(255, 138, 61, 0.4); }
+  .wo-hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 60%);
+    border-radius: 50%;
+  }
+  .wo-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.1) 100%);
+    pointer-events: none;
+  }
+  .wo-hero > * { position: relative; z-index: 1; }
+  .wo-hero .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 100px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .wo-hero h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 36px;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    margin-bottom: 4px;
+  }
+  .wo-hero .desc {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-bottom: 22px;
+  }
+  .wo-hero .facts {
+    display: flex;
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+  .wo-hero .fact {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .wo-hero .fact svg { opacity: 0.8; }
+  .wo-hero .start-btn {
+    width: 100%;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: var(--brand);
+    border: none;
+    border-radius: 100px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: transform 0.2s;
+  }
+
+  /* Rings glass card */
+  .rings-glass {
+    margin: 0 22px 14px;
+    border-radius: 24px;
+    padding: 20px;
+  }
+  .rings-glass .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+  }
+  .rings-glass .title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .rings-glass .sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .rings-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .ring-item {
+    text-align: center;
+    padding: 8px 0;
+  }
+  .ring-svg {
+    width: 62px; height: 62px;
+    margin: 0 auto 6px;
+    position: relative;
+  }
+  .ring-svg .val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .ring-item .lbl {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  /* Two small cards */
+  .two-cards {
+    margin: 0 22px 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .mini-card {
+    border-radius: 22px;
+    padding: 16px;
+  }
+  .mini-card .lbl {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .mini-card .val {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 24px;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .mini-card .val .unit {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .mini-card .delta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--brand);
+    margin-top: 6px;
+    font-weight: 500;
+  }
+  .mini-card .spark-bar {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: 28px;
+    margin-top: 8px;
+  }
+  .mini-card .spark-bar .bar {
+    flex: 1;
+    background: linear-gradient(180deg, var(--brand), var(--brand-2));
+    border-radius: 3px;
+    opacity: 0.9;
+  }
+
+  /* Floating tab bar */
+  .tab-bar {
+    position: absolute;
+    left: 16px; right: 16px;
+    bottom: 14px;
+    padding: 8px;
+    border-radius: 100px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+    z-index: 10;
+  }
+  .tab-bar button {
+    background: transparent;
+    border: none;
+    padding: 12px;
+    border-radius: 100px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tab-bar button.active {
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+    box-shadow: 0 6px 20px -4px var(--brand);
+  }
+
+  /* ================ COACH CLIENT DETAIL (DARK + AMBER) ================ */
+  .cd-top {
+    padding: 28px 22px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cd-top .back {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+  }
+  .cd-top .crumb {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+  .cd-top .crumb strong { color: var(--ink); }
+  .cd-top .more {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+  }
+
+  /* Hero profile */
+  .cd-profile {
+    padding: 8px 22px 20px;
+    text-align: center;
+  }
+  .cd-profile .photo {
+    width: 84px; height: 84px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background:
+      linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 32px;
+    color: white;
+    position: relative;
+    box-shadow: 0 10px 30px -5px rgba(255, 138, 61, 0.4);
+  }
+  .cd-profile .photo::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--brand), var(--brand-2), var(--brand));
+    z-index: -1;
+    animation: spin 8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cd-profile .active-dot {
+    position: absolute;
+    bottom: 4px; right: 4px;
+    width: 16px; height: 16px;
+    background: #4ADE80;
+    border-radius: 50%;
+    border: 3px solid var(--bg);
+  }
+  .cd-profile h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+  .cd-profile .meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    align-items: center;
+  }
+  .cd-profile .meta .sep {
+    width: 2px; height: 2px;
+    background: var(--dim);
+    border-radius: 50%;
+  }
+
+  /* Stats grid */
+  .cd-stats {
+    margin: 0 22px 16px;
+    border-radius: 24px;
+    padding: 4px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .cd-stat {
+    text-align: center;
+    padding: 14px 10px;
+    border-right: 1px solid var(--border);
+  }
+  .cd-stat:last-child { border-right: none; }
+  .cd-stat .val {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .cd-stat .val.accent {
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .cd-stat .lbl {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 5px;
+    font-weight: 500;
+  }
+
+  /* Tabs */
+  .cd-tabs {
+    margin: 0 22px 14px;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 100px;
+  }
+  .cd-tab {
+    flex: 1;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 100px;
+    cursor: pointer;
+  }
+  .cd-tab.active {
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+    box-shadow: 0 4px 12px -2px var(--brand);
+    font-weight: 600;
+  }
+
+  /* Chart card */
+  .cd-chart {
+    margin: 0 22px 14px;
+    border-radius: 24px;
+    padding: 20px;
+  }
+  .cd-chart .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+  }
+  .cd-chart .head .title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .cd-chart .head .range {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 3px 8px;
+    background: var(--brand-bg);
+    color: var(--brand);
+    border-radius: 100px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .cd-chart .big-num {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 36px;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  .cd-chart .big-num .unit { font-size: 16px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .cd-chart .delta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #4ADE80;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .cd-chart svg { width: 100%; height: 80px; }
+
+  /* Recent activity */
+  .cd-activity {
+    margin: 0 22px 100px;
+    border-radius: 24px;
+    padding: 20px;
+  }
+  .cd-activity .head {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }
+  .act-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .act-row:last-child { border-bottom: none; }
+  .act-row .ico {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--brand-bg);
+    color: var(--brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .act-row .info { flex: 1; min-width: 0; }
+  .act-row .info .name {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  .act-row .info .time {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+  .act-row .val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* Bottom CTA glass */
+  .cd-cta {
+    position: absolute;
+    left: 16px; right: 16px;
+    bottom: 14px;
+    padding: 12px 16px;
+    border-radius: 100px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 10;
+  }
+  .cd-cta .msg-btn {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--surface-strong);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+    font-family: var(--font-body);
+  }
+  .cd-cta .send {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px -4px var(--brand);
+  }
+
+  /* Footer specs */
+  .spec-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 48px 24px 60px;
+    max-width: 1400px;
+    margin: 0 auto;
+    color: #C8C8D2;
+  }
+  .spec-grid {
+    display: grid;
+    gap: 32px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 768px) { .spec-grid { grid-template-columns: 1fr 1fr 1fr; } }
+  .spec-block h4 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(200, 200, 210, 0.6);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .principles { display: flex; flex-direction: column; gap: 12px; }
+  .principle {
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+  }
+  .principle .n {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    background: linear-gradient(135deg, #7B5CFF, #FF8A3D);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+  }
+  .principle p { font-size: 13px; line-height: 1.5; color: rgba(240, 240, 250, 0.85); }
+  .principle p strong { color: #F5F5FA; font-weight: 600; }
+
+  .tech-list { display: flex; flex-direction: column; gap: 10px; }
+  .tech-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  }
+  .tech-item:last-child { border-bottom: none; }
+  .tech-item .tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 3px 6px;
+    background: rgba(123, 92, 255, 0.15);
+    color: #C8B8FF;
+    border-radius: 4px;
+    font-weight: 600;
+    flex-shrink: 0;
+    letter-spacing: 0.05em;
+  }
+  .tech-item .desc { font-size: 12px; line-height: 1.5; color: rgba(240, 240, 250, 0.75); }
+
+  .wl-demo-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .wl-demo-swatch {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .wl-demo-swatch .label {
+    position: absolute;
+    bottom: 4px; left: 4px; right: 4px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: white;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 2px 4px;
+    border-radius: 3px;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <span class="kicker"><span class="dot"></span>EVA · DESIGN STUDY 07 · LIQUID GLASS</span>
+  <h1>Aurora<span class="dot"></span></h1>
+
+  <div class="sub-header">
+    <div class="sh-cell">
+      <div class="lbl">// Thesis</div>
+      <div class="val"><strong>Glass mórfico que respira con el color del coach.</strong> La misma app se ve distinta por cliente sin rediseñar nada — el brand color del coach crea orbes luminosos detrás del cristal. iOS 26 vibes, pero el white-label es el corazón.</div>
+    </div>
+    <div class="sh-cell">
+      <div class="lbl">// Core tech</div>
+      <div class="val"><strong>backdrop-filter</strong><br>@property · color-mix<br>conic-gradient<br>CSS custom properties</div>
+    </div>
+    <div class="sh-cell">
+      <div class="lbl">// Themes</div>
+      <div class="val"><strong>Light + Dark</strong><br>Auto-switch por hora<br>+ cualquier brand color</div>
+    </div>
+  </div>
+
+  <div class="wl-strip">
+    <span class="label">White-label demo →</span>
+    <div class="wl-chips">
+      <div class="wl-chip" style="background: #7B5CFF; color: #7B5CFF;"></div>
+      <div class="wl-chip" style="background: #FF8A3D; color: #FF8A3D;"></div>
+      <div class="wl-chip" style="background: #50E3C2; color: #50E3C2;"></div>
+      <div class="wl-chip" style="background: #FF3B82; color: #FF3B82;"></div>
+      <div class="wl-chip" style="background: #0091FF; color: #0091FF;"></div>
+    </div>
+    <div class="wl-note">El coach elige su color y todo el sistema se recompone. El cliente ve la app del coach, no "una app genérica con un color".</div>
+  </div>
+</header>
+
+<section class="screens-wrap">
+  <div class="screens-grid">
+
+    <!-- LIGHT MODE + PURPLE BRAND -->
+    <div>
+      <div class="screen-label">
+        <span class="num">07·1</span>
+        <span class="title">Student Dashboard</span>
+        <span class="mode light">☀ LIGHT</span>
+      </div>
+      <div class="phone-wrap" style="--glow-color: rgba(123, 92, 255, 0.35);">
+        <div class="phone light">
+          <div class="dynamic-island"></div>
+          <div class="phone-screen">
+            <div class="status-bar">
+              <span>9:41</span>
+              <div class="right">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a8 8 0 0 1 8 8h2a10 10 0 0 0-10-10v2Z"/><path d="M12 8a4 4 0 0 1 4 4h2a6 6 0 0 0-6-6v2Z"/><circle cx="12" cy="12" r="2"/></svg>
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="10" rx="2"/></svg>
+              </div>
+            </div>
+
+            <div class="sd-top">
+              <div class="sd-greet-chip glass">
+                <div class="avatar">R</div>
+                Con Rodrigo
+              </div>
+              <div class="sd-bell glass"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21h4"/></svg></div>
+            </div>
+
+            <div class="sd-title">
+              <div class="date">Lunes, 18 Abr</div>
+              <h2>Hola Camila,<br>toca <span class="accent">push day</span>.</h2>
+            </div>
+
+            <div class="wo-hero">
+              <span class="chip">Semana 3 · Día 1</span>
+              <h3>Push Day</h3>
+              <div class="desc">Pecho, hombro y tríceps. Terminas con movilidad.</div>
+              <div class="facts">
+                <div class="fact"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="9" width="4" height="6"/><rect x="17" y="9" width="4" height="6"/><rect x="7" y="11" width="10" height="2"/></svg>6 ej</div>
+                <div class="fact"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>~58 min</div>
+                <div class="fact"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>22 sets</div>
+              </div>
+              <button class="start-btn">Empezar sesión <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+            </div>
+
+            <div class="rings-glass glass">
+              <div class="head">
+                <span class="title">Adherencia · esta semana</span>
+                <span class="sub">W3</span>
+              </div>
+              <div class="rings-row">
+                <div class="ring-item">
+                  <div class="ring-svg">
+                    <svg viewBox="0 0 62 62">
+                      <circle cx="31" cy="31" r="25" fill="none" stroke="var(--ring-track)" stroke-width="5"/>
+                      <circle cx="31" cy="31" r="25" fill="none" stroke="url(#g1)" stroke-width="5" stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="47" transform="rotate(-90 31 31)"/>
+                      <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7B5CFF"/><stop offset="1" stop-color="#C77BFF"/></linearGradient></defs>
+                    </svg>
+                    <div class="val">70%</div>
+                  </div>
+                  <div class="lbl">Gym</div>
+                </div>
+                <div class="ring-item">
+                  <div class="ring-svg">
+                    <svg viewBox="0 0 62 62">
+                      <circle cx="31" cy="31" r="25" fill="none" stroke="var(--ring-track)" stroke-width="5"/>
+                      <circle cx="31" cy="31" r="25" fill="none" stroke="url(#g2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="19" transform="rotate(-90 31 31)"/>
+                      <defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#50E3C2"/><stop offset="1" stop-color="#4AC7FF"/></linearGradient></defs>
+                    </svg>
+                    <div class="val">88%</div>
+                  </div>
+                  <div class="lbl">Dieta</div>
+                </div>
+                <div class="ring-item">
+                  <div class="ring-svg">
+                    <svg viewBox="0 0 62 62">
+                      <circle cx="31" cy="31" r="25" fill="none" stroke="var(--ring-track)" stroke-width="5"/>
+                      <circle cx="31" cy="31" r="25" fill="none" stroke="url(#g3)" stroke-width="5" stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="97" transform="rotate(-90 31 31)"/>
+                      <defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="1" stop-color="#FFC14D"/></linearGradient></defs>
+                    </svg>
+                    <div class="val">38%</div>
+                  </div>
+                  <div class="lbl">Cardio</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="two-cards">
+              <div class="mini-card glass">
+                <div class="lbl">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  Peso
+                </div>
+                <div class="val">64.2<span class="unit">kg</span></div>
+                <div class="delta">↓ -1.3 kg · 30d</div>
+              </div>
+              <div class="mini-card glass">
+                <div class="lbl">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                  Racha
+                </div>
+                <div class="val">12<span class="unit"> días</span></div>
+                <div class="spark-bar">
+                  <div class="bar" style="height: 35%"></div>
+                  <div class="bar" style="height: 50%"></div>
+                  <div class="bar" style="height: 30%"></div>
+                  <div class="bar" style="height: 65%"></div>
+                  <div class="bar" style="height: 55%"></div>
+                  <div class="bar" style="height: 75%"></div>
+                  <div class="bar" style="height: 90%"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-bar glass">
+              <button class="active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12L12 4l9 8"/><path d="M5 10v10h14V10"/></svg></button>
+              <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="4" height="6"/><rect x="17" y="9" width="4" height="6"/><rect x="7" y="11" width="10" height="2"/></svg></button>
+              <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg></button>
+              <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18l6-6 4 4 8-8"/><path d="M14 8h7v7"/></svg></button>
+              <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DARK MODE + AMBER BRAND -->
+    <div>
+      <div class="screen-label">
+        <span class="num">07·2</span>
+        <span class="title">Coach Client Detail</span>
+        <span class="mode dark">☾ DARK</span>
+      </div>
+      <div class="phone-wrap" style="--glow-color: rgba(255, 138, 61, 0.3);">
+        <div class="phone dark">
+          <div class="dynamic-island"></div>
+          <div class="phone-screen">
+            <div class="status-bar">
+              <span>9:41</span>
+              <div class="right">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a8 8 0 0 1 8 8h2a10 10 0 0 0-10-10v2Z"/><path d="M12 8a4 4 0 0 1 4 4h2a6 6 0 0 0-6-6v2Z"/><circle cx="12" cy="12" r="2"/></svg>
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="10" rx="2"/></svg>
+              </div>
+            </div>
+
+            <div class="cd-top">
+              <div class="back glass"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div>
+              <div class="crumb">clientes · <strong>perfil</strong></div>
+              <div class="more glass"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></div>
+            </div>
+
+            <div class="cd-profile">
+              <div class="photo">JM<span class="active-dot"></span></div>
+              <h2>Joaquín Muñoz</h2>
+              <div class="meta">
+                <span>28 años</span>
+                <span class="sep"></span>
+                <span>178 cm · 78 kg</span>
+                <span class="sep"></span>
+                <span>W3/12</span>
+              </div>
+            </div>
+
+            <div class="cd-stats glass">
+              <div class="cd-stat"><div class="val accent">98%</div><div class="lbl">Adherencia</div></div>
+              <div class="cd-stat"><div class="val">12d</div><div class="lbl">Racha</div></div>
+              <div class="cd-stat"><div class="val">3</div><div class="lbl">PRs mes</div></div>
+            </div>
+
+            <div class="cd-tabs glass">
+              <button class="cd-tab active">Overview</button>
+              <button class="cd-tab">Análisis</button>
+              <button class="cd-tab">Plan</button>
+              <button class="cd-tab">Pagos</button>
+            </div>
+
+            <div class="cd-chart glass">
+              <div class="head">
+                <span class="title">Peso corporal</span>
+                <span class="range">30 DÍAS</span>
+              </div>
+              <div class="big-num">78.4<span class="unit">kg</span></div>
+              <div class="delta">↓ -1.2 kg · meta -3</div>
+              <svg viewBox="0 0 300 80" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="aurora-area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#FF8A3D" stop-opacity="0.35"/>
+                    <stop offset="1" stop-color="#FF8A3D" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M0,30 C20,25 40,45 60,40 C80,38 100,22 120,30 C140,38 160,28 180,35 C200,42 220,32 240,42 C260,50 280,48 300,55 L300,80 L0,80 Z" fill="url(#aurora-area)"/>
+                <path d="M0,30 C20,25 40,45 60,40 C80,38 100,22 120,30 C140,38 160,28 180,35 C200,42 220,32 240,42 C260,50 280,48 300,55" fill="none" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="300" cy="55" r="4" fill="#FF8A3D"/>
+                <circle cx="300" cy="55" r="8" fill="#FF8A3D" opacity="0.25"/>
+              </svg>
+            </div>
+
+            <div class="cd-activity glass">
+              <div class="head">Actividad reciente</div>
+              <div class="act-row">
+                <div class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="4" height="6"/><rect x="17" y="9" width="4" height="6"/><rect x="7" y="11" width="10" height="2"/></svg></div>
+                <div class="info">
+                  <div class="name">Push Day completado</div>
+                  <div class="time">hace 2h · PR Bench +2.5</div>
+                </div>
+                <div class="val">+220 vol</div>
+              </div>
+              <div class="act-row">
+                <div class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+                <div class="info">
+                  <div class="name">Check-in mañana</div>
+                  <div class="time">hace 7h · sueño 7.5h</div>
+                </div>
+                <div class="val">78.4 kg</div>
+              </div>
+              <div class="act-row">
+                <div class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg></div>
+                <div class="info">
+                  <div class="name">5 comidas registradas</div>
+                  <div class="time">ayer · 1820 kcal</div>
+                </div>
+                <div class="val">100%</div>
+              </div>
+            </div>
+
+            <div class="cd-cta glass">
+              <div class="msg-btn">Escribir mensaje al alumno…</div>
+              <button class="send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer class="spec-footer">
+  <div class="spec-grid">
+
+    <div class="spec-block">
+      <h4>// White-label flex</h4>
+      <div class="wl-demo-grid">
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #7B5CFF, #C77BFF);"><span class="label">purple</span></div>
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #FF8A3D, #FFC14D);"><span class="label">amber</span></div>
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #50E3C2, #4AC7FF);"><span class="label">teal</span></div>
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #FF3B82, #FF8A3D);"><span class="label">coral</span></div>
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #0091FF, #50E3C2);"><span class="label">ocean</span></div>
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #0A0A14, #2C2C38);"><span class="label">eva·def</span></div>
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #FF0080, #7928CA);"><span class="label">magenta</span></div>
+        <div class="wl-demo-swatch" style="background: linear-gradient(135deg, #1A1A1A, #F5A623);"><span class="label">gold</span></div>
+      </div>
+      <p style="font-size: 12px; line-height: 1.5; color: rgba(240, 240, 250, 0.7); margin-top: 14px;">
+        Cada coach tiene un color primario. El gradient a un color-mix automático genera el secundario. Todos los elementos activos (botones, rings, highlights) heredan este par.
+      </p>
+    </div>
+
+    <div class="spec-block">
+      <h4>// Modern CSS tech</h4>
+      <div class="tech-list">
+        <div class="tech-item">
+          <span class="tag">backdrop-filter</span>
+          <div class="desc">Glass effect con blur(40px) + saturate(200%). En iOS ≥14 y Android ≥76 es nativo. Fallback: fondo sólido.</div>
+        </div>
+        <div class="tech-item">
+          <span class="tag">@property</span>
+          <div class="desc">Registra --aurora-hue como &lt;angle&gt; para animar gradientes cónicos que giran alrededor de la foto del cliente.</div>
+        </div>
+        <div class="tech-item">
+          <span class="tag">color-mix()</span>
+          <div class="desc">El secundario del coach se genera: color-mix(in oklch, var(--brand) 70%, white). Un solo color de input, paleta completa.</div>
+        </div>
+        <div class="tech-item">
+          <span class="tag">:has()</span>
+          <div class="desc">Bottom nav se auto-oculta cuando hay un overlay: .phone:has(.overlay) .tab-bar { transform: translateY(200%); }</div>
+        </div>
+        <div class="tech-item">
+          <span class="tag">view-transitions</span>
+          <div class="desc">Entre tabs del client detail: el chart hace morph al siguiente. Nativo en Chrome, fallback suave en Safari.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec-block">
+      <h4>// Principios</h4>
+      <div class="principles">
+        <div class="principle">
+          <div class="n">01</div>
+          <p><strong>El color del coach vive detrás del vidrio.</strong> Los orbes de fondo son del brand color, todo lo demás es glass neutro. Por eso el white-label funciona sin rediseñar nada.</p>
+        </div>
+        <div class="principle">
+          <div class="n">02</div>
+          <p><strong>Light y dark no son opcionales — son modos.</strong> El mismo componente usa --surface: rgba(...). Solo las variables cambian. Costo de mantenimiento casi cero.</p>
+        </div>
+        <div class="principle">
+          <div class="n">03</div>
+          <p><strong>El glass jerarquiza sin usar color.</strong> Menos transparencia = más importante. Los CTAs son sólidos o gradient, nunca glass. Dentro del glass no compites con el brand.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
