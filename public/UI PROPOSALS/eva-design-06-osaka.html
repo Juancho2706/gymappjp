@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EVA · OSAKA — Arcade / Mission-First</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ivory: #FAF6EC;
+    --ivory-2: #F2ECDD;
+    --bone: #E8E0CD;
+    --black: #0D0D0D;
+    --red: #E91B24;
+    --red-dark: #B50F18;
+    --yellow: #F5DC00;
+    --mint: #3DD9A8;
+    --ink: #1A1A1A;
+    --ink-soft: #3D3D3D;
+    --muted: #7A7065;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: var(--ivory);
+    color: var(--black);
+    font-family: 'Unbounded', sans-serif;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+  .jp { font-family: 'Noto Sans JP', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Halftone texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(13, 13, 13, 0.04) 1px, transparent 1.5px);
+    background-size: 8px 8px;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* Hard shadow utility */
+  .shadow-hard { box-shadow: 5px 5px 0 var(--black); }
+  .shadow-red { box-shadow: 5px 5px 0 var(--red); }
+
+  /* Header */
+  .page-header {
+    padding: 32px 24px 28px;
+    max-width: 1400px;
+    margin: 0 auto;
+    border-bottom: 3px solid var(--black);
+    position: relative;
+  }
+  .header-top-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .insert-coin {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--red);
+  }
+  .insert-coin .dot {
+    width: 8px; height: 8px;
+    background: var(--red);
+    border-radius: 50%;
+    animation: coin-blink 0.8s infinite;
+  }
+  @keyframes coin-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.2; } }
+  .header-badges { display: flex; gap: 0; }
+  .h-badge {
+    padding: 4px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 700;
+    border: 2px solid var(--black);
+  }
+  .h-badge + .h-badge { border-left: none; }
+  .h-badge.black { background: var(--black); color: var(--ivory); }
+  .h-badge.red { background: var(--red); color: white; border-color: var(--red); }
+  .h-badge.yellow { background: var(--yellow); color: var(--black); }
+
+  .hero-title-block {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    position: relative;
+  }
+  @media (min-width: 768px) {
+    .hero-title-block { grid-template-columns: 1fr auto; align-items: end; gap: 24px; }
+  }
+  .page-header h1 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: clamp(58px, 12vw, 150px);
+    line-height: 0.85;
+    letter-spacing: -0.04em;
+    color: var(--black);
+    position: relative;
+  }
+  .page-header h1 .dot {
+    display: inline-block;
+    width: 0.15em; height: 0.15em;
+    background: var(--red);
+    border-radius: 50%;
+    vertical-align: baseline;
+    margin-left: 0.06em;
+  }
+  .jp-accent {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+    font-size: clamp(36px, 7vw, 68px);
+    writing-mode: vertical-rl;
+    line-height: 0.95;
+    letter-spacing: 0.02em;
+    color: var(--red);
+    opacity: 0.9;
+    position: relative;
+    padding-left: 16px;
+    border-left: 3px solid var(--black);
+  }
+  @media (max-width: 767px) {
+    .jp-accent { writing-mode: horizontal-tb; border-left: none; border-top: 3px solid var(--black); padding: 16px 0 0; font-size: 32px; margin-top: 16px; }
+  }
+
+  .hero-footer {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 2px dashed var(--black);
+  }
+  @media (min-width: 768px) {
+    .hero-footer { grid-template-columns: 3fr 1fr 1fr; }
+  }
+  .hero-cell .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--red);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .hero-cell .val {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--ink);
+    font-weight: 400;
+  }
+  .hero-cell .val strong { font-weight: 700; }
+  .hero-cell .big {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    color: var(--black);
+    line-height: 1;
+  }
+
+  /* Screens */
+  .screens-wrap {
+    padding: 48px 24px 80px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .screens-grid {
+    display: grid;
+    gap: 48px;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  @media (min-width: 900px) {
+    .screens-grid { grid-template-columns: 1fr 1fr; gap: 40px; }
+  }
+
+  .screen-label {
+    margin-bottom: 20px;
+    padding: 10px 14px;
+    background: var(--black);
+    color: var(--ivory);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    box-shadow: 4px 4px 0 var(--red);
+  }
+  .screen-label .num { color: var(--yellow); }
+  .screen-label .title { flex: 1; }
+  .screen-label .jp-sm { font-family: 'Noto Sans JP', sans-serif; font-weight: 700; color: var(--red); font-size: 14px; }
+
+  /* Phone */
+  .phone {
+    width: 100%;
+    max-width: 390px;
+    margin: 0 auto;
+    background: var(--ivory);
+    border-radius: 40px;
+    border: 3px solid var(--black);
+    overflow: hidden;
+    box-shadow: 8px 8px 0 var(--black);
+    position: relative;
+  }
+  .phone-screen {
+    min-height: 820px;
+    position: relative;
+    padding-top: 14px;
+    background: var(--ivory);
+  }
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 20px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .status-bar .right { display: flex; gap: 6px; align-items: center; }
+  .status-bar svg { width: 16px; height: 16px; }
+  .dynamic-island {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px; height: 32px;
+    background: #000;
+    border-radius: 100px;
+    z-index: 5;
+  }
+
+  /* =============== SCREEN 1: MISSION SELECT =============== */
+  .player-bar {
+    padding: 14px 18px;
+    border-bottom: 3px solid var(--black);
+    background: var(--bone);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .player-avatar {
+    width: 44px; height: 44px;
+    background: var(--black);
+    color: var(--yellow);
+    border: 2px solid var(--black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 18px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .player-avatar::after {
+    content: 'P1';
+    position: absolute;
+    bottom: -8px; right: -8px;
+    background: var(--red);
+    color: white;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 4px;
+    border: 1.5px solid var(--black);
+  }
+  .player-info { flex: 1; min-width: 0; }
+  .player-info .name {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .player-info .lvl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .player-info .lvl-row .lvl {
+    background: var(--red);
+    color: white;
+    padding: 2px 6px;
+  }
+  .player-info .lvl-row .xp {
+    color: var(--muted);
+    flex: 1;
+  }
+  .xp-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--black);
+    margin-top: 5px;
+    position: relative;
+  }
+  .xp-bar::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 72%;
+    background: var(--yellow);
+  }
+  .player-coins {
+    text-align: right;
+  }
+  .player-coins .val {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 16px;
+    color: var(--black);
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+  .player-coins .val::before {
+    content: '';
+    width: 12px; height: 12px;
+    background: var(--yellow);
+    border: 1.5px solid var(--black);
+    border-radius: 50%;
+  }
+  .player-coins .lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Mission select title */
+  .sel-title-row {
+    padding: 18px 18px 14px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .sel-title-row .left .kicker {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+    font-size: 12px;
+    color: var(--red);
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .sel-title-row .left h3 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 26px;
+    letter-spacing: -0.04em;
+    line-height: 0.9;
+    color: var(--black);
+  }
+  .sel-title-row .right {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: right;
+  }
+  .sel-title-row .right .date {
+    color: var(--black);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  /* Primary mission card */
+  .mission-main {
+    margin: 0 18px 16px;
+    background: var(--red);
+    color: white;
+    border: 3px solid var(--black);
+    padding: 0;
+    position: relative;
+    box-shadow: 5px 5px 0 var(--black);
+    overflow: hidden;
+  }
+  .mission-main::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 80px; height: 80px;
+    background-image: repeating-linear-gradient(-45deg, var(--yellow) 0, var(--yellow) 6px, var(--red) 6px, var(--red) 12px);
+    clip-path: polygon(100% 0, 100% 100%, 0 0);
+  }
+  .mission-main .m-head {
+    padding: 14px 16px 12px;
+    border-bottom: 2px solid var(--black);
+    background: rgba(0,0,0,0.18);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .mission-main .m-head .stage {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .mission-main .m-head .jp-side {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    opacity: 0.9;
+  }
+  .mission-main .m-body {
+    padding: 18px 16px 16px;
+    position: relative;
+  }
+  .mission-main .m-body h4 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 34px;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    margin-bottom: 6px;
+  }
+  .mission-main .m-body .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    margin-bottom: 14px;
+  }
+  .difficulty-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-top: 10px;
+    border-top: 1.5px dashed rgba(255,255,255,0.4);
+  }
+  .difficulty-row .lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .difficulty-row .stars {
+    display: flex;
+    gap: 2px;
+  }
+  .difficulty-row .stars svg {
+    width: 14px; height: 14px;
+  }
+  .enemies-row {
+    padding-top: 12px;
+    border-top: 1.5px dashed rgba(255,255,255,0.4);
+    margin-bottom: 14px;
+  }
+  .enemies-row .lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    opacity: 0.9;
+  }
+  .enemies-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .enemy {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(0,0,0,0.2);
+    border: 1.5px solid rgba(0,0,0,0.3);
+    font-family: 'Unbounded', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .enemy .hp {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--yellow);
+  }
+  .rewards-row {
+    padding-top: 12px;
+    border-top: 1.5px dashed rgba(255,255,255,0.4);
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .reward-chip {
+    padding: 6px 10px;
+    background: var(--black);
+    color: var(--yellow);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .reward-chip.mint { background: var(--mint); color: var(--black); }
+  .start-cta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--yellow);
+    color: var(--black);
+    border: 3px solid var(--black);
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    text-transform: uppercase;
+    width: 100%;
+  }
+  .start-cta .arrow {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+  }
+
+  /* Secondary missions */
+  .side-sec {
+    padding: 12px 18px 18px;
+  }
+  .side-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--black);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .side-title .jp-sm { font-family: 'Noto Sans JP', sans-serif; color: var(--red); font-size: 11px; }
+  .side-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .side-mission {
+    padding: 12px;
+    background: var(--ivory);
+    border: 2.5px solid var(--black);
+    box-shadow: 3px 3px 0 var(--black);
+  }
+  .side-mission .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--red);
+    margin-bottom: 4px;
+  }
+  .side-mission .name {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .side-mission .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* =============== SCREEN 2: HIGH SCORES / DASHBOARD =============== */
+  .scores-header {
+    padding: 18px;
+    background: var(--black);
+    color: var(--ivory);
+    border-bottom: 3px solid var(--black);
+    position: relative;
+    overflow: hidden;
+  }
+  .scores-header::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 100%; height: 100%;
+    background-image: radial-gradient(circle, rgba(245, 220, 0, 0.08) 1px, transparent 1.5px);
+    background-size: 8px 8px;
+    pointer-events: none;
+  }
+  .scores-header .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .scores-header .top .jp-text {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+    font-size: 12px;
+    color: var(--yellow);
+    letter-spacing: 0.1em;
+  }
+  .scores-header .top .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    background: var(--red);
+    color: white;
+    letter-spacing: 0.1em;
+  }
+  .scores-header h3 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 32px;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    position: relative;
+  }
+  .scores-header h3 .ylw { color: var(--yellow); }
+
+  /* Combo counter */
+  .combo-strip {
+    padding: 16px 18px;
+    background: var(--yellow);
+    border-bottom: 3px solid var(--black);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .combo-strip::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: repeating-linear-gradient(90deg, transparent 0, transparent 20px, rgba(0,0,0,0.04) 20px, rgba(0,0,0,0.04) 22px);
+  }
+  .combo-strip .label {
+    position: relative;
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .combo-strip .num {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 48px;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    position: relative;
+    margin-left: auto;
+    color: var(--red);
+    -webkit-text-stroke: 2px var(--black);
+    text-stroke: 2px var(--black);
+  }
+  .combo-strip .num .x {
+    font-size: 28px;
+    -webkit-text-stroke: 1.5px var(--black);
+    color: var(--black);
+    margin-right: 2px;
+  }
+
+  /* High score table */
+  .scores-table-sec {
+    padding: 16px 18px 8px;
+  }
+  .score-sect-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 3px solid var(--black);
+  }
+  .score-sect-head h4 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+  }
+  .score-sect-head h4 em {
+    font-style: normal;
+    background: var(--red);
+    color: white;
+    padding: 1px 5px;
+    margin-left: 4px;
+  }
+  .score-sect-head .link {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--red);
+  }
+
+  .score-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1.5px dashed var(--black);
+    align-items: center;
+  }
+  .score-row:last-child { border-bottom: none; }
+  .score-row .rank {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 18px;
+    color: var(--red);
+    letter-spacing: -0.02em;
+  }
+  .score-row.top .rank { color: var(--yellow); -webkit-text-stroke: 1.5px var(--black); font-size: 24px; }
+  .score-row .name {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .score-row .name .sub {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 0.02em;
+  }
+  .score-row .value {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 16px;
+    letter-spacing: -0.02em;
+    text-align: right;
+  }
+  .score-row .value .unit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 500;
+    display: block;
+    margin-top: 2px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Stats grid */
+  .stats-section {
+    padding: 8px 18px 18px;
+  }
+  .stats-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 3px solid var(--black);
+    box-shadow: 5px 5px 0 var(--black);
+    background: var(--ivory);
+  }
+  .stat-cell {
+    padding: 12px 10px;
+    border-right: 2px solid var(--black);
+    text-align: center;
+  }
+  .stat-cell:last-child { border-right: none; }
+  .stat-cell .val {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .stat-cell .val.red { color: var(--red); }
+  .stat-cell .val.mint { color: var(--mint); -webkit-text-stroke: 1px var(--black); }
+  .stat-cell .lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* Achievement */
+  .achievement {
+    margin: 16px 18px 18px;
+    padding: 14px;
+    background: var(--mint);
+    color: var(--black);
+    border: 3px solid var(--black);
+    box-shadow: 5px 5px 0 var(--black);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .achievement::before {
+    content: 'NEW!';
+    position: absolute;
+    top: 0; right: 0;
+    background: var(--red);
+    color: white;
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-bottom: 2.5px solid var(--black);
+    border-left: 2.5px solid var(--black);
+  }
+  .achievement .trophy {
+    width: 40px; height: 40px;
+    background: var(--yellow);
+    border: 2.5px solid var(--black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .achievement .info { flex: 1; min-width: 0; }
+  .achievement .info .kick {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .achievement .info .name {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+
+  /* Style footer */
+  .style-footer {
+    border-top: 3px solid var(--black);
+    padding: 40px 24px 60px;
+    max-width: 1400px;
+    margin: 0 auto;
+    background: var(--bone);
+    position: relative;
+  }
+  .style-footer::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: repeating-linear-gradient(-45deg, var(--red) 0, var(--red) 8px, var(--yellow) 8px, var(--yellow) 16px, var(--black) 16px, var(--black) 24px);
+  }
+  .style-grid {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: 1fr;
+    margin-top: 12px;
+  }
+  @media (min-width: 768px) {
+    .style-grid { grid-template-columns: 1fr 1fr 1fr; }
+  }
+  .style-block {
+    background: var(--ivory);
+    border: 3px solid var(--black);
+    padding: 20px;
+    box-shadow: 5px 5px 0 var(--black);
+  }
+  .style-block h4 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 16px;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2.5px solid var(--black);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .style-block h4 .jp-sm {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    color: var(--red);
+  }
+
+  .palette { display: flex; flex-direction: column; gap: 6px; }
+  .palette-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    background: var(--ivory-2);
+    border: 2px solid var(--black);
+  }
+  .palette-row .swatch {
+    width: 26px; height: 26px;
+    flex-shrink: 0;
+    border: 2px solid var(--black);
+  }
+  .palette-row .info { flex: 1; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .palette-row .name {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .palette-row .hex {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  .font-demo { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1.5px dashed var(--black); }
+  .font-demo:last-child { border-bottom: none; }
+  .font-demo .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--red);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .font-demo .sample-unbounded {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 32px;
+    letter-spacing: -0.04em;
+    line-height: 0.9;
+  }
+  .font-demo .sample-jp {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+    font-size: 24px;
+    color: var(--red);
+  }
+  .font-demo .sample-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+
+  .principles { display: flex; flex-direction: column; gap: 10px; }
+  .principle-item {
+    padding: 12px 14px;
+    background: var(--ivory-2);
+    border-left: 4px solid var(--red);
+  }
+  .principle-item .n {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    color: var(--red);
+    font-size: 14px;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .principle-item p {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+    font-weight: 400;
+  }
+  .principle-item p strong { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-top-strip">
+    <span class="insert-coin"><span class="dot"></span>INSERT COIN · EVA DESIGN STUDY 06</span>
+    <div class="header-badges">
+      <span class="h-badge black">PLAYER 1</span>
+      <span class="h-badge yellow">MISSION-FIRST</span>
+      <span class="h-badge red">アーケード</span>
+    </div>
+  </div>
+
+  <div class="hero-title-block">
+    <h1>OSAKA<span class="dot"></span></h1>
+    <div class="jp-accent">大阪道場</div>
+  </div>
+
+  <div class="hero-footer">
+    <div class="hero-cell">
+      <div class="label">// Thesis</div>
+      <div class="val">El gym como <strong>juego de peleas</strong>. Workouts son misiones, ejercicios son enemigos, racha es un combo counter, PRs son high-scores. Elegante y bold — no infantil. Inspirado en menús de Yakuza y salones arcade japoneses.</div>
+    </div>
+    <div class="hero-cell">
+      <div class="label">// Primary verb</div>
+      <div class="big">SELECT</div>
+      <div class="val" style="margin-top:4px">No "start day".<br>Eliges una misión.</div>
+    </div>
+    <div class="hero-cell">
+      <div class="label">// Refs</div>
+      <div class="val"><strong>Yakuza menus</strong><br>Persona 5 UI<br>Sega arcade cabs<br>Manga halftones</div>
+    </div>
+  </div>
+</header>
+
+<section class="screens-wrap">
+  <div class="screens-grid">
+
+    <!-- SCREEN 1: MISSION SELECT -->
+    <div>
+      <div class="screen-label">
+        <span class="num">[06·1]</span>
+        <span class="title">MISSION SELECT // ALUMNO</span>
+        <span class="jp-sm">選択</span>
+      </div>
+      <div class="phone">
+        <div class="dynamic-island"></div>
+        <div class="phone-screen">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="right">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a8 8 0 0 1 8 8h2a10 10 0 0 0-10-10v2Z"/><path d="M12 8a4 4 0 0 1 4 4h2a6 6 0 0 0-6-6v2Z"/><circle cx="12" cy="12" r="2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="10" rx="2"/></svg>
+            </div>
+          </div>
+
+          <!-- Player bar -->
+          <div class="player-bar">
+            <div class="player-avatar">J</div>
+            <div class="player-info">
+              <div class="name">Joaquín M.</div>
+              <div class="lvl-row">
+                <span class="lvl">LV 14</span>
+                <span class="xp">2,840 / 4,000 XP</span>
+              </div>
+              <div class="xp-bar"></div>
+            </div>
+            <div class="player-coins">
+              <div class="val">28</div>
+              <div class="lbl">clients</div>
+            </div>
+          </div>
+
+          <!-- Title -->
+          <div class="sel-title-row">
+            <div class="left">
+              <div class="kicker">今日のミッション</div>
+              <h3>MISSION<br>SELECT</h3>
+            </div>
+            <div class="right">
+              <div>LUN</div>
+              <div class="date">18·04</div>
+            </div>
+          </div>
+
+          <!-- Main mission -->
+          <div class="mission-main">
+            <div class="m-head">
+              <span class="stage">STAGE 03 · 01</span>
+              <span class="jp-side">メイン</span>
+            </div>
+            <div class="m-body">
+              <h4>PUSH<br>DAY</h4>
+              <div class="sub">Chest · Shoulders · Triceps</div>
+
+              <div class="difficulty-row">
+                <span class="lbl">Difficulty</span>
+                <div class="stars">
+                  <svg viewBox="0 0 24 24" fill="var(--yellow)" stroke="#0D0D0D" stroke-width="1.5"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+                  <svg viewBox="0 0 24 24" fill="var(--yellow)" stroke="#0D0D0D" stroke-width="1.5"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+                  <svg viewBox="0 0 24 24" fill="var(--yellow)" stroke="#0D0D0D" stroke-width="1.5"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#0D0D0D" stroke-width="1.5"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#0D0D0D" stroke-width="1.5"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+                </div>
+              </div>
+
+              <div class="enemies-row">
+                <div class="lbl">ENEMIES · 6</div>
+                <div class="enemies-list">
+                  <div class="enemy"><span>01</span><span>Barbell Bench Press</span><span class="hp">4×8</span></div>
+                  <div class="enemy"><span>02</span><span>Incline DB Press</span><span class="hp">3×10</span></div>
+                  <div class="enemy"><span>03</span><span>Face Pull</span><span class="hp">4×15</span></div>
+                  <div class="enemy" style="opacity: 0.7;"><span>...</span><span>+ 3 more</span><span class="hp"></span></div>
+                </div>
+              </div>
+
+              <div class="rewards-row">
+                <div class="reward-chip">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                  +180 XP
+                </div>
+                <div class="reward-chip mint">+1 STREAK</div>
+              </div>
+
+              <button class="start-cta">
+                <span>START</span>
+                <span class="arrow">→</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Side missions -->
+          <div class="side-sec">
+            <div class="side-title">
+              <span>SIDE QUESTS · 2</span>
+              <span class="jp-sm">サイド</span>
+            </div>
+            <div class="side-grid">
+              <div class="side-mission">
+                <div class="tag">BONUS</div>
+                <div class="name">Cardio<br>Zone 2</div>
+                <div class="meta">20 min · +40 XP</div>
+              </div>
+              <div class="side-mission">
+                <div class="tag">DAILY</div>
+                <div class="name">Mobility<br>Flow</div>
+                <div class="meta">10 min · +20 XP</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: HIGH SCORES -->
+    <div>
+      <div class="screen-label">
+        <span class="num">[06·2]</span>
+        <span class="title">RECORDS // HIGH SCORES</span>
+        <span class="jp-sm">記録</span>
+      </div>
+      <div class="phone">
+        <div class="dynamic-island"></div>
+        <div class="phone-screen">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="right">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a8 8 0 0 1 8 8h2a10 10 0 0 0-10-10v2Z"/><path d="M12 8a4 4 0 0 1 4 4h2a6 6 0 0 0-6-6v2Z"/><circle cx="12" cy="12" r="2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="10" rx="2"/></svg>
+            </div>
+          </div>
+
+          <div class="scores-header">
+            <div class="top">
+              <span class="jp-text">個人記録</span>
+              <span class="badge">W3 · APR</span>
+            </div>
+            <h3>HIGH<br><span class="ylw">SCORES</span></h3>
+          </div>
+
+          <!-- Combo strip -->
+          <div class="combo-strip">
+            <div class="label">CURRENT<br>COMBO</div>
+            <div class="num"><span class="x">×</span>12</div>
+          </div>
+
+          <!-- Stats grid -->
+          <div class="stats-section">
+            <div class="stats-grid-3">
+              <div class="stat-cell">
+                <div class="val">47</div>
+                <div class="lbl">Stages cleared</div>
+              </div>
+              <div class="stat-cell">
+                <div class="val red">8,460</div>
+                <div class="lbl">Total XP</div>
+              </div>
+              <div class="stat-cell">
+                <div class="val mint">96<span style="font-size: 16px;">%</span></div>
+                <div class="lbl">Adherence</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- High scores table -->
+          <div class="scores-table-sec">
+            <div class="score-sect-head">
+              <h4>TOP PR'S <em>5</em></h4>
+              <span class="link">VIEW ALL →</span>
+            </div>
+
+            <div class="score-row top">
+              <div class="rank">01</div>
+              <div class="name">Bench Press<span class="sub">+2.5 KG · 2 DAYS AGO</span></div>
+              <div class="value">85<span class="unit">KG × 8</span></div>
+            </div>
+            <div class="score-row">
+              <div class="rank">02</div>
+              <div class="name">Barbell Squat<span class="sub">+5 KG · 5 DAYS AGO</span></div>
+              <div class="value">120<span class="unit">KG × 5</span></div>
+            </div>
+            <div class="score-row">
+              <div class="rank">03</div>
+              <div class="name">Deadlift<span class="sub">+2.5 KG · 8 DAYS AGO</span></div>
+              <div class="value">140<span class="unit">KG × 3</span></div>
+            </div>
+            <div class="score-row">
+              <div class="rank">04</div>
+              <div class="name">OHP<span class="sub">+1.25 KG · 12 DAYS AGO</span></div>
+              <div class="value">55<span class="unit">KG × 6</span></div>
+            </div>
+          </div>
+
+          <!-- Achievement -->
+          <div class="achievement">
+            <div class="trophy">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--black)"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+            </div>
+            <div class="info">
+              <div class="kick">achievement unlocked</div>
+              <div class="name">10-Day Streak</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer class="style-footer">
+  <div class="style-grid">
+    <div class="style-block">
+      <h4>PALETA <span class="jp-sm">色</span></h4>
+      <div class="palette">
+        <div class="palette-row"><div class="swatch" style="background:#FAF6EC"></div><div class="info"><span class="name">Ivory</span><span class="hex">#FAF6EC</span></div></div>
+        <div class="palette-row"><div class="swatch" style="background:#0D0D0D"></div><div class="info"><span class="name">Black</span><span class="hex">#0D0D0D</span></div></div>
+        <div class="palette-row"><div class="swatch" style="background:#E91B24"></div><div class="info"><span class="name">Red</span><span class="hex">#E91B24</span></div></div>
+        <div class="palette-row"><div class="swatch" style="background:#F5DC00"></div><div class="info"><span class="name">Yellow</span><span class="hex">#F5DC00</span></div></div>
+        <div class="palette-row"><div class="swatch" style="background:#3DD9A8"></div><div class="info"><span class="name">Mint</span><span class="hex">#3DD9A8</span></div></div>
+      </div>
+    </div>
+
+    <div class="style-block">
+      <h4>TYPE <span class="jp-sm">書</span></h4>
+      <div class="font-demo">
+        <div class="tag">// Display · Unbounded 900</div>
+        <div class="sample-unbounded">PUSH DAY</div>
+      </div>
+      <div class="font-demo">
+        <div class="tag">// Accent · Noto Sans JP</div>
+        <div class="sample-jp">大阪道場</div>
+      </div>
+      <div class="font-demo">
+        <div class="tag">// System · JetBrains Mono</div>
+        <div class="sample-mono">STAGE 03·01 · LV 14</div>
+      </div>
+    </div>
+
+    <div class="style-block">
+      <h4>RULES <span class="jp-sm">原則</span></h4>
+      <div class="principles">
+        <div class="principle-item">
+          <div class="n">01</div>
+          <p><strong>Gamificación elegante.</strong> Combos, XP, missions, stages — sí. Pero sin neón rosa ni sonidos 8-bit. El arcade se referencia con tipografía y layout, no con stock-icons de videojuegos.</p>
+        </div>
+        <div class="principle-item">
+          <div class="n">02</div>
+          <p><strong>Sombras duras.</strong> Nunca box-shadow con blur. Siempre offset sólido (4–8px) en negro puro. Le da peso físico a cada elemento, como stickers en un gabinete arcade.</p>
+        </div>
+        <div class="principle-item">
+          <div class="n">03</div>
+          <p><strong>Kanji como acento.</strong> Nunca para contenido crítico. Siempre como decoración con significado (大阪 = Osaka, 選択 = select, 記録 = records). El usuario no necesita leerlo — le aporta carácter.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

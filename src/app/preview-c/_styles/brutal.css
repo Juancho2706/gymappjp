@@ -1,0 +1,208 @@
+/* Concept C — Neo-Brutalist Spatial (scoped .preview-c-root, PREVIEW_CONCEPT_C.md) */
+
+.preview-c-root {
+  --pc-void: #000000;
+  --pc-chalk: #ffffff;
+  --pc-muted: #a1a1a1;
+  --pc-grid: rgba(255, 255, 255, 0.07);
+  --pc-primary: #ccff00;
+  --pc-primary-rgb: 204, 255, 0;
+  --pc-tape-pink: #ff4d8d;
+  --pc-tape-cyan: #00f0ff;
+  --pc-rail-w: 64px;
+  --pc-bottom-nav: 4.25rem;
+
+  background: var(--pc-void);
+  color: var(--pc-chalk);
+  min-height: 100vh;
+  font-family: var(--font-pc-display), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.preview-c-root *,
+.preview-c-root *::before,
+.preview-c-root *::after {
+  box-sizing: border-box;
+}
+
+.preview-c-root .pc-mono {
+  font-family: var(--font-pc-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-c-root .pc-hero-num {
+  font-family: var(--font-pc-display), ui-sans-serif, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  line-height: 0.85;
+  text-transform: uppercase;
+}
+
+.preview-c-root .pc-caps-micro {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pc-muted);
+}
+
+.preview-c-root .pc-edge {
+  border: 2px solid var(--pc-chalk);
+  box-shadow: none;
+  background: var(--pc-void);
+}
+
+.preview-c-root .pc-edge-muted {
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+  background: var(--pc-void);
+}
+
+.preview-c-root .pc-tape {
+  display: inline-block;
+  transform: rotate(-2deg);
+  border: 2px solid var(--pc-chalk);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--pc-void);
+}
+
+.preview-c-root .pc-tape-primary {
+  border-color: var(--pc-primary);
+  color: var(--pc-void);
+  background: var(--pc-primary);
+}
+
+.preview-c-root .pc-show-grid {
+  background-image:
+    linear-gradient(var(--pc-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pc-grid) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+.preview-c-root .pc-hover-ring:hover {
+  outline: 3px solid var(--pc-primary);
+  outline-offset: 2px;
+}
+
+.preview-c-root .pc-btn-solid {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1.1rem;
+  border: 2px solid var(--pc-primary);
+  background: var(--pc-primary);
+  color: var(--pc-void);
+  font-weight: 800;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.preview-c-root .pc-btn-solid:active {
+  transform: scale(0.97);
+}
+
+.preview-c-root .pc-btn-ghost {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  border: 2px solid var(--pc-chalk);
+  background: transparent;
+  color: var(--pc-chalk);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.preview-c-root .pc-contrast-wrap {
+  padding: 2px;
+  background: var(--pc-chalk);
+  display: inline-flex;
+}
+
+.preview-c-root .pc-contrast-wrap .pc-btn-solid {
+  border-color: var(--pc-void);
+}
+
+.preview-c-root .pc-marquee {
+  overflow: hidden;
+  white-space: nowrap;
+  border-top: 2px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.18);
+}
+
+.preview-c-root .pc-marquee-inner {
+  display: inline-block;
+  padding: 0.45rem 0;
+  font-family: var(--font-pc-mono), monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  animation: pc-marquee 22s linear infinite;
+}
+
+@keyframes pc-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.preview-c-root .pc-watermark-drift {
+  animation: pc-drift 18s ease-in-out infinite;
+}
+
+@keyframes pc-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(2%, -3%) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-c-root .pc-marquee-inner,
+  .preview-c-root .pc-watermark-drift {
+    animation: none !important;
+  }
+}
+
+.preview-c-root a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.preview-c-root .pc-demo-pill {
+  position: fixed;
+  z-index: 60;
+  top: max(0.5rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+  padding: 0.35rem 0.65rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  font-size: 0.5625rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--pc-void);
+  color: var(--pc-muted);
+}
