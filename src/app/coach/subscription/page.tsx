@@ -208,7 +208,10 @@ export default function CoachSubscriptionPage() {
             <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
                 <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
-                    {tierOptions.map((tier) => (
+                    {tierOptions.map((tier) => {
+                        const defaultCycle = getDefaultBillingCycleForTier(tier)
+                        const defaultPrice = getTierPriceClp(tier, defaultCycle)
+                        return (
                         <button
                             key={tier}
                             type="button"
@@ -220,6 +223,12 @@ export default function CoachSubscriptionPage() {
                             <p className="font-semibold text-foreground">{TIER_CONFIG[tier].label}</p>
                             <p className="text-xs text-muted-foreground">
                                 {TIER_STUDENT_RANGE_LABEL[tier]} · Hasta {TIER_CONFIG[tier].maxClients} alumnos
+                            </p>
+                            <p className="mt-2 text-sm font-bold text-foreground">
+                                ${defaultPrice.toLocaleString('es-CL')} CLP
+                                <span className="text-xs font-normal text-muted-foreground">
+                                    {' '}/ {BILLING_CYCLE_CONFIG[defaultCycle].label.toLowerCase()}
+                                </span>
                             </p>
                             <div className="mt-2 flex flex-wrap gap-1.5">
                                 <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -236,7 +245,8 @@ export default function CoachSubscriptionPage() {
                                 </span>
                             </div>
                         </button>
-                    ))}
+                        )
+                    })}
                 </div>
 
                 <div className="mt-4 grid gap-2 md:grid-cols-3">

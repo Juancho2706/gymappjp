@@ -26,7 +26,7 @@ export function FoodItemRow({ item, onUpdate, onRemove }: Props) {
   const defaultUnit = item.food.is_liquid ? 'ml' : 'g'
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 dark:border-border/60 bg-slate-50 dark:bg-muted/20 px-3 py-2">
       <span className="flex-1 min-w-[120px] text-sm font-semibold text-foreground truncate">
         {item.food.name}
         {item.food.brand && (
@@ -37,7 +37,7 @@ export function FoodItemRow({ item, onUpdate, onRemove }: Props) {
         type="number"
         min={0}
         step="any"
-        className="h-9 w-20 font-mono text-sm"
+        className="h-9 w-20 font-mono text-sm bg-white dark:bg-background text-slate-900 dark:text-foreground border-slate-300 dark:border-border"
         value={item.quantity}
         onChange={(e) => onUpdate(Number(e.target.value), item.unit ?? defaultUnit)}
       />
@@ -45,7 +45,7 @@ export function FoodItemRow({ item, onUpdate, onRemove }: Props) {
         value={item.unit ?? defaultUnit}
         onValueChange={(u) => onUpdate(item.quantity, u == null ? defaultUnit : u)}
       >
-        <SelectTrigger className="h-9 w-[100px]">
+        <SelectTrigger className="h-9 w-[100px] bg-white dark:bg-background text-slate-900 dark:text-foreground border-slate-300 dark:border-border">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

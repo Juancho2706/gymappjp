@@ -42,7 +42,10 @@ const CATEGORIES = [
   { id: 'lacteo', label: 'Lácteo' },
   { id: 'fruta', label: 'Fruta' },
   { id: 'verdura', label: 'Verdura' },
+  { id: 'legumbre', label: 'Legumbre' },
+  { id: 'bebida', label: 'Bebida' },
   { id: 'snack', label: 'Snack' },
+  { id: 'otro', label: 'Otro' },
 ]
 
 /** Normaliza unidades legacy a las tres unidades canónicas: 'g', 'ml' o 'un' */
@@ -64,9 +67,11 @@ function normalizeCategory(raw: string | null | undefined): string {
   if (value.startsWith('prote')) return 'proteina'
   if (value.startsWith('carb') || value.includes('cereal')) return 'carbohidrato'
   if (value.startsWith('gras')) return 'grasa'
-  if (value.startsWith('lact')) return 'lacteo'
+  if (value.startsWith('lact') || value.startsWith('leche')) return 'lacteo'
   if (value.startsWith('frut')) return 'fruta'
-  if (value.startsWith('verd')) return 'verdura'
+  if (value.startsWith('verd') || value.startsWith('vegetal')) return 'verdura'
+  if (value.startsWith('legum') || value.startsWith('porot')) return 'legumbre'
+  if (value.startsWith('bebid') || value.startsWith('liquid') || value === 'agua' || value === 'jugo') return 'bebida'
   if (value.startsWith('snack')) return 'snack'
   return value
 }

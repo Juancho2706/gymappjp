@@ -93,8 +93,11 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
                     />
                 ))}
             </div>
-            <Link href={`/c/${coachSlug}/nutrition`} className="block text-center text-[10px] font-semibold text-muted-foreground hover:text-foreground">
-                Plan completo →
+            <Link
+                href={`/c/${coachSlug}/nutrition`}
+                className="animate-pulse-cta block rounded-xl bg-emerald-500/15 px-4 py-2.5 text-center text-xs font-bold text-emerald-700 ring-1 ring-emerald-500/50 transition-colors hover:bg-emerald-500/25 dark:text-emerald-300"
+            >
+                Ver plan completo con macros →
             </Link>
         </GlassCard>
     )
