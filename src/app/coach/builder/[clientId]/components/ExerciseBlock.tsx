@@ -84,16 +84,17 @@ function ExerciseBlockInner({
     return (
         <div ref={setNodeRef}
             className={cn(
-                'group relative flex min-w-0 max-w-full flex-col bg-background dark:bg-card/50 backdrop-blur-md border border-border rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none border-l-4',
+                'group relative flex min-w-0 max-w-full flex-col glass-card rounded-xl overflow-hidden transition-all duration-300 border-l-[3px]',
                 isDragging
-                    ? 'z-50 ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50'
+                    ? 'z-50 kinetic-glow-strong scale-[1.03] opacity-60'
                     : isDragPending
-                        ? 'ring-2 ring-primary/40 scale-[1.02] shadow-lg'
-                        : 'hover:border-primary/40 hover:bg-primary/5 hover:shadow-md dark:hover:border-primary/40 dark:hover:bg-primary/10'
+                        ? 'kinetic-glow scale-[1.02]'
+                        : 'hover:bg-white/[0.05] hover:border-white/20'
             )}
             style={{
                 ...style,
-                borderLeftColor: isDragging ? 'var(--theme-primary)' : muscleColor,
+                borderLeftColor: isDragging ? 'rgb(var(--theme-primary-rgb))' : muscleColor,
+                boxShadow: isDragging ? undefined : `inset 3px 0 0 ${muscleColor}22`,
             }}
         >
             <div className="flex min-w-0 items-center gap-3 p-3">

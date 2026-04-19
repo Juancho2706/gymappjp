@@ -1,0 +1,517 @@
+/* ============================================================
+   SIGNAL — Design System v1
+   Estética: Neo-brutalismo editorial meets performance data
+   Scope: .signal-root
+   Inspiración: Supreme × The Athletic × Bloomberg × Nike Training
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;0,800;0,900;1,900&family=Barlow:wght@400;500;600;700&display=swap');
+
+.signal-root {
+  /* Core palette */
+  --s-paper: #FFFDF7;       /* Fondo papel cálido */
+  --s-paper-2: #F5F2EA;     /* Superficie secundaria */
+  --s-paper-3: #EDE9DE;     /* Superficie terciaria / hover */
+  --s-ink: #0F0F0F;         /* Negro tinta */
+  --s-ink-2: #2A2A2A;
+  --s-ink-3: #555555;
+
+  /* Accent palette — 2 únicos acentos */
+  --s-red: #FF3B1F;         /* Rojo señal — acción, alerta, marca */
+  --s-lime: #C1FF33;        /* Lima ácido — éxito, performance, live */
+  --s-lime-dark: #7AB300;   /* Lima oscuro para texto sobre lima */
+
+  /* Neutrals */
+  --s-border: #0F0F0F;      /* Border siempre ink */
+  --s-mid: #D4D0C8;         /* Gris cálido mid-tone */
+  --s-ghost: rgba(15,15,15,0.06);
+
+  /* Typography */
+  --s-font-display: 'Barlow Condensed', 'Impact', ui-sans-serif, sans-serif;
+  --s-font-body: 'Barlow', var(--font-inter), ui-sans-serif, sans-serif;
+  --s-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Geometry — ZERO radius (brutalismo) */
+  --s-radius: 2px;
+
+  /* Shadows — offset duros, brutalistas */
+  --s-shadow-sm: 2px 2px 0 var(--s-ink);
+  --s-shadow-md: 4px 4px 0 var(--s-ink);
+  --s-shadow-lg: 6px 6px 0 var(--s-ink);
+  --s-shadow-xl: 8px 8px 0 var(--s-ink);
+  --s-shadow-red: 4px 4px 0 var(--s-red);
+
+  /* Borders */
+  --s-border-1: 1px solid var(--s-ink);
+  --s-border-2: 2px solid var(--s-ink);
+  --s-border-3: 3px solid var(--s-ink);
+
+  background: var(--s-paper);
+  color: var(--s-ink);
+  min-height: 100vh;
+  font-family: var(--s-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.signal-root * { box-sizing: border-box; }
+
+/* ── TYPOGRAPHY ────────────────────── */
+
+.signal-root .display {
+  font-family: var(--s-font-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 0.92;
+}
+
+.signal-root .display-italic {
+  font-family: var(--s-font-display);
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  line-height: 0.92;
+}
+
+.signal-root .label-caps {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--s-ink-3);
+}
+
+.signal-root .mono {
+  font-family: var(--s-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── SURFACES ──────────────────────── */
+
+.signal-root .card {
+  background: var(--s-paper);
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  box-shadow: var(--s-shadow-md);
+}
+
+.signal-root .card-ink {
+  background: var(--s-ink);
+  color: var(--s-paper);
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  box-shadow: var(--s-shadow-md);
+}
+
+.signal-root .card-red {
+  background: var(--s-red);
+  color: var(--s-paper);
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  box-shadow: var(--s-shadow-md);
+}
+
+.signal-root .card-lime {
+  background: var(--s-lime);
+  color: var(--s-ink);
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  box-shadow: var(--s-shadow-md);
+}
+
+/* ── BUTTONS ───────────────────────── */
+
+.signal-root .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: var(--s-radius);
+  border: var(--s-border-2);
+  font-family: var(--s-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+  white-space: nowrap;
+}
+.signal-root .btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none !important;
+}
+
+.signal-root .btn-primary {
+  background: var(--s-red);
+  color: var(--s-paper);
+  box-shadow: var(--s-shadow-md);
+}
+.signal-root .btn-primary:hover { box-shadow: var(--s-shadow-lg); }
+
+.signal-root .btn-ink {
+  background: var(--s-ink);
+  color: var(--s-paper);
+  box-shadow: var(--s-shadow-md);
+}
+.signal-root .btn-ink:hover { box-shadow: var(--s-shadow-lg); }
+
+.signal-root .btn-lime {
+  background: var(--s-lime);
+  color: var(--s-ink);
+  box-shadow: var(--s-shadow-md);
+}
+.signal-root .btn-lime:hover { box-shadow: var(--s-shadow-lg); }
+
+.signal-root .btn-ghost {
+  background: transparent;
+  color: var(--s-ink);
+  box-shadow: var(--s-shadow-sm);
+}
+.signal-root .btn-ghost:hover { background: var(--s-paper-3); box-shadow: var(--s-shadow-md); }
+
+.signal-root .btn-sm { height: 32px; padding: 0 14px; font-size: 12px; }
+.signal-root .btn-lg { height: 52px; padding: 0 32px; font-size: 18px; }
+.signal-root .btn-xl { height: 64px; padding: 0 40px; font-size: 22px; }
+
+/* ── TAGS / CHIPS ──────────────────── */
+
+.signal-root .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  font-family: var(--s-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--s-paper);
+}
+.signal-root .tag-red { background: var(--s-red); color: var(--s-paper); }
+.signal-root .tag-lime { background: var(--s-lime); color: var(--s-ink); }
+.signal-root .tag-ink { background: var(--s-ink); color: var(--s-paper); }
+.signal-root .tag-paper { background: var(--s-paper); }
+
+/* ── LIVE indicator ────────────────── */
+
+.signal-root .live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--s-lime);
+  border: 1.5px solid var(--s-ink);
+  animation: s-blink 1s steps(1) infinite;
+  display: inline-block;
+}
+@keyframes s-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ── INPUT ─────────────────────────── */
+
+.signal-root .input {
+  height: 44px;
+  padding: 0 14px;
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  background: var(--s-paper);
+  font-family: var(--s-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  color: var(--s-ink);
+  box-shadow: var(--s-shadow-sm);
+  transition: box-shadow 100ms;
+  width: 100%;
+}
+.signal-root .input:focus { box-shadow: var(--s-shadow-md); outline: none; }
+
+/* ── STAT BLOCK ────────────────────── */
+
+.signal-root .stat-block {
+  padding: 24px 20px;
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  background: var(--s-paper);
+  box-shadow: var(--s-shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+.signal-root .stat-block .val {
+  font-family: var(--s-font-display);
+  font-size: 60px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.signal-root .stat-block .delta {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── SIDEBAR ───────────────────────── */
+
+.signal-root .side {
+  width: 240px;
+  background: var(--s-ink);
+  color: var(--s-paper);
+  border-right: var(--s-border-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.signal-root .side-logo {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 20px 24px;
+  border-bottom: var(--s-border-2);
+  font-family: var(--s-font-display);
+  font-weight: 900;
+  font-size: 28px;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  color: var(--s-paper);
+}
+.signal-root .side-logo .signal-mark {
+  color: var(--s-red);
+}
+
+.signal-root .side-section {
+  font-family: var(--s-font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  padding: 18px 24px 8px;
+}
+
+.signal-root .side-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 24px;
+  font-family: var(--s-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 80ms, color 80ms, border-color 80ms;
+}
+.signal-root .side-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.signal-root .side-item.active {
+  background: rgba(255,59,31,0.12);
+  color: #fff;
+  border-left-color: var(--s-red);
+}
+
+/* ── TOPBAR ────────────────────────── */
+
+.signal-root .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 64px;
+  background: var(--s-paper);
+  border-bottom: var(--s-border-2);
+}
+
+/* ── DIVIDERS ──────────────────────── */
+
+.signal-root hr {
+  border: none;
+  border-top: var(--s-border-2);
+  margin: 0;
+}
+
+/* ── AVATAR ────────────────────────── */
+
+.signal-root .avatar {
+  width: 40px; height: 40px;
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  background: var(--s-ink);
+  color: var(--s-paper);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--s-font-display);
+  font-weight: 900;
+  font-size: 14px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.signal-root .avatar-lg { width: 72px; height: 72px; font-size: 24px; }
+
+/* ── BAR ───────────────────────────── */
+
+.signal-root .bar {
+  height: 8px;
+  background: var(--s-paper-3);
+  border: var(--s-border-1);
+  border-radius: 0;
+  overflow: hidden;
+}
+.signal-root .bar > span {
+  display: block;
+  height: 100%;
+  background: var(--s-red);
+}
+.signal-root .bar-lime > span { background: var(--s-lime); }
+.signal-root .bar-ink > span { background: var(--s-ink); }
+
+/* ── ROW / TABLE ───────────────────── */
+
+.signal-root .row {
+  display: grid;
+  gap: 16px;
+  padding: 14px 24px;
+  border-top: var(--s-border-1);
+  align-items: center;
+}
+.signal-root .row:hover { background: var(--s-paper-2); }
+.signal-root .row.head {
+  background: var(--s-ink);
+  color: var(--s-paper);
+  font-family: var(--s-font-display);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-top: var(--s-border-2);
+  border-bottom: var(--s-border-2);
+}
+.signal-root .row.head:hover { background: var(--s-ink); }
+
+/* ── SCROLL ────────────────────────── */
+
+.signal-root ::-webkit-scrollbar { width: 8px; }
+.signal-root ::-webkit-scrollbar-thumb {
+  background: var(--s-ink);
+  border: 2px solid var(--s-paper);
+}
+
+/* ── GRID HELPERS ──────────────────── */
+
+.signal-root .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.signal-root .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.signal-root .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+@media (max-width: 900px) {
+  .signal-root .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .signal-root .grid-3 { grid-template-columns: 1fr; }
+  .signal-root .grid-2 { grid-template-columns: 1fr; }
+  .signal-root .side { display: none; }
+}
+
+/* ── LINK ──────────────────────────── */
+
+.signal-root a { color: inherit; text-decoration: none; }
+
+/* ── DEMO BANNER ───────────────────── */
+
+.signal-root .demo-banner {
+  position: fixed;
+  bottom: 16px; right: 16px;
+  z-index: 50;
+  background: var(--s-ink);
+  color: var(--s-paper);
+  padding: 10px 16px;
+  border: var(--s-border-2);
+  border-radius: var(--s-radius);
+  box-shadow: var(--s-shadow-md);
+  font-family: var(--s-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── STRIPE PATTERN (decorative) ──── */
+
+.signal-root .stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(15,15,15,0.06) 4px,
+    rgba(15,15,15,0.06) 8px
+  );
+}
+
+/* ── NUMBER TICKER (big stat display) */
+
+.signal-root .big-num {
+  font-family: var(--s-font-display);
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  line-height: 0.88;
+  letter-spacing: -0.02em;
+}
+
+/* ── SCROLLING MARQUEE ─────────────── */
+
+.signal-root .marquee-wrap {
+  overflow: hidden;
+  border-top: var(--s-border-2);
+  border-bottom: var(--s-border-2);
+  background: var(--s-red);
+  color: var(--s-paper);
+  white-space: nowrap;
+}
+.signal-root .marquee-inner {
+  display: inline-flex;
+  gap: 0;
+  animation: marquee 20s linear infinite;
+}
+.signal-root .marquee-item {
+  padding: 10px 32px;
+  font-family: var(--s-font-display);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-right: var(--s-border-2);
+  border-color: rgba(255,255,255,0.3);
+}
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ── TICKER NUMBERS (hero stat) ────── */
+
+.signal-root .ticker-pair {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.signal-root .ticker-pair .unit {
+  font-family: var(--s-font-display);
+  font-size: 0.3em;
+  font-weight: 900;
+  text-transform: uppercase;
+  opacity: 0.6;
+}

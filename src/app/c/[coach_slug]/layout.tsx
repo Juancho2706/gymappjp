@@ -15,6 +15,8 @@ import {
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { NoiseOverlay } from '@/components/fx/NoiseOverlay'
+import { AmbientMesh } from '@/components/fx/AmbientMesh'
 
 interface Props {
     children: React.ReactNode
@@ -126,11 +128,14 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         <>
             <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; --theme-primary-rgb: ${primaryRgb}; }` }} />
             <div
-                className="flex flex-col md:flex-row min-h-dvh antialiased bg-background text-foreground"
+                className="flex flex-col md:flex-row min-h-dvh antialiased bg-[var(--obs-base)] text-[var(--obs-text)]"
                 style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
             >
+                {/* Concept A — Kinetic Obsidian ambient FX */}
+                <AmbientMesh />
+
                 <ClientNav
                     coachSlug={coach_slug}
                     coachBrand={brandName}
@@ -139,9 +144,10 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 />
                 <InstallPrompt brandName={brandName} />
 
-                <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
+                <main className="relative z-0 flex-1 overflow-auto bg-transparent pb-[var(--mobile-content-bottom-offset)] md:pb-0 has-[.is-workout-page]:pb-0">
                     {children}
                 </main>
+                <NoiseOverlay />
             </div>
         </>
     )

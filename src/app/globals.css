@@ -4,9 +4,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   OMNICOACH — Ultra-Premium B2B Dashboard
-   Arquetipo: El Arquitecto / El Científico
-   Vibe: Precision, Control, Analytics, High-End Tech
+   CONCEPT A — "KINETIC OBSIDIAN"
+   Dirección de arte: Cine oscuro premium / energía en latencia
+   Metáfora: Sala de edición cinematográfica · Glass 3ra-gen
+   Dark-exclusive · Glow ring como firma del coach
    ============================================================ */
 @theme inline {
   --color-background: var(--background);
@@ -50,15 +51,17 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
 
-  /* Custom Shadow for Glow Effect */
-  --shadow-glow: 0 0 15px -3px rgba(0, 229, 255, 0.4);
+  --shadow-glow: 0 0 15px -3px rgba(var(--theme-primary-rgb, 0, 122, 255), 0.4);
   --shadow-glow-blue: 0 0 15px -3px rgba(0, 122, 255, 0.4);
 }
 
 /* ============================================================
-   LIGHT MODE (Default / Base)
+   OBSIDIAN — Base tokens (dark-forced, no light)
    ============================================================ */
-:root {
+:root,
+html:not(.dark),
+.dark {
+  /* Safe areas */
   --safe-area-inset-top: env(safe-area-inset-top);
   --safe-area-inset-bottom: env(safe-area-inset-bottom);
   --safe-area-inset-left: env(safe-area-inset-left);
@@ -68,349 +71,308 @@
   --mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-bar-h) + 0.5rem);
   --mobile-content-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-bar-h));
 
-  /* Pale Grey Background from Brand Guidelines */
-  --background: #F5F5F5;
-  --foreground: #121212;
+  /* ── Obsidian palette ── */
+  --obs-base: #05070A;
+  --obs-deep: #030406;
+  --obs-raised: #0B0F14;
+  --obs-elevated: #141922;
+  --obs-border: rgba(255, 255, 255, 0.06);
+  --obs-border-strong: rgba(255, 255, 255, 0.12);
+  --obs-text: #F2F5F9;
+  --obs-text-dim: #9AA4B2;
+  --obs-text-faint: #5A6372;
 
-  /* Surfaces: Snow White */
-  --card: #FFFFFF;
-  --card-foreground: #121212;
-  --popover: #FFFFFF;
-  --popover-foreground: #121212;
+  --glass-bg: rgba(255, 255, 255, 0.02);
+  --glass-bg-strong: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-strong: rgba(255, 255, 255, 0.14);
+  --glass-blur: 24px;
 
-  /* Accent: Electric Blue (#007AFF) */
+  /* Shadcn-mapped tokens → Obsidian */
+  --background: var(--obs-base);
+  --foreground: var(--obs-text);
+  --card: var(--obs-raised);
+  --card-foreground: var(--obs-text);
+  --popover: var(--obs-elevated);
+  --popover-foreground: var(--obs-text);
+
   --primary: var(--theme-primary, #007AFF);
   --primary-foreground: #FFFFFF;
 
-  /* Secondary & Muted for High Density UI */
-  --secondary: #E5E7EB;
-  --secondary-foreground: #121212;
+  --secondary: var(--obs-elevated);
+  --secondary-foreground: var(--obs-text);
+  --muted: var(--obs-raised);
+  --muted-foreground: var(--obs-text-dim);
+  --accent: var(--obs-elevated);
+  --accent-foreground: var(--obs-text);
+  --destructive: #FF3B30;
 
-  --muted: #E5E7EB;
-  --muted-foreground: #6B7280;
-
-  --accent: #E5E7EB;
-  --accent-foreground: var(--theme-primary, #007AFF);
-
-  /* State Colors */
-  --destructive: #FF3B30; /* iOS Red for consistency */
-
-  /* Borders: Subtly visible on light bg */
-  --border: rgba(0, 0, 0, 0.1);
-  --input: rgba(0, 0, 0, 0.05);
+  --border: var(--obs-border);
+  --input: var(--obs-border);
   --ring: var(--theme-primary, #007AFF);
 
-  /* Charts: Primary-aware colors */
   --chart-1: var(--theme-primary, #007AFF);
   --chart-2: #00E5FF;
   --chart-3: #5856D6;
   --chart-4: #00C7BE;
   --chart-5: #0040DD;
 
-  /* Sidebar: Light Look */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #6B7280;
+  /* Sidebar (flotante glass) */
+  --sidebar: rgba(11, 15, 20, 0.78);
+  --sidebar-foreground: var(--obs-text-dim);
   --sidebar-primary: var(--theme-primary, #007AFF);
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E5E7EB;
-  --sidebar-accent-foreground: #121212;
-  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-accent: rgba(255, 255, 255, 0.04);
+  --sidebar-accent-foreground: var(--obs-text);
+  --sidebar-border: var(--obs-border);
   --sidebar-ring: var(--theme-primary, #007AFF);
 
-  --radius: 0.75rem;
+  --radius: 0.875rem;
 
-  /* White-label variables */
+  /* White-label */
   --theme-primary: #007AFF;
   --theme-primary-rgb: 0, 122, 255;
 }
 
-/* ============================================================
-   NATIVE DARK MODE
-   ============================================================ */
-.dark {
-  /* Deep Charcoal Background */
-  --background: #121212;
-  --foreground: #F8F9FA;
-
-  /* Surfaces: Pure Black or Deep Neutral */
-  --card: #1E1E1E;
-  --card-foreground: #F8F9FA;
-  --popover: #1E1E1E;
-  --popover-foreground: #F8F9FA;
-
-  /* Accent: follows coach brand color */
-  --primary: var(--theme-primary, #007AFF);
-  --primary-foreground: #FFFFFF;
-
-  /* Secondary & Muted for High Density UI */
-  --secondary: #27272A;
-  --secondary-foreground: #F8F9FA;
-
-  --muted: #27272A;
-  --muted-foreground: #A1A1AA;
-
-  --accent: #27272A;
-  --accent-foreground: #00E5FF;
-
-  /* State Colors */
-  --destructive: #FF3B30; /* iOS Red for consistency */
-
-  /* Borders: Subtly visible on dark bg */
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.05);
-  --ring: var(--theme-primary, #007AFF);
-
-  /* Charts: Primary-aware colors */
-  --chart-1: var(--theme-primary, #007AFF);
-  --chart-2: #00E5FF;
-  --chart-3: #5856D6;
-  --chart-4: #00C7BE;
-  --chart-5: #0040DD;
-
-  /* Sidebar: Unified Deep Look */
-  --sidebar: #121212;
-  --sidebar-foreground: #A1A1AA;
-  --sidebar-primary: var(--theme-primary, #007AFF);
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1E1E1E;
-  --sidebar-accent-foreground: #F8F9FA;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: var(--theme-primary, #007AFF);
+/* Force dark color-scheme globally — Concept A es dark-exclusive */
+html {
+  color-scheme: dark;
+  background-color: var(--obs-base);
 }
-
-/* Force Dark Mode on root since it's native and mandatory */
 html.dark {
   color-scheme: dark;
 }
-html {
-  color-scheme: light;
-}
 
 /* ============================================================
-   Glassmorphism & Clean UI Utilities
+   GLASS V2 — Cristal tallado (inner shadow + gradient stroke)
    ============================================================ */
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
-.dark .glass {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 20px 60px -20px rgba(0, 0, 0, 0.8);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 32px -12px rgba(0, 0, 0, 0.6);
+  position: relative;
+  overflow: hidden;
 }
 
-.dark .glass-card {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: none;
+/* Gradient stroke con mask compositing (borde luminoso sutil) */
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(255, 255, 255, 0.0) 60%,
+    rgba(var(--theme-primary-rgb), 0.06) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 /* ============================================================
-   Animations & Interaction
+   KINETIC GLOW — Firma del coach (white-label)
+   Filosofía A: el color del coach SOLO aparece como glow/firma,
+   nunca invade superficies grandes.
    ============================================================ */
-.glow-primary {
-  box-shadow: 0 0 15px -3px rgba(var(--theme-primary-rgb, 0, 122, 255), 0.3);
+.kinetic-glow {
+  box-shadow: 0 0 20px -4px rgba(var(--theme-primary-rgb), 0.45);
 }
 
-.glow-primary:hover {
-  box-shadow: 0 0 20px -2px rgba(var(--theme-primary-rgb, 0, 122, 255), 0.5);
+.kinetic-glow-strong {
+  box-shadow:
+    0 0 0 1px rgba(var(--theme-primary-rgb), 0.4),
+    0 0 24px -2px rgba(var(--theme-primary-rgb), 0.55),
+    inset 0 0 24px -12px rgba(var(--theme-primary-rgb), 0.4);
 }
 
-.glow-cyan {
-  box-shadow: 0 0 15px -3px rgba(0, 229, 255, 0.3);
+.kinetic-ring {
+  position: relative;
+}
+.kinetic-ring::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 1px solid rgba(var(--theme-primary-rgb), 0.5);
+  box-shadow:
+    0 0 20px rgba(var(--theme-primary-rgb), 0.35),
+    inset 0 0 12px rgba(var(--theme-primary-rgb), 0.15);
+  pointer-events: none;
+  animation: kinetic-pulse 2.4s ease-in-out infinite;
 }
 
-.glow-cyan:hover {
-  box-shadow: 0 0 20px -2px rgba(0, 229, 255, 0.5);
+.kinetic-accent {
+  color: rgb(var(--theme-primary-rgb));
 }
 
+.kinetic-bar {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--theme-primary-rgb), 0.8),
+    rgba(var(--theme-primary-rgb), 0.2)
+  );
+  box-shadow: 0 0 16px -2px rgba(var(--theme-primary-rgb), 0.5);
+}
+
+/* ============================================================
+   NOISE OVERLAY (grain cinematográfico)
+   ============================================================ */
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  z-index: 9999;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Ambient mesh gradient para páginas grandes */
+.ambient-mesh {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(var(--theme-primary-rgb), 0.08), transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, rgba(88, 86, 214, 0.06), transparent 60%),
+    radial-gradient(800px 400px at 60% 50%, rgba(0, 229, 255, 0.04), transparent 60%);
+}
+
+/* ============================================================
+   SCROLLBAR obsidiana
+   ============================================================ */
 @layer base {
   * {
     @apply border-border/40 outline-ring/50;
   }
-
-  html {
-    @apply scroll-smooth;
-  }
-
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
+  html { @apply scroll-smooth; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 99px;
   }
-
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--primary);
+    background: rgba(var(--theme-primary-rgb), 0.5);
   }
 }
 
 /* ============================================================
-   GLOBAL TYPOGRAPHY
+   TYPOGRAPHY — Obsidian tight-tracking
    ============================================================ */
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--obs-base);
+  color: var(--obs-text);
   font-family: var(--font-inter), 'SF Pro Display', ui-sans-serif, system-ui, -apple-system, sans-serif !important;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'ss01', 'ss02', 'cv01';
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Montserrat', var(--font-inter), ui-sans-serif, system-ui, sans-serif !important;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .data-number {
+  font-family: var(--font-geist-mono), 'Geist Mono', 'JetBrains Mono', monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.display-hero {
   font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-}
-
-/*
-   Animations
-   ============================================================ */
-@layer utilities {
-  .animate-fade-in {
-    animation: fadeIn 0.5s ease-out both;
-  }
-
-  .animate-slide-up {
-    animation: slideUp 0.5s ease-out both;
-  }
-
-  .animate-slide-in-left {
-    animation: slideInLeft 0.5s ease-out both;
-  }
-
-  .animate-scale-in {
-    animation: scaleIn 0.4s ease-out both;
-  }
-
-  .animate-glow {
-    animation: glow 3s ease-in-out infinite alternate;
-  }
-
-  .animate-shimmer {
-    animation: shimmer 2s linear infinite;
-    background-size: 200% 100%;
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-24px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes glow {
-  from {
-    box-shadow: 0 0 10px 0px rgba(0, 229, 255, 0.2);
-  }
-
-  to {
-    box-shadow: 0 0 30px 6px rgba(0, 229, 255, 0.4);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-@keyframes float {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-12px);
-  }
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
 }
 
 /* ============================================================
-   Glass morphism utility
+   ANIMATIONS — Kinetic suite
    ============================================================ */
-.glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+@layer utilities {
+  .animate-fade-in { animation: fadeIn 0.5s ease-out both; }
+  .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .animate-slide-in-left { animation: slideInLeft 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .animate-scale-in { animation: scaleIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .animate-glow { animation: kinetic-pulse 3s ease-in-out infinite; }
+  .animate-shimmer { animation: shimmer 2s linear infinite; background-size: 200% 100%; }
+  .animate-float { animation: float 6s ease-in-out infinite; }
+  .animate-halo-drift { animation: halo-drift 18s ease-in-out infinite; }
+  .animate-shockwave { animation: shockwave 400ms ease-out both; }
 }
 
-.dark .glass {
-  background: rgba(17, 24, 39, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px) }
+  to { opacity: 1; transform: translateY(0) }
 }
-/* Smooth theme transitions */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px) }
+  to { opacity: 1; transform: translateX(0) }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92) }
+  to { opacity: 1; transform: scale(1) }
+}
+@keyframes kinetic-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1) }
+  50% { opacity: 1; transform: scale(1.02) }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0 }
+  100% { background-position: 200% 0 }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-12px) }
+}
+@keyframes halo-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); filter: blur(40px) saturate(1.4) }
+  33% { transform: translate3d(2%, -1%, 0) scale(1.04); filter: blur(50px) saturate(1.6) }
+  66% { transform: translate3d(-1%, 2%, 0) scale(0.98); filter: blur(42px) saturate(1.5) }
+}
+@keyframes shockwave {
+  0% { box-shadow: 0 0 0 0 rgba(var(--theme-primary-rgb), 0.5); transform: scale(1) }
+  100% { box-shadow: 0 0 0 24px rgba(var(--theme-primary-rgb), 0); transform: scale(1.02) }
+}
+
+/* ============================================================
+   Reduced motion + transitions
+   ============================================================ */
 body, nav, header, aside, section, article, a, button, input, select, textarea, label {
   transition-property: background-color, border-color, color, fill, stroke, box-shadow;
   transition-duration: 220ms;
@@ -426,93 +388,61 @@ body, nav, header, aside, section, article, a, button, input, select, textarea, 
   }
 }
 
-/* ============================================================
-   Safe Area Utilities (Notch support)
-   ============================================================ */
-@layer utilities {
-  .pt-safe {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
-  }
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .pl-safe {
-    padding-left: env(safe-area-inset-left, 0px);
-  }
-  .pr-safe {
-    padding-right: env(safe-area-inset-right, 0px);
-  }
-  .mt-safe {
-    margin-top: env(safe-area-inset-top, 0px);
-  }
-  .mb-safe {
-    margin-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .top-safe {
-    top: env(safe-area-inset-top, 0px);
-  }
-  .bottom-safe {
-    bottom: env(safe-area-inset-bottom, 0px);
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass-card, .glass-strong {
+    background: var(--obs-raised) !important;
+    backdrop-filter: none !important;
   }
 }
 
-/* Immersive Workout Mode */
+/* ============================================================
+   Safe area utilities
+   ============================================================ */
+@layer utilities {
+  .pt-safe { padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pl-safe { padding-left: env(safe-area-inset-left, 0px); }
+  .pr-safe { padding-right: env(safe-area-inset-right, 0px); }
+  .mt-safe { margin-top: env(safe-area-inset-top, 0px); }
+  .mb-safe { margin-bottom: env(safe-area-inset-bottom, 0px); }
+  .top-safe { top: env(safe-area-inset-top, 0px); }
+  .bottom-safe { bottom: env(safe-area-inset-bottom, 0px); }
+}
+
+/* Immersive workout mode */
 body.immersive-workout-mode nav.client-nav-mobile,
 body.immersive-workout-mode aside.client-nav-desktop {
   display: none !important;
 }
-body.immersive-workout-mode main {
-  padding-bottom: 0 !important;
-}
+body.immersive-workout-mode main { padding-bottom: 0 !important; }
 
-/* Perfil alumno — exportar / imprimir informe */
 @media print {
-  .coach-layout-container > aside {
-    display: none !important;
-  }
-  .coach-layout-container {
-    display: block !important;
-  }
+  .coach-layout-container > aside { display: none !important; }
+  .coach-layout-container { display: block !important; }
 }
 
 /* ============================================================
-   Mobile Foundation — overflow anti-clip & dynamic viewport
+   Mobile foundation
    ============================================================ */
-
-/* overflow-x: clip es superior a hidden: no crea scrollbar fantasma
-   y respeta position: sticky. Fallback a hidden en Safari < 16. */
 html {
   overflow-x: hidden;
   overflow-x: clip;
 }
-
 body {
-  /* dvh = dynamic viewport height: se adapta cuando la barra del
-     navegador aparece/desaparece en iOS Safari y Chrome Android. */
   min-height: 100vh;
   min-height: 100dvh;
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
 }
+body > * { max-width: 100%; }
 
-/* Evita que hijos directos del body empujen el ancho */
-body > * {
-  max-width: 100%;
-}
-
-/* ============================================================
-   DVH utilities (complementan las de Tailwind v4)
-   ============================================================ */
 @layer utilities {
-  /* Altura dinámica completa menos safe areas */
   .h-dvh-safe {
     height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
   .min-h-dvh-safe {
     min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
-
-  /* Padding lateral combinado (útil en landscape con notch) */
   .px-safe {
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
@@ -521,20 +451,30 @@ body > * {
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-
-  /* Scroll vertical con soporte táctil y padding para bottom nav */
   .scroll-y-safe {
     overflow-y: auto;
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-bar-h, 0px));
   }
-
-  /* Scroll vertical sin compensar bottom nav (auth, onboarding) */
   .scroll-y-plain {
     overflow-y: auto;
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+}
+
+/* ============================================================
+   Builder-specific (Kinetic timeline snap)
+   ============================================================ */
+.builder-timeline {
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+.builder-timeline::-webkit-scrollbar { display: none; }
+.builder-day {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
