@@ -1,0 +1,74 @@
+/* Ajustes locales del preview B (hereda tokens + utilities de globals.css) */
+
+.preview-b-banner--above-nav {
+  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .preview-b-banner--above-nav {
+    bottom: 1rem;
+  }
+}
+
+.preview-b-banner--low {
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .preview-b-banner--low {
+    bottom: 1rem;
+  }
+}
+
+.preview-b-input-line {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--hairline-strong);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.65rem 0;
+  font-size: 1rem;
+  color: var(--foreground);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.preview-b-input-line::placeholder {
+  color: var(--muted-foreground);
+}
+
+.preview-b-input-line:focus {
+  outline: none;
+  border-bottom-color: var(--theme-primary);
+  box-shadow: 0 1px 0 0 var(--theme-primary);
+}
+
+.preview-b-phase-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  transition: color 0.2s ease;
+}
+
+.preview-b-phase-tab[data-active="true"] {
+  color: var(--foreground);
+}
+
+.preview-b-phase-tab[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0.25rem;
+  right: 0.25rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--theme-primary);
+}
