@@ -246,19 +246,40 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     )
     const [cycleLength, setCycleLengthState] = useState<number>(initialProgram?.cycle_length || 7)
 
-    // When structure type or cycle length changes, rebuild the day columns
+    // Build a fresh day skeleton for the given structure, preserving existing blocks/titles
+    // by matching day id. Blocks on days that no longer exist are appended to the last
+    // day so the coach never silently loses work when toggling config options.
+    const reshapeDays = (existing: DayState[], type: 'weekly' | 'cycle', length: number): DayState[] => {
+        const skeleton: DayState[] = type === 'cycle'
+            ? Array.from({ length }, (_, i) => ({ id: i + 1, name: `Día ${i + 1}`, title: '', blocks: [] }))
+            : DAYS_OF_WEEK.map(d => ({ ...d, title: '', blocks: [] as BuilderBlock[] }))
+        const byId = new Map(existing.map(d => [d.id, d]))
+        const merged = skeleton.map(d => {
+            const prev = byId.get(d.id)
+            return prev ? { ...d, title: prev.title, blocks: prev.blocks, is_rest: prev.is_rest } : d
+        })
+        const orphanBlocks = existing
+            .filter(d => !merged.some(m => m.id === d.id))
+            .flatMap(d => d.blocks)
+        if (orphanBlocks.length > 0 && merged.length > 0) {
+            const last = merged[merged.length - 1]
+            merged[merged.length - 1] = { ...last, blocks: [...last.blocks, ...orphanBlocks] }
+        }
+        return merged
+    }
+
     const setProgramStructureType = (type: 'weekly' | 'cycle') => {
+        if (type === programStructureType) return
         setProgramStructureTypeState(type)
-        const newDays = getInitialDays('A', type, cycleLength)
-        builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
-        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: getInitialDays('B', type, cycleLength) })
+        builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: reshapeDays(builderA.days, type, cycleLength) })
+        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: reshapeDays(builderB.days, type, cycleLength) })
     }
     const setCycleLength = (length: number) => {
+        if (length === cycleLength) return
         setCycleLengthState(length)
         if (programStructureType === 'cycle') {
-            const newDays = getInitialDays('A', 'cycle', length)
-            builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: newDays })
-            builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: getInitialDays('B', 'cycle', length) })
+            builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: reshapeDays(builderA.days, 'cycle', length) })
+            builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: reshapeDays(builderB.days, 'cycle', length) })
         }
     }
 
