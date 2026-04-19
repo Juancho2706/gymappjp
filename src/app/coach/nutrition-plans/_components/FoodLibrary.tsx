@@ -373,7 +373,7 @@ function CustomFoodForm({
         <div className="space-y-2">
           <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categoría</Label>
           <input type="hidden" name="category" value={category} />
-          <Select value={category} onValueChange={setCategory}>
+          <Select value={category} onValueChange={(v) => setCategory(v ?? '')}>
             <SelectTrigger className="h-11 rounded-xl">
               <SelectValue placeholder="Seleccionar…" />
             </SelectTrigger>
