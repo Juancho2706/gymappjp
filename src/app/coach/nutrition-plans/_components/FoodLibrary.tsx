@@ -34,9 +34,12 @@ function macroPreviewPct(calories: number, p: number, c: number, f: number) {
   }
 }
 
+const PAGE_SIZE = 80
+
 export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   const [foods, setFoods] = useState<Food[]>(initialFoods)
   const [total, setTotal] = useState(totalFoods)
+  const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [category, setCategory] = useState<string>('todos')
@@ -44,8 +47,10 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   const [sort, setSort] = useState<SortKey>('name')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [pending, startTransition] = useTransition()
+  const [loadingMore, setLoadingMore] = useState(false)
   const [state, formAction] = useActionState(saveCustomFood.bind(null, coachId), { error: undefined, success: false })
   const skipNextFetch = useRef(true)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350)
@@ -59,10 +64,30 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
           search: searchTerm || undefined,
           category: cat !== 'todos' ? cat : undefined,
           page: 0,
-          pageSize: 120,
+          pageSize: PAGE_SIZE,
         })
         setFoods((next as Food[]) ?? [])
         setTotal(count ?? 0)
+        setPage(0)
+      })
+    },
+    [coachId]
+  )
+
+  const loadMore = useCallback(
+    (currentPage: number, searchTerm: string, cat: string) => {
+      setLoadingMore(true)
+      startTransition(async () => {
+        const nextPage = currentPage + 1
+        const { foods: next } = await searchCoachFoodLibrary(coachId, {
+          search: searchTerm || undefined,
+          category: cat !== 'todos' ? cat : undefined,
+          page: nextPage,
+          pageSize: PAGE_SIZE,
+        })
+        setFoods((prev) => [...prev, ...((next as Food[]) ?? [])])
+        setPage(nextPage)
+        setLoadingMore(false)
       })
     },
     [coachId]
@@ -75,6 +100,21 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
     }
     refresh(debouncedSearch, category)
   }, [debouncedSearch, category, refresh])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !pending && !loadingMore && foods.length < total) {
+          loadMore(page, debouncedSearch, category)
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [pending, loadingMore, foods.length, total, loadMore, page, debouncedSearch, category])
 
   useEffect(() => {
     if (state.success) {
@@ -204,6 +244,18 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
           ))}
         </div>
       : <FoodListCompact items={displayed} coachId={coachId} />}
+
+      <div ref={sentinelRef} className="h-4" />
+      {loadingMore && (
+        <div className="flex justify-center py-4">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      {!loadingMore && foods.length >= total && total > 0 && (
+        <p className="text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground py-2">
+          Todos los alimentos cargados
+        </p>
+      )}
     </div>
   )
 }

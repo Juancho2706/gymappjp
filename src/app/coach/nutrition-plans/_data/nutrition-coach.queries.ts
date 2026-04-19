@@ -260,8 +260,13 @@ export const getFoodLibrary = cache(async (coachId: string, options: FoodLibrary
     .range(page * pageSize, (page + 1) * pageSize - 1)
 
   if (search?.trim()) {
-    const term = search.trim().replace(/%/g, '\\%')
-    query = query.ilike('name', `%${term}%`)
+    const term = search
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/%/g, '\\%')
+    query = query.ilike('name_search', `%${term}%`)
   }
   if (category && category !== 'todos') {
     query = query.eq('category', category)
