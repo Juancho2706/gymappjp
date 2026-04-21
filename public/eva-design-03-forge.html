@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EVA · FORGE — Brutalist Functional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Archivo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAFAFA;
+    --bg-dark: #09090B;
+    --surface: #FFFFFF;
+    --surface-alt: #F4F4F5;
+    --ink: #09090B;
+    --ink-2: #27272A;
+    --muted: #71717A;
+    --dim: #A1A1AA;
+    --border: #E4E4E7;
+    --border-strong: #D4D4D8;
+    --accent: #FF3B1F;
+    --accent-dark: #CC2E18;
+    --accent-bg: #FFEDE8;
+    --success: #16A34A;
+    --warning: #CA8A04;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Geist', sans-serif;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    font-feature-settings: "ss01", "cv11";
+  }
+  .mono { font-family: 'Geist Mono', monospace; }
+  .display { font-family: 'Archivo', sans-serif; letter-spacing: -0.03em; }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    background-position: -1px -1px;
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: -1;
+    mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black, transparent);
+    -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black, transparent);
+  }
+
+  /* Page header */
+  .page-header {
+    padding: 40px 24px 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .tag-strip {
+    display: flex;
+    gap: 0;
+    margin-bottom: 40px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .tag-strip .cell {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .tag-strip .cell + .cell { border-left: none; }
+  .tag-strip .cell.accent {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+  .tag-strip .cell.red {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .page-header h1 {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: clamp(56px, 12vw, 140px);
+    line-height: 0.88;
+    letter-spacing: -0.05em;
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
+  .page-header h1 .slash {
+    color: var(--accent);
+    font-weight: 400;
+  }
+  .page-header h1 .sub {
+    display: block;
+    font-size: 0.25em;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0;
+    margin-top: 8px;
+    font-family: 'Geist Mono', monospace;
+  }
+  .header-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px dashed var(--border-strong);
+  }
+  @media (min-width: 768px) {
+    .header-grid { grid-template-columns: 2fr 1fr 1fr 1fr; }
+  }
+  .header-cell .label {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .header-cell .value {
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--ink-2);
+    font-weight: 400;
+  }
+  .header-cell .value strong { font-weight: 600; color: var(--ink); }
+
+  /* Screens */
+  .screens-wrap {
+    padding: 48px 24px 80px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .screens-grid {
+    display: grid;
+    gap: 48px;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  @media (min-width: 900px) {
+    .screens-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+  }
+
+  .screen-label {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .screen-label .marker {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    background: var(--ink);
+    color: var(--bg);
+    letter-spacing: 0.05em;
+  }
+  .screen-label .title {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    flex: 1;
+  }
+  .screen-label .aside {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Phone frame */
+  .phone {
+    width: 100%;
+    max-width: 390px;
+    margin: 0 auto;
+    background: var(--surface);
+    border: 1.5px solid var(--ink);
+    border-radius: 36px;
+    overflow: hidden;
+    box-shadow:
+      8px 8px 0 var(--ink),
+      0 0 0 1px var(--ink);
+    position: relative;
+  }
+  .phone-screen {
+    padding: 14px 0 0;
+    min-height: 820px;
+    position: relative;
+    background: var(--bg);
+  }
+  .phone-screen-inner { padding: 0 20px 20px; }
+
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 20px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .status-bar .right { display: flex; gap: 6px; align-items: center; }
+  .status-bar svg { width: 16px; height: 16px; }
+  .dynamic-island {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 32px;
+    background: #000;
+    border-radius: 100px;
+    z-index: 5;
+  }
+
+  /* --- SCREEN 1: PLAN BUILDER MOBILE --- */
+  .builder-top {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .builder-top .row1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .builder-top .back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .builder-top .save-chip {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    padding: 4px 8px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-radius: 4px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .builder-top h3 {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .builder-top .client-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .builder-top .client-row .avatar {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'Geist Mono', monospace;
+  }
+
+  /* Days tabs */
+  .days-tabs {
+    display: flex;
+    gap: 0;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .days-tabs::-webkit-scrollbar { display: none; }
+  .day-tab {
+    flex-shrink: 0;
+    min-width: 56px;
+    padding: 10px 0;
+    text-align: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin: 0 2px;
+  }
+  .day-tab .dow {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .day-tab .dnum {
+    font-family: 'Archivo', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink-2);
+    letter-spacing: -0.02em;
+  }
+  .day-tab.active {
+    border-bottom-color: var(--accent);
+  }
+  .day-tab.active .dow { color: var(--accent); }
+  .day-tab.active .dnum { color: var(--ink); }
+  .day-tab.rest .dnum { color: var(--dim); font-weight: 400; }
+
+  /* Day meta */
+  .day-meta {
+    padding: 16px 20px 12px;
+    display: flex;
+    gap: 16px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    border-bottom: 1px dashed var(--border);
+  }
+  .day-meta .item { display: flex; align-items: center; gap: 6px; }
+  .day-meta .item strong { color: var(--ink); font-weight: 600; }
+  .day-meta .item .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* Blocks section */
+  .blocks-list {
+    padding: 16px 20px 100px;
+  }
+  .section-hd {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 0 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .section-hd .count {
+    color: var(--ink);
+    padding: 2px 6px;
+    background: var(--surface-alt);
+    border-radius: 4px;
+  }
+
+  .block-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    position: relative;
+  }
+  .block-card::before {
+    content: '';
+    position: absolute;
+    left: -1px; top: 12px; bottom: 12px;
+    width: 3px;
+    background: var(--ink);
+    border-radius: 0 3px 3px 0;
+  }
+  .block-card.superset::before { background: var(--accent); }
+  .block-card .order {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    min-width: 18px;
+    padding-top: 2px;
+  }
+  .block-card .info { flex: 1; min-width: 0; }
+  .block-card .name {
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+  .block-card .specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+  }
+  .block-card .specs .chip {
+    padding: 2px 6px;
+    background: var(--surface-alt);
+    color: var(--ink-2);
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .block-card .specs .chip.red {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+  .block-card .actions {
+    display: flex;
+    gap: 4px;
+  }
+  .block-card .actions button {
+    width: 28px; height: 28px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .superset-label {
+    font-family: 'Geist Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    padding: 8px 0 4px 20px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .superset-label::before {
+    content: '';
+    width: 20px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  /* FAB */
+  .fab {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 100px;
+    padding: 14px 24px;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(255, 59, 31, 0.35);
+  }
+  .fab svg { width: 16px; height: 16px; }
+
+  .bottom-hint {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 72px;
+    padding: 8px 20px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .bottom-hint span { padding: 2px 6px; background: var(--surface-alt); border-radius: 3px; font-weight: 600; color: var(--ink); }
+
+  /* --- SCREEN 2: COACH DASHBOARD --- */
+  .coach-top {
+    padding: 24px 20px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .coach-top .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .coach-top .brand-mark {
+    width: 32px; height: 32px;
+    background: var(--ink);
+    color: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    border-radius: 6px;
+    letter-spacing: -0.02em;
+  }
+  .coach-top .brand-info .name {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+  }
+  .coach-top .brand-info .tier {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .coach-top .actions { display: flex; gap: 8px; }
+  .coach-top .actions button {
+    width: 36px; height: 36px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--ink-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .coach-top .actions .badge {
+    position: absolute;
+    top: -2px; right: -2px;
+    width: 16px; height: 16px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'Geist Mono', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--surface);
+  }
+
+  .kpi-hero {
+    padding: 20px;
+    background: var(--ink);
+    color: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-hero .kicker {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+  .kpi-hero .big-num {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: 64px;
+    line-height: 0.9;
+    letter-spacing: -0.05em;
+    margin-bottom: 6px;
+  }
+  .kpi-hero .big-num .unit { font-size: 24px; color: var(--dim); font-weight: 400; margin-left: 4px; }
+  .kpi-hero .label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+  }
+  .kpi-hero .label-row .lbl {
+    font-size: 13px;
+    color: var(--dim);
+  }
+  .kpi-hero .label-row .delta {
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    padding: 3px 8px;
+    background: rgba(22, 163, 74, 0.2);
+    color: #4ADE80;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .kpi-hero .micro-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid #27272A;
+  }
+  .kpi-hero .micro .lbl {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 4px;
+  }
+  .kpi-hero .micro .val {
+    font-family: 'Archivo', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  /* Table-ish list */
+  .table-section {
+    padding: 20px;
+  }
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .table-header h4 {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .table-header h4 .pill {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+  .table-header .filter {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 4px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .client-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 6px;
+  }
+  .client-row .avatar {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-2);
+    flex-shrink: 0;
+  }
+  .client-row .avatar.warn { background: var(--accent-bg); color: var(--accent); border-color: transparent; }
+  .client-row .info { flex: 1; min-width: 0; }
+  .client-row .info .name {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 3px;
+    letter-spacing: -0.01em;
+  }
+  .client-row .info .status {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .client-row .info .status.red { color: var(--accent); }
+  .client-row .info .status.green { color: var(--success); }
+  .client-row .info .status .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .client-row .metric {
+    text-align: right;
+  }
+  .client-row .metric .n {
+    font-family: 'Archivo', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .client-row .metric .lbl {
+    font-family: 'Geist Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* Style spec footer */
+  .style-footer {
+    border-top: 1px solid var(--border);
+    padding: 48px 24px 60px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .style-grid {
+    display: grid;
+    gap: 32px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 768px) {
+    .style-grid { grid-template-columns: 1fr 1fr 1fr; }
+  }
+  .style-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 24px;
+    border-radius: 8px;
+  }
+  .style-block h4 {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .palette { display: flex; flex-direction: column; gap: 6px; }
+  .palette-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .palette-row:last-child { border-bottom: none; }
+  .palette-row .swatch {
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+  .palette-row .info { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .palette-row .name { font-size: 13px; font-weight: 500; }
+  .palette-row .hex { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  .font-demo { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px dashed var(--border); }
+  .font-demo:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+  .font-demo .tag {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .font-demo .sample-archivo {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 32px;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .font-demo .sample-geist {
+    font-family: 'Geist', sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .font-demo .sample-mono {
+    font-family: 'Geist Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .principles { display: flex; flex-direction: column; gap: 12px; }
+  .principle-item {
+    padding: 12px 14px;
+    background: var(--surface-alt);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+  }
+  .principle-item .n {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+  .principle-item p { font-size: 13px; line-height: 1.5; color: var(--ink-2); font-weight: 400; }
+  .principle-item p strong { font-weight: 700; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="page-header">
+  <div class="tag-strip">
+    <span class="cell accent">EVA</span>
+    <span class="cell">DESIGN</span>
+    <span class="cell">03 / 03</span>
+    <span class="cell red">TOOL-FIRST</span>
+  </div>
+  <h1>FORGE<span class="slash">/</span><span class="sub">// brutalist functional · coach-first · data-dense</span></h1>
+  <div class="header-grid">
+    <div class="header-cell">
+      <div class="label">Thesis</div>
+      <div class="value">Una <strong>herramienta pro</strong>, no una app bonita. Grid visible, mono en todos lados, un solo acento saturado. Para coaches que pasan horas al día dentro.</div>
+    </div>
+    <div class="header-cell">
+      <div class="label">Mode</div>
+      <div class="value"><strong>Light-first</strong><br>Dark opcional</div>
+    </div>
+    <div class="header-cell">
+      <div class="label">Refs</div>
+      <div class="value"><strong>Linear · Vercel</strong><br>Notion · Plausible</div>
+    </div>
+    <div class="header-cell">
+      <div class="label">Persona</div>
+      <div class="value"><strong>El coach</strong><br>30+ clientes activos</div>
+    </div>
+  </div>
+</header>
+
+<!-- Screens -->
+<section class="screens-wrap">
+  <div class="screens-grid">
+
+    <!-- SCREEN 1: PLAN BUILDER MOBILE (el que tenía problemas) -->
+    <div>
+      <div class="screen-label">
+        <span class="marker">SCR.01</span>
+        <span class="title">Plan Builder · Móvil</span>
+        <span class="aside">the-problem-child.tsx</span>
+      </div>
+      <div class="phone">
+        <div class="dynamic-island"></div>
+        <div class="phone-screen">
+          <!-- Status bar -->
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="right">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a8 8 0 0 1 8 8h2a10 10 0 0 0-10-10v2Z"/><path d="M12 8a4 4 0 0 1 4 4h2a6 6 0 0 0-6-6v2Z"/><circle cx="12" cy="12" r="2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="10" rx="2"/></svg>
+            </div>
+          </div>
+
+          <!-- Top -->
+          <div class="builder-top">
+            <div class="row1">
+              <button class="back">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                <span>/builder</span>
+              </button>
+              <span class="save-chip">● Cambios sin guardar</span>
+            </div>
+            <h3>Plan Semanal</h3>
+            <div class="client-row">
+              <div class="avatar">JM</div>
+              <span>Joaquín Muñoz<span style="margin: 0 6px; opacity: 0.4;">·</span>Semana 3 de 12</span>
+            </div>
+          </div>
+
+          <!-- Days tabs -->
+          <div class="days-tabs">
+            <button class="day-tab"><div class="dow">LUN</div><div class="dnum">14</div></button>
+            <button class="day-tab"><div class="dow">MAR</div><div class="dnum">15</div></button>
+            <button class="day-tab rest"><div class="dow">MIÉ</div><div class="dnum">—</div></button>
+            <button class="day-tab active"><div class="dow">JUE</div><div class="dnum">17</div></button>
+            <button class="day-tab"><div class="dow">VIE</div><div class="dnum">18</div></button>
+            <button class="day-tab"><div class="dow">SÁB</div><div class="dnum">19</div></button>
+            <button class="day-tab rest"><div class="dow">DOM</div><div class="dnum">—</div></button>
+          </div>
+
+          <!-- Day meta -->
+          <div class="day-meta">
+            <div class="item"><span class="dot"></span><span><strong>PUSH</strong></span></div>
+            <div class="item"><span>6 ej · 22 sets</span></div>
+            <div class="item"><span>~58 min</span></div>
+          </div>
+
+          <!-- Blocks -->
+          <div class="blocks-list">
+            <div class="section-hd">
+              <span>Main · Principales</span>
+              <span class="count">4</span>
+            </div>
+
+            <div class="block-card superset">
+              <span class="order">A1</span>
+              <div class="info">
+                <div class="name">Bench Press — Barbell</div>
+                <div class="specs">
+                  <span class="chip">4 × 8</span>
+                  <span class="chip">82.5 kg</span>
+                  <span class="chip red">RIR 2</span>
+                  <span class="chip">90s</span>
+                </div>
+              </div>
+              <div class="actions">
+                <button>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="superset-label">Superserie A</div>
+
+            <div class="block-card superset">
+              <span class="order">A2</span>
+              <div class="info">
+                <div class="name">Face Pull — Polea</div>
+                <div class="specs">
+                  <span class="chip">4 × 15</span>
+                  <span class="chip">25 kg</span>
+                  <span class="chip red">RIR 3</span>
+                </div>
+              </div>
+              <div class="actions">
+                <button>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="block-card">
+              <span class="order">B</span>
+              <div class="info">
+                <div class="name">Incline DB Press</div>
+                <div class="specs">
+                  <span class="chip">3 × 10</span>
+                  <span class="chip">28 kg</span>
+                  <span class="chip red">RIR 2</span>
+                  <span class="chip">75s</span>
+                </div>
+              </div>
+              <div class="actions">
+                <button>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="block-card">
+              <span class="order">C</span>
+              <div class="info">
+                <div class="name">Overhead Press — Machine</div>
+                <div class="specs">
+                  <span class="chip">3 × 12</span>
+                  <span class="chip">40 kg</span>
+                  <span class="chip red">RIR 2</span>
+                </div>
+              </div>
+              <div class="actions">
+                <button>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottom-hint">
+            Toca <span>+</span> para agregar ejercicio
+          </div>
+
+          <!-- FAB -->
+          <button class="fab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+            AGREGAR EJERCICIO
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: COACH DASHBOARD -->
+    <div>
+      <div class="screen-label">
+        <span class="marker">SCR.02</span>
+        <span class="title">Coach Dashboard</span>
+        <span class="aside">/coach/dashboard</span>
+      </div>
+      <div class="phone">
+        <div class="dynamic-island"></div>
+        <div class="phone-screen">
+          <!-- Status bar -->
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="right">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a8 8 0 0 1 8 8h2a10 10 0 0 0-10-10v2Z"/><path d="M12 8a4 4 0 0 1 4 4h2a6 6 0 0 0-6-6v2Z"/><circle cx="12" cy="12" r="2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="20" height="10" rx="2"/></svg>
+            </div>
+          </div>
+
+          <!-- Coach top -->
+          <div class="coach-top">
+            <div class="brand">
+              <div class="brand-mark">E</div>
+              <div class="brand-info">
+                <div class="name">EVA Coach</div>
+                <div class="tier">PRO · 28 clientes</div>
+              </div>
+            </div>
+            <div class="actions">
+              <button>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+              </button>
+              <button>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21h4"/></svg>
+                <span class="badge">3</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI hero -->
+          <div class="kpi-hero">
+            <div class="kicker">// Adherencia · últimos 7d</div>
+            <div class="label-row">
+              <div></div>
+              <div class="delta">+4.2%</div>
+            </div>
+            <div class="big-num">82<span class="unit">%</span></div>
+            <div class="label-row" style="margin-bottom: 20px;">
+              <div class="lbl">Promedio de los 28 clientes</div>
+            </div>
+            <div class="micro-row">
+              <div class="micro">
+                <div class="lbl">Activos</div>
+                <div class="val">24 / 28</div>
+              </div>
+              <div class="micro">
+                <div class="lbl">PRs</div>
+                <div class="val">12</div>
+              </div>
+              <div class="micro">
+                <div class="lbl">Alertas</div>
+                <div class="val" style="color: #F87171;">3</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Clients needing attention -->
+          <div class="table-section">
+            <div class="table-header">
+              <h4>Necesitan atención <span class="pill">3 NEW</span></h4>
+              <span class="filter">filter ▾</span>
+            </div>
+
+            <div class="client-row">
+              <div class="avatar warn">MA</div>
+              <div class="info">
+                <div class="name">María Aguilar</div>
+                <div class="status red">
+                  <span class="dot"></span>
+                  <span>sin-registrar-8d</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="n" style="color: var(--accent);">12%</div>
+                <div class="lbl">Adher</div>
+              </div>
+            </div>
+
+            <div class="client-row">
+              <div class="avatar warn">DR</div>
+              <div class="info">
+                <div class="name">Diego Ramírez</div>
+                <div class="status red">
+                  <span class="dot"></span>
+                  <span>peso-sin-actualizar-14d</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="n" style="color: var(--accent);">45%</div>
+                <div class="lbl">Adher</div>
+              </div>
+            </div>
+
+            <div class="client-row">
+              <div class="avatar warn">LS</div>
+              <div class="info">
+                <div class="name">Lucía Soto</div>
+                <div class="status red">
+                  <span class="dot"></span>
+                  <span>check-in-vencido</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="n" style="color: var(--accent);">58%</div>
+                <div class="lbl">Adher</div>
+              </div>
+            </div>
+
+            <div class="table-header" style="margin-top: 20px;">
+              <h4>Top adherencia semana</h4>
+              <span class="filter">ver todos ↗</span>
+            </div>
+
+            <div class="client-row">
+              <div class="avatar">JM</div>
+              <div class="info">
+                <div class="name">Joaquín Muñoz</div>
+                <div class="status green">
+                  <span class="dot"></span>
+                  <span>pr-nuevo · bench-press</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="n">98%</div>
+                <div class="lbl">Adher</div>
+              </div>
+            </div>
+
+            <div class="client-row">
+              <div class="avatar">CP</div>
+              <div class="info">
+                <div class="name">Camila Pérez</div>
+                <div class="status green">
+                  <span class="dot"></span>
+                  <span>racha · 12d</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="n">96%</div>
+                <div class="lbl">Adher</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Style spec footer -->
+<footer class="style-footer">
+  <div class="style-grid">
+
+    <div class="style-block">
+      <h4>— Paleta</h4>
+      <div class="palette">
+        <div class="palette-row">
+          <div class="swatch" style="background:#FAFAFA"></div>
+          <div class="info"><span class="name">Canvas</span><span class="hex">#FAFAFA</span></div>
+        </div>
+        <div class="palette-row">
+          <div class="swatch" style="background:#09090B"></div>
+          <div class="info"><span class="name">Ink</span><span class="hex">#09090B</span></div>
+        </div>
+        <div class="palette-row">
+          <div class="swatch" style="background:#FF3B1F"></div>
+          <div class="info"><span class="name">Accent</span><span class="hex">#FF3B1F</span></div>
+        </div>
+        <div class="palette-row">
+          <div class="swatch" style="background:#71717A"></div>
+          <div class="info"><span class="name">Muted</span><span class="hex">#71717A</span></div>
+        </div>
+        <div class="palette-row">
+          <div class="swatch" style="background:#E4E4E7"></div>
+          <div class="info"><span class="name">Border</span><span class="hex">#E4E4E7</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="style-block">
+      <h4>— Tipografía</h4>
+      <div class="font-demo">
+        <div class="tag">// Display · Archivo 800</div>
+        <div class="sample-archivo">FORGE/</div>
+      </div>
+      <div class="font-demo">
+        <div class="tag">// Body · Geist 400</div>
+        <div class="sample-geist">Plan semanal · 6 ej · 22 sets</div>
+      </div>
+      <div class="font-demo">
+        <div class="tag">// Mono · Geist Mono 500</div>
+        <div class="sample-mono">/coach/builder/joaq.._3</div>
+      </div>
+    </div>
+
+    <div class="style-block">
+      <h4>— Principios</h4>
+      <div class="principles">
+        <div class="principle-item">
+          <div class="n">// 01</div>
+          <p><strong>Mono para metadata.</strong> Rutas, estados, IDs, códigos. El mono es el idioma del sistema; el sans es el idioma del humano.</p>
+        </div>
+        <div class="principle-item">
+          <div class="n">// 02</div>
+          <p><strong>Shadow como gesto.</strong> Un solo box-shadow 8px 8px 0 en negro puro. Una sola vez (el phone-frame). Nunca más.</p>
+        </div>
+        <div class="principle-item">
+          <div class="n">// 03</div>
+          <p><strong>Sin drag-and-drop en móvil.</strong> El problema de gestos se resuelve con el patrón <em>FAB + Bottom Sheet</em>. El coach toca "+", elige, vuelve.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</footer>
+
+</body>
+</html>
