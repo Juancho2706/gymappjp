@@ -25,7 +25,8 @@ const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
 export default function ReactivatePage() {
     const searchParams = useSearchParams()
     const [tier, setTier] = useState<SubscriptionTier>(() => {
-        const queryTier = searchParams.get('tier')
+        const raw = searchParams.get('tier')
+        const queryTier = raw === 'starter_lite' ? 'starter' : raw
         if (queryTier && queryTier in TIER_CONFIG) return queryTier as SubscriptionTier
         return 'starter'
     })

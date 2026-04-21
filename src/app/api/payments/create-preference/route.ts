@@ -13,7 +13,7 @@ import {
 import { getPaymentsProvider } from '@/lib/payments/provider'
 
 const schema = z.object({
-    tier: z.enum(['starter_lite', 'starter', 'pro', 'elite', 'scale']),
+    tier: z.enum(['starter', 'pro', 'elite', 'scale']),
     billingCycle: z.enum(['monthly', 'quarterly', 'annual']),
 })
 

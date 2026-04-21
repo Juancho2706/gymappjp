@@ -167,12 +167,12 @@ export default function CoachSubscriptionPage() {
                 <h2 className="text-sm font-semibold text-foreground">Cómo funcionan los planes</h2>
                 <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                     <li>
-                        <span className="font-semibold text-foreground">Solo mensual:</span> Starter Lite (1–5), Starter
-                        (6–10) y Pro (11–30). Sin nutrición en Starter Lite y Starter; Pro incluye nutrición.
+                        <span className="font-semibold text-foreground">Solo mensual:</span> Starter (1–10) y Pro
+                        (11–30). Sin nutrición en Starter; Pro incluye nutrición.
                     </li>
                     <li>
-                        <span className="font-semibold text-foreground">Solo trimestral o anual:</span> Elite (31–60) y
-                        Scale (61–100). Incluyen nutrición.
+                        <span className="font-semibold text-foreground">Elite (31–60) y Scale (61–100):</span> mensual,
+                        trimestral o anual; son los únicos planes con prepago trimestral o anual. Incluyen nutrición.
                     </li>
                 </ul>
             </section>

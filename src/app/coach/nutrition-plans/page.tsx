@@ -26,7 +26,7 @@ export default async function NutritionPlansPage() {
     .eq('id', coachId)
     .maybeSingle()
 
-  const tier = (coach?.subscription_tier ?? 'starter_lite') as SubscriptionTier
+  const tier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
   const capabilities = getTierCapabilities(tier)
   if (!capabilities.canUseNutrition) {
     return (

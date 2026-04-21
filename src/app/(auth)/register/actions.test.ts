@@ -92,7 +92,7 @@ describe('registerAction', () => {
   it('rejects billing cycle not allowed for selected tier', async () => {
     const result = await registerAction(
       {},
-      buildRegisterFormData({ subscription_tier: 'elite', billing_cycle: 'monthly' })
+      buildRegisterFormData({ subscription_tier: 'starter', billing_cycle: 'quarterly' })
     )
     expect(result).toEqual({ error: 'La frecuencia elegida no está disponible para ese plan.' })
   })

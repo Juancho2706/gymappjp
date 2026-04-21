@@ -13,7 +13,6 @@ const SUFFIX_KEYS = [
     'landing.typewriter.s0',
     'landing.typewriter.s1',
     'landing.typewriter.s2',
-    'landing.typewriter.s3',
     'landing.typewriter.s4',
     'landing.typewriter.s5',
     'landing.typewriter.s6',

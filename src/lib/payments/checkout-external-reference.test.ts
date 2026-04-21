@@ -11,6 +11,15 @@ describe('parseCheckoutExternalReference', () => {
         })
     })
 
+    it('parses elite monthly checkout reference', () => {
+        const r = parseCheckoutExternalReference('uuid-2|elite|monthly')
+        expect(r).toEqual({
+            coachId: 'uuid-2',
+            tier: 'elite',
+            billingCycle: 'monthly',
+        })
+    })
+
     it('returns coachId only when reference is incomplete', () => {
         expect(parseCheckoutExternalReference('uuid-1')).toEqual({
             coachId: 'uuid-1',

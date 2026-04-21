@@ -41,7 +41,11 @@ export default function SubscriptionProcessingPage() {
         [searchParams]
     )
     const fromRegister = searchParams.get('from') === 'register'
-    const tierFromUrl = (searchParams.get('tier') ?? 'starter') as SubscriptionTier
+    const rawTierParam = searchParams.get('tier')
+    const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter' : rawTierParam
+    const tierFromUrl = (
+        normalizedTierParam && normalizedTierParam in TIER_CONFIG ? normalizedTierParam : 'starter'
+    ) as SubscriptionTier
     const cycleFromUrl = (searchParams.get('cycle') ?? 'monthly') as BillingCycle
 
     const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl

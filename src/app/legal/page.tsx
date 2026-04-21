@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { GymAppLogo } from '@/components/ui/Logo'
+import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import { ArrowLeft } from 'lucide-react'
 
 export default function AvisoLegalPage() {
@@ -25,11 +25,11 @@ export default function AvisoLegalPage() {
         {/* Simple Header */}
         <header className="border-b border-white/5 bg-transparent py-6">
             <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
-                <Link href="/" className="flex items-center gap-2 group">
-                    <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0 transition-transform group-hover:scale-105" />
-                    <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
-                </Link>
-                <Link href="/" className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors">
+                <LandingBrandMark
+                    className="transition-transform hover:scale-[1.02]"
+                    iconClassName="h-8 w-8 sm:h-9 sm:w-9"
+                />
+                <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
                     <ArrowLeft className="w-4 h-4" />
                     Volver
                 </Link>
@@ -138,14 +138,14 @@ export default function AvisoLegalPage() {
         <footer className="border-t border-white/5 bg-transparent py-12 mt-10">
             <div className="max-w-4xl mx-auto px-6">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-2">
-                        <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0" />
-                        <span className="text-white font-bold text-sm tracking-tight font-display">EVA</span>
-                    </div>
+                    <LandingBrandMark
+                        className="opacity-90 hover:opacity-100"
+                        iconClassName="h-8 w-8 sm:h-9 sm:w-9"
+                    />
 
-                    <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-zinc-400">
-                        <Link href="/legal" className="hover:text-white transition-colors">Aviso Legal</Link>
-                        <Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link>
+                    <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">
+                        <Link href="/legal" className="transition-colors hover:text-foreground">Aviso Legal</Link>
+                        <Link href="/privacidad" className="transition-colors hover:text-foreground">Privacidad</Link>
                     </div>
                 </div>
             </div>

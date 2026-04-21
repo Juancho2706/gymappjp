@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { Check, Crown, Dumbbell, Rocket, Zap } from 'lucide-react'
+import { Check, Crown, Dumbbell, Zap } from 'lucide-react'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -45,14 +45,6 @@ const planDisplay: Array<{
     popular?: boolean
 }> = [
     {
-        id: 'starter_lite',
-        descKey: 'landing.pricing.plan.starter_lite.desc',
-        icon: Rocket,
-        color: 'text-emerald-600 dark:text-emerald-400',
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/25',
-    },
-    {
         id: 'starter',
         descKey: 'landing.pricing.plan.starter.desc',
         icon: Zap,
@@ -87,7 +79,7 @@ const planDisplay: Array<{
     },
 ]
 
-const ALL_ORDER: SubscriptionTier[] = ['starter_lite', 'starter', 'pro', 'elite', 'scale']
+const ALL_ORDER: SubscriptionTier[] = ['starter', 'pro', 'elite', 'scale']
 
 function planById(id: SubscriptionTier) {
     const p = planDisplay.find((x) => x.id === id)
@@ -166,7 +158,16 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
                 <span className="rounded-md bg-secondary px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {(() => {
                         const cycles = getTierAllowedBillingCycles(plan.id)
-                        if (cycles.length === 1 && cycles[0] === 'monthly') return t('landing.pricing.billing.monthlyOnly')
+                        if (cycles.length === 1 && cycles[0] === 'monthly') {
+                            return t('landing.pricing.billing.monthlyOnly')
+                        }
+                        if (
+                            cycles.includes('monthly') &&
+                            cycles.includes('quarterly') &&
+                            cycles.includes('annual')
+                        ) {
+                            return t('landing.pricing.billing.monthlyQuarterlyAnnual')
+                        }
                         return t('landing.pricing.billing.quarterlyAnnual')
                     })()}
                 </span>
@@ -429,7 +430,7 @@ export function LandingPricingPreview() {
 
                 <PricingMobileCarousel />
 
-                <div className="hidden gap-3 overflow-x-clip overflow-y-visible py-2 lg:grid lg:grid-cols-5 xl:gap-4">
+                <div className="hidden gap-3 overflow-x-clip overflow-y-visible py-2 lg:grid lg:grid-cols-4 xl:gap-4">
                     {ALL_ORDER.map((id) => (
                         <PlanCard key={id} plan={planById(id)} />
                     ))}

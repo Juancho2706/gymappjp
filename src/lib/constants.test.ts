@@ -18,20 +18,22 @@ describe('subscription constants', () => {
     })
 
     it('returns max clients and capabilities by tier', () => {
-        expect(getTierMaxClients('starter_lite')).toBe(5)
+        expect(getTierMaxClients('starter')).toBe(10)
         expect(getTierMaxClients('pro')).toBe(30)
-        expect(getTierCapabilities('starter_lite').canUseNutrition).toBe(false)
-        expect(getTierCapabilities('starter_lite').canUseBranding).toBe(true)
         expect(getTierCapabilities('starter').canUseNutrition).toBe(false)
+        expect(getTierCapabilities('starter').canUseBranding).toBe(true)
         expect(getTierCapabilities('pro').canUseNutrition).toBe(true)
         expect(getTierCapabilities('pro').canUseBranding).toBe(true)
     })
 
     it('enforces allowed billing cycles by tier', () => {
-        expect(isBillingCycleAllowedForTier('starter_lite', 'monthly')).toBe(true)
-        expect(isBillingCycleAllowedForTier('starter_lite', 'quarterly')).toBe(false)
+        expect(isBillingCycleAllowedForTier('starter', 'monthly')).toBe(true)
+        expect(isBillingCycleAllowedForTier('starter', 'quarterly')).toBe(false)
         expect(isBillingCycleAllowedForTier('pro', 'monthly')).toBe(true)
-        expect(isBillingCycleAllowedForTier('elite', 'monthly')).toBe(false)
+        expect(isBillingCycleAllowedForTier('pro', 'quarterly')).toBe(false)
+        expect(isBillingCycleAllowedForTier('elite', 'monthly')).toBe(true)
+        expect(isBillingCycleAllowedForTier('elite', 'quarterly')).toBe(true)
         expect(isBillingCycleAllowedForTier('elite', 'annual')).toBe(true)
+        expect(isBillingCycleAllowedForTier('scale', 'monthly')).toBe(true)
     })
 })

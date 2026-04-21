@@ -27,7 +27,7 @@ export async function registerAction(
     const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'starter'
     const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
 
-    const isTierValid = ['starter_lite', 'starter', 'pro', 'elite', 'scale'].includes(selectedTier)
+    const isTierValid = ['starter', 'pro', 'elite', 'scale'].includes(selectedTier)
     const isCycleValid = ['monthly', 'quarterly', 'annual'].includes(selectedBillingCycle)
 
     if (!fullName || !email || !password || !brandName) {

@@ -62,7 +62,7 @@ export async function createClientAction(
 
     if (!coach) return { error: 'Coach no encontrado.' }
 
-    const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+    const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const maxClients = coach.max_clients ?? getTierMaxClients(tier)
     const { count: activeClientsCount, error: countError } = await supabase
         .from('clients')

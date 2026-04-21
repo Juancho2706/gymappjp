@@ -28,7 +28,7 @@ export default async function CoachSettingsPage() {
 
     if (!rawCoach) redirect('/login')
     const coach = rawCoach as Coach
-    const tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+    const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const capabilities = getTierCapabilities(tier)
 
     if (!capabilities.canUseBranding) {

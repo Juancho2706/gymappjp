@@ -40,7 +40,7 @@ describe('createClientAction', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({
-        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'starter_lite', max_clients: 1 },
+        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'starter', max_clients: 1 },
       }),
     }
     const clientsCountQuery = {

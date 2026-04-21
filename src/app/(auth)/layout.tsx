@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { GymAppLogo } from '@/components/ui/Logo'
+import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 
 export const metadata: Metadata = {
     title: 'EVA',
@@ -17,12 +16,7 @@ export default function AuthLayout({
         <div className="min-h-dvh bg-background flex flex-col pt-safe">
             {/* Minimal header */}
             <header className="flex items-center justify-between px-6 py-4">
-                <Link href="/" className="flex items-center gap-2.5">
-                    <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0" />
-                    <span className="font-bold text-foreground font-display">
-                        EVA
-                    </span>
-                </Link>
+                <LandingBrandMark iconClassName="h-8 w-8 sm:h-9 sm:w-9" />
                 <ThemeToggle />
             </header>
 

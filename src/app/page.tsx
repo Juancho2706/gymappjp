@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRef, useState, useEffect } from 'react'
 import Image from 'next/image'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
@@ -13,9 +14,10 @@ import { LandingTypewriterHeadline } from '@/components/landing/LandingTypewrite
 import { LandingUseCases } from '@/components/landing/LandingUseCases'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
+import { useTheme } from 'next-themes'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { motion, useScroll, useTransform, useInView, AnimatePresence } from 'framer-motion'
-import { Dumbbell, Sparkles, ArrowRight, Play, Menu, X } from 'lucide-react'
+import { Dumbbell, Sparkles, ArrowRight, Menu, X } from 'lucide-react'
 import {
     Sheet,
     SheetContent,
@@ -25,6 +27,11 @@ import {
 import { MUSCLE_GROUPS } from '@/lib/constants'
 
 const muscleGroupCount = MUSCLE_GROUPS.length
+
+const WebGLShader = dynamic(
+    () => import('@/components/ui/web-gl-shader').then((m) => ({ default: m.WebGLShader })),
+    { ssr: false, loading: () => null }
+)
 
 const fadeUp = {
     hidden: { opacity: 0, y: 40 },
@@ -235,6 +242,10 @@ export default function LandingPage() {
     const heroRef = useRef<HTMLDivElement>(null)
     const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
     const { t } = useTranslation()
+    const { resolvedTheme } = useTheme()
+    /** Until theme hydrates, keep dark hero to avoid a bright flash before .dark is applied. */
+    const isDarkHero = resolvedTheme === 'dark' || resolvedTheme === undefined
+    const heroShaderVariant = isDarkHero ? 'dark' : 'light'
 
     const heroScale = useTransform(scrollYProgress, [0, 1], [1, 0.9])
     const heroY = useTransform(scrollYProgress, [0, 1], [0, 100])
@@ -277,28 +288,32 @@ export default function LandingPage() {
 
     const primaryCta =
         'inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-8 py-4 rounded-full text-base transition-all shadow-[var(--shadow-glow-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-    const secondaryCta =
-        'inline-flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground text-sm font-medium px-8 py-4 rounded-full border border-border bg-card/60 hover:bg-card backdrop-blur-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
     return (
         <div className="min-h-dvh bg-background text-foreground overflow-x-hidden">
             <PillNav />
             <StickyBrandingCard />
 
             <main>
-                <section ref={heroRef} className="relative min-h-dvh flex flex-col items-center justify-center pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-28 bg-background landing-noise">
+                <section
+                    ref={heroRef}
+                    className="relative min-h-dvh flex flex-col items-center justify-center bg-white pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-28 landing-noise dark:bg-black"
+                >
                     <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-                        <div className="absolute top-1/4 left-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-primary/10 blur-[100px] md:blur-[150px]" />
-                        <div className="absolute bottom-1/4 right-1/4 w-[200px] md:w-[400px] h-[200px] md:h-[400px] rounded-full bg-sky-400/10 blur-[80px] md:blur-[120px]" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] md:w-[800px] h-[400px] md:h-[800px] rounded-full bg-primary/5 blur-[120px] md:blur-[200px]" />
+                        <WebGLShader key={heroShaderVariant} variant={heroShaderVariant} className="opacity-100" />
+                        <div className="absolute top-1/4 left-1/4 h-[300px] w-[300px] rounded-full bg-primary/[0.06] blur-[100px] md:h-[600px] md:w-[600px] md:blur-[150px] dark:bg-primary/10" />
+                        <div className="absolute right-1/4 bottom-1/4 h-[200px] w-[200px] rounded-full bg-slate-400/[0.08] blur-[80px] md:h-[400px] md:w-[400px] md:blur-[120px] dark:bg-sky-400/10" />
+                        <div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/[0.04] blur-[120px] md:h-[800px] md:w-[800px] md:blur-[200px] dark:bg-primary/5" />
                     </div>
 
                     <div
-                        className="absolute inset-0 opacity-[0.035] dark:opacity-[0.06]"
-                        style={{
-                            backgroundImage: 'linear-gradient(rgba(128,128,128,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(128,128,128,.12) 1px, transparent 1px)',
-                            backgroundSize: '40px 40px',
-                        }}
+                        className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-white/20 via-white/60 to-white dark:from-black/35 dark:via-black/55 dark:to-black"
+                        aria-hidden
+                    />
+
+                    <div
+                        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.03] dark:opacity-[0.05] [background-image:linear-gradient(rgba(0,0,0,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,.08)_1px,transparent_1px)] dark:[background-image:linear-gradient(rgba(128,128,128,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(128,128,128,.12)_1px,transparent_1px)]"
+                        style={{ backgroundSize: '40px 40px' }}
+                        aria-hidden
                     />
 
                     <div className="relative z-10 mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-6 pb-8 lg:grid-cols-12 lg:gap-10 lg:pb-12">
@@ -310,7 +325,7 @@ export default function LandingPage() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.3 }}
-                                className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-4 py-1.5 shadow-sm backdrop-blur-md"
+                                className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/90 px-4 py-1.5 shadow-sm backdrop-blur-md dark:border-white/15 dark:bg-white/10"
                             >
                                 <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden />
                                 <span className="text-xs font-medium text-foreground">{t('landing.hero.badge')}</span>
@@ -320,16 +335,16 @@ export default function LandingPage() {
                                 initial={{ opacity: 0, y: 30 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.4, duration: 0.8 }}
-                                className="max-w-2xl text-balance font-display text-4xl font-black leading-[1.12] tracking-tighter text-foreground sm:text-5xl md:text-6xl lg:text-[3.15rem] xl:text-[3.55rem]"
+                                className="max-w-2xl text-balance font-display text-4xl font-black leading-[1.12] tracking-tighter text-foreground sm:text-5xl md:text-6xl lg:text-[3.15rem] xl:text-[3.55rem] dark:text-white"
                             >
                                 <span className="block">
                                     {t('landing.typewriter.prefixBefore')}
-                                    <span className="bg-gradient-to-r from-primary via-sky-500 to-violet-500 bg-clip-text text-transparent">
+                                    <span className="bg-gradient-to-r from-sky-800 via-primary to-violet-800 bg-clip-text text-transparent dark:from-sky-300 dark:via-primary dark:to-violet-400">
                                         {t('landing.typewriter.prefixBrand')}
                                     </span>
                                     {t('landing.typewriter.prefixAfter')}
                                 </span>
-                                <span className="mt-4 block text-foreground sm:mt-5">
+                                <span className="mt-4 block text-foreground sm:mt-5 dark:text-white">
                                     <span className="font-display text-[1.35rem] font-extrabold leading-snug tracking-tight sm:text-2xl md:text-[1.75rem] lg:text-[1.85rem]">
                                         <LandingTypewriterHeadline />
                                     </span>
@@ -340,7 +355,7 @@ export default function LandingPage() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.6 }}
-                                className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg"
+                                className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg dark:text-white/70"
                             >
                                 {t('landing.hero.subtitle')}
                             </motion.p>
@@ -349,16 +364,15 @@ export default function LandingPage() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.7 }}
-                                className="mt-8 flex w-full flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start"
+                                className="mt-8 flex w-full flex-col items-stretch sm:flex-row sm:justify-center lg:justify-start"
                             >
-                                <Link href="/register?tier=pro&cycle=monthly" className={`w-full sm:w-auto ${primaryCta} group/btn`}>
+                                <Link
+                                    href="/register?tier=pro&cycle=monthly"
+                                    className={`group/btn w-full sm:w-auto ${primaryCta} no-underline`}
+                                >
                                     {t('landing.hero.cta')}
-                                    <ArrowRight className="w-5 h-5 transition-transform group-hover/btn:translate-x-1" aria-hidden />
+                                    <ArrowRight className="h-5 w-5 transition-transform group-hover/btn:translate-x-1" aria-hidden />
                                 </Link>
-                                <a href="#panel-coach" className={`w-full sm:w-auto ${secondaryCta}`}>
-                                    <Play className="h-4 w-4" aria-hidden />
-                                    {t('landing.hero.secondaryCta')}
-                                </a>
                             </motion.div>
                         </motion.div>
 

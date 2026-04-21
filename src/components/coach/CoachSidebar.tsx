@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { GymAppLogo } from '@/components/ui/Logo'
+import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 
 const navItems = [
@@ -126,7 +126,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 )}
             >
                 <div className="flex min-w-0 items-center gap-2.5">
-                    <GymAppLogo className="h-8 w-[4.25rem] flex-shrink-0 sm:w-[4.75rem]" />
+                    <EvaBrandIcon className="h-8 w-8 shrink-0 sm:h-8 sm:w-8" />
                     <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
                         {coachBrand || coachName}
                     </span>
@@ -152,18 +152,11 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 {/* Logo area (Desktop only) */}
                 <div className={cn("hidden md:flex py-8 border-b border-sidebar-border items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
                     <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
-                        <GymAppLogo className={cn(
-                            'h-10 flex-shrink-0',
-                            isCollapsed ? 'w-14' : 'w-[6.75rem]'
-                        )} />
+                        <EvaBrandIcon
+                            className={cn('h-10 w-10 flex-shrink-0', isCollapsed && 'h-9 w-9')}
+                        />
                         {!isCollapsed && (
                             <div className="min-w-0 animate-in fade-in duration-300">
-                                <p 
-                                    className="text-[10px] font-bold uppercase tracking-[0.2em] mb-0.5"
-                                    style={{ color: 'var(--theme-primary, #007AFF)' }}
-                                >
-                                    EVA
-                                </p>
                                 <p className="text-sm font-bold text-sidebar-foreground truncate uppercase tracking-tight font-display">
                                     {coachBrand || coachName}
                                 </p>

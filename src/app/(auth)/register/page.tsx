@@ -72,10 +72,14 @@ export default function RegisterPage() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
-        const queryTier = params.get('tier')
+        const rawTier = params.get('tier')
+        const normalizedTier =
+            rawTier === 'starter_lite' ? 'starter' : rawTier
         const queryCycle = params.get('cycle')
         const nextTier =
-            queryTier && queryTier in TIER_CONFIG ? (queryTier as SubscriptionTier) : 'starter'
+            normalizedTier && normalizedTier in TIER_CONFIG
+                ? (normalizedTier as SubscriptionTier)
+                : 'starter'
         setTier(nextTier)
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) {
             const candidateCycle = queryCycle as BillingCycle

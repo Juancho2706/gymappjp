@@ -121,7 +121,7 @@ async function handleWebhook(request: Request, rawBody: string) {
     }
 
     const status = mapProviderStatus(result.providerStatus)
-    let tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+    let tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     let billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
 
     if (result.subscriptionTier && result.billingCycle) {

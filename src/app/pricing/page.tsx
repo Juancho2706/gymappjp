@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { Check, Zap, Crown, Dumbbell, Rocket } from 'lucide-react'
+import { Check, Zap, Crown, Dumbbell } from 'lucide-react'
 import type { Metadata } from 'next'
+import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -35,14 +36,6 @@ const planDisplay: Array<{
     border: string
     popular?: boolean
 }> = [
-    {
-        id: 'starter_lite',
-        description: 'Tier de entrada para empezar con bajo costo',
-        icon: Rocket,
-        color: 'text-emerald-300',
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/25',
-    },
     {
         id: 'starter',
         description: 'Para coaches que están comenzando',
@@ -85,14 +78,7 @@ export default function PricingPage() {
         <div className="min-h-dvh bg-background">
             {/* Header */}
             <header className="border-b border-border px-6 py-4 flex items-center justify-between">
-                <Link href="/" className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/15 border border-violet-500/25 flex items-center justify-center">
-                        <Dumbbell className="w-4 h-4 text-violet-400" />
-                    </div>
-                    <span className="font-bold text-foreground text-sm">
-                        EVA
-                    </span>
-                </Link>
+                <LandingBrandMark iconClassName="h-8 w-8 sm:h-9 sm:w-9" />
                 <Link
                     href="/login"
                     className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -112,23 +98,22 @@ export default function PricingPage() {
                     <span className="text-violet-400">según el ciclo de cada plan</span>
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                    Incluye nuevo tier Starter Lite para mayor accesibilidad y
-                    descuentos por prepago en planes trimestrales y anuales.
+                    Starter y Pro se cobran en mensualidad; Elite y Scale también pueden mensual, con descuentos por
+                    prepago trimestral o anual.
                 </p>
                 <div className="mt-8 mx-auto max-w-2xl rounded-2xl border border-violet-500/20 bg-violet-500/5 p-5 text-left text-sm text-muted-foreground">
                     <p className="font-semibold text-foreground mb-2">Resumen rápido</p>
                     <ul className="list-disc space-y-1 pl-5">
                         <li>
-                            <strong className="text-foreground">Solo mensual:</strong> Starter Lite (1–5), Starter
-                            (6–10) y Pro (11–30).
+                            <strong className="text-foreground">Solo mensual:</strong> Starter (1–10) y Pro (11–30).
                         </li>
                         <li>
-                            <strong className="text-foreground">Solo trimestral o anual:</strong> Elite (31–60) y Scale
-                            (61–100).
+                            <strong className="text-foreground">Elite y Scale (31–100):</strong> mensual, trimestral o
+                            anual; son los únicos planes con opción de prepago trimestral o anual.
                         </li>
                         <li>
-                            <strong className="text-foreground">Nutrición:</strong> no incluida en Starter Lite ni Starter;
-                            sí a partir de Pro.
+                            <strong className="text-foreground">Nutrición:</strong> no incluida en Starter; sí a partir
+                            de Pro.
                         </li>
                     </ul>
                 </div>
@@ -142,10 +127,12 @@ export default function PricingPage() {
                     <div className="flex-1 border-t border-border" />
                     <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Sin módulo de nutrición · Solo mensual</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    {planDisplay.filter((p) => ['starter_lite', 'starter'].includes(p.id)).map((plan) => (
-                        <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
-                    ))}
+                <div className="grid grid-cols-1 md:max-w-md md:mx-auto gap-6 mb-8">
+                    {planDisplay
+                        .filter((p) => p.id === 'starter')
+                        .map((plan) => (
+                            <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
+                        ))}
                 </div>
 
                 {/* Group 2: With nutrition */}

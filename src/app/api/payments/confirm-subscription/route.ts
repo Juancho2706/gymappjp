@@ -75,7 +75,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Subscription does not belong to current user.' }, { status: 403 })
         }
 
-        let tier = (coach.subscription_tier ?? 'starter_lite') as SubscriptionTier
+        let tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
         let billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
         if (parsedRef?.tier && parsedRef.billingCycle) {
             tier = parsedRef.tier
