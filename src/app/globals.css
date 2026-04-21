@@ -581,6 +581,48 @@ body > * {
     background: color-mix(in oklab, var(--muted) 35%, transparent);
   }
 
+  /** Panel coach landing: distinto tono que landing-section-alt */
+  .landing-section-coach {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 55%, var(--background)) 0%,
+      color-mix(in oklab, hsl(var(--primary)) 5%, var(--background)) 45%,
+      color-mix(in oklab, var(--card) 40%, var(--background)) 100%
+    );
+  }
+
+  /** Franja de stats en home: alternancia con hero en modo claro */
+  .landing-stats-strip {
+    background: color-mix(in oklab, var(--card) 45%, var(--muted) 55%);
+  }
+
+  /** Modo claro: más contraste entre secciones (next-themes: sin clase .dark en html) */
+  html:not(.dark) .landing-section-alt {
+    background: color-mix(in oklab, var(--muted) 52%, var(--background));
+  }
+
+  html:not(.dark) .landing-section-coach {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--muted) 18%, var(--background)) 0%,
+      color-mix(in oklab, var(--card) 92%, var(--muted)) 42%,
+      color-mix(in oklab, var(--background) 70%, var(--muted)) 100%
+    );
+  }
+
+  html:not(.dark) .landing-stats-strip {
+    background: color-mix(in oklab, var(--muted) 35%, var(--card));
+    border-color: color-mix(in oklab, var(--border) 70%, transparent);
+  }
+
+  html:not(.dark) .landing-section-final {
+    background: color-mix(in oklab, var(--muted) 38%, var(--background));
+  }
+
+  html:not(.dark) .landing-section-catalog {
+    background: color-mix(in oklab, var(--background) 82%, var(--muted));
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .landing-noise::before {
       display: none;

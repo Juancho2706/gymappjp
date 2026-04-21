@@ -1,7 +1,7 @@
 'use client';
 import { cn } from '@/lib/utils';
 import { useMotionValue, animate, motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { Children, cloneElement, isValidElement, useState, useEffect } from 'react';
 import useMeasure from 'react-use-measure';
 
 type InfiniteSliderProps = {
@@ -85,6 +85,8 @@ export function InfiniteSlider({
       }
     : {};
 
+  const items = Children.toArray(children);
+
   return (
     <div className={cn('overflow-hidden', className)}>
       <motion.div
@@ -99,8 +101,16 @@ export function InfiniteSlider({
         ref={ref}
         {...hoverProps}
       >
-        {children}
-        {children}
+        {items.map((child, i) =>
+          isValidElement(child)
+            ? cloneElement(child, { key: `inf-a-${i}` })
+            : child
+        )}
+        {items.map((child, i) =>
+          isValidElement(child)
+            ? cloneElement(child, { key: `inf-b-${i}` })
+            : child
+        )}
       </motion.div>
     </div>
   );

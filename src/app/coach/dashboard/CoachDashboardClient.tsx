@@ -144,10 +144,10 @@ export default function CoachDashboardClient({
 
     const topStats = [
         {
-            label: 'MRR Estimado',
+            label: 'Ingresos del mes',
             value: mrrLabel,
             icon: TrendingUp,
-            trend: mrrDelta !== null ? `${mrrDelta >= 0 ? '+' : ''}${mrrDelta}% vs mes anterior` : 'Mes actual',
+            trend: mrrDelta !== null ? `${mrrDelta >= 0 ? '+' : ''}${mrrDelta}% vs mes anterior` : 'Pagos de alumnos registrados',
             trendColor: mrrDelta !== null && mrrDelta >= 0 ? 'text-emerald-500' : 'text-rose-500',
         },
         {

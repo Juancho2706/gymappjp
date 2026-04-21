@@ -25,7 +25,7 @@ export function LandingUseCases() {
     const { t } = useTranslation()
 
     return (
-        <section className="relative py-24 sm:py-28">
+        <section id="casos" className="relative scroll-mt-28 py-24 sm:py-28">
             <div className="mx-auto mb-12 max-w-2xl px-6 text-center">
                 <motion.div
                     initial={{ opacity: 0, y: 12 }}

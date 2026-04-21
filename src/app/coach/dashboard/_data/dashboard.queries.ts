@@ -26,22 +26,80 @@ export interface ActivityItemClient {
     photoUrl?: string | null
 }
 
-function extractAmountClp(payload: unknown): number | null {
-    if (!payload || typeof payload !== 'object') return null
-    const root = payload as Record<string, unknown>
-    const candidates = [
-        root.transaction_amount,
-        (root.auto_recurring as Record<string, unknown> | undefined)?.transaction_amount,
-        (root.data as Record<string, unknown> | undefined)?.transaction_amount,
-    ]
-    for (const c of candidates) {
-        if (typeof c === 'number' && c > 0) return c
-        if (typeof c === 'string') {
-            const n = parseFloat(c)
-            if (!Number.isNaN(n) && n > 0) return n
-        }
+/** Align with BillingTabB8: only completed / paid rows count toward coach revenue. */
+function isClientPaymentCountedForRevenue(status: string | null | undefined): boolean {
+    const s = String(status || '').toLowerCase()
+    return s === 'paid' || s === 'pagado' || s === 'completed'
+}
+
+function parsePaymentAmount(amount: unknown): number {
+    if (typeof amount === 'number' && !Number.isNaN(amount)) return amount
+    if (typeof amount === 'string') {
+        const n = Number.parseFloat(amount)
+        return Number.isNaN(n) ? 0 : n
     }
-    return null
+    return 0
+}
+
+/** YYYY-MM-DD from ISO or timestamptz string */
+function parsePaymentYmd(iso: string): { y: number; m: number; d: number } | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim())
+    if (!m) return null
+    return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) }
+}
+
+function isLastDayOfCalendarMonth(y: number, month1to12: number, day: number): boolean {
+    return day === new Date(y, month1to12, 0).getDate()
+}
+
+function monthKeyFromYm(y: number, month0: number): string {
+    return `${y}-${String(month0 + 1).padStart(2, '0')}`
+}
+
+function addWholeMonths(y: number, month0: number, delta: number): { y: number; month0: number } {
+    const dt = new Date(y, month0 + delta, 1)
+    return { y: dt.getFullYear(), month0: dt.getMonth() }
+}
+
+/**
+ * Reparte el monto en meses calendario del coach:
+ * - Si el pago cae el último día del mes, el primer mes de servicio se considera el **siguiente**
+ *   (ej. 31 mar + mensualidad abril → todo el monto en abril).
+ * - Con period_months > 1, reparte amount/periodo en meses consecutivos desde ese inicio.
+ */
+function allocatePaymentToMonthKeys(
+    paymentDateIso: string,
+    amountRaw: unknown,
+    periodMonths: number | null | undefined
+): Record<string, number> {
+    const ymd = parsePaymentYmd(paymentDateIso)
+    if (!ymd) return {}
+
+    const total = Math.round(parsePaymentAmount(amountRaw))
+    if (total <= 0) return {}
+
+    const pm = Math.max(1, periodMonths ?? 1)
+    let startY = ymd.y
+    let startM0 = ymd.m - 1
+
+    if (isLastDayOfCalendarMonth(ymd.y, ymd.m, ymd.d)) {
+        const next = addWholeMonths(startY, startM0, 1)
+        startY = next.y
+        startM0 = next.month0
+    }
+
+    const base = Math.floor(total / pm)
+    const remainder = total - base * pm
+    const out: Record<string, number> = {}
+
+    for (let i = 0; i < pm; i++) {
+        const { y, month0 } = addWholeMonths(startY, startM0, i)
+        const key = monthKeyFromYm(y, month0)
+        const slice = base + (i === pm - 1 ? remainder : 0)
+        out[key] = (out[key] ?? 0) + slice
+    }
+
+    return out
 }
 
 export interface RiskAlertItem {
@@ -60,8 +118,8 @@ async function getCoachDashboardDataInner(userId: string) {
     const supabase = await createClient()
 
     const now = new Date()
-    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
+    // Incluye filas antiguas que aún reparten ingresos al mes actual (period_months largos)
+    const clientPaymentsLookbackStart = new Date(now.getFullYear(), now.getMonth() - 13, 1).toISOString()
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
     const [
@@ -74,7 +132,7 @@ async function getCoachDashboardDataInner(userId: string) {
         workoutSessionsSeriesRaw,
         workoutLogs30dRaw,
         recentWorkoutsRaw,
-        subscriptionEventsRaw,
+        clientPaymentsRaw,
         pulse,
         coachSubscriptionRaw,
     ] = await Promise.all([
@@ -115,12 +173,12 @@ async function getCoachDashboardDataInner(userId: string) {
             .eq('clients.coach_id', userId)
             .order('logged_at', { ascending: false })
             .limit(50),
-        // Subscription events for MRR (last 60 days)
+        // Coach revenue: payments registered from clients (same month windows as before)
         supabase
-            .from('subscription_events')
-            .select('created_at, payload, provider_status')
+            .from('client_payments')
+            .select('payment_date, amount, status, period_months')
             .eq('coach_id', userId)
-            .gte('created_at', startOfPrevMonth),
+            .gte('payment_date', clientPaymentsLookbackStart),
         getCachedDirectoryPulse(userId),
         supabase
             .from('coaches')
@@ -150,15 +208,29 @@ async function getCoachDashboardDataInner(userId: string) {
             ? (workoutSessionsSeriesRaw.data as { day: string; sessions: number }[])
             : null
     const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string } }[] | null) || []
-    const subscriptionEvents = subscriptionEventsRaw.data || []
+    const clientPayments = (clientPaymentsRaw.data || []) as {
+        payment_date: string
+        amount: number | string
+        status: string | null
+        period_months: number | null
+    }[]
 
-    // MRR: sum amounts from subscription_events in current and previous month
-    const mrrCurrentMonth = subscriptionEvents
-        .filter((e) => e.created_at >= startOfCurrentMonth)
-        .reduce((sum, e) => sum + (extractAmountClp(e.payload) ?? 0), 0)
-    const mrrPreviousMonth = subscriptionEvents
-        .filter((e) => e.created_at >= startOfPrevMonth && e.created_at < startOfCurrentMonth)
-        .reduce((sum, e) => sum + (extractAmountClp(e.payload) ?? 0), 0)
+    const revenueByMonth: Record<string, number> = {}
+    for (const p of clientPayments) {
+        if (!isClientPaymentCountedForRevenue(p.status)) continue
+        const slices = allocatePaymentToMonthKeys(p.payment_date, p.amount, p.period_months)
+        for (const [key, v] of Object.entries(slices)) {
+            revenueByMonth[key] = (revenueByMonth[key] ?? 0) + v
+        }
+    }
+
+    const currentMonthKey = monthKeyFromYm(now.getFullYear(), now.getMonth())
+    const prevMonthRef = addWholeMonths(now.getFullYear(), now.getMonth(), -1)
+    const prevMonthKey = monthKeyFromYm(prevMonthRef.y, prevMonthRef.month0)
+
+    // Ingresos del mes: pagos de alumnos (repartidos por period_months; fin de mes → mes siguiente)
+    const mrrCurrentMonth = revenueByMonth[currentMonthKey] ?? 0
+    const mrrPreviousMonth = revenueByMonth[prevMonthKey] ?? 0
 
     const activities: ActivityItemClient[] = []
 

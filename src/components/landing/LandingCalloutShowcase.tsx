@@ -22,6 +22,15 @@ type LandingCalloutShowcaseProps = {
     className?: string
 }
 
+export type CalloutShowcaseBodyProps = {
+    left: CalloutItem[]
+    right: CalloutItem[]
+    svgPaths: string[]
+    children: React.ReactNode
+    /** Espaciado superior del bloque mock + callouts (p. ej. en pestañas) */
+    className?: string
+}
+
 function CalloutPanel({
     item,
     align,
@@ -57,6 +66,97 @@ function CalloutPanel({
     )
 }
 
+export function CalloutShowcaseBody({ left, right, svgPaths, children, className }: CalloutShowcaseBodyProps) {
+    const uid = useId()
+    const { t } = useTranslation()
+    const [activeIdx, setActiveIdx] = useState<number | null>(null)
+
+    const mobileItems = [...left.map((c) => ({ ...c, side: 'left' as const })), ...right.map((c) => ({ ...c, side: 'right' as const }))]
+
+    return (
+        <div className={cn('w-full', className)}>
+            <div className="lg:hidden">
+                <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="mx-auto mb-10 max-w-md px-1 sm:px-0"
+                >
+                    {children}
+                </motion.div>
+                <ul className="mx-auto max-w-xl space-y-5 px-1 sm:px-2">
+                    {mobileItems.map((item, i) => (
+                        <li key={`${item.titleKey}-${i}`} className="border-l-2 border-primary/35 py-0.5 pl-4">
+                            <h3 className="text-sm font-bold text-foreground">{t(item.titleKey)}</h3>
+                            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{t(item.bodyKey)}</p>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <div className="relative hidden min-h-[380px] lg:grid lg:grid-cols-[minmax(220px,1fr)_minmax(320px,480px)_minmax(220px,1fr)] lg:items-center lg:gap-6">
+                <svg
+                    className="pointer-events-none absolute inset-0 z-0 h-full w-full text-muted-foreground/45 dark:text-muted-foreground/35"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    aria-hidden
+                >
+                    {svgPaths.map((d, i) => (
+                        <path
+                            key={`${uid}-${i}`}
+                            d={d}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="0.5"
+                            vectorEffect="non-scaling-stroke"
+                            className={cn(
+                                'transition-opacity duration-300',
+                                activeIdx === null || activeIdx === i ? 'opacity-100' : 'opacity-[0.35]'
+                            )}
+                        />
+                    ))}
+                </svg>
+
+                <div className="relative z-10 flex flex-col justify-center gap-8 py-4">
+                    {left.map((item, i) => (
+                        <CalloutPanel
+                            key={item.titleKey}
+                            item={item}
+                            align="left"
+                            active={activeIdx === i}
+                            onActivate={() => setActiveIdx(i)}
+                            onDeactivate={() => setActiveIdx(null)}
+                        />
+                    ))}
+                </div>
+
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true, margin: '-20px' }}
+                    transition={{ duration: 0.45 }}
+                    className="relative z-10 mx-auto w-full max-w-[480px]"
+                >
+                    {children}
+                </motion.div>
+
+                <div className="relative z-10 flex flex-col justify-center gap-8 py-4">
+                    {right.map((item, i) => (
+                        <CalloutPanel
+                            key={item.titleKey}
+                            item={item}
+                            align="right"
+                            active={activeIdx === left.length + i}
+                            onActivate={() => setActiveIdx(left.length + i)}
+                            onDeactivate={() => setActiveIdx(null)}
+                        />
+                    ))}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export function LandingCalloutShowcase({
     id,
     eyebrowKey,
@@ -68,10 +168,6 @@ export function LandingCalloutShowcase({
     className,
 }: LandingCalloutShowcaseProps) {
     const { t } = useTranslation()
-    const uid = useId()
-    const [activeIdx, setActiveIdx] = useState<number | null>(null)
-
-    const mobileItems = [...left.map((c) => ({ ...c, side: 'left' as const })), ...right.map((c) => ({ ...c, side: 'right' as const }))]
 
     return (
         <section
@@ -97,89 +193,9 @@ export function LandingCalloutShowcase({
                     </h2>
                 </motion.header>
 
-                {/* Móvil: mock + lista */}
-                <div className="lg:hidden">
-                    <motion.div
-                        initial={{ opacity: 0, y: 16 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="mx-auto mb-8 max-w-md"
-                    >
-                        {children}
-                    </motion.div>
-                    <ul className="mx-auto max-w-lg space-y-4">
-                        {mobileItems.map((item, i) => (
-                            <li
-                                key={`${item.titleKey}-${i}`}
-                                className="border-l-2 border-primary/35 pl-4"
-                            >
-                                <h3 className="text-sm font-bold text-foreground">{t(item.titleKey)}</h3>
-                                <p className="mt-1 text-xs text-muted-foreground">{t(item.bodyKey)}</p>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-                {/* Desktop: 3 columnas + SVG */}
-                <div className="relative hidden min-h-[380px] lg:grid lg:grid-cols-[minmax(220px,1fr)_minmax(320px,480px)_minmax(220px,1fr)] lg:items-center lg:gap-6">
-                    <svg
-                        className="pointer-events-none absolute inset-0 z-0 h-full w-full text-muted-foreground/45 dark:text-muted-foreground/35"
-                        viewBox="0 0 100 100"
-                        preserveAspectRatio="none"
-                        aria-hidden
-                    >
-                        {svgPaths.map((d, i) => (
-                            <path
-                                key={`${uid}-${i}`}
-                                d={d}
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="0.5"
-                                vectorEffect="non-scaling-stroke"
-                                className={cn(
-                                    'transition-opacity duration-300',
-                                    activeIdx === null || activeIdx === i ? 'opacity-100' : 'opacity-[0.35]'
-                                )}
-                            />
-                        ))}
-                    </svg>
-
-                    <div className="relative z-10 flex flex-col justify-center gap-8 py-4">
-                        {left.map((item, i) => (
-                            <CalloutPanel
-                                key={item.titleKey}
-                                item={item}
-                                align="left"
-                                active={activeIdx === i}
-                                onActivate={() => setActiveIdx(i)}
-                                onDeactivate={() => setActiveIdx(null)}
-                            />
-                        ))}
-                    </div>
-
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        whileInView={{ opacity: 1, scale: 1 }}
-                        viewport={{ once: true, margin: '-20px' }}
-                        transition={{ duration: 0.45 }}
-                        className="relative z-10 mx-auto w-full max-w-[480px]"
-                    >
-                        {children}
-                    </motion.div>
-
-                    <div className="relative z-10 flex flex-col justify-center gap-8 py-4">
-                        {right.map((item, i) => (
-                            <CalloutPanel
-                                key={item.titleKey}
-                                item={item}
-                                align="right"
-                                active={activeIdx === left.length + i}
-                                onActivate={() => setActiveIdx(left.length + i)}
-                                onDeactivate={() => setActiveIdx(null)}
-                            />
-                        ))}
-                    </div>
-                </div>
+                <CalloutShowcaseBody left={left} right={right} svgPaths={svgPaths}>
+                    {children}
+                </CalloutShowcaseBody>
             </div>
         </section>
     )

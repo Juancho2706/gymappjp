@@ -68,7 +68,8 @@ export function LandingTypewriterHeadline({ className }: { className?: string })
     }
 
     const visible = line.slice(0, charIdx)
-    const live = `${t('landing.typewriter.prefix')} ${line}`.trim()
+    const fullPrefix = `${t('landing.typewriter.prefixBefore')}${t('landing.typewriter.prefixBrand')}${t('landing.typewriter.prefixAfter')}`
+    const live = `${fullPrefix} ${visible}`.trim()
 
     return (
         <span className={className} aria-live="polite">

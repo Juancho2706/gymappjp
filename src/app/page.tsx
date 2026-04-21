@@ -7,19 +7,15 @@ import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import { LandingCoachCalloutSections } from '@/components/landing/LandingCoachCalloutSections'
 import { LandingContactFooter } from '@/components/landing/LandingContactFooter'
 import { LandingDeviceShowcase } from '@/components/landing/LandingDeviceShowcase'
+import { LandingExerciseCatalogShowcase } from '@/components/landing/LandingExerciseCatalogShowcase'
 import { LandingPricingPreview } from '@/components/landing/LandingPricingPreview'
 import { LandingTypewriterHeadline } from '@/components/landing/LandingTypewriterHeadline'
 import { LandingUseCases } from '@/components/landing/LandingUseCases'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
-import { DemoVideoSection } from '@/components/landing/DemoVideoSection'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { motion, useScroll, useTransform, useInView, AnimatePresence } from 'framer-motion'
-import {
-    Dumbbell, Users, BarChart3, Camera, Sparkles, ArrowRight, Check,
-    Zap, Smartphone, ChevronDown, Play, Palette,
-    ClipboardList, Utensils, Menu, X
-} from 'lucide-react'
+import { Dumbbell, Sparkles, ArrowRight, Play, Menu, X } from 'lucide-react'
 import {
     Sheet,
     SheetContent,
@@ -30,59 +26,9 @@ import { MUSCLE_GROUPS } from '@/lib/constants'
 
 const muscleGroupCount = MUSCLE_GROUPS.length
 
-const features = [
-    {
-        icon: Dumbbell,
-        titleKey: 'landing.feature.routines.title',
-        descKey: 'landing.feature.routines.desc',
-        iconBg: 'bg-primary/15',
-        iconClass: 'text-primary',
-    },
-    {
-        icon: Utensils,
-        titleKey: 'landing.feature.nutrition.title',
-        descKey: 'landing.feature.nutrition.desc',
-        iconBg: 'bg-sky-500/15',
-        iconClass: 'text-sky-600 dark:text-sky-400',
-    },
-    {
-        icon: Camera,
-        titleKey: 'landing.feature.checkins.title',
-        descKey: 'landing.feature.checkins.desc',
-        iconBg: 'bg-violet-500/15',
-        iconClass: 'text-violet-600 dark:text-violet-400',
-    },
-    {
-        icon: Smartphone,
-        titleKey: 'landing.feature.whitelabel.title',
-        descKey: 'landing.feature.whitelabel.desc',
-        iconBg: 'bg-emerald-500/15',
-        iconClass: 'text-emerald-600 dark:text-emerald-400',
-    },
-    {
-        icon: ClipboardList,
-        titleKey: 'landing.feature.profile.title',
-        descKey: 'landing.feature.profile.desc',
-        iconBg: 'bg-amber-500/15',
-        iconClass: 'text-amber-600 dark:text-amber-400',
-    },
-    {
-        icon: BarChart3,
-        titleKey: 'landing.feature.analytics.title',
-        descKey: 'landing.feature.analytics.desc',
-        iconBg: 'bg-rose-500/15',
-        iconClass: 'text-rose-600 dark:text-rose-400',
-    },
-] as const
-
 const fadeUp = {
     hidden: { opacity: 0, y: 40 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] as const } },
-}
-
-const scaleIn = {
-    hidden: { opacity: 0, scale: 0.85 },
-    visible: { opacity: 1, scale: 1, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] as const } },
 }
 
 function AnimatedCounter({ value, label }: { value: string; label: string }) {
@@ -99,32 +45,6 @@ function AnimatedCounter({ value, label }: { value: string; label: string }) {
         >
             <div className="text-4xl md:text-5xl font-black tabular-nums text-foreground mb-2">{value}</div>
             <div className="text-xs sm:text-sm text-muted-foreground uppercase tracking-widest font-medium">{label}</div>
-        </motion.div>
-    )
-}
-
-function FeatureCard({ feature, index }: { feature: (typeof features)[number]; index: number }) {
-    const ref = useRef<HTMLDivElement>(null)
-    const inView = useInView(ref, { once: true, margin: '-80px' })
-    const { t } = useTranslation()
-
-    return (
-        <motion.div
-            ref={ref}
-            initial={{ opacity: 0, y: 30 }}
-            animate={inView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5, delay: index * 0.08 }}
-            className="group relative rounded-2xl border border-border bg-card p-7 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80"
-        >
-            <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-gradient-to-br from-primary/[0.06] to-transparent" />
-
-            <div className="relative z-10">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${feature.iconBg}`}>
-                    <feature.icon className={`w-6 h-6 ${feature.iconClass}`} />
-                </div>
-                <h3 className="text-lg font-bold text-foreground mb-2">{t(feature.titleKey)}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{t(feature.descKey)}</p>
-            </div>
         </motion.div>
     )
 }
@@ -156,7 +76,6 @@ function PillNav() {
 
             <div className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2">
                 {[
-                    { key: 'landing.nav.features', id: 'funciones' },
                     { key: 'landing.nav.panelCoach', id: 'panel-coach' },
                     { key: 'landing.nav.pricing', id: 'precios' },
                     { key: 'landing.nav.contact', id: 'contacto' }
@@ -200,7 +119,6 @@ function PillNav() {
 
                         <div className="flex flex-col gap-1 px-2">
                             {[
-                                { key: 'landing.nav.features', id: 'funciones' },
                                 { key: 'landing.nav.panelCoach', id: 'panel-coach' },
                                 { key: 'landing.nav.pricing', id: 'precios' },
                                 { key: 'landing.nav.contact', id: 'contacto' },
@@ -402,27 +320,21 @@ export default function LandingPage() {
                                 initial={{ opacity: 0, y: 30 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.4, duration: 0.8 }}
-                                className="font-display text-4xl font-black leading-[1.08] tracking-tighter text-foreground sm:text-5xl md:text-6xl lg:text-[3.25rem] xl:text-[3.75rem]"
+                                className="max-w-2xl text-balance font-display text-4xl font-black leading-[1.12] tracking-tighter text-foreground sm:text-5xl md:text-6xl lg:text-[3.15rem] xl:text-[3.55rem]"
                             >
-                                <span className="block text-foreground">{t('landing.hero.title1')}</span>
-                                <span className="mt-2 block bg-gradient-to-r from-primary via-foreground to-muted-foreground bg-clip-text text-transparent">
-                                    {t('landing.hero.title2')}
+                                <span className="block">
+                                    {t('landing.typewriter.prefixBefore')}
+                                    <span className="bg-gradient-to-r from-primary via-sky-500 to-violet-500 bg-clip-text text-transparent">
+                                        {t('landing.typewriter.prefixBrand')}
+                                    </span>
+                                    {t('landing.typewriter.prefixAfter')}
+                                </span>
+                                <span className="mt-4 block text-foreground sm:mt-5">
+                                    <span className="font-display text-[1.35rem] font-extrabold leading-snug tracking-tight sm:text-2xl md:text-[1.75rem] lg:text-[1.85rem]">
+                                        <LandingTypewriterHeadline />
+                                    </span>
                                 </span>
                             </motion.h1>
-
-                            <motion.div
-                                initial={{ opacity: 0, y: 16 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.5, duration: 0.6 }}
-                                className="mt-6 max-w-xl text-balance"
-                            >
-                                <p className="text-sm font-semibold text-muted-foreground sm:text-base">
-                                    {t('landing.typewriter.prefix')}
-                                </p>
-                                <p className="mt-1 font-display text-xl font-extrabold leading-snug tracking-tight text-foreground sm:text-2xl md:text-[1.65rem]">
-                                    <LandingTypewriterHeadline />
-                                </p>
-                            </motion.div>
 
                             <motion.p
                                 initial={{ opacity: 0, y: 20 }}
@@ -443,7 +355,7 @@ export default function LandingPage() {
                                     {t('landing.hero.cta')}
                                     <ArrowRight className="w-5 h-5 transition-transform group-hover/btn:translate-x-1" aria-hidden />
                                 </Link>
-                                <a href="#funciones" className={`w-full sm:w-auto ${secondaryCta}`}>
+                                <a href="#panel-coach" className={`w-full sm:w-auto ${secondaryCta}`}>
                                     <Play className="h-4 w-4" aria-hidden />
                                     {t('landing.hero.secondaryCta')}
                                 </a>
@@ -456,9 +368,7 @@ export default function LandingPage() {
                     </div>
                 </section>
 
-                <DemoVideoSection />
-
-                <section className="relative py-14 border-y border-border/60 bg-card/30 backdrop-blur-sm">
+                <section className="landing-stats-strip relative border-y border-border/60 py-14 backdrop-blur-sm">
                     <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10">
                         {statsWithExercises.map((stat, i) => (
                             <AnimatedCounter key={i} value={stat.value} label={stat.label} />
@@ -468,279 +378,13 @@ export default function LandingPage() {
 
                 <LandingCoachCalloutSections />
 
-                <section className="relative py-24 sm:py-28 z-10">
-                    <div className="max-w-6xl mx-auto px-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                            <motion.div
-                                variants={scaleIn}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true, margin: '-50px' }}
-                                className="rounded-2xl border border-border bg-card p-8 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80"
-                            >
-                                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mb-6">
-                                    <Menu className="w-6 h-6 text-primary" />
-                                </div>
-                                <h3 className="text-xl font-bold text-foreground mb-6">{t('landing.core.routines.title')}</h3>
-                                <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-3">
-                                    {[
-                                        { name: 'Sentadilla', reps: '4 × 10' },
-                                        { name: 'Press banca', reps: '4 × 8' },
-                                        { name: 'Peso muerto', reps: '3 × 12' }
-                                    ].map((ex, i) => (
-                                        <div key={i} className="flex items-center gap-3 bg-background/80 p-3 rounded-lg border border-border">
-                                            <Menu className="w-4 h-4 text-muted-foreground" aria-hidden />
-                                            <span className="text-xs font-semibold text-foreground">{ex.name}</span>
-                                            <span className="text-[10px] text-muted-foreground ml-auto bg-muted px-2 py-1 rounded-md tabular-nums">{ex.reps}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </motion.div>
-
-                            <motion.div
-                                variants={scaleIn}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true, margin: '-50px' }}
-                                transition={{ delay: 0.08 }}
-                                className="rounded-2xl border border-border bg-card p-8 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80"
-                            >
-                                <div className="w-12 h-12 rounded-xl bg-sky-500/15 flex items-center justify-center mb-6">
-                                    <BarChart3 className="w-6 h-6 text-sky-600 dark:text-sky-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-foreground mb-6">{t('landing.core.macros.title')}</h3>
-                                <div className="bg-muted/50 rounded-xl p-6 border border-border flex items-center justify-center gap-6">
-                                    {[
-                                        { label: 'P', val: '36g', color: '#007AFF' },
-                                        { label: 'C', val: '20g', color: '#00E5FF' },
-                                        { label: 'G', val: '15g', color: '#00C7BE' },
-                                    ].map((macro, i) => (
-                                        <div key={i} className="flex flex-col items-center gap-2">
-                                            <div
-                                                className="w-14 h-14 rounded-full border-4 flex items-center justify-center"
-                                                style={{ borderColor: `${macro.color}44`, borderTopColor: macro.color }}
-                                            >
-                                                <span className="text-xs font-bold text-foreground tabular-nums">{macro.val}</span>
-                                            </div>
-                                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{macro.label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </motion.div>
-
-                            <motion.div
-                                variants={scaleIn}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true, margin: '-50px' }}
-                                transition={{ delay: 0.16 }}
-                                className="rounded-2xl border border-border bg-card p-8 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80 flex flex-col"
-                            >
-                                <div className="w-12 h-12 rounded-xl bg-violet-500/15 flex items-center justify-center mb-6">
-                                    <Zap className="w-6 h-6 text-violet-600 dark:text-violet-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-foreground mb-6">{t('landing.core.templates.title')}</h3>
-                                <div className="bg-muted/50 rounded-xl p-4 border border-border flex-1 flex flex-col gap-3">
-                                    <div className="flex items-center justify-between bg-background/80 p-3 rounded-lg border border-border">
-                                        <span className="text-sm font-medium text-foreground">Fuerza 4 días</span>
-                                        <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden />
-                                    </div>
-                                    <div className="flex items-center justify-between bg-muted/40 p-3 rounded-lg border border-border opacity-80">
-                                        <span className="text-sm text-muted-foreground font-medium">Hipertrofia 3 días</span>
-                                        <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden />
-                                    </div>
-                                    <div className="mt-auto pt-4">
-                                        <span className="block w-full text-center bg-primary text-primary-foreground text-sm font-bold py-2.5 rounded-lg shadow-sm">
-                                            {t('landing.core.apply')}
-                                        </span>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="funciones" className="relative py-24 sm:py-28 scroll-mt-28 border-t border-border/40 landing-section-alt">
-                    <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(90vw,600px)] h-[600px] rounded-full bg-primary/[0.04] blur-[120px]" />
-
-                    <div className="relative max-w-6xl mx-auto px-6">
-                        <motion.div
-                            variants={fadeUp}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-80px' }}
-                            className="text-center mb-14"
-                        >
-                            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-3 block">
-                                {t('landing.functions.eyebrow')}
-                            </span>
-                            <h2 className="font-display text-3xl md:text-5xl font-black text-foreground mb-4 tracking-tight">
-                                {t('landing.functions.title')}
-                            </h2>
-                            <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
-                                {t('landing.functions.subtitle')}
-                            </p>
-                        </motion.div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {features.map((feature, i) => (
-                                <FeatureCard key={feature.titleKey} feature={feature} index={i} />
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                <section className="relative py-24 sm:py-28 overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.03] to-transparent pointer-events-none" />
-
-                    <div className="max-w-6xl mx-auto px-6">
-                        <div className="grid lg:grid-cols-2 gap-14 items-center">
-                            <motion.div
-                                variants={fadeUp}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true, margin: '-80px' }}
-                            >
-                                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-3 block">
-                                    {t('landing.exercises.eyebrow')}
-                                </span>
-                                <h2 className="text-3xl md:text-5xl font-black text-foreground mb-6 leading-tight font-display tracking-tight">
-                                    {exerciseTitle}
-                                    <br />
-                                    <span className="text-muted-foreground">{t('landing.exercises.titleLead')}</span>
-                                </h2>
-                                <p className="text-muted-foreground text-base leading-relaxed mb-8 max-w-md">
-                                    {t('landing.exercises.intro')}
-                                </p>
-
-                                <ul className="space-y-3">
-                                    {exerciseBullets.map(item => (
-                                        <li key={item} className="flex items-center gap-3">
-                                            <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
-                                                <Check className="w-3 h-3 text-primary" aria-hidden />
-                                            </div>
-                                            <span className="text-sm text-muted-foreground">{item}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </motion.div>
-
-                            <motion.div
-                                variants={scaleIn}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true, margin: '-80px' }}
-                                className="relative"
-                            >
-                                <div className="absolute inset-0 bg-primary/5 blur-[100px] rounded-full" />
-                                <div className="relative bg-card/90 backdrop-blur-xl border border-border rounded-2xl p-6 space-y-3 shadow-xl">
-                                    {[
-                                        { name: 'Squat jumps', muscle: 'Piernas', reps: '10', color: '#007AFF' },
-                                        { name: 'Dominadas', muscle: 'Espalda', reps: '12', color: '#00E5FF' },
-                                        { name: 'Press banca', muscle: 'Pecho', reps: '8', color: '#00C7BE' },
-                                        { name: 'Plancha', muscle: 'Core', reps: '60s', color: '#5856D6' },
-                                    ].map((ex, i) => (
-                                        <motion.div
-                                            key={ex.name}
-                                            initial={{ opacity: 0, x: 20 }}
-                                            whileInView={{ opacity: 1, x: 0 }}
-                                            viewport={{ once: true }}
-                                            transition={{ delay: 0.15 + i * 0.08 }}
-                                            className="flex items-center gap-4 bg-muted/40 border border-border rounded-xl p-4 hover:bg-muted/60 transition-colors"
-                                        >
-                                            <div className="w-14 h-14 rounded-xl bg-background flex items-center justify-center flex-shrink-0 border border-border">
-                                                <Dumbbell className="w-6 h-6 text-muted-foreground" aria-hidden />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-semibold text-foreground truncate">{ex.name}</p>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span
-                                                        className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md"
-                                                        style={{ backgroundColor: `${ex.color}22`, color: ex.color }}
-                                                    >
-                                                        {ex.muscle}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground tabular-nums">{ex.reps}</span>
-                                                </div>
-                                            </div>
-                                            <ArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden />
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            </motion.div>
-                        </div>
-                    </div>
-                </section>
-
-                <section className="relative py-24 sm:py-28 border-t border-border/40">
-                    <div className="max-w-6xl mx-auto px-6 text-center">
-                        <motion.div
-                            variants={fadeUp}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-80px' }}
-                        >
-                            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-3 block">
-                                {t('landing.whitelabel.eyebrow')}
-                            </span>
-                            <h2 className="font-display text-3xl md:text-5xl font-black text-foreground mb-4 tracking-tight">
-                                {t('landing.whitelabel.title')}
-                            </h2>
-                            <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto mb-14 leading-relaxed">
-                                {t('landing.whitelabel.subtitle')}
-                            </p>
-                        </motion.div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-                            <motion.div
-                                variants={scaleIn}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true }}
-                                className="md:col-span-2 rounded-2xl border border-border bg-card p-8 shadow-sm dark:bg-card/80"
-                            >
-                                <Palette className="w-8 h-8 text-primary mb-4" aria-hidden />
-                                <h3 className="text-xl font-bold text-foreground mb-2">{t('landing.whitelabel.customize.title')}</h3>
-                                <p className="text-muted-foreground text-sm leading-relaxed max-w-xl">
-                                    {t('landing.whitelabel.customize.body')}
-                                </p>
-                                <code className="mt-4 inline-block rounded-lg border border-border bg-muted/50 px-3 py-1.5 font-mono text-xs text-foreground">
-                                    {t('landing.whitelabel.urlExample')}
-                                </code>
-                                <div className="mt-6 flex flex-wrap gap-3">
-                                    {['#007AFF', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6'].map(color => (
-                                        <div
-                                            key={color}
-                                            className="w-9 h-9 rounded-full border-2 border-border shadow-sm"
-                                            style={{ backgroundColor: color }}
-                                        />
-                                    ))}
-                                </div>
-                            </motion.div>
-
-                            <motion.div
-                                variants={scaleIn}
-                                initial="hidden"
-                                whileInView="visible"
-                                viewport={{ once: true }}
-                                transition={{ delay: 0.08 }}
-                                className="rounded-2xl border border-border bg-card p-8 shadow-sm dark:bg-card/80"
-                            >
-                                <Smartphone className="w-8 h-8 text-primary mb-4" aria-hidden />
-                                <h3 className="text-xl font-bold text-foreground mb-2">{t('landing.whitelabel.pwa.title')}</h3>
-                                <p className="text-muted-foreground text-sm leading-relaxed">
-                                    {t('landing.whitelabel.pwa.body')}
-                                </p>
-                            </motion.div>
-                        </div>
-                    </div>
-                </section>
+                <LandingExerciseCatalogShowcase exerciseTitle={exerciseTitle} exerciseBullets={exerciseBullets} />
 
                 <LandingPricingPreview />
 
                 <LandingUseCases />
 
-                <section className="relative py-24 sm:py-28 border-t border-border/40 landing-section-alt">
+                <section className="landing-section-final relative border-t border-border/40 py-24 sm:py-28 landing-section-alt">
                     <div className="absolute inset-0 bg-gradient-to-t from-primary/[0.04] to-transparent pointer-events-none" />
 
                     <motion.div
