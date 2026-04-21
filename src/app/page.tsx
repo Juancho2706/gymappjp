@@ -4,27 +4,15 @@ import Link from 'next/link'
 import { useRef, useState, useEffect } from 'react'
 import Image from 'next/image'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
-import { LandingCoachJourney } from '@/components/landing/LandingCoachJourney'
+import { LandingCoachCalloutSections } from '@/components/landing/LandingCoachCalloutSections'
 import { LandingContactFooter } from '@/components/landing/LandingContactFooter'
+import { LandingDeviceShowcase } from '@/components/landing/LandingDeviceShowcase'
 import { LandingPricingPreview } from '@/components/landing/LandingPricingPreview'
+import { LandingTypewriterHeadline } from '@/components/landing/LandingTypewriterHeadline'
 import { LandingUseCases } from '@/components/landing/LandingUseCases'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
-import dynamic from 'next/dynamic'
 import { DemoVideoSection } from '@/components/landing/DemoVideoSection'
-
-const DashboardMockup = dynamic(
-    () => import('@/components/landing/DashboardMockup').then((m) => ({ default: m.DashboardMockup })),
-    {
-        ssr: false,
-        loading: () => (
-            <div
-                className="w-full max-w-5xl mx-auto mt-12 rounded-2xl bg-muted/25 border border-border/30 min-h-[280px] animate-pulse"
-                aria-hidden
-            />
-        ),
-    }
-)
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { motion, useScroll, useTransform, useInView, AnimatePresence } from 'framer-motion'
 import {
@@ -169,7 +157,7 @@ function PillNav() {
             <div className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2">
                 {[
                     { key: 'landing.nav.features', id: 'funciones' },
-                    { key: 'landing.journey.eyebrow', id: 'recorrido-coach' },
+                    { key: 'landing.nav.panelCoach', id: 'panel-coach' },
                     { key: 'landing.nav.pricing', id: 'precios' },
                     { key: 'landing.nav.contact', id: 'contacto' }
                 ].map(item => (
@@ -213,7 +201,7 @@ function PillNav() {
                         <div className="flex flex-col gap-1 px-2">
                             {[
                                 { key: 'landing.nav.features', id: 'funciones' },
-                                { key: 'landing.journey.eyebrow', id: 'recorrido-coach' },
+                                { key: 'landing.nav.panelCoach', id: 'panel-coach' },
                                 { key: 'landing.nav.pricing', id: 'precios' },
                                 { key: 'landing.nav.contact', id: 'contacto' },
                             ].map(item => (
@@ -395,59 +383,77 @@ export default function LandingPage() {
                         }}
                     />
 
-                    <motion.div
-                        style={{ scale: heroScale, y: heroY }}
-                        className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center flex flex-col items-center"
-                    >
+                    <div className="relative z-10 mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-6 pb-8 lg:grid-cols-12 lg:gap-10 lg:pb-12">
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
-                            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-4 py-1.5 mb-8 shadow-sm backdrop-blur-md"
+                            style={{ scale: heroScale, y: heroY }}
+                            className="flex flex-col items-center text-center lg:col-span-5 lg:items-start lg:text-left"
                         >
-                            <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden />
-                            <span className="text-xs font-medium text-foreground">{t('landing.hero.badge')}</span>
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 }}
+                                className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-4 py-1.5 shadow-sm backdrop-blur-md"
+                            >
+                                <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden />
+                                <span className="text-xs font-medium text-foreground">{t('landing.hero.badge')}</span>
+                            </motion.div>
+
+                            <motion.h1
+                                initial={{ opacity: 0, y: 30 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.4, duration: 0.8 }}
+                                className="font-display text-4xl font-black leading-[1.08] tracking-tighter text-foreground sm:text-5xl md:text-6xl lg:text-[3.25rem] xl:text-[3.75rem]"
+                            >
+                                <span className="block text-foreground">{t('landing.hero.title1')}</span>
+                                <span className="mt-2 block bg-gradient-to-r from-primary via-foreground to-muted-foreground bg-clip-text text-transparent">
+                                    {t('landing.hero.title2')}
+                                </span>
+                            </motion.h1>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 16 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5, duration: 0.6 }}
+                                className="mt-6 max-w-xl text-balance"
+                            >
+                                <p className="text-sm font-semibold text-muted-foreground sm:text-base">
+                                    {t('landing.typewriter.prefix')}
+                                </p>
+                                <p className="mt-1 font-display text-xl font-extrabold leading-snug tracking-tight text-foreground sm:text-2xl md:text-[1.65rem]">
+                                    <LandingTypewriterHeadline />
+                                </p>
+                            </motion.div>
+
+                            <motion.p
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.6 }}
+                                className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg"
+                            >
+                                {t('landing.hero.subtitle')}
+                            </motion.p>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.7 }}
+                                className="mt-8 flex w-full flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start"
+                            >
+                                <Link href="/register?tier=pro&cycle=monthly" className={`w-full sm:w-auto ${primaryCta} group/btn`}>
+                                    {t('landing.hero.cta')}
+                                    <ArrowRight className="w-5 h-5 transition-transform group-hover/btn:translate-x-1" aria-hidden />
+                                </Link>
+                                <a href="#funciones" className={`w-full sm:w-auto ${secondaryCta}`}>
+                                    <Play className="h-4 w-4" aria-hidden />
+                                    {t('landing.hero.secondaryCta')}
+                                </a>
+                            </motion.div>
                         </motion.div>
 
-                        <motion.h1
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.4, duration: 0.8 }}
-                            className="text-4xl sm:text-5xl md:text-6xl lg:text-[4.5rem] font-black tracking-tighter leading-[1.08] mb-6 font-display text-foreground max-w-5xl mx-auto"
-                        >
-                            <span className="text-foreground block">{t('landing.hero.title1')}</span>
-                            <span className="mt-2 block bg-gradient-to-r from-primary via-foreground to-muted-foreground bg-clip-text text-transparent">
-                                {t('landing.hero.title2')}
-                            </span>
-                        </motion.h1>
-
-                        <motion.p
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6 }}
-                            className="text-base md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed"
-                        >
-                            {t('landing.hero.subtitle')}
-                        </motion.p>
-
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.7 }}
-                            className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
-                        >
-                            <Link href="/register?tier=pro&cycle=monthly" className={`w-full sm:w-auto ${primaryCta} group/btn`}>
-                                {t('landing.hero.cta')}
-                                <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" aria-hidden />
-                            </Link>
-                            <a href="#funciones" className={`w-full sm:w-auto ${secondaryCta}`}>
-                                <Play className="w-4 h-4" aria-hidden />
-                                {t('landing.hero.secondaryCta')}
-                            </a>
-                        </motion.div>
-
-                        <DashboardMockup />
-                    </motion.div>
+                        <div className="relative lg:col-span-7">
+                            <LandingDeviceShowcase />
+                        </div>
+                    </div>
                 </section>
 
                 <DemoVideoSection />
@@ -460,7 +466,7 @@ export default function LandingPage() {
                     </div>
                 </section>
 
-                <LandingCoachJourney />
+                <LandingCoachCalloutSections />
 
                 <section className="relative py-24 sm:py-28 z-10">
                     <div className="max-w-6xl mx-auto px-6">
