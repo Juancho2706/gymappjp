@@ -919,9 +919,9 @@ export function NutritionTabB5({
                 </tr>
               </thead>
               <tbody>
-                {logRowsDesc.slice(0, 30).map((row) => (
+                {logRowsDesc.slice(0, 30).map((row, i) => (
                   <tr
-                    key={row.log_date}
+                    key={`${row.log_date}-${row.plan_name ?? 'p'}-${i}`}
                     className={cn(
                       'border-b border-border/30 dark:border-white/5',
                       row.compliancePct < 60 && 'border-l-2 border-l-rose-500 bg-rose-500/5'

@@ -14,24 +14,24 @@ export function LandingDeviceShowcase() {
                 className="relative"
             >
                 <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-tr from-primary/15 via-transparent to-sky-400/10 blur-2xl" />
-                <div className="relative rounded-2xl border border-border bg-card/80 p-1 shadow-2xl backdrop-blur-sm dark:bg-card/50">
-                    <div className="flex items-center gap-1.5 rounded-t-[0.85rem] border-b border-border/60 bg-muted/30 px-3 py-2">
-                        <span className="h-2 w-2 rounded-full bg-red-400/70" />
-                        <span className="h-2 w-2 rounded-full bg-amber-400/70" />
-                        <span className="h-2 w-2 rounded-full bg-emerald-400/70" />
-                        <div className="ml-2 flex min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border/50 bg-background/60 px-2 py-1">
-                            <Lock className="h-2.5 w-2.5 shrink-0 text-muted-foreground" aria-hidden />
-                            <span className="truncate text-[9px] font-medium text-muted-foreground">app.eva-app.cl/coach</span>
-                            <Shield className="ml-auto h-2.5 w-2.5 shrink-0 text-emerald-600/80" aria-hidden />
+                <div className="relative rounded-2xl border border-zinc-900 bg-zinc-900 p-1 shadow-2xl backdrop-blur-sm dark:border-zinc-100 dark:bg-zinc-100">
+                    <div className="flex items-center gap-1.5 rounded-t-[0.85rem] border-b border-zinc-800 bg-zinc-900 px-3 py-2 dark:border-zinc-200 dark:bg-zinc-100">
+                        <span className="h-2 w-2 rounded-full bg-red-400/80" />
+                        <span className="h-2 w-2 rounded-full bg-amber-400/80" />
+                        <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
+                        <div className="ml-2 flex min-w-0 flex-1 items-center gap-1.5 rounded-md border border-zinc-700/60 bg-zinc-800/80 px-2 py-1 dark:border-zinc-300/70 dark:bg-zinc-200/80">
+                            <Lock className="h-2.5 w-2.5 shrink-0 text-zinc-300 dark:text-zinc-600" aria-hidden />
+                            <span className="truncate text-[9px] font-medium text-zinc-200 dark:text-zinc-700">app.eva-app.cl/coach</span>
+                            <Shield className="ml-auto h-2.5 w-2.5 shrink-0 text-emerald-400 dark:text-emerald-600" aria-hidden />
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-3 py-1.5">
-                        <span className="text-[9px] font-semibold text-muted-foreground">Coach</span>
-                        <ChevronRight className="h-3 w-3 text-muted-foreground/70" aria-hidden />
-                        <span className="truncate text-[9px] font-bold text-foreground">Dashboard</span>
-                        <span className="ml-auto rounded bg-primary/10 px-1.5 py-px text-[8px] font-bold text-primary">Pro</span>
+                    <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/95 px-3 py-1.5 dark:border-zinc-200 dark:bg-zinc-100/95">
+                        <span className="text-[9px] font-semibold text-zinc-300 dark:text-zinc-600">Coach</span>
+                        <ChevronRight className="h-3 w-3 text-zinc-400 dark:text-zinc-500" aria-hidden />
+                        <span className="truncate text-[9px] font-bold text-white dark:text-zinc-900">Dashboard</span>
+                        <span className="ml-auto rounded bg-primary/20 px-1.5 py-px text-[8px] font-bold text-primary-foreground dark:bg-primary/15 dark:text-primary">Pro</span>
                     </div>
-                    <div className="rounded-b-xl bg-background/50 p-2 sm:p-3 dark:bg-zinc-950/50">
+                    <div className="rounded-b-xl bg-background p-2 sm:p-3">
                         <DioramaDashboard />
                     </div>
                 </div>

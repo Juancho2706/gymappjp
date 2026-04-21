@@ -363,17 +363,17 @@ export function DioramaBrand() {
 export function DioramaClientPhone() {
     const { t } = useTranslation()
     const nav = [
-        { icon: Home, on: true },
-        { icon: Apple, on: false },
-        { icon: Dumbbell, on: false },
-        { icon: CheckCircle, on: false },
+        { icon: Home, on: true, label: 'Inicio' },
+        { icon: Apple, on: false, label: 'Plan' },
+        { icon: Dumbbell, on: false, label: 'Aprender' },
+        { icon: CheckCircle, on: false, label: 'Check-in' },
     ]
     return (
         <div
-            className="mx-auto w-[min(100%,200px)] min-h-[320px] overflow-hidden rounded-[1.75rem] border-4 border-zinc-300 bg-zinc-100 shadow-2xl dark:border-zinc-700 dark:bg-zinc-950"
+            className="mx-auto w-[min(100%,200px)] min-h-[320px] overflow-hidden rounded-[1.75rem] border-[6px] border-zinc-900 bg-zinc-900 shadow-[0_25px_60px_-12px_rgba(0,0,0,0.45)] dark:border-zinc-100 dark:bg-zinc-100 dark:shadow-[0_25px_60px_-12px_rgba(255,255,255,0.15)]"
             style={{ aspectRatio: '9/18' }}
         >
-            <div className="mx-auto mt-2 h-4 w-16 rounded-full bg-zinc-400/80 dark:bg-zinc-800" />
+            <div className="mx-auto mt-2 h-4 w-16 rounded-full bg-zinc-700 dark:bg-zinc-300" />
             <div className="flex h-[calc(100%-2rem)] flex-col bg-gradient-to-b from-zinc-50 via-zinc-100/90 to-zinc-200/30 p-2 pt-3 dark:from-zinc-900 dark:via-zinc-950/95 dark:to-zinc-950">
                 <div className="mb-2 flex items-center justify-between gap-1 px-0.5">
                     <div className="flex items-center gap-1.5">
@@ -422,20 +422,38 @@ export function DioramaClientPhone() {
                         </div>
                     </div>
                 </div>
-                <div className="mt-auto flex justify-around gap-0.5 border-t border-zinc-200/90 bg-white/95 px-0.5 pt-2 pb-1 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:border-zinc-800 dark:bg-zinc-900/95 dark:shadow-[0_-6px_20px_rgba(0,0,0,0.45)]">
+                <div className="mt-auto flex items-stretch justify-around gap-0.5 border-t border-border/60 bg-background/95 px-1 pb-[10px] pt-1.5 dark:bg-zinc-900/95">
                     {nav.map((n, i) => {
                         const Icon = n.icon
                         return (
                             <div
                                 key={i}
                                 className={cn(
-                                    'flex h-10 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors',
+                                    'relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-0.5 transition-colors',
                                     n.on
-                                        ? 'border-primary/35 bg-primary/12 text-primary shadow-sm dark:border-primary/40 dark:bg-primary/20'
-                                        : 'border-transparent text-zinc-600 dark:text-zinc-400'
+                                        ? 'text-primary'
+                                        : 'text-zinc-500 dark:text-zinc-500'
                                 )}
                             >
-                                <Icon className="h-4 w-4" strokeWidth={2.25} />
+                                {n.on ? (
+                                    <span className="absolute -top-1.5 left-1/2 h-[2px] w-5 -translate-x-1/2 rounded-full bg-primary" aria-hidden />
+                                ) : null}
+                                <span
+                                    className={cn(
+                                        'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
+                                        n.on && 'bg-primary/12 dark:bg-primary/20'
+                                    )}
+                                >
+                                    <Icon
+                                        className="h-[18px] w-[18px]"
+                                        strokeWidth={n.on ? 2.4 : 2}
+                                    />
+                                </span>
+                                {n.on ? (
+                                    <span className="text-[8px] font-bold leading-none tracking-tight text-primary">
+                                        {n.label}
+                                    </span>
+                                ) : null}
                             </div>
                         )
                     })}

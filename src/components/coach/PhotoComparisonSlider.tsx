@@ -72,7 +72,10 @@ export function PhotoComparisonSlider({
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent showCloseButton={false} className="max-w-4xl w-[95vw] h-[85vh] p-0 overflow-hidden bg-black/95 border-none gap-0">
-                <div className="absolute top-4 left-6 z-50 pointer-events-none">
+                <div
+                    className="absolute left-6 z-50 pointer-events-none"
+                    style={{ top: 'max(1rem, calc(env(safe-area-inset-top, 0px) + 0.5rem))' }}
+                >
                     <DialogTitle className="text-white font-black uppercase tracking-widest text-sm drop-shadow-md">
                         Comparativa de Evolución
                     </DialogTitle>
@@ -82,8 +85,11 @@ export function PhotoComparisonSlider({
                 </div>
 
                 <button
+                    type="button"
+                    aria-label="Cerrar comparativa"
                     onClick={onClose}
-                    className="absolute top-3 right-3 z-50 p-3 rounded-full bg-black/50 text-white hover:bg-black transition-colors touch-manipulation"
+                    className="absolute right-3 z-50 p-3 rounded-full bg-black/50 text-white hover:bg-black transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                    style={{ top: 'max(0.75rem, calc(env(safe-area-inset-top, 0px) + 0.25rem))' }}
                 >
                     <X className="w-5 h-5" />
                 </button>

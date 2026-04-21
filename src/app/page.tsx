@@ -10,8 +10,8 @@ import { LandingContactFooter } from '@/components/landing/LandingContactFooter'
 import { LandingDeviceShowcase } from '@/components/landing/LandingDeviceShowcase'
 import { LandingExerciseCatalogShowcase } from '@/components/landing/LandingExerciseCatalogShowcase'
 import { LandingPricingPreview } from '@/components/landing/LandingPricingPreview'
+import { LandingStudentTabs } from '@/components/landing/LandingStudentTabs'
 import { LandingTypewriterHeadline } from '@/components/landing/LandingTypewriterHeadline'
-import { LandingUseCases } from '@/components/landing/LandingUseCases'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
 import { useTheme } from 'next-themes'
@@ -396,7 +396,7 @@ export default function LandingPage() {
 
                 <LandingPricingPreview />
 
-                <LandingUseCases />
+                <LandingStudentTabs />
 
                 <section className="landing-section-final relative border-t border-border/40 py-24 sm:py-28 landing-section-alt">
                     <div className="absolute inset-0 bg-gradient-to-t from-primary/[0.04] to-transparent pointer-events-none" />

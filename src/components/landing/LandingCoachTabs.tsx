@@ -2,7 +2,7 @@
 
 import type { ComponentType } from 'react'
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CalloutShowcaseBody, type CalloutItem } from '@/components/landing/LandingCalloutShowcase'
 import {
@@ -172,6 +172,7 @@ function CoachPanelBody({ panel }: { panel: CoachPanelConfig }) {
             key={panel.value}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.22 }}
         >
             <div className="mb-6 max-w-2xl">
@@ -225,33 +226,51 @@ export function LandingCoachTabs() {
                                 variant="line"
                                 className={cn(
                                     '!h-auto min-h-11 w-full min-w-0 flex-nowrap justify-start gap-0 border-b border-border bg-transparent p-0',
-                                    'overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth touch-pan-x [-webkit-overflow-scrolling:touch]',
+                                    'overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth touch-pan-x [-webkit-overflow-scrolling:touch] snap-x snap-mandatory',
                                     '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
                                     'lg:inline-flex lg:w-auto lg:max-w-[min(100%,56rem)] lg:flex-wrap lg:justify-center lg:gap-x-1 lg:overflow-x-visible'
                                 )}
                             >
-                                {COACH_PANELS.map((p) => (
-                                    <TabsTrigger
-                                        key={p.value}
-                                        value={p.value}
-                                        id={`panel-coach-tab-${p.value}`}
-                                        className={cn(
-                                            'min-h-11 shrink-0 !flex-none rounded-none px-3 py-2.5 text-xs font-semibold sm:px-4 sm:text-sm',
-                                            'data-active:after:bottom-0'
-                                        )}
-                                    >
-                                        {t(p.tabKey)}
-                                    </TabsTrigger>
-                                ))}
+                                {COACH_PANELS.map((p) => {
+                                    const isActive = tab === p.value
+                                    return (
+                                        <TabsTrigger
+                                            key={p.value}
+                                            value={p.value}
+                                            id={`panel-coach-tab-${p.value}`}
+                                            className={cn(
+                                                'relative min-h-11 shrink-0 !flex-none snap-start rounded-none px-3 py-2.5 text-xs font-semibold transition-colors sm:px-4 sm:text-sm',
+                                                'after:!hidden',
+                                                isActive
+                                                    ? '!text-foreground !font-bold'
+                                                    : '!text-muted-foreground hover:!text-foreground'
+                                            )}
+                                        >
+                                            <span className="relative z-10">{t(p.tabKey)}</span>
+                                            {isActive ? (
+                                                <motion.span
+                                                    layoutId="coach-tabs-underline"
+                                                    className="absolute inset-x-2 bottom-0 h-[2.5px] rounded-full bg-primary"
+                                                    transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                                                    aria-hidden
+                                                />
+                                            ) : null}
+                                        </TabsTrigger>
+                                    )
+                                })}
                             </TabsList>
                         </div>
 
                         <div className="min-w-0 pt-6">
-                            {COACH_PANELS.map((panel) => (
-                                <TabsContent key={panel.value} value={panel.value} className="mt-0 outline-none">
-                                    <CoachPanelBody panel={panel} />
-                                </TabsContent>
-                            ))}
+                            <AnimatePresence mode="wait" initial={false}>
+                                {COACH_PANELS.map((panel) =>
+                                    panel.value === tab ? (
+                                        <TabsContent key={panel.value} value={panel.value} className="mt-0 outline-none">
+                                            <CoachPanelBody panel={panel} />
+                                        </TabsContent>
+                                    ) : null
+                                )}
+                            </AnimatePresence>
                         </div>
                     </Tabs>
                 </div>

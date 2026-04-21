@@ -20,20 +20,13 @@ import { cn } from '@/lib/utils'
 
 const cycleOrder: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
-const TIER_FEATURE_I18N_KEY: Record<string, string> = {
-    'Rutinas ilimitadas con GIFs': 'landing.tierFeature.routinesUnlimited',
-    'Catálogo de ejercicios con GIF': 'landing.tierFeature.catalogGif',
-    'Programas de entrenamiento': 'landing.tierFeature.programs',
-    'Check-in y progreso': 'landing.tierFeature.checkin',
-    'Dashboard coach': 'landing.tierFeature.dashboard',
-    'Branding personalizado': 'landing.tierFeature.branding',
-    'Planes de nutrición': 'landing.tierFeature.nutritionPlans',
-}
-
-function translateTierFeature(feat: string, t: (k: string) => string) {
-    const key = TIER_FEATURE_I18N_KEY[feat]
-    return key ? t(key) : feat
-}
+const SHARED_FEATURES_I18N_KEYS = [
+    'landing.tierFeature.routinesUnlimited',
+    'landing.tierFeature.catalogGif',
+    'landing.tierFeature.programs',
+    'landing.tierFeature.checkin',
+    'landing.tierFeature.dashboard',
+] as const
 
 const planDisplay: Array<{
     id: SubscriptionTier
@@ -156,20 +149,9 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
 
             <div className="mt-3 flex flex-wrap gap-1.5">
                 <span className="rounded-md bg-secondary px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {(() => {
-                        const cycles = getTierAllowedBillingCycles(plan.id)
-                        if (cycles.length === 1 && cycles[0] === 'monthly') {
-                            return t('landing.pricing.billing.monthlyOnly')
-                        }
-                        if (
-                            cycles.includes('monthly') &&
-                            cycles.includes('quarterly') &&
-                            cycles.includes('annual')
-                        ) {
-                            return t('landing.pricing.billing.monthlyQuarterlyAnnual')
-                        }
-                        return t('landing.pricing.billing.quarterlyAnnual')
-                    })()}
+                    {monthlyTier
+                        ? t('landing.pricing.billing.monthlyOnly')
+                        : t('landing.pricing.billing.monthlyQuarterlyAnnual')}
                 </span>
                 <span
                     className={cn(
@@ -250,17 +232,7 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
                 ) : null}
             </div>
 
-            <ul className="mt-4 flex-1 space-y-2">
-                {tier.features.slice(0, 5).map((feat) => (
-                    <li key={feat} className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                        <span>{translateTierFeature(feat, t)}</span>
-                    </li>
-                ))}
-                {tier.features.length > 5 ? (
-                    <li className="text-[11px] text-muted-foreground/80">+{tier.features.length - 5}…</li>
-                ) : null}
-            </ul>
+            <div className="mt-4 flex-1" />
 
             <Link
                 href={`/register?tier=${plan.id}&cycle=${getDefaultBillingCycleForTier(plan.id)}`}
@@ -427,6 +399,39 @@ export function LandingPricingPreview() {
                         </span>
                     </div>
                 </div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ duration: 0.4 }}
+                    className="mx-auto mb-8 max-w-5xl rounded-2xl border border-border bg-card/70 p-5 shadow-sm backdrop-blur-sm sm:p-6"
+                >
+                    <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="text-center sm:text-left">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
+                                {t('landing.pricing.includedEyebrow')}
+                            </p>
+                            <h3 className="mt-1 font-display text-base font-black tracking-tight text-foreground sm:text-lg">
+                                {t('landing.pricing.includedTitle')}
+                            </h3>
+                        </div>
+                        <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground sm:text-right sm:text-xs">
+                            {t('landing.pricing.includedSubtitle')}
+                        </p>
+                    </div>
+                    <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                        {SHARED_FEATURES_I18N_KEYS.map((key) => (
+                            <li
+                                key={key}
+                                className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs font-medium text-foreground"
+                            >
+                                <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+                                <span className="leading-tight">{t(key)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </motion.div>
 
                 <PricingMobileCarousel />
 

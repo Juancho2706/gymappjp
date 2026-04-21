@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { motion } from 'framer-motion'
 import {
@@ -54,7 +54,12 @@ export function ProfileOverviewB3({
     compliance,
 }: ProfileOverviewB3Props) {
     const { resolvedTheme } = useTheme()
-    const isDark = resolvedTheme === 'dark'
+    const [themeReady, setThemeReady] = useState(false)
+    useEffect(() => {
+        setThemeReady(true)
+    }, [])
+    // Evita mismatch SSR/cliente: en servidor y primer paint, mismo valor que en SSR.
+    const isDark = themeReady && resolvedTheme === 'dark'
 
     const calendarData = useMemo(
         () => buildProfileActivityCalendarData(workoutHistory, checkIns, 371),
