@@ -1,8 +1,8 @@
 'use client'
 
 import type { ComponentType } from 'react'
-import { useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CalloutShowcaseBody, type CalloutItem } from '@/components/landing/LandingCalloutShowcase'
 import {
@@ -163,6 +163,10 @@ const COACH_PANELS: CoachPanelConfig[] = [
     },
 ]
 
+const COACH_TAB_ORDER: CoachPanelValue[] = COACH_PANELS.map((p) => p.value)
+
+const COACH_TABS_AUTO_MS = 3000
+
 function CoachPanelBody({ panel }: { panel: CoachPanelConfig }) {
     const { t } = useTranslation()
     const DioramaCmp = panel.Diorama
@@ -172,7 +176,6 @@ function CoachPanelBody({ panel }: { panel: CoachPanelConfig }) {
             key={panel.value}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.22 }}
         >
             <div className="mb-6 max-w-2xl">
@@ -192,7 +195,21 @@ function CoachPanelBody({ panel }: { panel: CoachPanelConfig }) {
 
 export function LandingCoachTabs() {
     const { t } = useTranslation()
+    const reduceMotion = useReducedMotion()
     const [tab, setTab] = useState<CoachPanelValue>('dashboard')
+    const [autoPause, setAutoPause] = useState(false)
+
+    useEffect(() => {
+        if (reduceMotion || autoPause) return
+        const id = window.setInterval(() => {
+            setTab((prev) => {
+                const i = COACH_TAB_ORDER.indexOf(prev)
+                const next = (i + 1) % COACH_TAB_ORDER.length
+                return COACH_TAB_ORDER[next]!
+            })
+        }, COACH_TABS_AUTO_MS)
+        return () => clearInterval(id)
+    }, [reduceMotion, autoPause])
 
     return (
         <section
@@ -215,7 +232,18 @@ export function LandingCoachTabs() {
                     <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-base">{t('landing.coachTabs.subtitle')}</p>
                 </motion.header>
 
-                <div role="region" aria-label={t('landing.coachTabs.tabsRegionAria')}>
+                <div
+                    role="region"
+                    aria-label={t('landing.coachTabs.tabsRegionAria')}
+                    onMouseEnter={() => setAutoPause(true)}
+                    onMouseLeave={() => setAutoPause(false)}
+                    onFocusCapture={() => setAutoPause(true)}
+                    onBlurCapture={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                            setAutoPause(false)
+                        }
+                    }}
+                >
                     <Tabs
                         value={tab}
                         onValueChange={(v) => setTab(v as CoachPanelValue)}
@@ -262,15 +290,15 @@ export function LandingCoachTabs() {
                         </div>
 
                         <div className="min-w-0 pt-6">
-                            <AnimatePresence mode="wait" initial={false}>
-                                {COACH_PANELS.map((panel) =>
-                                    panel.value === tab ? (
-                                        <TabsContent key={panel.value} value={panel.value} className="mt-0 outline-none">
-                                            <CoachPanelBody panel={panel} />
-                                        </TabsContent>
-                                    ) : null
-                                )}
-                            </AnimatePresence>
+                            {COACH_PANELS.map((panel) => (
+                                <TabsContent
+                                    key={panel.value}
+                                    value={panel.value}
+                                    className="mt-0 w-full min-w-0 outline-none"
+                                >
+                                    <CoachPanelBody panel={panel} />
+                                </TabsContent>
+                            ))}
                         </div>
                     </Tabs>
                 </div>
