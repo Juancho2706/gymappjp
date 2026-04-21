@@ -4,6 +4,9 @@
  */
 export const BRAND_LOGO_WEB = '/LOGOS/eva-wordmark-outline.png'
 
+/** Marca figurativa (negro + borde blanco) para landing en tema claro */
+export const LANDING_LOGO_LIGHT_MARK = '/LOGOS/LOGO NEGRO SIN LETRAS SIN BG BORDE BLANCO.png'
+
 export const BRAND_APP_ICON = '/LOGOS/eva-icon.png'
 export const BRAND_PRIMARY_COLOR = '#10B981'
 /** Color primario del sistema EVA cuando el coach no usa colores personalizados */

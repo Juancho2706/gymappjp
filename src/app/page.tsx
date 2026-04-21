@@ -3,7 +3,11 @@
 import Link from 'next/link'
 import { useRef, useState, useEffect } from 'react'
 import Image from 'next/image'
-import { GymAppLogo } from '@/components/ui/Logo'
+import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
+import { LandingCoachJourney } from '@/components/landing/LandingCoachJourney'
+import { LandingContactFooter } from '@/components/landing/LandingContactFooter'
+import { LandingPricingPreview } from '@/components/landing/LandingPricingPreview'
+import { LandingUseCases } from '@/components/landing/LandingUseCases'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LanguageToggle } from '@/components/LanguageToggle'
 import dynamic from 'next/dynamic'
@@ -22,11 +26,11 @@ const DashboardMockup = dynamic(
     }
 )
 import { useTranslation } from '@/lib/i18n/LanguageContext'
-import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring, AnimatePresence } from 'framer-motion'
+import { motion, useScroll, useTransform, useInView, AnimatePresence } from 'framer-motion'
 import {
     Dumbbell, Users, BarChart3, Camera, Sparkles, ArrowRight, Check,
-    Zap, Shield, Smartphone, ChevronDown, Star, Play, Palette,
-    ClipboardList, Apple, Utensils, Menu, X
+    Zap, Smartphone, ChevronDown, Play, Palette,
+    ClipboardList, Utensils, Menu, X
 } from 'lucide-react'
 import {
     Sheet,
@@ -34,97 +38,65 @@ import {
     SheetTrigger,
     SheetTitle
 } from "@/components/ui/sheet"
-import {
-    BILLING_CYCLE_CONFIG,
-    getDefaultBillingCycleForTier,
-    getTierAllowedBillingCycles,
-    getTierBillingCycleSummary,
-    getTierNutritionSummary,
-    getTierPriceClp,
-    TIER_CONFIG,
-    TIER_STUDENT_RANGE_LABEL,
-    type BillingCycle,
-    type SubscriptionTier,
-} from '@/lib/constants'
+import { MUSCLE_GROUPS } from '@/lib/constants'
 
-/* ─── Constants ─── */
-const tierOrder: SubscriptionTier[] = ['starter_lite', 'starter', 'pro', 'elite', 'scale']
-const clientTiers: Array<{ id: SubscriptionTier; label: string; price: number }> = tierOrder.map(
-    (id) => ({
-        id,
-        label: TIER_STUDENT_RANGE_LABEL[id],
-        price: TIER_CONFIG[id].monthlyPriceClp,
-    })
-)
+const muscleGroupCount = MUSCLE_GROUPS.length
 
 const features = [
     {
         icon: Dumbbell,
-        title: 'Constructor de rutinas',
-        desc: 'Crea rutinas profesionales con un catálogo de ejercicios, cada uno con GIF de demostración e instrucciones.',
-        color: '#00e5ff',
+        titleKey: 'landing.feature.routines.title',
+        descKey: 'landing.feature.routines.desc',
+        iconBg: 'bg-primary/15',
+        iconClass: 'text-primary',
     },
     {
         icon: Utensils,
-        title: 'Planes de nutrición',
-        desc: 'Asigna planes alimenticios a cada alumno. Ellos anotan lo que comen día a día.',
-        color: '#007AFF',
+        titleKey: 'landing.feature.nutrition.title',
+        descKey: 'landing.feature.nutrition.desc',
+        iconBg: 'bg-sky-500/15',
+        iconClass: 'text-sky-600 dark:text-sky-400',
     },
     {
         icon: Camera,
-        title: 'Check-ins con fotos',
-        desc: 'Tus alumnos envían peso, energía y fotos de progreso directo desde su celular.',
-        color: '#3B82F6',
+        titleKey: 'landing.feature.checkins.title',
+        descKey: 'landing.feature.checkins.desc',
+        iconBg: 'bg-violet-500/15',
+        iconClass: 'text-violet-600 dark:text-violet-400',
     },
     {
         icon: Smartphone,
-        title: 'App White-Label',
-        desc: 'Tu propia app con tu logo, colores y URL. Instálala como PWA en cualquier celular.',
-        color: '#00BFFF',
+        titleKey: 'landing.feature.whitelabel.title',
+        descKey: 'landing.feature.whitelabel.desc',
+        iconBg: 'bg-emerald-500/15',
+        iconClass: 'text-emerald-600 dark:text-emerald-400',
     },
     {
         icon: ClipboardList,
-        title: 'Ficha del alumno',
-        desc: 'Recoge datos clave: peso, altura, objetivos, lesiones, nivel. Todo en un solo lugar.',
-        color: '#2563EB',
+        titleKey: 'landing.feature.profile.title',
+        descKey: 'landing.feature.profile.desc',
+        iconBg: 'bg-amber-500/15',
+        iconClass: 'text-amber-600 dark:text-amber-400',
     },
     {
         icon: BarChart3,
-        title: 'Analítica en vivo',
-        desc: 'Dashboard con métricas de cada alumno: avance de peso, volumen, adherencia.',
-        color: '#06B6D4',
+        titleKey: 'landing.feature.analytics.title',
+        descKey: 'landing.feature.analytics.desc',
+        iconBg: 'bg-rose-500/15',
+        iconClass: 'text-rose-600 dark:text-rose-400',
     },
-]
+] as const
 
-const stats = [
-    { value: '10', label: 'Grupos musculares' },
-    { value: '100%', label: 'Tu marca' },
-    { value: '24/7', label: 'Soporte' },
-]
-
-/* ─── Animations ─── */
- 
-const fadeUp: any = {
+const fadeUp = {
     hidden: { opacity: 0, y: 40 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] } },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] as const } },
 }
 
-const fadeIn: any = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { duration: 0.8 } },
-}
-
-const staggerContainer: any = {
-    hidden: {},
-    visible: { transition: { staggerChildren: 0.12 } },
-}
-
-const scaleIn: any = {
+const scaleIn = {
     hidden: { opacity: 0, scale: 0.85 },
-    visible: { opacity: 1, scale: 1, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] } },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.7, ease: [0.25, 0.4, 0.25, 1] as const } },
 }
 
-/* ─── Component: Animated Counter ─── */
 function AnimatedCounter({ value, label }: { value: string; label: string }) {
     const ref = useRef<HTMLDivElement>(null)
     const inView = useInView(ref, { once: true, margin: '-50px' })
@@ -137,16 +109,16 @@ function AnimatedCounter({ value, label }: { value: string; label: string }) {
             transition={{ duration: 0.6 }}
             className="text-center"
         >
-            <div className="text-4xl md:text-5xl font-black text-foreground mb-2">{value}</div>
-            <div className="text-sm text-foreground/50 uppercase tracking-widest font-medium">{label}</div>
+            <div className="text-4xl md:text-5xl font-black tabular-nums text-foreground mb-2">{value}</div>
+            <div className="text-xs sm:text-sm text-muted-foreground uppercase tracking-widest font-medium">{label}</div>
         </motion.div>
     )
 }
 
-/* ─── Component: Feature Card ─── */
-function FeatureCard({ feature, index }: { feature: typeof features[0]; index: number }) {
+function FeatureCard({ feature, index }: { feature: (typeof features)[number]; index: number }) {
     const ref = useRef<HTMLDivElement>(null)
     const inView = useInView(ref, { once: true, margin: '-80px' })
+    const { t } = useTranslation()
 
     return (
         <motion.div
@@ -154,32 +126,24 @@ function FeatureCard({ feature, index }: { feature: typeof features[0]; index: n
             initial={{ opacity: 0, y: 30 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.5, delay: index * 0.08 }}
-            className="group relative rounded-3xl border border-border bg-card p-7 hover:bg-white/[0.04] transition-all duration-500"
+            className="group relative rounded-2xl border border-border bg-card p-7 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80"
         >
-            {/* Glow on hover */}
-            <div
-                className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl"
-                style={{ background: `radial-gradient(circle at 50% 50%, ${feature.color}15, transparent 70%)` }}
-            />
+            <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-gradient-to-br from-primary/[0.06] to-transparent" />
 
             <div className="relative z-10">
-                <div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
-                    style={{ backgroundColor: `${feature.color}15` }}
-                >
-                    <feature.icon className="w-6 h-6" style={{ color: feature.color }} />
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${feature.iconBg}`}>
+                    <feature.icon className={`w-6 h-6 ${feature.iconClass}`} />
                 </div>
-                <h3 className="text-lg font-bold text-foreground mb-2">{feature.title}</h3>
-                <p className="text-sm text-foreground/50 leading-relaxed">{feature.desc}</p>
+                <h3 className="text-lg font-bold text-foreground mb-2">{t(feature.titleKey)}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{t(feature.descKey)}</p>
             </div>
         </motion.div>
     )
 }
 
-/* ─── Component: Pill Nav ─── */
 function PillNav() {
     const [scrolled, setScrolled] = useState(false)
-    const { t } = useTranslation();
+    const { t } = useTranslation()
 
     useEffect(() => {
         const handler = () => setScrolled(window.scrollY > 40)
@@ -187,39 +151,39 @@ function PillNav() {
         return () => window.removeEventListener('scroll', handler)
     }, [])
 
+    const ctaClass =
+        'bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold px-5 py-2.5 rounded-full transition-all shadow-[var(--shadow-glow-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
     return (
         <motion.nav
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className={`fixed top-[calc(1rem+var(--safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-50 transition-all duration-500 bg-background/60 dark:bg-black/10 backdrop-blur-2xl border ${scrolled
-                ? 'border-border shadow-2xl shadow-black/5'
-                : 'border-border/50'
-                } rounded-full px-4 sm:px-6 py-3 flex items-center w-[95%] max-w-5xl justify-between`}
+            className={`fixed top-[calc(1rem+var(--safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-50 transition-all duration-500 bg-background/70 dark:bg-background/50 backdrop-blur-2xl border ${scrolled
+                ? 'border-border shadow-lg shadow-black/5'
+                : 'border-border/60'
+                } rounded-full px-3 sm:px-6 py-2.5 sm:py-3 flex items-center w-[95%] max-w-5xl justify-between gap-2`}
         >
-            <Link href="/" className="flex items-center" aria-label="EVA — inicio">
-                <GymAppLogo className="h-10 w-[7.5rem] sm:h-11 sm:w-[8.5rem]" />
-            </Link>
+            <LandingBrandMark className="min-w-0" iconClassName="h-8 w-8 sm:h-9 sm:w-9" />
 
-            {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2">
                 {[
                     { key: 'landing.nav.features', id: 'funciones' },
+                    { key: 'landing.journey.eyebrow', id: 'recorrido-coach' },
                     { key: 'landing.nav.pricing', id: 'precios' },
                     { key: 'landing.nav.contact', id: 'contacto' }
                 ].map(item => (
                     <a
                         key={item.id}
                         href={`#${item.id}`}
-                        className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
+                        className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors whitespace-nowrap"
                     >
                         {t(item.key)}
                     </a>
                 ))}
             </div>
 
-            {/* Desktop Actions */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3 shrink-0">
                 <ThemeToggle />
                 <Link
                     href="/login"
@@ -227,61 +191,53 @@ function PillNav() {
                 >
                     {t('landing.nav.login')}
                 </Link>
-                <Link
-                    href="/register?tier=pro&cycle=monthly"
-                    className="bg-[#007AFF] text-white hover:bg-[#007AFF]/90 text-xs font-bold px-5 py-2.5 rounded-full transition-all glow-primary shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)]"
-                >
+                <Link href="/register?tier=pro&cycle=monthly" className={ctaClass}>
                     {t('landing.nav.register')}
                 </Link>
             </div>
 
-            {/* Mobile Navigation */}
-            <div className="md:hidden flex items-center gap-2">
+            <div className="md:hidden flex items-center gap-1 shrink-0">
                 <Link
                     href="/login"
-                    className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 text-sm font-bold px-2 py-1.5 transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-xs font-semibold px-2 py-1.5 transition-colors"
                 >
                     {t('landing.nav.login')}
                 </Link>
                 <Sheet>
-                    <SheetTrigger className="p-2 text-foreground/70 hover:text-foreground transition-colors rounded-full hover:bg-accent focus:outline-none flex items-center justify-center">
+                    <SheetTrigger className="p-2 text-foreground/70 hover:text-foreground transition-colors rounded-full hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-center">
                         <Menu className="w-5 h-5" />
                     </SheetTrigger>
-                    <SheetContent side="right" className="w-[300px] sm:w-[400px] border-l-border bg-background pt-16 flex flex-col gap-8">
-                        <SheetTitle className="sr-only">Menú de Navegación</SheetTitle>
-                        
-                        <div className="flex flex-col gap-4 px-2">
+                    <SheetContent side="right" className="w-[300px] sm:w-[400px] border-l-border bg-background pt-14 flex flex-col gap-6">
+                        <SheetTitle className="sr-only">Menú</SheetTitle>
+
+                        <div className="flex flex-col gap-1 px-2">
                             {[
                                 { key: 'landing.nav.features', id: 'funciones' },
-                                { key: 'landing.nav.pricing', id: 'precios' }
+                                { key: 'landing.journey.eyebrow', id: 'recorrido-coach' },
+                                { key: 'landing.nav.pricing', id: 'precios' },
+                                { key: 'landing.nav.contact', id: 'contacto' },
                             ].map(item => (
                                 <a
                                     key={item.id}
                                     href={`#${item.id}`}
-                                    className="text-xl font-bold text-foreground/90 hover:text-cyan-500 transition-colors py-3 border-b border-border/40"
+                                    className="text-base font-semibold text-foreground/90 hover:text-primary transition-colors py-3 border-b border-border/40"
                                 >
                                     {t(item.key)}
                                 </a>
                             ))}
                         </div>
 
-                        <div className="mt-auto flex flex-col gap-6 px-2 pb-8">
-                            <div className="flex items-center justify-between py-4 border-t border-border/50">
-                                <span className="text-sm font-medium text-foreground/70 text-left w-full">Configuración</span>
-                                <div className="flex gap-4 shrink-0 justify-end">
+                        <div className="mt-auto flex flex-col gap-4 px-2 pb-8">
+                            <div className="flex items-center justify-between py-3 border-t border-border/50">
+                                <span className="text-sm font-medium text-muted-foreground">{t('landing.nav.sheet.settings')}</span>
+                                <div className="flex gap-3 shrink-0">
                                     <LanguageToggle />
                                     <ThemeToggle />
                                 </div>
                             </div>
-                            
-                            <div className="flex flex-col gap-3">
-                                <Link
-                                    href="/register?tier=pro&cycle=monthly"
-                                    className="text-center w-full py-3 rounded-xl bg-cyan-500 text-background font-bold hover:bg-cyan-400 hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
-                                >
-                                    {t('landing.nav.register')}
-                                </Link>
-                            </div>
+                            <Link href="/register?tier=pro&cycle=monthly" className={`text-center w-full py-3 rounded-xl ${ctaClass}`}>
+                                {t('landing.nav.register')}
+                            </Link>
                         </div>
                     </SheetContent>
                 </Sheet>
@@ -290,10 +246,10 @@ function PillNav() {
     )
 }
 
-/* ─── Component: Sticky Branding Card (Intelligent Redirect) ─── */
 function StickyBrandingCard() {
     const [coach, setCoach] = useState<{ slug: string; name: string; logo: string | null } | null>(null)
     const [isVisible, setIsVisible] = useState(false)
+    const { t } = useTranslation()
 
     useEffect(() => {
         const slug = localStorage.getItem('last_coach_slug')
@@ -301,7 +257,6 @@ function StickyBrandingCard() {
         const logo = localStorage.getItem('coach_logo_url')
         if (slug && name) {
             setCoach({ slug, name, logo })
-            // Show with a slight delay for effect
             const timer = setTimeout(() => setIsVisible(true), 1000)
             return () => clearTimeout(timer)
         }
@@ -318,13 +273,14 @@ function StickyBrandingCard() {
                     exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                     className="fixed bottom-6 left-6 right-6 md:left-auto md:right-8 z-[60] md:w-[320px]"
                 >
-                    <div className="bg-card/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-5 relative overflow-hidden group">
-                        {/* Background Decoration */}
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/10 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-cyan-500/20 transition-colors" />
-                        
-                        <button 
+                    <div className="bg-card/90 backdrop-blur-xl border border-border shadow-2xl rounded-2xl p-5 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-primary/15 transition-colors" />
+
+                        <button
+                            type="button"
                             onClick={() => setIsVisible(false)}
-                            className="absolute top-3 right-3 p-1 rounded-full hover:bg-white/5 text-foreground/30 hover:text-foreground transition-colors"
+                            className="absolute top-3 right-3 p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label="Cerrar"
                         >
                             <X className="w-4 h-4" />
                         </button>
@@ -332,32 +288,32 @@ function StickyBrandingCard() {
                         <div className="flex items-start gap-4">
                             <div className="shrink-0">
                                 {coach.logo ? (
-                                    <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-white/5 bg-background">
-                                        <Image 
-                                            src={coach.logo} 
-                                            alt={coach.name} 
-                                            fill 
+                                    <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-border bg-background">
+                                        <Image
+                                            src={coach.logo}
+                                            alt={coach.name}
+                                            fill
                                             className="object-contain p-1"
                                         />
                                     </div>
                                 ) : (
-                                    <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
-                                        <Dumbbell className="w-6 h-6 text-cyan-400" />
+                                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                                        <Dumbbell className="w-6 h-6 text-primary" />
                                     </div>
                                 )}
                             </div>
                             <div className="flex-1 min-w-0 pr-4">
-                                <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1">
-                                    Bienvenido de nuevo
+                                <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">
+                                    {t('landing.sticky.welcome')}
                                 </p>
                                 <h4 className="text-sm font-bold text-foreground truncate mb-3">
                                     {coach.name}
                                 </h4>
                                 <Link
                                     href={`/c/${coach.slug}/login`}
-                                    className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background text-xs font-bold px-4 py-2 rounded-full transition-all group/btn"
+                                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 py-2 rounded-full transition-all group/btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
-                                    Ir a mi entrenamiento
+                                    {t('landing.sticky.cta')}
                                     <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                                 </Link>
                             </div>
@@ -369,9 +325,6 @@ function StickyBrandingCard() {
     )
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Main Landing Page
-   ═══════════════════════════════════════════════════════════════ */
 export default function LandingPage() {
     const heroRef = useRef<HTMLDivElement>(null)
     const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
@@ -380,7 +333,6 @@ export default function LandingPage() {
     const heroScale = useTransform(scrollYProgress, [0, 1], [1, 0.9])
     const heroY = useTransform(scrollYProgress, [0, 1], [0, 100])
 
-    const [selectedTier, setSelectedTier] = useState(0)
     const [exerciseCount, setExerciseCount] = useState(129)
 
     useEffect(() => {
@@ -403,694 +355,414 @@ export default function LandingPage() {
     }, [])
 
     const statsWithExercises = [
-        { value: String(exerciseCount), label: 'Ejercicios en GIF' },
-        ...stats,
+        { value: String(exerciseCount), label: t('landing.stats.exercises') },
+        { value: String(muscleGroupCount), label: t('landing.stats.muscles') },
+        { value: '100%', label: t('landing.stats.brand') },
+        { value: '24/7', label: t('landing.stats.support') },
     ]
-    const selectedTierId = clientTiers[selectedTier].id
-    const selectedTierConfig = TIER_CONFIG[selectedTierId]
-    const allowedCyclesForCard = getTierAllowedBillingCycles(selectedTierId)
-    const isMonthlyOnlyCard =
-        allowedCyclesForCard.length === 1 && allowedCyclesForCard[0] === 'monthly'
+
+    const exerciseTitle = t('landing.exercises.title').replace('{{count}}', String(exerciseCount))
+    const exerciseBullets = [
+        t('landing.exercises.bullet1'),
+        t('landing.exercises.bullet2'),
+        t('landing.exercises.bullet3'),
+        t('landing.exercises.bullet4'),
+    ]
+
+    const primaryCta =
+        'inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-8 py-4 rounded-full text-base transition-all shadow-[var(--shadow-glow-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    const secondaryCta =
+        'inline-flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground text-sm font-medium px-8 py-4 rounded-full border border-border bg-card/60 hover:bg-card backdrop-blur-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
     return (
         <div className="min-h-dvh bg-background text-foreground overflow-x-hidden">
             <PillNav />
             <StickyBrandingCard />
 
-            {/* ── HERO ── */}
-            <section ref={heroRef} className="relative min-h-dvh flex flex-col items-center justify-center pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-32 bg-background">
-                {/* Background glow orbs */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-                    <div className="absolute top-1/4 left-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-[#007AFF]/10 blur-[100px] md:blur-[150px]" />
-                    <div className="absolute bottom-1/4 right-1/4 w-[200px] md:w-[400px] h-[200px] md:h-[400px] rounded-full bg-[#00E5FF]/5 blur-[80px] md:blur-[120px]" />
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] md:w-[800px] h-[400px] md:h-[800px] rounded-full bg-[#007AFF]/5 blur-[120px] md:blur-[200px]" />
-                </div>
-
-                {/* Subtle grid pattern */}
-                <div
-                    className="absolute inset-0 opacity-[0.02]"
-                    style={{
-                        backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
-                        backgroundSize: '40px 40px',
-                    }}
-                />
-
-                <motion.div
-                    style={{ scale: heroScale, y: heroY }}
-                    className="relative z-10 w-full max-w-[1200px] mx-auto px-6 text-center flex flex-col items-center"
-                >
-                    {/* Badge */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="inline-flex items-center gap-2 bg-zinc-900/40 dark:bg-black/40 backdrop-blur-md border border-white/10 rounded-full px-4 py-1.5 mb-8 shadow-xl"
-                    >
-                        <Sparkles className="w-3.5 h-3.5 text-[#00E5FF]" />
-                        <span className="text-xs text-zinc-100 dark:text-zinc-300 font-medium">{t('landing.hero.badge')}</span>
-                    </motion.div>
-
-                    {/* Main headline */}
-                    <motion.h1
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4, duration: 0.8 }}
-                        className="text-4xl sm:text-5xl md:text-6xl lg:text-[5rem] font-black tracking-tighter leading-[1.1] mb-6 font-display text-foreground max-w-5xl mx-auto"
-                    >
-                        <span className="text-foreground block">{t('landing.hero.title1')}</span>
-                        <span className="bg-gradient-to-r from-foreground via-zinc-400 to-zinc-500 bg-clip-text text-transparent block mt-2">
-                            {t('landing.hero.title2')}
-                        </span>
-                    </motion.h1>
-
-                    {/* Subheadline */}
-                    <motion.p
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.6 }}
-                        className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10 leading-relaxed font-sans"
-                    >
-                        {t('landing.hero.subtitle')}
-                    </motion.p>
-
-                    {/* CTA buttons */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.7 }}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
-                    >
-                        <Link
-                            href="/register?tier=pro&cycle=monthly"
-                            className="w-full sm:w-auto bg-[#007AFF] text-white hover:bg-[#007AFF]/90 font-bold px-8 py-4 rounded-full text-base transition-all duration-300 flex items-center justify-center gap-2 glow-primary shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)] group/btn"
-                        >
-                            {t('landing.hero.cta')}
-                            <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
-                        </Link>
-                        <a
-                            href="#funciones"
-                            className="w-full sm:w-auto text-zinc-400 hover:text-white text-sm font-medium px-8 py-4 rounded-full border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 backdrop-blur-md transition-all flex items-center justify-center gap-2"
-                        >
-                            <Play className="w-4 h-4" />
-                            Ver funciones
-                        </a>
-                    </motion.div>
-
-                    {/* Dashboard Mockup */}
-                    <DashboardMockup />
-
-                </motion.div>
-            </section>
-
-            <DemoVideoSection />
-
-            {/* ── STATS BAR ── */}
-            <section className="relative py-16 border-y border-white/[0.04]">
-                <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-                    {statsWithExercises.map((stat, i) => (
-                        <AnimatedCounter key={i} value={stat.value} label={stat.label} />
-                    ))}
-                </div>
-            </section>
-
-            {/* ── CORE FEATURES (NEW) ── */}
-            <section className="relative py-28 z-10">
-                <div className="max-w-[1200px] mx-auto px-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        
-                        {/* 1. Creador de Rutinas Drag & Drop */}
-                        <motion.div
-                            variants={scaleIn}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-50px' }}
-                            className="bg-card dark:bg-white/[0.05] backdrop-blur-2xl border border-border dark:border-white/10 rounded-xl p-8 hover:bg-accent/50 dark:hover:bg-white/[0.08] transition-all duration-300 group shadow-lg shadow-black/5 dark:shadow-black/20"
-                        >
-                            <div className="w-12 h-12 rounded-xl bg-[#007AFF]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                <Menu className="w-6 h-6 text-[#007AFF]" />
-                            </div>
-                            <h3 className="text-xl font-bold text-foreground mb-6">Creador de Rutinas Drag & Drop</h3>
-                            <div className="bg-secondary dark:bg-black/20 backdrop-blur-xl rounded-lg p-4 border border-border dark:border-white/5 space-y-3">
-                                {[
-                                    { name: 'Sentadilla Libre', reps: '4 x 10' },
-                                    { name: 'Press de Banca', reps: '4 x 8' },
-                                    { name: 'Peso Muerto', reps: '3 x 12' }
-                                ].map((ex, i) => (
-                                    <div key={i} className="flex items-center gap-3 bg-background dark:bg-white/10 backdrop-blur-md p-3 rounded-md cursor-grab active:cursor-grabbing border border-border dark:border-white/5 hover:border-muted-foreground/20 dark:hover:border-white/10 transition-colors">
-                                        <Menu className="w-4 h-4 text-muted-foreground" />
-                                        <span className="text-xs font-semibold text-foreground/90">{ex.name}</span>
-                                        <span className="text-[10px] text-muted-foreground ml-auto bg-muted dark:bg-white/5 px-2 py-1 rounded-md">{ex.reps}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
-
-                        {/* 2. Calculadora de Macros Visual */}
-                        <motion.div
-                            variants={scaleIn}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-50px' }}
-                            transition={{ delay: 0.1 }}
-                            className="bg-card dark:bg-white/[0.05] backdrop-blur-2xl border border-border dark:border-white/10 rounded-xl p-8 hover:bg-accent/50 dark:hover:bg-white/[0.08] transition-all duration-300 group shadow-lg shadow-black/5 dark:shadow-black/20"
-                        >
-                            <div className="w-12 h-12 rounded-xl bg-[#00E5FF]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                <BarChart3 className="w-6 h-6 text-[#00E5FF]" />
-                            </div>
-                            <h3 className="text-xl font-bold text-foreground mb-6">Calculadora de Macros Visual</h3>
-                            <div className="bg-secondary dark:bg-black/20 backdrop-blur-xl rounded-lg p-6 border border-border dark:border-white/5 flex items-center justify-center gap-6">
-                                {/* Simulated Donut Charts */}
-                                {[
-                                    { label: 'Prot', val: '36g', color: '#007AFF' },
-                                    { label: 'Carb', val: '20g', color: '#00E5FF' },
-                                    { label: 'Grasa', val: '15g', color: '#3B82F6' },
-                                ].map((macro, i) => (
-                                    <div key={i} className="flex flex-col items-center gap-2">
-                                        <div className="w-14 h-14 rounded-full border-4 flex items-center justify-center" style={{ borderColor: `${macro.color}40`, borderTopColor: macro.color }}>
-                                            <span className="text-xs font-bold text-foreground">{macro.val}</span>
-                                        </div>
-                                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{macro.label}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
-
-                        {/* 3. Sistema de Plantillas Inteligentes */}
-                        <motion.div
-                            variants={scaleIn}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-50px' }}
-                            transition={{ delay: 0.2 }}
-                            className="bg-card dark:bg-white/[0.05] backdrop-blur-2xl border border-border dark:border-white/10 rounded-xl p-8 hover:bg-accent/50 dark:hover:bg-white/[0.08] transition-all duration-300 group flex flex-col shadow-lg shadow-black/5 dark:shadow-black/20"
-                        >
-                            <div className="w-12 h-12 rounded-xl bg-[#00BFFF]/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                <Zap className="w-6 h-6 text-[#00BFFF]" />
-                            </div>
-                            <h3 className="text-xl font-bold text-foreground mb-6">Sistema de Plantillas Inteligentes</h3>
-                            <div className="bg-secondary dark:bg-black/20 backdrop-blur-xl rounded-lg p-4 border border-border dark:border-white/5 flex-1 flex flex-col gap-3">
-                                <div className="flex items-center justify-between bg-background dark:bg-white/10 backdrop-blur-md p-3 rounded-md border border-border dark:border-white/5">
-                                    <span className="text-sm text-foreground/90 font-medium">Volumen Nivel Intermedio</span>
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                </div>
-                                <div className="flex items-center justify-between bg-muted dark:bg-white/5 backdrop-blur-md p-3 rounded-md border border-border dark:border-white/5 opacity-70">
-                                    <span className="text-sm text-muted-foreground font-medium">Definición Principiante</span>
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                </div>
-                                <div className="mt-auto pt-4">
-                                    <button className="w-full bg-[#007AFF] hover:bg-[#007AFF]/90 text-white text-sm font-bold py-2.5 rounded-md transition-colors shadow-lg shadow-[#007AFF]/20">
-                                        Aplicar a Cliente
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-
+            <main>
+                <section ref={heroRef} className="relative min-h-dvh flex flex-col items-center justify-center pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-28 bg-background landing-noise">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                        <div className="absolute top-1/4 left-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-primary/10 blur-[100px] md:blur-[150px]" />
+                        <div className="absolute bottom-1/4 right-1/4 w-[200px] md:w-[400px] h-[200px] md:h-[400px] rounded-full bg-sky-400/10 blur-[80px] md:blur-[120px]" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] md:w-[800px] h-[400px] md:h-[800px] rounded-full bg-primary/5 blur-[120px] md:blur-[200px]" />
                     </div>
-                </div>
-            </section>
 
-            {/* ── FEATURES GRID ── */}
-            <section id="funciones" className="relative py-28">
-                {/* Background glow */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-cyan-500/[0.03] blur-[200px] pointer-events-none" />
+                    <div
+                        className="absolute inset-0 opacity-[0.035] dark:opacity-[0.06]"
+                        style={{
+                            backgroundImage: 'linear-gradient(rgba(128,128,128,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(128,128,128,.12) 1px, transparent 1px)',
+                            backgroundSize: '40px 40px',
+                        }}
+                    />
 
-                <div className="max-w-6xl mx-auto px-6">
                     <motion.div
-                        variants={fadeUp}
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true, margin: '-80px' }}
-                        className="text-center mb-16"
+                        style={{ scale: heroScale, y: heroY }}
+                        className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center flex flex-col items-center"
                     >
-                        <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
-                            Funciones
-                        </span>
-                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
-                            Todo lo que necesitas
-                        </h2>
-                        <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto">
-                            Herramientas diseñadas para coaches que quieren escalar.
-                        </p>
-                    </motion.div>
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-4 py-1.5 mb-8 shadow-sm backdrop-blur-md"
+                        >
+                            <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden />
+                            <span className="text-xs font-medium text-foreground">{t('landing.hero.badge')}</span>
+                        </motion.div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {features.map((feature, i) => (
-                            <FeatureCard key={i} feature={feature} index={i} />
+                        <motion.h1
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.4, duration: 0.8 }}
+                            className="text-4xl sm:text-5xl md:text-6xl lg:text-[4.5rem] font-black tracking-tighter leading-[1.08] mb-6 font-display text-foreground max-w-5xl mx-auto"
+                        >
+                            <span className="text-foreground block">{t('landing.hero.title1')}</span>
+                            <span className="mt-2 block bg-gradient-to-r from-primary via-foreground to-muted-foreground bg-clip-text text-transparent">
+                                {t('landing.hero.title2')}
+                            </span>
+                        </motion.h1>
+
+                        <motion.p
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.6 }}
+                            className="text-base md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed"
+                        >
+                            {t('landing.hero.subtitle')}
+                        </motion.p>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.7 }}
+                            className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
+                        >
+                            <Link href="/register?tier=pro&cycle=monthly" className={`w-full sm:w-auto ${primaryCta} group/btn`}>
+                                {t('landing.hero.cta')}
+                                <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" aria-hidden />
+                            </Link>
+                            <a href="#funciones" className={`w-full sm:w-auto ${secondaryCta}`}>
+                                <Play className="w-4 h-4" aria-hidden />
+                                {t('landing.hero.secondaryCta')}
+                            </a>
+                        </motion.div>
+
+                        <DashboardMockup />
+                    </motion.div>
+                </section>
+
+                <DemoVideoSection />
+
+                <section className="relative py-14 border-y border-border/60 bg-card/30 backdrop-blur-sm">
+                    <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10">
+                        {statsWithExercises.map((stat, i) => (
+                            <AnimatedCounter key={i} value={stat.value} label={stat.label} />
                         ))}
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* ── EXERCISE SHOWCASE ── */}
-            <section className="relative py-28 overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/[0.02] to-transparent pointer-events-none" />
+                <LandingCoachJourney />
 
-                <div className="max-w-6xl mx-auto px-6">
-                    <div className="grid lg:grid-cols-2 gap-16 items-center">
-                        {/* Left: text */}
+                <section className="relative py-24 sm:py-28 z-10">
+                    <div className="max-w-6xl mx-auto px-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <motion.div
+                                variants={scaleIn}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true, margin: '-50px' }}
+                                className="rounded-2xl border border-border bg-card p-8 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80"
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mb-6">
+                                    <Menu className="w-6 h-6 text-primary" />
+                                </div>
+                                <h3 className="text-xl font-bold text-foreground mb-6">{t('landing.core.routines.title')}</h3>
+                                <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-3">
+                                    {[
+                                        { name: 'Sentadilla', reps: '4 × 10' },
+                                        { name: 'Press banca', reps: '4 × 8' },
+                                        { name: 'Peso muerto', reps: '3 × 12' }
+                                    ].map((ex, i) => (
+                                        <div key={i} className="flex items-center gap-3 bg-background/80 p-3 rounded-lg border border-border">
+                                            <Menu className="w-4 h-4 text-muted-foreground" aria-hidden />
+                                            <span className="text-xs font-semibold text-foreground">{ex.name}</span>
+                                            <span className="text-[10px] text-muted-foreground ml-auto bg-muted px-2 py-1 rounded-md tabular-nums">{ex.reps}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                variants={scaleIn}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true, margin: '-50px' }}
+                                transition={{ delay: 0.08 }}
+                                className="rounded-2xl border border-border bg-card p-8 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80"
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-sky-500/15 flex items-center justify-center mb-6">
+                                    <BarChart3 className="w-6 h-6 text-sky-600 dark:text-sky-400" />
+                                </div>
+                                <h3 className="text-xl font-bold text-foreground mb-6">{t('landing.core.macros.title')}</h3>
+                                <div className="bg-muted/50 rounded-xl p-6 border border-border flex items-center justify-center gap-6">
+                                    {[
+                                        { label: 'P', val: '36g', color: '#007AFF' },
+                                        { label: 'C', val: '20g', color: '#00E5FF' },
+                                        { label: 'G', val: '15g', color: '#00C7BE' },
+                                    ].map((macro, i) => (
+                                        <div key={i} className="flex flex-col items-center gap-2">
+                                            <div
+                                                className="w-14 h-14 rounded-full border-4 flex items-center justify-center"
+                                                style={{ borderColor: `${macro.color}44`, borderTopColor: macro.color }}
+                                            >
+                                                <span className="text-xs font-bold text-foreground tabular-nums">{macro.val}</span>
+                                            </div>
+                                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{macro.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                variants={scaleIn}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true, margin: '-50px' }}
+                                transition={{ delay: 0.16 }}
+                                className="rounded-2xl border border-border bg-card p-8 shadow-sm transition-shadow hover:shadow-md dark:bg-card/80 flex flex-col"
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-violet-500/15 flex items-center justify-center mb-6">
+                                    <Zap className="w-6 h-6 text-violet-600 dark:text-violet-400" />
+                                </div>
+                                <h3 className="text-xl font-bold text-foreground mb-6">{t('landing.core.templates.title')}</h3>
+                                <div className="bg-muted/50 rounded-xl p-4 border border-border flex-1 flex flex-col gap-3">
+                                    <div className="flex items-center justify-between bg-background/80 p-3 rounded-lg border border-border">
+                                        <span className="text-sm font-medium text-foreground">Fuerza 4 días</span>
+                                        <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden />
+                                    </div>
+                                    <div className="flex items-center justify-between bg-muted/40 p-3 rounded-lg border border-border opacity-80">
+                                        <span className="text-sm text-muted-foreground font-medium">Hipertrofia 3 días</span>
+                                        <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden />
+                                    </div>
+                                    <div className="mt-auto pt-4">
+                                        <span className="block w-full text-center bg-primary text-primary-foreground text-sm font-bold py-2.5 rounded-lg shadow-sm">
+                                            {t('landing.core.apply')}
+                                        </span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="funciones" className="relative py-24 sm:py-28 scroll-mt-28 border-t border-border/40 landing-section-alt">
+                    <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(90vw,600px)] h-[600px] rounded-full bg-primary/[0.04] blur-[120px]" />
+
+                    <div className="relative max-w-6xl mx-auto px-6">
+                        <motion.div
+                            variants={fadeUp}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: '-80px' }}
+                            className="text-center mb-14"
+                        >
+                            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-3 block">
+                                {t('landing.functions.eyebrow')}
+                            </span>
+                            <h2 className="font-display text-3xl md:text-5xl font-black text-foreground mb-4 tracking-tight">
+                                {t('landing.functions.title')}
+                            </h2>
+                            <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+                                {t('landing.functions.subtitle')}
+                            </p>
+                        </motion.div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {features.map((feature, i) => (
+                                <FeatureCard key={feature.titleKey} feature={feature} index={i} />
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                <section className="relative py-24 sm:py-28 overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.03] to-transparent pointer-events-none" />
+
+                    <div className="max-w-6xl mx-auto px-6">
+                        <div className="grid lg:grid-cols-2 gap-14 items-center">
+                            <motion.div
+                                variants={fadeUp}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true, margin: '-80px' }}
+                            >
+                                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-3 block">
+                                    {t('landing.exercises.eyebrow')}
+                                </span>
+                                <h2 className="text-3xl md:text-5xl font-black text-foreground mb-6 leading-tight font-display tracking-tight">
+                                    {exerciseTitle}
+                                    <br />
+                                    <span className="text-muted-foreground">{t('landing.exercises.titleLead')}</span>
+                                </h2>
+                                <p className="text-muted-foreground text-base leading-relaxed mb-8 max-w-md">
+                                    {t('landing.exercises.intro')}
+                                </p>
+
+                                <ul className="space-y-3">
+                                    {exerciseBullets.map(item => (
+                                        <li key={item} className="flex items-center gap-3">
+                                            <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+                                                <Check className="w-3 h-3 text-primary" aria-hidden />
+                                            </div>
+                                            <span className="text-sm text-muted-foreground">{item}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </motion.div>
+
+                            <motion.div
+                                variants={scaleIn}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true, margin: '-80px' }}
+                                className="relative"
+                            >
+                                <div className="absolute inset-0 bg-primary/5 blur-[100px] rounded-full" />
+                                <div className="relative bg-card/90 backdrop-blur-xl border border-border rounded-2xl p-6 space-y-3 shadow-xl">
+                                    {[
+                                        { name: 'Squat jumps', muscle: 'Piernas', reps: '10', color: '#007AFF' },
+                                        { name: 'Dominadas', muscle: 'Espalda', reps: '12', color: '#00E5FF' },
+                                        { name: 'Press banca', muscle: 'Pecho', reps: '8', color: '#00C7BE' },
+                                        { name: 'Plancha', muscle: 'Core', reps: '60s', color: '#5856D6' },
+                                    ].map((ex, i) => (
+                                        <motion.div
+                                            key={ex.name}
+                                            initial={{ opacity: 0, x: 20 }}
+                                            whileInView={{ opacity: 1, x: 0 }}
+                                            viewport={{ once: true }}
+                                            transition={{ delay: 0.15 + i * 0.08 }}
+                                            className="flex items-center gap-4 bg-muted/40 border border-border rounded-xl p-4 hover:bg-muted/60 transition-colors"
+                                        >
+                                            <div className="w-14 h-14 rounded-xl bg-background flex items-center justify-center flex-shrink-0 border border-border">
+                                                <Dumbbell className="w-6 h-6 text-muted-foreground" aria-hidden />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-semibold text-foreground truncate">{ex.name}</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span
+                                                        className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md"
+                                                        style={{ backgroundColor: `${ex.color}22`, color: ex.color }}
+                                                    >
+                                                        {ex.muscle}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground tabular-nums">{ex.reps}</span>
+                                                </div>
+                                            </div>
+                                            <ArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden />
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="relative py-24 sm:py-28 border-t border-border/40">
+                    <div className="max-w-6xl mx-auto px-6 text-center">
                         <motion.div
                             variants={fadeUp}
                             initial="hidden"
                             whileInView="visible"
                             viewport={{ once: true, margin: '-80px' }}
                         >
-                            <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
-                                Ejercicios
+                            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-3 block">
+                                {t('landing.whitelabel.eyebrow')}
                             </span>
-                            <h2 className="text-3xl md:text-5xl font-black text-foreground mb-6 leading-tight">
-                                {exerciseCount} ejercicios
-                                <br />
-                                <span className="text-foreground/30">con GIF de demostración</span>
+                            <h2 className="font-display text-3xl md:text-5xl font-black text-foreground mb-4 tracking-tight">
+                                {t('landing.whitelabel.title')}
                             </h2>
-                            <p className="text-foreground/40 text-base leading-relaxed mb-8 max-w-md">
-                                Cada ejercicio incluye demostración visual, instrucciones paso a paso,
-                                equipo necesario y músculos trabajados. En español.
-                            </p>
-
-                            <div className="space-y-3">
-                                {['GIF de demostración', 'Instrucciones en español', '10 grupos musculares', 'Agrega ejercicios propios'].map(item => (
-                                    <div key={item} className="flex items-center gap-3">
-                                        <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
-                                            <Check className="w-3 h-3 text-cyan-400" />
-                                        </div>
-                                        <span className="text-sm text-foreground/60">{item}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
-
-                        {/* Right: exercise cards mockup */}
-                        <motion.div
-                            variants={scaleIn}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-80px' }}
-                            className="relative"
-                        >
-                            <div className="absolute inset-0 bg-cyan-500/5 blur-[100px] rounded-full" />
-                            <div className="relative bg-white/[0.05] backdrop-blur-2xl border border-white/10 rounded-3xl p-6 space-y-3 shadow-2xl shadow-black/40">
-                                {/* Mock exercise cards - Fitonist style */}
-                                {[
-                                    { name: 'Squat Jumps', muscle: 'Piernas', reps: '10 reps', color: '#007AFF' },
-                                    { name: 'Pull Ups', muscle: 'Espalda', reps: '12 reps', color: '#3B82F6' },
-                                    { name: 'Bench Press', muscle: 'Pecho', reps: '8 reps', color: '#00e5ff' },
-                                    { name: 'Plank', muscle: 'Core', reps: '60 seg', color: '#00BFFF' },
-                                ].map((ex, i) => (
-                                    <motion.div
-                                        key={i}
-                                        initial={{ opacity: 0, x: 20 }}
-                                        whileInView={{ opacity: 1, x: 0 }}
-                                        viewport={{ once: true }}
-                                        transition={{ delay: 0.2 + i * 0.1 }}
-                                        className="flex items-center gap-4 bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 hover:bg-white/[0.08] transition-colors"
-                                    >
-                                        <div className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
-                                            <Dumbbell className="w-6 h-6 text-foreground/30" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-foreground truncate">{ex.name}</p>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span
-                                                    className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md"
-                                                    style={{ backgroundColor: `${ex.color}20`, color: ex.color }}
-                                                >
-                                                    {ex.muscle}
-                                                </span>
-                                                <span className="text-xs text-foreground/30">{ex.reps}</span>
-                                            </div>
-                                        </div>
-                                        <ArrowRight className="w-4 h-4 text-foreground/20 flex-shrink-0" />
-                                    </motion.div>
-                                ))}
-                            </div>
-                        </motion.div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ── WHITE-LABEL SHOWCASE ── */}
-            <section className="relative py-28">
-                <div className="max-w-6xl mx-auto px-6 text-center">
-                    <motion.div
-                        variants={fadeUp}
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true, margin: '-80px' }}
-                    >
-                        <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
-                            White-Label
-                        </span>
-                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
-                            Tu marca. Tu app.
-                        </h2>
-                        <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto mb-16">
-                            Cada coach obtiene su propia URL, logo y colores. Tus alumnos solo ven tu marca.
-                        </p>
-                    </motion.div>
-
-                    {/* Bento grid showcasing white-label features */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <motion.div
-                            variants={scaleIn}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true }}
-                            className="md:col-span-2 bg-card border border-border rounded-3xl p-8 text-left"
-                        >
-                            <Palette className="w-8 h-8 text-cyan-400 mb-4" />
-                            <h3 className="text-xl font-bold text-foreground mb-2">Personalización total</h3>
-                            <p className="text-foreground/40 text-sm leading-relaxed">
-                                Elige tu color de marca, sube tu logo y configura tu URL personalizada.
-                                Tu alumno accede a <code className="text-cyan-400/70 font-mono text-xs">omnicoach.app/c/tu-marca</code> y ve TU identidad.
-                            </p>
-                            <div className="mt-6 flex gap-3">
-                                {['#00e5ff', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6'].map(color => (
-                                    <div
-                                        key={color}
-                                        className="w-8 h-8 rounded-full border-2 border-border"
-                                        style={{ backgroundColor: color }}
-                                    />
-                                ))}
-                            </div>
-                        </motion.div>
-
-                        <motion.div
-                            variants={scaleIn}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.1 }}
-                            className="bg-card border border-border rounded-3xl p-8 text-left"
-                        >
-                            <Smartphone className="w-8 h-8 text-cyan-400 mb-4" />
-                            <h3 className="text-xl font-bold text-foreground mb-2">Instalable</h3>
-                            <p className="text-foreground/40 text-sm leading-relaxed">
-                                PWA que se instala como app nativa en cualquier celular. Sin App Store.
+                            <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto mb-14 leading-relaxed">
+                                {t('landing.whitelabel.subtitle')}
                             </p>
                         </motion.div>
-                    </div>
-                </div>
-            </section>
 
-            {/* ── PRICING ── */}
-            <section id="precios" className="relative py-28">
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/[0.02] to-transparent pointer-events-none" />
-
-                <div className="max-w-4xl mx-auto px-6">
-                    <motion.div
-                        variants={fadeUp}
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true, margin: '-80px' }}
-                        className="text-center mb-16"
-                    >
-                        <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
-                            Precios
-                        </span>
-                        <h2 className="text-3xl md:text-5xl font-black text-foreground mb-4">
-                            Precios por cupo de alumnos
-                        </h2>
-                        <p className="text-foreground/40 text-base md:text-lg max-w-xl mx-auto">
-                            Pagás según cuántos alumnos quieras tener en la app: los cupos más chicos van mes a mes,
-                            y los de mayor escala se facturan trimestral o anual para que sea más simple de administrar.
-                            En los planes de entrada el módulo de nutrición no viene incluido; en los superiores sí.
-                        </p>
-                        <div className="mt-6">
-                            <Link
-                                href="/pricing"
-                                className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-600 transition-colors hover:text-cyan-500 dark:text-cyan-400 dark:hover:text-cyan-300"
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                            <motion.div
+                                variants={scaleIn}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true }}
+                                className="md:col-span-2 rounded-2xl border border-border bg-card p-8 shadow-sm dark:bg-card/80"
                             >
-                                Ver todos los planes
-                                <ArrowRight className="h-4 w-4" />
-                            </Link>
+                                <Palette className="w-8 h-8 text-primary mb-4" aria-hidden />
+                                <h3 className="text-xl font-bold text-foreground mb-2">{t('landing.whitelabel.customize.title')}</h3>
+                                <p className="text-muted-foreground text-sm leading-relaxed max-w-xl">
+                                    {t('landing.whitelabel.customize.body')}
+                                </p>
+                                <code className="mt-4 inline-block rounded-lg border border-border bg-muted/50 px-3 py-1.5 font-mono text-xs text-foreground">
+                                    {t('landing.whitelabel.urlExample')}
+                                </code>
+                                <div className="mt-6 flex flex-wrap gap-3">
+                                    {['#007AFF', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6'].map(color => (
+                                        <div
+                                            key={color}
+                                            className="w-9 h-9 rounded-full border-2 border-border shadow-sm"
+                                            style={{ backgroundColor: color }}
+                                        />
+                                    ))}
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                variants={scaleIn}
+                                initial="hidden"
+                                whileInView="visible"
+                                viewport={{ once: true }}
+                                transition={{ delay: 0.08 }}
+                                className="rounded-2xl border border-border bg-card p-8 shadow-sm dark:bg-card/80"
+                            >
+                                <Smartphone className="w-8 h-8 text-primary mb-4" aria-hidden />
+                                <h3 className="text-xl font-bold text-foreground mb-2">{t('landing.whitelabel.pwa.title')}</h3>
+                                <p className="text-muted-foreground text-sm leading-relaxed">
+                                    {t('landing.whitelabel.pwa.body')}
+                                </p>
+                            </motion.div>
                         </div>
-                    </motion.div>
+                    </div>
+                </section>
+
+                <LandingPricingPreview />
+
+                <LandingUseCases />
+
+                <section className="relative py-24 sm:py-28 border-t border-border/40 landing-section-alt">
+                    <div className="absolute inset-0 bg-gradient-to-t from-primary/[0.04] to-transparent pointer-events-none" />
 
                     <motion.div
-                        variants={scaleIn}
+                        variants={fadeUp}
                         initial="hidden"
                         whileInView="visible"
                         viewport={{ once: true }}
-                        className="relative bg-card border border-border rounded-3xl overflow-hidden"
+                        className="relative max-w-3xl mx-auto px-6 text-center"
                     >
-                        {/* Glow */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-cyan-500/10 blur-[120px] pointer-events-none" />
-
-                        <div className="relative p-8 md:p-12">
-                            {/* Tier selector */}
-                            <div className="flex flex-wrap justify-center gap-2 mb-10">
-                                {clientTiers.map((tier, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => setSelectedTier(i)}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all duration-300 ${selectedTier === i
-                                            ? 'bg-cyan-500 text-background shadow-lg shadow-cyan-500/25'
-                                            : 'bg-secondary text-foreground/50 hover:bg-white/[0.08] hover:text-foreground/70'
-                                            }`}
-                                    >
-                                        {tier.label}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
-                                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
-                                    {getTierBillingCycleSummary(selectedTierId)}
-                                </span>
-                                <span
-                                    className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                                        getTierNutritionSummary(selectedTierId).startsWith('Sin')
-                                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                                    }`}
-                                >
-                                    {getTierNutritionSummary(selectedTierId)}
-                                </span>
-                            </div>
-
-                            {/* Price display */}
-                            <div className="text-center mb-10">
-                                <motion.div
-                                    key={selectedTier}
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="space-y-4"
-                                >
-                                    {isMonthlyOnlyCard ? (
-                                        <>
-                                            <div className="flex items-end justify-center gap-1">
-                                                <span className="text-5xl md:text-7xl font-black text-foreground">
-                                                    ${clientTiers[selectedTier].price.toLocaleString('es-CL')}
-                                                </span>
-                                                <span className="text-foreground/30 text-lg mb-2">/mes CLP</span>
-                                            </div>
-                                            <p className="text-foreground/30 text-sm">
-                                                Cancela cuando quieras
-                                            </p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">
-                                                Montos por periodo (prepago)
-                                            </p>
-                                            <div className="mx-auto max-w-md space-y-2 text-left">
-                                                {allowedCyclesForCard.map((cycle: BillingCycle) => {
-                                                    const info = BILLING_CYCLE_CONFIG[cycle]
-                                                    const amount = getTierPriceClp(selectedTierId, cycle)
-                                                    return (
-                                                        <div
-                                                            key={cycle}
-                                                            className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/30 px-4 py-3"
-                                                        >
-                                                            <span className="text-sm font-semibold text-foreground">
-                                                                {info.label}
-                                                                {info.discountPercent > 0 ? (
-                                                                    <span className="ml-2 text-xs font-normal text-emerald-500">
-                                                                        −{info.discountPercent}%
-                                                                    </span>
-                                                                ) : null}
-                                                            </span>
-                                                            <span className="text-sm font-black text-foreground tabular-nums">
-                                                                ${amount.toLocaleString('es-CL')} CLP
-                                                            </span>
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
-                                            <p className="text-foreground/30 text-xs px-2">
-                                                Referencia mensual del plan: $
-                                                {TIER_CONFIG[selectedTierId].monthlyPriceClp.toLocaleString('es-CL')}{' '}
-                                                CLP/mes (el cobro es trimestral o anual según elijas).
-                                            </p>
-                                        </>
-                                    )}
-                                </motion.div>
-                            </div>
-
-                            {/* Features */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto mb-10">
-                                {selectedTierConfig.features.map((feat, i) => (
-                                    <div key={i} className="flex items-center gap-2.5">
-                                        <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
-                                            <Check className="w-3 h-3 text-cyan-400" />
-                                        </div>
-                                        <span className="text-sm text-foreground/60">{feat}</span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* CTA */}
-                            <div className="text-center">
-                                <Link
-                                    href={`/register?tier=${clientTiers[selectedTier].id}&cycle=${getDefaultBillingCycleForTier(clientTiers[selectedTier].id)}`}
-                                    className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background font-bold px-8 py-4 rounded-full text-base transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/25"
-                                >
-                                    Empieza ahora
-                                    <ArrowRight className="w-4 h-4" />
-                                </Link>
-                            </div>
-                        </div>
-                    </motion.div>
-                    {/* Enterprise callout */}
-                    <p className="mt-6 text-center text-xs text-foreground/40">
-                        ¿Necesitas más de 100 alumnos o funciones personalizadas? Tenemos{' '}
-                        <strong className="text-foreground/60">planes empresariales</strong>.{' '}
-                        Escríbenos a{' '}
-                        <a href="mailto:contacto@eva-app.cl" className="underline hover:text-foreground/80 transition-colors">
-                            contacto@eva-app.cl
-                        </a>
-                    </p>
-                </div>
-            </section>
-
-            {/* ── TRUST / TESTIMONIALS ── */}
-            <section className="relative py-28">
-                <div className="max-w-6xl mx-auto px-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {/* Testimonial 1 */}
-                        <motion.div
-                            variants={fadeUp}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-80px' }}
-                            className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none h-full flex flex-col justify-between"
-                        >
-                            <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/20 blur-[60px] rounded-full pointer-events-none" />
-                            <div className="relative z-10">
-                                <div className="flex justify-start gap-1 mb-6">
-                                    {[...Array(5)].map((_, j) => (
-                                        <Star key={j} className="w-5 h-5 fill-cyan-400 text-cyan-400" />
-                                    ))}
-                                </div>
-                                <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
-                                    {`"EVA revolucionó mi negocio. Pasé de Excels caóticos a gestionar 50 clientes sin esfuerzo."`}
-                                </p>
-                            </div>
-                            <div className="relative z-10 border-t border-border pt-6 mt-auto">
-                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">— Coach Alex Ramírez.</p>
-                            </div>
-                        </motion.div>
-
-                        {/* Testimonial 2 */}
-                        <motion.div
-                            variants={fadeUp}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-80px' }}
-                            className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none h-full flex flex-col justify-between"
-                            transition={{ delay: 0.1 }}
-                        >
-                            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/20 blur-[60px] rounded-full pointer-events-none" />
-                            <div className="relative z-10">
-                                <div className="flex justify-start gap-1 mb-6">
-                                    {[...Array(5)].map((_, j) => (
-                                        <Star key={j} className="w-5 h-5 fill-cyan-400 text-cyan-400" />
-                                    ))}
-                                </div>
-                                <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
-                                    {`"La mejor inversión para mi servicio de asesorías. Mis clientes aman la app y yo ahorro horas de trabajo."`}
-                                </p>
-                            </div>
-                            <div className="relative z-10 border-t border-border pt-6 mt-auto">
-                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">— Coach Laura Mendoza.</p>
-                            </div>
-                        </motion.div>
-
-                        {/* Testimonial 3 */}
-                        <motion.div
-                            variants={fadeUp}
-                            initial="hidden"
-                            whileInView="visible"
-                            viewport={{ once: true, margin: '-80px' }}
-                            className="relative bg-card dark:bg-white/[0.02] border border-border dark:border-white/10 backdrop-blur-xl rounded-[2rem] p-8 overflow-hidden shadow-xl shadow-black/5 dark:shadow-none h-full flex flex-col justify-between"
-                            transition={{ delay: 0.2 }}
-                        >
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-emerald-500/20 blur-[60px] rounded-full pointer-events-none" />
-                            <div className="relative z-10">
-                                <div className="flex justify-start gap-1 mb-6">
-                                    {[...Array(5)].map((_, j) => (
-                                        <Star key={j} className="w-5 h-5 fill-cyan-400 text-cyan-400" />
-                                    ))}
-                                </div>
-                                <p className="text-lg md:text-xl font-medium text-foreground leading-relaxed italic mb-8">
-                                    {`"Increíblemente fácil de usar. El constructor de rutinas y dietas es exactamente lo que necesitaba."`}
-                                </p>
-                            </div>
-                            <div className="relative z-10 border-t border-border pt-6 mt-auto">
-                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">— Coach Diego Silva.</p>
-                            </div>
-                        </motion.div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ── FINAL CTA ── */}
-            <section className="relative py-28">
-                <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/[0.04] to-transparent pointer-events-none" />
-
-                <motion.div
-                    variants={fadeUp}
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    className="max-w-3xl mx-auto px-6 text-center"
-                >
-                    <h2 className="text-4xl md:text-6xl font-black text-foreground mb-6 leading-tight">
-                        Empieza hoy.
-                        <br />
-                        <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">
-                            Únete ahora.
-                        </span>
-                    </h2>
-                    <p className="text-foreground/40 text-base md:text-lg mb-10 max-w-lg mx-auto">
-                        Configura tu plataforma en minutos y empieza a escalar tu negocio.
-                    </p>
-                    <Link
-                        href="/register?tier=pro&cycle=monthly"
-                        className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-background font-bold px-10 py-5 rounded-full text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-cyan-500/30"
-                    >
-                        Crear cuenta
-                        <ArrowRight className="w-5 h-5" />
-                    </Link>
-                </motion.div>
-            </section>
-
-            {/* ── FOOTER ── */}
-            <footer className="border-t border-border bg-transparent py-12">
-                <div className="max-w-6xl mx-auto px-6">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                        <Link href="/" className="flex items-center" aria-label="EVA — inicio">
-                            <GymAppLogo className="h-9 w-[6.75rem] sm:h-10 sm:w-[7.5rem]" />
+                        <h2 className="text-4xl md:text-5xl font-black text-foreground mb-6 leading-tight font-display tracking-tight">
+                            {t('landing.final.title1')}
+                            <br />
+                            <span className="bg-gradient-to-r from-primary to-sky-500 bg-clip-text text-transparent">
+                                {t('landing.final.title2')}
+                            </span>
+                        </h2>
+                        <p className="text-muted-foreground text-base md:text-lg mb-10 max-w-lg mx-auto leading-relaxed">
+                            {t('landing.final.subtitle')}
+                        </p>
+                        <Link href="/register?tier=pro&cycle=monthly" className={`${primaryCta} text-lg px-10 py-5`}>
+                            {t('landing.final.cta')}
+                            <ArrowRight className="w-5 h-5" aria-hidden />
                         </Link>
+                    </motion.div>
+                </section>
 
-                        <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">
-                            <Link href="/legal" className="hover:text-foreground transition-colors">Aviso Legal</Link>
-                            <Link href="/privacidad" className="hover:text-foreground transition-colors">Privacidad</Link>
-                        </div>
-                    </div>
-                </div>
-            </footer>
+                <LandingContactFooter />
+            </main>
         </div>
     )
 }

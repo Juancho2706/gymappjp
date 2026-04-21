@@ -552,4 +552,38 @@ body > * {
     -webkit-overflow-scrolling: touch;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
+  /* Landing: textura sutil + separadores (no afecta contraste del texto) */
+  .landing-noise {
+    position: relative;
+  }
+  .landing-noise::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .landing-divider {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--border) 80%, transparent),
+      transparent
+    );
+  }
+
+  .landing-section-alt {
+    background: color-mix(in oklab, var(--muted) 35%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .landing-noise::before {
+      display: none;
+    }
+  }
 }

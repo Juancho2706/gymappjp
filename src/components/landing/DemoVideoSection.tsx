@@ -34,7 +34,7 @@ export function DemoVideoSection() {
     const src = embedUrlFromDemoEnv(process.env.NEXT_PUBLIC_DEMO_VIDEO_URL)
 
     return (
-        <section className="relative py-20 md:py-28 border-y border-white/[0.06] bg-muted/10">
+        <section className="relative py-20 md:py-28 border-y border-border/60 bg-muted/15">
             <div className="max-w-5xl mx-auto px-6">
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
@@ -56,9 +56,16 @@ export function DemoVideoSection() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: '-40px' }}
                     transition={{ duration: 0.5, delay: 0.05 }}
-                    className="rounded-2xl overflow-hidden border border-border bg-card shadow-xl shadow-black/10"
+                    className="rounded-2xl border border-border bg-card p-1 shadow-xl shadow-black/10 ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
                 >
-                    <div className="aspect-video w-full bg-black/80 relative">
+                    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/60 bg-muted/30 rounded-t-[0.85rem]">
+                        <span className="h-2 w-2 rounded-full bg-red-400/80" aria-hidden />
+                        <span className="h-2 w-2 rounded-full bg-amber-400/80" aria-hidden />
+                        <span className="h-2 w-2 rounded-full bg-emerald-400/80" aria-hidden />
+                        <span className="ml-2 h-2 flex-1 max-w-[8rem] rounded-full bg-muted-foreground/15" aria-hidden />
+                    </div>
+                    <div className="overflow-hidden rounded-b-xl">
+                    <div className="aspect-video w-full bg-black/85 relative">
                         {src ? (
                             <iframe
                                 title={t('landing.demo.iframeTitle')}
@@ -77,12 +84,13 @@ export function DemoVideoSection() {
                             </div>
                         )}
                     </div>
+                    </div>
                 </motion.div>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
                     <Link
                         href="/register?tier=pro&cycle=monthly"
-                        className="w-full sm:w-auto bg-[#007AFF] text-white hover:bg-[#007AFF]/90 font-bold px-8 py-3.5 rounded-full text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_0_20px_-5px_rgba(0,122,255,0.5)]"
+                        className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-8 py-3.5 rounded-full text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-[var(--shadow-glow-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                         {t('landing.demo.ctaTrial')}
                         <ArrowRight className="w-4 h-4" />
