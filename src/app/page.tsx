@@ -25,6 +25,7 @@ import {
     SheetTitle
 } from "@/components/ui/sheet"
 import { MUSCLE_GROUPS } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 const muscleGroupCount = MUSCLE_GROUPS.length
 
@@ -298,11 +299,28 @@ export default function LandingPage() {
                     ref={heroRef}
                     className="relative min-h-dvh flex flex-col items-center justify-center bg-white pt-[calc(7rem+var(--safe-area-inset-top,0px))] pb-28 landing-noise dark:bg-black"
                 >
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                    {/*
+                      Mobile: the hero section is taller than a screen (text + CTA + devices). A full-bleed
+                      `inset-0` background centers the WebGL "ray" in the middle of the *whole* section, so
+                      the focal point sat near the device mockups. Constrain the shader layer to the upper
+                      band so its center lines up behind the headline + subtitle + CTA.
+                    */}
+                    <div
+                        className={cn(
+                            'pointer-events-none absolute z-0 overflow-hidden',
+                            'md:inset-0',
+                            'max-md:left-0 max-md:right-0 max-md:top-0',
+                            'max-md:h-[min(76vh,640px)]'
+                        )}
+                    >
                         <WebGLShader key={heroShaderVariant} variant={heroShaderVariant} className="opacity-100" />
-                        <div className="absolute top-1/4 left-1/4 h-[300px] w-[300px] rounded-full bg-primary/[0.06] blur-[100px] md:h-[600px] md:w-[600px] md:blur-[150px] dark:bg-primary/10" />
-                        <div className="absolute right-1/4 bottom-1/4 h-[200px] w-[200px] rounded-full bg-slate-400/[0.08] blur-[80px] md:h-[400px] md:w-[400px] md:blur-[120px] dark:bg-sky-400/10" />
-                        <div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/[0.04] blur-[120px] md:h-[800px] md:w-[800px] md:blur-[200px] dark:bg-primary/5" />
+                        <div className="absolute top-[16%] left-[6%] h-[200px] w-[200px] rounded-full bg-primary/[0.06] blur-[80px] dark:bg-primary/10 md:top-1/4 md:left-1/4 md:h-[300px] md:w-[300px] md:blur-[100px] lg:h-[600px] lg:w-[600px] lg:blur-[150px]" />
+                        <div className="absolute bottom-[10%] right-[6%] h-[160px] w-[160px] rounded-full bg-slate-400/[0.08] blur-[60px] dark:bg-sky-400/10 md:bottom-1/4 md:right-1/4 md:h-[200px] md:w-[200px] md:blur-[80px] lg:h-[400px] lg:w-[400px] lg:blur-[120px]" />
+                        <div className="absolute left-1/2 top-[40%] h-[min(280px,75vw)] w-[min(280px,75vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/[0.04] blur-[100px] dark:bg-primary/5 md:top-1/2 md:h-[400px] md:w-[400px] md:blur-[120px] lg:h-[800px] lg:w-[800px] lg:blur-[200px]" />
+                        <div
+                            className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-b from-transparent to-white dark:from-transparent dark:to-black md:hidden"
+                            aria-hidden
+                        />
                     </div>
 
                     <div
