@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import {
     Check,
     ChevronsUpDown,
@@ -16,11 +16,13 @@ import {
     X,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
     DialogFooter,
@@ -73,6 +75,13 @@ interface Client {
 interface WorkoutProgramsClientProps {
     initialPrograms: ProgramListModel[]
     availableClients: Client[]
+}
+
+function defaultDuplicateProgramName(program: ProgramListModel): string {
+    if (program.client_id && program.client?.full_name) {
+        return `Copia de ${program.client.full_name}`
+    }
+    return `${program.name} (Copia)`
 }
 
 function LibraryEmptyState({
@@ -311,6 +320,9 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     const [showSyncDialog, setShowSyncDialog] = useState(false)
     const [programToSync, setProgramToSync] = useState<ProgramListModel | null>(null)
     const [programToDelete, setProgramToDelete] = useState<ProgramListModel | null>(null)
+    const [programToDuplicate, setProgramToDuplicate] = useState<ProgramListModel | null>(null)
+    const [duplicateNameInput, setDuplicateNameInput] = useState('')
+    const duplicateNameInputRef = useRef<HTMLInputElement>(null)
     const [actionProgramId, setActionProgramId] = useState<string | null>(null)
 
     // Desktop detail panel state
@@ -347,9 +359,22 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
 
     const listMotionKey = `${search}|${filterType}|${filterStatus}|${filterStructure}|${filterHasPhases}`
 
+    const assignDaysMismatch = useMemo(() => {
+        if (!selectedProgram || assignmentDays.length === 0) return false
+        const planDays = new Set((selectedProgram.workout_plans ?? []).map((p) => p.day_of_week))
+        return !assignmentDays.some((d) => planDays.has(d))
+    }, [selectedProgram, assignmentDays])
+
     const handleAssign = (force = false) => {
         if (!selectedProgram || selectedClients.length === 0) {
             toast.error('Selecciona al menos un alumno')
+            return
+        }
+
+        if (assignDaysMismatch) {
+            toast.error(
+                'Los días marcados no coinciden con ningún día de esta plantilla. Quita la selección o elige otros.'
+            )
             return
         }
 
@@ -373,10 +398,14 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
 
         setActionProgramId(selectedProgram.id)
         startTransition(async () => {
+            const startDateFlexible =
+                assignmentStartMode === 'flexible' ? true : assignmentStartMode === 'custom' ? false : undefined
+
             const result = await assignProgramToClientsAction(selectedProgram.id, selectedClients, {
                 startDate: assignmentStartMode === 'custom' ? assignmentStartDate : undefined,
                 durationWeeks: Math.max(1, Number(assignmentDurationWeeks) || 4),
                 selectedDays: assignmentDays.length ? assignmentDays : undefined,
+                ...(typeof startDateFlexible === 'boolean' ? { startDateFlexible } : {}),
             })
             if (result.error) {
                 toast.error(result.error)
@@ -417,10 +446,39 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
         { id: 7, label: 'Dom' },
     ]
 
-    const handleDuplicate = (program: ProgramListModel) => {
-        setActionProgramId(program.id)
+    const openDuplicateDialog = (program: ProgramListModel) => {
+        setProgramToDuplicate(program)
+        setDuplicateNameInput(defaultDuplicateProgramName(program))
+    }
+
+    const trimmedDuplicateName = duplicateNameInput.trim()
+    const duplicateTemplateNameTaken =
+        !!programToDuplicate &&
+        trimmedDuplicateName.length >= 2 &&
+        programs.some((p) => !p.client_id && p.name === trimmedDuplicateName)
+    const duplicateNameTooShort = trimmedDuplicateName.length > 0 && trimmedDuplicateName.length < 2
+    const duplicateNameTooLong = trimmedDuplicateName.length > 100
+    const canConfirmDuplicate =
+        !!programToDuplicate &&
+        trimmedDuplicateName.length >= 2 &&
+        trimmedDuplicateName.length <= 100 &&
+        !duplicateTemplateNameTaken
+
+    useEffect(() => {
+        if (!programToDuplicate) return
+        const id = requestAnimationFrame(() => {
+            duplicateNameInputRef.current?.focus()
+            duplicateNameInputRef.current?.select()
+        })
+        return () => cancelAnimationFrame(id)
+    }, [programToDuplicate])
+
+    const handleConfirmDuplicate = () => {
+        if (!programToDuplicate || !canConfirmDuplicate) return
+        const trimmed = duplicateNameInput.trim()
+        setActionProgramId(programToDuplicate.id)
         startTransition(async () => {
-            const result = await duplicateWorkoutProgramAction(program.id)
+            const result = await duplicateWorkoutProgramAction(programToDuplicate.id, trimmed)
             if (result.error) {
                 toast.error(result.error)
             } else {
@@ -430,9 +488,16 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                 } else {
                     router.refresh()
                 }
+                setProgramToDuplicate(null)
+                setDuplicateNameInput('')
             }
             setActionProgramId(null)
         })
+    }
+
+    const closeDuplicateDialog = () => {
+        setProgramToDuplicate(null)
+        setDuplicateNameInput('')
     }
 
     const handleDelete = (program: ProgramListModel) => {
@@ -585,7 +650,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                                 setProgramToPreview(program)
                                                 setIsPreviewOpen(true)
                                             }}
-                                            onDuplicate={() => handleDuplicate(program)}
+                                            onDuplicate={() => openDuplicateDialog(program)}
                                             onSync={
                                                 program.source_template_id
                                                     ? () => {
@@ -615,7 +680,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                 setSelectedProgram(selectedPanelProgram)
                                 setIsAssignOpen(true)
                             }}
-                            onDuplicate={() => handleDuplicate(selectedPanelProgram)}
+                            onDuplicate={() => openDuplicateDialog(selectedPanelProgram)}
                             onSync={
                                 selectedPanelProgram.source_template_id
                                     ? () => {
@@ -642,12 +707,21 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                 </aside>
             </div>
 
-            <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
-                <DialogContent className="border-border bg-card text-card-foreground sm:max-w-[425px]">
+            <Dialog
+                open={isAssignOpen}
+                onOpenChange={(open) => {
+                    setIsAssignOpen(open)
+                    if (!open) setOpenPopover(false)
+                }}
+            >
+                <DialogContent className="max-h-[min(88dvh,88svh)] overflow-y-auto overscroll-contain border-border bg-card px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-card-foreground sm:max-w-[440px]">
                     <DialogHeader>
-                        <DialogTitle>Asignar programa</DialogTitle>
+                        <DialogTitle className="text-foreground">Asignar programa</DialogTitle>
+                        <DialogDescription className="text-muted-foreground">
+                            Duplicas la plantilla en el alumno; ajusta inicio, semanas y días aquí.
+                        </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-3 py-3 sm:space-y-4 sm:py-4">
                         <div className="space-y-2">
                             <p className="text-sm font-medium">
                                 Programa:{' '}
@@ -733,12 +807,15 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <div className="space-y-2 border-t pt-3">
-                            <p className="flex items-center gap-2 text-sm font-medium">
-                                Configuración de asignación
-                                <InfoTooltip content="Cada alumno puede tener solo 1 programa activo. Si ya tiene uno, se desactivará automáticamente (el historial de sesiones se conserva). Inicio: cuándo arranca el programa. Duración: semanas activas. Días: si seleccionas días específicos, solo esos días del template se copian al alumno." />
-                            </p>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="space-y-3 border-t border-border pt-3">
+                            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                                <span>Configuración de asignación</span>
+                                <InfoTooltip
+                                    title="Cómo funciona la asignación"
+                                    content="Ciclos, fases, tipo de duración y estructura del entrenamiento vienen siempre de la plantilla; no se editan aquí. Un alumno solo puede tener un programa activo: si ya tenía otro, se desactiva y se conserva el historial. Inicio: Hoy usa la fecha por defecto del servidor; Fecha específica fija el día y desactiva inicio flexible; Inicio flexible deja acomodar el calendario. Semanas: actualiza la ventana en semanas del plan asignado (no cambia las fases de la plantilla). Días Lun–Dom: filtran por día 1–7; sin marcar ninguno se copian todos los días. Si la plantilla usa días mayores que 7, edita en el builder o deja los días sin marcar."
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                         Inicio
@@ -749,7 +826,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                             setAssignmentStartMode(v as 'today' | 'custom' | 'flexible')
                                         }
                                     >
-                                        <SelectTrigger className="border-input bg-background text-foreground">
+                                        <SelectTrigger className="h-11 min-h-11 w-full border-input bg-background text-foreground sm:h-10 sm:min-h-10">
                                             <SelectValue>
                                                 {assignmentStartMode === 'today'
                                                     ? 'Hoy'
@@ -758,10 +835,10 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                                       : 'Flexible'}
                                             </SelectValue>
                                         </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="today">Hoy</SelectItem>
+                                        <SelectContent className="border-border bg-popover text-popover-foreground">
+                                            <SelectItem value="today">Hoy (fecha por defecto)</SelectItem>
                                             <SelectItem value="custom">Fecha específica</SelectItem>
-                                            <SelectItem value="flexible">Flexible</SelectItem>
+                                            <SelectItem value="flexible">Inicio flexible</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -776,7 +853,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                         value={assignmentDurationWeeks}
                                         onChange={(e) => setAssignmentDurationWeeks(e.target.value)}
                                         placeholder="Ej: 4"
-                                        className="border-input bg-background text-foreground placeholder:text-muted-foreground"
+                                        className="h-11 min-h-11 border-input bg-background text-foreground placeholder:text-muted-foreground sm:h-10 sm:min-h-10"
                                     />
                                 </div>
                             </div>
@@ -785,42 +862,141 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                     type="date"
                                     value={assignmentStartDate}
                                     onChange={(e) => setAssignmentStartDate(e.target.value)}
-                                    className="border-input bg-background text-foreground"
+                                    className="h-11 min-h-11 border-input bg-background text-foreground sm:h-10 sm:min-h-10"
                                 />
                             )}
-                            <div className="flex flex-wrap justify-center gap-1 pt-1">
-                                {dayOptions.map((day) => {
-                                    const active = assignmentDays.includes(day.id)
-                                    return (
-                                        <button
-                                            key={day.id}
-                                            type="button"
-                                            onClick={() =>
-                                                setAssignmentDays((prev) =>
-                                                    active ? prev.filter((d) => d !== day.id) : [...prev, day.id]
-                                                )
-                                            }
-                                            className={cn(
-                                                'rounded-md border px-2 py-1 text-[10px] font-bold',
-                                                active
-                                                    ? 'border-primary/30 bg-primary/10 text-primary'
-                                                    : 'border-border bg-muted/20 text-muted-foreground'
-                                            )}
-                                        >
-                                            {day.label}
-                                        </button>
-                                    )
-                                })}
+                            <div className="space-y-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Días a copiar (opcional)
+                                    </p>
+                                    <InfoTooltip
+                                        title="Filtro por día"
+                                        content="Marca Lun–Dom para copiar solo esos entrenamientos (día 1–7). Si no marcas ninguno, se copian todos los días de la plantilla."
+                                    />
+                                </div>
+                                {assignDaysMismatch ? (
+                                    <p className="text-xs text-destructive" role="alert">
+                                        Ningún día marcado coincide con esta plantilla. Desmarca todo para copiar todos
+                                        los días.
+                                    </p>
+                                ) : null}
+                                <div className="grid grid-cols-7 gap-1 pt-0.5">
+                                    {dayOptions.map((day) => {
+                                        const active = assignmentDays.includes(day.id)
+                                        return (
+                                            <button
+                                                key={day.id}
+                                                type="button"
+                                                onClick={() =>
+                                                    setAssignmentDays((prev) =>
+                                                        active ? prev.filter((d) => d !== day.id) : [...prev, day.id]
+                                                    )
+                                                }
+                                                className={cn(
+                                                    'flex min-h-9 min-w-0 items-center justify-center rounded-lg border px-0.5 py-1.5 text-[10px] font-semibold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-9 sm:text-xs',
+                                                    active
+                                                        ? 'border-primary/40 bg-primary/15 text-primary'
+                                                        : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                                )}
+                                            >
+                                                {day.label}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsAssignOpen(false)}>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full border-border sm:w-auto"
+                            onClick={() => setIsAssignOpen(false)}
+                        >
                             Cancelar
                         </Button>
-                        <Button onClick={() => handleAssign(false)} disabled={isPending || selectedClients.length === 0}>
+                        <Button
+                            type="button"
+                            className="w-full sm:w-auto"
+                            onClick={() => handleAssign(false)}
+                            disabled={
+                                isPending || selectedClients.length === 0 || assignDaysMismatch
+                            }
+                        >
                             {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                            Asignar a {selectedClients.length} alumnos
+                            {selectedClients.length === 1
+                                ? 'Asignar a 1 alumno'
+                                : `Asignar a ${selectedClients.length} alumnos`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={!!programToDuplicate}
+                onOpenChange={(open) => {
+                    if (!open) closeDuplicateDialog()
+                }}
+            >
+                <DialogContent className="border-border bg-card text-card-foreground sm:max-w-[440px]">
+                    <DialogHeader>
+                        <DialogTitle>Duplicar programa</DialogTitle>
+                        <DialogDescription>
+                            El nuevo programa será una plantilla. El nombre debe ser único entre tus plantillas (2–100
+                            caracteres).
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 py-1">
+                        <Label htmlFor="duplicate-program-name">Nombre de la copia</Label>
+                        <Input
+                            ref={duplicateNameInputRef}
+                            id="duplicate-program-name"
+                            value={duplicateNameInput}
+                            onChange={(e) => setDuplicateNameInput(e.target.value)}
+                            autoComplete="off"
+                            disabled={isPending && actionProgramId === programToDuplicate?.id}
+                            className="border-input bg-background text-foreground"
+                            aria-invalid={duplicateTemplateNameTaken || duplicateNameTooShort || duplicateNameTooLong}
+                        />
+                        {duplicateNameTooShort ? (
+                            <p role="alert" className="text-sm text-destructive">
+                                El nombre debe tener al menos 2 caracteres.
+                            </p>
+                        ) : null}
+                        {duplicateNameTooLong ? (
+                            <p role="alert" className="text-sm text-destructive">
+                                El nombre no puede superar 100 caracteres.
+                            </p>
+                        ) : null}
+                        {duplicateTemplateNameTaken ? (
+                            <p role="alert" className="text-sm text-destructive">
+                                Ya tienes una plantilla con este nombre. Elige otro.
+                            </p>
+                        ) : null}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={closeDuplicateDialog}
+                            disabled={isPending && actionProgramId === programToDuplicate?.id}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={handleConfirmDuplicate}
+                            disabled={
+                                !canConfirmDuplicate ||
+                                (isPending && actionProgramId === programToDuplicate?.id)
+                            }
+                        >
+                            {isPending && actionProgramId === programToDuplicate?.id ? (
+                                <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : null}
+                            Duplicar
                         </Button>
                     </DialogFooter>
                 </DialogContent>

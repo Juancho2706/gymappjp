@@ -1,8 +1,43 @@
 'use client'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
+import {
+    effectiveWorkoutSection,
+    groupContiguousSupersetRuns,
+    WORKOUT_SECTION_ORDER,
+    type WorkoutSectionKey,
+} from '@/lib/workout-block-grouping'
 import { getMuscleColor } from '../muscle-colors'
-import type { DayState } from '../types'
+import type { BuilderBlock, DayState } from '../types'
+
+const PREVIEW_SECTION_LABEL: Record<WorkoutSectionKey, string> = {
+    warmup: 'Calentamiento',
+    main: 'Principal',
+    cooldown: 'Enfriamiento',
+    other: 'Otros',
+}
+
+type PreviewRow = BuilderBlock & { id: string; order_index: number; superset_group: string | null }
+
+function buildDayPreviewSections(blocks: BuilderBlock[]) {
+    const rows: PreviewRow[] = blocks.map((b, order_index) => ({
+        ...b,
+        id: b.uid,
+        order_index,
+        superset_group: b.superset_group ?? null,
+    }))
+    return WORKOUT_SECTION_ORDER.map((sectionKey) => {
+        const sectionBlocks = rows.filter((b) => effectiveWorkoutSection(b.section) === sectionKey)
+        if (sectionBlocks.length === 0) return null
+        const groups = groupContiguousSupersetRuns(sectionBlocks)
+        return { sectionKey, label: PREVIEW_SECTION_LABEL[sectionKey], groups }
+    }).filter(Boolean) as Array<{
+        sectionKey: WorkoutSectionKey
+        label: string
+        groups: ReturnType<typeof groupContiguousSupersetRuns<PreviewRow>>
+    }>
+}
 
 interface ProgramPreviewDialogProps {
     open: boolean
@@ -31,9 +66,9 @@ export function ProgramPreviewDialog({
     ))
 
     function durationLabel() {
-        if (durationType === 'calendar_days' && durationDays) return `${durationDays} días`
-        if (durationType === 'async') return `Ciclo de ${durationDays || weeksToRepeat * 7} días`
-        return `${weeksToRepeat} semana${weeksToRepeat !== 1 ? 's' : ''}`
+        if (durationType === 'calendar_days' && durationDays) return `Duración: ${durationDays} días corridos`
+        if (durationType === 'async') return `Duración: ${durationDays || weeksToRepeat * 7} días (sin semana fija)`
+        return `Duración: ${weeksToRepeat} semana${weeksToRepeat !== 1 ? 's' : ''}`
     }
 
     return (
@@ -41,7 +76,7 @@ export function ProgramPreviewDialog({
             <DialogContent className="max-w-2xl bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-sm font-display uppercase tracking-[0.2em] text-foreground">
-                        Vista Previa del Programa
+                        Vista previa del programa
                     </DialogTitle>
                 </DialogHeader>
 
@@ -129,19 +164,53 @@ export function ProgramPreviewDialog({
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        {day.blocks.map(block => (
-                                            <div key={block.uid} className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                                <div
-                                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                                    style={{ backgroundColor: getMuscleColor(block.muscle_group) }}
-                                                />
-                                                <span className="font-bold text-foreground/80 truncate">{block.exercise_name}</span>
-                                                {block.sets && block.reps && (
-                                                    <span className="ml-auto shrink-0 bg-muted px-1.5 py-0.5 rounded font-bold">
-                                                        {block.sets}×{block.reps}
-                                                    </span>
-                                                )}
+                                    <div className="space-y-3">
+                                        {buildDayPreviewSections(day.blocks).map((sec) => (
+                                            <div key={sec.sectionKey} className="space-y-1.5">
+                                                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/60 pb-0.5">
+                                                    {sec.label}
+                                                </div>
+                                                <div className="space-y-2 pl-0.5">
+                                                    {sec.groups.map((group) => (
+                                                        <div
+                                                            key={group.key}
+                                                            className={cn(
+                                                                'rounded-lg border border-transparent',
+                                                                group.type === 'superset' &&
+                                                                    'border-primary/25 bg-primary/[0.06] p-2 space-y-1',
+                                                            )}
+                                                        >
+                                                            {group.type === 'superset' && (
+                                                                <div className="text-[8px] font-black uppercase tracking-widest text-primary/80 px-0.5">
+                                                                    Superserie · grupo {group.supersetLetter ?? '?'}
+                                                                </div>
+                                                            )}
+                                                            <div className={cn('space-y-1', group.type === 'superset' && 'pl-1')}>
+                                                                {group.blocks.map((block) => (
+                                                                    <div
+                                                                        key={block.uid}
+                                                                        className="flex items-center gap-2 text-[10px] text-muted-foreground"
+                                                                    >
+                                                                        <div
+                                                                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                                                            style={{
+                                                                                backgroundColor: getMuscleColor(block.muscle_group),
+                                                                            }}
+                                                                        />
+                                                                        <span className="font-bold text-foreground/80 truncate">
+                                                                            {block.exercise_name}
+                                                                        </span>
+                                                                        {block.sets && block.reps && (
+                                                                            <span className="ml-auto shrink-0 bg-muted px-1.5 py-0.5 rounded font-bold">
+                                                                                {block.sets}×{block.reps}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>

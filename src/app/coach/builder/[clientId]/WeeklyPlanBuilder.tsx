@@ -8,7 +8,7 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,7 @@ import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
 import { DayColumn } from './components/DayColumn'
 import { BlockEditSheet } from './components/BlockEditSheet'
 import { ProgramConfigHeader } from './components/ProgramConfigHeader'
+import { BuilderOnboardingTour, type BuilderTourStep } from './components/BuilderOnboardingTour'
 import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
@@ -45,6 +46,14 @@ import { getMuscleColor } from './muscle-colors'
 
 type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
+
+/** Pasos del tour cuyo spotlight está dentro del panel Configurar: el panel debe estar abierto. Cualquier otro paso con tour activo lo cierra para no mezclar contextos. */
+const TOUR_CONFIG_INTERNAL_STEP_IDS = new Set<string>([
+    'program-structure-toggle',
+    'config-structure-section',
+    'config-duration-section',
+    'config-phases-section',
+])
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -308,6 +317,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const [mounted, setMounted] = useState(false)
     const [showConfig, setShowConfig] = useState(false)
     const [showBuilderHint, setShowBuilderHint] = useState(false)
+    const [tourOpen, setTourOpen] = useState(false)
+    const [tourMode, setTourMode] = useState<'short' | 'full'>('short')
+    const [hasSeenShortTour, setHasSeenShortTour] = useState(true)
+    const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null)
     const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
 
     const touchStartY = useRef(0)
@@ -315,6 +328,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const swipeTouchStartX = useRef(0)
     const swipeTouchStartY = useRef(0)
     const boardScrollRef = useRef<HTMLDivElement>(null)
+    const preTourShowConfigRef = useRef(false)
+    const preTourCatalogOpenRef = useRef(false)
+    const preTourSheetHeightRef = useRef(12)
+    const onboardingShortKey = 'builder_onboarding_seen_short_v1'
+    const onboardingHelpKey = 'builder_onboarding_seen_help_v1'
 
     const scrollBoard = (dir: 'left' | 'right') => {
         const el = boardScrollRef.current
@@ -322,15 +340,29 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         el.scrollBy({ left: dir === 'right' ? 300 : -300, behavior: 'smooth' })
     }
 
+    const openTour = useCallback((mode: 'short' | 'full') => {
+        preTourShowConfigRef.current = showConfig
+        preTourCatalogOpenRef.current = isCatalogOpen
+        preTourSheetHeightRef.current = sheetHeight
+        setTourMode(mode)
+        setTourOpen(true)
+    }, [showConfig, isCatalogOpen, sheetHeight])
+
     useEffect(() => {
         setMounted(true)
         const checkMobile = () => setIsMobile(window.innerWidth < 768)
         checkMobile()
         window.addEventListener('resize', checkMobile)
 
-        // Hint de primera visita
+        // Onboarding de primera visita + hint de apoyo para usuarios previos.
+        const seenShortTour = !!localStorage.getItem(onboardingShortKey)
+        setHasSeenShortTour(seenShortTour)
+        if (!seenShortTour) {
+            openTour('short')
+        }
+
         const hintKey = 'builder_config_hint_v1'
-        if (!localStorage.getItem(hintKey)) {
+        if (seenShortTour && !localStorage.getItem(hintKey)) {
             setShowBuilderHint(true)
             const t = setTimeout(() => {
                 setShowBuilderHint(false)
@@ -343,7 +375,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         }
 
         return () => window.removeEventListener('resize', checkMobile)
-    }, [])
+    }, [openTour])
 
     useEffect(() => {
         try {
@@ -565,6 +597,212 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         try { localStorage.setItem('builder_config_hint_v1', '1') } catch (e) {}
     }, [])
 
+    const shortTourSteps = useMemo<BuilderTourStep[]>(
+        () => [
+            {
+                id: 'top-config-button',
+                title: 'Empieza en Configurar',
+                description: 'Aquí defines la base del plan: estructura, duración y fases visuales.',
+                placement: 'bottom',
+            },
+            {
+                id: 'program-structure-toggle',
+                title: 'Elige cómo se repite',
+                description: 'Usa Semanal o Ciclo N-días según la lógica de trabajo que quieras aplicar.',
+                placement: 'bottom',
+            },
+            {
+                id: 'days-board',
+                title: 'Construye cada día',
+                description: 'En este tablero organizas ejercicios, bloques y orden del entrenamiento.',
+                placement: 'top',
+            },
+            ...(isMobile
+                ? [
+                    {
+                        id: 'exercise-sheet-handle',
+                        title: 'Abre el menú de ejercicios',
+                        description:
+                            'Desliza esta barra hacia arriba (o tócala y desliza) para desplegar el catálogo en móvil.',
+                        placement: 'top' as const,
+                    },
+                ]
+                : [
+                    {
+                        id: 'exercise-catalog',
+                        title: 'Añade ejercicios rápido',
+                        description: 'Desde el catálogo lateral puedes buscar, arrastrar o tocar para agregar.',
+                        placement: 'bottom' as const,
+                    },
+                ]),
+            {
+                id: 'save-button',
+                title: 'Guarda cuando termines',
+                description: 'Al guardar, el programa queda listo para seguir editando o asignarlo.',
+                placement: 'bottom',
+            },
+        ],
+        [isMobile]
+    )
+
+    const fullTourSteps = useMemo<BuilderTourStep[]>(() => {
+        const mobilePostShort: BuilderTourStep[] = isMobile
+            ? [
+                {
+                    id: 'exercise-catalog-mobile',
+                    title: 'Catálogo completo en móvil',
+                    description: 'Con el menú expandido puedes buscar, filtrar y tocar para añadir ejercicios.',
+                    placement: 'top',
+                },
+            ]
+            : []
+
+        const desktopToolbarSteps: BuilderTourStep[] = [
+            {
+                id: 'templates-button',
+                title: 'Plantillas',
+                description: 'Aplica una plantilla para acelerar la creación del programa.',
+                placement: 'bottom',
+            },
+            {
+                id: 'preview-button',
+                title: 'Vista previa',
+                description: 'Comprueba cómo se verá el programa antes de cerrar tu edición.',
+                placement: 'bottom',
+            },
+            {
+                id: 'balance-button',
+                title: 'Balance muscular',
+                description: 'Revisa la distribución por grupos para detectar desbalances.',
+                placement: 'bottom',
+            },
+            {
+                id: 'print-button',
+                title: 'Imprimir / PDF',
+                description: 'Genera una versión imprimible para compartir o revisar fuera del builder.',
+                placement: 'bottom',
+            },
+        ]
+
+        const mobileOverflowMenuStep: BuilderTourStep = {
+            id: 'mobile-more-menu',
+            title: 'Menú de más opciones',
+            description:
+                'Toca los tres puntos para abrir Plantillas, Vista previa, Balance muscular, Imprimir / PDF, Deshacer y Rehacer (en desktop esos atajos van en la barra superior).',
+            placement: 'bottom',
+        }
+
+        const undoRedoSteps: BuilderTourStep[] = [
+            {
+                id: 'undo-button',
+                title: 'Deshacer',
+                description: 'Revierte el último cambio cuando quieras corregir algo rápido.',
+                placement: 'bottom',
+            },
+            {
+                id: 'redo-button',
+                title: 'Rehacer',
+                description: 'Recupera un cambio deshecho para continuar tu flujo sin perder ritmo.',
+                placement: 'bottom',
+            },
+        ]
+
+        const configSteps: BuilderTourStep[] = [
+            {
+                id: 'config-structure-section',
+                title: 'Dentro de Configurar: Estructura',
+                description: 'Aquí eliges si el plan se organiza por semana o por ciclos de N días.',
+                placement: 'bottom',
+            },
+            {
+                id: 'config-duration-section',
+                title: 'Dentro de Configurar: Duración',
+                description: 'Define cuánto dura el plan y cómo quieres contabilizar esa duración.',
+                placement: 'bottom',
+            },
+            {
+                id: 'config-phases-section',
+                title: 'Dentro de Configurar: Fases',
+                description: 'Las fases ordenan visualmente el timeline del programa para dar contexto.',
+                placement: 'top',
+            },
+        ]
+
+        return [
+            ...shortTourSteps,
+            ...mobilePostShort,
+            {
+                id: 'ab-toggle',
+                title: 'Activa semanas A/B',
+                description: 'Alterna variantes A y B para manejar microciclos semanales más avanzados.',
+                placement: 'bottom',
+            },
+            ...(isMobile
+                ? [mobileOverflowMenuStep]
+                : [...desktopToolbarSteps, ...configSteps, ...undoRedoSteps]),
+            ...(isMobile ? configSteps : []),
+        ]
+    }, [shortTourSteps, isMobile])
+
+    const handleOpenFullTour = useCallback(() => {
+        openTour('full')
+        try { localStorage.setItem(onboardingHelpKey, '1') } catch (e) {}
+    }, [openTour])
+
+    const handleStepChange = useCallback((step: BuilderTourStep | null) => {
+        setActiveTourStepId(step?.id ?? null)
+    }, [])
+
+    const tourFooterHint = useCallback((step: BuilderTourStep) => {
+        if (isMobile && step.id === 'save-button') {
+            return 'En móvil, Guardar se muestra como ícono de disquete arriba a la derecha.'
+        }
+        return undefined
+    }, [isMobile])
+
+    useEffect(() => {
+        if (!tourOpen || !activeTourStepId) return
+        const isConfigInternal = TOUR_CONFIG_INTERNAL_STEP_IDS.has(activeTourStepId)
+        if (isConfigInternal) {
+            if (!showConfig) setShowConfig(true)
+            if (isMobile) {
+                setIsCatalogOpen(false)
+                setSheetHeight(12)
+            }
+        } else if (showConfig) {
+            setShowConfig(false)
+        }
+        if (activeTourStepId === 'exercise-catalog-mobile') {
+            setIsCatalogOpen(true)
+            setSheetHeight(80)
+        }
+        if (activeTourStepId === 'exercise-sheet-handle') {
+            setIsCatalogOpen(false)
+            setSheetHeight(12)
+        }
+    }, [tourOpen, activeTourStepId, showConfig, isMobile])
+
+    const handleCloseTour = useCallback((completed: boolean) => {
+        setTourOpen(false)
+        setActiveTourStepId(null)
+        setShowConfig(preTourShowConfigRef.current)
+        if (isMobile) {
+            setIsCatalogOpen(preTourCatalogOpenRef.current)
+            setSheetHeight(preTourSheetHeightRef.current)
+        }
+        if (tourMode === 'short') {
+            setHasSeenShortTour(true)
+            setShowBuilderHint(false)
+            try {
+                localStorage.setItem(onboardingShortKey, '1')
+                localStorage.setItem('builder_config_hint_v1', '1')
+            } catch (e) {}
+            if (completed) toast.success('Guía inicial completada')
+        } else if (completed) {
+            toast.success('Guía del builder completada')
+        }
+    }, [tourMode, isMobile])
+
     const handleToggleBlockOverride = useCallback((uid: string) => {
         toggleBlockOverride(uid)
         setHasUnsavedChanges(true)
@@ -578,6 +816,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         const missingData = allDaysToCheck.some(d => d.blocks.some(b => !b.sets || b.sets < 1 || !b.reps?.trim()))
         if (missingData) { toast.error('Hay ejercicios con datos incompletos (Series o Repeticiones faltan).'); return }
 
+        const parseOptionalKg = (raw: string | undefined): number | null => {
+            if (raw == null) return null
+            const t = raw.trim().replace(',', '.')
+            if (t === '') return null
+            const n = parseFloat(t)
+            return Number.isFinite(n) ? n : null
+        }
+
         const mapDays = (dayList: DayState[], variant: 'A' | 'B') =>
             dayList.filter(d => d.blocks.length > 0).map(d => ({
                 day_of_week: d.id,
@@ -585,16 +831,19 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 week_variant: variant,
                 blocks: d.blocks.map((b, idx) => ({
                     exercise_id: b.exercise_id,
-                    sets: b.sets || 3,
+                    sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1 ? Math.round(b.sets as number) : 3,
                     reps: b.reps || '',
-                    target_weight_kg: b.target_weight_kg ? parseFloat(b.target_weight_kg) : null,
+                    target_weight_kg: parseOptionalKg(b.target_weight_kg),
                     tempo: b.tempo || null,
                     rir: b.rir || null,
                     rest_time: b.rest_time || null,
                     notes: b.notes || null,
                     superset_group: b.superset_group || null,
                     progression_type: b.progression_type || null,
-                    progression_value: b.progression_value ?? null,
+                    progression_value:
+                        b.progression_value != null && Number.isFinite(b.progression_value)
+                            ? b.progression_value
+                            : null,
                     section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
                     is_override: b.is_override ?? false,
                     order_index: idx
@@ -712,6 +961,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         <Button
                             variant="ghost"
                             size="sm"
+                            data-tour-id="templates-button"
                             className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowTemplatePicker(true)}
                             title="Cargar plantilla"
@@ -723,6 +973,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         <Button
                             variant="ghost"
                             size="sm"
+                            data-tour-id="preview-button"
                             className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowPreview(true)}
                             title="Vista previa"
@@ -747,6 +998,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         <Button
                             variant="ghost"
                             size="sm"
+                            data-tour-id="balance-button"
                             className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowBalance(true)}
                             title="Balance muscular"
@@ -758,6 +1010,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         <Button
                             variant="ghost"
                             size="sm"
+                            data-tour-id="print-button"
                             className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowPrint(true)}
                             title="Imprimir / Exportar PDF"
@@ -770,6 +1023,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             <Button
                                 variant="ghost"
                                 size="sm"
+                                data-tour-id="undo-button"
                                 className={`h-10 w-10 transition-colors ${canUndo ? 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5' : 'text-muted-foreground/30 cursor-not-allowed'}`}
                                 onClick={undo}
                                 disabled={!canUndo}
@@ -780,6 +1034,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             <Button
                                 variant="ghost"
                                 size="sm"
+                                data-tour-id="redo-button"
                                 className={`h-10 w-10 transition-colors ${canRedo ? 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5' : 'text-muted-foreground/30 cursor-not-allowed'}`}
                                 onClick={redo}
                                 disabled={!canRedo}
@@ -792,6 +1047,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         {/* Mobile overflow menu — hidden on md+ */}
                         <DropdownMenu>
                             <DropdownMenuTrigger
+                                data-tour-id="mobile-more-menu"
                                 className="md:hidden h-8 w-8 px-0 border-0 bg-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                                 title="Más opciones"
                             >
@@ -825,6 +1081,23 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             </DropdownMenuContent>
                         </DropdownMenu>
 
+                        <div className="relative">
+                            {!hasSeenShortTour && (
+                                <span className="absolute inset-0 rounded-lg animate-ping bg-primary/25 pointer-events-none" />
+                            )}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                data-tour-id="help-tour-button"
+                                className="relative h-8 w-8 md:h-10 md:w-10 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary/60"
+                                onClick={handleOpenFullTour}
+                                title="Guía del Builder"
+                                aria-label="Abrir guía del builder"
+                            >
+                                <CircleHelp className="w-4 h-4" />
+                            </Button>
+                        </div>
+
                         {/* Config/Settings — always visible */}
                         <div className="relative">
                             {/* Ping permanente — sólo cuando el panel está cerrado */}
@@ -834,6 +1107,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             <Button
                                 variant="outline"
                                 size="sm"
+                                data-tour-id="top-config-button"
                                 className={`relative h-8 w-8 md:h-10 md:w-10 transition-all ${
                                     showConfig
                                         ? 'border-amber-400/60 bg-amber-400/10 text-amber-500 dark:text-amber-400'
@@ -877,6 +1151,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         <Button
                             onClick={handleSave}
                             disabled={isPending || !programName.trim()}
+                            data-tour-id="save-button"
                             size="sm"
                             className="h-8 w-8 md:h-10 md:w-auto md:px-6 text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] hover:opacity-90 transition-all disabled:opacity-50"
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
@@ -891,7 +1166,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 animate-in slide-in-from-top-1 duration-300">
                         <Settings className="w-4 h-4 text-amber-500 shrink-0" />
                         <p className="flex-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-                            <strong>¡Configura tu programa!</strong> Pulsa <strong>Configurar</strong> arriba para definir nombre, tipo de duración, fases y más opciones.
+                            <strong>Configura la base del programa.</strong> En <strong>Configurar</strong> defines estructura, duraci&oacute;n y fases (solo visuales).
                         </p>
                         <button
                             onClick={dismissBuilderHint}
@@ -944,7 +1219,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                 <Search className="w-4 h-4" />
                             </button>
                         </div>
-                        <div className={`flex-1 min-h-0 transition-opacity duration-200 ${!isCatalogSidebarOpen ? 'md:max-lg:opacity-0 md:max-lg:pointer-events-none' : ''}`}>
+                        <div data-tour-id="exercise-catalog" className={`flex-1 min-h-0 transition-opacity duration-200 ${!isCatalogSidebarOpen ? 'md:max-lg:opacity-0 md:max-lg:pointer-events-none' : ''}`}>
                             <DraggableExerciseCatalog
                                 exercises={exercises}
                                 selectedMuscleGroup={catalogMuscleFilter}
@@ -958,6 +1233,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 flex-shrink-0">
                             <button
                                 onClick={() => setIsABMode(v => !v)}
+                                data-tour-id="ab-toggle"
                                 className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-colors ${
                                     isABMode
                                         ? 'bg-primary/10 border-primary/30 text-primary'
@@ -1013,7 +1289,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             )}
                         </div>
 
-                        <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar" ref={boardScrollRef}>
+                        <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar" ref={boardScrollRef} data-tour-id="days-board">
                         {isMobile ? (
                             <div className="h-full flex flex-col">
                                 {/* Mobile tab bar with exercise counts */}
@@ -1079,6 +1355,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                     allDays={days}
                                                     isCycleMode={programStructureType === 'cycle'}
                                                     isDragPending={isDragPending}
+                                                    narrowLayout={isMobile}
                                                     onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
                                                     onRemoveBlock={handleRemoveBlock}
@@ -1106,6 +1383,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                             allDays={days}
                                             isCycleMode={programStructureType === 'cycle'}
                                             isDragPending={isDragPending}
+                                            narrowLayout={isMobile}
                                             onAddExercise={handleAddExercise}
                                             onEditBlock={setEditingBlock}
                                             onRemoveBlock={handleRemoveBlock}
@@ -1136,6 +1414,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             )}
                             <div
                                 className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
+                                data-tour-id="exercise-sheet-handle"
                                 style={{ height: `${sheetHeight}vh`, transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)', paddingBottom: 'env(safe-area-inset-bottom)' }}
                             >
                                 {/* Drag handle — always visible */}
@@ -1190,13 +1469,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                 </button>
                                             ))}
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground text-center">Toca un grupo o arrastra para ver todos</p>
+                                        <p className="text-[10px] text-muted-foreground text-center">
+                                            Toca un grupo muscular para ver todos los ejercicios
+                                        </p>
                                     </div>
                                 )}
 
                                 {/* Full catalog (80vh) */}
                                 {sheetHeight >= 60 && (
-                                    <div className="h-[calc(100%-48px)] overflow-hidden px-4 pb-4">
+                                    <div data-tour-id="exercise-catalog-mobile" className="h-[calc(100%-48px)] overflow-hidden px-4 pb-4">
                                         <DraggableExerciseCatalog
                                             exercises={exercises}
                                             selectedMuscleGroup={catalogMuscleFilter}
@@ -1238,6 +1519,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                         dayId={activeData.dayId}
                                         onEdit={() => {}}
                                         onRemove={() => {}}
+                                        narrowLayout={isMobile}
                                     />
                                 </div>
                             ) : null
@@ -1314,6 +1596,17 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 days={builderA.days}
                 daysB={isABMode ? builderB.days : undefined}
                 isABMode={isABMode}
+            />
+
+            <BuilderOnboardingTour
+                open={tourOpen}
+                mode={tourMode}
+                steps={tourMode === 'short' ? shortTourSteps : fullTourSteps}
+                onClose={handleCloseTour}
+                onStepChange={handleStepChange}
+                getFooterHint={tourFooterHint}
+                deferAutoSkipIfTargetMissing={TOUR_CONFIG_INTERNAL_STEP_IDS}
+                spotlightRemeasureSignal={`${showConfig}-${sheetHeight}`}
             />
         </div>
     )

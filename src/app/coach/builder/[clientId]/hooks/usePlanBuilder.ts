@@ -120,8 +120,16 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
                 if (d.id !== dayId) return d
                 const block = d.blocks.find(b => b.uid === uid)
                 if (!block) return d
-                const rest = d.blocks.filter(b => b.uid !== uid)
-                const moved: BuilderBlock = { ...block, section }
+                const groupId = block.superset_group?.trim() || null
+                const rest = d.blocks
+                    .filter(b => b.uid !== uid)
+                    .map(b => {
+                        if (groupId && b.superset_group === groupId) {
+                            return { ...b, superset_group: null }
+                        }
+                        return b
+                    })
+                const moved: BuilderBlock = { ...block, section, superset_group: null }
                 const warmup = rest.filter(b => normalizedSection(b) === 'warmup')
                 const main = rest.filter(b => normalizedSection(b) === 'main')
                 const cool = rest.filter(b => normalizedSection(b) === 'cooldown')
@@ -165,6 +173,7 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
                     // Last block can't link forward
                     if (idx === d.blocks.length - 1) return d
                     const nextBlock = d.blocks[idx + 1]
+                    if (normalizedSection(block) !== normalizedSection(nextBlock)) return d
                     // Reuse next block's group, or find a new letter
                     const groupToUse = nextBlock.superset_group || (() => {
                         const usedGroups = new Set(d.blocks.map(b => b.superset_group).filter(Boolean))

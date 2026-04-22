@@ -64,15 +64,12 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
     async function handleAssign() {
         if (selected.length === 0) return
         setAssigning(true)
-        const result = await assignProgramToClientsAction(
-            programId,
-            selected,
-            {
-                startDate: flexibleStart ? undefined : startDate,
-                durationWeeks: Math.max(1, Number(durationWeeks) || 4),
-                selectedDays: selectedDays.length ? selectedDays : undefined,
-            }
-        )
+        const result = await assignProgramToClientsAction(programId, selected, {
+            startDate: flexibleStart ? undefined : startDate,
+            durationWeeks: Math.max(1, Number(durationWeeks) || 4),
+            selectedDays: selectedDays.length ? selectedDays : undefined,
+            startDateFlexible: flexibleStart,
+        })
         if (result.error) {
             toast.error(result.error)
         } else {

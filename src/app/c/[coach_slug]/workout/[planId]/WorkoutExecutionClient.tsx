@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
@@ -18,6 +18,12 @@ import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
+import {
+    effectiveWorkoutSection,
+    groupContiguousSupersetRuns,
+    WORKOUT_SECTION_ORDER,
+    type WorkoutSectionKey,
+} from '@/lib/workout-block-grouping'
 
 interface ExerciseType {
     id: string
@@ -105,6 +111,20 @@ function isBlockComplete(
     return done >= block.sets
 }
 
+const WORKOUT_SECTION_TITLE: Record<WorkoutSectionKey, string> = {
+    warmup: 'Calentamiento',
+    main: 'Bloque Principal',
+    cooldown: 'Enfriamiento',
+    other: 'Otros bloques',
+}
+
+const WORKOUT_SECTION_SUBTITLE: Record<WorkoutSectionKey, string> = {
+    warmup: 'Movilidad y activación suave antes del trabajo intenso.',
+    main: 'Bloque de mayor esfuerzo: respeta series, reps y descansos.',
+    cooldown: 'Baja la intensidad y cierra la sesión con control.',
+    other: 'Ejercicios sin sección definida. Si no estás seguro, consulta a tu coach.',
+}
+
 export function WorkoutExecutionClient({
     plan,
     program,
@@ -142,31 +162,16 @@ export function WorkoutExecutionClient({
     }
 
     const getExercise = (block: BlockType) => (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) || null
-    const sectionOrder: Array<'warmup' | 'main' | 'cooldown' | 'other'> = ['warmup', 'main', 'cooldown', 'other']
-    const sectionTitle: Record<'warmup' | 'main' | 'cooldown' | 'other', string> = {
-        warmup: 'Calentamiento',
-        main: 'Bloque Principal',
-        cooldown: 'Enfriamiento',
-        other: 'Otros bloques',
-    }
-    const sectioned = sectionOrder.map((sectionKey) => {
-        const sectionBlocks = blocks.filter((block) => (block.section || 'other') === sectionKey)
-        const grouped = sectionBlocks.reduce<Array<{ key: string; blocks: BlockType[]; type: 'superset' | 'single' }>>((acc, block) => {
-            const group = block.superset_group?.trim()
-            if (!group) {
-                acc.push({ key: block.id, blocks: [block], type: 'single' })
-                return acc
-            }
-            const existing = acc.find((entry) => entry.key === group)
-            if (existing) {
-                existing.blocks.push(block)
-            } else {
-                acc.push({ key: group, blocks: [block], type: 'superset' })
-            }
-            return acc
-        }, [])
-        return { sectionKey, title: sectionTitle[sectionKey], groups: grouped }
-    }).filter((section) => section.groups.length > 0)
+
+    const sectioned = useMemo(() => {
+        return WORKOUT_SECTION_ORDER.map((sectionKey) => {
+            const sectionBlocks = blocks
+                .filter((block) => effectiveWorkoutSection(block.section) === sectionKey)
+                .sort((a, b) => a.order_index - b.order_index)
+            const grouped = groupContiguousSupersetRuns(sectionBlocks)
+            return { sectionKey, title: WORKOUT_SECTION_TITLE[sectionKey], groups: grouped }
+        }).filter((section) => section.groups.length > 0)
+    }, [blocks])
 
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
     const completedSetCount = sessionLogs.length
@@ -289,33 +294,60 @@ export function WorkoutExecutionClient({
                     <div className="space-y-6">
                         {sectioned.map((section) => (
                             <section key={section.sectionKey} className="space-y-3">
-                                <div className="flex items-center gap-3">
-                                    <div
-                                        className="w-1 self-stretch min-h-[1.25rem] rounded-full shrink-0"
-                                        style={{
-                                            backgroundColor: 'var(--theme-primary)',
-                                            opacity:
-                                                section.sectionKey === 'warmup' || section.sectionKey === 'cooldown'
-                                                    ? 0.4
-                                                    : 1,
-                                        }}
-                                    />
-                                    <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground shrink-0">
-                                        {section.title}
-                                    </h2>
-                                    <hr className="flex-1 h-px bg-border/50 border-0 min-w-[2rem]" />
-                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                        {section.groups.length} bloque(s)
-                                    </span>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-1 self-stretch min-h-[1.25rem] rounded-full shrink-0"
+                                            style={{
+                                                backgroundColor: 'var(--theme-primary)',
+                                                opacity:
+                                                    section.sectionKey === 'warmup' || section.sectionKey === 'cooldown'
+                                                        ? 0.4
+                                                        : 1,
+                                            }}
+                                        />
+                                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground shrink-0">
+                                            {section.title}
+                                        </h2>
+                                        <hr className="flex-1 h-px bg-border/50 border-0 min-w-[2rem]" />
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                            {section.groups.length} bloque(s)
+                                        </span>
+                                    </div>
+                                    <p className="text-xs leading-relaxed text-muted-foreground pl-4 border-l-2 border-border/60">
+                                        {WORKOUT_SECTION_SUBTITLE[section.sectionKey]}
+                                    </p>
                                 </div>
                                 <div className="space-y-3">
                                     {section.groups.map((group, groupIndex) => (
                                         <div key={group.key} className={cn("rounded-2xl border bg-card p-4", group.type === 'superset' && "border-primary/30 bg-primary/5")}>
-                                            <div className="flex items-center justify-between mb-3">
+                                            <div className="mb-3 space-y-2">
                                                 <p className="text-sm font-semibold">
-                                                    {group.type === 'superset' ? `Superserie ${group.key}` : `Ejercicio ${groupIndex + 1}`}
+                                                    {group.type === 'superset'
+                                                        ? `Superserie (grupo ${group.supersetLetter ?? group.key})`
+                                                        : `Ejercicio ${groupIndex + 1}`}
                                                 </p>
-                                                {group.type === 'superset' && <span className="text-xs font-semibold text-primary">Alterna ejercicios y descansa al final de la ronda</span>}
+                                                {group.type === 'superset' && (
+                                                    <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-3 text-xs leading-relaxed text-foreground/90 space-y-2.5">
+                                                        <p className="font-semibold text-primary">Cómo hacerla</p>
+                                                        <ol className="list-decimal space-y-1.5 pl-4 marker:font-semibold">
+                                                            <li>
+                                                                Completa <strong>una serie</strong> del primer ejercicio y regístrala abajo.
+                                                            </li>
+                                                            <li>
+                                                                Completa <strong>una serie</strong> del siguiente ejercicio y regístrala.
+                                                            </li>
+                                                            <li>
+                                                                Respeta los descansos que indique cada ejercicio; <strong>repite</strong> hasta
+                                                                terminar todas las series de <strong>cada</strong> ejercicio.
+                                                            </li>
+                                                        </ol>
+                                                        <p className="border-t border-border/50 pt-2 text-muted-foreground">
+                                                            Cada ejercicio tiene sus propias series: el contador superior suma todas las
+                                                            series de la rutina.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="space-y-4">
                                                 {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
@@ -324,8 +356,15 @@ export function WorkoutExecutionClient({
                                                     const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
                                                     const complete = isBlockCompleted(block)
                                                     return (
+                                                        <Fragment key={block.id}>
+                                                            {blockIndex > 0 && group.type === 'superset' && (
+                                                                <div className="flex items-center justify-center gap-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                                    <span className="h-px max-w-[72px] flex-1 bg-border" />
+                                                                    <span>Luego</span>
+                                                                    <span className="h-px max-w-[72px] flex-1 bg-border" />
+                                                                </div>
+                                                            )}
                                                         <motion.div
-                                                            key={block.id}
                                                             layout
                                                             ref={(el) => {
                                                                 if (el) blockRefs.current.set(block.id, el)
@@ -353,7 +392,9 @@ export function WorkoutExecutionClient({
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div>
                                                                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                                                                        {group.type === 'superset' ? `${group.key}-${blockIndex + 1}` : exercise.muscle_group}
+                                                                        {group.type === 'superset'
+                                                                            ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1}`
+                                                                            : exercise.muscle_group}
                                                                     </p>
                                                                     <h3 className="text-lg font-bold">{exercise.name}</h3>
                                                                 </div>
@@ -425,6 +466,7 @@ export function WorkoutExecutionClient({
                                                                 </div>
                                                             </div>
                                                         </motion.div>
+                                                        </Fragment>
                                                     )
                                                 })}
                                             </div>

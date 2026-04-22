@@ -11,30 +11,76 @@ import { buildProgramAssignedEmail } from '@/lib/email/transactional-templates'
 
 // --- SCHEMAS ---
 
+/** Peso objetivo: espacios / "." / texto sueltan NaN en Number(); lo normalizamos a null. */
+function preprocessOptionalFiniteKg(val: unknown): number | null | undefined {
+    if (val === null) return null
+    if (val === undefined || val === '') return undefined
+    if (typeof val === 'string') {
+        const t = val.trim().replace(',', '.')
+        if (t === '') return null
+        const n = Number(t)
+        return Number.isFinite(n) ? n : null
+    }
+    if (typeof val === 'number') return Number.isFinite(val) ? val : null
+    const n = Number(val)
+    return Number.isFinite(n) ? n : null
+}
+
+function preprocessOptionalFiniteProgression(val: unknown): number | null | undefined {
+    if (val === null) return null
+    if (val === undefined || val === '') return undefined
+    const n = typeof val === 'number' ? val : Number(val)
+    return Number.isFinite(n) ? n : null
+}
+
+function preprocessSets(val: unknown): number {
+    const n = typeof val === 'number' ? val : Number(val)
+    if (!Number.isFinite(n)) return 3
+    return Math.min(20, Math.max(1, Math.round(n)))
+}
+
+function preprocessDayOfWeek(val: unknown): number {
+    const n = typeof val === 'number' ? val : Number(val)
+    if (!Number.isFinite(n)) return 1
+    return Math.min(28, Math.max(1, Math.round(n)))
+}
+
+function preprocessIntInRange(min: number, max: number, fallback: number) {
+    return (val: unknown) => {
+        if (val === null || val === undefined || val === '') return fallback
+        const n = typeof val === 'number' ? val : Number(val)
+        if (!Number.isFinite(n)) return fallback
+        return Math.min(max, Math.max(min, Math.round(n)))
+    }
+}
+
+const optionalKg = z.union([z.number().min(0), z.null()]).optional()
+const optionalProgression = z.union([z.number().min(0).max(1000), z.null()]).optional()
+
 const blockSchema = z.object({
     exercise_id: z.string().uuid(),
-    sets: z.coerce.number().int().min(1).max(20),
+    sets: z.preprocess(preprocessSets, z.number().int().min(1).max(20)),
     reps: z.string().min(1).max(20),
-    target_weight_kg: z.coerce.number().min(0).nullable().optional(),
+    target_weight_kg: z.preprocess(preprocessOptionalFiniteKg, optionalKg),
     tempo: z.string().max(20).nullable().optional(),
     rir: z.string().max(10).nullable().optional(),
     rest_time: z.string().max(20).nullable().optional(),
     notes: z.string().max(200).nullable().optional(),
     superset_group: z.string().max(10).nullable().optional(),
     progression_type: z.enum(['weight', 'reps']).nullable().optional(),
-    progression_value: z.coerce.number().min(0).max(1000).nullable().optional(),
+    progression_value: z.preprocess(preprocessOptionalFiniteProgression, optionalProgression),
     section: z.enum(['warmup', 'main', 'cooldown']).optional(),
     is_override: z.boolean().optional(),
 })
 
 const programPhaseSchema = z.object({
     name: z.string().min(1).max(80),
-    weeks: z.coerce.number().int().min(1).max(52),
+    weeks: z.preprocess(preprocessIntInRange(1, 52, 1), z.number().int().min(1).max(52)),
     color: z.string().max(32).optional(),
 })
 
 const workoutDaySchema = z.object({
-    day_of_week: z.number().int().min(1).max(28),
+    day_of_week: z.preprocess(preprocessDayOfWeek, z.number().int().min(1).max(28)),
     title: z.string().max(100).optional(),
     week_variant: z.enum(['A', 'B']).optional().default('A'),
     blocks: z.array(blockSchema).min(1, 'Agrega al menos un ejercicio'),
@@ -44,12 +90,28 @@ const workoutProgramSchema = z.object({
     programId: z.string().uuid().optional(),
     clientId: z.string().uuid().nullable().optional(),
     programName: z.string().min(2, 'El nombre del programa es requerido').max(100),
-    weeksToRepeat: z.coerce.number().int().min(1).max(52),
+    weeksToRepeat: z.preprocess(preprocessIntInRange(1, 52, 4), z.number().int().min(1).max(52)),
     startDate: z.string().nullable().optional(),
     duration_type: z.enum(['weeks', 'async', 'calendar_days']).optional(),
-    duration_days: z.coerce.number().int().min(1).max(365).nullable().optional(),
+    duration_days: z.preprocess(
+        (v) => {
+            if (v === null || v === undefined || v === '') return null
+            const n = typeof v === 'number' ? v : Number(v)
+            if (!Number.isFinite(n)) return null
+            return Math.min(365, Math.max(1, Math.round(n)))
+        },
+        z.union([z.null(), z.number().int().min(1).max(365)]).optional()
+    ),
     program_structure_type: z.enum(['weekly', 'cycle']).optional(),
-    cycle_length: z.coerce.number().int().min(1).max(28).optional(),
+    cycle_length: z.preprocess(
+        (v) => {
+            if (v === null || v === undefined || v === '') return undefined
+            const n = typeof v === 'number' ? v : Number(v)
+            if (!Number.isFinite(n)) return 7
+            return Math.min(28, Math.max(1, Math.round(n)))
+        },
+        z.number().int().min(1).max(28).optional()
+    ),
     start_date_flexible: z.boolean().optional(),
     program_notes: z.string().max(2000).nullable().optional(),
     ab_mode: z.boolean().optional(),
@@ -80,6 +142,8 @@ export type AssignProgramOptions = {
     startDate?: string
     durationWeeks?: number
     selectedDays?: number[]
+    /** Si se define, sustituye el flag de la plantilla al crear el programa del alumno. */
+    startDateFlexible?: boolean
 }
 
 // --- ACTIONS ---
@@ -99,7 +163,12 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
     const parsed = workoutProgramSchema.safeParse(payload)
 
     if (!parsed.success) {
-        return { error: parsed.error.issues[0].message }
+        const msg = parsed.error.issues[0]?.message ?? 'Datos inválidos'
+        const friendly =
+            /NaN|Invalid input/i.test(msg)
+                ? 'Hay un valor numérico inválido (revisa peso objetivo en kg, progresión automática y series).'
+                : msg
+        return { error: friendly }
     }
 
     const {
@@ -390,15 +459,30 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
     return {}
 }
 
+const duplicateProgramNameSchema = z
+    .string()
+    .trim()
+    .min(2, 'El nombre del programa es requerido')
+    .max(100)
+
 /**
  * Duplica un programa de entrenamiento existente (sea plantilla o asignado).
  * El nuevo programa será una plantilla (sin client_id) por defecto.
  */
-export async function duplicateWorkoutProgramAction(programId: string): Promise<{
+export async function duplicateWorkoutProgramAction(
+    programId: string,
+    newName: string,
+): Promise<{
     error?: string
     programId?: string
     program?: ProgramListModel
 }> {
+    const nameParsed = duplicateProgramNameSchema.safeParse(newName)
+    if (!nameParsed.success) {
+        return { error: nameParsed.error.issues[0]?.message ?? 'Nombre no válido.' }
+    }
+    const finalName = nameParsed.data
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
@@ -423,18 +507,25 @@ export async function duplicateWorkoutProgramAction(programId: string): Promise<
 
         if (originalError || !original) throw new Error('Programa no encontrado.')
 
-        // 2. Insertar nuevo programa como plantilla
-        const isOriginalAssigned = !!original.client_id
-        const newName = isOriginalAssigned && original.client?.full_name 
-            ? `Copia de ${original.client.full_name}`
-            : `${original.name} (Copia)`
+        const { data: existingName } = await adminDb
+            .from('workout_programs')
+            .select('id')
+            .eq('coach_id', user.id)
+            .eq('name', finalName)
+            .is('client_id', null)
+            .maybeSingle()
 
+        if (existingName) {
+            return { error: `Ya tienes una plantilla guardada con el nombre "${finalName}".` }
+        }
+
+        // 2. Insertar nuevo programa como plantilla
         const { data: newProgram, error: newProgramError } = await adminDb
             .from('workout_programs')
             .insert({
                 coach_id: user.id,
                 client_id: null, // Siempre como plantilla al duplicar manualmente
-                name: newName,
+                name: finalName,
                 weeks_to_repeat: original.weeks_to_repeat,
                 start_date: null,
                 end_date: null,
@@ -581,10 +672,25 @@ export async function assignProgramToClientsAction(
         }
 
         const selectedDaysSet = new Set((normalizedOptions.selectedDays || []).filter(d => d >= 1 && d <= 28))
-        const templatePlans = (template.workout_plans || []).filter((plan: any) => {
+        const allTemplatePlans = (template.workout_plans || []) as any[]
+        const templatePlans = allTemplatePlans.filter((plan: any) => {
             if (!selectedDaysSet.size) return true
             return selectedDaysSet.has(plan.day_of_week)
         })
+
+        if (!allTemplatePlans.length) {
+            return { error: 'Esta plantilla no tiene días de entrenamiento para copiar.' }
+        }
+        if (!templatePlans.length) {
+            return {
+                error: 'Los días seleccionados no coinciden con ningún día de esta plantilla. Quita la selección de días o elige otros.',
+            }
+        }
+
+        const startDateFlexible =
+            typeof normalizedOptions.startDateFlexible === 'boolean'
+                ? normalizedOptions.startDateFlexible
+                : ((template as { start_date_flexible?: boolean | null }).start_date_flexible ?? true)
 
         const weeksToRepeat = Math.max(1, Math.min(52, normalizedOptions.durationWeeks || template.weeks_to_repeat))
         const start = new Date(dateToUse)
@@ -623,7 +729,7 @@ export async function assignProgramToClientsAction(
                         duration_days: (template as any).duration_days ?? null,
                         program_structure_type: (template as any).program_structure_type || 'weekly',
                         cycle_length: (template as any).cycle_length ?? null,
-                        start_date_flexible: (template as any).start_date_flexible ?? true,
+                        start_date_flexible: startDateFlexible,
                         program_notes: (template as any).program_notes ?? null,
                         ab_mode: (template as any).ab_mode ?? false,
                         program_phases: (template as any).program_phases ?? [],

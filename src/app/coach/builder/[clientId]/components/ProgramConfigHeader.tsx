@@ -33,10 +33,19 @@ interface ProgramConfigHeaderProps {
     onClose: () => void
 }
 
-const DURATION_LABELS: Record<string, string> = {
-    weeks: 'Semanas',
-    async: 'Ciclos Asíncronos',
-    calendar_days: 'Días Fijos',
+const DURATION_META: Record<string, { label: string; helper: string }> = {
+    weeks: {
+        label: 'Por Semanas',
+        helper: 'Organiza el plan por semanas del calendario.',
+    },
+    async: {
+        label: 'Por Días (Sin Calendario)',
+        helper: 'Cuenta días totales, sin depender de una semana fija.',
+    },
+    calendar_days: {
+        label: 'Por Días Corridos',
+        helper: 'Define una duración exacta en días corridos.',
+    },
 }
 
 export function ProgramConfigHeader({
@@ -59,7 +68,7 @@ export function ProgramConfigHeader({
                     {/* Nombre */}
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center justify-between">
-                            Designación
+                            Nombre del programa
                         </label>
                         <div className="relative">
                             <Edit2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -73,11 +82,14 @@ export function ProgramConfigHeader({
                     </div>
 
                     {/* Modo de Estructura: Semanal / Ciclo */}
-                    <div className="space-y-2">
+                    <div className="space-y-2" data-tour-id="config-structure-section">
                         <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                             Estructura del Programa
                         </label>
-                        <div className="flex rounded-xl overflow-hidden border border-border bg-background">
+                        <p className="text-[10px] text-muted-foreground">
+                            Define c&oacute;mo se repiten los d&iacute;as: semanal o por ciclo.
+                        </p>
+                        <div data-tour-id="program-structure-toggle" className="flex rounded-xl overflow-hidden border border-border bg-background">
                             <button
                                 onClick={() => setProgramStructureType('weekly')}
                                 className={`flex-1 flex items-center justify-center gap-2 h-11 text-[11px] font-bold uppercase tracking-widest transition-colors ${
@@ -105,8 +117,8 @@ export function ProgramConfigHeader({
                             <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl p-3 mt-2">
                                 <RotateCcw className="w-4 h-4 text-primary flex-shrink-0" />
                                 <div className="flex-1">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Longitud del Ciclo</p>
-                                    <p className="text-[10px] text-muted-foreground">El ciclo se repite continuamente sin depender del día de la semana</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Longitud del ciclo</p>
+                                    <p className="text-[10px] text-muted-foreground">Este ciclo se repite continuamente y no depende de Lunes a Domingo.</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
@@ -128,29 +140,32 @@ export function ProgramConfigHeader({
 
                     {/* Duración (solo en modo semanal) */}
                     {programStructureType === 'weekly' && (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4" data-tour-id="config-duration-section">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
                                     <Repeat className="w-3.5 h-3.5" />
-                                    Tipo de Duración
+                                    Duración del Programa
                                 </label>
                                 <Select value={durationType} onValueChange={v => setDurationType(v as any)}>
                                     <SelectTrigger className="h-12 rounded-xl bg-background border-border font-bold text-xs uppercase tracking-widest">
                                         <SelectValue>
-                                            {DURATION_LABELS[durationType] ?? durationType}
+                                            {DURATION_META[durationType]?.label ?? durationType}
                                         </SelectValue>
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl border-border bg-background text-foreground">
-                                        <SelectItem value="weeks" className="text-xs font-bold uppercase tracking-widest">Semanas</SelectItem>
-                                        <SelectItem value="async" className="text-xs font-bold uppercase tracking-widest">Ciclos Asíncronos</SelectItem>
-                                        <SelectItem value="calendar_days" className="text-xs font-bold uppercase tracking-widest">Días Fijos</SelectItem>
+                                        <SelectItem value="weeks" className="text-xs font-bold uppercase tracking-widest">Por Semanas</SelectItem>
+                                        <SelectItem value="async" className="text-xs font-bold uppercase tracking-widest">Por Días (Sin Calendario)</SelectItem>
+                                        <SelectItem value="calendar_days" className="text-xs font-bold uppercase tracking-widest">Por Días Corridos</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                                    {DURATION_META[durationType]?.helper ?? 'Define cu&aacute;nto dura el programa.'}
+                                </p>
                             </div>
 
                             {durationType === 'weeks' && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Cant. Semanas</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Cantidad de semanas</label>
                                     <ClampedIntInput
                                         value={weeksToRepeat}
                                         onValueChange={setWeeksToRepeat}
@@ -162,7 +177,7 @@ export function ProgramConfigHeader({
                             )}
                             {(durationType === 'async' || durationType === 'calendar_days') && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Días</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Total de días</label>
                                     <OptionalClampedIntInput
                                         value={durationDays}
                                         onValueChange={setDurationDays}
@@ -187,7 +202,7 @@ export function ProgramConfigHeader({
                                 className="rounded border-border accent-primary h-4 w-4"
                             />
                             <span className="text-sm font-medium group-hover:text-foreground text-muted-foreground transition-colors">
-                                Inicio Flexible (El cliente decide cuándo arranca)
+                                Inicio flexible (el cliente decide cuándo arranca)
                             </span>
                         </label>
                         {!startDateFlexible && (
@@ -204,7 +219,7 @@ export function ProgramConfigHeader({
                         )}
                     </div>
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Notas y Reglas del Programa</label>
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Notas y reglas del programa</label>
                         <textarea 
                             className="w-full h-[88px] p-4 text-sm rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none resize-none placeholder:text-muted-foreground"
                             value={programNotes}
@@ -216,11 +231,16 @@ export function ProgramConfigHeader({
             </div>
 
             {/* Fases del macrociclo (metadata visual) — ancho completo */}
-            <div className="space-y-3 border-t border-border pt-6 mt-4 px-0">
+            <div className="space-y-3 border-t border-border pt-6 mt-4 px-0" data-tour-id="config-phases-section">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                        Fases del programa (Volumen → Fuerza → etc.)
-                    </label>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                            Fases del programa (Volumen &rarr; Fuerza &rarr; etc.)
+                        </label>
+                        <p className="text-[10px] text-muted-foreground">
+                            Solo organiza visualmente el timeline del programa.
+                        </p>
+                    </div>
                     <Button
                         type="button"
                         variant="outline"
@@ -238,8 +258,8 @@ export function ProgramConfigHeader({
                         Añadir fase
                     </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground -mt-1">
-                    Solo referencia visual en el encabezado; no cambia ejercicios automáticamente.
+                <p className="text-[10px] text-foreground/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    Las fases no cambian ejercicios ni cargas de forma autom&aacute;tica. Solo ordenan el timeline visual del programa.
                 </p>
                 <div className="space-y-2">
                     {programPhases.map((phase, index) => (

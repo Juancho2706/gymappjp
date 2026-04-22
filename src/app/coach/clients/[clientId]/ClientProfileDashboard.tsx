@@ -30,6 +30,7 @@ import {
     resolveActiveWeekVariantForDisplay,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
+import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
 import { updateClientGoalWeight } from './actions'
 
 interface ClientProfileDashboardProps {
@@ -846,13 +847,48 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                                 {isExpanded && (
                                                     <div className="p-4 border-t border-border/50 dark:border-white/5 animate-in slide-in-from-top-2 duration-300">
                                                         <div className="space-y-4">
-                                                            {plan.workout_blocks?.map((block: any, idx: number) => (
-                                                                <div key={idx} className="space-y-2">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-black text-primary">
+                                                            {[...(plan.workout_blocks || [])]
+                                                                .sort(
+                                                                    (a: any, b: any) =>
+                                                                        (a.order_index ?? 0) - (b.order_index ?? 0)
+                                                                )
+                                                                .map((block: any, idx: number) => {
+                                                                    const sec = effectiveWorkoutSection(block.section)
+                                                                    const secShort =
+                                                                        sec === 'warmup'
+                                                                            ? 'CAL'
+                                                                            : sec === 'main'
+                                                                              ? 'PRI'
+                                                                              : sec === 'cooldown'
+                                                                                ? 'ENF'
+                                                                                : '—'
+                                                                    const ss = block.superset_group?.trim()
+                                                                    return (
+                                                                <div key={block.id ?? idx} className="space-y-2">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-black text-primary shrink-0">
                                                                             {idx + 1}
                                                                         </div>
-                                                                        <h4 className="text-xs font-black uppercase tracking-tight">{block.exercises?.name}</h4>
+                                                                        <h4 className="text-xs font-black uppercase tracking-tight min-w-0 flex-1">
+                                                                            {block.exercises?.name}
+                                                                        </h4>
+                                                                        <span className="rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground shrink-0">
+                                                                            {secShort}
+                                                                        </span>
+                                                                        {ss && (
+                                                                            <span
+                                                                                className="rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest shrink-0"
+                                                                                style={{
+                                                                                    color: 'var(--theme-primary, #007AFF)',
+                                                                                    borderColor:
+                                                                                        'color-mix(in srgb, var(--theme-primary, #007AFF) 35%, transparent)',
+                                                                                    backgroundColor:
+                                                                                        'color-mix(in srgb, var(--theme-primary, #007AFF) 10%, transparent)',
+                                                                                }}
+                                                                            >
+                                                                                SS · {ss}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                     <div className="pl-8 overflow-x-auto">
                                                                         <table className="w-full text-[10px] uppercase font-bold tracking-widest">
@@ -884,7 +920,8 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                                                         </table>
                                                                     </div>
                                                                 </div>
-                                                            ))}
+                                                                    )
+                                                                })}
                                                         </div>
                                                     </div>
                                                 )}

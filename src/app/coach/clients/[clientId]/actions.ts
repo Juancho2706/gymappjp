@@ -80,7 +80,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .select(`
             id, title, assigned_date,
             workout_blocks (
-                id, exercise_id, target_weight_kg, reps, sets,
+                id, exercise_id, order_index, section, superset_group, target_weight_kg, reps, sets,
                 exercises ( id, name, muscle_group ),
                 workout_logs (
                     id, set_number, weight_kg, reps_done, rpe, logged_at

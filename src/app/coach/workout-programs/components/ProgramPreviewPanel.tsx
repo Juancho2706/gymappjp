@@ -18,6 +18,12 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+import {
+    effectiveWorkoutSection,
+    groupContiguousSupersetRuns,
+    WORKOUT_SECTION_ORDER,
+    type WorkoutSectionKey,
+} from '@/lib/workout-block-grouping'
 import { useSyncExternalStore } from 'react'
 import type { ProgramListModel } from '../libraryStats'
 
@@ -39,6 +45,61 @@ const SECTION_META: Record<BlockSection, { label: string; icon: React.ReactNode;
         icon: <Wind className="size-3" />,
         className: 'text-sky-700 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
     },
+}
+
+type LibraryPlanBlock = NonNullable<
+    NonNullable<ProgramListModel['workout_plans']>[number]['workout_blocks']
+>[number]
+
+type LibraryBlockRow = LibraryPlanBlock & {
+    id: string
+    order_index: number
+    superset_group: string | null
+}
+
+function librarySectionHeader(sectionKey: WorkoutSectionKey): {
+    short: string
+    label: string
+    icon: React.ReactNode
+    className: string
+} {
+    const short =
+        sectionKey === 'warmup' ? 'CAL' : sectionKey === 'main' ? 'PRI' : sectionKey === 'cooldown' ? 'ENF' : 'OTR'
+    if (sectionKey === 'other') {
+        return {
+            short,
+            label: 'Otros bloques',
+            icon: <Dumbbell className="size-3" />,
+            className: 'text-muted-foreground bg-muted/30 border-border/40',
+        }
+    }
+    const m = SECTION_META[sectionKey]
+    return { short, label: m.label, icon: m.icon, className: m.className }
+}
+
+function renderLibraryExerciseRow(block: LibraryPlanBlock) {
+    const chips = [
+        block.tempo && `Tempo ${block.tempo}`,
+        block.rir && `${block.rir} RIR`,
+        block.rest_time && `Desc. ${block.rest_time}`,
+    ].filter(Boolean)
+
+    return (
+        <div className="flex items-start justify-between gap-3 px-3 py-2.5 sm:px-4">
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{block.exercise.name}</p>
+                {chips.length > 0 && (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{chips.join(' · ')}</p>
+                )}
+                {block.notes && (
+                    <p className="mt-0.5 truncate text-[11px] italic text-muted-foreground/80">{block.notes}</p>
+                )}
+            </div>
+            <div className="shrink-0 rounded-md border border-border/80 bg-muted/30 px-2.5 py-1 text-xs font-semibold tabular-nums text-foreground">
+                {block.sets}×{block.reps}
+            </div>
+        </div>
+    )
 }
 
 function subscribeMd(cb: () => void) {
@@ -105,7 +166,12 @@ export function ProgramPreviewBody({ program }: { program: ProgramListModel }) {
                         const blocks = [...(plan.workout_blocks ?? [])].sort(
                             (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
                         )
-                        const hasSections = blocks.some((b) => b.section && b.section !== 'main')
+                        const rows: LibraryBlockRow[] = blocks.map((b) => ({
+                            ...b,
+                            id: b.id,
+                            order_index: b.order_index ?? 0,
+                            superset_group: b.superset_group ?? null,
+                        }))
 
                         return (
                             <div
@@ -126,44 +192,57 @@ export function ProgramPreviewBody({ program }: { program: ProgramListModel }) {
                                     </Badge>
                                 </div>
                                 <div className="divide-y divide-border/50">
-                                    {blocks.map((block, idx) => {
-                                        const section = (block.section ?? 'main') as BlockSection
-                                        const prevSection = (blocks[idx - 1]?.section ?? 'main') as BlockSection
-                                        const showSectionHeader = hasSections && (idx === 0 || section !== prevSection)
-                                        const meta = SECTION_META[section] ?? SECTION_META.main
-                                        const chips = [
-                                            block.tempo && `Tempo ${block.tempo}`,
-                                            block.rir && `${block.rir} RIR`,
-                                            block.rest_time && `Desc. ${block.rest_time}`,
-                                        ].filter(Boolean)
+                                    {WORKOUT_SECTION_ORDER.map((sectionKey) => {
+                                        const sectionBlocks = rows.filter(
+                                            (b) => effectiveWorkoutSection(b.section) === sectionKey
+                                        )
+                                        if (sectionBlocks.length === 0) return null
+                                        const header = librarySectionHeader(sectionKey)
+                                        const groups = groupContiguousSupersetRuns(sectionBlocks)
 
                                         return (
-                                            <div key={block.id}>
-                                                {showSectionHeader && (
-                                                    <div className={cn('flex items-center gap-1.5 border-b border-border/40 px-3 py-1.5 text-[11px] font-semibold sm:px-4', meta.className)}>
-                                                        {meta.icon}
-                                                        {meta.label}
-                                                    </div>
-                                                )}
-                                                <div className="flex items-start justify-between gap-3 px-3 py-2.5 sm:px-4">
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="truncate text-sm font-medium text-foreground">
-                                                            {block.exercise.name}
-                                                        </p>
-                                                        {chips.length > 0 && (
-                                                            <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                                                {chips.join(' · ')}
-                                                            </p>
-                                                        )}
-                                                        {block.notes && (
-                                                            <p className="mt-0.5 truncate text-[11px] italic text-muted-foreground/80">
-                                                                {block.notes}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <div className="shrink-0 rounded-md border border-border/80 bg-muted/30 px-2.5 py-1 text-xs font-semibold tabular-nums text-foreground">
-                                                        {block.sets}×{block.reps}
-                                                    </div>
+                                            <div key={sectionKey} className="space-y-0">
+                                                <div
+                                                    className={cn(
+                                                        'flex flex-wrap items-center gap-2 border-b border-border/40 px-3 py-1.5 text-[11px] font-semibold sm:px-4',
+                                                        header.className,
+                                                    )}
+                                                >
+                                                    <span className="rounded border border-current/30 bg-background/40 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest">
+                                                        {header.short}
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5">
+                                                        {header.icon}
+                                                        {header.label}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-2 bg-background/20 px-2 py-2 sm:px-3">
+                                                    {groups.map((group) => (
+                                                        <div
+                                                            key={group.key}
+                                                            className={cn(
+                                                                'overflow-hidden rounded-xl border border-transparent',
+                                                                group.type === 'superset' &&
+                                                                    'border-primary/25 bg-primary/[0.06]',
+                                                            )}
+                                                        >
+                                                            {group.type === 'superset' && (
+                                                                <div className="border-b border-primary/15 bg-primary/[0.04] px-3 py-1 text-[9px] font-black uppercase tracking-widest text-primary/85">
+                                                                    Superserie · grupo {group.supersetLetter ?? '?'}
+                                                                </div>
+                                                            )}
+                                                            <div
+                                                                className={cn(
+                                                                    'divide-y divide-border/40',
+                                                                    group.type === 'superset' && 'rounded-b-xl',
+                                                                )}
+                                                            >
+                                                                {group.blocks.map((block) => (
+                                                                    <div key={block.id}>{renderLibraryExerciseRow(block)}</div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         )
