@@ -58,7 +58,6 @@ export function BuilderOnboardingTour({
 }: BuilderOnboardingTourProps) {
     const [currentIdx, setCurrentIdx] = useState(0)
     const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null)
-    const [viewport, setViewport] = useState({ width: 1280, height: 800 })
 
     const visibleSteps = useMemo(() => steps.filter(Boolean), [steps])
     const activeStep = visibleSteps[currentIdx]
@@ -108,14 +107,6 @@ export function BuilderOnboardingTour({
 
     useEffect(() => {
         if (!open) return
-        const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
-        updateViewport()
-        window.addEventListener('resize', updateViewport)
-        return () => window.removeEventListener('resize', updateViewport)
-    }, [open])
-
-    useEffect(() => {
-        if (!open) return
         if (!activeStep) return
         if (deferAutoSkipIfTargetMissing?.has(activeStep.id)) return
         // Skip unavailable targets to keep flow smooth on responsive layouts.
@@ -139,13 +130,13 @@ export function BuilderOnboardingTour({
 
     const rect = spotlightRect ?? getDefaultRect()
     const isLast = currentIdx >= total - 1
-    const cardMaxWidth = 360
-    const cardLeft = Math.min(
-        Math.max(12, rect.left),
-        Math.max(12, viewport.width - cardMaxWidth - 12)
-    )
     const preferTop = activeStep.placement === 'top'
-    const cardTop = preferTop ? Math.max(12, rect.top - 172) : Math.min(viewport.height - 164, rect.top + rect.height + 10)
+    /** iOS notch / status bar + home indicator: combine measured rect with env() so the card never sits under system UI. */
+    const cardTopPxFromAnchor = preferTop ? Math.max(12, rect.top - 172) : rect.top + rect.height + 10
+    const cardTopStyle = preferTop
+        ? `max(calc(env(safe-area-inset-top, 0px) + 0.75rem), ${cardTopPxFromAnchor}px)`
+        : `max(calc(env(safe-area-inset-top, 0px) + 0.75rem), min(calc(100svh - env(safe-area-inset-bottom, 0px) - 11rem), ${cardTopPxFromAnchor}px))`
+    const cardLeftStyle = `clamp(calc(env(safe-area-inset-left, 0px) + 12px), ${rect.left}px, calc(100vw - env(safe-area-inset-right, 0px) - min(360px, calc(100vw - 24px)) - 12px))`
 
     return (
         <div className="fixed inset-0 z-[120]">
@@ -162,7 +153,7 @@ export function BuilderOnboardingTour({
 
             <div
                 className="absolute w-[min(360px,calc(100vw-24px))] rounded-xl border border-border bg-background/95 backdrop-blur p-3 shadow-2xl"
-                style={{ top: cardTop, left: cardLeft }}
+                style={{ top: cardTopStyle, left: cardLeftStyle }}
             >
                 <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">
                     Guía del builder · {currentIdx + 1}/{total}
