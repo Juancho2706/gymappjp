@@ -10,6 +10,11 @@ import {
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
+import {
+    assertPlatformEmailAvailable,
+    isAuthDuplicateEmailMessage,
+    normalizePlatformEmail,
+} from '@/lib/auth/platform-email'
 
 export type RegisterState = {
     error?: string
@@ -68,16 +73,23 @@ export async function registerAction(
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
-
+    const emailNorm = normalizePlatformEmail(email)
+    const availability = await assertPlatformEmailAvailable(adminDb, email)
+    if (!availability.ok) {
+        return { error: availability.error }
+    }
 
     // Create auth user
     const { data: authData, error: authError } = await adminDb.auth.admin.createUser({
-        email,
+        email: emailNorm,
         password,
         email_confirm: true,
     })
 
     if (authError || !authData.user) {
+        if (authError && isAuthDuplicateEmailMessage(authError.message)) {
+            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
+        }
         return { error: authError?.message || 'Error al crear la cuenta' }
     }
 
@@ -105,7 +117,7 @@ export async function registerAction(
 
     // Sign in the user
     const supabase = await createClient()
-    await supabase.auth.signInWithPassword({ email, password })
+    await supabase.auth.signInWithPassword({ email: emailNorm, password })
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(

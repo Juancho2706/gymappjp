@@ -1516,6 +1516,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      check_platform_email_availability: {
+        Args: { p_email: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

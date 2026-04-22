@@ -8,6 +8,11 @@ import { z } from 'zod'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
+import {
+    assertPlatformEmailAvailable,
+    isAuthDuplicateEmailMessage,
+    normalizePlatformEmail,
+} from '@/lib/auth/platform-email'
 
 // ────────────────────────────────────────────────────────────────
 // Create Client Action
@@ -78,17 +83,23 @@ export async function createClientAction(
         }
     }
 
-    // Create the auth user with Admin API (does NOT sign out the coach)
     const admin = await createRawAdminClient()
+    const emailNorm = normalizePlatformEmail(parsed.data.email)
+    const availability = await assertPlatformEmailAvailable(admin, parsed.data.email)
+    if (!availability.ok) {
+        return { error: availability.error }
+    }
+
+    // Create the auth user with Admin API (does NOT sign out the coach)
     const { data: newAuthUser, error: authError } = await admin.auth.admin.createUser({
-        email: parsed.data.email,
+        email: emailNorm,
         password: parsed.data.temp_password,
         email_confirm: true, // auto-confirm so client can log in immediately
     })
 
     if (authError) {
-        if (authError.message.includes('already been registered')) {
-            return { error: 'Ya existe un usuario con ese email.' }
+        if (isAuthDuplicateEmailMessage(authError.message)) {
+            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
         }
         console.error('Admin createUser error:', authError)
         return { error: `Error al crear el usuario: ${authError.message}` }
@@ -99,7 +110,7 @@ export async function createClientAction(
         id: newAuthUser.user.id,
         coach_id: coach.id,
         full_name: parsed.data.full_name,
-        email: parsed.data.email,
+        email: emailNorm,
         phone: parsed.data.phone || null,
         subscription_start_date: parsed.data.subscription_start_date || null,
         force_password_change: true,
@@ -109,6 +120,9 @@ export async function createClientAction(
         // Rollback: delete the auth user we just created
         await admin.auth.admin.deleteUser(newAuthUser.user.id)
         console.error('DB insert client error:', dbError)
+        if (dbError.code === '23505') {
+            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
+        }
         return { error: 'Error al guardar el alumno en la base de datos.' }
     }
 
@@ -123,7 +137,7 @@ export async function createClientAction(
         welcomeMessage: coach.welcome_message,
     })
     const emailResult = await sendTransactionalEmail({
-        to: parsed.data.email,
+        to: emailNorm,
         subject: welcomeEmail.subject,
         html: welcomeEmail.html,
     })
@@ -154,10 +168,20 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
-    // Delete from Auth (cascades to public.clients via FK)
     const admin = await createRawAdminClient()
-    const { error } = await admin.auth.admin.deleteUser(clientId)
-    if (error) return { error: error.message }
+    const { data: coachProfile } = await admin.from('coaches').select('id').eq('id', clientId).maybeSingle()
+
+    if (coachProfile) {
+        const { error: delErr } = await admin
+            .from('clients')
+            .delete()
+            .eq('id', clientId)
+            .eq('coach_id', coachUser.id)
+        if (delErr) return { error: delErr.message }
+    } else {
+        const { error } = await admin.auth.admin.deleteUser(clientId)
+        if (error) return { error: error.message }
+    }
 
     revalidatePath('/coach/clients')
     return {}

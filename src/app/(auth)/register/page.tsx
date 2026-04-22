@@ -351,7 +351,8 @@ export default function RegisterPage() {
                     {/* Error */}
                     {(clientError || state?.error) && (
                         <div className="animate-fade-in rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                            {clientError ?? state.error}
+                            {/* Prefer server errors (e.g. email already used) over stale client-side validation */}
+                            {state.error ?? clientError}
                         </div>
                     )}
 

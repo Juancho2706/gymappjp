@@ -49,6 +49,38 @@ describe('registerAction', () => {
     vi.clearAllMocks()
   })
 
+  it('returns error when email is already registered on the platform', async () => {
+    const slugQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
+    const adminDb = {
+      from: vi.fn().mockReturnValue(slugQuery),
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          exists_in_auth: true,
+          is_coach: false,
+          is_client: true,
+          orphan_client_email: false,
+        },
+        error: null,
+      }),
+      auth: {
+        admin: {
+          createUser: vi.fn(),
+          deleteUser: vi.fn(),
+        },
+      },
+    }
+    createRawAdminClientMock.mockResolvedValue(adminDb)
+
+    const result = await registerAction({}, buildRegisterFormData())
+
+    expect(result.error).toMatch(/ya está registrado en la plataforma/i)
+    expect(adminDb.auth.admin.createUser).not.toHaveBeenCalled()
+  })
+
   it('returns error when slug already exists', async () => {
     const slugQuery = {
       select: vi.fn().mockReturnThis(),
@@ -58,6 +90,15 @@ describe('registerAction', () => {
 
     const adminDb = {
       from: vi.fn().mockReturnValue(slugQuery),
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          exists_in_auth: false,
+          is_coach: false,
+          is_client: false,
+          orphan_client_email: false,
+        },
+        error: null,
+      }),
       auth: {
         admin: {
           createUser: vi.fn(),
@@ -116,6 +157,15 @@ describe('registerAction', () => {
 
     const adminDb = {
       from: fromMock,
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          exists_in_auth: false,
+          is_coach: false,
+          is_client: false,
+          orphan_client_email: false,
+        },
+        error: null,
+      }),
       auth: {
         admin: {
           createUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u123' } }, error: null }),
@@ -151,6 +201,15 @@ describe('registerAction', () => {
 
     const adminDb = {
       from: fromMock,
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          exists_in_auth: false,
+          is_coach: false,
+          is_client: false,
+          orphan_client_email: false,
+        },
+        error: null,
+      }),
       auth: {
         admin: {
           createUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u123' } }, error: null }),
@@ -175,6 +234,9 @@ describe('registerAction', () => {
     expect(userSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
       email: 'coach@example.com',
       password: 'super-secret-123',
+    })
+    expect(adminDb.rpc).toHaveBeenCalledWith('check_platform_email_availability', {
+      p_email: 'coach@example.com',
     })
     expect(redirectMock).toHaveBeenCalledWith('/coach/subscription/processing?from=register&tier=starter&cycle=monthly&plan=mensual')
   })
