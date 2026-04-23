@@ -92,6 +92,7 @@ export function RingValue({
                         className={strokeHex ? '' : colors[tone]}
                         style={strokeHex ? { stroke: strokeHex } : undefined}
                         strokeDasharray={circ}
+                        initial={{ strokeDashoffset: circ }}
                         animate={{ strokeDashoffset: off }}
                         transition={{ duration: 0.35, ease: 'easeOut' }}
                     />

@@ -55,7 +55,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                             </h2>
                         </div>
                     </div>
-                    <div className="p-6 h-[300px] w-full">
+                    <div className="p-6 h-[300px] w-full min-w-0">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={areaData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
@@ -119,7 +119,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                             </h2>
                         </div>
                     </div>
-                    <div className="p-6 h-[300px] w-full">
+                    <div className="p-6 h-[300px] w-full min-w-0">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />
