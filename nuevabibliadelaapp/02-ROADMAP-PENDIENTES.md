@@ -1,8 +1,8 @@
 # 02 — Roadmap y Tareas Pendientes
 
-> **Actualizado:** 2026-04-18 America/Santiago (Sesión 7)
-> **Fuentes:** ROAD-TO-100.md (Sesiones 1–7), verificación directa via Supabase MCP
-> **Estado global:** ~97% completado. Estimación restante: ~12–15 días de desarrollo.
+> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
+> **Fuentes:** ROAD-TO-100.md (Sesiones 1–8), Supabase MCP / panel según entorno
+> **Estado global:** ~97–98% completado. Estimación restante: ~12–15 días de desarrollo (sin contar QA pagos real).
 
 ---
 
@@ -38,11 +38,36 @@ Los siguientes archivos fueron borrados de `supabase/migrations/` el 2026-04-17.
 | `20260417120000_perf_pulse_streaks_and_indexes.sql` | Funciones streaks + índices perf ✅ |
 | `20260417131500_perf_dashboard_sessions_series.sql` | Función `get_coach_workout_sessions_30d` ✅ |
 
-**Archivos conservados** (en `supabase_migrations` remota o base):
-`20260410202446_remote_schema.sql`, `20260411120000_subscription_core_sprint2.sql`, `20260411193000_expand_subscription_status_check.sql`, `20260413220000_normalize_food_units_to_g_un.sql`, `20260413230000_seed_foods_250.sql`
+**Archivos conservados en `supabase/migrations/`** (repo actual; ejecutar `supabase db push` o MCP según entorno si falta alguno):
 
-**Archivo añadido en Sesión 7** (nuevo):
-`20260417_fix_duration_type_constraint.sql` — corrige constraint `workout_programs_duration_type_check` para aceptar `calendar_days` y `async` (aplicado via MCP en producción)
+| Archivo | Notas |
+|---------|--------|
+| `20260410202446_remote_schema.sql` | Esquema base (puede estar vacío en git; la verdad operativa es la DB remota) |
+| `20260411120000_subscription_core_sprint2.sql` | `subscription_events`, columnas coach |
+| `20260411193000_expand_subscription_status_check.sql` | Estados suscripción |
+| `20260413220000_normalize_food_units_to_g_un.sql` | Unidades alimentos |
+| `20260413230000_seed_foods_250.sql` | Seed foods |
+| `20260417_fix_duration_type_constraint.sql` | `duration_type` incluye `calendar_days`, `async` |
+| `20260419120000_add_unaccent_food_search.sql` | Búsqueda `foods` sin acentos (índice/columna generada) |
+| `20260421120000_client_payments_coach_payment_date_idx.sql` | Índice `client_payments` |
+| `20260421130100_coaches_retire_starter_lite_tier.sql` | Retira tier legacy `starter_lite` → `starter` |
+| `20260422000000_platform_email_availability.sql` | RPC `check_platform_email_availability` + índice único email normalizado en `clients` |
+
+**Sesión 7 (ya documentado):** migraciones antiguas eliminadas del árbol tras aplicarlas por MCP — ver tabla “Migraciones SQL Eliminadas” arriba.
+
+---
+
+## BLOQUE M0b — Post-móvil / producto (Sesión 8 — completado)
+
+| ID | Tarea | Estado |
+|----|-------|--------|
+| M12 | Landing EVA unificada (marca, tabs, pricing preview, contacto) | ✅ Sesión 8 |
+| M13 | Registro: email único plataforma (`check_platform_email_availability` + UX errores) | ✅ Sesión 8 |
+| M14 | Builder tour: modal guía respeta `env(safe-area-inset-*)` (iPhone) | ✅ Sesión 8 |
+| M15 | Workout execution: tour / onboarding UX | ✅ Sesión 8 |
+| M16 | Foods: búsqueda sin acentos (Postgres `unaccent`) | ✅ Sesión 8 |
+| M17 | Tiers: retiro `starter_lite`; 4 tiers en código | ✅ Sesión 8 |
+| M18 | Scripts ops: `list-coaches`, `purge-platform-email`, `create-coach-account` | ✅ Sesión 8 |
 
 ---
 
@@ -83,7 +108,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 | 04.3 | Login bloqueado → middleware redirige a `/coach/reactivate` con mensaje claro | ✅ Sesión 1 |
 | 04.4 | Banner trial: `subscription_status === 'trialing'` → días restantes | ✅ Confirmado implementado |
 | 05.2 | Historial pagos: fechas `es-CL`, monto y estado por `subscription_event` | ✅ Sesión 1 |
-| RLS | RLS en 24 tablas + políticas ownership | ✅ Migración creada (pendiente `supabase db push`) |
+| RLS | RLS en 24 tablas + políticas ownership | ✅ Aplicado en prod (MCP); `supabase db push` no requerido si remoto ya alineado |
 | P2.4 | Webhook upgrade: cancelar preapproval anterior, actualizar tier en DB | ✅ Sesión 1 |
 | P2.6 | Reactivación desde `canceled`: `start_date = now + 60s` | ✅ Sesión 1 |
 
@@ -93,6 +118,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 
 | ID | Tarea | Estado |
 |----|-------|--------|
+| N1.0 | Búsqueda sin acentos (`unaccent` + columna/índice en `foods`) | ✅ Sesión 8 |
 | N1.1 | Migración `is_liquid` + `brand` en tabla `foods` | ✅ Sesión 5 |
 | N1.2 | Líquidos marcados con `is_liquid=true`, `serving_unit='ml'` | ✅ Sesión 5 |
 | N1.3 | Script auditoría USDA para alimentos frescos | ✅ Sesión 5 |
@@ -175,7 +201,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 | Features | Ejercicios coach GIF upload + filtro | 🟡 P2 | 2d | ⏳ |
 | Features | Ejercicios alumno favoritos + historial | 🟡 P2 | 2d | ⏳ |
 | Features | PrintProgramDialog mejorado + PDF | 🟡 P2 | 1d | ⏳ |
-| Seguridad | Verificación email al registrar | 🟡 P2 | 1d | ⏳ |
+| Seguridad | Verificación email al registrar (Supabase Auth + pantalla post-registro) | 🟡 P2 | 1d | ⏳ |
 | Features | Panel CEO superadmin | 🟢 P3 | 4d | ⏳ |
 | Features | Testing E2E + RLS tests | 🟢 P3 | 5d | ⏳ |
 | Features | Push notifications PWA | 🟢 P3 | 3d | ⏳ |
@@ -241,7 +267,7 @@ En rutinas largas (6+ ejercicios) el scroll es la única forma de navegar. Agreg
 - SQL injection: riesgo bajo, Supabase usa queries parametrizadas ✅
 - Secrets: ningún hardcoded en código ✅
 - Email drip: `Authorization: Bearer` exclusivo ✅
-- RLS: migración creada para 24 tablas (pendiente `supabase db push`) ✅
+- RLS en 24 tablas aplicado en entorno de producción operativo ✅ (re-verificar en Supabase si el proyecto se clona desde cero)
 
 ### 🟡 Pendiente — Sin verificación de email al registrar
 Coaches se registran y tienen acceso inmediato sin verificar su email. Facilita cuentas con emails falsos.

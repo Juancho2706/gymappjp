@@ -19,6 +19,12 @@ function hexToRgb(hex: string): string {
     return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
 }
 
+/**
+ * Consola: "cleaning up async info that was not on the parent Suspense boundary" con stack
+ * `chrome-extension://…/installHook.js` → hook de **React Developer Tools** (no es tu bundle).
+ * Desactiva la extensión o prueba incógnito sin extensiones; el aviso suele desaparecer.
+ * @see https://github.com/vercel/next.js/discussions/84973
+ */
 export default async function CoachLayout({
     children,
 }: {

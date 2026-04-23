@@ -623,9 +623,41 @@ body > * {
     background: color-mix(in oklab, var(--background) 82%, var(--muted));
   }
 
+  /* EVA route loader (loading.tsx / Suspense): marca visible, animación ligera */
+  @keyframes eva-loader-shine {
+    0%,
+    100% {
+      filter: brightness(1);
+      opacity: 1;
+    }
+    50% {
+      filter: brightness(1.12);
+      opacity: 0.94;
+    }
+  }
+  @keyframes eva-loader-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+  .eva-loader-word-shine {
+    animation: eva-loader-shine 2.2s ease-in-out infinite;
+  }
+  .eva-loader-icon-wrap {
+    animation: eva-loader-float 2.5s ease-in-out infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .landing-noise::before {
       display: none;
+    }
+    .eva-loader-word-shine,
+    .eva-loader-icon-wrap {
+      animation: none !important;
     }
   }
 }

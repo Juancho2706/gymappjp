@@ -1,7 +1,7 @@
 # 03 — Arquitectura Técnica de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-18 America/Santiago (Sesión 7)
-> **Fuentes:** ARQUITECTURA-COMPONENTES.md, ESTADO-COMPONENTES.md, PERFORMANCE-NAV-BASELINE.md
+> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
+> **Fuentes:** ARQUITECTURA-COMPONENTES.md, ESTADO-COMPONENTES.md, PERFORMANCE-NAV-BASELINE.md + diff `837f847..master`
 
 ---
 
@@ -35,7 +35,7 @@
 ```
 src/app/
 ├── layout.tsx                         # Root: fonts, ThemeProvider, i18n, PWA
-├── page.tsx                           # Landing page
+├── page.tsx                           # Landing marketing EVA (tabs coach/alumno, pricing preview, contacto, assets marca)
 ├── error.tsx / global-error.tsx       # Error boundaries
 ├── globals.css                        # Tailwind v4 @theme + design tokens
 │
@@ -139,6 +139,10 @@ Request
 - `createAdminClient()` — service_role key (operaciones admin: crear/borrar usuarios auth)
 - `createRawAdminClient()` — untyped service_role para edge cases RLS
 
+**Email único en plataforma (coach + alumno):**
+- RPC Postgres `check_platform_email_availability(p_email)` — devuelve `exists_in_auth`, `is_coach`, `is_client`, `orphan_client_email` (ver migración `20260422000000_platform_email_availability.sql`).
+- Wrapper TS [`assertPlatformEmailAvailable`](src/lib/auth/platform-email.ts) — usado en registro coach ([`register/actions.ts`](src/app/(auth)/register/actions.ts)) y alta de cliente ([`clients/actions.ts`](src/app/coach/clients/actions.ts)).
+
 **Color system:**
 - `SYSTEM_PRIMARY_COLOR = '#007AFF'` — azul EVA (cuando coach no activa branding)
 - `BRAND_PRIMARY_COLOR = '#10B981'` — verde EVA (marca propia para landing)
@@ -220,8 +224,14 @@ coaches ──┬──→ clients ──┬──→ check_ins
 | `client_payments` | id, client_id, coach_id, amount, payment_date, period_months, service_description, status, receipt_image_url |
 | `subscription_events` | id, coach_id, event_type, amount, status, mp_preapproval_id, created_at |
 
-**Funciones RPC:**
-- `search_foods(search_term text)` → retorna rows con shape de `foods`
+**Funciones RPC (`public`, ver `database.types.ts`):**
+- `search_foods(search_term text)` — búsqueda catálogo `foods` (incl. soporte sin acentos vía migración `20260419120000_add_unaccent_food_search.sql`)
+- `get_client_current_streak(p_client_id uuid)` — racha alumno
+- `get_coach_clients_streaks(p_coach_id uuid)` — rachas directorio
+- `get_coach_workout_sessions_30d(p_coach_id uuid)` — serie sesiones 30d dashboard
+- `check_platform_email_availability(p_email text)` — disponibilidad global de email
+
+**Scripts operativos (Node, service role):** `scripts/create-coach-account.mjs`, `scripts/purge-platform-email.mjs`, `scripts/list-coaches.mjs` (ver `01` / `05`).
 
 ---
 
@@ -278,7 +288,7 @@ Server: re-validación obligatoria en server actions + Zod v4
 |--------|---|------------------|
 | Dashboard Alumno | 98% | page.tsx, DashboardShell, HeroSection, ComplianceRings, NutritionDailySummary, WeightWidget, PRBanner |
 | Nutrición Alumno | 96% | NutritionShell, DayNavigator, MacroRingSummary, MealCard, AdherenceStrip |
-| Constructor de Planes | 97% | WeeklyPlanBuilder, usePlanBuilder, BlockEditSheet, DraggableExerciseCatalog, MuscleBalancePanel. Sesión 7: config oculto, gear button pulsante, hint banner, labels español |
+| Constructor de Planes | 98% | WeeklyPlanBuilder, usePlanBuilder, BlockEditSheet, DraggableExerciseCatalog, MuscleBalancePanel. Sesión 7 móvil + Sesión 8: `BuilderOnboardingTour` con safe-area iOS en la tarjeta guía |
 | Biblioteca Programas | 95% | WorkoutProgramsClient, ProgramPreviewPanel, LibraryToolbar, libraryStats.ts |
 | Perfil Alumno (Coach) | 95% | ClientProfileDashboard, ProfileTabNav, B3–B8 tabs, ClientProfileHero |
 | Nutrición Coach | 93% | NutritionHub, PlanBuilder, FoodSearchDrawer (con ml), FoodListCompact |
@@ -290,9 +300,9 @@ Server: re-validación obligatoria en server actions + Zod v4
 | Módulo | % | Deuda principal |
 |--------|---|----------------|
 | Dashboard Coach | 88% | Optimistic updates pendientes |
-| Registro Coach | 88% | Verificación email pendiente |
+| Registro Coach | 92% | Validación email duplicado (RPC). Pendiente: flujo “confirma tu correo” Supabase Auth si se exige política anti-spam |
 | Historial fecha coach | 85% | Dots actividad ✅ implementados |
-| Workout Execution | 84% | Optimistic UI, offline/retry |
+| Workout Execution | 88% | `WorkoutExecutionClient`; tour Sesión 8. Pendiente: offline/retry |
 | Check-in Alumno | 82% | Medidas corporales, notas |
 | Mi Marca / Settings | 68% | Preview moderno del dashboard alumno |
 | Catálogo Ejercicios Alumno | 68% | Favoritos, historial |

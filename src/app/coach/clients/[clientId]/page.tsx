@@ -10,7 +10,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
     const { clientId } = await params
     
     return (
-        <div className="relative mx-auto max-w-[1600px] w-full min-w-0 space-y-8 animate-fade-in overflow-x-hidden mb-24 md:mb-0">
+        <div className="relative mx-auto max-w-[1600px] w-full min-w-0 space-y-8 animate-fade-in mb-24 md:mb-0">
             <Link href="/coach/clients"
                 className="group print:hidden inline-flex max-w-full min-w-0 items-center gap-2 break-words text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground transition-all hover:text-primary">
                 <div className="p-1.5 rounded-full bg-secondary dark:bg-white/5 group-hover:bg-primary/10 transition-colors">

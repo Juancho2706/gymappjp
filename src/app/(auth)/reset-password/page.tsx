@@ -9,6 +9,7 @@ import { resetPasswordAction, type ResetPasswordState } from './actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
 
 const initialState: ResetPasswordState = {}
 
@@ -121,8 +122,11 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
     return (
         <Suspense fallback={
-            <div className="flex items-center justify-center p-12">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center gap-6 p-12 text-center">
+                <h1 className="text-2xl font-bold tracking-tight text-zinc-50 font-display">
+                    Nueva contraseña
+                </h1>
+                <EvaRouteLoader subtitle="Cargando formulario…" size="md" />
             </div>
         }>
             <ResetPasswordForm />

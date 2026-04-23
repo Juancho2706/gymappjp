@@ -9,6 +9,9 @@ const schema = z.object({
     metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 })
 
+/** FK violation: coach_id no existe en coaches */
+const PG_FOREIGN_KEY_VIOLATION = '23503'
+
 export async function POST(request: Request) {
     const supabase = await createClient()
     const {
@@ -25,19 +28,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createServiceRoleClient()
-    const db = admin as any
-
-    const { data: coach } = await admin
-        .from('coaches')
-        .select('id')
-        .eq('id', user.id)
-        .maybeSingle()
-
-    if (!coach) {
-        return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
-    }
-
-    const { error } = await db.from('coach_onboarding_events').insert({
+    const { error } = await admin.from('coach_onboarding_events').insert({
         coach_id: user.id,
         step_key: parsed.data.stepKey,
         event_type: parsed.data.eventType,
@@ -45,6 +36,9 @@ export async function POST(request: Request) {
     })
 
     if (error) {
+        if (error.code === PG_FOREIGN_KEY_VIOLATION) {
+            return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
+        }
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 

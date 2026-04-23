@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 
-export const metadata: Metadata = {
-    title: 'EVA',
-    description: 'Accede a tu cuenta',
-}
+/** Metadata por ruta: cada segmento bajo `(auth)` exporta `metadata` en su `layout.tsx`. */
 
 export default function AuthLayout({
     children,

@@ -1,6 +1,6 @@
 # 05 — Pagos y Operaciones
 
-> **Actualizado:** 2026-04-17 America/Santiago
+> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
 > **Fuentes:** SMOKE-TEST-P1-7-PAGOS.md, EVALUACION-PAGOS-CHILE.md (técnico), ESTADO-PROYECTO.md (pagos)
 
 ---
@@ -188,10 +188,11 @@ Ejecutar en **sandbox** con `MERCADOPAGO_ACCESS_TOKEN=TEST-...` y `MERCADOPAGO_T
 
 ### Flujo A — Registro → pago → activación
 
-1. Registrar coach con plan y ciclo válidos → redirige a `/coach/subscription/processing`
-2. Completar checkout en MercadoPago hasta autorizar la tarjeta
-3. Verificar redirección automática (webhook) o manual a `/coach/dashboard?subscription=active`
-4. En Supabase verificar: `subscription_status = 'active'`, `subscription_mp_id` no nulo, `current_period_end` coherente con el plan
+1. Registrar coach con plan y ciclo válidos — **validación previa:** el correo no debe existir ya como usuario Auth ni como email huérfano en `clients` (RPC `check_platform_email_availability`). Si falla, la UI muestra error sin crear usuario duplicado.
+2. Tras validación → creación Auth + fila `coaches` → redirige a `/coach/subscription/processing`
+3. Completar checkout en MercadoPago hasta autorizar la tarjeta
+4. Verificar redirección automática (webhook) o manual a `/coach/dashboard?subscription=active`
+5. En Supabase verificar: `subscription_status = 'active'`, `subscription_mp_id` no nulo, `current_period_end` coherente con el plan
 
 ### Flujo B — Cancelar suscripción y grace period
 
@@ -225,36 +226,39 @@ Ejecutar en **sandbox** con `MERCADOPAGO_ACCESS_TOKEN=TEST-...` y `MERCADOPAGO_T
 
 ---
 
-## Migraciones Pendientes de Ejecutar
+## Migraciones y entornos Supabase
 
-### Paso a paso
+**Producción (EVA operativa):** RLS, `goal_weight_kg`, alimentos, pagos y demás migraciones históricas se aplicaron vía **MCP / flujo directo**; no dependas de que el árbol local liste todos los `.sql` antiguos.
+
+**Repo actual (`supabase/migrations/`):** ver tabla en [`02-ROADMAP-PENDIENTES.md`](nuevabibliadelaapp/02-ROADMAP-PENDIENTES.md) (Sesión 8). Para un **proyecto nuevo** o un fork: usar `supabase migration list` / `supabase db push` y comparar con [`database.types.ts`](src/lib/database.types.ts).
+
+### Paso a paso (entorno nuevo o drift)
 
 ```bash
-# 1. Ver migraciones pendientes
 supabase migration list
-
-# 2. Aplicar en producción
 supabase db push
-
-# 3. Verificar
 supabase db diff
 ```
 
-### Migraciones críticas pendientes
+---
 
-| Archivo | Contenido | Estado |
-|---------|-----------|--------|
-| `20260414183000_superseded_preapproval_and_rls.sql` | RLS en 24 tablas + columna `superseded_mp_preapproval_id` en `coaches` | ⚠️ **PENDIENTE** |
-| `20260415120000_goal_weight_kg.sql` | Columna `goal_weight_kg numeric` en `clients` | ⚠️ **PENDIENTE** |
-| `20260416120000_add_liquid_and_brand_support.sql` | `is_liquid` + `brand` en `foods` | ✅ Aplicada via MCP |
+## Provisionamiento manual de coaches (sin MP)
+
+Para cuentas internas o QA sin pasar checkout:
+
+- Script: [`scripts/create-coach-account.mjs`](scripts/create-coach-account.mjs) — requiere `.env.local` con `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`. Valida email con `check_platform_email_availability` antes de crear.
+- **Purga** de un correo (alumno o coach con datos dependientes): [`scripts/purge-platform-email.mjs`](scripts/purge-platform-email.mjs) con `--email` y `--yes` (irreversible).
+- **Inventario:** [`scripts/list-coaches.mjs`](scripts/list-coaches.mjs) — lista emails/slugs y heurística “probable prueba” (`active`/`trialing` sin `subscription_mp_id`).
+
+**No documentar contraseñas** en markdown del repo.
 
 ---
 
 ## Checklist Pre-Lanzamiento
 
 ### Supabase y BD
-- [ ] Todas las migraciones aplicadas en producción con evidencia
-- [ ] RLS habilitado y revisado (aplicar `20260414183000`)
+- [ ] Todas las migraciones aplicadas en producción con evidencia (panel Supabase + tipos alineados)
+- [ ] RLS habilitado y revisado (24 tablas críticas — revalidar en panel si el proyecto se recreó)
 - [ ] Service role key solo en servidor (nunca en cliente ni repo público)
 - [ ] Backup automático confirmado en panel Supabase
 - [ ] Índices en FKs frecuentes: `workout_logs(client_id, logged_at)`, `check_ins(client_id, created_at)`, `daily_nutrition_logs(client_id, log_date)`

@@ -121,6 +121,8 @@ async function getCoachDashboardDataInner(userId: string) {
     // Incluye filas antiguas que aún reparten ingresos al mes actual (period_months largos)
     const clientPaymentsLookbackStart = new Date(now.getFullYear(), now.getMonth() - 13, 1).toISOString()
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const expiringEndUpper = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const expiringEndLower = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
     const [
         clientsCount,
@@ -128,7 +130,7 @@ async function getCoachDashboardDataInner(userId: string) {
         recentClientsRaw,
         recentCheckinsRaw,
         expiringProgramsRaw,
-        clientsGrowthRaw,
+        signupsByMonthRaw,
         workoutSessionsSeriesRaw,
         workoutLogs30dRaw,
         recentWorkoutsRaw,
@@ -156,8 +158,11 @@ async function getCoachDashboardDataInner(userId: string) {
             .eq('coach_id', userId)
             .eq('is_active', true)
             .not('end_date', 'is', null)
-            .order('end_date', { ascending: true }),
-        supabase.from('clients').select('created_at').eq('coach_id', userId),
+            .gte('end_date', expiringEndLower)
+            .lte('end_date', expiringEndUpper)
+            .order('end_date', { ascending: true })
+            .limit(200),
+        supabase.rpc('get_coach_client_signups_last_6_months', { p_coach_id: userId }),
         // Fast SQL aggregation (if migration is applied)
         supabase.rpc('get_coach_workout_sessions_30d' as never, { p_coach_id: userId } as never),
         // 30-day workout sessions for AreaChart (solo columnas necesarias; join para RLS/filtro coach)
@@ -201,7 +206,11 @@ async function getCoachDashboardDataInner(userId: string) {
     const rawRecentClients = recentClientsRaw.data || []
     const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; photos: string[] | null; clients: { id: string; full_name: string } }[] | null) || []
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
-    const allClientsData = clientsGrowthRaw.data || []
+    const signupsRows =
+        signupsByMonthRaw.error || !signupsByMonthRaw.data
+            ? []
+            : (signupsByMonthRaw.data as { ym: string; client_count: number }[])
+    const signupMap = new Map(signupsRows.map((r) => [r.ym, Number(r.client_count)]))
     const workoutLogs30d = workoutLogs30dRaw.data || []
     const workoutSessionsSeries =
         !workoutSessionsSeriesRaw.error && Array.isArray(workoutSessionsSeriesRaw.data)
@@ -350,20 +359,16 @@ async function getCoachDashboardDataInner(userId: string) {
         sesiones,
     }))
 
-    // BarChart: new clients per month (last 6 months, non-cumulative)
+    // BarChart: new clients per month (last 6 sliding months; counts from RPC by YYYY-MM)
     const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
     const growthMap: Record<string, number> = {}
     for (let i = 5; i >= 0; i -= 1) {
         const d = new Date()
         d.setMonth(d.getMonth() - i)
         const key = monthNames[d.getMonth()]
-        growthMap[key] = 0
+        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        growthMap[key] = signupMap.get(ym) ?? 0
     }
-    allClientsData.forEach((c) => {
-        const d = new Date(c.created_at)
-        const key = monthNames[d.getMonth()]
-        if (growthMap[key] !== undefined) growthMap[key] += 1
-    })
     const barData = Object.entries(growthMap).map(([name, alumnos]) => ({ name, alumnos }))
 
     return {

@@ -61,7 +61,6 @@ import {
     type ProgramListModel,
     matchesProgramFilters,
 } from './libraryStats'
-
 interface Client {
     id: string
     full_name: string
@@ -191,7 +190,7 @@ function DesktopDetailPanel({
         .join(' · ')
 
     return (
-        <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/50 shadow-sm">
+        <div className="rounded-2xl border border-border/50 bg-card/50 ring-1 ring-border/15 dark:ring-white/10">
             {/* Header */}
             <div className="flex items-start justify-between gap-2 border-b border-border/60 bg-muted/20 px-4 py-3">
                 <div className="min-w-0 flex-1">
@@ -288,7 +287,10 @@ function DesktopDetailPanel({
     )
 }
 
-export function WorkoutProgramsClient({ initialPrograms, availableClients }: WorkoutProgramsClientProps) {
+export function WorkoutProgramsClient({
+    initialPrograms,
+    availableClients,
+}: WorkoutProgramsClientProps) {
     const router = useRouter()
     const reduceMotion = useReducedMotion()
     const [search, setSearch] = useState('')
@@ -524,7 +526,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
     }
 
     return (
-        <div className="pb-8">
+        <div className="min-w-0 max-w-full rounded-t-2xl -mx-4 px-4 pb-8 md:-mx-8 md:px-8">
             <AlertDialog open={showConfirmOverwrite} onOpenChange={setShowConfirmOverwrite}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -578,7 +580,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
             </AlertDialog>
 
             {/* Sticky header — full width */}
-            <div className="sticky top-0 z-20 -mx-1 space-y-4 bg-transparent px-1 pb-4 pt-3 backdrop-blur-sm">
+            <div className="sticky top-0 z-20 space-y-4 rounded-b-2xl bg-background/95 pb-4 pt-3 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.08)] backdrop-blur-md dark:bg-background/90 dark:shadow-[0_8px_28px_-14px_rgba(0,0,0,0.45)]">
                 <LibraryHeader
                     templateCount={templateCount}
                     activeAssignedCount={activeAssignedCount}
@@ -613,7 +615,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                             onNewTemplate={() => router.push('/coach/workout-programs/builder')}
                         />
                     ) : (
-                        <div className="overflow-hidden rounded-2xl border border-border/50 bg-card/30 shadow-sm">
+                        <div className="rounded-2xl border border-border/60 bg-card/40 ring-1 ring-border/20 dark:bg-card/25 dark:ring-white/10">
                             <motion.div
                                 key={listMotionKey}
                                 className="divide-y divide-border/50"
@@ -624,6 +626,7 @@ export function WorkoutProgramsClient({ initialPrograms, availableClients }: Wor
                                 {filtered.map((program, index) => (
                                     <motion.div
                                         key={program.id}
+                                        className="min-w-0"
                                         initial={reduceMotion ? false : { opacity: 0, y: 4 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{

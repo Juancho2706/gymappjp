@@ -172,9 +172,13 @@ export function CoachWarRoom({
 
     return (
         <>
-            <div className="mb-8 min-w-0 max-w-full space-y-8 overflow-x-hidden md:mb-12">
+            <div className="mb-8 min-w-0 max-w-full space-y-8 md:mb-12">
                 <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-                    <div className="pointer-events-none absolute -left-10 -top-10 z-0 h-64 w-64 bg-primary/10 blur-[100px]" />
+                    {/* Sin offsets negativos: evitan recorte con overflow-x del layout coach */}
+                    <div
+                        className="pointer-events-none absolute left-1/2 top-0 z-0 h-48 w-[min(90vw,22rem)] -translate-x-1/2 bg-primary/10 blur-[56px] md:h-64 md:w-[min(90vw,36rem)] md:blur-[80px]"
+                        aria-hidden
+                    />
 
                     <div className="relative z-10 min-w-0 max-w-full space-y-3">
                         <div className="flex flex-wrap items-center gap-3">

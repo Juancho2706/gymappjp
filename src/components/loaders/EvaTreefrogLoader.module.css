@@ -1,0 +1,77 @@
+/**
+ * Animaciones inspiradas en "Loader" de SelfMadeSystem (uiverse.io/SelfMadeSystem/pretty-treefrog-77), MIT.
+ * Trazos y letras EVA propios de este repo.
+ */
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.wrapper.compact {
+  gap: 0.75rem;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.inlineBlock {
+  display: inline-block;
+}
+
+.loader {
+  display: flex;
+  margin: 0.25em 0;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.compact .loader {
+  margin: 0;
+}
+
+.compact .loader svg {
+  height: 48px;
+  width: 48px;
+}
+
+.spacer {
+  width: 0.5em;
+}
+
+.compact .spacer {
+  width: 0.35em;
+}
+
+.dash {
+  animation: evaDashArray 2s ease-in-out infinite, evaDashOffset 2s linear infinite;
+}
+
+@keyframes evaDashArray {
+  0% {
+    stroke-dasharray: 0 1 359 0;
+  }
+  50% {
+    stroke-dasharray: 0 359 1 0;
+  }
+  100% {
+    stroke-dasharray: 359 1 0 0;
+  }
+}
+
+@keyframes evaDashOffset {
+  0% {
+    stroke-dashoffset: 365;
+  }
+  100% {
+    stroke-dashoffset: 5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash {
+    animation: none;
+  }
+}

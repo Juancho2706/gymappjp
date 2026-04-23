@@ -1,8 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import { ClientLoadingShell } from '@/components/ui/EvaRouteLoader'
 
 export default function LoadingWorkoutExecution() {
     return (
-        <div className="fixed inset-0 flex flex-col bg-background overflow-hidden overscroll-none">
+        <ClientLoadingShell layout="fullscreen">
             {/* Top Section - Fixed Header & Progress */}
             <div className="flex-none bg-card border-b border-border/50 shadow-sm z-20 pb-4 pt-safe">
                 <div className="px-4 py-3 md:px-8 max-w-3xl mx-auto w-full">
@@ -28,10 +29,9 @@ export default function LoadingWorkoutExecution() {
             </div>
 
             {/* Main Content Area - Carousel */}
-            <div className="flex-1 relative overflow-hidden bg-muted/10 w-full">
+            <div className="flex-1 relative overflow-hidden bg-muted/10 w-full min-h-0">
                 <div className="absolute inset-0 overflow-y-auto pb-32 pt-6 px-4 md:px-8">
                     <div className="max-w-xl mx-auto w-full space-y-6">
-                        
                         {/* Exercise Header Card Skeleton */}
                         <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
                             <div className="flex items-start justify-between gap-4 mb-4">
@@ -64,7 +64,10 @@ export default function LoadingWorkoutExecution() {
 
                             <div className="space-y-1 pt-2">
                                 {[...Array(4)].map((_, i) => (
-                                    <div key={i} className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-1.5 md:px-2 py-1.5">
+                                    <div
+                                        key={i}
+                                        className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-1.5 md:px-2 py-1.5"
+                                    >
                                         <Skeleton className="w-4 h-4 md:w-5 rounded-full mx-auto" />
                                         <Skeleton className="h-9 md:h-9 w-full rounded-lg" />
                                         <Skeleton className="h-9 md:h-9 w-full rounded-lg" />
@@ -86,6 +89,6 @@ export default function LoadingWorkoutExecution() {
                     <Skeleton className="flex-1 h-14 rounded-2xl" />
                 </div>
             </div>
-        </div>
+        </ClientLoadingShell>
     )
 }

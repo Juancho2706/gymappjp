@@ -1,6 +1,6 @@
 # 04 — Negocio y Estrategia de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-17 America/Santiago
+> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
 > **Fuentes:** PLANIFICACION-EMPRESA.md, ESCALABILIDAD-Y-MODELO-NEGOCIO.md, EVALUACION-PAGOS-CHILE.md (resumen)
 
 ---
@@ -58,28 +58,30 @@ Fuente de verdad: `src/lib/constants.ts` y `src/app/pricing/page.tsx`
 
 ### Tabla maestra de tiers
 
-| Tier | Etiqueta | Alumnos máx. | Precio mensual | Ciclos | Nutrición |
-|------|----------|--------------|----------------|--------|-----------|
-| `starter_lite` | Starter Lite | 5 | **$7.990** | Solo mensual | No |
+Fuente de verdad en código: [`TIER_CONFIG`](src/lib/constants.ts), [`TIER_ALLOWED_BILLING_CYCLES`](src/lib/constants.ts), [`getTierPriceClp`](src/lib/constants.ts). El tier legacy **`starter_lite` fue retirado** (migración `20260421130100_coaches_retire_starter_lite_tier.sql`); el producto expone **4 tiers**.
+
+| Tier | Etiqueta | Alumnos máx. (código) | Precio mensual CLP | Ciclos permitidos | Nutrición |
+|------|----------|------------------------|-------------------|-------------------|-----------|
 | `starter` | Starter | 10 | **$19.990** | Solo mensual | No |
 | `pro` | Pro | 30 | **$29.990** | Solo mensual | Sí |
-| `elite` | Elite | 60 | *(no mensual)* | Trimestral/Anual | Sí |
-| `scale` | Scale | 100 | *(no mensual)* | Trimestral/Anual | Sí |
+| `elite` | Elite | 60 | **$44.990** | Mensual, trimestral, anual | Sí |
+| `scale` | Scale | 100 | **$64.990** | Mensual, trimestral, anual | Sí |
 
 ### Precios por ciclo (calculados con descuentos del código)
 
+`getTierPriceClp`: trimestral = 3× mensual con −10%; anual = 12× mensual con −20% (redondeo `Math.round`).
+
 | Tier | Mensual | Trimestral (−10%) | Anual (−20%) |
 |------|---------|-------------------|--------------|
-| starter_lite | $7.990 | N/A | N/A |
 | starter | $19.990 | N/A | N/A |
 | pro | $29.990 | N/A | N/A |
-| elite | N/A | **$121.473** | **$431.904** |
-| scale | N/A | **$175.473** | **$623.904** |
+| elite | $44.990 | **$121.473** | **$431.904** |
+| scale | $64.990 | **$175.473** | **$623.904** |
 
 ### Mensajes por segmento
 
-- **Coach con pocos alumnos y sin nutrición:** Starter Lite / Starter — bajo ticket, mensual simple
-- **Coach con nutrición o intención de escalar:** Pro — "sweet spot" en pricing
+- **Coach con pocos alumnos y sin nutrición:** Starter — mensual simple, tope 10 alumnos
+- **Coach con nutrición o intención de escalar:** Pro — “sweet spot” en pricing (nutrición + hasta 30 alumnos)
 - **Box mediano / muchos alumnos:** Elite o Scale — prepago trimestral/anual mejora cashflow
 - **Gimnasio / franquicia:** Empresarial `contacto@eva-app.cl` — multi-coach, reporting, posible dominio propio
 
@@ -89,8 +91,8 @@ Fuente de verdad: `src/lib/constants.ts` y `src/app/pricing/page.tsx`
 
 ### Escenarios de MRR ilustrativos
 
-**Escenario conservador (mes 3):** 4 coaches: 2×Starter Lite, 1×Starter, 1×Pro
-MRR ≈ 2×$7.990 + $19.990 + $29.990 = **$65.960 CLP/mes**
+**Escenario conservador (mes 3):** 4 coaches: 3×Starter, 1×Pro  
+MRR ≈ 3×$19.990 + $29.990 = **$89.960 CLP/mes** (ilustrativo; usar mix real de tiers)
 
 **Escenario base (mes 6):** 12 coaches con mezcla de tiers
 MRR aproximado ≈ **~$280.000 CLP/mes**
@@ -158,8 +160,8 @@ Producto funcional. Core loop completo. MercadoPago integrado con grace period +
 
 **Qué falta:**
 - Smoke test webhook MP en producción con credenciales reales
-- Supabase db push (RLS + goal_weight_kg)
 - Verificación cuenta MP (KYC completo)
+- (Entornos nuevos) Alinear migraciones Supabase con el repo antes de tráfico real
 
 ### Fase 2: Product-Market Fit (3–9 meses)
 **Objetivo:** 10+ coaches activos.

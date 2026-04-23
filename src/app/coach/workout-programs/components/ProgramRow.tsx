@@ -72,10 +72,10 @@ export function ProgramRow({
             onClick={onRowClick}
             onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick() } } : undefined}
             className={cn(
-                'flex items-center gap-2 border-b border-border/60 bg-background/80 transition-colors last:border-b-0 hover:bg-muted/20',
+                'flex w-full min-w-0 max-w-full items-center gap-2 border-b border-border/60 bg-background/80 transition-colors last:border-b-0 hover:bg-muted/20',
                 compact ? 'min-h-[52px] px-2 py-1.5 sm:px-3' : 'min-h-[60px] px-3 py-2.5 sm:px-4',
                 onRowClick && 'cursor-pointer',
-                isSelected && 'bg-primary/5 hover:bg-primary/8 border-l-2 border-l-primary/40'
+                isSelected && 'bg-primary/5 hover:bg-primary/8 ring-2 ring-inset ring-primary/35'
             )}
         >
             <div className="min-w-0 flex-1">
@@ -113,12 +113,10 @@ export function ProgramRow({
                             Asíncrono
                         </Badge>
                     )}
-                    {/* In compact mode show client inline */}
                     {compact && !isTemplate && program.client?.full_name && (
                         <span className="truncate text-xs text-muted-foreground">{program.client.full_name}</span>
                     )}
                 </div>
-                {/* Only show meta and client rows in comfortable mode */}
                 {!compact && (
                     <>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>

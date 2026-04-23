@@ -128,6 +128,16 @@ function plannedSetsFromProgram(program: any): number {
     );
 }
 
+/** PostgREST `.in()` con muchos UUID puede acercarse a límites de URL; trocear consultas. */
+const CLIENT_ID_IN_CHUNK = 120
+const PROGRAM_ID_RPC_CHUNK = 80
+
+function chunkIds<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = []
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+    return out
+}
+
 function adherenceForWindow(
     logs: { logged_at: string }[],
     windowStart: Date,
@@ -281,54 +291,58 @@ export class DashboardService {
         const now = new Date();
         const lastWeekStr = subDays(now, 7).toISOString();
         const logsFrom = subDays(now, 35).toISOString();
-        const [logsRes, checkInsRes, programsRes] = await Promise.all([
-            this.supabase
-                .from('workout_logs')
-                .select('client_id, logged_at, weight_kg, reps_done, plan_name_at_log')
-                .in('client_id', clientIds)
-                .gte('logged_at', logsFrom),
-            this.supabase
-                .from('check_ins')
-                .select('client_id, created_at, date, weight, energy_level')
-                .in('client_id', clientIds)
-                .gte('created_at', logsFrom),
-            this.supabase
-                .from('workout_programs')
-                .select(
-                    `
-                    client_id,
-                    created_at,
-                    start_date,
-                    end_date,
-                    weeks_to_repeat,
-                    duration_days,
-                    is_active,
-                    workout_plans (
-                        workout_blocks ( sets )
-                    )
-                `
-                )
-                .in('client_id', clientIds)
-                .eq('is_active', true)
-                .order('created_at', { ascending: false }),
-        ]);
 
-        const logsByClient = new Map<string, typeof logsRes.data>();
-        for (const row of logsRes.data || []) {
+        const logChunks = await Promise.all(
+            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+                this.supabase
+                    .from('workout_logs')
+                    .select('client_id, logged_at, weight_kg, reps_done, plan_name_at_log')
+                    .in('client_id', chunk)
+                    .gte('logged_at', logsFrom)
+            )
+        );
+        const checkChunks = await Promise.all(
+            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+                this.supabase
+                    .from('check_ins')
+                    .select('client_id, created_at, date, weight, energy_level')
+                    .in('client_id', chunk)
+                    .gte('created_at', logsFrom)
+            )
+        );
+        const programChunks = await Promise.all(
+            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+                this.supabase
+                    .from('workout_programs')
+                    .select(
+                        'id, client_id, created_at, start_date, end_date, weeks_to_repeat, duration_days, is_active'
+                    )
+                    .in('client_id', chunk)
+                    .eq('is_active', true)
+                    .order('created_at', { ascending: false })
+            )
+        );
+
+        const logsMerged = logChunks.flatMap((r) => r.data ?? []);
+        const checksMerged = checkChunks.flatMap((r) => r.data ?? []);
+        const programsMerged = programChunks.flatMap((r) => r.data ?? []);
+
+        const logsByClient = new Map<string, typeof logsMerged>();
+        for (const row of logsMerged) {
             const id = row.client_id;
             if (!logsByClient.has(id)) logsByClient.set(id, []);
             logsByClient.get(id)!.push(row);
         }
 
-        const checksByClient = new Map<string, NonNullable<typeof checkInsRes.data>>();
-        for (const row of checkInsRes.data || []) {
+        const checksByClient = new Map<string, typeof checksMerged>();
+        for (const row of checksMerged) {
             const id = row.client_id;
             if (!checksByClient.has(id)) checksByClient.set(id, []);
             checksByClient.get(id)!.push(row);
         }
 
-        const programByClient = new Map<string, any>();
-        const sortedPrograms = [...(programsRes.data || [])].sort(
+        const programByClient = new Map<string, (typeof programsMerged)[number]>();
+        const sortedPrograms = [...programsMerged].sort(
             (a, b) =>
                 new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
@@ -338,14 +352,29 @@ export class DashboardService {
             programByClient.set(cid, p);
         }
 
+        const plannedSetTotals = new Map<string, number>();
+        const programIdsForRpc = [...new Set(programByClient.values().map((p) => p.id))].filter(Boolean);
+        for (const chunk of chunkIds(programIdsForRpc, PROGRAM_ID_RPC_CHUNK)) {
+            if (chunk.length === 0) continue;
+            const { data, error } = await this.supabase.rpc('get_workout_program_planned_set_totals', {
+                p_program_ids: chunk,
+            });
+            if (error || !data) continue;
+            for (const row of data) {
+                plannedSetTotals.set(row.program_id, Number(row.total_planned_sets));
+            }
+        }
+
         const logDateCutoff = lastWeekStr.split('T')[0]!;
         const nutritionMap = new Map<string, any[]>();
         for (const id of clientIds) nutritionMap.set(id, []);
 
-        const { data: allNutritionRows, error: nutritionErr } = await this.supabase
-            .from('daily_nutrition_logs')
-            .select(
-                `
+        const nutritionChunks = await Promise.all(
+            chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
+                this.supabase
+                    .from('daily_nutrition_logs')
+                    .select(
+                        `
                 client_id,
                 plan_name_at_log,
                 target_calories_at_log,
@@ -362,12 +391,15 @@ export class DashboardService {
                     )
                 )
             `
+                    )
+                    .in('client_id', chunk)
+                    .gte('log_date', logDateCutoff)
             )
-            .in('client_id', clientIds)
-            .gte('log_date', logDateCutoff);
+        );
 
-        if (!nutritionErr) {
-            for (const row of allNutritionRows || []) {
+        for (const res of nutritionChunks) {
+            if (res.error) continue;
+            for (const row of res.data || []) {
                 const cid = row.client_id as string;
                 if (!nutritionMap.has(cid)) nutritionMap.set(cid, []);
                 nutritionMap.get(cid)!.push(row);
@@ -389,16 +421,20 @@ export class DashboardService {
 
         if (streakMap.size < clientIds.length) {
             const missing = clientIds.filter((id) => !streakMap.has(id));
-            const fallback = await Promise.all(
-                missing.map(async (clientId) => {
-                    const { data, error } = await this.supabase.rpc('get_client_current_streak', {
-                        p_client_id: clientId,
-                    });
-                    if (error) return { clientId, streak: 0 };
-                    return { clientId, streak: typeof data === 'number' ? data : 0 };
-                })
-            );
-            for (const s of fallback) streakMap.set(s.clientId, s.streak);
+            const STREAK_FALLBACK_CONCURRENCY = 8
+            for (let i = 0; i < missing.length; i += STREAK_FALLBACK_CONCURRENCY) {
+                const slice = missing.slice(i, i + STREAK_FALLBACK_CONCURRENCY);
+                const fallback = await Promise.all(
+                    slice.map(async (clientId) => {
+                        const { data, error } = await this.supabase.rpc('get_client_current_streak', {
+                            p_client_id: clientId,
+                        });
+                        if (error) return { clientId, streak: 0 };
+                        return { clientId, streak: typeof data === 'number' ? data : 0 };
+                    })
+                );
+                for (const s of fallback) streakMap.set(s.clientId, s.streak);
+            }
         }
 
         const rows: DirectoryPulseRow[] = [];
@@ -408,7 +444,10 @@ export class DashboardService {
             const logs = logsByClient.get(id) || [];
             const checkIns = checksByClient.get(id) || [];
             const activeProgram = programByClient.get(id);
-            const totalPlannedSets = plannedSetsFromProgram(activeProgram);
+            const totalPlannedSets =
+                activeProgram?.id != null
+                    ? (plannedSetTotals.get(activeProgram.id) ?? plannedSetsFromProgram(activeProgram))
+                    : 0;
 
             const logsLastWeek = logs.filter((l) => new Date(l.logged_at) >= new Date(lastWeekStr));
             const logsCount = logsLastWeek.length;
@@ -479,8 +518,8 @@ export class DashboardService {
             );
 
             const dailyLogs = nutritionMap.get(id) || [];
-            let totalConsumed = { cal: 0, prot: 0, carb: 0, fat: 0 };
-            let totalTarget = { cal: 0, prot: 0, carb: 0, fat: 0 };
+            const totalConsumed = { cal: 0, prot: 0, carb: 0, fat: 0 };
+            const totalTarget = { cal: 0, prot: 0, carb: 0, fat: 0 };
             let mealsCompleted = 0;
             let totalMeals = 0;
             let lastPlanNutrition = 'Sin plan';

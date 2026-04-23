@@ -1489,6 +1489,20 @@ export type Database = {
           sessions: number
         }[]
       }
+      get_coach_client_signups_last_6_months: {
+        Args: { p_coach_id: string }
+        Returns: {
+          ym: string
+          client_count: number
+        }[]
+      }
+      get_workout_program_planned_set_totals: {
+        Args: { p_program_ids: string[] }
+        Returns: {
+          program_id: string
+          total_planned_sets: number
+        }[]
+      }
       get_client_current_streak: {
         Args: { p_client_id: string }
         Returns: number

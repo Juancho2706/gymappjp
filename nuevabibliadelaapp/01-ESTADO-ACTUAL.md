@@ -1,8 +1,8 @@
 # 01 — Estado Actual de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-18 America/Santiago (Sesión 7)
-> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits 2026-04-15/18
-> **Completitud global estimada: ~97%** (Sesiones 1–7 completadas)
+> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
+> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits `837f847..master` (hasta 2026-04-22)
+> **Completitud global estimada: ~97–98%** (Sesiones 1–8; landing + auth email + tours documentados)
 
 ---
 
@@ -26,31 +26,31 @@
 | Testing | Vitest + Testing Library + Playwright | — |
 | PDF | puppeteer (devDependencies — PrintProgramDialog) | — |
 
-**Base de código:** 225+ archivos TypeScript/TSX · 24 tablas Supabase · 41 rutas · 11+ API routes · 3 funciones RPC (`get_client_current_streak`, `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`)
+**Base de código:** 225+ archivos TypeScript/TSX · 24 tablas Supabase · 41+ rutas · 11+ API routes · **5 funciones RPC** en `public` (ver [`database.types.ts`](src/lib/database.types.ts)): `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`
 
 ---
 
-## Estado por Módulo (Snapshot 2026-04-17)
+## Estado por Módulo (Snapshot 2026-04-22)
 
 | Módulo | % | Notas clave |
 |--------|---|-------------|
 | Dashboard Alumno | 98% | Completo. 9 Suspense boundaries, React.cache, compliance rings, PRs, nutrición |
 | Nutrición Alumno | 97% | Completo. Datos reales, DayNavigator, adherencia 30d |
-| Constructor de Planes | 97% | Completo. WeeklyPlanBuilder, DnD, A/B mode, BlockEditSheet. UX móvil mejorado (panel config oculto, gear button pulsante, hint banner, labels español) |
+| Constructor de Planes | 98% | WeeklyPlanBuilder, DnD, A/B, BlockEditSheet. Sesión 7 móvil + Sesión 8: tour guía con posición `env(safe-area-inset-*)` en iPhone (modal no bajo status bar) |
 | Biblioteca de Programas | 95% | Completo. Filtros, preview panel, duplicate con snapshot |
 | Perfil Alumno (Coach view) | 95% | Completo. 6 tabs (Overview/Análisis/Nutrición/Progreso/Plan/Facturación) |
 | Nutrición Coach (núcleo) | 93% | Completo. Hub, PlanBuilder, FoodLibrary, ActivePlansBoard |
 | Directorio de Clientes | 92% | Completo. War Room, attention score, tabla virtualizable |
 | Pagos & Suscripciones | 96% | Completo. Grace period, upgrade mid-cycle, webhook HMAC |
-| BD Alimentos | 100% | is_liquid+brand+ml+branded foods chilenos aplicados en producción. Scripts auditoría disponibles para futuras actualizaciones |
+| BD Alimentos | 100% | `is_liquid`+`brand`+branded foods. Búsqueda **sin acentos** (migración `unaccent` + columna generada; ver `02`) |
 | Dashboard Coach Principal | 90% | Analytics MRR/sesiones/crecimiento/activity feed. Botones ayuda agregados |
-| Registro Coach | 88% | Sprint 8 UX (badges, tabla resumen). Pendiente: verificación email |
-| Workout Execution | 88% | BUG-001 cerrado. useOptimistic ya implementado. Fix UX edición sets. Pendiente: offline/retry |
-| Historial fecha coach | 85% | DayNavigator en TrainingTab y NutritionTab. Pendiente: dots actividad ✅ |
+| Registro Coach | 92% | UX pasos + **comprobación global de email** (`check_platform_email_availability` + mensajes claros si el correo ya existe como coach o alumno). Pendiente: confirmación de email Supabase (política producto) |
+| Workout Execution | 90% | BUG-001 cerrado. `useOptimistic`. Sesión 8: onboarding/tour en ejecución. Pendiente: offline/retry (10.2/10.3 roadmap) |
+| Historial fecha coach | 90% | DayNavigator + **dots de actividad** en Training/Nutrition tabs |
 | Check-in Alumno | 82% | Wizard 3 pasos, dual photos. Pendiente: medidas corporales |
 | Mi Marca / Settings | 68% | Logo preview real-time, color fix. Pendiente: preview moderno |
-| Pricing Page | 78% | CLP, 5 tiers, agrupación visual. Pendiente: testimonios, SEO |
-| Landing Page | 72% | Hero animado, stats, pricing. Pendiente: SEO técnico, LCP |
+| Pricing Page | 82% | CLP; **4 tiers** en código (`starter`–`scale`; retirado `starter_lite`). Pendiente: testimonios, SEO |
+| Landing Page | 88% | Landing EVA unificada (marca, tabs coach/alumno, pricing preview, contacto, assets). Pendiente: SEO técnico, LCP, Core Web Vitals baseline |
 | Catálogo Ejercicios Alumno | 68% | Búsqueda + filtro + modal GIF. Pendiente: favoritos, historial |
 | Onboarding Alumno | 58% | Multi-step, localStorage draft. Pendiente: fotos, más validación |
 | Login/Auth Alumno | 50% | Funcional. Sin rework visual |
@@ -64,13 +64,39 @@
 
 ---
 
-## Cuentas de Prueba Activas (2026-04-16)
+## Cuentas coach en Supabase (snapshot 2026-04-22)
 
-| Email | Slug | Plan | Acceso hasta |
-|-------|------|------|-------------|
-| Joaquinamr7@gmail.com | joaquinamr7 | pro activo | 2026-05-16 |
-| robertocarrasco154@gmail.com | robertocarrasco154 | pro activo | 2026-05-16 |
-| Password provisional: `evaprueba123`, `max_clients: 50`
+Generado con `node scripts/list-coaches.mjs` (lee `coaches` + email desde Auth). **No se documentan contraseñas** en el repo; provisionar con `scripts/create-coach-account.mjs` o reset en Supabase Auth.
+
+**Heurística “probable prueba / manual”:** `subscription_status` en `active` o `trialing` **y** `subscription_mp_id` **NULL** → suele ser activación manual o script (no checkout MP). **Con MP:** `subscription_mp_id` no nulo. **Excepción:** coach en `canceled` puede seguir teniendo id MP histórico. Fila `coach-prueba-codi`: coach en BD **sin** usuario Auth (“User not found”) — limpieza pendiente.
+
+**Resumen:** 21 filas `coaches` listadas; **11** `active` sin `subscription_mp_id` (heurística “probable prueba / activación manual”); **9** `active` con `subscription_mp_id` (checkout MP asociado); **1** `canceled` con MP histórico; **1** fila `coaches` sin usuario Auth (`coach-prueba-codi`).
+
+| Email (Auth) | Slug | Tier | Estado | ¿`subscription_mp_id`? | Heurística |
+|--------------|------|------|--------|-------------------------|------------|
+| coach@test.com | juancho-fitness | scale | active | no | Probable cuenta de prueba / activación manual |
+| juanmvr2706@gmail.com | josefit | scale | active | no | Probable cuenta de prueba / activación manual |
+| victor.surth@gmail.com | fitness-mcswagg | scale | active | no | Probable cuenta de prueba / activación manual |
+| jotap.pr96@gmail.com | jotap-coach | scale | active | no | Probable cuenta de prueba / activación manual |
+| coach_test@example.com | test-brand | scale | active | no | Probable cuenta de prueba / activación manual |
+| jvillegas.dev@gmail.com | juan-manuel2 | scale | active | sí | Suscripción asociada a Mercado Pago |
+| jvillegas.dev2@gmail.com | juan-manuel22 | scale | active | sí | Suscripción asociada a Mercado Pago |
+| jmvr270622@gmail.com | juan-manuel33 | scale | active | sí | Suscripción asociada a Mercado Pago |
+| pablopa1@gmail.com | pablopa1 | scale | active | no | Probable cuenta de prueba / activación manual |
+| pepe1@gmail.com | pepe1 | scale | active | sí | Suscripción asociada a Mercado Pago |
+| pollo1@gmail.com | pollo1 | scale | active | sí | Suscripción asociada a Mercado Pago |
+| jmvr270611111@gmail.com | juan-manuel333 | scale | active | sí | Suscripción asociada a Mercado Pago |
+| jmvr2706dd@gmail.com | juancho27dsss | scale | active | sí | Suscripción asociada a Mercado Pago |
+| jvillegas.devaa11@gmail.com | juan-manuel21as | scale | active | sí | Suscripción asociada a Mercado Pago |
+| franciscomarquez279cx1@gmail.com | francisco-javierddd | scale | active | sí | Suscripción asociada a Mercado Pago |
+| jmvr2706@gmail.com | juanmanuel2222 | starter | canceled | sí | Cancelado; revisar period_end en BD |
+| joaquinamr7@gmail.com | joaquinamr7 | pro | active | no | Probable cuenta de prueba / activación manual |
+| *(sin usuario Auth)* | coach-prueba-codi | pro | active | no | Huérfano: corregir o borrar fila `coaches` |
+| dcastraube@gmail.com | eva-castraube-coach | pro | active | no | Probable cuenta de prueba / activación manual |
+| robertocarrasco154@gmail.com | olympuswolf | pro | active | no | Probable cuenta de prueba / activación manual |
+| robinson.berna@outlook.com | robinson-berna | pro | active | no | Probable cuenta de prueba / activación manual |
+
+**Scripts relacionados:** [`scripts/list-coaches.mjs`](scripts/list-coaches.mjs), [`scripts/create-coach-account.mjs`](scripts/create-coach-account.mjs), [`scripts/purge-platform-email.mjs`](scripts/purge-platform-email.mjs) (purga profunda de datos de cliente antes de borrar `clients` / Auth).
 
 ---
 
@@ -87,7 +113,8 @@
 - **Arquitectura `_data/_actions/_components`:** Patrón establecido en dashboard alumno y nutrición. Seguir en nuevos módulos.
 - **React.cache:** Para queries deduplicadas en RSC. No usar `unstable_cache` (incompatible con Supabase SSR en prod).
 - **PWA:** `public/sw.js` + manifests dinámicos por coach (`/api/manifest/[coach_slug]` + `/c/[slug]/manifest.webmanifest`).
-- **24 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`. 1 función RPC: `search_foods`.
+- **24 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`.
+- **RPC `public`:** `search_foods`, `get_client_current_streak`, `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `check_platform_email_availability` (email único plataforma coach/cliente; ver [`src/lib/auth/platform-email.ts`](src/lib/auth/platform-email.ts)).
 
 ### Arquitectura Móvil (Sesión 7)
 
@@ -116,6 +143,24 @@ body { min-height: 100dvh; overscroll-behavior-y: none; }
 ---
 
 ## Historial de Sesiones
+
+### Sesión 8 — 2026-04-19/22 — Landing EVA, email único, alimentos sin acento, tours
+
+**Landing y marca:** Unificación EVA en [`src/app/page.tsx`](src/app/page.tsx) y componentes bajo `src/components/landing/*` (tabs coach/alumno, pricing preview, contacto, typewriter, WebGL shader, callouts). Constantes de marca en [`src/lib/brand-assets.ts`](src/lib/brand-assets.ts). Commit referencia: `f638f9d` (unify EVA brand, drop Forge landing).
+
+**Registro coach — email global:** RPC `check_platform_email_availability` + [`assertPlatformEmailAvailable`](src/lib/auth/platform-email.ts) en registro y alta de alumnos. Migraciones [`20260422000000_platform_email_availability.sql`](supabase/migrations/20260422000000_platform_email_availability.sql) + índice único normalizado en `clients.email`. Commit: `d29fc9d`.
+
+**Alimentos — búsqueda sin acentos:** Migración [`20260419120000_add_unaccent_food_search.sql`](supabase/migrations/20260419120000_add_unaccent_food_search.sql). Commits: `db5dd80`, `096fe8d`, UI `FoodSearchDrawer` / `FoodLibrary`.
+
+**Builder — tour iOS:** [`BuilderOnboardingTour.tsx`](src/app/coach/builder/[clientId]/components/BuilderOnboardingTour.tsx): posición de la tarjeta con `max()` / `min()` / `clamp()` y `env(safe-area-inset-*)` para que la guía no quede bajo la status bar. Commits: `58b9478` (y refactors relacionados en `WeeklyPlanBuilder`).
+
+**Workout ejecución — tour/onboarding:** Cambios en [`WorkoutExecutionClient.tsx`](src/app/c/[coach_slug]/workout/[planId]/WorkoutExecutionClient.tsx). Commit: `0f42ff5`.
+
+**Tiers:** Retiro de `starter_lite` en código y data ([`20260421130100_coaches_retire_starter_lite_tier.sql`](supabase/migrations/20260421130100_coaches_retire_starter_lite_tier.sql)); tipos en [`constants.ts`](src/lib/constants.ts): `starter` | `pro` | `elite` | `scale`.
+
+**Operaciones — scripts:** [`scripts/create-coach-account.mjs`](scripts/create-coach-account.mjs), [`scripts/purge-platform-email.mjs`](scripts/purge-platform-email.mjs) (orden de borrado nutrición/workout antes de `clients`), [`scripts/list-coaches.mjs`](scripts/list-coaches.mjs) (inventario coaches + heurística prueba).
+
+---
 
 ### Sesión 7 — 2026-04-17/18 — Optimización Móvil Completa + Builder UX
 
@@ -284,7 +329,7 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 
 **RLS:**
 - **Migración `20260414183000_superseded_preapproval_and_rls.sql`** — RLS en 24 tablas críticas.
-- **`supabase db push` PENDIENTE** (usuario debe ejecutar).
+- **Aplicado en producción** (MCP / flujo operativo actual — alinear con panel Supabase si hubiera drift).
 
 **Performance & loading.tsx:**
 - 6 nuevos `loading.tsx` creados: `/coach/builder/[clientId]/`, `/coach/meals/`, `/coach/nutrition-plans/[templateId]/edit/`, `/coach/nutrition-plans/new/`, `/coach/recipes/`, `/coach/workout-programs/builder/`
@@ -330,6 +375,18 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 
 ---
 
+## Commits 2026-04-19/22 — Resumen (post-Sesión 7)
+
+| Hash | Fecha | Cambio |
+|------|-------|--------|
+| `f638f9d` | 2026-04-21 | Unify EVA brand; landing; tiers/pagos |
+| `d29fc9d` | 2026-04-22 | Registro: disponibilidad de email + errores |
+| `db5dd80` | 2026-04-19 | Búsqueda alimentos sin acento (DB + queries) |
+| `0f42ff5` | 2026-04-22 | Workout execution: secciones + tour onboarding |
+| `58b9478` | 2026-04-22 | Builder tour: safe area / sin viewport state redundante |
+
+---
+
 ## Commits 2026-04-15/16 — Resumen técnico
 
 | Hash | Fecha | Cambio |
@@ -353,9 +410,9 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 
 ---
 
-## Estado de la Base de Datos en Producción (verificado 2026-04-17)
+## Estado de la Base de Datos en Producción (verificado 2026-04-17; ampliado Sesión 8)
 
-**Todo aplicado en producción via MCP.** No hay migraciones pendientes.
+**Criterio:** alineado con despliegue vía MCP / operación habitual. Nuevos objetos desde entonces (p. ej. `check_platform_email_availability`, `unaccent` foods) están versionados en [`supabase/migrations/`](supabase/migrations/); confirmar en panel Supabase si alguna migración aún no se aplicó en un entorno concreto.
 
 | Elemento | Estado |
 |----------|--------|
@@ -369,6 +426,8 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 | Función `get_coach_workout_sessions_30d` | ✅ Existe |
 | Función `get_coach_clients_streaks` | ✅ Existe |
 | Función `get_client_current_streak` | ✅ Existe |
+| Función `check_platform_email_availability` + índice único `clients_email_norm_uidx` | ✅ En repo; verificar en prod |
+| Función / índices búsqueda `foods` sin acento (`20260419120000_*`) | ✅ En repo; verificar en prod |
 | Índices perf `workout_logs`, `daily_nutrition_logs` | ✅ Existen |
 | Alimentos chilenos de marca (Colún, Quaker, etc.) | ✅ Seedeados |
 

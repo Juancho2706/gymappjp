@@ -1,3 +1,9 @@
+/**
+ * EVA PWA — política conservadora:
+ * - No precachear HTML ni payloads RSC de Next (evita contenido obsoleto).
+ * - Rutas /coach y /c/ no se interceptan (fetch pasa al origen).
+ * - Si se amplía el precache, usar solo estáticos versionables (iconos, etc.).
+ */
 const CACHE_NAME = 'eva-pwa-cache-v1';
 
 // Recursos mínimos a guardar en caché para la PWA
