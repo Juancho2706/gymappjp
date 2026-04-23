@@ -365,12 +365,28 @@ function PricingMobileCarousel() {
     )
 }
 
+/** Static “aurora” columns — heavy blur, primary tint only (no animation). */
+function PricingAuroraBackdrop() {
+    return (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+            <div className="absolute inset-0 bg-gradient-to-b from-muted/30 via-transparent to-muted/25 dark:from-background dark:via-background dark:to-muted/15" />
+            <div className="absolute -left-[12%] top-[-18%] h-[135%] w-[32%] -rotate-[9deg] rounded-full bg-primary/[0.11] blur-[64px] dark:bg-primary/[0.2]" />
+            <div className="absolute left-[8%] top-[-12%] h-[128%] w-[22%] -rotate-[5deg] rounded-full bg-primary/[0.09] blur-[56px] dark:bg-primary/[0.17]" />
+            <div className="absolute left-[32%] top-[-22%] h-[142%] w-[26%] rotate-[4deg] rounded-full bg-primary/[0.1] blur-[72px] dark:bg-primary/[0.19]" />
+            <div className="absolute left-[52%] top-[-14%] h-[130%] w-[20%] -rotate-[3deg] rounded-full bg-primary/[0.08] blur-[52px] dark:bg-primary/[0.15]" />
+            <div className="absolute left-[68%] top-[-20%] h-[138%] w-[24%] rotate-[5deg] rounded-full bg-primary/[0.09] blur-[60px] dark:bg-primary/[0.16]" />
+            <div className="absolute -right-[8%] top-[-16%] h-[132%] w-[30%] rotate-[7deg] rounded-full bg-primary/[0.1] blur-[68px] dark:bg-primary/[0.18]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/85 via-background/35 to-background/90 dark:from-background/55 dark:via-background/15 dark:to-background/88" />
+        </div>
+    )
+}
+
 export function LandingPricingPreview() {
     const { t } = useTranslation()
 
     return (
-        <section id="precios" className="relative scroll-mt-28 py-20 sm:py-24">
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.03] to-transparent" />
+        <section id="precios" className="relative overflow-hidden scroll-mt-28 py-20 sm:py-24">
+            <PricingAuroraBackdrop />
             <div className="relative mx-auto w-full max-w-[1600px] px-4 sm:px-6">
                 <motion.div
                     initial={{ opacity: 0, y: 12 }}
@@ -440,8 +456,6 @@ export function LandingPricingPreview() {
                         <PlanCard key={id} plan={planById(id)} />
                     ))}
                 </div>
-
-                <p className="mt-6 text-center text-[11px] text-muted-foreground/90">{t('landing.pricing.currencyNote')}</p>
 
                 <p className="mt-8 text-center text-xs text-muted-foreground md:mt-10">
                     {t('landing.pricing.enterprise')}{' '}

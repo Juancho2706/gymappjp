@@ -51,6 +51,7 @@ import {
 import { motion, useReducedMotion } from 'framer-motion'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { LibraryHeader } from './components/LibraryHeader'
+import { LibraryHeroBackdrop } from './components/LibraryHeroBackdrop'
 import { LibraryToolbar } from './components/LibraryToolbar'
 import { ProgramRow } from './components/ProgramRow'
 import { ProgramPreviewBody, ProgramPreviewPanel } from './components/ProgramPreviewPanel'
@@ -76,6 +77,9 @@ interface WorkoutProgramsClientProps {
     availableClients: Client[]
 }
 
+const libraryEmptyCardClass =
+    'rounded-xl border border-border/60 bg-card px-4 py-14 text-center text-card-foreground shadow-sm'
+
 function defaultDuplicateProgramName(program: ProgramListModel): string {
     if (program.client_id && program.client?.full_name) {
         return `Copia de ${program.client.full_name}`
@@ -97,7 +101,7 @@ function LibraryEmptyState({
     const trimmed = search.trim()
     if (hasPrograms && trimmed) {
         return (
-            <div className="rounded-2xl border border-dashed border-border/50 bg-muted/10 px-4 py-14 text-center">
+            <div className={libraryEmptyCardClass}>
                 <p className="text-sm font-medium text-foreground">Sin resultados para tu búsqueda</p>
                 <p className="mt-1 text-xs text-muted-foreground">Prueba con otro término o revisa los filtros.</p>
             </div>
@@ -105,7 +109,7 @@ function LibraryEmptyState({
     }
     if (hasPrograms && filterType === 'templates') {
         return (
-            <div className="rounded-2xl border border-dashed border-border/50 bg-muted/10 px-4 py-14 text-center">
+            <div className={libraryEmptyCardClass}>
                 <p className="text-sm font-medium text-foreground">No hay plantillas con estos criterios</p>
                 <p className="mt-1 text-xs text-muted-foreground">Crea una plantilla nueva o cambia el filtro.</p>
             </div>
@@ -113,7 +117,7 @@ function LibraryEmptyState({
     }
     if (hasPrograms && filterType === 'assigned') {
         return (
-            <div className="rounded-2xl border border-dashed border-border/50 bg-muted/10 px-4 py-14 text-center">
+            <div className={libraryEmptyCardClass}>
                 <p className="text-sm font-medium text-foreground">No hay programas en curso</p>
                 <p className="mt-1 text-xs text-muted-foreground">Asigna una plantilla a un alumno para verla aquí.</p>
             </div>
@@ -121,17 +125,17 @@ function LibraryEmptyState({
     }
     if (hasPrograms) {
         return (
-            <div className="rounded-2xl border border-dashed border-border/50 bg-muted/10 px-4 py-14 text-center">
+            <div className={libraryEmptyCardClass}>
                 <p className="text-sm font-medium text-foreground">Nada que mostrar con estos filtros</p>
                 <p className="mt-1 text-xs text-muted-foreground">Ajusta filtros o la búsqueda.</p>
             </div>
         )
     }
     return (
-        <div className="rounded-2xl border border-dashed border-border/50 bg-muted/10 px-4 py-14 text-center">
+        <div className={libraryEmptyCardClass}>
             <p className="text-sm font-medium text-foreground">Aún no tienes programas</p>
             <p className="mt-1 text-xs text-muted-foreground">Crea tu primera plantilla para empezar.</p>
-            <Button type="button" className="mt-4 gap-2" onClick={onNewTemplate}>
+            <Button type="button" className="mt-4 h-11 w-full gap-2 rounded-xl shadow-sm sm:h-10 sm:w-auto sm:rounded-lg" onClick={onNewTemplate}>
                 <Plus className="size-4" />
                 Nueva plantilla
             </Button>
@@ -141,9 +145,9 @@ function LibraryEmptyState({
 
 function DesktopEmptyPanel() {
     return (
-        <div className="rounded-2xl border border-dashed border-border/40 bg-muted/5 p-8 text-center">
-            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted/30 text-muted-foreground">
-                <Eye className="size-5 opacity-50" />
+        <div className="rounded-xl border border-border/60 bg-card p-8 text-center text-card-foreground shadow-sm">
+            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted/40 text-muted-foreground">
+                <Eye className="size-5 opacity-60" />
             </div>
             <p className="text-sm font-medium text-foreground">Vista de detalles</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -190,9 +194,9 @@ function DesktopDetailPanel({
         .join(' · ')
 
     return (
-        <div className="rounded-2xl border border-border/50 bg-card/50 ring-1 ring-border/15 dark:ring-white/10">
+        <div className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm">
             {/* Header */}
-            <div className="flex items-start justify-between gap-2 border-b border-border/60 bg-muted/20 px-4 py-3">
+            <div className="flex items-start justify-between gap-2 border-b border-border/60 bg-muted/25 px-4 py-3.5">
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                         <span className="min-w-0 truncate font-semibold text-foreground">{program.name}</span>
@@ -526,7 +530,14 @@ export function WorkoutProgramsClient({
     }
 
     return (
-        <div className="min-w-0 max-w-full rounded-t-2xl -mx-4 px-4 pb-8 md:-mx-8 md:px-8">
+        <div
+            className={cn(
+                'min-w-0 max-w-full rounded-t-2xl pb-8',
+                /* Móvil: sin -mx; padding simétrico + safe area (iPhone/Android) */
+                'max-md:pl-[max(1rem,env(safe-area-inset-left,0px))] max-md:pr-[max(1rem,env(safe-area-inset-right,0px))]',
+                'md:-mx-8 md:px-8'
+            )}
+        >
             <AlertDialog open={showConfirmOverwrite} onOpenChange={setShowConfirmOverwrite}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -579,34 +590,37 @@ export function WorkoutProgramsClient({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Sticky header — full width */}
-            <div className="sticky top-0 z-20 space-y-4 rounded-b-2xl bg-background/95 pb-4 pt-3 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.08)] backdrop-blur-md dark:bg-background/90 dark:shadow-[0_8px_28px_-14px_rgba(0,0,0,0.45)]">
-                <LibraryHeader
-                    templateCount={templateCount}
-                    activeAssignedCount={activeAssignedCount}
-                    totalCount={programs.length}
-                    onNewTemplate={() => router.push('/coach/workout-programs/builder')}
-                />
-                <LibraryToolbar
-                    search={search}
-                    onSearchChange={setSearch}
-                    filterType={filterType}
-                    onFilterTypeChange={setFilterType}
-                    filterStatus={filterStatus}
-                    onFilterStatusChange={setFilterStatus}
-                    filterStructure={filterStructure}
-                    onFilterStructureChange={setFilterStructure}
-                    filterHasPhases={filterHasPhases}
-                    onFilterHasPhasesChange={setFilterHasPhases}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                />
+            {/* Sticky hero: backdrop + header + toolbar */}
+            <div className="sticky top-0 z-20 w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-border/40 bg-background/90 shadow-[0_8px_28px_-14px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-background/85 dark:shadow-[0_8px_32px_-16px_rgba(0,0,0,0.5)]">
+                <LibraryHeroBackdrop />
+                <div className="relative z-10 space-y-4 px-3 pb-4 pt-3 sm:px-5">
+                    <LibraryHeader
+                        templateCount={templateCount}
+                        activeAssignedCount={activeAssignedCount}
+                        totalCount={programs.length}
+                        onNewTemplate={() => router.push('/coach/workout-programs/builder')}
+                    />
+                    <LibraryToolbar
+                        search={search}
+                        onSearchChange={setSearch}
+                        filterType={filterType}
+                        onFilterTypeChange={setFilterType}
+                        filterStatus={filterStatus}
+                        onFilterStatusChange={setFilterStatus}
+                        filterStructure={filterStructure}
+                        onFilterStructureChange={setFilterStructure}
+                        filterHasPhases={filterHasPhases}
+                        onFilterHasPhasesChange={setFilterHasPhases}
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                    />
+                </div>
             </div>
 
             {/* Two-column layout on desktop */}
             <div className="mt-4 lg:flex lg:items-start lg:gap-6">
-                {/* Left: program list */}
-                <div className="min-w-0 flex-1 space-y-4">
+                {/* Left: program list — same max width as hero on mobile/tablet */}
+                <div className="min-w-0 w-full max-w-full flex-1 space-y-4">
                     {filtered.length === 0 ? (
                         <LibraryEmptyState
                             hasPrograms={programs.length > 0}
@@ -615,59 +629,57 @@ export function WorkoutProgramsClient({
                             onNewTemplate={() => router.push('/coach/workout-programs/builder')}
                         />
                     ) : (
-                        <div className="rounded-2xl border border-border/60 bg-card/40 ring-1 ring-border/20 dark:bg-card/25 dark:ring-white/10">
-                            <motion.div
-                                key={listMotionKey}
-                                className="divide-y divide-border/50"
-                                initial={reduceMotion ? false : { opacity: 0.6 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ duration: reduceMotion ? 0 : 0.2 }}
-                            >
-                                {filtered.map((program, index) => (
-                                    <motion.div
-                                        key={program.id}
-                                        className="min-w-0"
-                                        initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{
-                                            duration: reduceMotion ? 0 : 0.18,
-                                            delay: reduceMotion ? 0 : Math.min(index * 0.025, 0.35),
+                        <motion.div
+                            key={listMotionKey}
+                            className="flex flex-col gap-3"
+                            initial={reduceMotion ? false : { opacity: 0.6 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: reduceMotion ? 0 : 0.2 }}
+                        >
+                            {filtered.map((program, index) => (
+                                <motion.div
+                                    key={program.id}
+                                    className="min-w-0"
+                                    initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{
+                                        duration: reduceMotion ? 0 : 0.18,
+                                        delay: reduceMotion ? 0 : Math.min(index * 0.025, 0.35),
+                                    }}
+                                >
+                                    <ProgramRow
+                                        program={program}
+                                        compact={viewMode === 'compact'}
+                                        isPending={isPending}
+                                        isActionPending={actionProgramId === program.id}
+                                        isSelected={selectedPanelProgram?.id === program.id}
+                                        onRowClick={() =>
+                                            setSelectedPanelProgram((prev) =>
+                                                prev?.id === program.id ? null : program
+                                            )
+                                        }
+                                        onAssign={() => {
+                                            setSelectedProgram(program)
+                                            setIsAssignOpen(true)
                                         }}
-                                    >
-                                        <ProgramRow
-                                            program={program}
-                                            compact={viewMode === 'compact'}
-                                            isPending={isPending}
-                                            isActionPending={actionProgramId === program.id}
-                                            isSelected={selectedPanelProgram?.id === program.id}
-                                            onRowClick={() =>
-                                                setSelectedPanelProgram((prev) =>
-                                                    prev?.id === program.id ? null : program
-                                                )
-                                            }
-                                            onAssign={() => {
-                                                setSelectedProgram(program)
-                                                setIsAssignOpen(true)
-                                            }}
-                                            onPreview={() => {
-                                                setProgramToPreview(program)
-                                                setIsPreviewOpen(true)
-                                            }}
-                                            onDuplicate={() => openDuplicateDialog(program)}
-                                            onSync={
-                                                program.source_template_id
-                                                    ? () => {
-                                                          setProgramToSync(program)
-                                                          setShowSyncDialog(true)
-                                                      }
-                                                    : undefined
-                                            }
-                                            onDelete={() => setProgramToDelete(program)}
-                                        />
-                                    </motion.div>
-                                ))}
-                            </motion.div>
-                        </div>
+                                        onPreview={() => {
+                                            setProgramToPreview(program)
+                                            setIsPreviewOpen(true)
+                                        }}
+                                        onDuplicate={() => openDuplicateDialog(program)}
+                                        onSync={
+                                            program.source_template_id
+                                                ? () => {
+                                                      setProgramToSync(program)
+                                                      setShowSyncDialog(true)
+                                                  }
+                                                : undefined
+                                        }
+                                        onDelete={() => setProgramToDelete(program)}
+                                    />
+                                </motion.div>
+                            ))}
+                        </motion.div>
                     )}
                 </div>
 

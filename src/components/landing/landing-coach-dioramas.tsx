@@ -10,11 +10,9 @@ import {
     TrendingUp,
     Layers,
     TriangleAlert,
-    Home,
-    CheckCircle,
-    Flame,
     Calendar,
 } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { GlassCard } from '@/components/ui/glass-card'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
@@ -70,10 +68,11 @@ function MiniCoachShell({
     )
 }
 
-const SPARK = [40, 65, 45, 80, 55, 90, 70]
+const SPARK_BASE = [40, 65, 45, 80, 55, 90, 70]
 
 export function DioramaDashboard() {
     const { t } = useTranslation()
+    const reduce = useReducedMotion()
     return (
         <MiniCoachShell active="dashboard">
             <div className="space-y-2">
@@ -84,23 +83,40 @@ export function DioramaDashboard() {
                         </p>
                         <p className="text-[9px] text-muted-foreground sm:text-[10px]">{t('landing.diorama.dashboard.sub')}</p>
                     </div>
-                    <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[7px] font-bold uppercase text-emerald-700 dark:text-emerald-400">
+                    <motion.span
+                        className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[7px] font-bold uppercase text-emerald-700 dark:text-emerald-400"
+                        animate={reduce ? undefined : { opacity: [1, 0.72, 1] }}
+                        transition={
+                            reduce
+                                ? undefined
+                                : { duration: 3.2, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }
+                        }
+                    >
                         Live
-                    </span>
+                    </motion.span>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
                     {[
                         { label: t('landing.diorama.dashboard.mrr'), val: '$890k', icon: TrendingUp },
                         { label: t('landing.diorama.dashboard.clients'), val: '24', icon: Users },
                         { label: t('landing.diorama.dashboard.plans'), val: '18', icon: Layers },
-                    ].map((s) => {
+                    ].map((s, i) => {
                         const Icon = s.icon
                         return (
-                            <GlassCard key={s.label} className="!shadow-md p-2 !backdrop-blur-md">
-                                <Icon className="mb-0.5 h-3 w-3 text-primary/80" aria-hidden />
-                                <p className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">{s.label}</p>
-                                <p className="font-display text-sm font-black text-primary">{s.val}</p>
-                            </GlassCard>
+                            <motion.div
+                                key={s.label}
+                                initial={reduce ? false : { opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={
+                                    reduce ? { duration: 0 } : { delay: 0.06 * i, duration: 0.35, ease: [0.22, 1, 0.36, 1] }
+                                }
+                            >
+                                <GlassCard className="!shadow-md p-2 !backdrop-blur-md">
+                                    <Icon className="mb-0.5 h-3 w-3 text-primary/80" aria-hidden />
+                                    <p className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                                    <p className="font-display text-sm font-black text-primary">{s.val}</p>
+                                </GlassCard>
+                            </motion.div>
                         )
                     })}
                 </div>
@@ -112,13 +128,35 @@ export function DioramaDashboard() {
                         <span className="text-[8px] font-semibold text-primary">+12%</span>
                     </div>
                     <div className="flex h-7 items-end gap-0.5 rounded-md bg-muted/30 px-1 pb-0.5 pt-1">
-                        {SPARK.map((h, i) => (
-                            <div
-                                key={i}
-                                className="flex-1 rounded-sm bg-gradient-to-t from-primary/50 to-sky-400/80"
-                                style={{ height: `${h}%` }}
-                            />
-                        ))}
+                        {SPARK_BASE.map((h, i) =>
+                            reduce ? (
+                                <div
+                                    key={i}
+                                    className="flex-1 rounded-sm bg-gradient-to-t from-primary/50 to-sky-400/80"
+                                    style={{ height: `${h}%` }}
+                                />
+                            ) : (
+                                <motion.div
+                                    key={i}
+                                    className="flex-1 rounded-sm bg-gradient-to-t from-primary/50 to-sky-400/80"
+                                    initial={{ height: `${h}%` }}
+                                    animate={{
+                                        height: [
+                                            `${h}%`,
+                                            `${Math.min(95, h + 18)}%`,
+                                            `${Math.max(28, h - 12)}%`,
+                                            `${h}%`,
+                                        ],
+                                    }}
+                                    transition={{
+                                        duration: 4.2 + i * 0.25,
+                                        repeat: Number.POSITIVE_INFINITY,
+                                        ease: 'easeInOut',
+                                        delay: i * 0.12,
+                                    }}
+                                />
+                            )
+                        )}
                     </div>
                 </GlassCard>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -126,7 +164,20 @@ export function DioramaDashboard() {
                         <p className="text-[8px] font-bold uppercase text-muted-foreground">{t('landing.diorama.dashboard.adherenceMini')}</p>
                         <p className="mt-0.5 font-display text-lg font-black text-emerald-600 dark:text-emerald-400">87%</p>
                         <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full w-[87%] rounded-full bg-emerald-500" />
+                            <motion.div
+                                className="h-full rounded-full bg-emerald-500"
+                                initial={false}
+                                animate={
+                                    reduce
+                                        ? { width: '87%' }
+                                        : { width: ['78%', '87%', '82%', '87%'] }
+                                }
+                                transition={
+                                    reduce
+                                        ? { duration: 0 }
+                                        : { duration: 4.5, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }
+                                }
+                            />
                         </div>
                     </GlassCard>
                     <GlassCard className="p-2 !shadow-md">
@@ -356,109 +407,5 @@ export function DioramaBrand() {
                 <p className="text-[8px] text-muted-foreground">{t('landing.diorama.brand.urlHint')}</p>
             </div>
         </MiniCoachShell>
-    )
-}
-
-/** Vista alumno móvil (ClientNav) */
-export function DioramaClientPhone() {
-    const { t } = useTranslation()
-    const nav = [
-        { icon: Home, on: true, label: 'Inicio' },
-        { icon: Apple, on: false, label: 'Plan' },
-        { icon: Dumbbell, on: false, label: 'Aprender' },
-        { icon: CheckCircle, on: false, label: 'Check-in' },
-    ]
-    return (
-        <div
-            className="mx-auto w-[min(100%,200px)] min-h-[320px] overflow-hidden rounded-[1.75rem] border-[6px] border-zinc-900 bg-zinc-900 shadow-[0_25px_60px_-12px_rgba(0,0,0,0.45)] dark:border-zinc-100 dark:bg-zinc-100 dark:shadow-[0_25px_60px_-12px_rgba(255,255,255,0.15)]"
-            style={{ aspectRatio: '9/18' }}
-        >
-            <div className="mx-auto mt-2 h-4 w-16 rounded-full bg-zinc-700 dark:bg-zinc-300" />
-            <div className="flex h-[calc(100%-2rem)] flex-col bg-gradient-to-b from-zinc-50 via-zinc-100/90 to-zinc-200/30 p-2 pt-3 dark:from-zinc-900 dark:via-zinc-950/95 dark:to-zinc-950">
-                <div className="mb-2 flex items-center justify-between gap-1 px-0.5">
-                    <div className="flex items-center gap-1.5">
-                        <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/40 to-violet-500/40 ring-2 ring-primary/25" />
-                        <div>
-                            <p className="text-left text-[9px] font-bold leading-tight text-foreground">{t('landing.diorama.phone.greeting')}</p>
-                        </div>
-                    </div>
-                    <span className="flex items-center gap-0.5 rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[7px] font-bold text-orange-700 dark:text-orange-300">
-                        <Flame className="h-2.5 w-2.5" aria-hidden />
-                        {t('landing.diorama.phone.streak')}
-                    </span>
-                </div>
-                <div className="mt-1 flex-1 rounded-xl border border-border bg-card/95 p-2 shadow-inner">
-                    <div className="mb-2 flex items-center justify-between">
-                        <span className="text-[8px] font-black uppercase tracking-wide text-primary">{t('landing.diorama.phone.routineTitle')}</span>
-                        <span className="rounded bg-violet-500/15 px-1 py-px text-[7px] font-bold text-violet-700 dark:text-violet-300">
-                            {t('landing.diorama.phone.focusTag')}
-                        </span>
-                    </div>
-                    <div className="mb-2 rounded-lg border border-primary/20 bg-gradient-to-r from-primary/15 via-sky-500/10 to-transparent p-2">
-                        <p className="text-[9px] font-bold text-foreground">{t('landing.diorama.phone.exercise')}</p>
-                        <p className="mt-0.5 text-[8px] text-muted-foreground">{t('landing.diorama.phone.sets')}</p>
-                        <div className="mt-2 flex gap-1">
-                            <span className="rounded-md bg-background/80 px-1.5 py-0.5 text-[7px] font-bold text-primary">RPE 8</span>
-                            <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[7px] font-bold text-emerald-700 dark:text-emerald-400">
-                                {t('landing.diorama.phone.doneBadge')}
-                            </span>
-                        </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <div className="flex items-center gap-2 rounded-md border border-border/80 bg-muted/30 px-2 py-1.5">
-                            <div className="h-8 w-8 shrink-0 rounded-md bg-sky-500/20" />
-                            <div className="min-w-0 flex-1">
-                                <div className="h-1.5 w-3/4 rounded bg-muted-foreground/25" />
-                                <div className="mt-1 h-1 w-1/2 rounded bg-muted-foreground/15" />
-                            </div>
-                            <span className="text-[8px] font-bold text-primary">3×10</span>
-                        </div>
-                        <div className="flex items-center gap-2 rounded-md border border-border/80 bg-muted/20 px-2 py-1.5 opacity-80">
-                            <div className="h-8 w-8 shrink-0 rounded-md bg-rose-500/20" />
-                            <div className="min-w-0 flex-1">
-                                <div className="h-1.5 w-2/3 rounded bg-muted-foreground/20" />
-                            </div>
-                            <span className="text-[8px] font-semibold text-muted-foreground">—</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="mt-auto flex items-stretch justify-around gap-0.5 border-t border-border/60 bg-background/95 px-1 pb-[10px] pt-1.5 dark:bg-zinc-900/95">
-                    {nav.map((n, i) => {
-                        const Icon = n.icon
-                        return (
-                            <div
-                                key={i}
-                                className={cn(
-                                    'relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-0.5 transition-colors',
-                                    n.on
-                                        ? 'text-primary'
-                                        : 'text-zinc-500 dark:text-zinc-500'
-                                )}
-                            >
-                                {n.on ? (
-                                    <span className="absolute -top-1.5 left-1/2 h-[2px] w-5 -translate-x-1/2 rounded-full bg-primary" aria-hidden />
-                                ) : null}
-                                <span
-                                    className={cn(
-                                        'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                                        n.on && 'bg-primary/12 dark:bg-primary/20'
-                                    )}
-                                >
-                                    <Icon
-                                        className="h-[18px] w-[18px]"
-                                        strokeWidth={n.on ? 2.4 : 2}
-                                    />
-                                </span>
-                                {n.on ? (
-                                    <span className="text-[8px] font-bold leading-none tracking-tight text-primary">
-                                        {n.label}
-                                    </span>
-                                ) : null}
-                            </div>
-                        )
-                    })}
-                </div>
-            </div>
-        </div>
     )
 }

@@ -119,6 +119,12 @@ function FiltersForm({
     )
 }
 
+const segmentedTabsListClass =
+    'h-11 w-full justify-start gap-0.5 overflow-x-auto rounded-full border border-border/50 bg-muted/35 p-1 shadow-inner [-ms-overflow-style:none] [scrollbar-width:none] dark:bg-muted/20 [&::-webkit-scrollbar]:hidden'
+
+const segmentedTabsTriggerClass =
+    'shrink-0 rounded-full border-0 px-3.5 py-2 text-xs font-semibold shadow-none after:hidden sm:px-4 sm:text-sm data-active:bg-primary/12 data-active:text-foreground dark:data-active:bg-primary/20'
+
 export function LibraryToolbar({
     search,
     onSearchChange,
@@ -140,12 +146,12 @@ export function LibraryToolbar({
         <div className={cn('flex flex-col gap-3', className)}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         placeholder="Buscar por programa o alumno…"
                         value={search}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="h-10 rounded-lg border-border/40 bg-background pl-9 shadow-sm"
+                        className="h-11 rounded-full border-border/50 bg-background/90 pl-10 text-base shadow-sm placeholder:text-muted-foreground/80 md:text-sm dark:bg-background/60"
                         aria-label="Buscar programas"
                     />
                 </div>
@@ -154,7 +160,7 @@ export function LibraryToolbar({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-10 gap-2 md:hidden"
+                        className="h-11 shrink-0 gap-2 rounded-full border-border/50 px-3 shadow-sm md:hidden"
                         onClick={() => setMobileFiltersOpen(true)}
                     >
                         <SlidersHorizontal className="size-4" />
@@ -163,7 +169,7 @@ export function LibraryToolbar({
                     <Popover>
                         <PopoverTrigger
                             type="button"
-                            className="hidden h-10 items-center gap-2 rounded-lg border border-border/40 bg-background px-3 text-sm font-medium text-foreground shadow-sm hover:bg-muted/40 md:inline-flex"
+                            className="hidden h-11 shrink-0 items-center gap-2 rounded-full border border-border/50 bg-background/90 px-4 text-sm font-medium text-foreground shadow-sm hover:bg-muted/50 md:inline-flex dark:bg-background/60"
                         >
                             <Filter className="size-4 shrink-0" />
                             Filtros
@@ -182,12 +188,12 @@ export function LibraryToolbar({
                             />
                         </PopoverContent>
                     </Popover>
-                    <div className="flex items-center rounded-lg border border-border/40 bg-background p-0.5 shadow-sm">
+                    <div className="flex items-center rounded-full border border-border/50 bg-muted/35 p-1 shadow-inner dark:bg-muted/20">
                         <Button
                             type="button"
                             variant={viewMode === 'comfortable' ? 'secondary' : 'ghost'}
                             size="icon"
-                            className="size-9 rounded-md"
+                            className="size-9 shrink-0 rounded-full"
                             onClick={() => onViewModeChange('comfortable')}
                             title="Vista cómoda"
                         >
@@ -197,7 +203,7 @@ export function LibraryToolbar({
                             type="button"
                             variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
                             size="icon"
-                            className="size-9 rounded-md"
+                            className="size-9 shrink-0 rounded-full"
                             onClick={() => onViewModeChange('compact')}
                             title="Vista compacta"
                         >
@@ -212,14 +218,14 @@ export function LibraryToolbar({
                 onValueChange={(val) => onFilterTypeChange(val as LibraryFilters['filterType'])}
                 className="w-full"
             >
-                <TabsList className="h-10 w-full justify-start overflow-x-auto rounded-xl bg-background p-1 shadow-sm [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <TabsTrigger value="all" className="shrink-0 rounded-md px-4">
+                <TabsList className={segmentedTabsListClass}>
+                    <TabsTrigger value="all" className={segmentedTabsTriggerClass}>
                         Todos
                     </TabsTrigger>
-                    <TabsTrigger value="templates" className="shrink-0 rounded-md px-4">
+                    <TabsTrigger value="templates" className={segmentedTabsTriggerClass}>
                         Plantillas
                     </TabsTrigger>
-                    <TabsTrigger value="assigned" className="shrink-0 rounded-md px-4">
+                    <TabsTrigger value="assigned" className={segmentedTabsTriggerClass}>
                         En curso
                     </TabsTrigger>
                 </TabsList>

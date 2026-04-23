@@ -30,7 +30,6 @@ const AssignToClientsDialog = dynamic(
 )
 import { MuscleBalancePanel } from './components/MuscleBalancePanel'
 import { PrintProgramDialog } from './components/PrintProgramDialog'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 
 import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
@@ -910,8 +909,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
             )}
 
             <header className="z-20 flex-shrink-0 border-b border-border bg-background/50 pt-safe pl-safe pr-safe backdrop-blur-xl">
-                <div className="h-16 px-4 md:px-6 flex items-center justify-between max-w-[2000px] mx-auto gap-2 md:gap-4">
-                    <div className="flex items-center gap-4">
+                <div className="mx-auto flex h-16 max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6">
+                    <div className="flex min-w-0 items-center gap-3 md:gap-4">
                         <Link href={client ? `/coach/clients/${client.id}` : '/coach/templates'}>
                             <Button variant="ghost" size="icon" className="shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />
@@ -919,10 +918,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         </Link>
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                                <h1 className="text-sm font-display uppercase tracking-[0.2em] text-foreground truncate max-w-[160px] md:max-w-md">
+                                <h1 className="max-w-[140px] truncate text-sm font-display uppercase tracking-[0.2em] text-foreground md:max-w-[26rem]">
                                     {programName || 'NUEVO PROGRAMA'}
                                 </h1>
-                                <InfoTooltip content={t('section.coachBuilder')} />
                                 {hasUnsavedChanges && (
                                     <span className="hidden md:flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20 shrink-0">
                                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
@@ -945,7 +943,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                    <div className="flex shrink-0 items-center gap-1 pr-2 md:gap-2 md:pr-0">
                         {/* Catalog toggle — tablet only (md→lg) */}
                         <Button
                             variant="ghost"
@@ -1153,7 +1151,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                             disabled={isPending || !programName.trim()}
                             data-tour-id="save-button"
                             size="sm"
-                            className="h-8 w-8 md:h-10 md:w-auto md:px-6 text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] hover:opacity-90 transition-all disabled:opacity-50"
+                            className="h-10 w-10 min-h-10 min-w-10 shrink-0 text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 md:h-10 md:w-auto md:min-h-10 md:min-w-0 md:px-6"
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin md:mr-2" /> : <Save className="w-4 h-4 md:mr-2" />}
