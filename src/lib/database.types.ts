@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      beta_invite_registrations: {
+        Row: {
+          coach_id: string
+          created_at: string
+          email: string
+          id: string
+          ip_address: string
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          email: string
+          id?: string
+          ip_address: string
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          ip_address?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beta_invite_registrations_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       check_ins: {
         Row: {
           back_photo_url: string | null
@@ -110,37 +142,37 @@ export type Database = {
       }
       client_payments: {
         Row: {
-          id: string
+          amount: number
           client_id: string
           coach_id: string
-          amount: number
-          service_description: string
-          period_months: number | null
-          payment_date: string
-          status: string
           created_at: string
+          id: string
+          payment_date: string
+          period_months: number | null
+          service_description: string
+          status: string
         }
         Insert: {
-          id?: string
+          amount: number
           client_id: string
           coach_id: string
-          amount: number
-          service_description: string
-          period_months?: number | null
-          payment_date?: string
-          status?: string
           created_at?: string
+          id?: string
+          payment_date?: string
+          period_months?: number | null
+          service_description: string
+          status?: string
         }
         Update: {
-          id?: string
+          amount?: number
           client_id?: string
           coach_id?: string
-          amount?: number
-          service_description?: string
-          period_months?: number | null
-          payment_date?: string
-          status?: string
           created_at?: string
+          id?: string
+          payment_date?: string
+          period_months?: number | null
+          service_description?: string
+          status?: string
         }
         Relationships: [
           {
@@ -431,8 +463,6 @@ export type Database = {
           muscle_group: string
           name: string
           secondary_muscles: string[] | null
-          video_end_time: number | null
-          video_start_time: number | null
           video_url: string | null
         }
         Insert: {
@@ -448,8 +478,6 @@ export type Database = {
           muscle_group: string
           name: string
           secondary_muscles?: string[] | null
-          video_end_time?: number | null
-          video_start_time?: number | null
           video_url?: string | null
         }
         Update: {
@@ -465,8 +493,6 @@ export type Database = {
           muscle_group?: string
           name?: string
           secondary_muscles?: string[] | null
-          video_end_time?: number | null
-          video_start_time?: number | null
           video_url?: string | null
         }
         Relationships: [
@@ -577,6 +603,7 @@ export type Database = {
           id: string
           is_liquid: boolean
           name: string
+          name_search: string | null
           protein_g: number
           serving_size: number
           serving_unit: string | null
@@ -591,6 +618,7 @@ export type Database = {
           id?: string
           is_liquid?: boolean
           name: string
+          name_search?: string | null
           protein_g: number
           serving_size: number
           serving_unit?: string | null
@@ -605,6 +633,7 @@ export type Database = {
           id?: string
           is_liquid?: boolean
           name?: string
+          name_search?: string | null
           protein_g?: number
           serving_size?: number
           serving_unit?: string | null
@@ -1475,6 +1504,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_platform_email_availability: {
+        Args: { p_email: string }
+        Returns: Json
+      }
+      get_client_current_streak: {
+        Args: { p_client_id: string }
+        Returns: number
+      }
+      get_coach_client_signups_last_6_months: {
+        Args: { p_coach_id: string }
+        Returns: {
+          client_count: number
+          ym: string
+        }[]
+      }
       get_coach_clients_streaks: {
         Args: { p_coach_id: string }
         Returns: {
@@ -1489,13 +1533,6 @@ export type Database = {
           sessions: number
         }[]
       }
-      get_coach_client_signups_last_6_months: {
-        Args: { p_coach_id: string }
-        Returns: {
-          ym: string
-          client_count: number
-        }[]
-      }
       get_workout_program_planned_set_totals: {
         Args: { p_program_ids: string[] }
         Returns: {
@@ -1503,10 +1540,7 @@ export type Database = {
           total_planned_sets: number
         }[]
       }
-      get_client_current_streak: {
-        Args: { p_client_id: string }
-        Returns: number
-      }
+      immutable_unaccent: { Args: { "": string }; Returns: string }
       search_foods: {
         Args: { search_term: string }
         Returns: {
@@ -1519,6 +1553,7 @@ export type Database = {
           id: string
           is_liquid: boolean
           name: string
+          name_search: string | null
           protein_g: number
           serving_size: number
           serving_unit: string | null
@@ -1530,10 +1565,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      check_platform_email_availability: {
-        Args: { p_email: string }
-        Returns: Json
-      }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
