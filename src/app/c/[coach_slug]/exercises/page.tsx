@@ -37,20 +37,11 @@ export default async function ClientExercisesPage({ params }: Props) {
   const client = clientResponse.data;
   if (!client) redirect(`/c/${coach_slug}/login`);
 
-  let exercisesResponse = await supabase
+  const exercisesResponse = await supabase
     .from("exercises")
     .select(EXERCISE_CATALOG_COLUMNS)
     .or(`coach_id.is.null,coach_id.eq.${client.coach_id}`)
     .order("name");
-
-  // Compat fallback for environments that are missing recently added columns.
-  if (exercisesResponse.error) {
-    exercisesResponse = await supabase
-      .from("exercises")
-      .select("*")
-      .or(`coach_id.is.null,coach_id.eq.${client.coach_id}`)
-      .order("name");
-  }
 
   const coachBranding = Array.isArray(client.coaches)
     ? client.coaches[0]

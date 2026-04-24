@@ -215,13 +215,13 @@ function ExercisePreviewModal({
         let url = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`
         
         // Add start time if present (assuming video_start_time is in seconds)
-        if (exercise.video_start_time) {
-            url += `&start=${exercise.video_start_time}`
+        if ((exercise as any).video_start_time) {
+            url += `&start=${(exercise as any).video_start_time}`
         }
-        
+
         // Add end time if present
-        if (exercise.video_end_time) {
-            url += `&end=${exercise.video_end_time}`
+        if ((exercise as any).video_end_time) {
+            url += `&end=${(exercise as any).video_end_time}`
         }
         
         return url
