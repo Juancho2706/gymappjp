@@ -80,6 +80,7 @@ interface Props {
         weight_kg: number | null
         reps_done: number | null
         rpe: number | null
+        rir?: number | null
     }>
     previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
     coachSlug: string
@@ -202,7 +203,7 @@ export function WorkoutExecutionClient({
         setSelectedExercise(exercise)
         setShowTechnique(true)
     }
-    const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null }) => {
+    const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null }) => {
         setSessionLogs((prev) => {
             const wasComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, prev))
             const next = prev.filter((log) => !(log.block_id === payload.blockId && log.set_number === payload.setNumber))
@@ -212,6 +213,7 @@ export function WorkoutExecutionClient({
                 weight_kg: payload.weightKg,
                 reps_done: payload.repsDone,
                 rpe: payload.rpe,
+                rir: payload.rir,
             })
             const nowComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, next))
             if (!wasComplete && nowComplete) {

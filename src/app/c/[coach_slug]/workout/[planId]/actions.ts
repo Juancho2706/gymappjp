@@ -11,6 +11,7 @@ const logSchema = z.object({
     weight_kg: z.coerce.number().min(0).optional(),
     reps_done: z.coerce.number().int().min(0).optional(),
     rpe: z.coerce.number().min(1).max(10).optional(),
+    rir: z.coerce.number().int().min(0).max(10).optional(),
 })
 
 export type LogState = {
@@ -34,6 +35,7 @@ export async function logSetAction(
         weight_kg: getOptional('weight_kg'),
         reps_done: getOptional('reps_done'),
         rpe: getOptional('rpe'),
+        rir: getOptional('rir'),
     }
 
     const parsed = logSchema.safeParse(raw)
@@ -74,6 +76,7 @@ export async function logSetAction(
                 weight_kg: parsed.data.weight_kg ?? null,
                 reps_done: parsed.data.reps_done ?? null,
                 rpe: parsed.data.rpe ?? null,
+                rir: parsed.data.rir ?? null,
             })
             .eq('id', targetId)
         dbError = updateError
@@ -91,6 +94,7 @@ export async function logSetAction(
             weight_kg: parsed.data.weight_kg ?? null,
             reps_done: parsed.data.reps_done ?? null,
             rpe: parsed.data.rpe ?? null,
+            rir: parsed.data.rir ?? null,
         })
         dbError = insertError
     }

@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -57,6 +57,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
     targetMealId: null,
   })
   const [isSaving, setIsSaving] = useState(false)
+  const [autoSync, setAutoSync] = useState(true)
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -64,6 +65,17 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
   )
 
   const realTotals = useMemo(() => totalsFromMealDrafts(meals), [meals])
+
+  // Auto-sync goals whenever meals change and toggle is ON
+  useEffect(() => {
+    if (!autoSync) return
+    setGoals({
+      calories: Math.round(realTotals.calories),
+      protein: Math.round(realTotals.protein),
+      carbs: Math.round(realTotals.carbs),
+      fats: Math.round(realTotals.fats),
+    })
+  }, [autoSync, realTotals])
 
   const handleAutoSync = useCallback(() => {
     setGoals({
@@ -218,6 +230,8 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
           onGoalsChange={setGoals}
           realTotals={realTotals}
           onAutoSync={handleAutoSync}
+          autoSync={autoSync}
+          onAutoSyncToggle={setAutoSync}
           instructions={instructions}
           onInstructionsChange={setInstructions}
           isSaving={isSaving}

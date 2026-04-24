@@ -7,8 +7,9 @@ import { ClampedIntInput } from '@/components/ui/clamped-int-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Zap } from 'lucide-react'
 
 interface Goals {
   calories: number
@@ -24,6 +25,8 @@ interface Props {
   onGoalsChange: (g: Goals) => void
   realTotals: Goals
   onAutoSync: () => void
+  autoSync: boolean
+  onAutoSyncToggle: (v: boolean) => void
   instructions: string
   onInstructionsChange: (v: string) => void
   isSaving: boolean
@@ -43,6 +46,8 @@ export function PlanBuilderSidebar({
   onGoalsChange,
   realTotals,
   onAutoSync,
+  autoSync,
+  onAutoSyncToggle,
   instructions,
   onInstructionsChange,
   isSaving,
@@ -71,7 +76,36 @@ export function PlanBuilderSidebar({
       </div>
 
       <div className="space-y-3">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Metas (manual)</p>
+        {/* Header with toggle */}
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            Metas {autoSync ? '' : '(manual)'}
+          </p>
+          <label className="flex cursor-pointer items-center gap-2">
+            <span className={cn(
+              'flex items-center gap-1 text-[10px] font-bold transition-colors',
+              autoSync ? 'text-emerald-500' : 'text-muted-foreground'
+            )}>
+              <Zap className={cn('h-3 w-3', autoSync && 'fill-emerald-500')} />
+              Auto
+            </span>
+            <Switch
+              checked={autoSync}
+              onCheckedChange={(checked) => {
+                onAutoSyncToggle(checked)
+                if (checked) onAutoSync()
+              }}
+              size="sm"
+            />
+          </label>
+        </div>
+
+        {autoSync && (
+          <p className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">
+            Calculando metas en tiempo real desde los alimentos añadidos.
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           {(
             [
@@ -84,15 +118,12 @@ export function PlanBuilderSidebar({
             <div key={key}>
               <Label className="text-[10px] text-muted-foreground">{label}</Label>
               <ClampedIntInput
-                className="h-9 mt-0.5"
+                className={cn('h-9 mt-0.5 transition-opacity', autoSync && 'opacity-50 pointer-events-none')}
                 value={val}
                 min={0}
                 max={key === 'calories' ? 50000 : 10000}
                 onValueChange={(n) =>
-                  onGoalsChange({
-                    ...goals,
-                    [key]: n,
-                  })
+                  !autoSync && onGoalsChange({ ...goals, [key]: n })
                 }
               />
             </div>
@@ -115,7 +146,7 @@ export function PlanBuilderSidebar({
         </div>
       </div>
 
-      {mismatch && (
+      {mismatch && !autoSync && (
         <div className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
           <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
           <div className="space-y-2">

@@ -117,6 +117,7 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         weight_kg: number | null
         reps_done: number | null
         rpe: number | null
+        rir: number | null
     }> = []
 
     if (blockIds.length > 0) {
@@ -125,7 +126,7 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         const tomorrowStr = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
         const { data: rawLogs } = await supabase
             .from('workout_logs')
-            .select('block_id, set_number, weight_kg, reps_done, rpe')
+            .select('block_id, set_number, weight_kg, reps_done, rpe, rir')
             .in('block_id', blockIds)
             .gte('logged_at', `${todayStr}T00:00:00`)
             .lt('logged_at', `${tomorrowStr}T00:00:00`)

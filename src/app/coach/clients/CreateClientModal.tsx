@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, UserPlus } from 'lucide-react'
+import { Loader2, UserPlus, MessageCircle, CheckCircle2 } from 'lucide-react'
 import { createClientAction, type CreateClientState } from './actions'
 import { cn } from '@/lib/utils'
 
@@ -53,12 +53,66 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
     const [state, formAction] = useActionState(createClientAction, initialState)
     const formRef = useRef<HTMLFormElement>(null)
 
+    // Auto-close only when success but no phone (no WhatsApp CTA to show)
     useEffect(() => {
-        if (state.success) {
+        if (state.success && !state.newClientPhone) {
             formRef.current?.reset()
             onClose()
         }
-    }, [state.success, onClose])
+    }, [state.success, state.newClientPhone, onClose])
+
+    const handleClose = () => {
+        formRef.current?.reset()
+        onClose()
+    }
+
+    // WhatsApp CTA step
+    if (state.success && state.newClientPhone) {
+        const digits = state.newClientPhone.replace(/\D/g, '')
+        const message = `Hola ${state.clientName}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${state.loginUrl}`
+        const waUrl = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+
+        return (
+            <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+                <DialogContent className="bg-card border border-border text-foreground max-w-md rounded-2xl shadow-2xl">
+                    <div className="flex flex-col items-center gap-5 py-4 text-center">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15">
+                            <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-extrabold text-foreground">
+                                ¡Alumno creado!
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Enviá el link de acceso a{' '}
+                                <span className="font-semibold text-foreground">{state.clientName}</span>{' '}
+                                por WhatsApp.
+                            </p>
+                        </div>
+
+                        <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={handleClose}
+                            className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#25D366] px-4 py-3 text-sm font-bold text-white shadow-lg shadow-[#25D366]/25 transition hover:bg-[#1ebe5d] active:scale-[0.98]"
+                        >
+                            <MessageCircle className="h-5 w-5" />
+                            Enviar link por WhatsApp
+                        </a>
+
+                        <button
+                            type="button"
+                            onClick={handleClose}
+                            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            Omitir por ahora
+                        </button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        )
+    }
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>

@@ -1254,6 +1254,7 @@ export type Database = {
           logged_at: string
           plan_name_at_log: string | null
           reps_done: number | null
+          rir: number | null
           rpe: number | null
           set_number: number
           target_reps_at_log: string | null
@@ -1268,6 +1269,7 @@ export type Database = {
           logged_at?: string
           plan_name_at_log?: string | null
           reps_done?: number | null
+          rir?: number | null
           rpe?: number | null
           set_number: number
           target_reps_at_log?: string | null
@@ -1282,6 +1284,7 @@ export type Database = {
           logged_at?: string
           plan_name_at_log?: string | null
           reps_done?: number | null
+          rir?: number | null
           rpe?: number | null
           set_number?: number
           target_reps_at_log?: string | null

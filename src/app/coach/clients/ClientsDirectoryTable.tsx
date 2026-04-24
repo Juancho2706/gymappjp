@@ -1,15 +1,16 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, Eye } from 'lucide-react'
+import { ArrowUpDown, Eye, Pencil } from 'lucide-react'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectorySortKey } from './directory-types'
 import { defaultSortDir, sortClientsByKey } from './clientsDirectorySort'
 import { cn } from '@/lib/utils'
 import { differenceInDays } from 'date-fns'
+import { EditClientDataModal } from './EditClientDataModal'
 
 type ColId =
     | 'name'
@@ -140,6 +141,7 @@ export function ClientsDirectoryTable({
 }: ClientsDirectoryTableProps) {
     const router = useRouter()
     const parentRef = useRef<HTMLDivElement>(null)
+    const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)
 
     const sorted = useMemo(
         () => sortClientsByKey(clients, pulseByClientId, sortKey, sortDir),
@@ -168,9 +170,10 @@ export function ClientsDirectoryTable({
             daysSince < 3 ? 'bg-emerald-500'
             : daysSince < 7 ? 'bg-amber-500'
             : 'bg-red-500'
+        const waMessage = `Hola ${client.full_name}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
         const whatsappLink =
             client.phone && loginUrl ?
-                `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}`)}`
+                `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waMessage)}`
             :   null
 
         return (
@@ -258,17 +261,27 @@ export function ClientsDirectoryTable({
                             href={whatsappLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="rounded-lg p-2 text-xs font-black uppercase text-emerald-600 hover:bg-emerald-500/10"
+                            className="rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wide bg-[#25D366] text-white hover:bg-[#1ebe5d] transition-colors"
+                            aria-label="Enviar WhatsApp"
                         >
                             WA
                         </a>
                     : null}
+                    <button
+                        type="button"
+                        onClick={() => setEditingClient({ id: client.id, name: client.full_name })}
+                        className="rounded-lg p-2 text-muted-foreground hover:bg-white/50 hover:text-primary dark:hover:bg-white/10"
+                        aria-label="Editar datos"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </button>
                 </div>
             </div>
         )
     }
 
     return (
+        <>
         <div className="overflow-hidden rounded-2xl border border-border/50 bg-white/40 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/40">
             {/* Una sola zona de scroll horizontal: encabezado y filas comparten el mismo ancho mínimo */}
             <div className="touch-pan-x overscroll-x-contain overflow-x-auto">
@@ -370,5 +383,15 @@ export function ClientsDirectoryTable({
                 Desliza horizontalmente en móvil para ver todas las columnas.
             </p>
         </div>
+
+        {editingClient && (
+            <EditClientDataModal
+                clientId={editingClient.id}
+                clientName={editingClient.name}
+                open={!!editingClient}
+                onClose={() => setEditingClient(null)}
+            />
+        )}
+        </>
     )
 }

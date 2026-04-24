@@ -33,6 +33,9 @@ export type CreateClientState = {
     error?: string
     success?: boolean
     fieldErrors?: Record<string, string[]>
+    newClientPhone?: string
+    loginUrl?: string
+    clientName?: string
 }
 
 export async function createClientAction(
@@ -146,6 +149,142 @@ export async function createClientAction(
     }
 
     revalidatePath('/coach/clients')
+    return {
+        success: true,
+        newClientPhone: parsed.data.phone || undefined,
+        loginUrl,
+        clientName: parsed.data.full_name,
+    }
+}
+
+// ────────────────────────────────────────────────────────────────
+// Get Client Intake Action (for edit modal)
+// ────────────────────────────────────────────────────────────────
+
+export type ClientIntakeData = {
+    full_name: string
+    phone: string | null
+    weight_kg: number | null
+    height_cm: number | null
+    goals: string | null
+    experience_level: string | null
+    availability: string | null
+    injuries: string | null
+    medical_conditions: string | null
+}
+
+export async function getClientIntakeAction(clientId: string): Promise<{ data?: ClientIntakeData; error?: string }> {
+    const supabase = await createClient()
+    const { data: { user: coachUser } } = await supabase.auth.getUser()
+    if (!coachUser) return { error: 'No autenticado.' }
+
+    const { data: client } = await supabase
+        .from('clients')
+        .select('full_name, phone, coach_id, client_intake(weight_kg, height_cm, goals, experience_level, availability, injuries, medical_conditions)')
+        .eq('id', clientId)
+        .eq('coach_id', coachUser.id)
+        .maybeSingle()
+
+    if (!client) return { error: 'Alumno no encontrado.' }
+
+    const intake = Array.isArray(client.client_intake) ? client.client_intake[0] : client.client_intake
+
+    return {
+        data: {
+            full_name: client.full_name,
+            phone: client.phone ?? null,
+            weight_kg: intake?.weight_kg ?? null,
+            height_cm: intake?.height_cm ?? null,
+            goals: intake?.goals ?? null,
+            experience_level: intake?.experience_level ?? null,
+            availability: intake?.availability ?? null,
+            injuries: intake?.injuries ?? null,
+            medical_conditions: intake?.medical_conditions ?? null,
+        },
+    }
+}
+
+// ────────────────────────────────────────────────────────────────
+// Update Client Data Action (name, phone + intake)
+// ────────────────────────────────────────────────────────────────
+
+const updateClientDataSchema = z.object({
+    client_id: z.string().uuid(),
+    full_name: z.string().min(2, 'Nombre muy corto').max(100),
+    phone: z.string().optional(),
+    weight_kg: z.coerce.number().positive().optional().or(z.literal('')),
+    height_cm: z.coerce.number().positive().optional().or(z.literal('')),
+    goals: z.string().optional(),
+    experience_level: z.string().optional(),
+    availability: z.string().optional(),
+    injuries: z.string().optional(),
+    medical_conditions: z.string().optional(),
+})
+
+export type UpdateClientDataState = {
+    error?: string
+    success?: boolean
+    fieldErrors?: Record<string, string[]>
+}
+
+export async function updateClientDataAction(
+    _prev: UpdateClientDataState,
+    formData: FormData
+): Promise<UpdateClientDataState> {
+    const raw = {
+        client_id: formData.get('client_id') as string,
+        full_name: formData.get('full_name') as string,
+        phone: formData.get('phone') as string,
+        weight_kg: formData.get('weight_kg') as string,
+        height_cm: formData.get('height_cm') as string,
+        goals: formData.get('goals') as string,
+        experience_level: formData.get('experience_level') as string,
+        availability: formData.get('availability') as string,
+        injuries: formData.get('injuries') as string,
+        medical_conditions: formData.get('medical_conditions') as string,
+    }
+
+    const parsed = updateClientDataSchema.safeParse(raw)
+    if (!parsed.success) {
+        return { fieldErrors: parsed.error.flatten().fieldErrors }
+    }
+
+    const supabase = await createClient()
+    const { data: { user: coachUser } } = await supabase.auth.getUser()
+    if (!coachUser) return { error: 'No autenticado.' }
+
+    // Update clients table
+    const { error: clientErr } = await supabase
+        .from('clients')
+        .update({
+            full_name: parsed.data.full_name,
+            phone: parsed.data.phone || null,
+        })
+        .eq('id', parsed.data.client_id)
+        .eq('coach_id', coachUser.id)
+
+    if (clientErr) return { error: 'Error al actualizar datos del alumno.' }
+
+    // Upsert client_intake
+    const intakePayload = {
+        client_id: parsed.data.client_id,
+        weight_kg: parsed.data.weight_kg !== '' ? Number(parsed.data.weight_kg) : null,
+        height_cm: parsed.data.height_cm !== '' ? Number(parsed.data.height_cm) : null,
+        goals: parsed.data.goals || null,
+        experience_level: parsed.data.experience_level || null,
+        availability: parsed.data.availability || null,
+        injuries: parsed.data.injuries || null,
+        medical_conditions: parsed.data.medical_conditions || null,
+    }
+
+    const { error: intakeErr } = await supabase
+        .from('client_intake')
+        .upsert(intakePayload, { onConflict: 'client_id' })
+
+    if (intakeErr) return { error: 'Error al actualizar datos de onboarding.' }
+
+    revalidatePath('/coach/clients')
+    revalidatePath(`/coach/clients/${parsed.data.client_id}`)
     return { success: true }
 }
 

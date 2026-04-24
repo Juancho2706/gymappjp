@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { cn } from '@/lib/utils'
 
 export interface Food {
   id: string
@@ -16,46 +17,83 @@ export interface Food {
   carbs_g: number
   fats_g: number
   coach_id: string | null
+  category: string | null
 }
+
+const CATEGORIES: { value: string; label: string }[] = [
+  { value: '', label: 'Todos' },
+  { value: 'proteina', label: 'Proteína' },
+  { value: 'carbohidrato', label: 'Carbohidrato' },
+  { value: 'verdura', label: 'Verdura' },
+  { value: 'fruta', label: 'Fruta' },
+  { value: 'lacteo', label: 'Lácteo' },
+  { value: 'grasa', label: 'Grasa' },
+  { value: 'legumbre', label: 'Legumbre' },
+  { value: 'bebida', label: 'Bebida' },
+  { value: 'snack', label: 'Snack' },
+]
 
 interface Props {
   onFoodSelected?: (food: Food) => void
 }
 
-/** Búsqueda RPC para modales (meal groups, etc.). La página `/coach/foods` usa `FoodBrowser`. */
+/** Búsqueda para modales (meal groups, etc.). La página `/coach/foods` usa `FoodBrowser`. */
 export function FoodSearch({ onFoodSelected }: Props) {
   const supabase = createClient()
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('')
   const [results, setResults] = useState<Food[]>([])
 
   useEffect(() => {
     const timer = setTimeout(async () => {
-      if (searchTerm.trim().length < 3) {
+      const trimmed = searchTerm.trim()
+
+      // Need either a search term (≥3 chars) or a category filter to fetch
+      if (trimmed.length < 3 && selectedCategory === '') {
         setResults([])
         return
       }
 
-      const { data, error } = await supabase.rpc('search_foods', { search_term: searchTerm })
+      let query = supabase
+        .from('foods')
+        .select('id, name, serving_size, serving_unit, calories, protein_g, carbs_g, fats_g, coach_id, category')
+        .order('name')
+        .limit(40)
+
+      if (trimmed.length >= 3) {
+        // Use normalized name_search column for accent-insensitive matching
+        query = query.ilike('name_search', `%${trimmed}%`)
+      }
+
+      if (selectedCategory !== '') {
+        query = query.eq('category', selectedCategory)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('Error searching foods:', error)
         return
       }
 
-      setResults(data as Food[])
+      setResults((data as Food[]) ?? [])
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, supabase])
+  }, [searchTerm, selectedCategory, supabase])
+
+  const showEmpty =
+    results.length === 0 && (searchTerm.length >= 3 || selectedCategory !== '')
 
   return (
     <div>
+      {/* Search input */}
       <div className="flex w-full items-center space-x-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Escribe para buscar (Ej: Pollo, Arroz...)"
+            placeholder="Buscar alimento (ej: Pollo, Arroz...)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-9 h-11 bg-white dark:bg-background text-slate-900 dark:text-foreground border-emerald-200 dark:border-emerald-500/20"
@@ -64,10 +102,32 @@ export function FoodSearch({ onFoodSelected }: Props) {
         </div>
       </div>
 
-      <div className="mt-4 space-y-2">
-        {results.length === 0 && searchTerm.length >= 3 && (
+      {/* Category filter pills */}
+      <div className="flex gap-1.5 mt-3 overflow-x-auto pb-1 scrollbar-none">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.value}
+            type="button"
+            onClick={() => setSelectedCategory(cat.value)}
+            className={cn(
+              'shrink-0 rounded-full px-3 py-1 text-[11px] font-bold transition-colors whitespace-nowrap',
+              selectedCategory === cat.value
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+            )}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Results */}
+      <div className="mt-3 space-y-2">
+        {showEmpty && (
           <p className="text-center py-8 text-muted-foreground text-sm italic">
-            {`No se encontraron alimentos con "${searchTerm}"`}
+            {searchTerm.length >= 3
+              ? `No se encontraron alimentos con "${searchTerm}"${selectedCategory ? ` en ${CATEGORIES.find(c => c.value === selectedCategory)?.label}` : ''}`
+              : `No hay alimentos en ${CATEGORIES.find(c => c.value === selectedCategory)?.label}`}
           </p>
         )}
         {results.map((food) => (
