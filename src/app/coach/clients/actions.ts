@@ -268,11 +268,11 @@ export async function updateClientDataAction(
     // Upsert client_intake
     const intakePayload = {
         client_id: parsed.data.client_id,
-        weight_kg: parsed.data.weight_kg !== '' ? Number(parsed.data.weight_kg) : null,
-        height_cm: parsed.data.height_cm !== '' ? Number(parsed.data.height_cm) : null,
-        goals: parsed.data.goals || null,
-        experience_level: parsed.data.experience_level || null,
-        availability: parsed.data.availability || null,
+        weight_kg: parsed.data.weight_kg !== '' ? Number(parsed.data.weight_kg) : 0,
+        height_cm: parsed.data.height_cm !== '' ? Number(parsed.data.height_cm) : 0,
+        goals: parsed.data.goals || '',
+        experience_level: parsed.data.experience_level || '',
+        availability: parsed.data.availability || '',
         injuries: parsed.data.injuries || null,
         medical_conditions: parsed.data.medical_conditions || null,
     }
