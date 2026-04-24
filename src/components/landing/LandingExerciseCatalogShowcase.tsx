@@ -73,14 +73,16 @@ function ExerciseTile({
     )
 }
 
-export type LandingExerciseCatalogShowcaseProps = {
-    exerciseTitle: string
-    exerciseBullets: string[]
-}
-
-export function LandingExerciseCatalogShowcase({ exerciseTitle, exerciseBullets }: LandingExerciseCatalogShowcaseProps) {
+export function LandingExerciseCatalogShowcase({ exerciseCount }: { exerciseCount: number }) {
     const { t, language } = useTranslation()
     const lang = language === 'en' ? 'en' : 'es'
+    const exerciseTitle = t('landing.exercises.title').replace('{{count}}', String(exerciseCount))
+    const exerciseBullets = [
+        t('landing.exercises.bullet1'),
+        t('landing.exercises.bullet2'),
+        t('landing.exercises.bullet3'),
+        t('landing.exercises.bullet4'),
+    ]
     const titleParts = parseLeadingNumberTitle(exerciseTitle)
     const titleLead = t('landing.exercises.titleLead')
 

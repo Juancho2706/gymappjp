@@ -1,11 +1,11 @@
 'use client'
 
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Zap, Info, Dumbbell, Timer, X, Settings, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Zap, Info, Dumbbell, Timer, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { LogSetForm } from './LogSetForm'
@@ -145,7 +145,19 @@ export function WorkoutExecutionClient({
     const [showCompleted, setShowCompleted] = useState(false)
     const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null)
     const [sessionLogs, setSessionLogs] = useState(logs)
-    
+    const [isOffline, setIsOffline] = useState(false)
+
+    useEffect(() => {
+        const onOnline = () => setIsOffline(false)
+        const onOffline = () => setIsOffline(true)
+        window.addEventListener('online', onOnline)
+        window.addEventListener('offline', onOffline)
+        return () => {
+            window.removeEventListener('online', onOnline)
+            window.removeEventListener('offline', onOffline)
+        }
+    }, [])
+
     if (!blocks.length) {
         return (
             <div className="min-h-dvh bg-background flex flex-col items-center justify-center p-6 text-center">
@@ -289,6 +301,13 @@ export function WorkoutExecutionClient({
                         </div>
                     </div>
                 </motion.div>
+
+                {isOffline && (
+                    <div className="sticky top-[var(--workout-header-h,80px)] z-10 flex items-center gap-2.5 bg-amber-500/90 backdrop-blur-sm px-4 py-2.5 text-amber-950 dark:bg-amber-600/90 dark:text-amber-50">
+                        <WifiOff className="w-4 h-4 shrink-0" />
+                        <p className="text-xs font-semibold">Sin conexión — los datos se guardarán al reconectar.</p>
+                    </div>
+                )}
 
                 <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
                     <div className="space-y-6">

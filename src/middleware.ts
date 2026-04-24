@@ -30,6 +30,7 @@ export async function middleware(request: NextRequest) {
             pathname === '/register' ||
             pathname === '/forgot-password' ||
             pathname === '/reset-password' ||
+            pathname === '/registro-beta' ||
             /^\/c\/[^/]+\/login$/.test(pathname)
         if (authPost) {
             const rl = await rateLimitAuth(ip)
@@ -267,7 +268,7 @@ export async function middleware(request: NextRequest) {
     // 4. Redirect logged-in coaches away from auth pages
     // EXCEPT for /reset-password which needs the session
     // ============================================================
-    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
+    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password') || pathname.startsWith('/registro-beta')
     if (isAuthPage && user) {
         const { data: coachData } = await supabase
             .from('coaches')

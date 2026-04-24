@@ -13,7 +13,9 @@ export async function GET() {
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
-        return NextResponse.json({ count: count ?? 0 })
+        return NextResponse.json({ count: count ?? 0 }, {
+            headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' }
+        })
     } catch (error) {
         const message = error instanceof Error ? error.message : 'No se pudo obtener el total.'
         return NextResponse.json({ error: message }, { status: 500 })

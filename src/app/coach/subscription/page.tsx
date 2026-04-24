@@ -183,11 +183,24 @@ export default function CoachSubscriptionPage() {
 
             {coach ? (
                 <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
+                    {/* Status badge */}
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            coach.subscription_status === 'active' ? 'bg-emerald-500/15 text-emerald-500' :
+                            coach.subscription_status === 'canceled' ? 'bg-red-500/15 text-red-400' :
+                            coach.subscription_status === 'trialing' ? 'bg-blue-500/15 text-blue-400' :
+                            'bg-amber-500/15 text-amber-400'
+                        }`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                            {coach.subscription_status === 'active' ? 'Activo' :
+                             coach.subscription_status === 'canceled' ? 'Cancelado — acceso hasta el período pagado' :
+                             coach.subscription_status === 'trialing' ? 'En prueba' :
+                             coach.subscription_status === 'pending_payment' ? 'Procesando pago' :
+                             coach.subscription_status}
+                        </span>
+                    </div>
                     <p className="text-sm text-muted-foreground">
-                        Estado actual: <span className="font-semibold text-foreground">{coach.subscription_status}</span>
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Plan actual:{' '}
+                        Plan:{' '}
                         <span className="font-semibold text-foreground">
                             {(() => {
                                 const t = coach.subscription_tier as SubscriptionTier
@@ -196,12 +209,29 @@ export default function CoachSubscriptionPage() {
                             })()}
                         </span>
                     </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Próximo corte:{' '}
-                        <span className="font-semibold text-foreground">
-                            {coach.current_period_end ? new Date(coach.current_period_end).toLocaleDateString('es-CL') : 'No disponible'}
-                        </span>
-                    </p>
+                    {coach.current_period_end ? (
+                        <p className="text-sm text-muted-foreground mt-1">
+                            {coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'}:{' '}
+                            <span className="font-semibold text-foreground">
+                                {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
+                                    day: 'numeric', month: 'long', year: 'numeric',
+                                })}
+                            </span>
+                            {coach.subscription_status === 'active' && (() => {
+                                const t = coach.subscription_tier as SubscriptionTier
+                                const c = coach.billing_cycle as BillingCycle
+                                const price = getTierPriceClp(t, c)
+                                return price > 0 ? (
+                                    <span className="text-muted-foreground"> · ${price.toLocaleString('es-CL')} CLP</span>
+                                ) : null
+                            })()}
+                        </p>
+                    ) : null}
+                    {coach.subscription_status === 'active' && coach.payment_provider === 'mercadopago' && coach.current_period_end && (
+                        <p className="mt-2 text-xs text-muted-foreground/60">
+                            Mercado Pago tiene autorizado el débito automático para esa fecha.
+                        </p>
+                    )}
                 </section>
             ) : null}
 

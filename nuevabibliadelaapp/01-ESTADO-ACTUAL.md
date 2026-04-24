@@ -144,6 +144,16 @@ body { min-height: 100dvh; overscroll-behavior-y: none; }
 
 ## Historial de Sesiones
 
+### Sesión 9 — 2026-04-23 — Dashboard polish, Builder UX, revisión general pre-lanzamiento
+
+**Dashboard Coach — DashboardCharts:** [`src/components/coach/dashboard/DashboardCharts.tsx`](src/components/coach/dashboard/DashboardCharts.tsx) refactorizado con layout mejorado y responsividad. Commit: `e088046`.
+
+**Builder + WorkoutPrograms — UI polish:** [`WeeklyPlanBuilder`](src/app/coach/builder/[clientId]/components/WeeklyPlanBuilder.tsx) y [`WorkoutProgramsClient`](src/app/coach/workout-programs/WorkoutProgramsClient.tsx) con mejoras de UI y responsividad. Commit: `cb38c73`.
+
+**Docs Sesión 9:** Revisión general completa (landing multi-rol, auditoría componentes coach/alumno, plan de lanzamiento). Quick wins: Cache-Control en `/api/public/exercises-count` (`s-maxage=3600, stale-while-revalidate=86400`). Fix `StickyBrandingCard` localStorage try/catch. Commit: `19b6e33` (docs previos) + implementaciones de esta sesión.
+
+---
+
 ### Sesión 8 — 2026-04-19/22 — Landing EVA, email único, alimentos sin acento, tours
 
 **Landing y marca:** Unificación EVA en [`src/app/page.tsx`](src/app/page.tsx) y componentes bajo `src/components/landing/*` (tabs coach/alumno, pricing preview, contacto, typewriter, WebGL shader, callouts). Constantes de marca en [`src/lib/brand-assets.ts`](src/lib/brand-assets.ts). Commit referencia: `f638f9d` (unify EVA brand, drop Forge landing).

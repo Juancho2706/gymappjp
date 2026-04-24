@@ -10,25 +10,21 @@ export default function AuthLayout({
 }) {
     return (
         <div className="min-h-dvh bg-background flex flex-col pt-safe">
-            {/* Minimal header */}
-            <header className="flex items-center justify-between px-6 py-4">
-                <LandingBrandMark iconClassName="h-8 w-8 sm:h-9 sm:w-9" />
-                <ThemeToggle />
-            </header>
+            {/* Ambient gradient */}
+            <div
+                className="fixed inset-0 pointer-events-none z-0"
+                aria-hidden="true"
+                style={{
+                    background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,122,255,0.08), transparent)',
+                }}
+            />
 
-            {/* Content */}
-            <div className="flex-1 flex items-center justify-center p-4">
-                {/* Ambient gradient */}
-                <div
-                    className="fixed inset-0 pointer-events-none"
-                    aria-hidden="true"
-                    style={{
-                        background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,122,255,0.08), transparent)',
-                    }}
-                />
-                <div className="relative z-10 w-full max-w-md">
-                    {children}
-                </div>
+            {/*
+              Content — no max-width constraint here; each child sets its own.
+              Coach login uses a full-width split layout; other pages use max-w-md.
+            */}
+            <div className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6">
+                {children}
             </div>
         </div>
     )

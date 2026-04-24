@@ -115,7 +115,7 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="animate-slide-up">
+        <div className="w-full max-w-md mx-auto animate-slide-up">
             {/* Header */}
             <div className="text-center mb-8 flex flex-col items-center">
                 <h1 className="text-3xl font-extrabold tracking-tight text-foreground font-display">

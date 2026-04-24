@@ -31,6 +31,8 @@ function rowUnavailable(row: AvailabilityPayload): boolean {
 export const PLATFORM_EMAIL_TAKEN_ES =
     'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.'
 
+const BLOCKED_EMAIL_DOMAINS = ['eva-app.cl']
+
 /**
  * Server-only: requires service_role (or a role granted EXECUTE on the RPC).
  */
@@ -41,6 +43,11 @@ export async function assertPlatformEmailAvailable(
     const normalized = normalizePlatformEmail(email)
     if (!normalized) {
         return { ok: false, error: 'El correo es obligatorio.' }
+    }
+
+    const domain = normalized.split('@')[1] ?? ''
+    if (BLOCKED_EMAIL_DOMAINS.includes(domain)) {
+        return { ok: false, error: 'Este dominio de correo no está permitido para registro.' }
     }
 
     const { data, error } = await admin.rpc('check_platform_email_availability', {

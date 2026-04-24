@@ -121,15 +121,17 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
     return (
-        <Suspense fallback={
-            <div className="flex flex-col items-center justify-center gap-6 p-12 text-center">
-                <h1 className="text-2xl font-bold tracking-tight text-zinc-50 font-display">
-                    Nueva contraseña
-                </h1>
-                <EvaRouteLoader subtitle="Cargando formulario…" size="md" />
-            </div>
-        }>
-            <ResetPasswordForm />
-        </Suspense>
+        <div className="w-full max-w-md mx-auto">
+            <Suspense fallback={
+                <div className="flex flex-col items-center justify-center gap-6 p-12 text-center">
+                    <h1 className="text-2xl font-bold tracking-tight text-zinc-50 font-display">
+                        Nueva contraseña
+                    </h1>
+                    <EvaRouteLoader subtitle="Cargando formulario…" size="md" />
+                </div>
+            }>
+                <ResetPasswordForm />
+            </Suspense>
+        </div>
     )
 }

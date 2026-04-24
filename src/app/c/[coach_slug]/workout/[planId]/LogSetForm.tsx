@@ -158,7 +158,16 @@ export function LogSetForm({
                     <SubmitSetButton isLogged={Boolean(isLogged)} />
                 </div>
                 {state.error && (
-                    <p className="col-span-full text-xs text-red-400 px-2 mt-1">{state.error}</p>
+                    <div className="col-span-full flex items-center gap-2 px-2 mt-1">
+                        <p className="flex-1 text-xs text-red-400">{state.error}</p>
+                        <button
+                            type="button"
+                            onClick={() => formRef.current?.requestSubmit()}
+                            className="text-[10px] font-bold text-red-400 border border-red-500/30 rounded-md px-2 py-0.5 hover:bg-red-500/10 transition-colors shrink-0"
+                        >
+                            Reintentar
+                        </button>
+                    </div>
                 )}
             </form>
 
