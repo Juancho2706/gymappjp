@@ -1,6 +1,6 @@
 # 04 — Negocio y Estrategia de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
+> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
 > **Fuentes:** PLANIFICACION-EMPRESA.md, ESCALABILIDAD-Y-MODELO-NEGOCIO.md, EVALUACION-PAGOS-CHILE.md (resumen)
 
 ---
@@ -125,7 +125,8 @@ ARPA sube por nutrición y tiers altos → MRR potencial ~$1M+ CLP/mes
 2. **Outbound a gimnasios y boxes** — demo presencial con PWA instalada
 3. **Alianzas con nutricionistas** — bundles Pro+ (nutrición real en producto)
 4. **Contenido educativo** — reels/shorts "cómo dejar de mandar PDFs por WhatsApp"
-5. **Programa piloto** — 3–5 coaches con feedback semanal + testimonio
+5. **Programa piloto / beta invites** — `/registro-beta?t=<token>` para invitaciones controladas. 20 días Pro gratis + 30 alumnos. Ideal para coaches de confianza que generen testimonios.
+6. **Programa piloto extendido** — 3–5 coaches con feedback semanal + testimonio
 
 ### Proceso de venta B2B (pasos)
 
@@ -146,8 +147,8 @@ ARPA sube por nutrición y tiers altos → MRR potencial ~$1M+ CLP/mes
 
 ## Fases del Producto
 
-### Fase 0: Pre-Revenue — COMPLETADA (~94%)
-Producto funcional. Core loop completo. MercadoPago integrado con grace period + upgrade mid-cycle.
+### Fase 0: Pre-Revenue — COMPLETADA (~98%)
+Producto funcional. Core loop completo. MercadoPago integrado con grace period + upgrade mid-cycle. Beta invite flow activo. Dashboard V2 listo. Auth rediseñado. Landing refactorizada.
 
 ### Fase 1: Revenue MVP (objetivo inmediato)
 **Objetivo:** Primer coach real pagando.
@@ -161,7 +162,8 @@ Producto funcional. Core loop completo. MercadoPago integrado con grace period +
 **Qué falta:**
 - Smoke test webhook MP en producción con credenciales reales
 - Verificación cuenta MP (KYC completo)
-- (Entornos nuevos) Alinear migraciones Supabase con el repo antes de tráfico real
+- Panel CEO para visibilidad de métricas
+- Testing E2E de cobertura real
 
 ### Fase 2: Product-Market Fit (3–9 meses)
 **Objetivo:** 10+ coaches activos.

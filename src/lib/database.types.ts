@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_logs: {
+        Row: {
+          action: string
+          admin_email: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          payload: Json | null
+          target_id: string | null
+          target_table: string
+        }
+        Insert: {
+          action: string
+          admin_email: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          payload?: Json | null
+          target_id?: string | null
+          target_table: string
+        }
+        Update: {
+          action?: string
+          admin_email?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          payload?: Json | null
+          target_id?: string | null
+          target_table?: string
+        }
+        Relationships: []
+      }
       beta_invite_registrations: {
         Row: {
           coach_id: string
@@ -1531,6 +1564,36 @@ export type Database = {
       }
       get_coach_workout_sessions_30d: {
         Args: { p_coach_id: string }
+        Returns: {
+          day: string
+          sessions: number
+        }[]
+      }
+      get_platform_clients_count: { Args: never; Returns: number }
+      get_platform_coach_signups_last_6_months: {
+        Args: never
+        Returns: {
+          coach_count: number
+          ym: string
+        }[]
+      }
+      get_platform_coaches_by_tier: {
+        Args: never
+        Returns: {
+          coach_count: number
+          tier: string
+        }[]
+      }
+      get_platform_coaches_count: { Args: never; Returns: number }
+      get_platform_subscription_events_series: {
+        Args: never
+        Returns: {
+          event_count: number
+          ym: string
+        }[]
+      }
+      get_platform_workout_sessions_30d: {
+        Args: never
         Returns: {
           day: string
           sessions: number

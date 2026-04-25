@@ -1,8 +1,8 @@
 # 02 — Roadmap y Tareas Pendientes
 
-> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
-> **Fuentes:** ROAD-TO-100.md (Sesiones 1–8), Supabase MCP / panel según entorno
-> **Estado global:** ~97–98% completado. Estimación restante: ~12–15 días de desarrollo (sin contar QA pagos real).
+> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
+> **Fuentes:** ROAD-TO-100.md (Sesiones 1–9), Supabase MCP / panel según entorno
+> **Estado global:** ~98–99% completado. Estimación restante: ~6–10 días de desarrollo (sin contar QA pagos real).
 
 ---
 
@@ -52,10 +52,26 @@ Los siguientes archivos fueron borrados de `supabase/migrations/` el 2026-04-17.
 | `20260421120000_client_payments_coach_payment_date_idx.sql` | Índice `client_payments` |
 | `20260421130100_coaches_retire_starter_lite_tier.sql` | Retira tier legacy `starter_lite` → `starter` |
 | `20260422000000_platform_email_availability.sql` | RPC `check_platform_email_availability` + índice único email normalizado en `clients` |
+| `20260423120000_perf_dashboard_pulse_indexes_rpcs.sql` | Índices perf dashboard + 2 RPCs (`get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`) |
+| `20260424000000_beta_invite_registrations.sql` | Tabla `beta_invite_registrations` + RLS |
+| `20260424120000_add_rir_to_workout_logs.sql` | Columna `rir` en `workout_logs` |
 
 **Sesión 7 (ya documentado):** migraciones antiguas eliminadas del árbol tras aplicarlas por MCP — ver tabla “Migraciones SQL Eliminadas” arriba.
 
 ---
+
+## BLOQUE M0c — Sesión 9 (2026-04-23/24 — completado)
+
+| ID | Tarea | Estado |
+|----|-------|--------|
+| M19 | Dashboard Coach V2: GreetingHeader, KPIs, FocusList, Agenda, Sheets, Modales | ✅ Sesión 9 |
+| M20 | Beta invite registration flow (`/registro-beta`, token, 20 días Pro) | ✅ Sesión 9 |
+| M21 | Landing refactor: HeroSection, PillNav, FinalCTA, StickyBrandingCard | ✅ Sesión 9 |
+| M22 | Auth visual rework: login coach/alumno, forgot/reset password | ✅ Sesión 9 |
+| M23 | RIR (Reps In Reserve) en workout logs + slider en ejecución | ✅ Sesión 9 |
+| M24 | PlanBuilder auto-sync goals con totales de comidas | ✅ Sesión 9 |
+| M25 | FoodSearchDrawer portal + 2-stage UX + categorías | ✅ Sesión 9 |
+| M26 | EditClientDataModal para edición de datos del alumno | ✅ Sesión 9 |
 
 ## BLOQUE M0b — Post-móvil / producto (Sesión 8 — completado)
 
@@ -174,7 +190,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 
 | ID | Tarea | Área | Esfuerzo | Estado |
 |----|-------|------|----------|--------|
-| 17 | **Panel CEO**: coaches activos por tier, MRR total, churn, alumnos totales | `src/app/admin/` (nuevo) | 4d | ⏳ Pendiente |
+| 17 | **Panel CEO**: coaches activos por tier, MRR total, churn, alumnos totales | `src/app/admin/` (nuevo) | 4d | ✅ Sesión 9 |
 | 18 | **Testing E2E**: pago sandbox MP, flujo alumno completo, unit tests server actions, test RLS | `tests/` | 5d | ⏳ Pendiente |
 | 19.1 | **SEO técnico**: `sitemap.xml` dinámico, `robots.txt`, JSON-LD `SoftwareApplication` | `src/app/` | 1d | ⏳ Pendiente |
 | 20 | **i18n**: migrar strings hardcoded del dashboard alumno + onboarding a keys | Toda la app | 3d | ⏳ Pendiente |
@@ -190,26 +206,26 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 |-----------|------|-----------|----------|--------|
 | Móvil | Optimización safe-areas, dvh, builder UX | 🔴 P0 | — | ✅ Sesión 7 |
 | DB | Constraint `duration_type` corregido | 🔴 P0 | — | ✅ Sesión 7 |
+| Dashboard | Dashboard Coach V2 completo | 🔴 P0 | — | ✅ Sesión 9 |
 | Pagos | Smoke test grace period + reactivar | 🔴 P0 | 0.5d | ⏳ |
 | DB | BD Alimentos: USDA key + ejecutar scripts + CSV | 🔴 P0 | — | ⏳ (usuario) |
 | Pagos | Verificar cuenta MP (KYC completo) | 🔴 P0 | — | ⏳ (usuario) |
 | Features | Check-in medidas corporales | 🟠 P1 | 2d | ⏳ |
-| Features | Workout optimistic updates + retry + offline | 🟠 P1 | 2d | ⏳ |
+| Features | Workout retry automático + offline banner | 🟠 P1 | 1d | ⏳ |
+| Features | Panel CEO superadmin | 🟠 P1 | 4d | ✅ Sesión 9 |
 | UX | Nav alumno reestructura (Entrenar/Progreso/Más) | 🟡 P2 | 1d | ⏳ |
-| Features | Login coach rediseño visual | 🟡 P2 | 1d | ⏳ |
 | Features | Mi Marca preview real | 🟡 P2 | 1.5d | ⏳ |
-| Features | Ejercicios coach GIF upload + filtro | 🟡 P2 | 2d | ⏳ |
+| Features | Ejercicios coach GIF upload + filtro muscle_group | 🟡 P2 | 2d | ⏳ |
 | Features | Ejercicios alumno favoritos + historial | 🟡 P2 | 2d | ⏳ |
 | Features | PrintProgramDialog mejorado + PDF | 🟡 P2 | 1d | ⏳ |
 | Seguridad | Verificación email al registrar (Supabase Auth + pantalla post-registro) | 🟡 P2 | 1d | ⏳ |
-| Features | Panel CEO superadmin | 🟢 P3 | 4d | ⏳ |
 | Features | Testing E2E + RLS tests | 🟢 P3 | 5d | ⏳ |
 | Features | Push notifications PWA | 🟢 P3 | 3d | ⏳ |
 | Features | i18n migración strings | 🟢 P3 | 3d | ⏳ |
 | Features | SEO técnico (sitemap, JSON-LD) | 🟢 P3 | 1d | ⏳ |
 | Features | Email confirmación de pago | 🟢 P3 | 1d | ⏳ |
 
-**Total estimado restante al 100%: ~22–25 días de desarrollo**
+**Total estimado restante al 100%: ~18–22 días de desarrollo**
 
 ---
 

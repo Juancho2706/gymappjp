@@ -1,6 +1,6 @@
 # 05 — Pagos y Operaciones
 
-> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
+> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
 > **Fuentes:** SMOKE-TEST-P1-7-PAGOS.md, EVALUACION-PAGOS-CHILE.md (técnico), ESTADO-PROYECTO.md (pagos)
 
 ---
@@ -158,6 +158,9 @@ UPSTASH_REDIS_REST_TOKEN=
 
 # Email drip cron
 DRIP_CRON_TOKEN=                   # Bearer token para /api/internal/email-drip/run
+
+# Beta invites
+BETA_INVITE_TOKEN=                 # Token secreto para /registro-beta (timing-safe compare)
 ```
 
 ### Opcionales (desarrollo/debug)
@@ -272,9 +275,10 @@ Para cuentas internas o QA sin pasar checkout:
 - [ ] Smoke test P1.7 completado y sin errores
 
 ### App y deploy
-- [ ] Todas las variables de entorno en Vercel/hosting
+- [ ] Todas las variables de entorno en Vercel/hosting (incl. `BETA_INVITE_TOKEN` si se usa beta invites)
 - [ ] Dominio con TLS activo
 - [ ] `NEXT_PUBLIC_APP_URL` correcto (para redirects y webhooks)
+- [ ] `NEXT_PUBLIC_COACH_DASHBOARD_V2` decidir si activar por defecto
 - [ ] `middleware.ts` verificado con `SUBSCRIPTION_BLOCKED_STATUSES` correcto
 - [ ] `coach-subscription-gate.ts` verificado con `current_period_end` correcto
 

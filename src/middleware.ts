@@ -8,6 +8,7 @@ import {
     jsonRateLimited,
     rateLimitAuth,
     rateLimitPayment,
+    rateLimitAdmin,
 } from '@/lib/rate-limit'
 
 type Coach = Tables<'coaches'>
@@ -42,6 +43,12 @@ export async function middleware(request: NextRequest) {
             const rl = await rateLimitPayment(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
         }
+
+        // SEC-004: rate limit admin mutation endpoints.
+        if (pathname.startsWith('/admin/')) {
+            const rl = await rateLimitAdmin(ip)
+            if (!rl.ok) return jsonRateLimited(rl.retryAfter)
+        }
     }
 
     let supabaseResponse = NextResponse.next({ request })
@@ -67,6 +74,33 @@ export async function middleware(request: NextRequest) {
 
     // Refresh session — IMPORTANT: do not remove
     const { data: { user } } = await supabase.auth.getUser()
+
+    // ============================================================
+    // ADMIN ROUTE PROTECTION
+    // ============================================================
+    if (pathname.startsWith('/admin')) {
+        // Allow admin login page without check
+        if (pathname === '/admin/login') {
+            return supabaseResponse
+        }
+
+        // Must be authenticated
+        if (!user) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/admin/login'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        // Must be in admin allowlist
+        const { isAdminEmail } = await import('@/lib/admin/admin-gate')
+        if (!isAdminEmail(user.email)) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        return supabaseResponse
+    }
 
     // ============================================================
     // 1. PROTECT /coach/* routes (only for coaches)

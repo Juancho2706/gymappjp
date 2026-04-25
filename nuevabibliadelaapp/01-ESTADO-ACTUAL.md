@@ -1,8 +1,8 @@
 # 01 — Estado Actual de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
-> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits `837f847..master` (hasta 2026-04-22)
-> **Completitud global estimada: ~97–98%** (Sesiones 1–8; landing + auth email + tours documentados)
+> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
+> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits hasta 2026-04-24
+> **Completitud global estimada: ~98–99%** (Sesiones 1–9; Panel CEO + Dashboard V2 + beta flow)
 
 ---
 
@@ -26,7 +26,7 @@
 | Testing | Vitest + Testing Library + Playwright | — |
 | PDF | puppeteer (devDependencies — PrintProgramDialog) | — |
 
-**Base de código:** 225+ archivos TypeScript/TSX · 24 tablas Supabase · 41+ rutas · 11+ API routes · **5 funciones RPC** en `public` (ver [`database.types.ts`](src/lib/database.types.ts)): `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`
+**Base de código:** 225+ archivos TypeScript/TSX · **26 tablas** Supabase · 41+ rutas · 11+ API routes · **12 funciones RPC** en `public` (ver [`database.types.ts`](src/lib/database.types.ts)): `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier`
 
 ---
 
@@ -58,9 +58,9 @@
 | Forgot/Reset Password | 40% | Flujo correcto con redirectTo |
 | Ejercicios Coach | 40% | CRUD + catálogo. Pendiente: upload GIF, bulk edit |
 | Testing | 28% | Vitest básico + Playwright. Sin cobertura real |
-| Panel CEO / Superadmin | 0% | No implementado |
+| Panel CEO / Superadmin | ~85% | Implementado. Dashboard analytics, tabla coaches/clientes, search, edit/delete con audit logs. Pendiente: paginación server-side, gráficos avanzados |
 
-**TOTAL GLOBAL: ~97%**
+**TOTAL GLOBAL: ~98%**
 
 ---
 
@@ -113,8 +113,8 @@ Generado con `node scripts/list-coaches.mjs` (lee `coaches` + email desde Auth).
 - **Arquitectura `_data/_actions/_components`:** Patrón establecido en dashboard alumno y nutrición. Seguir en nuevos módulos.
 - **React.cache:** Para queries deduplicadas en RSC. No usar `unstable_cache` (incompatible con Supabase SSR en prod).
 - **PWA:** `public/sw.js` + manifests dinámicos por coach (`/api/manifest/[coach_slug]` + `/c/[slug]/manifest.webmanifest`).
-- **24 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`.
-- **RPC `public`:** `search_foods`, `get_client_current_streak`, `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `check_platform_email_availability` (email único plataforma coach/cliente; ver [`src/lib/auth/platform-email.ts`](src/lib/auth/platform-email.ts)).
+- **26 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`, `beta_invite_registrations`, `admin_audit_logs`.
+- **RPC `public`:** `search_foods`, `get_client_current_streak`, `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `check_platform_email_availability` (email único plataforma coach/cliente; ver [`src/lib/auth/platform-email.ts`](src/lib/auth/platform-email.ts)), `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier` (analytics plataforma para Panel CEO).
 
 ### Arquitectura Móvil (Sesión 7)
 
@@ -144,13 +144,25 @@ body { min-height: 100dvh; overscroll-behavior-y: none; }
 
 ## Historial de Sesiones
 
-### Sesión 9 — 2026-04-23 — Dashboard polish, Builder UX, revisión general pre-lanzamiento
+### Sesión 9 — 2026-04-23/24 — Panel CEO / Admin Dashboard + Dashboard V2 + Beta Flow
+
+**Panel CEO / Admin Dashboard:**
+- Ruta `/admin/*` con protección en middleware (`isAdminEmail`) + layout sidebar dark
+- Tabla `admin_audit_logs` con RLS + `admin-action-wrapper.ts` (auth guard + audit logging)
+- Rate limiting admin: 20 req/min (`rateLimitAdmin`)
+- Dashboard CEO: KPIs (total coaches, alumnos, MRR estimado, beta invites), charts Recharts (signups 6m, sesiones 30d, eventos suscripción), lista coaches recientes
+- Tabla coaches: paginación cliente, búsqueda, editar tier/estado/máx alumnos, eliminar con cleanup auth
+- Tabla clientes: paginación cliente, búsqueda, filtro por coach, editar datos básicos
+- Env var `ADMIN_EMAILS` (allowlist comma-separated)
+- **Nota técnica:** `coaches` no tiene columna `email` (vive en `auth.users`); el panel opera sin mostrar email de coach directamente.
+
+**Dashboard Coach V2:** `DashboardContent.tsx` simplificado (V2 siempre activo), legacy V1 eliminado. Commit: `fdf7883`.
 
 **Dashboard Coach — DashboardCharts:** [`src/components/coach/dashboard/DashboardCharts.tsx`](src/components/coach/dashboard/DashboardCharts.tsx) refactorizado con layout mejorado y responsividad. Commit: `e088046`.
 
 **Builder + WorkoutPrograms — UI polish:** [`WeeklyPlanBuilder`](src/app/coach/builder/[clientId]/components/WeeklyPlanBuilder.tsx) y [`WorkoutProgramsClient`](src/app/coach/workout-programs/WorkoutProgramsClient.tsx) con mejoras de UI y responsividad. Commit: `cb38c73`.
 
-**Docs Sesión 9:** Revisión general completa (landing multi-rol, auditoría componentes coach/alumno, plan de lanzamiento). Quick wins: Cache-Control en `/api/public/exercises-count` (`s-maxage=3600, stale-while-revalidate=86400`). Fix `StickyBrandingCard` localStorage try/catch. Commit: `19b6e33` (docs previos) + implementaciones de esta sesión.
+**Docs Sesión 9:** Revisión general completa (landing multi-rol, auditoría componentes coach/alumno, plan de lanzamiento). Quick wins: Cache-Control en `/api/public/exercises-count` (`s-maxage=3600, stale-while-revalidate=86400`). Fix `StickyBrandingCard` localStorage try/catch.
 
 ---
 
@@ -385,6 +397,19 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 
 ---
 
+## Commits 2026-04-23/24 — Resumen (Sesión 9)
+
+| Hash | Fecha | Cambio |
+|------|-------|--------|
+| *(actual)* | 2026-04-24 | feat(admin): Panel CEO completo — dashboard, coaches, clientes, audit logs, RPCs platform |
+| `df6780c` | 2026-04-24 | fix(kpi): conditional rendering delta en KpiTile |
+| `fdf7883` | 2026-04-24 | feat(dashboard): Dashboard V2 completo — 16 componentes, KPIs, sheets, modales |
+| `755a712` | 2026-04-24 | fix(clients): intake defaults a 0/'' para evitar errores de tipo |
+| `1fcafec` | 2026-04-24 | feat: FoodSearchDrawer portal + auto-sync PlanBuilder + RIR en logs + EditClientDataModal |
+| `a64764b` | 2026-04-24 | fix(exercises): remove video_start_time/video_end_time del catálogo |
+| `d075748` | 2026-04-24 | feat(database): beta_invite_registrations + updates client_payments |
+| `c91a2bf` | 2026-04-23 | feat: Beta registration flow + landing refactor + auth rework visual |
+
 ## Commits 2026-04-19/22 — Resumen (post-Sesión 7)
 
 | Hash | Fecha | Cambio |
@@ -438,6 +463,40 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 | Función `get_client_current_streak` | ✅ Existe |
 | Función `check_platform_email_availability` + índice único `clients_email_norm_uidx` | ✅ En repo; verificar en prod |
 | Función / índices búsqueda `foods` sin acento (`20260419120000_*`) | ✅ En repo; verificar en prod |
+| Índices perf `workout_logs`, `daily_nutrition_logs` | ✅ Existen |
+| Alimentos chilenos de marca (Colún, Quaker, etc.) | ✅ Seedeados |
+
+**Nota sobre `supabase_migrations`:** Las migraciones se aplicaron vía MCP directo, por lo que solo 9 aparecen registradas en la tabla `supabase_migrations`. Esto es normal para este flujo de trabajo. Los archivos `.sql` locales correspondientes fueron eliminados para evitar confusión.
+
+| Elemento | Estado |
+|----------|--------|
+| `workout_programs_duration_type_check` constraint (Sesión 7) | ✅ Corregido — ahora acepta `('weeks', 'calendar_days', 'async')` |
+| Migración `20260417_fix_duration_type_constraint.sql` | ✅ Guardada en `supabase/migrations/` |
+| Índices perf dashboard + RPCs `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals` | ✅ Sesión 9 (`20260423120000_*`) |
+
+---
+
+## Estado de la Base de Datos en Producción (verificado 2026-04-17; ampliado Sesión 9)
+
+**Criterio:** alineado con despliegue vía MCP / operación habitual. Nuevos objetos desde entonces están versionados en [`supabase/migrations/`](supabase/migrations/); confirmar en panel Supabase si alguna migración aún no se aplicó en un entorno concreto.
+
+| Elemento | Estado |
+|----------|--------|
+| RLS en 24 tablas (`rowsecurity = true`) | ✅ Activo |
+| `clients.goal_weight_kg` | ✅ Existe |
+| `coaches.superseded_mp_preapproval_id` | ✅ Existe |
+| `coaches.welcome_message` | ✅ Existe |
+| `foods.is_liquid`, `foods.brand`, `foods.serving_unit` | ✅ Existen |
+| `client_payments` table | ✅ Existe con RLS |
+| `coach_onboarding_events`, `coach_email_drip_events` | ✅ Existen |
+| `admin_audit_logs` table | ✅ Creada en Sesión 9 con RLS |
+| `beta_invite_registrations` table | ✅ Creada en Sesión 9 con RLS |
+| Función `get_coach_workout_sessions_30d` | ✅ Existe |
+| Función `get_coach_clients_streaks` | ✅ Existe |
+| Función `get_client_current_streak` | ✅ Existe |
+| Función `check_platform_email_availability` + índice único `clients_email_norm_uidx` | ✅ En repo; verificar en prod |
+| Función / índices búsqueda `foods` sin acento (`20260419120000_*`) | ✅ En repo; verificar en prod |
+| **Funciones platform analytics (Panel CEO):** `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier` | ✅ Sesión 9 |
 | Índices perf `workout_logs`, `daily_nutrition_logs` | ✅ Existen |
 | Alimentos chilenos de marca (Colún, Quaker, etc.) | ✅ Seedeados |
 

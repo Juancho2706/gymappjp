@@ -99,13 +99,14 @@ describe('createClientAction', () => {
       from: vi.fn(() => ({
         insert: vi.fn().mockResolvedValue({ error: null }),
       })),
+      rpc: vi.fn().mockResolvedValue({ data: { available: true }, error: null }),
     }
 
     createClientMock.mockResolvedValue(supabase)
     createRawAdminClientMock.mockResolvedValue(admin)
 
     const result = await createClientAction({}, buildFormData())
-    expect(result).toEqual({ success: true })
+    expect(result.success).toBe(true)
     expect(revalidatePathMock).toHaveBeenCalledWith('/coach/clients')
   })
 })

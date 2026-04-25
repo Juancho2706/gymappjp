@@ -110,10 +110,6 @@ export interface RiskAlertItem {
     label: string
 }
 
-export async function getCoachDashboardData(userId: string) {
-    return measureServer('getCoachDashboardData', () => getCoachDashboardDataInner(userId))
-}
-
 export async function getCoachDashboardDataV2(userId: string) {
     return measureServer('getCoachDashboardDataV2', async () => {
         const base = await getCoachDashboardDataInner(userId)

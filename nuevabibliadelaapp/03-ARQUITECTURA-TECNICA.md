@@ -1,6 +1,6 @@
 # 03 — Arquitectura Técnica de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-22 America/Santiago (Sesión 8)
+> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
 > **Fuentes:** ARQUITECTURA-COMPONENTES.md, ESTADO-COMPONENTES.md, PERFORMANCE-NAV-BASELINE.md + diff `837f847..master`
 
 ---
@@ -40,11 +40,12 @@ src/app/
 ├── globals.css                        # Tailwind v4 @theme + design tokens
 │
 ├── (auth)/                            # Grupo auth coach
-│   ├── layout.tsx                     # Centrado, logo, ThemeToggle
-│   ├── login/                         # Login coach → /coach/dashboard
+│   ├── layout.tsx                     # Centrado, logo, ThemeToggle, fondo ambient gradient
+│   ├── login/                         # Login coach → /coach/dashboard (rediseño visual Sesión 9)
 │   ├── register/                      # Registro coach (Admin API, slug)
-│   ├── forgot-password/               # Email reset
-│   └── reset-password/                # Cambio de contraseña
+│   ├── forgot-password/               # Email reset (rediseño visual Sesión 9)
+│   ├── reset-password/                # Cambio de contraseña (rediseño visual Sesión 9)
+│   └── registro-beta/                 # Invitación beta controlada por token (Sesión 9)
 │
 ├── auth/callback/                     # Supabase auth callback (code exchange)
 │
@@ -150,7 +151,7 @@ Request
 
 ---
 
-## Modelo de Datos Completo (24 tablas)
+## Modelo de Datos Completo (25 tablas)
 
 ### Diagrama de relaciones
 
@@ -178,8 +179,9 @@ coaches ──┬──→ clients ──┬──→ check_ins
           ├──→ nutrition_plan_templates
           │       └──→ template_meals
           │              └──→ template_meal_groups ──→ saved_meals
-          └──→ saved_meals
-                 └──→ saved_meal_items ──→ foods
+          ├──→ saved_meals
+          │       └──→ saved_meal_items ──→ foods
+          └──→ beta_invite_registrations (Sesión 9)
 ```
 
 ### Columnas clave por tabla
@@ -200,7 +202,7 @@ coaches ──┬──→ clients ──┬──→ check_ins
 | `workout_plans` | id, coach_id, client_id, program_id, title, day_of_week, group_name, assigned_date, week_variant (A/B) |
 | `workout_blocks` | id, plan_id, exercise_id, section (warmup/main/cooldown), order_index, sets, reps, target_weight_kg, rir, rest_time, tempo, notes, superset_group, progression_type, progression_value |
 | `exercises` | id, coach_id (null=global), name, muscle_group, body_part, equipment, gif_url, video_url, video_start_time, video_end_time, instructions[], secondary_muscles[] |
-| `workout_logs` | id, client_id, block_id, set_number, reps_done, weight_kg, rpe, plan_name_at_log, logged_at |
+| `workout_logs` | id, client_id, block_id, set_number, reps_done, weight_kg, rpe, rir, plan_name_at_log, logged_at |
 
 **Nutrición:**
 
@@ -223,12 +225,15 @@ coaches ──┬──→ clients ──┬──→ check_ins
 | `check_ins` | id, client_id, date, weight, energy_level, front_photo_url, back_photo_url, notes |
 | `client_payments` | id, client_id, coach_id, amount, payment_date, period_months, service_description, status, receipt_image_url |
 | `subscription_events` | id, coach_id, event_type, amount, status, mp_preapproval_id, created_at |
+| `beta_invite_registrations` | id, ip_address, email, coach_id, created_at (Sesión 9) |
 
 **Funciones RPC (`public`, ver `database.types.ts`):**
 - `search_foods(search_term text)` — búsqueda catálogo `foods` (incl. soporte sin acentos vía migración `20260419120000_add_unaccent_food_search.sql`)
 - `get_client_current_streak(p_client_id uuid)` — racha alumno
 - `get_coach_clients_streaks(p_coach_id uuid)` — rachas directorio
 - `get_coach_workout_sessions_30d(p_coach_id uuid)` — serie sesiones 30d dashboard
+- `get_coach_client_signups_last_6_months(p_coach_id uuid)` — signup bars 6 meses
+- `get_workout_program_planned_set_totals(p_program_ids uuid[])` — sets planificados para adherencia
 - `check_platform_email_availability(p_email text)` — disponibilidad global de email
 
 **Scripts operativos (Node, service role):** `scripts/create-coach-account.mjs`, `scripts/purge-platform-email.mjs`, `scripts/list-coaches.mjs` (ver `01` / `05`).
@@ -299,23 +304,23 @@ Server: re-validación obligatoria en server actions + Zod v4
 
 | Módulo | % | Deuda principal |
 |--------|---|----------------|
-| Dashboard Coach | 88% | Optimistic updates pendientes |
-| Registro Coach | 92% | Validación email duplicado (RPC). Pendiente: flujo “confirma tu correo” Supabase Auth si se exige política anti-spam |
+| Dashboard Coach | 95% | V2 completo (Sesión 9): KPIs, FocusList, Agenda, Sheets. Feature flag `NEXT_PUBLIC_COACH_DASHBOARD_V2`. Pendiente: toggle default V2 |
+| Registro Coach | 94% | Validación email duplicado (RPC) + beta invite flow. Pendiente: flujo “confirma tu correo” Supabase Auth |
 | Historial fecha coach | 85% | Dots actividad ✅ implementados |
-| Workout Execution | 88% | `WorkoutExecutionClient`; tour Sesión 8. Pendiente: offline/retry |
+| Workout Execution | 92% | Tour Sesión 8 + RIR slider Sesión 9. Pendiente: offline/retry |
 | Check-in Alumno | 82% | Medidas corporales, notas |
 | Mi Marca / Settings | 68% | Preview moderno del dashboard alumno |
 | Catálogo Ejercicios Alumno | 68% | Favoritos, historial |
 | Onboarding Alumno | 58% | Fotos iniciales, más validación |
-| Login/Auth Alumno | 50% | Sin rework visual |
+| Login/Auth Alumno | 70% | Rediseño visual Sesión 9. Pendiente: animaciones finales |
 
 ### Módulos críticos con trabajo pendiente
 
 | Módulo | % | Nota |
 |--------|---|------|
-| Login Coach | 40% | Sin rework visual. Sin rate limiting. |
+| Login Coach | 70% | Rediseño visual Sesión 9. Pendiente: animaciones finales |
 | Ejercicios Coach | 40% | CRUD funcional. Sin upload GIF. |
-| Forgot/Reset Password | 40% | Flujo correcto verificado. |
+| Forgot/Reset Password | 60% | Flujo correcto verificado + rediseño visual Sesión 9 |
 | Testing | 28% | Vitest básico + Playwright. Sin cobertura real. |
 | Panel CEO | 0% | No implementado. |
 
