@@ -114,6 +114,93 @@ export async function getCoachDashboardData(userId: string) {
     return measureServer('getCoachDashboardData', () => getCoachDashboardDataInner(userId))
 }
 
+export async function getCoachDashboardDataV2(userId: string) {
+    return measureServer('getCoachDashboardDataV2', async () => {
+        const base = await getCoachDashboardDataInner(userId)
+        const pulse = await getCachedDirectoryPulse(userId)
+
+        const mrrDeltaPct =
+            base.mrrPreviousMonth > 0
+                ? Math.round(((base.mrrCurrentMonth - base.mrrPreviousMonth) / base.mrrPreviousMonth) * 100)
+                : base.mrrCurrentMonth > 0
+                ? 100
+                : 0
+
+        const agenda = buildAgendaFromPulse(pulse, base.expiringPrograms)
+
+        const riskCount = base.topRiskClients.length
+
+        const kpi = {
+            mrrCurrentMonth: base.mrrCurrentMonth,
+            mrrPreviousMonth: base.mrrPreviousMonth,
+            mrrDeltaPct,
+            totalClients: base.totalClients,
+            riskCount,
+            avgAdherence: base.avgAdherence,
+            avgNutrition: base.avgNutrition,
+        }
+
+        const clientList = pulse.map((p) => ({ id: p.clientId, name: p.clientName }))
+        const clientPaymentSummary = buildClientPaymentSummary(base._rawClientPayments ?? [], pulse)
+
+        return { ...base, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
+    })
+}
+
+function buildAgendaFromPulse(
+    pulse: Awaited<ReturnType<typeof getCachedDirectoryPulse>>,
+    expiring: Array<{ id: string; clientId?: string; clientName?: string; daysLeft: number; name: string }>
+) {
+    const items: Array<{
+        id: string
+        clientId: string
+        clientName: string
+        kind: 'programa_vence' | 'checkin_pendiente' | 'sin_ejercicio'
+        label: string
+        href: string
+        dueAt: string | null
+    }> = []
+
+    for (const p of expiring) {
+        if (!p.clientId || !p.clientName) continue
+        items.push({
+            id: `expire-${p.id}`,
+            clientId: p.clientId,
+            clientName: p.clientName,
+            kind: 'programa_vence',
+            label: p.daysLeft <= 0 ? `${p.name} vencio` : `${p.name} vence en ${p.daysLeft}d`,
+            href: `/coach/clients/${p.clientId}`,
+            dueAt: null,
+        })
+    }
+
+    for (const row of pulse) {
+        if (row.attentionFlags.includes('SIN_CHECKIN_1M')) {
+            items.push({
+                id: `checkin-${row.clientId}`,
+                clientId: row.clientId,
+                clientName: row.clientName,
+                kind: 'checkin_pendiente',
+                label: 'Check-in pendiente (>30d)',
+                href: `/coach/clients/${row.clientId}`,
+                dueAt: row.lastCheckinDate,
+            })
+        } else if (row.attentionFlags.includes('SIN_EJERCICIO_7D')) {
+            items.push({
+                id: `workout-${row.clientId}`,
+                clientId: row.clientId,
+                clientName: row.clientName,
+                kind: 'sin_ejercicio',
+                label: 'Sin ejercicio esta semana',
+                href: `/coach/clients/${row.clientId}`,
+                dueAt: row.lastWorkoutDate,
+            })
+        }
+    }
+
+    return items.slice(0, 8)
+}
+
 async function getCoachDashboardDataInner(userId: string) {
     const supabase = await createClient()
 
@@ -181,7 +268,7 @@ async function getCoachDashboardDataInner(userId: string) {
         // Coach revenue: payments registered from clients (same month windows as before)
         supabase
             .from('client_payments')
-            .select('payment_date, amount, status, period_months')
+            .select('client_id, payment_date, amount, status, period_months')
             .eq('coach_id', userId)
             .gte('payment_date', clientPaymentsLookbackStart),
         getCachedDirectoryPulse(userId),
@@ -218,6 +305,7 @@ async function getCoachDashboardDataInner(userId: string) {
             : null
     const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string } }[] | null) || []
     const clientPayments = (clientPaymentsRaw.data || []) as {
+        client_id: string | null
         payment_date: string
         amount: number | string
         status: string | null
@@ -388,5 +476,52 @@ async function getCoachDashboardDataInner(userId: string) {
         subscriptionStatus: coachSubscriptionRaw.data?.subscription_status ?? null,
         currentPeriodEnd: coachSubscriptionRaw.data?.current_period_end ?? null,
         trialEndsAt: coachSubscriptionRaw.data?.trial_ends_at ?? null,
+        _rawClientPayments: clientPayments,
     }
+}
+
+function buildClientPaymentSummary(
+    payments: { client_id: string | null; payment_date: string; amount: number | string; status: string | null; period_months: number | null }[],
+    pulse: { clientId: string; clientName: string }[]
+) {
+    const thirtyFiveDaysAgo = Date.now() - 35 * 24 * 60 * 60 * 1000
+
+    const paidByClient = new Map<string, { payment_date: string; amount: number; period_months: number | null }>()
+    for (const p of payments) {
+        if (!p.client_id) continue
+        const s = String(p.status || '').toLowerCase()
+        if (s !== 'paid' && s !== 'pagado' && s !== 'completed') continue
+        const existing = paidByClient.get(p.client_id)
+        if (!existing || new Date(p.payment_date) > new Date(existing.payment_date)) {
+            paidByClient.set(p.client_id, {
+                payment_date: p.payment_date,
+                amount: Math.round(parseFloat(String(p.amount)) || 0),
+                period_months: p.period_months,
+            })
+        }
+    }
+
+    return pulse.map((c) => {
+        const last = paidByClient.get(c.clientId) ?? null
+        let nextRenewalDate: string | null = null
+        if (last?.period_months && last.period_months > 0) {
+            try {
+                const d = new Date(last.payment_date)
+                d.setMonth(d.getMonth() + last.period_months)
+                nextRenewalDate = d.toISOString().slice(0, 10)
+            } catch {}
+        }
+        return {
+            clientId: c.clientId,
+            clientName: c.clientName,
+            lastPaymentDate: last?.payment_date ?? null,
+            lastPaymentAmount: last?.amount ?? null,
+            lastPaymentPeriodMonths: last?.period_months ?? null,
+            nextRenewalDate,
+            hasRecentPayment: last ? new Date(last.payment_date).getTime() > thirtyFiveDaysAgo : false,
+        }
+    }).sort((a, b) => {
+        if (a.hasRecentPayment === b.hasRecentPayment) return 0
+        return a.hasRecentPayment ? 1 : -1
+    })
 }

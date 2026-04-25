@@ -53,12 +53,12 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-[71] grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl bg-black/40 backdrop-blur-2xl p-6 text-sm border border-white/10 shadow-2xl duration-300 outline-none sm:max-w-lg data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-[71] grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-border bg-popover p-6 text-sm text-popover-foreground shadow-2xl outline-none sm:max-w-lg dark:border-white/10 dark:bg-black/40 dark:backdrop-blur-2xl dark:shadow-2xl duration-300 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,rgba(0,0,0,0)_70%)] pointer-events-none rounded-2xl" />
+        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-primary/[0.07] to-transparent dark:bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.05)_0%,transparent_70%)]" />
         <div className="relative z-10">
           {children}
         </div>
@@ -68,7 +68,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-foreground/5 border border-foreground/10 hover:bg-foreground/10 hover:text-foreground"
+                className="absolute top-4 right-4 z-20 h-8 w-8 rounded-full border border-border bg-muted/70 text-foreground hover:bg-muted dark:border-foreground/10 dark:bg-foreground/5 dark:hover:bg-foreground/10"
                 size="icon-sm"
               />
             }
@@ -104,7 +104,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-6 -mb-6 mt-2 flex flex-col-reverse gap-3 rounded-b-2xl border-t border-white/5 bg-white/[0.02] p-6 sm:flex-row sm:justify-end",
+        "-mx-6 -mb-6 mt-2 flex flex-col-reverse gap-3 rounded-b-2xl border-t border-border bg-muted/30 p-6 sm:flex-row sm:justify-end dark:border-white/5 dark:bg-white/[0.02]",
         className
       )}
       {...props}
@@ -123,7 +123,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg font-bold text-white uppercase tracking-tighter", className)}
+      className={cn("text-lg font-bold text-foreground uppercase tracking-tighter", className)}
       style={{ fontFamily: 'Montserrat, sans-serif' }}
       {...props}
     />
@@ -138,7 +138,7 @@ function DialogDescription({
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        "text-sm font-medium text-zinc-500",
+        "text-sm font-medium text-muted-foreground",
         className
       )}
       {...props}

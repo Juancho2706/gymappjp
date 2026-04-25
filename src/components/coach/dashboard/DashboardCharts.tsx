@@ -56,7 +56,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                         </div>
                     </div>
                     <div className="p-6 h-[300px] w-full min-w-0">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" debounce={50}>
                             <AreaChart data={areaData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorSesiones" x1="0" y1="0" x2="0" y2="1">
@@ -120,7 +120,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                         </div>
                     </div>
                     <div className="p-6 h-[300px] w-full min-w-0">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" debounce={50}>
                             <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />
                                 <XAxis

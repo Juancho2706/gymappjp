@@ -214,14 +214,11 @@ export interface DirectoryPulseRow {
     latestEnergyLevel: number | null;
 }
 
-export function mapDirectoryPulseToAdherenceStats(pulse: DirectoryPulseRow[]) {
-    return pulse.map((p) => ({
+function baseClientStatFields(p: DirectoryPulseRow) {
+    return {
         clientId: p.clientId,
         clientName: p.clientName,
-        percentage: p.percentage,
         lastPlan: p.lastPlan,
-        completedSets: p.completedSets,
-        totalSets: p.totalSets,
         lastWorkoutDate: p.lastWorkoutDate,
         lastCheckinDate: p.lastCheckinDate,
         currentWeight: p.currentWeight,
@@ -236,32 +233,42 @@ export function mapDirectoryPulseToAdherenceStats(pulse: DirectoryPulseRow[]) {
         attentionFlags: p.attentionFlags,
         streak: p.streak,
         latestEnergyLevel: p.latestEnergyLevel,
+    };
+}
+
+export function mapDirectoryPulseToClientStats(
+    pulse: DirectoryPulseRow[],
+    mode: 'adherence'
+): ReturnType<typeof mapDirectoryPulseToAdherenceStats>
+export function mapDirectoryPulseToClientStats(
+    pulse: DirectoryPulseRow[],
+    mode: 'nutrition'
+): ReturnType<typeof mapDirectoryPulseToNutritionStats>
+export function mapDirectoryPulseToClientStats(
+    pulse: DirectoryPulseRow[],
+    mode: 'adherence' | 'nutrition'
+) {
+    return mode === 'adherence'
+        ? mapDirectoryPulseToAdherenceStats(pulse)
+        : mapDirectoryPulseToNutritionStats(pulse);
+}
+
+export function mapDirectoryPulseToAdherenceStats(pulse: DirectoryPulseRow[]) {
+    return pulse.map((p) => ({
+        ...baseClientStatFields(p),
+        percentage: p.percentage,
+        completedSets: p.completedSets,
+        totalSets: p.totalSets,
         nutritionCompliance: p.nutritionPercentage,
     }));
 }
 
 export function mapDirectoryPulseToNutritionStats(pulse: DirectoryPulseRow[]) {
     return pulse.map((p) => ({
-        clientId: p.clientId,
-        clientName: p.clientName,
+        ...baseClientStatFields(p),
         percentage: p.nutritionPercentage,
-        lastPlan: p.lastPlan,
         consumed: p.consumed,
         target: p.target,
-        lastWorkoutDate: p.lastWorkoutDate,
-        lastCheckinDate: p.lastCheckinDate,
-        currentWeight: p.currentWeight,
-        weightDelta7d: p.weightDelta7d,
-        weightHistory30d: p.weightHistory30d,
-        adherenceHistory4w: p.adherenceHistory4w,
-        oneRMDelta: p.oneRMDelta,
-        planDaysRemaining: p.planDaysRemaining,
-        planCurrentWeek: p.planCurrentWeek,
-        planTotalWeeks: p.planTotalWeeks,
-        attentionScore: p.attentionScore,
-        attentionFlags: p.attentionFlags,
-        streak: p.streak,
-        latestEnergyLevel: p.latestEnergyLevel,
         adherence: p.percentage,
     }));
 }

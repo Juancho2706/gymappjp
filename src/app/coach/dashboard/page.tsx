@@ -13,7 +13,7 @@ export default async function CoachDashboardPage() {
 
     return (
         <Suspense fallback={<CoachLoadingShell />}>
-            <DashboardContent userId={coach.id} />
+            <DashboardContent userId={coach.id} coachName={coach.full_name ?? coach.brand_name ?? 'Coach'} />
         </Suspense>
     )
 }
