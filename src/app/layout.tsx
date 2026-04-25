@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Montserrat } from 'next/font/google'
 import './globals.css'
+import { Analytics } from '@vercel/analytics/react'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from 'next-themes'
 import { LanguageProvider } from '@/lib/i18n/LanguageContext'
@@ -104,6 +105,7 @@ export default function RootLayout({
             <InstallPrompt brandName="EVA" />
             {children}
             <Toaster richColors position="bottom-center" />
+            <Analytics />
           </LanguageProvider>
         </ThemeProvider>
       </body>
