@@ -15,8 +15,8 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         // Usamos addAll con cuidado, si falla un recurso falla todo el SW
-        return cache.addAll(urlsToCache).catch(err => {
-          console.error('Fallo al precargar cache:', err);
+        return cache.addAll(urlsToCache).catch(() => {
+          // Silently fail cache preload
         });
       })
       .then(() => self.skipWaiting())

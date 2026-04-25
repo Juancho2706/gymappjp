@@ -40,11 +40,11 @@ export function PwaRegister() {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('/sw.js').then(
-          function(registration) {
-            console.log('ServiceWorker registrado con alcance: ', registration.scope)
+          function(_registration) {
+            // ServiceWorker registered silently
           },
-          function(err) {
-            console.error('ServiceWorker falló en registrarse: ', err)
+          function(_err) {
+            // Registration failed silently
           }
         )
       })
