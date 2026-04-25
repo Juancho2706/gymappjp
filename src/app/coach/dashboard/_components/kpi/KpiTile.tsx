@@ -27,11 +27,13 @@ export function KpiTile({ label, value, icon: Icon, deltaPct, hint, href, onClic
                 <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
                 <Icon className="h-4 w-4" style={{ color: 'var(--theme-primary, #007AFF)' }} />
             </div>
-            <div className="flex items-end justify-between gap-2">
-                <span className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{value}</span>
-                {hasDelta && (
+            {hasDelta ? (
+                <div className="flex flex-col items-start gap-1.5">
+                    <span className="max-w-full font-display text-2xl font-bold leading-none tracking-tight tabular-nums sm:text-3xl lg:text-4xl">
+                        {value}
+                    </span>
                     <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
                             up
                                 ? 'bg-emerald-500/15 text-emerald-500'
                                 : 'bg-rose-500/15 text-rose-500'
@@ -40,8 +42,12 @@ export function KpiTile({ label, value, icon: Icon, deltaPct, hint, href, onClic
                         {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                         {Math.abs(deltaPct!)}%
                     </span>
-                )}
-            </div>
+                </div>
+            ) : (
+                <span className="font-display text-2xl font-bold leading-none tracking-tight tabular-nums sm:text-3xl lg:text-4xl">
+                    {value}
+                </span>
+            )}
             {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
             {interactive && (
                 <span className="mt-auto text-xs font-semibold" style={{ color: 'var(--theme-primary, #007AFF)' }}>
