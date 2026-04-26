@@ -466,10 +466,10 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
 
   try {
     const name = (formData.get('name') as string)?.trim()
-    const calories = parseFloat(formData.get('calories') as string)
-    const protein = parseFloat(formData.get('protein') as string) || 0
-    const carbs = parseFloat(formData.get('carbs') as string) || 0
-    const fats = parseFloat(formData.get('fats') as string) || 0
+    const calories = Math.round(parseFloat(formData.get('calories') as string))
+    const protein = Math.round(parseFloat(formData.get('protein') as string) || 0)
+    const carbs = Math.round(parseFloat(formData.get('carbs') as string) || 0)
+    const fats = Math.round(parseFloat(formData.get('fats') as string) || 0)
     const categoryRaw = (formData.get('category') as string | null)?.trim() || null
     const unit = (formData.get('unit') as string | null)?.trim() || 'g'
     const servingSizeRaw = formData.get('serving_size') as string | null
