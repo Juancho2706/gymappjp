@@ -29,8 +29,3 @@ export const scaleIn = {
     show: { opacity: 1, scale: 1 },
 }
 
-export function useAnimationVariant<T extends object>(fullVariant: T, reducedVariant?: Partial<T>): T {
-    const reduced = useReducedMotion()
-    if (!reduced) return fullVariant
-    return { ...fullVariant, ...reducedVariant } as T
-}

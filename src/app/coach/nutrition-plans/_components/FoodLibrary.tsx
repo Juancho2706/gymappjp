@@ -274,6 +274,43 @@ const FOOD_CATEGORIES = [
   { value: 'otro', label: 'Otro' },
 ]
 
+const UNIT_OPTIONS = [
+  { value: 'g', label: 'Gramos (g)', hint: 'Usa gramos en el plan (ej. 150 g de pollo).' },
+  { value: 'ml', label: 'Mililitros (ml)', hint: 'Usa mililitros en el plan (ej. 200 ml de leche).' },
+  { value: 'un', label: 'Unidad (un)', hint: 'Usa unidades en el plan (ej. 2 huevos). Define cuántos gramos pesa 1 unidad abajo.' },
+]
+
+function MacroInput({
+  name,
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  name: string
+  label: string
+  hint: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</Label>
+      <Input
+        name={name}
+        type="number"
+        step="0.1"
+        min="0"
+        placeholder="0"
+        className="h-11 rounded-xl"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="text-[10px] text-muted-foreground">{hint}</p>
+    </div>
+  )
+}
+
 function CustomFoodForm({
   formAction,
   state,
@@ -286,11 +323,17 @@ function CustomFoodForm({
   const [carbs, setCarbs] = useState('')
   const [fats, setFats] = useState('')
   const [category, setCategory] = useState('')
+  const [unit, setUnit] = useState('g')
+  const [servingSize, setServingSize] = useState('100')
+
   const c = calories === '' ? 0 : Number(calories)
   const p = protein === '' ? 0 : Number(protein)
   const cb = carbs === '' ? 0 : Number(carbs)
   const f = fats === '' ? 0 : Number(fats)
   const pct = macroPreviewPct(c, p, cb, f)
+
+  const selectedUnit = UNIT_OPTIONS.find((u) => u.value === unit) ?? UNIT_OPTIONS[0]
+  const isUnitMode = unit === 'un'
 
   return (
     <form action={formAction} className="space-y-4 pt-2">
@@ -298,64 +341,45 @@ function CustomFoodForm({
         <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Nombre</Label>
         <Input name="name" placeholder="Ej: Avena cocida" required className="h-11 rounded-xl" />
       </div>
-      <p className="text-xs text-muted-foreground leading-relaxed rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-        Calorías y macros: <span className="font-semibold text-foreground">por 100 g</span>. En el plan puedes usar gramos (200) o unidades (1): para <span className="font-semibold text-foreground">un</span>, define abajo cuántos gramos es una unidad.
-      </p>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Kcal (100g)</Label>
-          <Input
-            name="calories"
-            type="number"
-            step="0.1"
-            min="0"
-            required
-            placeholder="0"
-            className="h-11 rounded-xl"
-            value={calories}
-            onChange={(e) => setCalories(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Proteína (g)</Label>
-          <Input
-            name="protein"
-            type="number"
-            step="0.1"
-            min="0"
-            placeholder="0"
-            className="h-11 rounded-xl"
-            value={protein}
-            onChange={(e) => setProtein(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Carbos (g)</Label>
-          <Input
-            name="carbs"
-            type="number"
-            step="0.1"
-            min="0"
-            placeholder="0"
-            className="h-11 rounded-xl"
-            value={carbs}
-            onChange={(e) => setCarbs(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Grasas (g)</Label>
-          <Input
-            name="fats"
-            type="number"
-            step="0.1"
-            min="0"
-            placeholder="0"
-            className="h-11 rounded-xl"
-            value={fats}
-            onChange={(e) => setFats(e.target.value)}
-          />
-        </div>
+
+      <div className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2.5 space-y-1">
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cómo cargar los datos</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Ingresá calorías y macros <span className="font-semibold text-foreground">por cada 100 g</span> del alimento. Usá <span className="font-semibold text-foreground">punto decimal</span> (ej. <code className="bg-muted px-1 rounded">6.5</code>), no coma. Si no tenés el dato exacto de un macro, podés dejarlo en 0.
+        </p>
       </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <MacroInput
+          name="calories"
+          label="Kcal (por 100 g)"
+          hint="Energía total. Ej: pollo = 165"
+          value={calories}
+          onChange={setCalories}
+        />
+        <MacroInput
+          name="protein"
+          label="Proteína g (por 100 g)"
+          hint="Gramos de proteína. Ej: pollo = 31"
+          value={protein}
+          onChange={setProtein}
+        />
+        <MacroInput
+          name="carbs"
+          label="Carbos g (por 100 g)"
+          hint="Hidratos totales. Ej: arroz = 28"
+          value={carbs}
+          onChange={setCarbs}
+        />
+        <MacroInput
+          name="fats"
+          label="Grasas g (por 100 g)"
+          hint="Grasas totales. Ej: aceite = 100"
+          value={fats}
+          onChange={setFats}
+        />
+      </div>
+
       {(c > 0 || p > 0 || cb > 0 || f > 0) && (
         <div className="rounded-xl border border-border/60 p-3 space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">% calorías aprox.</p>
@@ -369,12 +393,13 @@ function CustomFoodForm({
           </p>
         </div>
       )}
+
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categoría</Label>
           <input type="hidden" name="category" value={category} />
           <Select value={category} onValueChange={(v) => setCategory(v ?? '')}>
-            <SelectTrigger className="h-11 rounded-xl">
+            <SelectTrigger className="h-11 rounded-xl bg-background border-input">
               <SelectValue placeholder="Seleccionar…" />
             </SelectTrigger>
             <SelectContent>
@@ -386,20 +411,48 @@ function CustomFoodForm({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Unidad de referencia</Label>
-          <Input name="unit" defaultValue="g" placeholder="g, un, ml…" className="h-11 rounded-xl" />
-        </div>
-        <div className="space-y-2 col-span-2">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-            Gramos en 1 unidad (opcional)
-          </Label>
-          <Input name="serving_size" type="number" min={1} step="1" defaultValue={100} className="h-11 rounded-xl" />
-          <p className="text-[11px] text-muted-foreground">
-            Para cantidad en <span className="font-medium text-foreground">un</span> en el plan (ej. 2 huevos), pon gramos de 1 unidad. Solo gramos en el plan → deja 100.
-          </p>
+
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Unidad en el plan</Label>
+          <input type="hidden" name="unit" value={unit} />
+          <Select value={unit} onValueChange={(v) => setUnit(v ?? 'g')}>
+            <SelectTrigger className="h-11 rounded-xl bg-background border-input">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {UNIT_OPTIONS.map((u) => (
+                <SelectItem key={u.value} value={u.value}>
+                  {u.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">{selectedUnit.hint}</p>
         </div>
       </div>
+
+      {isUnitMode && (
+        <div className="space-y-1.5">
+          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            Gramos por 1 unidad
+          </Label>
+          <Input
+            name="serving_size"
+            type="number"
+            min={1}
+            step="1"
+            value={servingSize}
+            onChange={(e) => setServingSize(e.target.value)}
+            className="h-11 rounded-xl"
+            placeholder="Ej: 60 (para un huevo grande)"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            ¿Cuántos gramos pesa 1 {category || 'unidad'}? Ej: huevo = 60 g, banana = 120 g.
+          </p>
+        </div>
+      )}
+      {!isUnitMode && <input type="hidden" name="serving_size" value="100" />}
+
       <SubmitButton />
       {state.error && <p className="text-xs text-rose-500 font-bold text-center">{state.error}</p>}
     </form>

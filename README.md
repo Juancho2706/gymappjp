@@ -6,13 +6,13 @@ GymAppJP (also known as OmniCoach OS) is an advanced web application designed to
 
 | Documento | Contenido |
 |-----------|-----------|
-| [docs/ESTADO-COMPONENTES.md](docs/ESTADO-COMPONENTES.md) | Por módulo: % completitud y notas |
-| [docs/ESTADO-PROYECTO.md](docs/ESTADO-PROYECTO.md) | Reworks cerrados, deuda técnica, stack |
-| [docs/ARQUITECTURA-COMPONENTES.md](docs/ARQUITECTURA-COMPONENTES.md) | Rutas, flujos, modelo de datos |
-| [docs/MAPA-MAESTRO.md](docs/MAPA-MAESTRO.md) | Mapa de completitud, fases, riesgos, quick wins |
-| [docs/PLAN-MAESTRO-ESTRATEGICO.md](docs/PLAN-MAESTRO-ESTRATEGICO.md) | Roadmap por rol (PM, UX, eng, QA, ops, legal) |
-
-Runbooks, sprints y reportes históricos: [docs/archive/](docs/archive/) (ver [docs/archive/README.md](docs/archive/README.md)).
+| [AGENTS.md](AGENTS.md) | Stack, patrones arquitectónicos, flujos E2E y reglas de código para agentes de IA |
+| [nuevabibliadelaapp/01-ESTADO-ACTUAL.md](nuevabibliadelaapp/01-ESTADO-ACTUAL.md) | Snapshot de completitud por módulo, sesiones y estado DB |
+| [nuevabibliadelaapp/02-ROADMAP-PENDIENTES.md](nuevabibliadelaapp/02-ROADMAP-PENDIENTES.md) | Roadmap por bloques, tareas manuales, UX, seguridad y performance |
+| [nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md](nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md) | Rutas, flujos de auth, modelo de datos, patrones, PWA y móvil |
+| [nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md](nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md) | Tiers, MRR, go-to-market, escalabilidad y proveedores de pago |
+| [nuevabibliadelaapp/05-PAGOS-Y-OPERACIONES.md](nuevabibliadelaapp/05-PAGOS-Y-OPERACIONES.md) | Flujo MercadoPago, webhooks, grace period y smoke tests |
+| [docs/BRANDING-IMAGENES-IA.md](docs/BRANDING-IMAGENES-IA.md) | Guía de branding para generación de imágenes con IA |
 
 ## 🚀 Features
 
@@ -29,7 +29,7 @@ Runbooks, sprints y reportes históricos: [docs/archive/](docs/archive/) (ver [d
 - **Framework:** Next.js 15+ (App Router, React Server Components)
 - **Styling:** Tailwind CSS + Shadcn UI + Framer Motion
 - **Database & Auth:** Supabase (PostgreSQL, Auth, Storage)
-- **PWA Support:** next-pwa
+- **PWA Support:** Manual service worker (`public/sw.js`) + dynamic manifests per coach
 
 ## 🏃‍♂️ Getting Started
 
@@ -97,24 +97,17 @@ Workflow: `.github/workflows/ci.yml`.
   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (and `SUPABASE_SERVICE_ROLE_KEY` if the app reads it at startup).
   - Optional for **QA-014 / QA-015:** `E2E_COACH_SLUG`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD`, `E2E_WORKOUT_PLAN_ID` (alumno con programa activo y plan de entreno válido; sin ellos esas pruebas se omiten pero el resto de E2E sigue ejecutándose).
 
-### Sprint 5 beta operations
+### Operations
 
-- **Email drip runner (RET-002):** `POST /api/internal/email-drip/run` (token required).
-  - scheduler workflow: `.github/workflows/email-drip.yml`
-  - required secrets: `BETA_APP_URL`, `DRIP_CRON_TOKEN`
-- **Beta health monitor:** `GET /api/ops/beta-health` with `Authorization: Bearer $BETA_MONITOR_TOKEN`.
-- Operational docs (archivo):
-  - `docs/archive/BIZ-004-MP-PROD-RUNBOOK.md`
-  - `docs/archive/BIZ-004-MP-PROD-CHECKLIST.md`
-  - `docs/archive/RET-002-EMAIL-DRIP-OPS.md`
-  - `docs/archive/SPRINT5-MONITORING-SUPPORT.md`
+- **Beta registrations:** `/registro-beta` with token query param (manual distribution).
+- **Supabase management:** `npm run supabase:disable-signup` to toggle public signups via Management API.
 
 ### Vercel preview deployments (OPS-004)
 
 Con el repositorio conectado a Vercel, cada pull request recibe una **Preview URL** en el comentario/check de despliegue. Usa ese enlace para validar cambios antes de fusionar; las variables sensibles se configuran en el proyecto Vercel (Environment Variables → Preview).
 
 ### Supabase migration workflow
-This repository keeps migration SQL under `supabase/migrations` (snapshots y copias históricas adicionales en `supabase/migrations_backup/`). Guía detallada: `docs/archive/SUPABASE-MIGRATION-WORKFLOW.md`.
+This repository keeps migration SQL under `supabase/migrations` (historical snapshots in `supabase/migrations_backup/`).
 
 1. Authenticate with Supabase CLI:
 ```bash
@@ -139,7 +132,7 @@ npx supabase db push
 
 Security hardening:
 - Keep `Enable email signups` disabled in Supabase Auth if registration is managed by server-side admin flows only.
-- RLS audit and matrix: `docs/archive/SEC-001-RLS-AUDIT.md`, `docs/archive/QA-RLS-MATRIX.md`. Integration tests: set `SUPABASE_RLS_INTEGRATION=1` and variables listed in `.env.example`.
+- Integration tests: set `SUPABASE_RLS_INTEGRATION=1` and variables listed in `.env.example`.
 - Never commit real secret values. Use `.env.example` for placeholders.
 - To disable public signup via Management API, set `SUPABASE_ACCESS_TOKEN` and run:
 ```bash

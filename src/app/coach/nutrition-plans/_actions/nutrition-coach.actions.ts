@@ -501,7 +501,11 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
     return { success: true }
   } catch (err: unknown) {
     console.error('[saveCustomFood] Error:', err)
-    const msg = err instanceof Error ? err.message : String(err)
+    const msg =
+      err instanceof Error ? err.message
+      : typeof err === 'object' && err !== null && 'message' in err
+        ? String((err as { message: unknown }).message)
+        : String(err)
     return { error: `Error al guardar: ${msg}`, success: false }
   }
 }

@@ -21,4 +21,3 @@ export async function measureServer<T>(label: string, fn: () => Promise<T>): Pro
     }
 }
 
-export const perfNavServerEnabled = PERF_NAV_SERVER
