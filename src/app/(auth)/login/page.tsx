@@ -51,63 +51,63 @@ export default function CoachLoginPage() {
     const [state, formAction] = useActionState(loginAction, initialState)
 
     return (
-        <div className="w-full max-w-5xl mx-auto min-h-dvh flex flex-col lg:flex-row lg:items-stretch">
-            {/* Left branding panel */}
-            <div className="hidden lg:flex lg:flex-col lg:w-[55%] relative overflow-hidden bg-background border-r border-border/60 px-12 py-10">
+        <div className="w-full flex flex-col lg:flex-row">
+            {/* Left branding panel — full viewport height */}
+            <div className="hidden lg:flex lg:flex-col lg:w-[52%] xl:w-[55%] relative overflow-hidden bg-background border-r border-border/60 px-12 xl:px-16 py-12 min-h-screen">
                 {/* Background gradient + grid */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-sky-500/5 pointer-events-none" />
                 <div
-                    className="absolute inset-0 opacity-[0.04] pointer-events-none"
-                    style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.1) 1px,transparent 1px)', backgroundSize: '40px 40px' }}
+                    className="absolute inset-0 opacity-[0.035] pointer-events-none"
+                    style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,.15) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.15) 1px,transparent 1px)', backgroundSize: '40px 40px' }}
                     aria-hidden
                 />
 
                 {/* Logo */}
-                <div className="relative z-10 flex items-center justify-between mb-auto">
+                <div className="relative z-10 flex items-center justify-between">
                     <LandingBrandMark iconClassName="h-9 w-9" />
                     <ThemeToggle />
                 </div>
 
-                {/* Headline */}
-                <div className="relative z-10 mt-16 mb-12">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 backdrop-blur-sm px-3 py-1.5 mb-6">
+                {/* Headline — vertically centered in remaining space */}
+                <div className="relative z-10 flex-1 flex flex-col justify-center py-16">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 backdrop-blur-sm px-3 py-1.5 mb-8 w-fit">
                         <Sparkles className="w-3.5 h-3.5 text-primary" />
                         <span className="text-xs font-medium text-muted-foreground">Plataforma para coaches</span>
                     </div>
-                    <h1 className="font-display text-4xl font-black leading-[1.1] tracking-tighter text-foreground mb-4">
+                    <h1 className="font-display text-4xl xl:text-5xl font-black leading-[1.1] tracking-tighter text-foreground mb-5">
                         Tu negocio de fitness,{' '}
                         <span className="bg-gradient-to-r from-primary to-sky-500 bg-clip-text text-transparent">
                             profesionalizado
                         </span>
                     </h1>
-                    <p className="text-muted-foreground text-base leading-relaxed max-w-sm">
+                    <p className="text-muted-foreground text-base leading-relaxed max-w-sm mb-12">
                         Gestiona alumnos, crea rutinas y planes de nutrición desde un solo panel.
                     </p>
+
+                    {/* Feature list */}
+                    <div className="space-y-6">
+                        {FEATURES.map(({ icon: Icon, label, desc }, i) => (
+                            <motion.div
+                                key={label}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.1 * i + 0.3, duration: 0.5 }}
+                                className="flex items-start gap-4"
+                            >
+                                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+                                    <Icon className="h-4.5 w-4.5 text-primary" aria-hidden />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">{label}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Feature list */}
-                <div className="relative z-10 space-y-5 mb-12">
-                    {FEATURES.map(({ icon: Icon, label, desc }, i) => (
-                        <motion.div
-                            key={label}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.1 * i + 0.3, duration: 0.5 }}
-                            className="flex items-start gap-4"
-                        >
-                            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-                                <Icon className="h-4 w-4 text-primary" aria-hidden />
-                            </div>
-                            <div>
-                                <p className="text-sm font-semibold text-foreground">{label}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-
-                {/* Bottom badge */}
-                <div className="relative z-10 mt-auto">
+                {/* Bottom */}
+                <div className="relative z-10">
                     <p className="text-xs text-muted-foreground">
                         &copy; {new Date().getFullYear()} EVA. Todos los derechos reservados.
                     </p>
@@ -115,9 +115,9 @@ export default function CoachLoginPage() {
             </div>
 
             {/* Right form panel */}
-            <div className="flex-1 flex flex-col justify-center px-6 py-10 lg:px-12 lg:py-10">
+            <div className="flex-1 flex flex-col justify-center min-h-screen px-6 py-12 sm:px-10 lg:px-16 xl:px-20">
                 {/* Mobile header */}
-                <div className="flex items-center justify-between mb-8 lg:hidden">
+                <div className="flex items-center justify-between mb-10 lg:hidden">
                     <LandingBrandMark iconClassName="h-8 w-8" />
                     <ThemeToggle />
                 </div>
@@ -126,13 +126,13 @@ export default function CoachLoginPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="w-full max-w-sm mx-auto lg:mx-0"
+                    className="w-full max-w-sm mx-auto"
                 >
                     <div className="mb-8">
                         <h2 className="text-2xl font-bold tracking-tight text-foreground">
                             Bienvenido de vuelta
                         </h2>
-                        <p className="mt-1.5 text-sm text-muted-foreground">
+                        <p className="mt-2 text-sm text-muted-foreground">
                             Ingresa tus credenciales para acceder al panel
                         </p>
                     </div>

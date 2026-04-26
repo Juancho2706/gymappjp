@@ -8,5 +8,19 @@ export const metadata: Metadata = {
 }
 
 export default function LoginLayout({ children }: { children: ReactNode }) {
-    return children
+    return (
+        <div className="fixed inset-0 z-50 bg-background overflow-auto">
+            {/* Ambient gradient */}
+            <div
+                className="fixed inset-0 pointer-events-none z-0"
+                aria-hidden="true"
+                style={{
+                    background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,122,255,0.08), transparent)',
+                }}
+            />
+            <div className="relative z-10 min-h-full flex">
+                {children}
+            </div>
+        </div>
+    )
 }
