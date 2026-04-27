@@ -44,7 +44,8 @@ export const getFinanzasData = unstable_cache(
             admin.from('coaches')
                 .select('id, full_name, brand_name, subscription_tier')
                 .eq('subscription_status', 'active')
-                .not('subscription_mp_id', 'is', null),
+                .not('subscription_mp_id', 'is', null)
+                .neq('payment_provider', 'beta'),
             (admin.rpc as any)('get_platform_mrr_12_months'),
             (admin.rpc as any)('get_platform_churn_monthly'),
             (admin.rpc as any)('get_platform_revenue_by_cycle'),
