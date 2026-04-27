@@ -50,13 +50,17 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
 export async function deleteCoachAction(coachId: string) {
     const { adminClient } = await assertAdmin()
 
+    // Delete clients assigned to this coach first to avoid FK violation
+    const { error: clientsError } = await adminClient.from('clients').delete().eq('coach_id', coachId)
+    if (clientsError) console.error('[admin] failed to delete clients for coach:', clientsError)
+
     const { error: authError } = await adminClient.auth.admin.deleteUser(coachId)
     if (authError) console.error('[admin] failed to delete auth user:', authError)
 
     const { error: dbError } = await adminClient.from('coaches').delete().eq('id', coachId)
     if (dbError) return { error: dbError.message }
 
-    await logAdminAction(adminClient, 'coach.delete', 'coaches', coachId, undefined)
+    await logAdminAction(adminClient, 'coach.delete', 'coaches', coachId, { clients_deleted: true })
     revalidateAdmin()
     return { success: true }
 }

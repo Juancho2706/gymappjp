@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users } from 'lucide-react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import { AdminSortHeader } from '../../_components/AdminSortHeader'
 import { AdminEmptyState } from '../../_components/AdminEmptyState'
@@ -182,13 +184,14 @@ export function CoachTable({ coaches, total }: Props) {
                                         <InfoTooltip content="Última vez que algún alumno de este coach registró una sesión de entrenamiento. Indica si la plataforma se está usando activamente." />
                                     </span>
                                 </th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Registrado</th>
                                 <th className="px-3 py-2 text-right text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Acc.</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[--admin-border]">
                             {coaches.length === 0 && (
                                 <tr>
-                                    <td colSpan={11}>
+                                    <td colSpan={12}>
                                         <AdminEmptyState icon={Users} title="Sin coaches" description="Ajusta los filtros para ver resultados." />
                                     </td>
                                 </tr>
@@ -251,6 +254,11 @@ export function CoachTable({ coaches, total }: Props) {
                                                 {c.last_activity_at
                                                     ? `hace ${Math.floor((Date.now() - new Date(c.last_activity_at).getTime()) / (1000 * 60 * 60 * 24))}d`
                                                     : 'sin act.'}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <span className="font-mono text-[11px] tabular-nums text-[--admin-text-3]" title={c.created_at}>
+                                                {format(new Date(c.created_at), 'dd/MM/yy', { locale: es })}
                                             </span>
                                         </td>
                                         <td className="px-3 py-2.5 text-right">

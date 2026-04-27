@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { getAllCoachesPaginated } from '../dashboard/_data/admin.queries'
 import { CoachTable } from './_components/CoachTable'
+import { CoachFilterBar } from './_components/CoachFilterBar'
 import { PageInfoButton } from '../_components/PageInfoButton'
 
 export const metadata = { title: 'Coaches' }
@@ -37,6 +38,7 @@ interface Props {
         q?: string
         status?: string
         tier?: string
+        provider?: string
         beta?: string
         sort?: string
         dir?: string
@@ -52,7 +54,7 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
         search:   sp.q,
         status:   sp.status,
         tier:     sp.tier,
-        beta:     sp.beta === 'true' ? true : undefined,
+        beta:     sp.beta === 'true' ? true : sp.provider === 'beta' ? true : undefined,
         sort:     sp.sort,
         dir:      sp.dir,
         page,
@@ -70,6 +72,10 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
                 </div>
                 <PageInfoButton title="Coaches — Guía completa" sections={COACHES_INFO} />
             </div>
+
+            <Suspense>
+                <CoachFilterBar />
+            </Suspense>
 
             <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-[--admin-bg-surface]" />}>
                 <CoachTable coaches={coaches} total={total} />
