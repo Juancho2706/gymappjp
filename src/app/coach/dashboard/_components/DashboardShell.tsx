@@ -83,7 +83,7 @@ export function DashboardShell({ data, coachName }: Props) {
                     <KpiStrip kpi={data.kpi} onAdherenceClick={() => setStatsSheetOpen(true)} onMrrClick={() => setRevenueSheetOpen(true)} />
                 </motion.section>
 
-                <motion.section variants={itemVariants} className="grid gap-4 lg:grid-cols-12">
+                <motion.section variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-12">
                     <div className="lg:col-span-8">
                         <FocusList items={data.topRiskClients} />
                     </div>
@@ -92,7 +92,7 @@ export function DashboardShell({ data, coachName }: Props) {
                     </div>
                 </motion.section>
 
-                <motion.section variants={itemVariants} className="grid gap-4 lg:grid-cols-12">
+                <motion.section variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-12">
                     <div className="lg:col-span-8">
                         <TodayAgenda items={data.agenda} />
                     </div>

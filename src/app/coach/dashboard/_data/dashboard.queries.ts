@@ -443,8 +443,10 @@ async function getCoachDashboardDataInner(userId: string) {
     }
     if (workoutSessionsSeries && workoutSessionsSeries.length > 0) {
         for (const row of workoutSessionsSeries) {
-            const d = new Date(row.day)
-            const dayKey = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
+            // row.day is a calendar date string (YYYY-MM-DD) from Postgres.
+            // Parse manually to avoid timezone shifts from new Date('YYYY-MM-DD').
+            const [yStr, mStr, dStr] = row.day.split('-')
+            const dayKey = `${dStr}/${mStr}`
             if (sessionsByDay[dayKey] !== undefined) sessionsByDay[dayKey] = row.sessions
         }
     } else {
@@ -460,12 +462,14 @@ async function getCoachDashboardDataInner(userId: string) {
             }
         })
     }
-    // Show every 5th label to avoid crowding
-    const areaData = Object.entries(sessionsByDay).map(([name, sesiones], idx) => ({
-        name: idx % 5 === 0 ? name : '',
-        fullName: name,
-        sesiones,
-    }))
+    // Only show days with sessions to keep the chart clean and tooltip precise
+    const areaData = Object.entries(sessionsByDay)
+        .filter(([_, sesiones]) => sesiones > 0)
+        .map(([name, sesiones]) => ({
+            name,
+            fullName: name,
+            sesiones,
+        }))
 
     // BarChart: new clients per month (last 6 sliding months; counts from RPC by YYYY-MM)
     const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']

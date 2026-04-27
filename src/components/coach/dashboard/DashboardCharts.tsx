@@ -56,49 +56,63 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                         </div>
                     </div>
                     <div className="p-6 h-[300px] w-full min-w-0">
-                        <ResponsiveContainer width="100%" height="100%" debounce={50}>
-                            <AreaChart data={areaData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="colorSesiones" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />
-                                <XAxis
-                                    dataKey="name"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.4 }}
-                                    dy={10}
-                                />
-                                <YAxis
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'currentColor', fontSize: 12, opacity: 0.4 }}
-                                    allowDecimals={false}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '12px',
-                                        color: '#fff'
-                                    }}
-                                    labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ''}
-                                    itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="sesiones"
-                                    name="Sesiones"
-                                    stroke="#3b82f6"
-                                    strokeWidth={3}
-                                    fillOpacity={1}
-                                    fill="url(#colorSesiones)"
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        {areaData.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
+                                <TrendingUp className="w-8 h-8 opacity-20" />
+                                <p className="text-sm">Sin sesiones registradas en los últimos 30 días</p>
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                                <AreaChart data={areaData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorSesiones" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />
+                                    <XAxis
+                                        dataKey="name"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: 'currentColor', fontSize: 11, opacity: 0.4 }}
+                                        dy={10}
+                                        interval={areaData.length > 8 ? 'preserveStartEnd' : 0}
+                                    />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: 'currentColor', fontSize: 12, opacity: 0.4 }}
+                                        allowDecimals={false}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            borderRadius: '12px',
+                                            color: '#fff'
+                                        }}
+                                        labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ''}
+                                        formatter={(value) => [
+                                            `${value} sesión${Number(value) !== 1 ? 'es' : ''}`,
+                                            ''
+                                        ]}
+                                        itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }}
+                                    />
+                                    <Area
+                                        type="linear"
+                                        dataKey="sesiones"
+                                        name="Sesiones"
+                                        stroke="#3b82f6"
+                                        strokeWidth={2}
+                                        fillOpacity={1}
+                                        fill="url(#colorSesiones)"
+                                        dot={{ r: 4, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
+                                        activeDot={{ r: 6, stroke: '#fff', strokeWidth: 3, fill: '#3b82f6' }}
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                 </GlassCard>
             </motion.div>
