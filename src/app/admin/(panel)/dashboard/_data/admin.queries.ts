@@ -127,7 +127,28 @@ export async function getAllCoachesPaginated(params: {
         p_offset: offset,
     })
 
-    if (error || !data) return { coaches: [], total: 0 }
+    if (error || !data) {
+        // Fallback: direct coaches query if RPC is unavailable
+        const { data: fallback } = await admin
+            .from('coaches')
+            .select('id, full_name, brand_name, slug, subscription_tier, subscription_status, billing_cycle, payment_provider, max_clients, current_period_end, trial_ends_at, created_at')
+            .order('created_at', { ascending: false })
+            .limit(pageSize)
+        if (!fallback) return { coaches: [], total: 0 }
+        const coaches: CoachListItem[] = (fallback as any[]).map(r => ({
+            id: r.id, full_name: r.full_name, brand_name: r.brand_name, slug: r.slug,
+            subscription_tier: r.subscription_tier, subscription_status: r.subscription_status,
+            billing_cycle: r.billing_cycle, payment_provider: r.payment_provider,
+            max_clients: r.max_clients, current_period_end: r.current_period_end,
+            trial_ends_at: r.trial_ends_at, created_at: r.created_at,
+            client_count: 0, active_client_count: 0,
+            days_until_expiry: r.current_period_end
+                ? Math.floor((new Date(r.current_period_end).getTime() - Date.now()) / 86400000)
+                : null,
+            utilization_pct: 0, last_activity_at: null,
+        }))
+        return { coaches, total: coaches.length }
+    }
 
     const rows = data as unknown as (Record<string, any> & { total_count: number })[]
     const total = rows[0]?.total_count ?? 0

@@ -5,8 +5,40 @@ import {
     Database, Users, UserCheck, AlertTriangle,
     CheckCircle, XCircle, Clock, Shield
 } from 'lucide-react'
+import { PageInfoButton } from '../_components/PageInfoButton'
 
 export const metadata = { title: 'Sistema' }
+
+const SISTEMA_INFO = [
+    {
+        heading: '¿Qué muestra esta sección?',
+        body: 'Health check en tiempo real del estado operativo de la plataforma. No tiene cache — cada visita consulta la base de datos directamente para mostrar el estado actual.',
+    },
+    {
+        heading: 'Conectividad — Base de datos',
+        body: 'Verifica que la conexión al proyecto Supabase responda correctamente. Si falla, ninguna parte de la app funciona. Fuente: query directa a la tabla coaches.',
+    },
+    {
+        heading: 'Conectividad — Coaches legacy sin expirar',
+        body: 'Detecta coaches con payment_provider=\'beta\', subscription_status=\'active\' y current_period_end en el pasado. Estos coaches tienen un bug pre-fix: están marcados como activos pero su trial ya venció. Deben actualizarse a status=\'trialing\' o \'expired\'. Fuente: tabla coaches.',
+    },
+    {
+        heading: 'Conectividad — Coaches vencidos sin pago',
+        body: 'Coaches con status \'past_due\' o \'pending_payment\'. Tienen cobro fallido de MercadoPago. Fuente: tabla coaches.',
+    },
+    {
+        heading: 'Conectividad — Auditoría activa',
+        body: 'Muestra cuándo fue la última acción registrada en admin_audit_logs. Si dice "sin actividad" es normal si no se hizo nada recientemente. Fuente: tabla admin_audit_logs.',
+    },
+    {
+        heading: 'Tarjetas de plataforma',
+        body: 'Total coaches — todos los registros en la tabla coaches.\nTotal alumnos — todos los registros en la tabla clients.\nActivos — coaches con status active o trialing (con acceso habilitado).\nBeta — coaches con payment_provider=\'beta\' (prueba sin pago).\nExpirados — coaches con status=\'expired\' (bloqueados hasta pagar).\nMorosos — coaches con status past_due o pending_payment.\nFuente: queries directas a Supabase, sin cache.',
+    },
+    {
+        heading: 'Acciones de auditoría (24h)',
+        body: 'Cantidad de operaciones administrativas registradas en las últimas 24 horas. Útil para saber si el panel se está usando activamente.',
+    },
+]
 
 function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
     return (
@@ -42,9 +74,12 @@ export default async function AdminSistemaPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Sistema</h1>
-                <p className="text-xs text-[--admin-text-3]">Health check y estado operativo de la plataforma.</p>
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-[--admin-text-1]">Sistema</h1>
+                    <p className="text-xs text-[--admin-text-3]">Health check y estado operativo de la plataforma.</p>
+                </div>
+                <PageInfoButton title="Sistema — Guía completa" sections={SISTEMA_INFO} />
             </div>
 
             {/* Health checks */}
