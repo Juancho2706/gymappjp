@@ -43,6 +43,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
+                className="h-full"
             >
                 <GlassCard className="h-full flex flex-col bg-card dark:bg-zinc-950">
                     <div className="px-6 py-5 border-b border-border dark:border-white/10 flex items-center justify-between bg-muted/30 dark:bg-white/[0.02]">
@@ -55,7 +56,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                             </h2>
                         </div>
                     </div>
-                    <div className="p-6 h-[300px] w-full min-w-0">
+                    <div className="p-6 h-[300px] w-full min-w-0 relative">
                         {areaData.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
                                 <TrendingUp className="w-8 h-8 opacity-20" />
@@ -121,6 +122,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
+                className="h-full"
             >
                 <GlassCard className="h-full flex flex-col bg-card dark:bg-zinc-950">
                     <div className="px-6 py-5 border-b border-border dark:border-white/10 flex items-center justify-between bg-muted/30 dark:bg-white/[0.02]">
@@ -133,7 +135,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                             </h2>
                         </div>
                     </div>
-                    <div className="p-6 h-[300px] w-full min-w-0">
+                    <div className="p-6 h-[300px] w-full min-w-0 relative">
                         <ResponsiveContainer width="100%" height="100%" debounce={50}>
                             <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />

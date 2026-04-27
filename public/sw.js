@@ -50,6 +50,7 @@ self.addEventListener('fetch', (event) => {
   if (
     url.hostname.includes('supabase.co') || 
     url.pathname.includes('/_next/') ||
+    url.pathname.includes('/_vercel/') ||
     url.pathname.includes('/api/') ||
     url.pathname.startsWith('/coach') ||
     url.pathname.startsWith('/c/')
