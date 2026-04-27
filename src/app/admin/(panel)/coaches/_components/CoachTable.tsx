@@ -77,6 +77,7 @@ export function CoachTable({ coaches }: Props) {
                                 <th className="px-4 py-3 font-medium">Slug</th>
                                 <th className="px-4 py-3 font-medium">Tier</th>
                                 <th className="px-4 py-3 font-medium">Estado</th>
+                                <th className="px-4 py-3 font-medium">Vence</th>
                                 <th className="px-4 py-3 font-medium">Alumnos</th>
                                 <th className="px-4 py-3 font-medium">Registro</th>
                                 <th className="px-4 py-3 font-medium text-right">Acciones</th>
@@ -104,6 +105,11 @@ export function CoachTable({ coaches }: Props) {
                                         >
                                             {coach.subscription_status}
                                         </Badge>
+                                    </td>
+                                    <td className="px-4 py-3 text-neutral-500">
+                                        {coach.current_period_end
+                                            ? new Date(coach.current_period_end).toLocaleDateString('es-CL')
+                                            : '—'}
                                     </td>
                                     <td className="px-4 py-3 text-neutral-300">{coach.client_count}</td>
                                     <td className="px-4 py-3 text-neutral-500">

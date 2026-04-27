@@ -34,14 +34,14 @@ export function KpiStrip({ data }: Props) {
         {
             label: 'Total Alumnos',
             value: data.totalClients,
-            sub: `en toda la plataforma`,
+            sub: `registrados por coaches`,
             icon: UserCheck,
             color: 'text-emerald-400',
         },
         {
             label: 'MRR Estimado',
             value: `$${data.mrrEstimate.toLocaleString('es-CL')}`,
-            sub: data.mrrDeltaPct !== null ? `${data.mrrDeltaPct > 0 ? '+' : ''}${data.mrrDeltaPct}% vs mes ant.` : 'Sin datos históricos',
+            sub: data.mrrDeltaPct !== null ? `${data.mrrDeltaPct > 0 ? '+' : ''}${data.mrrDeltaPct}% vs mes ant.` : 'solo pagos MercadoPago',
             icon: TrendingUp,
             color: 'text-violet-400',
             delta: data.mrrDeltaPct,
@@ -49,7 +49,7 @@ export function KpiStrip({ data }: Props) {
         {
             label: 'Beta Invites',
             value: data.betaInvitesCount,
-            sub: 'registros de beta',
+            sub: 'coaches sin pago',
             icon: Zap,
             color: 'text-amber-400',
         },

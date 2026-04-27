@@ -10,7 +10,7 @@ export const getPlatformOverview = cache(async (): Promise<PlatformOverview> => 
         coachesCountRes,
         clientsCountRes,
         activeCoachesRes,
-        coachesByTierRes,
+        paidCoachesByTierRes,
         recentSignupsRes,
         signupsSeriesRes,
         workoutSessionsRes,
@@ -21,7 +21,10 @@ export const getPlatformOverview = cache(async (): Promise<PlatformOverview> => 
         admin.rpc('get_platform_clients_count'),
         admin.from('coaches').select('*', { count: 'exact', head: true })
             .in('subscription_status', ['active', 'trialing']),
-        admin.rpc('get_platform_coaches_by_tier'),
+        admin.from('coaches')
+            .select('subscription_tier')
+            .not('subscription_mp_id', 'is', null)
+            .in('subscription_status', ['active', 'trialing']),
         admin.from('coaches')
             .select('id, full_name, brand_name, created_at, subscription_status, subscription_tier')
             .order('created_at', { ascending: false })
@@ -29,24 +32,28 @@ export const getPlatformOverview = cache(async (): Promise<PlatformOverview> => 
         admin.rpc('get_platform_coach_signups_last_6_months'),
         admin.rpc('get_platform_workout_sessions_30d'),
         admin.rpc('get_platform_subscription_events_series'),
-        admin.from('beta_invite_registrations').select('*', { count: 'exact', head: true }),
+        admin.from('coaches')
+            .select('*', { count: 'exact', head: true })
+            .is('subscription_mp_id', null)
+            .in('subscription_status', ['active', 'trialing']),
     ])
 
     const totalCoaches = coachesCountRes.data ?? 0
     const totalClients = clientsCountRes.data ?? 0
     const activeCoaches = activeCoachesRes.count ?? 0
 
-    // Build coachesByTier map
-    const coachesByTier: Record<string, number> = {}
-    if (coachesByTierRes.data) {
-        for (const row of coachesByTierRes.data) {
-            coachesByTier[row.tier ?? 'unknown'] = Number(row.coach_count ?? 0)
+    // Build paid coachesByTier map (only coaches with real MercadoPago payment)
+    const paidCoachesByTier: Record<string, number> = {}
+    if (paidCoachesByTierRes.data) {
+        for (const row of paidCoachesByTierRes.data) {
+            const tier = row.subscription_tier ?? 'unknown'
+            paidCoachesByTier[tier] = (paidCoachesByTier[tier] ?? 0) + 1
         }
     }
 
-    // Estimate MRR from active coaches * tier prices
+    // Estimate MRR from paid coaches * tier prices
     let mrrEstimate = 0
-    for (const [tier, count] of Object.entries(coachesByTier)) {
+    for (const [tier, count] of Object.entries(paidCoachesByTier)) {
         const config = TIER_CONFIG[tier as keyof typeof TIER_CONFIG]
         if (config) {
             mrrEstimate += count * config.monthlyPriceClp
@@ -65,7 +72,7 @@ export const getPlatformOverview = cache(async (): Promise<PlatformOverview> => 
         totalCoaches,
         totalClients,
         activeCoaches,
-        coachesByTier,
+        coachesByTier: paidCoachesByTier,
         mrrEstimate,
         mrrDeltaPct,
         recentCoachSignups: recentSignupsRes.data ?? [],
