@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { LucideIcon } from 'lucide-react'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
 import { GlassCard } from '@/components/ui/glass-card'
 
 interface Props {
@@ -16,10 +17,26 @@ interface Props {
     onClick?: () => void
 }
 
+function valueSizeClass(value: string): string {
+    const len = value.length
+    if (len <= 4) return 'text-4xl lg:text-5xl'
+    if (len <= 6) return 'text-3xl lg:text-4xl'
+    if (len <= 8) return 'text-2xl lg:text-3xl'
+    if (len <= 10) return 'text-xl lg:text-2xl'
+    if (len <= 12) return 'text-lg lg:text-xl'
+    if (len <= 14) return 'text-base lg:text-lg'
+    return 'text-sm lg:text-base'
+}
+
 export function KpiTile({ label, value, icon: Icon, deltaPct, hint, href, onClick }: Props) {
     const hasDelta = typeof deltaPct === 'number' && !Number.isNaN(deltaPct)
     const up = hasDelta && deltaPct! >= 0
     const interactive = !!href || !!onClick
+
+    const valueClass = cn(
+        'block max-w-full truncate font-display font-bold leading-none tracking-tight tabular-nums',
+        valueSizeClass(value)
+    )
 
     const inner = (
         <div className="flex h-full flex-col gap-3 p-5">
@@ -29,9 +46,7 @@ export function KpiTile({ label, value, icon: Icon, deltaPct, hint, href, onClic
             </div>
             {hasDelta ? (
                 <div className="flex flex-col items-start gap-1.5">
-                    <span className="max-w-full font-display text-2xl font-bold leading-none tracking-tight tabular-nums sm:text-3xl lg:text-4xl">
-                        {value}
-                    </span>
+                    <span className={valueClass}>{value}</span>
                     <span
                         className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
                             up
@@ -44,9 +59,7 @@ export function KpiTile({ label, value, icon: Icon, deltaPct, hint, href, onClic
                     </span>
                 </div>
             ) : (
-                <span className="font-display text-2xl font-bold leading-none tracking-tight tabular-nums sm:text-3xl lg:text-4xl">
-                    {value}
-                </span>
+                <span className={valueClass}>{value}</span>
             )}
             {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
             {interactive && (
