@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useTransition, useRef } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, X, RefreshCw } from 'lucide-react'
 
 const STATUS_OPTIONS = [
     { value: 'active',           label: 'Activo' },
@@ -128,6 +128,17 @@ export function CoachFilterBar() {
                     Reset
                 </button>
             )}
+
+            {/* Live refresh */}
+            <button
+                onClick={() => startTransition(() => router.refresh())}
+                disabled={isPending}
+                className="ml-auto flex items-center gap-1.5 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2.5 py-1.5 text-xs text-[--admin-text-3] hover:text-[--admin-text-1] hover:border-[--admin-accent] transition-colors disabled:opacity-50"
+                title="Actualizar datos desde la base de datos"
+            >
+                <RefreshCw className={`h-3 w-3 ${isPending ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Actualizar</span>
+            </button>
         </div>
     )
 }

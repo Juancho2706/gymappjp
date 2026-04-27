@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache'
+import { unstable_cache, unstable_noStore as noStore } from 'next/cache'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { TIER_CONFIG } from '@/lib/constants'
 import type { PlatformOverview, CoachListItem, ClientListItem } from './types'
@@ -111,6 +111,7 @@ export async function getAllCoachesPaginated(params: {
     page?: number
     pageSize?: number
 }): Promise<{ coaches: CoachListItem[]; total: number }> {
+    noStore()
     const admin = createServiceRoleClient()
     const pageSize = params.pageSize ?? 50
     const page = params.page ?? 1
