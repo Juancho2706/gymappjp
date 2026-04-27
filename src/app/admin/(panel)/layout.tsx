@@ -1,73 +1,76 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { isAdminEmail } from '@/lib/admin/admin-gate'
-import { AdminLogoutButton } from './AdminLogoutButton'
-import { LayoutDashboard, Users, UserCheck, Shield } from 'lucide-react'
+import { AdminDarkWrapper } from './AdminDarkWrapper'
+import { AdminNavItem } from './AdminNavItem'
+import { AdminSidebar } from './AdminSidebar'
+import {
+    LayoutDashboard, Users, UserCheck,
+    TrendingUp, ClipboardList, Activity
+} from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: {
-        default: 'Panel CEO',
-        template: '%s | CEO | EVA',
-    },
+    title: { default: 'Panel CEO', template: '%s | CEO | EVA' },
 }
 
-const NAV_ITEMS = [
-    { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/admin/coaches', label: 'Coaches', icon: Users },
-    { href: '/admin/clients', label: 'Clientes', icon: UserCheck },
+const NAV_PLATAFORMA = [
+    { href: '/admin/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
+    { href: '/admin/coaches',   label: 'Coaches',    icon: Users },
+    { href: '/admin/clients',   label: 'Clientes',   icon: UserCheck },
+]
+const NAV_FINANZAS = [
+    { href: '/admin/finanzas',  label: 'Finanzas',   icon: TrendingUp },
+]
+const NAV_SISTEMA = [
+    { href: '/admin/auditoria', label: 'Auditoría',  icon: ClipboardList },
+    { href: '/admin/sistema',   label: 'Sistema',    icon: Activity },
 ]
 
-export default async function AdminLayout({
-    children,
-}: {
-    children: React.ReactNode
-}) {
+// Mobile tabs: max 5 most important
+const NAV_MOBILE = [
+    { href: '/admin/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
+    { href: '/admin/coaches',   label: 'Coaches',    icon: Users },
+    { href: '/admin/clients',   label: 'Clientes',   icon: UserCheck },
+    { href: '/admin/finanzas',  label: 'Finanzas',   icon: TrendingUp },
+    { href: '/admin/auditoria', label: 'Auditoría',  icon: ClipboardList },
+]
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
     const supabase = await createClient()
-    const {
-        data: { user },
-        error,
-    } = await supabase.auth.getUser()
+    const { data: { user }, error } = await supabase.auth.getUser()
 
     if (error || !user?.email || !isAdminEmail(user.email)) {
         redirect('/admin/login')
     }
 
     return (
-        <div className="flex min-h-[100dvh] flex-col bg-neutral-950 text-neutral-100 md:flex-row">
-            {/* Sidebar */}
-            <aside className="flex w-full flex-col border-b border-neutral-800 bg-neutral-900/50 md:w-64 md:border-b-0 md:border-r">
-                <div className="flex items-center gap-2 px-4 py-5">
-                    <Shield className="h-5 w-5 text-emerald-400" />
-                    <span className="text-sm font-semibold tracking-wide">EVA CEO</span>
-                </div>
+        <AdminDarkWrapper>
+            <div className="admin-shell flex min-h-[100dvh] flex-col bg-[--admin-bg-base] text-[--admin-text-1] md:flex-row">
 
-                <nav className="flex flex-1 flex-row gap-1 overflow-x-auto px-2 py-2 md:flex-col md:overflow-visible">
-                    {NAV_ITEMS.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
-                        >
-                            <item.icon className="h-4 w-4" />
-                            <span className="hidden md:inline">{item.label}</span>
-                        </Link>
+                {/* Desktop sidebar — collapsible */}
+                <AdminSidebar
+                    navPlataforma={NAV_PLATAFORMA}
+                    navFinanzas={NAV_FINANZAS}
+                    navSistema={NAV_SISTEMA}
+                    userEmail={user.email}
+                />
+
+                {/* Main content */}
+                <main className="flex-1 overflow-y-auto pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0">
+                    <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+                        {children}
+                    </div>
+                </main>
+
+                {/* Mobile bottom tab bar */}
+                <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-[--admin-border] bg-[--admin-bg-surface] md:hidden"
+                    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                    {NAV_MOBILE.map(item => (
+                        <AdminNavItem key={item.href} {...item} mobile />
                     ))}
                 </nav>
-
-                <div className="border-t border-neutral-800 px-4 py-3">
-                    <p className="mb-2 truncate text-xs text-neutral-500">{user.email}</p>
-                    <AdminLogoutButton />
-                </div>
-            </aside>
-
-            {/* Main */}
-            <main className="flex-1 overflow-y-auto">
-                <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
-                    {children}
-                </div>
-            </main>
-        </div>
+            </div>
+        </AdminDarkWrapper>
     )
 }

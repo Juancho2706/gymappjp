@@ -1,6 +1,6 @@
 # 03 — Arquitectura Técnica de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
+> **Actualizado:** 2026-04-27 America/Santiago (Sesión 11)
 > **Fuentes:** ARQUITECTURA-COMPONENTES.md, ESTADO-COMPONENTES.md, PERFORMANCE-NAV-BASELINE.md + diff `837f847..master`
 
 ---
@@ -32,7 +32,7 @@
 
 ---
 
-## Estructura de Rutas (41 rutas)
+## Estructura de Rutas (48+ rutas)
 
 ```
 src/app/
@@ -68,6 +68,21 @@ src/app/
 ├── pricing/                           # Pricing estática CLP
 ├── legal/                             # Términos y condiciones
 ├── privacidad/                        # Política de privacidad
+│
+├── admin/                             # Panel CEO (protegido por isAdminEmail + assertAdmin)
+│   ├── login/                         # Login admin
+│   └── (panel)/                       # Layout con sidebar colapsable + mobile tabs
+│       ├── layout.tsx                 # AdminSidebar client + auth guard
+│       ├── AdminDarkWrapper.tsx       # CSS tokens dark design system
+│       ├── AdminSidebar.tsx           # Sidebar colapsable (64px / 224px)
+│       ├── AdminNavItem.tsx           # Link activo via usePathname
+│       ├── _components/               # AdminStatusBadge, AdminKpiCard, AdminSortHeader, etc.
+│       ├── dashboard/                 # 8 KPIs + 4 charts + RecentActivity
+│       ├── coaches/                   # CoachTable + CoachCommandPanel (3 tabs) + bulk
+│       ├── clients/                   # ClientTable
+│       ├── finanzas/                  # 4 KPIs + 4 charts + tabla subscription_events
+│       ├── auditoria/                 # Filtros URL + tabla + CSV export
+│       └── sistema/                   # Health checks DB + stats plataforma
 │
 ├── coach/                             # Rutas del coach (protegidas por middleware)
 │   ├── layout.tsx                     # getCoach(), sidebar, brand CSS vars

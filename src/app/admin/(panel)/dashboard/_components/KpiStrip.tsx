@@ -1,83 +1,71 @@
-'use client'
-
-import { motion } from 'framer-motion'
-import { Users, UserCheck, TrendingUp, Zap } from 'lucide-react'
+import { AdminKpiCard } from '../../_components/AdminKpiCard'
 import type { PlatformOverview } from '../_data/types'
-import { GlassCard } from '@/components/ui/glass-card'
 
-interface Props {
-    data: PlatformOverview
+function formatClp(n: number): string {
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
+    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`
+    return `$${n.toLocaleString('es-CL')}`
 }
 
-const container = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: { staggerChildren: 0.08 },
-    },
-}
-
-const item = {
-    hidden: { opacity: 0, y: 12 },
-    show: { opacity: 1, y: 0 },
-}
-
-export function KpiStrip({ data }: Props) {
-    const kpiCards = [
-        {
-            label: 'Total Coaches',
-            value: data.totalCoaches,
-            sub: `${data.activeCoaches} activos`,
-            icon: Users,
-            color: 'text-blue-400',
-        },
-        {
-            label: 'Total Alumnos',
-            value: data.totalClients,
-            sub: `registrados por coaches`,
-            icon: UserCheck,
-            color: 'text-emerald-400',
-        },
-        {
-            label: 'MRR Estimado',
-            value: `$${data.mrrEstimate.toLocaleString('es-CL')}`,
-            sub: data.mrrDeltaPct !== null ? `${data.mrrDeltaPct > 0 ? '+' : ''}${data.mrrDeltaPct}% vs mes ant.` : 'solo pagos MercadoPago',
-            icon: TrendingUp,
-            color: 'text-violet-400',
-            delta: data.mrrDeltaPct,
-        },
-        {
-            label: 'Beta Invites',
-            value: data.betaInvitesCount,
-            sub: 'coaches sin pago',
-            icon: Zap,
-            color: 'text-amber-400',
-        },
-    ]
+export function KpiStrip({ data }: { data: PlatformOverview }) {
+    const sessions7d = data.workoutSessionsSeries
+        .slice(-7)
+        .reduce((s, d) => s + ((d as any).sessions ?? 0), 0)
 
     return (
-        <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        >
-            {kpiCards.map((kpi) => (
-                <motion.div key={kpi.label} variants={item}>
-                    <GlassCard className="flex items-center gap-4 p-4">
-                        <div className={`rounded-lg bg-neutral-800/50 p-2.5 ${kpi.color}`}>
-                            <kpi.icon className="h-5 w-5" />
-                        </div>
-                        <div>
-                            <p className="text-xs text-neutral-400">{kpi.label}</p>
-                            <p className="text-lg font-semibold text-white">{kpi.value}</p>
-                            <p className={`text-xs ${kpi.delta !== undefined && kpi.delta !== null ? (kpi.delta >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-neutral-500'}`}>
-                                {kpi.sub}
-                            </p>
-                        </div>
-                    </GlassCard>
-                </motion.div>
-            ))}
-        </motion.div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* Row 1 — Financial */}
+            <AdminKpiCard
+                label="MRR"
+                value={formatClp(data.mrrEstimate)}
+                sub="ingresos recurrentes mensuales"
+                delta={data.mrrDeltaPct}
+                tooltip="Ingresos mensuales recurrentes estimados. Suma coaches con status=active × precio de su tier. Coaches beta no cuentan."
+            />
+            <AdminKpiCard
+                label="ARR"
+                value={formatClp(data.arrEstimate)}
+                sub="proyección anual"
+                tooltip="Ingresos anuales proyectados si el MRR actual se mantiene (MRR × 12)."
+            />
+            <AdminKpiCard
+                label="MRR Delta"
+                value={data.mrrDeltaPct !== null ? `${data.mrrDeltaPct > 0 ? '+' : ''}${data.mrrDeltaPct}%` : '—'}
+                sub="vs mes anterior"
+                tooltip="Cambio porcentual del MRR vs el mismo período del mes anterior."
+            />
+            <AdminKpiCard
+                label="Churn 30d"
+                value={data.churnLast30d}
+                sub="coaches cancelados/expirados"
+                tooltip="Coaches que pasaron a cancelado o expirado en los últimos 30 días. Alta tasa indica problema de retención."
+            />
+
+            {/* Row 2 — Operational */}
+            <AdminKpiCard
+                label="Coaches activos"
+                value={data.activeCoaches}
+                sub={`de ${data.totalCoaches} total`}
+                tooltip="Total de coaches con acceso habilitado (activos + en trial)."
+            />
+            <AdminKpiCard
+                label="Total alumnos"
+                value={data.totalClients}
+                sub="en toda la plataforma"
+                tooltip="Todos los alumnos registrados en la plataforma, sin importar coach o estado."
+            />
+            <AdminKpiCard
+                label="Sessions 7d"
+                value={sessions7d}
+                sub="entrenamientos completados"
+                tooltip="Sesiones de entrenamiento completadas en la plataforma en los últimos 7 días."
+            />
+            <AdminKpiCard
+                label="Check-ins 7d"
+                value={data.checkinsLast7d}
+                sub="registros de peso y fotos"
+                tooltip="Registros de peso y fotos de alumnos en los últimos 7 días. Indica engagement con seguimiento."
+            />
+        </div>
     )
 }

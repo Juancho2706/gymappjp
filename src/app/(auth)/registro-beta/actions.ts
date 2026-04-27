@@ -126,12 +126,13 @@ export async function betaRegisterAction(
         brand_name: brandName,
         slug,
         primary_color: '#10B981',
-        subscription_status: 'active',
+        subscription_status: 'trialing',
         subscription_tier: 'pro',
         billing_cycle: 'monthly',
         payment_provider: 'beta',
         max_clients: maxClients,
         current_period_end: periodEnd,
+        trial_ends_at: periodEnd,
     })
 
     if (coachError) {

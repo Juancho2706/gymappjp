@@ -1,8 +1,8 @@
 # 01 — Estado Actual de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
-> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits hasta 2026-04-25
-> **Completitud global estimada: ~98–99%** (Sesiones 1–10; Panel CEO + Dashboard V2 + beta flow + Mi Marca deluxe)
+> **Actualizado:** 2026-04-27 America/Santiago (Sesión 11)
+> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits hasta 2026-04-27
+> **Completitud global estimada: ~99%** (Sesiones 1–11; Admin Panel CEO rework total — Phases 0–3 completas)
 
 ---
 
@@ -28,7 +28,7 @@
 | QR | qrcode.react | ^4.2.0 |
 | Recharts fix | react-is | ^19.2.5 |
 
-**Base de código:** 225+ archivos TypeScript/TSX · **26 tablas** Supabase · 41+ rutas · 11+ API routes · **12 funciones RPC** en `public` (ver [`database.types.ts`](src/lib/database.types.ts)): `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier`
+**Base de código:** 250+ archivos TypeScript/TSX · **26 tablas** Supabase + col `coaches.admin_notes` · 48+ rutas · 11+ API routes · **22+ funciones RPC** en `public`: `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier`, `get_platform_mrr_12_months`, `get_platform_coaches_by_tier_monthly`, `get_platform_checkins_7d`, `get_platform_churn_last_30d`, `get_admin_coaches_paginated`, `get_platform_churn_monthly`, `get_admin_audit_logs_paginated`, `get_platform_revenue_by_cycle`, `get_platform_revenue_by_tier`
 
 ---
 
@@ -60,7 +60,7 @@
 | Forgot/Reset Password | 40% | Flujo correcto con redirectTo |
 | Ejercicios Coach | 40% | CRUD + catálogo. Pendiente: upload GIF, bulk edit |
 | Testing | 28% | Vitest básico + Playwright. Sin cobertura real |
-| Panel CEO / Superadmin | ~85% | Implementado. Dashboard analytics, tabla coaches/clientes, search, edit/delete con audit logs. Pendiente: paginación server-side, gráficos avanzados |
+| Panel CEO / Superadmin | ~99% | Rework total Sesión 11. 7 páginas (`dashboard`, `coaches`, `clients`, `finanzas`, `auditoria`, `sistema` + login). Sidebar colapsable. Dark design system con tokens CSS. CoachCommandPanel 3 tabs + acciones masivas. Trial fix. `admin_notes`. CSV export. |
 
 **TOTAL GLOBAL: ~98%**
 
@@ -145,6 +145,42 @@ body { min-height: 100dvh; overscroll-behavior-y: none; }
 ---
 
 ## Historial de Sesiones
+
+### Sesión 11 — 2026-04-27 — Admin Panel CEO Rework Total (Phases 0–3)
+
+**Phase 0 — Fix crítico trial system:**
+- `registro-beta/actions.ts`: `subscription_status='trialing'` (era `'active'`) + agrega `trial_ends_at`
+- `coach-subscription-gate.ts`: `hasEffectiveAccess()` ahora bloquea `trialing` con `current_period_end` vencido (igual que `canceled`). Coaches beta que no renuevan ven `/coach/reactivate` automáticamente al vencer.
+
+**Phase 1 — Foundation:**
+- Design system admin: tokens CSS en `AdminDarkWrapper.tsx` (`--admin-bg-base`, `--admin-accent`, etc.)
+- Componentes compartidos: `AdminStatusBadge`, `AdminKpiCard`, `AdminSortHeader`, `AdminFilterBar`, `AdminEmptyState`, `AdminPagination`, `AdminBulkBar`
+- `AdminNavItem` con active link via `usePathname`
+- Layout: sidebar desktop + mobile bottom tab bar
+
+**Phase 1 — Dashboard rework:**
+- 8 KPI cards: MRR, ARR, MRR delta, churn 30d, coaches activos, total alumnos, sessions 7d, check-ins 7d
+- 4 charts: MRR 12m (ComposedChart), tier por mes (BarChart stacked), tier donut (PieChart), actividad 30d (AreaChart)
+- `RecentActivity`: tabs Signups / Auditoría con `formatDistanceToNow`
+
+**Phase 1 — Coaches rework:**
+- `CoachTable`: health score bar, at-risk strip colapsable, bulk bar, 10 columnas, tooltips `InfoTooltip`
+- `CoachCommandPanel`: 3 tabs (Info, Editar, Acciones). Acciones: extender período +7/14/30d, suspender, expirar, reactivar, eliminar
+- 7 server actions nuevas: `extendCoachPeriodAction`, `suspendCoachAction`, `expireCoachAction`, `reactivateCoachAdminAction`, `updateCoachPeriodEndAction`, `bulkCoachStatusAction`, `bulkCoachTierAction`
+- Migration `20260428000000_admin_phase1_rpcs_indexes.sql`: indexes + `get_platform_mrr_12_months`, `get_platform_coaches_by_tier_monthly`, `get_platform_checkins_7d`, `get_platform_churn_last_30d`, `get_admin_coaches_paginated`
+
+**Phase 2 — Nuevas páginas:**
+- `/admin/finanzas`: 4 KPIs (MRR/ARR/coaches pagando/ARPC), 4 charts (MRR 12m, churn mensual, revenue por ciclo donut, revenue por tier), tabla eventos suscripción con payload expandible
+- `/admin/auditoria`: URL filters (action/from/to/target), tabla con action badges + JSON payload dialogs, paginación, Export CSV
+- Migration `20260428000001_admin_phase2_rpcs.sql`: `get_platform_churn_monthly`, `get_admin_audit_logs_paginated`, `get_platform_revenue_by_cycle`, `get_platform_revenue_by_tier`
+
+**Phase 3 — Polish:**
+- `/admin/sistema`: health checks DB + coaches morosos/legacy-bug + estadísticas plataforma
+- Sidebar colapsable: `AdminSidebar` client component con toggle icon-only 64px ↔ 224px
+- `coaches.admin_notes` (text, nullable): migration `20260428000002_admin_phase3_admin_notes.sql` + UI en Tab Editar del CoachCommandPanel (no visible para el coach)
+- CSV export auditoría: `exportAuditCsvAction` (server action) + `AuditExportButton` client component, respeta filtros activos, hasta 5000 rows
+
+---
 
 ### Sesión 10 — 2026-04-25 — Mi Marca Deluxe + PWA White-label Hardening + Tour Guiado
 
@@ -514,9 +550,9 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 
 ---
 
-## Estado de la Base de Datos en Producción (verificado 2026-04-17; ampliado Sesión 9)
+## Estado de la Base de Datos en Producción (verificado 2026-04-27; ampliado Sesión 11)
 
-**Criterio:** alineado con despliegue vía MCP / operación habitual. Nuevos objetos desde entonces están versionados en [`supabase/migrations/`](supabase/migrations/); confirmar en panel Supabase si alguna migración aún no se aplicó en un entorno concreto.
+**Criterio:** alineado con despliegue vía MCP / operación habitual. Nuevos objetos están versionados en [`supabase/migrations/`](supabase/migrations/).
 
 | Elemento | Estado |
 |----------|--------|
@@ -524,6 +560,7 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 | `clients.goal_weight_kg` | ✅ Existe |
 | `coaches.superseded_mp_preapproval_id` | ✅ Existe |
 | `coaches.welcome_message` | ✅ Existe |
+| `coaches.admin_notes` (Sesión 11) | ✅ Existe |
 | `foods.is_liquid`, `foods.brand`, `foods.serving_unit` | ✅ Existen |
 | `client_payments` table | ✅ Existe con RLS |
 | `coach_onboarding_events`, `coach_email_drip_events` | ✅ Existen |
@@ -535,12 +572,8 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 | Función `check_platform_email_availability` + índice único `clients_email_norm_uidx` | ✅ En repo; verificar en prod |
 | Función / índices búsqueda `foods` sin acento (`20260419120000_*`) | ✅ En repo; verificar en prod |
 | **Funciones platform analytics (Panel CEO):** `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier` | ✅ Sesión 9 |
+| **Admin Phase 1 RPCs + indexes** (Sesión 11): `get_platform_mrr_12_months`, `get_platform_coaches_by_tier_monthly`, `get_platform_checkins_7d`, `get_platform_churn_last_30d`, `get_admin_coaches_paginated` + 3 indexes | ✅ Aplicado vía MCP |
+| **Admin Phase 2 RPCs** (Sesión 11): `get_platform_churn_monthly`, `get_admin_audit_logs_paginated`, `get_platform_revenue_by_cycle`, `get_platform_revenue_by_tier` | ✅ Aplicado vía MCP |
 | Índices perf `workout_logs`, `daily_nutrition_logs` | ✅ Existen |
 | Alimentos chilenos de marca (Colún, Quaker, etc.) | ✅ Seedeados |
-
-**Nota sobre `supabase_migrations`:** Las migraciones se aplicaron vía MCP directo, por lo que solo 9 aparecen registradas en la tabla `supabase_migrations`. Esto es normal para este flujo de trabajo. Los archivos `.sql` locales correspondientes fueron eliminados para evitar confusión.
-
-| Elemento | Estado |
-|----------|--------|
 | `workout_programs_duration_type_check` constraint (Sesión 7) | ✅ Corregido — ahora acepta `('weeks', 'calendar_days', 'async')` |
-| Migración `20260417_fix_duration_type_constraint.sql` | ✅ Guardada en `supabase/migrations/` |

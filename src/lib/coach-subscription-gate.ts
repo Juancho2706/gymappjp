@@ -15,8 +15,8 @@ export function hasEffectiveAccess(
 
     if (blocked.has(status)) return false
 
-    // 'canceled' coaches retain access until current_period_end
-    if (status === 'canceled') {
+    // 'canceled' and 'trialing' coaches retain access only until current_period_end
+    if (status === 'canceled' || status === 'trialing') {
         if (!currentPeriodEnd) return false
         return new Date(currentPeriodEnd).getTime() > Date.now()
     }

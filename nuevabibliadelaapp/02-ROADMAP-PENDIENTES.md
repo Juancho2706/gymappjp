@@ -1,8 +1,8 @@
 # 02 — Roadmap y Tareas Pendientes
 
-> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
-> **Fuentes:** ROAD-TO-100.md (Sesiones 1–10), Supabase MCP / panel según entorno
-> **Estado global:** ~98–99% completado. Estimación restante: ~4–8 días de desarrollo (sin contar QA pagos real).
+> **Actualizado:** 2026-04-27 America/Santiago (Sesión 11)
+> **Fuentes:** ROAD-TO-100.md (Sesiones 1–11), Supabase MCP / panel según entorno
+> **Estado global:** ~99% completado. Estimación restante: ~3–6 días de desarrollo (sin contar QA pagos real).
 
 ---
 
@@ -57,6 +57,24 @@ Los siguientes archivos fueron borrados de `supabase/migrations/` el 2026-04-17.
 | `20260424120000_add_rir_to_workout_logs.sql` | Columna `rir` en `workout_logs` |
 
 **Sesión 7 (ya documentado):** migraciones antiguas eliminadas del árbol tras aplicarlas por MCP — ver tabla “Migraciones SQL Eliminadas” arriba.
+
+---
+
+## BLOQUE M0e — Sesión 11 (2026-04-27 — completado)
+
+| ID | Tarea | Estado |
+|----|-------|--------|
+| M31 | Fix trial: `registro-beta` status=`trialing` + `trial_ends_at` | ✅ Sesión 11 |
+| M32 | Fix gate: `hasEffectiveAccess` bloquea `trialing` expirado | ✅ Sesión 11 |
+| M33 | Admin design system: tokens CSS, 7 componentes compartidos | ✅ Sesión 11 |
+| M34 | Dashboard CEO rework: 8 KPIs, 4 charts, RecentActivity tabs | ✅ Sesión 11 |
+| M35 | Coaches rework: health score, at-risk strip, bulk, CoachCommandPanel 3 tabs | ✅ Sesión 11 |
+| M36 | `/admin/finanzas`: 4 KPIs, 4 charts, tabla events con payload JSON | ✅ Sesión 11 |
+| M37 | `/admin/auditoria`: URL filters, tabla, export CSV | ✅ Sesión 11 |
+| M38 | `/admin/sistema`: health checks + stats plataforma | ✅ Sesión 11 |
+| M39 | Sidebar colapsable icon-only 64px ↔ 224px | ✅ Sesión 11 |
+| M40 | `coaches.admin_notes` column + UI en Tab Editar | ✅ Sesión 11 |
+| M41 | Migrations: phase1 (RPCs+indexes), phase2 (RPCs), phase3 (admin_notes) | ✅ Sesión 11 |
 
 ---
 
@@ -201,7 +219,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 
 | ID | Tarea | Área | Esfuerzo | Estado |
 |----|-------|------|----------|--------|
-| 17 | **Panel CEO**: coaches activos por tier, MRR total, churn, alumnos totales | `src/app/admin/` (nuevo) | 4d | ✅ Sesión 9 |
+| 17 | **Panel CEO**: coaches activos por tier, MRR total, churn, alumnos totales | `src/app/admin/` | 4d | ✅ Sesión 11 (rework total) |
 | 18 | **Testing E2E**: pago sandbox MP, flujo alumno completo, unit tests server actions, test RLS | `tests/` | 5d | ⏳ Pendiente |
 | 19.1 | **SEO técnico**: `sitemap.xml` dinámico, `robots.txt`, JSON-LD `SoftwareApplication` | `src/app/` | 1d | ⏳ Pendiente |
 | 20 | **i18n**: migrar strings hardcoded del dashboard alumno + onboarding a keys | Toda la app | 3d | ⏳ Pendiente |

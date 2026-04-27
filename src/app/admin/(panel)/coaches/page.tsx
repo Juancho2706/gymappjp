@@ -20,7 +20,7 @@ export default async function AdminCoachesPage({
             </div>
 
             <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-neutral-900" />}>
-                <CoachTable coaches={coaches} />
+                <CoachTable coaches={coaches} total={coaches.length} />
             </Suspense>
         </div>
     )
