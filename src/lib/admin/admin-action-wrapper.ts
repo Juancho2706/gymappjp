@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { isAdminEmail } from './admin-gate'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
@@ -16,7 +17,7 @@ export async function assertAdmin() {
         throw new Error('Unauthorized: admin access required')
     }
 
-    return { user, adminClient: supabase }
+    return { user, adminClient: createServiceRoleClient() }
 }
 
 export async function logAdminAction(

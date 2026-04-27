@@ -1,10 +1,10 @@
 import { cache } from 'react'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { TIER_CONFIG } from '@/lib/constants'
 import type { PlatformOverview, CoachListItem, ClientListItem } from './types'
 
 export const getPlatformOverview = cache(async (): Promise<PlatformOverview> => {
-    const admin = await createAdminClient()
+    const admin = createServiceRoleClient()
 
     const [
         coachesCountRes,
@@ -84,7 +84,7 @@ export const getPlatformOverview = cache(async (): Promise<PlatformOverview> => 
 })
 
 export async function getAllCoaches(search?: string): Promise<CoachListItem[]> {
-    const admin = await createAdminClient()
+    const admin = createServiceRoleClient()
 
     let query = admin
         .from('coaches')
@@ -117,7 +117,7 @@ export async function getAllCoaches(search?: string): Promise<CoachListItem[]> {
 }
 
 export async function getAllClients(search?: string, coachId?: string): Promise<ClientListItem[]> {
-    const admin = await createAdminClient()
+    const admin = createServiceRoleClient()
 
     let query = admin
         .from('clients')
