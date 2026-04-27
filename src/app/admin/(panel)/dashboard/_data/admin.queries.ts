@@ -24,11 +24,13 @@ export const getPlatformOverview = unstable_cache(
             admin.rpc('get_platform_coaches_count'),
             admin.rpc('get_platform_clients_count'),
             admin.from('coaches').select('*', { count: 'exact', head: true })
-                .in('subscription_status', ['active', 'trialing']),
+                .in('subscription_status', ['active', 'trialing'])
+                .not('payment_provider', 'in', ['beta', 'internal']),
             admin.from('coaches')
                 .select('subscription_tier')
                 .not('subscription_mp_id', 'is', null)
-                .eq('subscription_status', 'active'),
+                .eq('subscription_status', 'active')
+                .not('payment_provider', 'in', ['beta', 'internal']),
             admin.from('coaches')
                 .select('id, full_name, brand_name, created_at, subscription_status, subscription_tier')
                 .order('created_at', { ascending: false })
