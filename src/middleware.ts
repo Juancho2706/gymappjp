@@ -156,11 +156,11 @@ export async function middleware(request: NextRequest) {
         // NOTE: We removed use_brand_colors from the query because it might not exist in the DB yet
         const { data: coachData } = await supabase
             .from('coaches')
-            .select('id, brand_name, primary_color, logo_url, slug')
+            .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode')
             .eq('slug', coachSlug)
             .maybeSingle()
 
-        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug'> | null
+        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode'> | null
 
         if (!coach) {
             // Coach slug doesn't exist → 404
@@ -171,20 +171,35 @@ export async function middleware(request: NextRequest) {
 
         const resolvedColor = coach.primary_color || BRAND_PRIMARY_COLOR
 
-        // Forward branding as request headers so layouts can read them
-        const response = NextResponse.next({ request })
+        // Forward branding as request headers so layouts and loading.tsx can read them
+        const requestHeaders = new Headers(request.headers)
+        requestHeaders.set('x-coach-id', coach.id)
+        requestHeaders.set('x-coach-slug', coach.slug)
+        requestHeaders.set('x-coach-brand-name', coach.brand_name)
+        requestHeaders.set('x-coach-primary-color', resolvedColor)
+        requestHeaders.set('x-coach-logo-url', coach.logo_url?.trim() || BRAND_APP_ICON)
+        requestHeaders.set('x-coach-loader-text', (coach as any).loader_text?.trim() || '')
+        requestHeaders.set('x-coach-use-custom-loader', String((coach as any).use_custom_loader ?? false))
+        requestHeaders.set('x-coach-loader-text-color', (coach as any).loader_text_color?.trim() || '')
+        requestHeaders.set('x-coach-loader-icon-mode', (coach as any).loader_icon_mode || 'eva')
+
+        const response = NextResponse.next({ request: { headers: requestHeaders } })
 
         // Copy all cookies from supabaseResponse
         supabaseResponse.cookies.getAll().forEach(cookie => {
             response.cookies.set(cookie.name, cookie.value)
         })
 
-        // Initial default headers (will be updated if client prefers default blue)
+        // Also set on response for backwards compatibility with any response-header consumers
         response.headers.set('x-coach-id', coach.id)
         response.headers.set('x-coach-slug', coach.slug)
         response.headers.set('x-coach-brand-name', coach.brand_name)
         response.headers.set('x-coach-primary-color', resolvedColor)
         response.headers.set('x-coach-logo-url', coach.logo_url?.trim() || BRAND_APP_ICON)
+        response.headers.set('x-coach-loader-text', (coach as any).loader_text?.trim() || '')
+        response.headers.set('x-coach-use-custom-loader', String((coach as any).use_custom_loader ?? false))
+        response.headers.set('x-coach-loader-text-color', (coach as any).loader_text_color?.trim() || '')
+        response.headers.set('x-coach-loader-icon-mode', (coach as any).loader_icon_mode || 'eva')
 
         // Check if client is authenticated for protected /c/* routes (not login page)
         const isLoginPage = pathname.endsWith('/login')

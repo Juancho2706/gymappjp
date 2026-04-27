@@ -1,8 +1,8 @@
 # 02 — Roadmap y Tareas Pendientes
 
-> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
-> **Fuentes:** ROAD-TO-100.md (Sesiones 1–9), Supabase MCP / panel según entorno
-> **Estado global:** ~98–99% completado. Estimación restante: ~6–10 días de desarrollo (sin contar QA pagos real).
+> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
+> **Fuentes:** ROAD-TO-100.md (Sesiones 1–10), Supabase MCP / panel según entorno
+> **Estado global:** ~98–99% completado. Estimación restante: ~4–8 días de desarrollo (sin contar QA pagos real).
 
 ---
 
@@ -60,6 +60,15 @@ Los siguientes archivos fueron borrados de `supabase/migrations/` el 2026-04-17.
 
 ---
 
+## BLOQUE M0d — Sesión 10 (2026-04-25 — completado)
+
+| ID | Tarea | Estado |
+|----|-------|--------|
+| M27 | Tour guiado "Mi Marca": 8 pasos, auto-inicio, botón `(?)`, spotlight, scroll lock | ✅ Sesión 10 |
+| M28 | Loader customizable del coach: texto, color, toggle ícono, preview en vivo | ✅ Sesión 10 |
+| M29 | Panel "Mi Marca" deluxe: header educativo, QR+link, preview inline claro/oscuro | ✅ Sesión 10 |
+| M30 | PWA white-label hardening: offline branding, favicon dinámico, skeletons tinte, install prompt con logo | ✅ Sesión 10 |
+
 ## BLOQUE M0c — Sesión 9 (2026-04-23/24 — completado)
 
 | ID | Tarea | Estado |
@@ -72,6 +81,8 @@ Los siguientes archivos fueron borrados de `supabase/migrations/` el 2026-04-17.
 | M24 | PlanBuilder auto-sync goals con totales de comidas | ✅ Sesión 9 |
 | M25 | FoodSearchDrawer portal + 2-stage UX + categorías | ✅ Sesión 9 |
 | M26 | EditClientDataModal para edición de datos del alumno | ✅ Sesión 9 |
+| M26b | Vercel Analytics integration | ✅ Sesión 9 |
+| M26c | Login layout gradient + responsive | ✅ Sesión 9 |
 
 ## BLOQUE M0b — Post-móvil / producto (Sesión 8 — completado)
 
@@ -175,7 +186,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 
 | ID | Tarea | Archivo clave | Esfuerzo | Estado |
 |----|-------|--------------|----------|--------|
-| 12.1 | **Mi Marca preview real**: mock del dashboard alumno actual | `src/app/coach/settings/preview/` | 1.5d | ⏳ Pendiente |
+| 12.1 | **Mi Marca preview real**: mock del dashboard alumno actual con modo claro/oscuro | `src/app/coach/settings/preview/` + inline preview | 1.5d | ✅ Sesión 10 |
 | 13.1 | **Ejercicios coach upload GIF/video**: max 5MB, bucket `exercises` | `src/app/coach/exercises/` | 1.5d | ⏳ Pendiente |
 | 13.4 | **Ejercicios coach filtro por muscle_group** en lista | `src/app/coach/exercises/` | 0.5d | ⏳ Pendiente |
 | 14 | **Login coach rediseño visual**: layout split o centered premium | `src/app/(auth)/login/` | 1d | ⏳ Pendiente |
@@ -214,7 +225,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 | Features | Workout retry automático + offline banner | 🟠 P1 | 1d | ⏳ |
 | Features | Panel CEO superadmin | 🟠 P1 | 4d | ✅ Sesión 9 |
 | UX | Nav alumno reestructura (Entrenar/Progreso/Más) | 🟡 P2 | 1d | ⏳ |
-| Features | Mi Marca preview real | 🟡 P2 | 1.5d | ⏳ |
+| Features | Mi Marca preview real + tour + loader customizable | 🟡 P2 | 1.5d | ✅ Sesión 10 |
 | Features | Ejercicios coach GIF upload + filtro muscle_group | 🟡 P2 | 2d | ⏳ |
 | Features | Ejercicios alumno favoritos + historial | 🟡 P2 | 2d | ⏳ |
 | Features | PrintProgramDialog mejorado + PDF | 🟡 P2 | 1d | ⏳ |
@@ -225,7 +236,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 | Features | SEO técnico (sitemap, JSON-LD) | 🟢 P3 | 1d | ⏳ |
 | Features | Email confirmación de pago | 🟢 P3 | 1d | ⏳ |
 
-**Total estimado restante al 100%: ~18–22 días de desarrollo**
+**Total estimado restante al 100%: ~12–16 días de desarrollo**
 
 ---
 

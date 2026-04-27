@@ -4,16 +4,13 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 export async function saveMealGroup(groupData: { id?: string, name: string, items: { food_id: string, quantity: number, unit?: string }[] }, coachId: string) {
-    console.log("[saveMealGroup] Argumentos recibidos:", JSON.stringify({ groupData, coachId }, null, 2))
     const supabase = await createClient()
 
     try {
-        console.log("[saveMealGroup] coachId obtenido para la operación:", coachId)
         let groupId = groupData.id
 
         if (groupId) {
             // Update existing group name
-            console.log("[saveMealGroup] Actualizando grupo existente:", groupId)
             const { error: updateError } = await supabase
                 .from('saved_meals')
                 .update({ name: groupData.name })
@@ -31,7 +28,6 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
             }
 
             // Delete existing items to replace them
-            console.log("[saveMealGroup] Eliminando items antiguos para el grupo:", groupId)
             const { error: deleteError } = await supabase.from('saved_meal_items').delete().eq('saved_meal_id', groupId)
             if (deleteError) {
                 console.error("[saveMealGroup] Error eliminando items antiguos:", {
@@ -44,7 +40,6 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
             }
         } else {
             // Create new group
-            console.log("[saveMealGroup] Creando nuevo grupo:", groupData.name)
             const { data: newGroup, error: insertError } = await supabase
                 .from('saved_meals')
                 .insert({ name: groupData.name, coach_id: coachId })
@@ -60,7 +55,6 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
                 })
                 throw insertError
             }
-            console.log("[saveMealGroup] Resultado inserción saved_meals (nuevo grupo):", newGroup)
             groupId = newGroup.id
         }
 
@@ -72,7 +66,6 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
                 quantity: item.quantity,
                 unit: item.unit || 'g'
             }))
-            console.log("[saveMealGroup] Intentando insertar items en saved_meal_items:", JSON.stringify(itemsToInsert, null, 2))
 
             const { data: insertedItems, error: itemsError } = await supabase
                 .from('saved_meal_items')
@@ -88,11 +81,9 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
                 })
                 throw itemsError
             }
-            console.log("[saveMealGroup] Items insertados correctamente:", insertedItems)
         }
 
         // Fetch the full object to return it
-        console.log("[saveMealGroup] Recuperando objeto completo del grupo:", groupId)
         const { data: fullGroup, error: fetchError } = await supabase
             .from('saved_meals')
             .select(`
@@ -118,7 +109,6 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
             throw fetchError
         }
 
-        console.log("[saveMealGroup] Operación completada con éxito para el grupo:", groupId)
         revalidatePath('/coach/meal-groups')
         return { success: true, group: fullGroup }
     } catch (error: any) {

@@ -7,19 +7,33 @@ import {
     Home, Apple, Dumbbell, CheckCircle, Settings,
     ChevronRight, Flame, Calendar, TrendingUp, Zap,
 } from 'lucide-react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
 
 interface Props {
     brandName: string
     primaryColor: string
     logoUrl: string | null
+    loaderText?: string | null
+    useCustomLoader?: boolean
+    loaderTextColor?: string | null
+    loaderIconMode?: 'eva' | 'coach' | 'none'
 }
 
 const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 const TODAY_IDX = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1
 const WORKOUT_DAYS = [0, 2, 4] // Mon, Wed, Fri
 
-export function StudentDashboardPreview({ brandName, primaryColor, logoUrl }: Props) {
+export function StudentDashboardPreview({
+    brandName,
+    primaryColor,
+    logoUrl,
+    loaderText,
+    useCustomLoader,
+    loaderTextColor,
+    loaderIconMode = 'eva',
+}: Props) {
     const [view, setView] = useState<'mobile' | 'desktop'>('mobile')
 
     return (
@@ -81,7 +95,7 @@ export function StudentDashboardPreview({ brandName, primaryColor, logoUrl }: Pr
                     Vista móvil del alumno
                 </p>
                 <div className="flex-1 overflow-hidden">
-                    <DashboardScreen brandName={brandName} primaryColor={primaryColor} isMobile />
+                    <DashboardScreen brandName={brandName} primaryColor={primaryColor} logoUrl={logoUrl ?? null} isMobile />
                 </div>
             </div>
 
@@ -90,8 +104,25 @@ export function StudentDashboardPreview({ brandName, primaryColor, logoUrl }: Pr
                 {view === 'mobile' ? (
                     <MobileFrame brandName={brandName} primaryColor={primaryColor} logoUrl={logoUrl} />
                 ) : (
-                    <DesktopFrame brandName={brandName} primaryColor={primaryColor} logoUrl={logoUrl} />
+                    <DesktopFrame brandName={brandName} primaryColor={primaryColor} logoUrl={logoUrl ?? null} />
                 )}
+            </div>
+
+            {/* ── LOADER PREVIEW ── */}
+            <div className="flex flex-col items-center py-8 px-4 border-t border-border/30">
+                <p className="text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">
+                    Así se ve al cargar la app
+                </p>
+                <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
+                    <EvaRouteLoader
+                        customText={loaderText ?? undefined}
+                        useCustom={useCustomLoader ?? false}
+                        textColor={loaderTextColor ?? undefined}
+                        primaryColor={!loaderTextColor ? primaryColor : undefined}
+                        iconMode={loaderIconMode}
+                        size="lg"
+                    />
+                </div>
             </div>
         </div>
     )
@@ -108,7 +139,7 @@ function MobileFrame({ brandName, primaryColor, logoUrl }: Props) {
 
                 {/* Screen */}
                 <div className="bg-[#F5F5F5] dark:bg-[#121212] rounded-[36px] overflow-hidden" style={{ height: 760 }}>
-                    <DashboardScreen brandName={brandName} primaryColor={primaryColor} isMobile />
+                    <DashboardScreen brandName={brandName} primaryColor={primaryColor} logoUrl={logoUrl ?? null} isMobile />
                 </div>
 
                 {/* Home indicator */}
@@ -146,7 +177,7 @@ function DesktopFrame({ brandName, primaryColor, logoUrl }: Props) {
 
                 {/* App screen */}
                 <div className="bg-[#F5F5F5] dark:bg-[#121212] rounded-b-xl overflow-hidden" style={{ height: 620 }}>
-                    <DashboardScreen brandName={brandName} primaryColor={primaryColor} isMobile={false} />
+                    <DashboardScreen brandName={brandName} primaryColor={primaryColor} logoUrl={logoUrl ?? null} isMobile={false} />
                 </div>
             </div>
 
@@ -162,7 +193,7 @@ function DesktopFrame({ brandName, primaryColor, logoUrl }: Props) {
 }
 
 /* ─── DASHBOARD SCREEN (shared between mobile & desktop) ────── */
-function DashboardScreen({ brandName, primaryColor, isMobile }: { brandName: string; primaryColor: string; isMobile: boolean }) {
+function DashboardScreen({ brandName, primaryColor, logoUrl, isMobile }: { brandName: string; primaryColor: string; logoUrl: string | null; isMobile: boolean }) {
     const px = (val: string) => `color-mix(in srgb, ${primaryColor} ${val}, transparent)`
 
     return (
@@ -171,9 +202,18 @@ function DashboardScreen({ brandName, primaryColor, isMobile }: { brandName: str
             {/* ── Sidebar (desktop only) ── */}
             {!isMobile && (
                 <aside className="w-56 h-full bg-white dark:bg-[#121212] border-r border-black/10 dark:border-white/10 flex flex-col flex-shrink-0">
-                    <div className="px-5 py-5 border-b border-black/10 dark:border-white/10">
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Mi Coach</p>
-                        <p className="text-sm font-extrabold truncate" style={{ color: primaryColor }}>{brandName}</p>
+                    <div className="px-5 py-5 border-b border-black/10 dark:border-white/10 flex items-center gap-3">
+                        {logoUrl ? (
+                            <Image src={logoUrl} alt={brandName} width={28} height={28} className="rounded-lg object-contain flex-shrink-0" unoptimized />
+                        ) : (
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-black flex-shrink-0" style={{ backgroundColor: primaryColor }}>
+                                {brandName.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <div className="min-w-0">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Mi Coach</p>
+                            <p className="text-sm font-extrabold truncate" style={{ color: primaryColor }}>{brandName}</p>
+                        </div>
                     </div>
                     <nav className="flex-1 p-3 space-y-1">
                         {[

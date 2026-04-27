@@ -1,6 +1,6 @@
 # 04 — Negocio y Estrategia de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
+> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
 > **Fuentes:** PLANIFICACION-EMPRESA.md, ESCALABILIDAD-Y-MODELO-NEGOCIO.md, EVALUACION-PAGOS-CHILE.md (resumen)
 
 ---
@@ -16,7 +16,9 @@
 | **Grace period** | Tras cancelar, el coach conserva acceso hasta `current_period_end` |
 | **Upgrade mid-cycle** | Cambio de plan con inicio del nuevo cobro al término del ciclo actual |
 | **PWA** | App instalable por alumno (`/c/[coach_slug]` + manifest dinámico) |
-| **White-label** | Cada coach tiene su espacio `/c/[coach_slug]` con logo, colores y mensaje propio |
+| **White-label** | Cada coach tiene su espacio `/c/[coach_slug]` con logo, colores, mensaje propio, loader customizable y favicon dinámico |
+| **Loader customizable** | Texto, color e ícono del coach en la animación de carga de la app |
+| **Tour guiado** | Guía interactiva de 8 pasos en el panel "Mi Marca" para que el coach personalice su marca |
 
 ---
 
@@ -35,10 +37,11 @@
 4. **Stack moderno en CLP:** Next.js 16, Supabase, Vercel, MercadoPago
 
 **Ventaja competitiva:**
-- White-label real (PWA instalable con marca del coach)
+- White-label real (PWA instalable con marca del coach: logo, colores, loader, favicon, pantalla offline)
 - Mercado Chile/LATAM desatendido
 - Precios en CLP
 - Datos y soporte en español
+- Onboarding educativo: tour guiado en el panel de marca para que el coach configure su app sin fricción
 
 ---
 

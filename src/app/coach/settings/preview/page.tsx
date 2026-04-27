@@ -12,7 +12,7 @@ export default async function PreviewPage() {
 
     const { data: coach } = await supabase
         .from('coaches')
-        .select('brand_name, primary_color, logo_url, use_brand_colors_coach')
+        .select('brand_name, primary_color, logo_url, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -36,6 +36,10 @@ export default async function PreviewPage() {
                 brandName={coach.brand_name || 'Mi Marca'}
                 primaryColor={primaryColor}
                 logoUrl={coach.logo_url ?? null}
+                loaderText={coach.loader_text}
+                useCustomLoader={coach.use_custom_loader ?? false}
+                loaderTextColor={coach.loader_text_color}
+                loaderIconMode={(coach.loader_icon_mode as 'eva' | 'coach' | 'none') ?? 'eva'}
             />
         </>
     )

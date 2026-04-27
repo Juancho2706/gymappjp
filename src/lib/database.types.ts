@@ -367,11 +367,17 @@ export type Database = {
           current_period_end: string | null
           full_name: string
           id: string
+          loader_icon_mode: 'eva' | 'coach' | 'none'
+          loader_show_icon: boolean
+          loader_text: string | null
+          loader_text_color: string | null
           logo_url: string | null
           max_clients: number
           payment_provider: string
+          previous_slugs: string[] | null
           primary_color: string
           slug: string
+          slug_changed_at: string | null
           subscription_mp_id: string | null
           subscription_status: string
           subscription_tier: string
@@ -380,7 +386,13 @@ export type Database = {
           trial_used_email: string | null
           updated_at: string
           use_brand_colors_coach: boolean | null
+          use_custom_loader: boolean
           welcome_message: string | null
+          welcome_modal_content: string | null
+          welcome_modal_enabled: boolean
+          welcome_modal_type: string
+          welcome_modal_updated_at: string | null
+          welcome_modal_version: number
         }
         Insert: {
           billing_cycle?: string
@@ -389,11 +401,17 @@ export type Database = {
           current_period_end?: string | null
           full_name: string
           id: string
+          loader_icon_mode?: 'eva' | 'coach' | 'none'
+          loader_show_icon?: boolean
+          loader_text?: string | null
+          loader_text_color?: string | null
           logo_url?: string | null
           max_clients?: number
           payment_provider?: string
+          previous_slugs?: string[] | null
           primary_color?: string
           slug: string
+          slug_changed_at?: string | null
           subscription_mp_id?: string | null
           subscription_status?: string
           subscription_tier?: string
@@ -402,7 +420,13 @@ export type Database = {
           trial_used_email?: string | null
           updated_at?: string
           use_brand_colors_coach?: boolean | null
+          use_custom_loader?: boolean
           welcome_message?: string | null
+          welcome_modal_content?: string | null
+          welcome_modal_enabled?: boolean
+          welcome_modal_type?: string
+          welcome_modal_updated_at?: string | null
+          welcome_modal_version?: number
         }
         Update: {
           billing_cycle?: string
@@ -411,11 +435,17 @@ export type Database = {
           current_period_end?: string | null
           full_name?: string
           id?: string
+          loader_icon_mode?: 'eva' | 'coach' | 'none'
+          loader_show_icon?: boolean
+          loader_text?: string | null
+          loader_text_color?: string | null
           logo_url?: string | null
           max_clients?: number
           payment_provider?: string
+          previous_slugs?: string[] | null
           primary_color?: string
           slug?: string
+          slug_changed_at?: string | null
           subscription_mp_id?: string | null
           subscription_status?: string
           subscription_tier?: string
@@ -424,7 +454,13 @@ export type Database = {
           trial_used_email?: string | null
           updated_at?: string
           use_brand_colors_coach?: boolean | null
+          use_custom_loader?: boolean
           welcome_message?: string | null
+          welcome_modal_content?: string | null
+          welcome_modal_enabled?: boolean
+          welcome_modal_type?: string
+          welcome_modal_updated_at?: string | null
+          welcome_modal_version?: number
         }
         Relationships: []
       }
@@ -1370,7 +1406,7 @@ export type Database = {
         }
         Update: {
           assigned_date?: string | null
-          client_id?: string | null
+          client_id?: string
           coach_id?: string
           created_at?: string
           day_of_week?: number | null
@@ -1450,7 +1486,7 @@ export type Database = {
         }
         Update: {
           ab_mode?: boolean | null
-          client_id?: string | null
+          client_id?: string
           coach_id?: string
           created_at?: string
           cycle_length?: number | null

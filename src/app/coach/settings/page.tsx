@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BrandSettingsForm } from './BrandSettingsForm'
 import { LogoUploadForm } from './LogoUploadForm'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { WhatChangesList } from './_components/WhatChangesList'
+import { BrandSettingsTourClient } from './_components/BrandSettingsTourClient'
 import type { Tables } from '@/lib/database.types'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 
@@ -52,17 +53,21 @@ export default async function CoachSettingsPage() {
     }
 
     return (
-        <div className="p-8 max-w-3xl animate-fade-in">
-            <div className="mb-8">
-                <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-extrabold text-foreground">
-                        Mi Marca
-                    </h1>
-                    <InfoTooltip content="Personaliza cómo ven tu app los alumnos: logo, color principal y mensaje de bienvenida. Cada alumno ve tu marca, no la de EVA." />
+        <div className="px-4 py-6 md:px-8 max-w-3xl lg:max-w-6xl animate-fade-in mx-auto" data-tour-id="brand-header">
+            <div className="mb-6 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h1 className="text-xl md:text-2xl font-extrabold text-foreground leading-tight">
+                            Personaliza la app de tus alumnos
+                        </h1>
+                        <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
+                            Tus alumnos instalan tu app como si fuera tuya. Aquí defines cómo se ve: logo, colores, nombre y mensajes.
+                            Cada alumno ve <span className="font-semibold text-foreground">TU marca</span>, no la de EVA.
+                        </p>
+                    </div>
                 </div>
-                <p className="text-muted-foreground text-sm mt-1">
-                    Define lo minimo que tus alumnos deben ver: nombre, logo, color y mensaje de bienvenida.
-                </p>
+
+                <WhatChangesList />
             </div>
 
             <div className="space-y-6">
@@ -75,6 +80,8 @@ export default async function CoachSettingsPage() {
                 {/* Brand settings form */}
                 <BrandSettingsForm coach={coach} />
             </div>
+
+            <BrandSettingsTourClient coachId={coach.id} />
         </div>
     )
 }

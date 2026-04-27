@@ -1,6 +1,6 @@
 # 05 — Pagos y Operaciones
 
-> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
+> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
 > **Fuentes:** SMOKE-TEST-P1-7-PAGOS.md, EVALUACION-PAGOS-CHILE.md (técnico), ESTADO-PROYECTO.md (pagos)
 
 ---
@@ -26,6 +26,19 @@
    ↓
 7. Processing page detecta status=active → redirect /coach/dashboard
 ```
+
+---
+
+## Conversión de Alumnos (Panel "Mi Marca")
+
+El panel "Mi Marca" ahora incluye herramientas de conversión directa para que el coach comparta su app con alumnos potenciales:
+
+- **QR dinámico**: Generado con `qrcode.react` con el link único del coach (`/c/[slug]`). El coach puede mostrarlo en su gym.
+- **Link copiable**: Botón de copiar al portapapeles con `navigator.clipboard`.
+- **Mensaje de bienvenida**: El coach puede personalizar el mensaje que ven los alumnos al abrir la app.
+- **Loader con marca**: La animación de carga muestra el nombre del coach en vez de "EVA".
+
+Esto reduce la fricción de onboarding del alumno: escanea el QR → instala la PWA → ve la marca del coach inmediatamente.
 
 ---
 

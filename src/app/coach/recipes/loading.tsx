@@ -1,5 +1,5 @@
-import { CoachLoadingShell } from '@/components/ui/EvaRouteLoader'
+import { BrandCoachLoadingShell } from '../_components/BrandCoachLoadingShell'
 
 export default function LoadingRecipes() {
-    return <CoachLoadingShell />
+    return <BrandCoachLoadingShell />
 }

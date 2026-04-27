@@ -1,8 +1,8 @@
 # 01 — Estado Actual de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
-> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits hasta 2026-04-24
-> **Completitud global estimada: ~98–99%** (Sesiones 1–9; Panel CEO + Dashboard V2 + beta flow)
+> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
+> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits hasta 2026-04-25
+> **Completitud global estimada: ~98–99%** (Sesiones 1–10; Panel CEO + Dashboard V2 + beta flow + Mi Marca deluxe)
 
 ---
 
@@ -25,6 +25,8 @@
 | PWA | Manual sw.js + manifests dinámicos (no next-pwa) | — |
 | Testing | Vitest + Testing Library + Playwright | — |
 | PDF | puppeteer (devDependencies — PrintProgramDialog) | — |
+| QR | qrcode.react | ^4.2.0 |
+| Recharts fix | react-is | ^19.2.5 |
 
 **Base de código:** 225+ archivos TypeScript/TSX · **26 tablas** Supabase · 41+ rutas · 11+ API routes · **12 funciones RPC** en `public` (ver [`database.types.ts`](src/lib/database.types.ts)): `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier`
 
@@ -48,7 +50,7 @@
 | Workout Execution | 90% | BUG-001 cerrado. `useOptimistic`. Sesión 8: onboarding/tour en ejecución. Pendiente: offline/retry (10.2/10.3 roadmap) |
 | Historial fecha coach | 90% | DayNavigator + **dots de actividad** en Training/Nutrition tabs |
 | Check-in Alumno | 82% | Wizard 3 pasos, dual photos. Pendiente: medidas corporales |
-| Mi Marca / Settings | 68% | Logo preview real-time, color fix. Pendiente: preview moderno |
+| Mi Marca / Settings | 92% | Tour guiado 8 pasos, loader customizable, preview en vivo modo claro/oscuro, QR+link copiable, header educativo con grid "¿Qué cambia?", paleta automática visible. Pendiente: polish final de copy/visual |
 | Pricing Page | 82% | CLP; **4 tiers** en código (`starter`–`scale`; retirado `starter_lite`). Pendiente: testimonios, SEO |
 | Landing Page | 88% | Landing EVA unificada (marca, tabs coach/alumno, pricing preview, contacto, assets). Pendiente: SEO técnico, LCP, Core Web Vitals baseline |
 | Catálogo Ejercicios Alumno | 68% | Búsqueda + filtro + modal GIF. Pendiente: favoritos, historial |
@@ -143,6 +145,42 @@ body { min-height: 100dvh; overscroll-behavior-y: none; }
 ---
 
 ## Historial de Sesiones
+
+### Sesión 10 — 2026-04-25 — Mi Marca Deluxe + PWA White-label Hardening + Tour Guiado
+
+**Tour guiado "Mi Marca":**
+- 8 pasos que explican cada sección del panel (header, logo, identidad, color, loader, compartir, preview, guardar).
+- Auto-inicio primera vez (`localStorage: eva:brand-settings-tour-seen`), botón flotante `(?)` reiniciable.
+- Spotlight overlay con `box-shadow` de 9999px (área focuseada se ve con brillo normal, fondo oscurecido).
+- Scroll automático al centro (`scrollIntoView({ block: 'center' })`).
+- Scroll del body bloqueado durante el tour (`overflow: hidden` + `touchmove` preventDefault en móvil).
+- Fixes de posicionamiento en móvil: tarjeta de guía se coloca arriba del foco cuando el elemento está en la mitad inferior (evita bottom nav).
+- Botón `(?)` reposicionado en móvil: `z-[60]` por encima de la bottom nav (`z-50`), con offset `bottom-[calc(var(--mobile-content-bottom-offset,0px)+1rem)]`.
+
+**Loader customizable del coach:**
+- Campos en BD: `loader_text` (texto, max 10 chars, mayúsculas automáticas), `use_custom_loader` (boolean), `loader_text_color` (hex opcional), `loader_show_icon` (boolean).
+- Efectos: gradiente shine animado (violeta-azul-verde) cuando no hay color custom; pulse sólido cuando hay color.
+- Preview en vivo dentro del formulario de branding.
+- `EvaRouteLoader` acepta config del coach; `CoachLoadingShell` / `ClientLoadingShell` la propagan.
+
+**Panel "Mi Marca" deluxe:**
+- Header educativo con grid "¿Qué cambia?" (1→2→3 cols responsive) explicando qué personaliza cada campo.
+- Paleta de colores generada automáticamente desde HEX primario (HSL) mostrada como swatches (Primario, Oscuro, Claro, Superficie, Brillo).
+- Sección "Compartir con alumnos": QR dinámico (`qrcode.react`) + link copiable con botón clipboard.
+- Preview inline con mockup de teléfono (login + dashboard + bottom nav), toggle modo claro/oscuro.
+- Responsive: padding móvil ajustado (`px-4` vs `p-8`).
+
+**PWA white-label hardening:**
+- Pantalla offline con branding del coach (logo + color + mensaje) via `NetworkProvider`.
+- Paleta de colores automática (HSL) generada desde `primary_color` del coach.
+- Favicon dinámico: logo del coach como favicon, SVG fallback con inicial si no hay logo.
+- Skeletons con tinte de marca: `shimmer` animado con color primario del coach.
+- `InstallPrompt` / `PwaNavButton` muestran logo del coach en vez de logo genérico EVA.
+- Manifest dinámico por coach (`/api/manifest/[coach_slug]`).
+
+**Documento Capacitor:** `docs/CAPACITOR-WHITELABEL-ROADMAP.md` — roadmap técnico para futura app nativa (Capacitor + `next export`) sin dejar Next.js. Target: 20–30 coaches pagando.
+
+---
 
 ### Sesión 9 — 2026-04-23/24 — Panel CEO / Admin Dashboard + Dashboard V2 + Beta Flow
 

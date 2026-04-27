@@ -21,7 +21,8 @@ function SubmitButton() {
         <button
             type="submit"
             disabled={pending}
-            className="btn-theme w-full h-12 rounded-xl text-base font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full h-12 rounded-xl text-base font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'var(--theme-primary, #007AFF)', color: 'var(--primary-foreground, #ffffff)' }}
         >
             {pending ? (
                 <span className="flex items-center justify-center gap-2">

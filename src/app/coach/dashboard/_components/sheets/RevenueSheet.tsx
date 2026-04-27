@@ -4,7 +4,12 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { TrendingUp, TrendingDown, Minus, ArrowUpRight } from 'lucide-react'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import type { ClientPaymentSummary, KpiSummary } from '../../_data/types'
 
 interface Props {
@@ -33,12 +38,12 @@ export function RevenueSheet({ open, onOpenChange, kpi, clientPaymentSummary }: 
     const deltaColor = deltaPct > 0 ? 'text-emerald-500' : deltaPct < 0 ? 'text-destructive' : 'text-muted-foreground'
 
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="flex w-full flex-col gap-0 sm:max-w-[480px]">
-                <SheetHeader className="border-b border-border pb-4">
-                    <SheetTitle className="font-display text-xl font-black uppercase tracking-tighter text-foreground">
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="flex max-h-[80dvh] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+                <DialogHeader className="border-b border-border p-6 pb-4">
+                    <DialogTitle className="font-display text-xl font-black uppercase tracking-tighter text-foreground">
                         Panel de ingresos
-                    </SheetTitle>
+                    </DialogTitle>
                     <div className="flex items-end gap-3">
                         <span className="text-3xl font-black tabular-nums text-foreground">
                             {formatCLP(kpi.mrrCurrentMonth)}
@@ -51,7 +56,7 @@ export function RevenueSheet({ open, onOpenChange, kpi, clientPaymentSummary }: 
                     <p className="text-xs text-muted-foreground">
                         Mes anterior: {formatCLP(kpi.mrrPreviousMonth)}
                     </p>
-                </SheetHeader>
+                </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto px-1 py-2 sm:px-2">
                     {sorted.length === 0 ? (
@@ -94,8 +99,8 @@ export function RevenueSheet({ open, onOpenChange, kpi, clientPaymentSummary }: 
                         </ul>
                     )}
                 </div>
-            </SheetContent>
-        </Sheet>
+            </DialogContent>
+        </Dialog>
     )
 }
 

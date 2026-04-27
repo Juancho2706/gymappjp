@@ -88,9 +88,6 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
             }))
         }
 
-        console.log("[MealGroupModal] Datos del formulario antes de guardar:", JSON.stringify(groupData, null, 2))
-        console.log("[MealGroupModal] coachId recibido:", coachId)
-
         const result = await saveMealGroup(groupData, coachId)
         if (result.success && result.group) {
             onSave(result.group)

@@ -5,18 +5,13 @@ import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimat
 import { getCoach } from '@/lib/coach/get-coach'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
+import { generateBrandPalette } from '@/lib/color-utils'
 
 export const metadata: Metadata = {
     title: {
         default: 'Panel Coach',
         template: '%s | EVA',
     },
-}
-
-function hexToRgb(hex: string): string {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    if (!result) return '0, 122, 255'
-    return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
 }
 
 /**
@@ -40,14 +35,45 @@ export default async function CoachLayout({
         coach.use_brand_colors_coach === false
             ? SYSTEM_PRIMARY_COLOR
             : (coach.primary_color || BRAND_PRIMARY_COLOR)
-    const primaryRgb = hexToRgb(primaryColor)
+    const palette = generateBrandPalette(primaryColor)
+
+    const useCustomStyles = coach.use_brand_colors_coach !== false
+    const loaderConfig = useCustomStyles ? {
+        customText: coach.loader_text ?? undefined,
+        useCustom: coach.use_custom_loader ?? false,
+        textColor: coach.loader_text_color ?? undefined,
+        iconMode: (coach.loader_icon_mode ?? 'eva') as 'eva' | 'coach' | 'none',
+        coachLogoUrl: coach.logo_url ?? undefined,
+    } : {
+        customText: undefined,
+        useCustom: false,
+        textColor: undefined,
+        iconMode: 'eva' as const,
+        coachLogoUrl: undefined,
+    }
 
     return (
         <>
-        <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; --theme-primary-rgb: ${primaryRgb}; }` }} />
+        <style dangerouslySetInnerHTML={{ __html: `
+            :root {
+                --theme-primary: ${palette.primary};
+                --theme-primary-rgb: ${palette.primaryRgb};
+                --theme-primary-dark: ${palette.primaryDark};
+                --theme-primary-light: ${palette.primaryLight};
+                --theme-primary-surface: ${palette.primarySurface};
+                --theme-primary-glow: ${palette.primaryGlow};
+                --theme-primary-foreground: ${palette.primaryForeground};
+                --primary: ${palette.primary};
+                --primary-foreground: ${palette.primaryForeground};
+                --coach-loader-text: '${(loaderConfig.customText || '').replace(/'/g, "\\'")}';
+                --coach-use-custom-loader: ${loaderConfig.useCustom ? '1' : '0'};
+                --coach-loader-color: '${(loaderConfig.textColor || '').replace(/'/g, "\\'")}';
+                --coach-loader-icon-mode: '${loaderConfig.iconMode}';
+            }
+        ` }} />
         <div
             className="coach-layout-container flex min-h-[100dvh] min-w-0 flex-col bg-white transition-colors selection:bg-primary/30 selection:text-primary dark:bg-black md:min-h-screen md:flex-row has-[.coach-builder-shell]:h-dvh has-[.coach-builder-shell]:max-h-dvh has-[.coach-builder-shell]:min-h-0 has-[.coach-builder-shell]:overflow-hidden"
-            style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': primaryRgb } as React.CSSProperties}
+            style={{ '--theme-primary': palette.primary, '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
         >
             <CoachSidebar
                 coachName={coach.full_name}

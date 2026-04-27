@@ -269,7 +269,17 @@ Server Component (fetch via Supabase)
 
 ---
 
-## 13. Notas para Agentes de IA
+## 13. Estilo de Comunicación (Caveman Full)
+
+Para minimizar tokens de salida sin perder precisión técnica:
+
+- **Conciso:** Ve al grano inmediatamente. Sin cortesías, sin relleno, sin artículos innecesarios.
+- **Fragmentos:** Usa frases cortas y bullets. Una idea por línea.
+- **Código intacto:** Los bloques de código, nombres de variables, mensajes de error y términos técnicos se mantienen EXACTOS.
+- **Code speaks for itself:** No expliques lo que el código ya dice claramente.
+- **Expansión solo cuando sea necesario:** Solo profundiza en explicaciones cuando haya riesgo real de malentendido técnico.
+
+## 14. Notas para Agentes de IA
 
 1. **Siempre verifica `AGENTS.md` antes de hacer cambios arquitectónicos.**
 2. **Mantén consistencia con los patrones establecidos** (`_data/_actions/_components`).

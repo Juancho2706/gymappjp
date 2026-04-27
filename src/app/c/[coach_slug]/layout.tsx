@@ -15,6 +15,8 @@ import {
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { NetworkProvider } from '@/components/client/OfflineScreen'
+import { generateBrandPalette } from '@/lib/color-utils'
 
 interface Props {
     children: React.ReactNode
@@ -111,12 +113,17 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const coachId = headersList.get('x-coach-id') ?? ''
     const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
     const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
+    const loaderText = headersList.get('x-coach-loader-text') ?? ''
+    const useCustomLoader = headersList.get('x-coach-use-custom-loader') === 'true'
+    const loaderTextColor = headersList.get('x-coach-loader-text-color') ?? undefined
+    const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
+    const loaderIconMode = (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
 
-    // Compute RGB values for rgba() usage throughout the UI
-    const hexMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(primaryColor)
-    const primaryRgb = hexMatch
-        ? `${parseInt(hexMatch[1], 16)}, ${parseInt(hexMatch[2], 16)}, ${parseInt(hexMatch[3], 16)}`
-        : '16, 185, 129'
+    // Generate full brand palette
+    const palette = generateBrandPalette(primaryColor)
+
+    // Generate fallback favicon SVG (initial + color) if no logo
+    const faviconUrl = logoUrl || generateFaviconSvg(brandName, primaryColor)
 
     if (!coachId) {
         redirect('/not-found')
@@ -124,25 +131,51 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     return (
         <>
-            <style dangerouslySetInnerHTML={{ __html: `:root { --theme-primary: ${primaryColor}; --theme-primary-rgb: ${primaryRgb}; }` }} />
+            <link rel="icon" href={faviconUrl} />
+            <link rel="apple-touch-icon" href={faviconUrl} />
+            <style dangerouslySetInnerHTML={{ __html: `
+                :root {
+                    --theme-primary: ${palette.primary};
+                    --theme-primary-rgb: ${palette.primaryRgb};
+                    --theme-primary-dark: ${palette.primaryDark};
+                    --theme-primary-light: ${palette.primaryLight};
+                    --theme-primary-surface: ${palette.primarySurface};
+                    --theme-primary-glow: ${palette.primaryGlow};
+                    --theme-primary-foreground: ${palette.primaryForeground};
+                    --primary: ${palette.primary};
+                    --primary-foreground: ${palette.primaryForeground};
+                    --coach-loader-text: '${(loaderText || '').replace(/'/g, "\\'")}';
+                    --coach-use-custom-loader: ${useCustomLoader ? '1' : '0'};
+                    --coach-loader-color: '${(loaderTextColor || '').replace(/'/g, "\\'")}';
+                    --coach-loader-icon-mode: '${loaderIconMode}';
+                }
+            ` }} />
             <div
                 className="flex flex-col md:flex-row min-h-dvh antialiased bg-background text-foreground"
-                style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': primaryRgb } as React.CSSProperties}
+                style={{ '--theme-primary': palette.primary, '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
             >
-                <ClientNav
-                    coachSlug={coach_slug}
-                    coachBrand={brandName}
-                    coachLogoUrl={logoUrl}
-                    initialUseBrandColors={initialUseBrandColors}
-                />
-                <InstallPrompt brandName={brandName} />
+                <NetworkProvider brandName={brandName} logoUrl={logoUrl} primaryColor={primaryColor}>
+                    <ClientNav
+                        coachSlug={coach_slug}
+                        coachBrand={brandName}
+                        coachLogoUrl={logoUrl}
+                        initialUseBrandColors={initialUseBrandColors}
+                    />
+                    <InstallPrompt brandName={brandName} logoUrl={logoUrl} coachInitial={brandName.charAt(0)} primaryColor={primaryColor} />
 
-                <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
-                    {children}
-                </main>
+                    <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
+                        {children}
+                    </main>
+                </NetworkProvider>
             </div>
         </>
     )
+}
+
+function generateFaviconSvg(brandName: string, color: string): string {
+    const initial = brandName.charAt(0).toUpperCase()
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="12" fill="${color}"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="system-ui,sans-serif" font-weight="bold" font-size="36">${initial}</text></svg>`
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }

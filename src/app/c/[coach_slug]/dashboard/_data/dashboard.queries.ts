@@ -5,7 +5,7 @@ import type { Tables } from '@/lib/database.types'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { measureServer } from '@/lib/perf/measure-server'
 
-type CoachBrand = Pick<Tables<'coaches'>, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message'>
+type CoachBrand = Pick<Tables<'coaches'>, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message' | 'welcome_modal_enabled' | 'welcome_modal_content' | 'welcome_modal_type' | 'welcome_modal_version'>
 
 export type DashboardClient = Pick<Tables<'clients'>, 'id' | 'full_name' | 'coach_id'> & {
     coaches: CoachBrand | CoachBrand[] | null
@@ -15,7 +15,7 @@ export const getClientProfile = cache(async (userId: string) => {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('clients')
-        .select('id, full_name, coach_id, coaches ( brand_name, primary_color, logo_url, welcome_message )')
+        .select('id, full_name, coach_id, coaches ( brand_name, primary_color, logo_url, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version )')
         .eq('id', userId)
         .maybeSingle()
     return { client: data as DashboardClient | null, error }

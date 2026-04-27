@@ -13,7 +13,8 @@ import {
     PanelLeftClose,
     PanelLeft,
     ClipboardList,
-    CreditCard
+    CreditCard,
+    HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -132,6 +133,17 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     </span>
                 </div>
                 <div className="flex items-center gap-3">
+                    {pathname === '/coach/settings' && (
+                        <button
+                            type="button"
+                            onClick={() => window.dispatchEvent(new CustomEvent('brand-tour-start'))}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                            title="Ver guía del panel Mi Marca"
+                            aria-label="Ver guía del panel Mi Marca"
+                        >
+                            <HelpCircle className="w-5 h-5" />
+                        </button>
+                    )}
                     <ThemeToggle />
                     <button type="button" onClick={handleSignOut} className="text-muted-foreground hover:text-destructive" aria-label="Cerrar sesión">
                         <LogOut className="w-5 h-5" />

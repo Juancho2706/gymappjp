@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useReducedMotion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
-import { useTheme } from 'next-themes'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -26,7 +25,6 @@ const stroke: Record<ComplianceRingProps['color'], string> = {
 const emptyStroke = '#9ca3af'
 
 export function ComplianceRing({ value, label, color, empty }: ComplianceRingProps) {
-    const { resolvedTheme } = useTheme()
     const reduce = useReducedMotion()
     const [animated, setAnimated] = useState(reduce ? value : 0)
     const mv = useMotionValue(0)
@@ -45,7 +43,6 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
         setAnimated(Math.round(v))
     })
 
-    const trail = resolvedTheme === 'dark' ? '#374151' : '#e5e7eb'
     const displayPct = empty ? 0 : reduce ? value : animated
     const pathColor = empty ? emptyStroke : stroke[color]
     const centerText = empty ? '—' : `${displayPct}%`
@@ -59,8 +56,8 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
                     text={centerText}
                     styles={buildStyles({
                         pathColor,
-                        trailColor: trail,
-                        textColor: empty ? (resolvedTheme === 'dark' ? '#9ca3af' : '#6b7280') : resolvedTheme === 'dark' ? '#f9fafb' : '#111827',
+                        trailColor: 'var(--compliance-ring-trail)',
+                        textColor: empty ? 'var(--compliance-ring-text-empty)' : 'var(--compliance-ring-text)',
                         textSize,
                     })}
                 />

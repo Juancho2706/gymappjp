@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { DashboardContent } from './_components/DashboardContent'
 import { getCoach } from '@/lib/coach/get-coach'
-import { CoachLoadingShell } from '@/components/ui/EvaRouteLoader'
+import { BrandCoachLoadingShell } from '../_components/BrandCoachLoadingShell'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -12,7 +12,7 @@ export default async function CoachDashboardPage() {
     if (!coach) redirect('/login')
 
     return (
-        <Suspense fallback={<CoachLoadingShell />}>
+        <Suspense fallback={<BrandCoachLoadingShell />}>
             <DashboardContent userId={coach.id} coachName={coach.full_name ?? coach.brand_name ?? 'Coach'} />
         </Suspense>
     )

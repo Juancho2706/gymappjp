@@ -8,7 +8,7 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -321,6 +321,19 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
     const [hasSeenShortTour, setHasSeenShortTour] = useState(true)
     const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null)
     const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
+    const [isSimpleMode, setIsSimpleMode] = useState(false)
+    const [showSwipeHint, setShowSwipeHint] = useState(false)
+    const [modeTransitionLabel, setModeTransitionLabel] = useState<string | null>(null)
+    const preTourSimpleModeRef = useRef(false)
+
+    const toggleSimpleMode = useCallback(() => {
+        const nextLabel = isSimpleMode ? 'Modo Normal' : 'Modo Simple'
+        setModeTransitionLabel(nextLabel)
+        // Swap UI once black covers full screen (~20% of 2.4s = 480ms)
+        const tSwap = setTimeout(() => setIsSimpleMode(v => !v), 480)
+        const tEnd = setTimeout(() => setModeTransitionLabel(null), 2400)
+        return () => { clearTimeout(tSwap); clearTimeout(tEnd) }
+    }, [isSimpleMode])
 
     const touchStartY = useRef(0)
     const initialSheetHeight = useRef(60)
@@ -343,9 +356,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         preTourShowConfigRef.current = showConfig
         preTourCatalogOpenRef.current = isCatalogOpen
         preTourSheetHeightRef.current = sheetHeight
+        preTourSimpleModeRef.current = isSimpleMode
+        if (isSimpleMode) setIsSimpleMode(false)
         setTourMode(mode)
         setTourOpen(true)
-    }, [showConfig, isCatalogOpen, sheetHeight])
+    }, [showConfig, isCatalogOpen, sheetHeight, isSimpleMode])
 
     useEffect(() => {
         setMounted(true)
@@ -382,6 +397,25 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
             if (saved) setShowDraftBanner(true)
         } catch (e) {}
     }, [initialProgram])
+
+    useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem('builder:simpleMode')
+            if (saved === '1') setIsSimpleMode(true)
+        } catch {}
+    }, [])
+
+    useEffect(() => {
+        try { sessionStorage.setItem('builder:simpleMode', isSimpleMode ? '1' : '0') } catch {}
+    }, [isSimpleMode])
+
+    // Swipe hint: show on Simple Mode entry and on day change, auto-hide after 2.5s.
+    useEffect(() => {
+        if (!isMobile || !isSimpleMode) { setShowSwipeHint(false); return }
+        setShowSwipeHint(true)
+        const t = setTimeout(() => setShowSwipeHint(false), 2500)
+        return () => clearTimeout(t)
+    }, [isMobile, isSimpleMode, activeMobileDayIndex])
 
     useEffect(() => {
         if (isFirstRender.current) { isFirstRender.current = false; return }
@@ -788,6 +822,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
         if (isMobile) {
             setIsCatalogOpen(preTourCatalogOpenRef.current)
             setSheetHeight(preTourSheetHeightRef.current)
+            setIsSimpleMode(preTourSimpleModeRef.current)
         }
         if (tourMode === 'short') {
             setHasSeenShortTour(true)
@@ -909,7 +944,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
             )}
 
             <header className="z-20 flex-shrink-0 border-b border-border bg-background/50 pt-safe pl-safe pr-safe backdrop-blur-xl">
-                <div className="mx-auto flex h-16 max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6">
+                <div className={`mx-auto flex max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6 ${isMobile && isSimpleMode ? 'h-12' : 'h-16'}`}>
                     <div className="flex min-w-0 items-center gap-3 md:gap-4">
                         <Link href={client ? `/coach/clients/${client.id}` : '/coach/templates'}>
                             <Button variant="ghost" size="icon" className="shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
@@ -1176,7 +1211,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     </div>
                 )}
 
-                <ProgramPhasesBar phases={programPhases} />
+                {!(isMobile && isSimpleMode) && <ProgramPhasesBar phases={programPhases} />}
 
                 {showConfig && (
                     <ProgramConfigHeader 
@@ -1228,7 +1263,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
 
                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-background to-background">
                         {/* A/B Mode bar */}
-                        <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 flex-shrink-0">
+                        <div className={`flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 flex-shrink-0 ${isMobile && isSimpleMode ? 'hidden' : ''}`}>
                             <button
                                 onClick={() => setIsABMode(v => !v)}
                                 data-tour-id="ab-toggle"
@@ -1290,6 +1325,25 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar" ref={boardScrollRef} data-tour-id="days-board">
                         {isMobile ? (
                             <div className="h-full flex flex-col">
+                                {isSimpleMode && isABMode && (
+                                    <div className="flex justify-center mt-1 mb-0.5 mx-2">
+                                        <div className="flex bg-muted/50 p-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
+                                            {(['A', 'B'] as const).map(v => (
+                                                <button
+                                                    key={v}
+                                                    onClick={() => setActiveVariant(v)}
+                                                    className={`px-2.5 py-0.5 rounded-sm transition-colors ${
+                                                        activeVariant === v
+                                                            ? 'bg-background text-foreground shadow-sm'
+                                                            : 'text-muted-foreground'
+                                                    }`}
+                                                >
+                                                    {v}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 {/* Mobile tab bar with exercise counts */}
                                 <div className="flex bg-muted/50 p-1 h-11 rounded-xl gap-0.5 mx-2 mt-1 mb-1 flex-shrink-0">
                                     {days.map((d, idx) => {
@@ -1324,10 +1378,30 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
 
                                 {/* Carousel swipeable area */}
                                 <div
-                                    className="flex-1 overflow-hidden"
+                                    className="flex-1 overflow-hidden relative"
                                     onTouchStart={handleSwipeTouchStart}
                                     onTouchEnd={handleSwipeTouchEnd}
                                 >
+                                    {isSimpleMode && (
+                                        <>
+                                            {activeMobileDayIndex > 0 && (
+                                                <div
+                                                    className={`pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 z-10 transition-opacity duration-500 ${showSwipeHint ? 'opacity-100' : 'opacity-0'}`}
+                                                    aria-hidden="true"
+                                                >
+                                                    <ChevronLeft className="w-9 h-9 text-primary/70 drop-shadow-md animate-swipe-hint-left" strokeWidth={2.5} />
+                                                </div>
+                                            )}
+                                            {activeMobileDayIndex < days.length - 1 && (
+                                                <div
+                                                    className={`pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 z-10 transition-opacity duration-500 ${showSwipeHint ? 'opacity-100' : 'opacity-0'}`}
+                                                    aria-hidden="true"
+                                                >
+                                                    <ChevronRight className="w-9 h-9 text-primary/70 drop-shadow-md animate-swipe-hint-right" strokeWidth={2.5} />
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                     <div
                                         className="flex h-full"
                                         style={{
@@ -1343,7 +1417,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                 style={{
                                                     width: `${100 / days.length}%`,
                                                     /* Solo altura del sheet: el sheet ya lleva paddingBottom safe-area; sumar inset aquí duplicaba hueco */
-                                                    paddingBottom: `calc(${sheetHeight}vh + 6px)`,
+                                                    paddingBottom: isSimpleMode
+                                                        ? `calc(env(safe-area-inset-bottom, 0px) + 12px)`
+                                                        : `calc(${sheetHeight}vh + 6px)`,
                                                     WebkitOverflowScrolling: 'touch',
                                                 } as React.CSSProperties}
                                             >
@@ -1354,6 +1430,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                                                     isCycleMode={programStructureType === 'cycle'}
                                                     isDragPending={isDragPending}
                                                     narrowLayout={isMobile}
+                                                    compact={isMobile && isSimpleMode}
                                                     onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
                                                     onRemoveBlock={handleRemoveBlock}
@@ -1402,7 +1479,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         </div>
                     </div>
 
-                    {isMobile && (
+                    {isMobile && !isSimpleMode && (
                         <>
                             {isCatalogOpen && sheetHeight >= 40 && (
                                 <div
@@ -1494,6 +1571,97 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                         </>
                     )}
 
+                    {/* Simple Mode: catalog overlay (80vh) — no handle, no compact states */}
+                    {isMobile && isSimpleMode && isCatalogOpen && (
+                        <>
+                            <div
+                                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
+                                onClick={() => setIsCatalogOpen(false)}
+                            />
+                            <div
+                                className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom"
+                                style={{ height: '80vh', paddingBottom: 'env(safe-area-inset-bottom)' }}
+                            >
+                                <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border">
+                                    <span className="text-[11px] font-bold uppercase tracking-widest text-foreground">Añadir ejercicio</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsCatalogOpen(false)}
+                                        className="h-9 w-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        aria-label="Cerrar catálogo"
+                                    >
+                                        <span className="text-xl leading-none">×</span>
+                                    </button>
+                                </div>
+                                <div data-tour-id="exercise-catalog-mobile" className="h-[calc(100%-48px)] overflow-hidden px-4 pb-4 pt-3">
+                                    <DraggableExerciseCatalog
+                                        exercises={exercises}
+                                        selectedMuscleGroup={catalogMuscleFilter}
+                                        onSelectedMuscleGroupChange={setCatalogMuscleFilter}
+                                        onTapAdd={(exercise) => {
+                                            const dayId = days[activeMobileDayIndex]?.id
+                                            if (dayId != null) {
+                                                handleAddExercise(dayId, exercise)
+                                                toast.success(`${exercise.name} añadido`)
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* FAB stack — mobile only */}
+                    {isMobile && (
+                        <div
+                            className="fixed right-4 z-40 flex flex-col items-end gap-3"
+                            style={{
+                                bottom: isSimpleMode
+                                    ? `calc(env(safe-area-inset-bottom, 0px) + 16px)`
+                                    : `calc(${sheetHeight}vh + env(safe-area-inset-bottom, 0px) + 12px)`,
+                                transition: 'bottom 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
+                            }}
+                        >
+                            {isSimpleMode && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCatalogOpen(true)}
+                                    aria-label="Añadir ejercicio"
+                                    className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-xl flex items-center justify-center transition-colors"
+                                    style={{ boxShadow: '0 4px 24px rgba(16,185,129,0.45)' }}
+                                >
+                                    <Plus className="w-6 h-6" strokeWidth={3} />
+                                </button>
+                            )}
+
+                            {/* Toggle button */}
+                            <div className="relative flex flex-col items-center">
+                                <button
+                                    type="button"
+                                    onClick={toggleSimpleMode}
+                                    aria-label={isSimpleMode ? 'Modo normal' : 'Modo simple'}
+                                    title={isSimpleMode ? 'Modo normal' : 'Modo simple'}
+                                    className={`relative flex items-center justify-center transition-all active:scale-95 ${
+                                        isSimpleMode
+                                            ? 'w-12 h-12 rounded-full bg-background/90 border border-border/80 text-muted-foreground hover:bg-muted backdrop-blur-sm shadow-lg'
+                                            : 'w-12 h-12 rounded-2xl text-white shadow-2xl'
+                                    }`}
+                                    style={!isSimpleMode ? {
+                                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
+                                        boxShadow: '0 4px 20px rgba(139,92,246,0.55), 0 1px 0 rgba(255,255,255,0.15) inset',
+                                    } : undefined}
+                                >
+                                    <Sparkles className="w-5 h-5" />
+                                    {!isSimpleMode && (
+                                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] font-black uppercase tracking-[0.18em] text-emerald-400 animate-nuevo-glow pointer-events-none select-none">
+                                            NUEVO
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <DragOverlay dropAnimation={null}>
                         {activeId && activeData ? (
                             activeData.type === 'new-exercise' ? (
@@ -1525,6 +1693,25 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                     </DragOverlay>
                 </div>
             </DndContext>
+
+            {modeTransitionLabel && (
+                <div
+                    className="fixed inset-0 z-[100] bg-black flex items-center justify-center pointer-events-none animate-mode-transition"
+                    aria-hidden="true"
+                >
+                    <div className="flex flex-col items-center gap-6 animate-mode-transition-text">
+                        <img
+                            src="/LOGOS/eva-icon.png"
+                            alt=""
+                            className="w-20 h-20 object-contain"
+                            style={{ filter: 'brightness(0) invert(1)' }}
+                        />
+                        <span className="text-white text-3xl font-display uppercase tracking-[0.3em]">
+                            {modeTransitionLabel}
+                        </span>
+                    </div>
+                </div>
+            )}
 
             <BlockEditSheet
                 block={editingBlock}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download, X, Share, PlusSquare } from 'lucide-react'
+import Image from 'next/image'
 
 const STORAGE_KEY = 'eva-pwa-install-dismissed'
 
@@ -31,7 +32,17 @@ function isDismissedPersistent(): boolean {
   }
 }
 
-export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
+export function InstallPrompt({
+    brandName = 'EVA',
+    logoUrl,
+    coachInitial = 'E',
+    primaryColor = '#10B981',
+}: {
+    brandName?: string
+    logoUrl?: string
+    coachInitial?: string
+    primaryColor?: string
+}) {
   const [isIOS, setIsIOS] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
@@ -120,9 +131,15 @@ export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
               </button>
 
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center shrink-0">
-                  <Download className="w-6 h-6 text-primary" />
-                </div>
+                {logoUrl ? (
+                    <div className="w-12 h-12 rounded-2xl overflow-hidden border border-border shrink-0 bg-background">
+                        <Image src={logoUrl} alt={brandName} width={48} height={48} className="object-contain p-1" />
+                    </div>
+                ) : (
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-lg" style={{ backgroundColor: primaryColor }}>
+                        {coachInitial}
+                    </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <h3 className="font-extrabold text-base text-foreground leading-tight">Instalar {brandName}</h3>
                   <p className="text-xs text-muted-foreground">Úsala como una aplicación nativa</p>
@@ -156,9 +173,15 @@ export function InstallPrompt({ brandName = 'EVA' }: { brandName?: string }) {
               exit={{ opacity: 0, y: 50 }}
               className="w-full max-w-sm bg-card/95 backdrop-blur-xl border border-border rounded-[2.5rem] shadow-2xl p-4 pointer-events-auto flex items-center gap-4"
             >
-              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center shrink-0">
-                <Download className="w-6 h-6 text-primary" />
-              </div>
+              {logoUrl ? (
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden border border-border shrink-0 bg-background">
+                      <Image src={logoUrl} alt={brandName} width={48} height={48} className="object-contain p-1" />
+                  </div>
+              ) : (
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-lg" style={{ backgroundColor: primaryColor }}>
+                      {coachInitial}
+                  </div>
+              )}
 
               <div className="flex-1 min-w-0 pr-2">
                 <h3 className="font-extrabold text-sm text-foreground truncate">¿Instalar {brandName}?</h3>

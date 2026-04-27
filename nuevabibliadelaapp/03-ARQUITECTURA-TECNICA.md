@@ -1,6 +1,6 @@
 # 03 — Arquitectura Técnica de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-24 America/Santiago (Sesión 9)
+> **Actualizado:** 2026-04-25 America/Santiago (Sesión 10)
 > **Fuentes:** ARQUITECTURA-COMPONENTES.md, ESTADO-COMPONENTES.md, PERFORMANCE-NAV-BASELINE.md + diff `837f847..master`
 
 ---
@@ -22,7 +22,9 @@
 | Virtualización | @tanstack/react-virtual | — |
 | Animación Lottie | @lottiefiles/react-lottie-player | — |
 | Confetti | canvas-confetti | — |
+| QR dinámico | qrcode.react | ^4.2.0 |
 | Compresión img | browser-image-compression | — |
+| Recharts fix | react-is | ^19.2.5 |
 | i18n | Custom LanguageContext + JSON (es/en) | parcial |
 | PWA | Manual sw.js + manifests dinámicos | no next-pwa |
 | Testing | Vitest + @testing-library/react + Playwright | — |
@@ -190,7 +192,7 @@ coaches ──┬──→ clients ──┬──→ check_ins
 
 | Tabla | Columnas clave |
 |-------|---------------|
-| `coaches` | id, slug, brand_name, full_name, primary_color, logo_url, use_brand_colors_coach, subscription_tier, subscription_status, subscription_mp_id, superseded_mp_preapproval_id, current_period_end, trial_ends_at, trial_used_email, max_clients, billing_cycle, welcome_message, payment_provider |
+| `coaches` | id, slug, brand_name, full_name, primary_color, logo_url, use_brand_colors_coach, subscription_tier, subscription_status, subscription_mp_id, superseded_mp_preapproval_id, current_period_end, trial_ends_at, trial_used_email, max_clients, billing_cycle, welcome_message, payment_provider, **loader_text**, **use_custom_loader**, **loader_text_color**, **loader_show_icon** |
 | `clients` | id (FK auth.users), coach_id, email, full_name, phone, is_active, onboarding_completed, force_password_change, use_coach_brand_colors, goal_weight_kg |
 | `client_intake` | id, client_id (1:1), weight_kg, height_cm, experience_level, goals, availability, injuries, medical_conditions |
 
@@ -309,7 +311,7 @@ Server: re-validación obligatoria en server actions + Zod v4
 | Historial fecha coach | 85% | Dots actividad ✅ implementados |
 | Workout Execution | 92% | Tour Sesión 8 + RIR slider Sesión 9. Pendiente: offline/retry |
 | Check-in Alumno | 82% | Medidas corporales, notas |
-| Mi Marca / Settings | 68% | Preview moderno del dashboard alumno |
+| Mi Marca / Settings | 92% | Tour guiado, loader customizable, preview en vivo modo claro/oscuro, QR+link, header educativo. Pendiente: polish final |
 | Catálogo Ejercicios Alumno | 68% | Favoritos, historial |
 | Onboarding Alumno | 58% | Fotos iniciales, más validación |
 | Login/Auth Alumno | 70% | Rediseño visual Sesión 9. Pendiente: animaciones finales |

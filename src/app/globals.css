@@ -176,6 +176,11 @@
   --sidebar-accent-foreground: #F8F9FA;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: var(--theme-primary, #007AFF);
+
+  /* Compliance ring colors (avoid hydration mismatch) */
+  --compliance-ring-trail: #374151;
+  --compliance-ring-text: #f9fafb;
+  --compliance-ring-text-empty: #9ca3af;
 }
 
 /* Force Dark Mode on root since it's native and mandatory */
@@ -320,6 +325,55 @@ h1, h2, h3, h4, h5, h6 {
   .animate-pulse-cta {
     animation: pulseCta 2.2s ease-in-out infinite;
   }
+
+  .animate-swipe-hint-left {
+    animation: swipeHintLeft 1.4s ease-in-out infinite;
+  }
+
+  .animate-swipe-hint-right {
+    animation: swipeHintRight 1.4s ease-in-out infinite;
+  }
+
+  .animate-mode-transition {
+    animation: modeTransition 2.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  }
+
+  .animate-mode-transition-text {
+    animation: modeTransitionText 2.4s ease-out forwards;
+  }
+
+  .animate-nuevo-glow {
+    animation: nuevoGlow 2s ease-in-out infinite;
+  }
+}
+
+@keyframes swipeHintLeft {
+  0%, 100% { transform: translateX(0); opacity: 0.3; }
+  50% { transform: translateX(-10px); opacity: 1; }
+}
+
+@keyframes swipeHintRight {
+  0%, 100% { transform: translateX(0); opacity: 0.3; }
+  50% { transform: translateX(10px); opacity: 1; }
+}
+
+@keyframes nuevoGlow {
+  0%, 100% { opacity: 0.7; text-shadow: 0 0 6px currentColor; }
+  50% { opacity: 1; text-shadow: 0 0 14px currentColor, 0 0 28px currentColor; }
+}
+
+@keyframes modeTransition {
+  0% { transform: translateY(100%); }
+  20% { transform: translateY(0); }
+  80% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+
+@keyframes modeTransitionText {
+  0%, 20% { opacity: 0; transform: translateY(20px) scale(0.92); }
+  35% { opacity: 1; transform: translateY(0) scale(1); }
+  75% { opacity: 1; transform: translateY(0) scale(1); }
+  90%, 100% { opacity: 0; transform: translateY(-10px) scale(0.98); }
 }
 
 @keyframes pulseCta {
@@ -647,8 +701,34 @@ body > * {
   .eva-loader-word-shine {
     animation: eva-loader-shine 2.2s ease-in-out infinite;
   }
+  .eva-loader-text-shine {
+    background-size: 200% auto;
+    animation: eva-loader-text-shine 3s linear infinite;
+  }
+  .eva-loader-word-pulse {
+    animation: eva-loader-pulse 2s ease-in-out infinite;
+  }
   .eva-loader-icon-wrap {
     animation: eva-loader-float 2.5s ease-in-out infinite;
+  }
+
+  @keyframes eva-loader-text-shine {
+    0% {
+      background-position: 0% center;
+    }
+    100% {
+      background-position: 200% center;
+    }
+  }
+  @keyframes eva-loader-pulse {
+    0%, 100% {
+      opacity: 0.7;
+      transform: scale(0.98);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -656,6 +736,8 @@ body > * {
       display: none;
     }
     .eva-loader-word-shine,
+    .eva-loader-text-shine,
+    .eva-loader-word-pulse,
     .eva-loader-icon-wrap {
       animation: none !important;
     }

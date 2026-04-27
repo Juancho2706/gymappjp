@@ -289,10 +289,34 @@ async function getCoachDashboardDataInner(userId: string) {
     const rawRecentClients = recentClientsRaw.data || []
     const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; photos: string[] | null; clients: { id: string; full_name: string } }[] | null) || []
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
-    const signupsRows =
+    let signupsRows =
         signupsByMonthRaw.error || !signupsByMonthRaw.data
             ? []
             : (signupsByMonthRaw.data as { ym: string; client_count: number }[])
+
+    // Fallback: if RPC fails or returns empty, aggregate directly from clients table
+    if (signupsRows.length === 0) {
+        if (signupsByMonthRaw.error) {
+            console.error('[dashboard] RPC get_coach_client_signups_last_6_months failed:', signupsByMonthRaw.error)
+        }
+        const { data: clientsFallback } = await supabase
+            .from('clients')
+            .select('created_at')
+            .eq('coach_id', userId)
+        if (clientsFallback && clientsFallback.length > 0) {
+            const monthCounts = new Map<string, number>()
+            for (const c of clientsFallback) {
+                const iso = c.created_at as string
+                const m = /^(\d{4})-(\d{2})/.exec(iso)
+                if (m) {
+                    const ym = `${m[1]}-${m[2]}`
+                    monthCounts.set(ym, (monthCounts.get(ym) || 0) + 1)
+                }
+            }
+            signupsRows = Array.from(monthCounts.entries()).map(([ym, client_count]) => ({ ym, client_count }))
+        }
+    }
+
     const signupMap = new Map(signupsRows.map((r) => [r.ym, Number(r.client_count)]))
     const workoutLogs30d = workoutLogs30dRaw.data || []
     const workoutSessionsSeries =

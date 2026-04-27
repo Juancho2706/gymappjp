@@ -75,6 +75,8 @@ interface DayColumnProps {
     templateLinked?: boolean
     /** Viewport estrecho (mismo criterio que md en Tailwind): microcopia sin arrastrar/soltar a secciones */
     narrowLayout?: boolean
+    /** Modo simple móvil: oculta meta del día y reduce padding del header */
+    compact?: boolean
 }
 
 function DayColumnInner({
@@ -95,6 +97,7 @@ function DayColumnInner({
     onToggleBlockOverride,
     templateLinked,
     narrowLayout = false,
+    compact = false,
 }: DayColumnProps) {
     const { id: dayId, title, blocks, name, is_rest } = day
     const dayLabel = isCycleMode ? `Día ${dayId}` : name
@@ -131,11 +134,12 @@ function DayColumnInner({
                 ? 'bg-muted/30 dark:bg-muted/20'
                 : 'bg-card dark:bg-card/80'
         )}>
+            {!compact && (
             <div className={cn(
-                'p-4 border-b border-border',
+                'border-b border-border p-4',
                 is_rest ? 'bg-muted/40' : 'bg-muted/30'
             )}>
-                <div className="flex items-center justify-between mb-4">
+                <div className={cn('flex items-center justify-between', compact ? 'mb-2' : 'mb-4')}>
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
                         {dayLabel}
                         {is_rest && (
@@ -206,7 +210,7 @@ function DayColumnInner({
 
                 {!is_rest && (
                     <>
-                        <div className="relative mb-3 group">
+                        <div className={cn('relative group', compact ? 'mb-1' : 'mb-3')}>
                             <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                             <input
                                 value={title}
@@ -217,6 +221,7 @@ function DayColumnInner({
                         </div>
 
                         {/* Contador de Volumen por Día */}
+                        {!compact && (
                         <div className="flex items-center gap-2 flex-wrap mb-4">
                             <div className="flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded-md border border-border shadow-sm">
                                 <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Ej.</span>
@@ -232,6 +237,7 @@ function DayColumnInner({
                                 ))}
                             </div>
                         </div>
+                        )}
 
                         {/* Búsqueda rápida — solo desktop */}
                         <div className="relative hidden md:block">
@@ -279,6 +285,7 @@ function DayColumnInner({
                     </>
                 )}
             </div>
+            )}
 
             <div
                 ref={setNodeRef}
