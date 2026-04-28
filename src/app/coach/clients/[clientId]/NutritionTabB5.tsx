@@ -522,6 +522,7 @@ export function NutritionTabB5({
                         outerRadius={66}
                         paddingAngle={2}
                         label={({ cx, cy, midAngle, outerRadius, name, value }) => {
+                          if (midAngle === undefined) return null
                           const RADIAN = Math.PI / 180
                           const radius = outerRadius + 20
                           const x = cx + radius * Math.cos(-midAngle * RADIAN)
