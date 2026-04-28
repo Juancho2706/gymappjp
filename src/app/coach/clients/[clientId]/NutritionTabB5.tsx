@@ -537,7 +537,7 @@ export function NutritionTabB5({
                               fontWeight={700}
                               fill="currentColor"
                             >
-                              {`${name.slice(0, 4)}: ${Math.round(value)}kcal`}
+                              {`${(name ?? '').slice(0, 4)}: ${Math.round(value ?? 0)}kcal`}
                             </text>
                           )
                         }}
