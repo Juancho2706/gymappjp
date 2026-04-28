@@ -720,40 +720,9 @@ export type Database = {
           },
         ]
       }
-      meal_completions: {
-        Row: {
-          client_id: string
-          created_at: string
-          date_completed: string
-          id: string
-          meal_id: string
-        }
-        Insert: {
-          client_id: string
-          created_at?: string
-          date_completed?: string
-          id?: string
-          meal_id: string
-        }
-        Update: {
-          client_id?: string
-          created_at?: string
-          date_completed?: string
-          id?: string
-          meal_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "meal_completions_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       nutrition_meal_logs: {
         Row: {
+          consumed_quantity: number | null
           created_at: string
           daily_log_id: string
           id: string
@@ -761,6 +730,7 @@ export type Database = {
           meal_id: string
         }
         Insert: {
+          consumed_quantity?: number | null
           created_at?: string
           daily_log_id: string
           id?: string
@@ -768,6 +738,7 @@ export type Database = {
           meal_id: string
         }
         Update: {
+          consumed_quantity?: number | null
           created_at?: string
           daily_log_id?: string
           id?: string
@@ -794,6 +765,7 @@ export type Database = {
       nutrition_meals: {
         Row: {
           created_at: string
+          day_of_week: number | null
           description: string
           id: string
           name: string
@@ -802,6 +774,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          day_of_week?: number | null
           description: string
           id?: string
           name: string
@@ -810,6 +783,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          day_of_week?: number | null
           description?: string
           id?: string
           name?: string
@@ -1240,6 +1214,7 @@ export type Database = {
       template_meals: {
         Row: {
           created_at: string
+          day_of_week: number | null
           id: string
           name: string
           order_index: number
@@ -1247,6 +1222,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          day_of_week?: number | null
           id?: string
           name: string
           order_index?: number
@@ -1254,6 +1230,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          day_of_week?: number | null
           id?: string
           name?: string
           order_index?: number
@@ -1603,7 +1580,31 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      meal_completions: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          date_completed: string | null
+          id: string | null
+          meal_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_nutrition_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_meal_logs_meal_id_fkey"
+            columns: ["meal_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_meals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       check_platform_email_availability: {
@@ -1932,3 +1933,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

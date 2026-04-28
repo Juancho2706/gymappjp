@@ -79,7 +79,6 @@ type NutritionTabB5Props = {
   nutritionTimeline: NutritionTimelineRow[]
   mealDetails: unknown[] | null | undefined
   adherence30d?: DayAdherence[]
-  adherenceTotalMeals?: number
   todayMacros?: TodayMacros
   hasTodayNutritionLog?: boolean
   nutritionMonthlyAvgPct?: number | null
@@ -187,7 +186,6 @@ export function NutritionTabB5({
   nutritionTimeline,
   mealDetails,
   adherence30d,
-  adherenceTotalMeals = 0,
   todayMacros,
   hasTodayNutritionLog = false,
   nutritionMonthlyAvgPct,
@@ -319,8 +317,9 @@ export function NutritionTabB5({
     )
   }, [nutritionTimeline])
 
+  const planMealsForStrip = (plan?.nutrition_meals as { id: string; day_of_week?: number | null }[] | undefined) ?? []
   const useAdherenceStrip =
-    Array.isArray(adherence30d) && adherence30d.length > 0 && adherenceTotalMeals > 0
+    Array.isArray(adherence30d) && adherence30d.length > 0 && planMealsForStrip.length > 0
 
   const weekDelta = nutritionWeeklyAvgPct - nutritionPrevWeeklyAvgPct
   const WeekIcon = weekDelta > 1 ? TrendingUp : weekDelta < -1 ? TrendingDown : Minus
@@ -492,7 +491,13 @@ export function NutritionTabB5({
             </h3>
             {useAdherenceStrip ? (
               <div className="space-y-4">
-                <AdherenceStrip data={adherence30d!} totalMeals={adherenceTotalMeals} />
+                <AdherenceStrip
+                  data={adherence30d!}
+                  planMeals={planMealsForStrip.map((m) => ({
+                    id: m.id,
+                    day_of_week: m.day_of_week ?? null,
+                  }))}
+                />
                 <div className="flex flex-wrap gap-4 text-sm">
                   {nutritionMonthlyAvgPct != null && (
                     <div>

@@ -17,15 +17,27 @@ export interface MealCardMeal {
 interface Props {
   meal: MealCardMeal
   isCompleted: boolean
+  /** null = modo binario (100% del plan); 0–100 = % explícito de macros del plan */
+  partialPlanPct: number | null
   isToday: boolean
   isPending: boolean
   onToggle: (mealId: string, current: boolean) => void
+  onPartialPlanPctChange?: (mealId: string, pct: number | null) => void
 }
 
-export function MealCard({ meal, isCompleted, isToday, isPending, onToggle }: Props) {
+export function MealCard({
+  meal,
+  isCompleted,
+  partialPlanPct,
+  isToday,
+  isPending,
+  onToggle,
+  onPartialPlanPctChange,
+}: Props) {
   const reduceMotion = useReducedMotion()
   const [isExpanded, setIsExpanded] = useState(false)
   const mealMacros = sumMealMacros(meal)
+  const macroScale = partialPlanPct != null ? partialPlanPct / 100 : 1
   const desc = meal.description?.trim()
 
   const handleToggle = useCallback(
@@ -116,7 +128,12 @@ export function MealCard({ meal, isCompleted, isToday, isPending, onToggle }: Pr
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {!isToday && <Lock className="w-3 h-3 text-muted-foreground/40" aria-hidden />}
               <span className="text-xs font-black text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                {Math.round(mealMacros.calories)} kcal
+                {Math.round(mealMacros.calories * macroScale)} kcal
+                {isCompleted && partialPlanPct != null && partialPlanPct < 100 ? (
+                  <span className="ml-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    ({partialPlanPct}%)
+                  </span>
+                ) : null}
               </span>
               {isExpanded ? (
                 <ChevronUp className="w-4 h-4 text-muted-foreground/40" />
@@ -126,9 +143,15 @@ export function MealCard({ meal, isCompleted, isToday, isPending, onToggle }: Pr
             </div>
           </div>
           <div className="flex gap-2 mt-1">
-            <span className="text-[10px] font-bold text-orange-500">P {Math.round(mealMacros.protein)}g</span>
-            <span className="text-[10px] font-bold text-blue-500">C {Math.round(mealMacros.carbs)}g</span>
-            <span className="text-[10px] font-bold text-yellow-500">G {Math.round(mealMacros.fats)}g</span>
+            <span className="text-[10px] font-bold text-orange-500">
+              P {Math.round(mealMacros.protein * macroScale)}g
+            </span>
+            <span className="text-[10px] font-bold text-blue-500">
+              C {Math.round(mealMacros.carbs * macroScale)}g
+            </span>
+            <span className="text-[10px] font-bold text-yellow-500">
+              G {Math.round(mealMacros.fats * macroScale)}g
+            </span>
           </div>
           {desc && !isExpanded && (
             <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{desc}</p>
@@ -158,6 +181,69 @@ export function MealCard({ meal, isCompleted, isToday, isPending, onToggle }: Pr
                   Esta comida no tiene alimentos especificados
                 </p>
               )}
+              {isToday && isCompleted && onPartialPlanPctChange ? (
+                <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Porción del plan
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([25, 50, 75] as const).map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        disabled={isPending}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onPartialPlanPctChange(meal.id, pct)
+                        }}
+                        className={cn(
+                          'min-w-[2.75rem] rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
+                          partialPlanPct === pct
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
+                        )}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onPartialPlanPctChange(meal.id, 100)
+                      }}
+                      className={cn(
+                        'min-w-[2.75rem] rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
+                        partialPlanPct === 100
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
+                      )}
+                    >
+                      100%
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onPartialPlanPctChange(meal.id, null)
+                      }}
+                      className={cn(
+                        'rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors touch-manipulation',
+                        partialPlanPct == null
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/40'
+                          : 'bg-background border border-border/80 text-muted-foreground hover:bg-muted/60'
+                      )}
+                    >
+                      Plan completo
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-snug">
+                    «Plan completo» usa el 100% de macros del plan (igual que antes). Ajusta % si comiste menos.
+                  </p>
+                </div>
+              ) : null}
             </div>
           </motion.div>
         )}

@@ -1,6 +1,8 @@
+import { addDays, format, parseISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import { getTodayInSantiago } from '@/lib/date-utils'
 import { resolveActiveWeekVariantForDisplay } from '@/lib/workout/programWeekVariant'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 
@@ -122,8 +124,8 @@ export default async function WorkoutExecutionPage({ params }: Props) {
 
     if (blockIds.length > 0) {
         // Only load logs from TODAY to avoid showing previous weeks' data as "already completed"
-        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
-        const tomorrowStr = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+        const { iso: todayStr } = getTodayInSantiago()
+        const tomorrowStr = format(addDays(parseISO(`${todayStr}T12:00:00`), 1), 'yyyy-MM-dd')
         const { data: rawLogs } = await supabase
             .from('workout_logs')
             .select('block_id, set_number, weight_kg, reps_done, rpe, rir')

@@ -52,6 +52,7 @@ export function mapTemplateRowToInitialData(row: any): PlanBuilderInitialData {
     return {
       id: tm.id as string,
       name: tm.name as string,
+      day_of_week: (tm.day_of_week as number | null | undefined) ?? null,
       foodItems: mapSavedItemsToFoodDrafts(flatItems),
     }
   })
@@ -93,6 +94,7 @@ export function mapClientPlanRowToInitialData(row: any): PlanBuilderInitialData 
     return {
       id: nm.id as string,
       name: nm.name as string,
+      day_of_week: (nm.day_of_week as number | null | undefined) ?? null,
       foodItems: mapSavedItemsToFoodDrafts(items),
     }
   })

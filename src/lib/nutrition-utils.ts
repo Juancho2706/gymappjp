@@ -71,6 +71,7 @@ export type MealWithFoodItems = { id: string; food_items: FoodItemForMacros[] }
 /** Fila `nutrition_meals` + ítems anidados (p. ej. select de Supabase). */
 export type NutritionMealMacroSource = {
   id: string
+  day_of_week?: number | null
   food_items?: Array<{
     quantity: number
     unit?: string | null
@@ -107,16 +108,49 @@ export function normalizeMealForMacros(meal: NutritionMealMacroSource): MealWith
   }
 }
 
-export function calculateConsumedMacros(meals: MealWithFoodItems[], completedMealIds: Set<string>) {
+/** Mapa meal_id → % (0–100) solo para comidas completadas con ajuste parcial explícito. */
+export function portionPctMapFromMealLogs(
+  logs: ReadonlyArray<{ meal_id: string; is_completed: boolean; consumed_quantity?: number | null }>
+): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const row of logs) {
+    if (!row.is_completed || row.consumed_quantity == null) continue
+    const n = Number(row.consumed_quantity)
+    if (Number.isNaN(n)) continue
+    m.set(row.meal_id, n)
+  }
+  return m
+}
+
+/**
+ * Porcentaje explícito (0-100) por meal_id. Solo filas presentes en el mapa escalan macros;
+ * ausencia de clave = 100% del plan (modo binario).
+ */
+export function mealConsumedPortionMultiplier(
+  mealId: string,
+  portionPctByMealId?: ReadonlyMap<string, number>
+): number {
+  if (!portionPctByMealId?.has(mealId)) return 1
+  const pct = portionPctByMealId.get(mealId)!
+  if (Number.isNaN(pct)) return 1
+  return Math.min(Math.max(pct / 100, 0), 1)
+}
+
+export function calculateConsumedMacros(
+  meals: MealWithFoodItems[],
+  completedMealIds: Set<string>,
+  portionPctByMealId?: ReadonlyMap<string, number>
+) {
   return meals
     .filter((m) => completedMealIds.has(m.id))
     .reduce(
       (acc, meal) => {
+        const mult = mealConsumedPortionMultiplier(meal.id, portionPctByMealId)
         const m = sumMealMacros(meal)
-        acc.calories += m.calories
-        acc.protein += m.protein
-        acc.carbs += m.carbs
-        acc.fats += m.fats
+        acc.calories += m.calories * mult
+        acc.protein += m.protein * mult
+        acc.carbs += m.carbs * mult
+        acc.fats += m.fats * mult
         return acc
       },
       { calories: 0, protein: 0, carbs: 0, fats: 0 }
@@ -133,15 +167,21 @@ export function hasAnyMealMacroData(meals: MealWithFoodItems[]) {
 export function calculateConsumedMacrosWithCompletionFallback(
   meals: MealWithFoodItems[],
   completedMealIds: Set<string>,
-  goals: { calories: number; protein: number; carbs: number; fats: number }
+  goals: { calories: number; protein: number; carbs: number; fats: number },
+  portionPctByMealId?: ReadonlyMap<string, number>
 ) {
-  const consumed = calculateConsumedMacros(meals, completedMealIds)
+  const consumed = calculateConsumedMacros(meals, completedMealIds, portionPctByMealId)
   if (hasAnyMealMacroData(meals)) return consumed
 
   const totalMeals = meals.length
   if (totalMeals === 0) return consumed
 
-  const ratio = Math.min(Math.max(completedMealIds.size / totalMeals, 0), 1)
+  let weighted = 0
+  for (const m of meals) {
+    if (!completedMealIds.has(m.id)) continue
+    weighted += mealConsumedPortionMultiplier(m.id, portionPctByMealId)
+  }
+  const ratio = Math.min(Math.max(weighted / totalMeals, 0), 1)
   return {
     calories: goals.calories * ratio,
     protein: goals.protein * ratio,

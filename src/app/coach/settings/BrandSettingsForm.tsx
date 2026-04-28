@@ -58,6 +58,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [welcomeModalContent, setWelcomeModalContent] = useState(coach.welcome_modal_content ?? '')
     const [welcomeModalType, setWelcomeModalType] = useState<'text' | 'video'>(coach.welcome_modal_type as 'text' | 'video' ?? 'text')
     const [welcomeMessageInput, setWelcomeMessageInput] = useState(coach.welcome_message ?? '')
+    const [slugLockNowMs, setSlugLockNowMs] = useState<number | null>(null)
 
     const palette = generateBrandPalette(selectedColor ?? '#007AFF')
     const studentUrl = `https://eva-app.cl/c/${slugInput}/login`
@@ -96,11 +97,21 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         )
     }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, slugInput, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, coach])
 
-    // Calcular días restantes para cambio de slug
+    // Calcular días restantes para cambio de slug (Date.now solo en effect → cumple purity en render)
     const slugLastChanged = coach.slug_changed_at ? new Date(coach.slug_changed_at) : null
-    const daysSinceSlugChange = slugLastChanged ? Math.floor((Date.now() - slugLastChanged.getTime()) / (1000 * 60 * 60 * 24)) : null
-    const slugChangeLocked = daysSinceSlugChange !== null && daysSinceSlugChange < 30 && coach.slug_changed_at !== null
-    const daysRemaining = slugChangeLocked ? 30 - daysSinceSlugChange : 0
+    const daysSinceSlugChange =
+        slugLastChanged && slugLockNowMs != null
+            ? Math.floor((slugLockNowMs - slugLastChanged.getTime()) / (1000 * 60 * 60 * 24))
+            : null
+    const slugChangeLocked =
+        coach.slug_changed_at != null &&
+        (slugLockNowMs === null || (daysSinceSlugChange !== null && daysSinceSlugChange < 30))
+    const daysRemaining =
+        daysSinceSlugChange !== null && slugChangeLocked ? Math.max(0, 30 - daysSinceSlugChange) : 0
+
+    useEffect(() => {
+        setSlugLockNowMs(Date.now())
+    }, [])
 
     useEffect(() => {
         if (state.success) {

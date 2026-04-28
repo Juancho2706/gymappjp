@@ -20,6 +20,8 @@ export type CoachTemplateMealFoodItem = {
 export type CoachTemplateMealJson = {
   name: string
   order_index: number
+  /** 1=Lun … 7=Dom; omitir = todos los días */
+  day_of_week?: number | null
   foodItems: CoachTemplateMealFoodItem[]
 }
 
@@ -218,7 +220,7 @@ export async function upsertClientNutritionPlanJson(
       // Fetch existing meals to match by order_index (preserves IDs → nutrition_meal_logs survive)
       const { data: existingMeals } = await supabase
         .from('nutrition_meals')
-        .select('id, order_index')
+        .select('id, order_index, day_of_week')
         .eq('plan_id', currentPlanId)
         .order('order_index', { ascending: true })
 
@@ -243,7 +245,11 @@ export async function upsertClientNutritionPlanJson(
           // UPDATE in-place: keep meal ID → nutrition_meal_logs survive
           await supabase
             .from('nutrition_meals')
-            .update({ name: meal.name, order_index: meal.order_index })
+            .update({
+              name: meal.name,
+              order_index: meal.order_index,
+              day_of_week: meal.day_of_week ?? null,
+            })
             .eq('id', existingId)
           await supabase.from('food_items').delete().eq('meal_id', existingId)
           if (meal.foodItems.length > 0) {
@@ -259,7 +265,13 @@ export async function upsertClientNutritionPlanJson(
         } else {
           const { data: newMeal, error: mealError } = await supabase
             .from('nutrition_meals')
-            .insert({ plan_id: currentPlanId!, name: meal.name, description: '', order_index: meal.order_index })
+            .insert({
+              plan_id: currentPlanId!,
+              name: meal.name,
+              description: '',
+              order_index: meal.order_index,
+              day_of_week: meal.day_of_week ?? null,
+            })
             .select('id')
             .single()
           if (mealError) throw mealError
@@ -290,7 +302,13 @@ export async function upsertClientNutritionPlanJson(
       for (const meal of sorted) {
         const { data: insertedMeal, error: mealError } = await supabase
           .from('nutrition_meals')
-          .insert({ plan_id: currentPlanId!, name: meal.name, description: '', order_index: meal.order_index })
+          .insert({
+            plan_id: currentPlanId!,
+            name: meal.name,
+            description: '',
+            order_index: meal.order_index,
+            day_of_week: meal.day_of_week ?? null,
+          })
           .select('id')
           .single()
 
@@ -375,43 +393,83 @@ function safeParseInt(value: string | null): number | null {
   return isNaN(parsed) ? null : parsed
 }
 
+function parseLegacyTemplateMeals(formData: FormData): CoachTemplateMealJson[] {
+  const mealIndexes = new Set<number>()
+  for (const [key] of formData.entries()) {
+    const m = /^meal_name_(\d+)$/.exec(key)
+    if (m) mealIndexes.add(Number(m[1]))
+  }
+
+  const sortedIndexes = [...mealIndexes].sort((a, b) => a - b)
+  return sortedIndexes.map((idx, orderIdx) => {
+    const rawName = formData.get(`meal_name_${idx}`)
+    const name = typeof rawName === 'string' && rawName.trim().length > 0
+      ? rawName.trim()
+      : `Comida ${orderIdx + 1}`
+
+    const items: CoachTemplateMealFoodItem[] = []
+    for (const [key, value] of formData.entries()) {
+      const fm = new RegExp(`^meal_${idx}_food_(\\d+)$`).exec(key)
+      if (!fm || typeof value !== 'string') continue
+      try {
+        const parsed = JSON.parse(value) as Partial<CoachTemplateMealFoodItem>
+        if (!parsed.food_id) continue
+        items.push({
+          food_id: parsed.food_id,
+          quantity: Number(parsed.quantity) || 0,
+          unit: parsed.unit ?? 'g',
+        })
+      } catch {
+        continue
+      }
+    }
+
+    return {
+      name,
+      order_index: orderIdx,
+      foodItems: items,
+    }
+  })
+}
+
 /** @deprecated Usar upsertCoachNutritionTemplate. Mantenido para compatibilidad con formularios legacy. */
 export async function saveNutritionTemplate(
   coachId: string,
   prevState: TemplateFormState,
   formData: FormData
 ): Promise<TemplateFormState> {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { error: authErr ?? 'No autorizado.' }
-
-  const nutritionService = new NutritionService(supabase)
-
   try {
-    const templateId = formData.get('id') as string | null
+    void prevState
+    const templateIdRaw = formData.get('id')
+    const templateId = typeof templateIdRaw === 'string' && templateIdRaw.length > 0 ? templateIdRaw : undefined
     const name = formData.get('name') as string
     const caloriesStr = formData.get('daily_calories') as string
     const proteinStr = formData.get('protein_g') as string
     const carbsStr = formData.get('carbs_g') as string
     const fatsStr = formData.get('fats_g') as string
     const instructions = formData.get('instructions') as string
-    const selectedClientsStr = formData.get('selected_clients') as string
-
-    if (!name) return { error: 'El nombre es obligatorio.' }
-
-    const templateData = {
-      name,
-      daily_calories: safeParseInt(caloriesStr),
-      protein_g: safeParseInt(proteinStr),
-      carbs_g: safeParseInt(carbsStr),
-      fats_g: safeParseInt(fatsStr),
-      instructions: instructions || null,
-      coach_id: coachId,
+    const selectedClientsStr = (formData.get('selected_clients') as string) || '[]'
+    const meals = parseLegacyTemplateMeals(formData)
+    let parsedClientIds: string[] = []
+    try {
+      const parsed = JSON.parse(selectedClientsStr) as unknown
+      parsedClientIds = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+    } catch {
+      parsedClientIds = []
     }
 
-    const newTemplateId = await nutritionService.createOrUpdateTemplate(templateId, templateData, formData)
-    await nutritionService.propagateTemplateChanges(newTemplateId, coachId, selectedClientsStr)
-
-    revalidatePath('/coach/nutrition-plans')
+    const res = await upsertCoachNutritionTemplate(coachId, {
+      id: templateId,
+      name,
+      daily_calories: safeParseInt(caloriesStr) ?? 0,
+      protein_g: safeParseInt(proteinStr) ?? 0,
+      carbs_g: safeParseInt(carbsStr) ?? 0,
+      fats_g: safeParseInt(fatsStr) ?? 0,
+      instructions: instructions || null,
+      meals,
+      propagateClientIds: parsedClientIds,
+    })
+    if (!res.success) return { error: res.error ?? 'No se pudo guardar la plantilla.' }
     return { success: true }
   } catch (err: unknown) {
     console.error('[saveNutritionTemplate] Error:', err)

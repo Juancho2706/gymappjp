@@ -18,6 +18,8 @@ export interface FoodItemDraft {
 export interface MealDraft {
   id: string
   name: string
+  /** 1=Lun … 7=Dom; undefined/null = todos los días */
+  day_of_week?: number | null
   foodItems: FoodItemDraft[]
 }
 

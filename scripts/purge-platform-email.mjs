@@ -43,10 +43,6 @@ async function purgeClientDataRows(admin, clientId) {
         const { error } = await admin.from('daily_nutrition_logs').delete().eq('client_id', clientId)
         if (error) console.warn('daily_nutrition_logs', error.message)
     }
-    {
-        const { error } = await admin.from('meal_completions').delete().eq('client_id', clientId)
-        if (error) console.warn('meal_completions', error.message)
-    }
 
     const { data: nplans } = await admin.from('nutrition_plans').select('id').eq('client_id', clientId)
     const npIds = (nplans || []).map((r) => r.id)

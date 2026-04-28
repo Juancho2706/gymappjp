@@ -159,6 +159,18 @@ export function WorkoutExecutionClient({
         }
     }, [])
 
+    const getExercise = (block: BlockType) => (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) || null
+
+    const sectioned = useMemo(() => {
+        return WORKOUT_SECTION_ORDER.map((sectionKey) => {
+            const sectionBlocks = blocks
+                .filter((block) => effectiveWorkoutSection(block.section) === sectionKey)
+                .sort((a, b) => a.order_index - b.order_index)
+            const grouped = groupContiguousSupersetRuns(sectionBlocks)
+            return { sectionKey, title: WORKOUT_SECTION_TITLE[sectionKey], groups: grouped }
+        }).filter((section) => section.groups.length > 0)
+    }, [blocks])
+
     if (!blocks.length) {
         return (
             <div className="min-h-dvh bg-background flex flex-col items-center justify-center p-6 text-center">
@@ -173,18 +185,6 @@ export function WorkoutExecutionClient({
             </div>
         )
     }
-
-    const getExercise = (block: BlockType) => (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) || null
-
-    const sectioned = useMemo(() => {
-        return WORKOUT_SECTION_ORDER.map((sectionKey) => {
-            const sectionBlocks = blocks
-                .filter((block) => effectiveWorkoutSection(block.section) === sectionKey)
-                .sort((a, b) => a.order_index - b.order_index)
-            const grouped = groupContiguousSupersetRuns(sectionBlocks)
-            return { sectionKey, title: WORKOUT_SECTION_TITLE[sectionKey], groups: grouped }
-        }).filter((section) => section.groups.length > 0)
-    }, [blocks])
 
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
     const completedSetCount = sessionLogs.length

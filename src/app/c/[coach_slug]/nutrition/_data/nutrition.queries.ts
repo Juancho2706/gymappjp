@@ -15,7 +15,7 @@ export const getActiveNutritionPlan = cache(async (userId: string) => {
       `
       id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, is_active,
       nutrition_meals (
-        id, name, order_index, plan_id,
+        id, name, order_index, plan_id, day_of_week,
         food_items (
           id, meal_id, quantity, unit,
           foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
@@ -44,7 +44,8 @@ export const getNutritionLogForDate = cache(
       id, client_id, plan_id, log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, plan_name_at_log,
       nutrition_meal_logs (
         meal_id,
-        is_completed
+        is_completed,
+        consumed_quantity
       )
     `
       )
@@ -70,7 +71,9 @@ export const getNutritionAdherence30d = cache(async (userId: string, planId: str
       `
       log_date,
       nutrition_meal_logs (
-        is_completed
+        meal_id,
+        is_completed,
+        consumed_quantity
       )
     `
     )

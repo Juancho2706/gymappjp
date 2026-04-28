@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { differenceInDays, subDays } from 'date-fns';
 import { Database } from '@/lib/database.types';
 import { measureServer } from '@/lib/perf/measure-server';
+import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils';
 
 // Check-ins mensuales: alertar solo si ya hubo al menos un check-in y pasaron >30 días desde el último.
 const CHECKIN_OVERDUE_AFTER_DAYS = 30
@@ -383,6 +384,7 @@ export class DashboardService {
                     .select(
                         `
                 client_id,
+                log_date,
                 plan_name_at_log,
                 target_calories_at_log,
                 target_protein_at_log,
@@ -390,7 +392,9 @@ export class DashboardService {
                 target_fats_at_log,
                 nutrition_meal_logs (
                     is_completed,
+                    consumed_quantity,
                     nutrition_meals (
+                        day_of_week,
                         food_items (
                             quantity,
                             foods ( calories, protein_g, carbs_g, fats_g, serving_size )
@@ -539,13 +543,22 @@ export class DashboardService {
                 totalTarget.fat += log.target_fats_at_log || 0;
 
                 log.nutrition_meal_logs?.forEach((mealLog: any) => {
+                    const nm = mealLog.nutrition_meals;
+                    if (!nm || !nutritionMealAppliesOnIsoYmdInSantiago(nm, log.log_date as string)) return;
                     totalMeals++;
                     if (mealLog.is_completed) {
                         mealsCompleted++;
-                        mealLog.nutrition_meals?.food_items?.forEach((item: any) => {
+                        const mult =
+                            mealLog.consumed_quantity != null
+                                ? Math.min(
+                                      Math.max(Number(mealLog.consumed_quantity) / 100, 0),
+                                      1
+                                  )
+                                : 1;
+                        nm?.food_items?.forEach((item: any) => {
                             const f = item.foods;
                             if (f) {
-                                const q = (item.quantity || 0) / (f.serving_size || 100);
+                                const q = ((item.quantity || 0) / (f.serving_size || 100)) * mult;
                                 totalConsumed.cal += (f.calories || 0) * q;
                                 totalConsumed.prot += (f.protein_g || 0) * q;
                                 totalConsumed.carb += (f.carbs_g || 0) * q;

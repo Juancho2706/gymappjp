@@ -134,7 +134,7 @@ export const getTodayNutritionBundle = cache(async (clientId: string, planId: st
     const [{ data: dailyLog }, { data: meals }] = await Promise.all([
         supabase
             .from('daily_nutrition_logs')
-            .select('id, log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( id, is_completed, meal_id )')
+            .select('id, log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( id, is_completed, meal_id, consumed_quantity )')
             .eq('client_id', clientId)
             .eq('plan_id', planId)
             .eq('log_date', todayISO)
@@ -143,7 +143,7 @@ export const getTodayNutritionBundle = cache(async (clientId: string, planId: st
             .from('nutrition_meals')
             .select(
                 `
-            id, name, order_index,
+            id, name, order_index, day_of_week,
             food_items (
               quantity, unit,
               foods ( name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )

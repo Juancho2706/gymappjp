@@ -23,6 +23,8 @@ export const MealSchema = z.object({
     .min(1, 'El nombre de la comida es requerido')
     .max(100, 'Máximo 100 caracteres'),
   order_index: z.number().int().nonnegative(),
+  /** 1=Lun … 7=Dom; omitir o null = todos los días */
+  day_of_week: z.number().int().min(1).max(7).nullable().optional(),
   foodItems: z
     .array(FoodItemSchema)
     .min(1, 'Cada comida debe tener al menos 1 alimento')

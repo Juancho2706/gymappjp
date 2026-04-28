@@ -2,8 +2,13 @@ import Link from 'next/link'
 import { Apple } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { getActiveNutritionPlan, getTodayNutritionBundle } from '../../_data/dashboard.queries'
-import { getTodayInSantiago } from '@/lib/date-utils'
-import { calculateConsumedMacrosWithCompletionFallback, normalizeMealForMacros } from '@/lib/nutrition-utils'
+import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
+import {
+  calculateConsumedMacrosWithCompletionFallback,
+  normalizeMealForMacros,
+  portionPctMapFromMealLogs,
+  type NutritionMealMacroSource,
+} from '@/lib/nutrition-utils'
 import { MacroBar } from './MacroBar'
 import { MealCompletionRow } from './MealCompletionRow'
 
@@ -22,10 +27,15 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
     }
 
     const { dailyLog, meals } = await getTodayNutritionBundle(userId, plan.id, today)
-    const mealLogs = (dailyLog as { nutrition_meal_logs?: { meal_id: string; is_completed: boolean }[] } | null)?.nutrition_meal_logs ?? []
+    const mealLogs =
+        (dailyLog as {
+            nutrition_meal_logs?: { meal_id: string; is_completed: boolean; consumed_quantity: number | null }[]
+        } | null)?.nutrition_meal_logs ?? []
     const doneByMeal = new Map(mealLogs.map((m) => [m.meal_id, m.is_completed]))
 
-    const totalMeals = meals.length
+    type MealRow = NutritionMealMacroSource & { name: string }
+    const mealsToday = (meals as MealRow[]).filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, today))
+    const totalMeals = mealsToday.length
 
     const tCal = plan.daily_calories ?? 0
     const tP = plan.protein_g ?? 0
@@ -35,13 +45,19 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
     const completedIds = new Set(
         mealLogs.filter((m) => m.is_completed).map((m) => m.meal_id)
     )
-    const mealsForMacros = meals.map((m) => normalizeMealForMacros(m))
-    const realConsumed = calculateConsumedMacrosWithCompletionFallback(mealsForMacros, completedIds, {
-        calories: tCal,
-        protein: tP,
-        carbs: tC,
-        fats: tF,
-    })
+    const mealsForMacros = mealsToday.map((m) => normalizeMealForMacros(m))
+    const portionMap = portionPctMapFromMealLogs(mealLogs)
+    const realConsumed = calculateConsumedMacrosWithCompletionFallback(
+        mealsForMacros,
+        completedIds,
+        {
+            calories: tCal,
+            protein: tP,
+            carbs: tC,
+            fats: tF,
+        },
+        portionMap
+    )
     const consumedCal = Math.round(realConsumed.calories)
     const consumedP = realConsumed.protein
     const consumedC = realConsumed.carbs
@@ -85,7 +101,7 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
             <MacroBar label="Carbos" consumed={consumedC} target={tC} unit="g" colorClass="bg-amber-500" delayIndex={1} />
             <MacroBar label="Grasas" consumed={consumedF} target={tF} unit="g" colorClass="bg-emerald-500" delayIndex={2} />
             <div className="space-y-2">
-                {meals.map((m) => (
+                {mealsToday.map((m) => (
                     <MealCompletionRow
                         key={m.id}
                         mealId={m.id}

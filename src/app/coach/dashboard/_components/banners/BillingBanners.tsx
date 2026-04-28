@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Clock } from 'lucide-react'
 
@@ -8,12 +11,19 @@ interface Props {
 }
 
 export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEndsAt }: Props) {
-    const now = Date.now()
+    const [nowMs, setNowMs] = useState<number | null>(null)
+
+    useEffect(() => {
+        setNowMs(Date.now())
+    }, [])
+
+    if (nowMs === null) return null
+
     const canceledGrace =
-        subscriptionStatus === 'canceled' && currentPeriodEnd && new Date(currentPeriodEnd).getTime() > now
-    const trialActive = trialEndsAt && new Date(trialEndsAt).getTime() > now
+        subscriptionStatus === 'canceled' && currentPeriodEnd && new Date(currentPeriodEnd).getTime() > nowMs
+    const trialActive = trialEndsAt && new Date(trialEndsAt).getTime() > nowMs
     const blocked =
-        subscriptionStatus === 'canceled' && currentPeriodEnd && new Date(currentPeriodEnd).getTime() <= now
+        subscriptionStatus === 'canceled' && currentPeriodEnd && new Date(currentPeriodEnd).getTime() <= nowMs
 
     if (blocked) {
         return (
@@ -25,7 +35,7 @@ export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEnds
     }
 
     if (canceledGrace) {
-        const days = Math.max(0, Math.ceil((new Date(currentPeriodEnd!).getTime() - now) / 86400000))
+        const days = Math.max(0, Math.ceil((new Date(currentPeriodEnd!).getTime() - nowMs) / 86400000))
         return (
             <Banner tone="warn" icon={<Clock className="h-4 w-4" />}>
                 <span>Cancelaste tu plan. Acceso hasta por {days} dia{days === 1 ? '' : 's'}.</span>
@@ -35,7 +45,7 @@ export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEnds
     }
 
     if (trialActive) {
-        const days = Math.max(0, Math.ceil((new Date(trialEndsAt!).getTime() - now) / 86400000))
+        const days = Math.max(0, Math.ceil((new Date(trialEndsAt!).getTime() - nowMs) / 86400000))
         return (
             <Banner tone="info" icon={<Clock className="h-4 w-4" />}>
                 <span>Estas en periodo de prueba · {days} dia{days === 1 ? '' : 's'} restantes.</span>

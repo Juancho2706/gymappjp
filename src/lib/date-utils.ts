@@ -17,6 +17,27 @@ export function getTodayInSantiago(now = new Date()): {
     return { date, iso, dayOfWeek }
 }
 
+/**
+ * Convierte `YYYY-MM-DD` al día de semana 1=Lun … 7=Dom en **America/Santiago**
+ * (misma convención que `getTodayInSantiago`).
+ */
+export function getNutritionDayOfWeekFromIsoYmdInSantiago(isoYmd: string): number {
+    const ref = parseISO(`${isoYmd}T12:00:00`)
+    const tzStr = ref.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
+    const d = new Date(tzStr)
+    const dowJs = d.getDay()
+    return dowJs === 0 ? 7 : dowJs
+}
+
+/** NULL/`undefined` en `day_of_week` = comida aplica todos los días. */
+export function nutritionMealAppliesOnIsoYmdInSantiago(
+    meal: { day_of_week?: number | null },
+    isoYmd: string
+): boolean {
+    if (meal.day_of_week == null) return true
+    return meal.day_of_week === getNutritionDayOfWeekFromIsoYmdInSantiago(isoYmd)
+}
+
 /** Etiquetas relativas en español para fechas `YYYY-MM-DD`. */
 export function formatRelativeDate(dateStr: string, todayIso?: string): string {
     const today = todayIso ?? getTodayInSantiago().iso

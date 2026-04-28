@@ -4,37 +4,39 @@ import { useMemo } from 'react'
 import { format, parseISO, subDays } from 'date-fns'
 import { Flame } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import type { DayAdherence } from './AdherenceStrip'
 
 interface Props {
   adherenceData: DayAdherence[]
-  totalMeals: number
+  planMeals: { id: string; day_of_week?: number | null }[]
 }
 
-export function NutritionStreakBanner({ adherenceData, totalMeals }: Props) {
+export function NutritionStreakBanner({ adherenceData, planMeals }: Props) {
   const { iso: today } = getTodayInSantiago()
 
   const streak = useMemo(() => {
-    const map = new Map(
-      adherenceData.map((d) => [
-        d.log_date,
-        d.nutrition_meal_logs.filter((m) => m.is_completed).length,
-      ])
-    )
+    const map = new Map(adherenceData.map((d) => [d.log_date, d]))
     let count = 0
     const todayNoon = parseISO(`${today}T12:00:00`)
     for (let i = 0; i < 365; i++) {
       const iso = format(subDays(todayNoon, i), 'yyyy-MM-dd')
-      const completed = map.get(iso) ?? 0
-      if (totalMeals > 0 && completed / totalMeals >= 0.5) {
+      const log = map.get(iso)
+      const planned = planMeals.filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, iso)).length
+      if (planned === 0) continue
+      const applicableIds = new Set(
+        planMeals.filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, iso)).map((m) => m.id)
+      )
+      const completed =
+        log?.nutrition_meal_logs.filter((m) => m.is_completed && applicableIds.has(m.meal_id)).length ?? 0
+      if (completed / planned >= 0.5) {
         count++
       } else {
         break
       }
     }
     return count
-  }, [adherenceData, today, totalMeals])
+  }, [adherenceData, today, planMeals])
 
   if (streak < 2) return null
 

@@ -6,17 +6,18 @@ import { MacroRingSummary } from './MacroRingSummary'
 import { MealCard, type MealCardMeal } from './MealCard'
 import { AdherenceStrip, type DayAdherence } from './AdherenceStrip'
 import { NutritionStreakBanner } from './NutritionStreakBanner'
-import { toggleMealCompletion, fetchLogForDate } from '../_actions/nutrition.actions'
+import { toggleMealCompletion, fetchLogForDate, updateMealConsumedPortion } from '../_actions/nutrition.actions'
 import {
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
   calculateFoodItemMacros,
   type NutritionMealMacroSource,
 } from '@/lib/nutrition-utils'
+import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { toast } from 'sonner'
 import { Share2 } from 'lucide-react'
 
-type MealLogRow = { meal_id: string; is_completed: boolean }
+type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null }
 
 type PlanMealRow = NutritionMealMacroSource & {
   name: string
@@ -37,6 +38,7 @@ interface Props {
   plan: {
     id: string
     name?: string | null
+    instructions?: string | null
     nutrition_meals?: PlanMealRow[]
     daily_calories?: number | null
     protein_g?: number | null
@@ -55,15 +57,45 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   const [currentLog, setCurrentLog] = useState<Record<string, unknown> | null>(initialLog)
   const [isDateLoading, startDateTransition] = useTransition()
   const [isTogglePending, startToggleTransition] = useTransition()
+  const [isPortionPending, startPortionTransition] = useTransition()
+
+  const mealLogs = useMemo(
+    () => (currentLog?.nutrition_meal_logs as MealLogRow[] | undefined) ?? [],
+    [currentLog]
+  )
+
+  const serverPartialPct = useMemo(() => {
+    const o: Record<string, number> = {}
+    for (const ml of mealLogs) {
+      if (ml.is_completed && ml.consumed_quantity != null && !Number.isNaN(Number(ml.consumed_quantity))) {
+        o[ml.meal_id] = Number(ml.consumed_quantity)
+      }
+    }
+    return o
+  }, [mealLogs])
+
+  const [optimisticPartialPct, applyOptimisticPartial] = useOptimistic(
+    serverPartialPct,
+    (state, u: { mealId: string; pct: number | null }) => {
+      const n = { ...state }
+      if (u.pct == null) delete n[u.mealId]
+      else n[u.mealId] = u.pct
+      return n
+    }
+  )
+
+  const portionMapForMacros = useMemo(
+    () => new Map<string, number>(Object.entries(optimisticPartialPct) as [string, number][]),
+    [optimisticPartialPct]
+  )
 
   const serverCompletions = useMemo(() => {
-    const logs = (currentLog?.nutrition_meal_logs as MealLogRow[] | undefined) ?? []
     const o: Record<string, boolean> = {}
-    for (const ml of logs) {
+    for (const ml of mealLogs) {
       o[ml.meal_id] = ml.is_completed
     }
     return o
-  }, [currentLog])
+  }, [mealLogs])
 
   const [optimisticCompletions, setOptimisticCompletion] = useOptimistic(
     serverCompletions,
@@ -79,36 +111,58 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     [plan.nutrition_meals]
   )
 
-  const mealsForMacros = useMemo(() => mealsSorted.map(normalizeMealForMacros), [mealsSorted])
+  const mealsVisible = useMemo(
+    () => mealsSorted.filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, selectedDate)),
+    [mealsSorted, selectedDate]
+  )
+
+  const planMealsForAdherence = useMemo(
+    () => (plan.nutrition_meals ?? []).map((m) => ({ id: m.id, day_of_week: m.day_of_week ?? null })),
+    [plan.nutrition_meals]
+  )
+
+  const mealsForMacros = useMemo(() => mealsVisible.map(normalizeMealForMacros), [mealsVisible])
 
   const completedIds = useMemo(() => {
     const ids = new Set<string>()
-    for (const [mealId, v] of Object.entries(optimisticCompletions)) {
-      if (v) ids.add(mealId)
+    for (const m of mealsVisible) {
+      if (optimisticCompletions[m.id]) ids.add(m.id)
     }
     return ids
-  }, [optimisticCompletions])
+  }, [mealsVisible, optimisticCompletions])
 
-  const goals = {
-    calories: plan.daily_calories ?? 0,
-    protein: plan.protein_g ?? 0,
-    carbs: plan.carbs_g ?? 0,
-    fats: plan.fats_g ?? 0,
-  }
+  const goals = useMemo(
+    () => ({
+      calories: plan.daily_calories ?? 0,
+      protein: plan.protein_g ?? 0,
+      carbs: plan.carbs_g ?? 0,
+      fats: plan.fats_g ?? 0,
+    }),
+    [plan.daily_calories, plan.protein_g, plan.carbs_g, plan.fats_g]
+  )
 
   const consumed = useMemo(() => {
-    return calculateConsumedMacrosWithCompletionFallback(mealsForMacros, completedIds, goals)
-  }, [mealsForMacros, completedIds, goals])
+    return calculateConsumedMacrosWithCompletionFallback(
+      mealsForMacros,
+      completedIds,
+      goals,
+      portionMapForMacros
+    )
+  }, [mealsForMacros, completedIds, goals, portionMapForMacros])
 
   const adherenceDates = useMemo(() => {
     const s = new Set<string>()
+    const allMeals = plan.nutrition_meals ?? []
     for (const d of adherence) {
-      if (d.nutrition_meal_logs?.some((m) => m.is_completed)) {
+      const applicableIds = new Set(
+        allMeals.filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, d.log_date)).map((m) => m.id)
+      )
+      if (d.nutrition_meal_logs?.some((m) => m.is_completed && applicableIds.has(m.meal_id))) {
         s.add(d.log_date)
       }
     }
     return s
-  }, [adherence])
+  }, [adherence, plan.nutrition_meals])
 
   const handleDateChange = useCallback(
     (date: string) => {
@@ -149,44 +203,144 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     [setOptimisticCompletion, userId, plan.id, currentLog, coachSlug, selectedDate]
   )
 
-  const totalMeals = mealsSorted.length
-  const isPending = isTogglePending || isDateLoading
+  const handlePartialPctChange = useCallback(
+    (mealId: string, pct: number | null) => {
+      const dailyLogId = currentLog?.id as string | undefined
+      if (!dailyLogId || !isToday) return
+      startPortionTransition(async () => {
+        applyOptimisticPartial({ mealId, pct })
+        try {
+          const { success } = await updateMealConsumedPortion({
+            clientId: userId,
+            planId: plan.id,
+            mealId,
+            dailyLogId,
+            coachSlug,
+            targetDate: selectedDate,
+            consumedPct: pct,
+          })
+          if (!success) throw new Error('portion')
+          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+          setCurrentLog(dailyLog as Record<string, unknown> | null)
+        } catch (e) {
+          console.error(e)
+          toast.error('No se pudo guardar la porción')
+          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+          setCurrentLog(dailyLog as Record<string, unknown> | null)
+        }
+      })
+    },
+    [
+      currentLog,
+      isToday,
+      applyOptimisticPartial,
+      userId,
+      plan.id,
+      coachSlug,
+      selectedDate,
+    ]
+  )
 
-  const handleCopyPlan = useCallback(() => {
+  const totalMeals = mealsVisible.length
+  const isPending = isTogglePending || isDateLoading || isPortionPending
+
+  const copyToClipboard = useCallback((text: string, okMsg: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          toast.success(okMsg)
+        })
+        .catch(() => {
+          toast.error('No se pudo copiar automáticamente')
+        })
+    } else {
+      toast.error('Tu navegador no soporta copiar al portapapeles')
+    }
+  }, [])
+
+  const handleCopyDayDetail = useCallback(() => {
     const lines: string[] = []
     lines.push(`*Plan Nutricional: ${plan.name ?? 'Mi Plan'}*`)
+    lines.push(`_Fecha: ${selectedDate}_`)
     lines.push('')
+    if (typeof plan.instructions === 'string' && plan.instructions.trim().length > 0) {
+      lines.push('*Indicaciones del coach:*')
+      lines.push(plan.instructions.trim())
+      lines.push('')
+    }
 
-    for (const meal of mealsSorted) {
+    for (const meal of mealsVisible) {
       lines.push(`*${meal.name.toUpperCase()}*`)
       const items = meal.food_items ?? []
+      let mealCalories = 0
+      let mealProtein = 0
+      let mealCarbs = 0
+      let mealFats = 0
       for (const fi of items) {
         const name = fi.foods?.name ?? '—'
         const qty = fi.quantity ?? 0
         const unit = fi.unit ?? 'g'
         const macros = fi.foods
-          ? calculateFoodItemMacros({ quantity: qty, unit, foods: fi.foods as Parameters<typeof calculateFoodItemMacros>[0]['foods'] })
+          ? calculateFoodItemMacros({
+              quantity: qty,
+              unit,
+              foods: fi.foods as Parameters<typeof calculateFoodItemMacros>[0]['foods'],
+            })
           : null
         const kcalStr = macros ? ` · ${Math.round(macros.calories)} kcal` : ''
+        if (macros) {
+          mealCalories += macros.calories
+          mealProtein += macros.protein
+          mealCarbs += macros.carbs
+          mealFats += macros.fats
+        }
         lines.push(`• ${name} — ${qty}${unit}${kcalStr}`)
       }
+      lines.push(
+        `Subtotal: ${Math.round(mealCalories)} kcal | P ${Math.round(mealProtein)}g · C ${Math.round(mealCarbs)}g · G ${Math.round(mealFats)}g`
+      )
       lines.push('')
     }
 
     lines.push(`📊 Meta: ${goals.calories} kcal | P ${goals.protein}g · C ${goals.carbs}g · G ${goals.fats}g`)
 
-    const text = lines.join('\n')
+    copyToClipboard(lines.join('\n'), 'Detalle del día copiado — listo para WhatsApp 📋')
+  }, [mealsVisible, plan.name, plan.instructions, goals, selectedDate, copyToClipboard])
 
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => {
-        toast.success('Plan copiado — pégalo en WhatsApp 📋')
-      }).catch(() => {
-        toast.error('No se pudo copiar automáticamente')
-      })
-    } else {
-      toast.error('Tu navegador no soporta copiar al portapapeles')
+  const handleCopyDayShort = useCallback(() => {
+    const lines: string[] = []
+    lines.push(`*${plan.name ?? 'Mi plan'} · ${selectedDate}*`)
+    lines.push('')
+    for (const meal of mealsVisible) {
+      const items = meal.food_items ?? []
+      let kcal = 0
+      let p = 0
+      let c = 0
+      let f = 0
+      for (const fi of items) {
+        const macros = fi.foods
+          ? calculateFoodItemMacros({
+              quantity: fi.quantity ?? 0,
+              unit: fi.unit ?? 'g',
+              foods: fi.foods as Parameters<typeof calculateFoodItemMacros>[0]['foods'],
+            })
+          : null
+        if (macros) {
+          kcal += macros.calories
+          p += macros.protein
+          c += macros.carbs
+          f += macros.fats
+        }
+      }
+      lines.push(
+        `• ${meal.name} — ${Math.round(kcal)} kcal (P ${Math.round(p)} · C ${Math.round(c)} · G ${Math.round(f)})`
+      )
     }
-  }, [mealsSorted, plan.name, goals])
+    lines.push('')
+    lines.push(`Meta diaria: ${goals.calories} kcal | P ${goals.protein}g · C ${goals.carbs}g · G ${goals.fats}g`)
+    copyToClipboard(lines.join('\n'), 'Resumen corto copiado 📋')
+  }, [mealsVisible, plan.name, goals, selectedDate, copyToClipboard])
 
   return (
     <div className="space-y-5">
@@ -198,7 +352,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
       />
 
       {adherence.length > 0 && totalMeals > 0 && (
-        <NutritionStreakBanner adherenceData={adherence} totalMeals={totalMeals} />
+        <NutritionStreakBanner adherenceData={adherence} planMeals={planMealsForAdherence} />
       )}
 
       <MacroRingSummary
@@ -210,39 +364,50 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
       />
 
       <div className="space-y-3">
-        {mealsSorted.map((meal) => (
-          <MealCard
-            key={meal.id}
-            meal={toMealCardMeal(meal)}
-            isCompleted={!!optimisticCompletions[meal.id]}
-            isToday={isToday}
-            isPending={isPending}
-            onToggle={handleToggle}
-          />
-        ))}
+        {mealsVisible.length === 0 ? (
+          <p className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3 text-center text-xs text-muted-foreground">
+            No hay comidas planificadas para este día.
+          </p>
+        ) : (
+          mealsVisible.map((meal) => (
+            <MealCard
+              key={meal.id}
+              meal={toMealCardMeal(meal)}
+              isCompleted={!!optimisticCompletions[meal.id]}
+              partialPlanPct={meal.id in optimisticPartialPct ? optimisticPartialPct[meal.id]! : null}
+              isToday={isToday}
+              isPending={isPending}
+              onToggle={handleToggle}
+              onPartialPlanPctChange={handlePartialPctChange}
+            />
+          ))
+        )}
       </div>
 
       {totalMeals > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-center text-[11px] font-black tracking-wide text-orange-500">
-            Aun no implementado
-          </p>
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={handleCopyPlan}
-            disabled
-            aria-disabled="true"
-            className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-border/40 bg-muted/15 py-3 text-xs font-bold text-muted-foreground/60 opacity-70"
+            onClick={handleCopyDayDetail}
+            className="flex items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/20 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40 active:scale-[0.98]"
           >
-            <Share2 className="h-3.5 w-3.5" />
-            Copiar plan para WhatsApp
+            <Share2 className="h-3.5 w-3.5 shrink-0" />
+            WhatsApp · Detalle
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyDayShort}
+            className="flex items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/10 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/30 active:scale-[0.98]"
+          >
+            <Share2 className="h-3.5 w-3.5 shrink-0" />
+            WhatsApp · Resumen
           </button>
         </div>
       )}
 
-      {adherence.length > 0 && totalMeals > 0 && (
+      {adherence.length > 0 && (plan.nutrition_meals?.length ?? 0) > 0 && (
         <div className="bg-card border border-border rounded-2xl p-4">
-          <AdherenceStrip data={adherence} totalMeals={totalMeals} />
+          <AdherenceStrip data={adherence} planMeals={planMealsForAdherence} />
         </div>
       )}
     </div>

@@ -3,19 +3,19 @@
 import { useMemo } from 'react'
 import { format, parseISO, subDays } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 
 export interface DayAdherence {
   log_date: string
-  nutrition_meal_logs: { is_completed: boolean }[]
+  nutrition_meal_logs: { meal_id: string; is_completed: boolean }[]
 }
 
 interface Props {
   data: DayAdherence[]
-  totalMeals: number
+  planMeals: { id: string; day_of_week?: number | null }[]
 }
 
-export function AdherenceStrip({ data, totalMeals }: Props) {
+export function AdherenceStrip({ data, planMeals }: Props) {
   const { iso: today } = getTodayInSantiago()
 
   const days = useMemo(() => {
@@ -25,12 +25,17 @@ export function AdherenceStrip({ data, totalMeals }: Props) {
     for (let i = 29; i >= 0; i--) {
       const iso = format(subDays(todayNoon, i), 'yyyy-MM-dd')
       const log = map.get(iso)
-      const completed = log?.nutrition_meal_logs.filter((m) => m.is_completed).length ?? 0
-      const pct = totalMeals > 0 ? completed / totalMeals : 0
+      const planned = planMeals.filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, iso)).length
+      const applicableIds = new Set(
+        planMeals.filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, iso)).map((m) => m.id)
+      )
+      const completed =
+        log?.nutrition_meal_logs.filter((m) => m.is_completed && applicableIds.has(m.meal_id)).length ?? 0
+      const pct = planned > 0 ? completed / planned : 0
       result.push({ iso, pct, completed, isToday: iso === today })
     }
     return result
-  }, [data, today, totalMeals])
+  }, [data, today, planMeals])
 
   const registeredDays = days.filter((d) => d.completed > 0).length
 

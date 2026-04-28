@@ -1,10 +1,11 @@
 import { cache } from 'react'
 import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import {
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
+  portionPctMapFromMealLogs,
   type MealWithFoodItems,
   type NutritionMealMacroSource,
 } from '@/lib/nutrition-utils'
@@ -27,6 +28,7 @@ export const getCoachTemplateById = cache(async (coachId: string, templateId: st
         id,
         name,
         order_index,
+        day_of_week,
         template_meal_groups (
           id,
           order_index,
@@ -66,6 +68,7 @@ export const getCoachTemplates = cache(async (coachId: string) => {
         id,
         name,
         order_index,
+        day_of_week,
         template_meal_groups (
           id,
           order_index,
@@ -155,7 +158,7 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
         client_id,
         plan_id,
         log_date,
-        nutrition_meal_logs ( meal_id, is_completed )
+        nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )
       `
       )
       .in('client_id', clientIds)
@@ -167,6 +170,7 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
         `
         id,
         plan_id,
+        day_of_week,
         food_items ( quantity, unit, foods ( name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit ) )
       `
       )
@@ -177,7 +181,11 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
     client_id: string
     plan_id: string
     log_date: string
-    nutrition_meal_logs: { meal_id: string; is_completed: boolean }[] | null
+    nutrition_meal_logs: {
+      meal_id: string
+      is_completed: boolean
+      consumed_quantity: number | null
+    }[] | null
   }
 
   const logsByKey = new Map<string, LogRow[]>()
@@ -187,14 +195,11 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
     logsByKey.get(k)!.push(l)
   }
 
-  const mealCountByPlan = new Map<string, number>()
-  const mealsByPlan = new Map<string, MealWithFoodItems[]>()
+  const mealsRawByPlan = new Map<string, NutritionMealMacroSource[]>()
   for (const m of mealsDetail ?? []) {
     const pid = m.plan_id as string
-    mealCountByPlan.set(pid, (mealCountByPlan.get(pid) ?? 0) + 1)
-    const normalized = normalizeMealForMacros(m as NutritionMealMacroSource)
-    if (!mealsByPlan.has(pid)) mealsByPlan.set(pid, [])
-    mealsByPlan.get(pid)!.push(normalized)
+    if (!mealsRawByPlan.has(pid)) mealsRawByPlan.set(pid, [])
+    mealsRawByPlan.get(pid)!.push(m as NutritionMealMacroSource)
   }
 
   return plans.map((plan) => {
@@ -202,14 +207,17 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
     const cid = plan.client_id as string
     const key = `${cid}|${pid}`
     const planLogs = logsByKey.get(key) ?? []
-    const totalMeals = Math.max(mealCountByPlan.get(pid) ?? 1, 1)
+    const rawList = mealsRawByPlan.get(pid) ?? []
 
     const sparkline7d = dayLabels.map((d) => {
       const log = planLogs.find((x) => x.log_date === d)
       const rows = log?.nutrition_meal_logs ?? []
-      if (rows.length === 0) return 0
-      const done = rows.filter((x) => x.is_completed).length
-      return Math.min(100, Math.round((done / totalMeals) * 100))
+      const applicable = rawList.filter((meal) => nutritionMealAppliesOnIsoYmdInSantiago(meal, d))
+      const denom = applicable.length
+      if (denom === 0) return 0
+      const applicableIds = new Set(applicable.map((meal) => meal.id as string))
+      const done = rows.filter((x) => x.is_completed && applicableIds.has(x.meal_id)).length
+      return Math.min(100, Math.round((done / denom) * 100))
     })
 
     const todayLog = planLogs.find((x) => x.log_date === todayIso)
@@ -218,15 +226,22 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
       if (ml.is_completed) completed.add(ml.meal_id)
     }
 
+    const applicableToday = rawList.filter((meal) => nutritionMealAppliesOnIsoYmdInSantiago(meal, todayIso))
+    const mealsTodayNorm: MealWithFoodItems[] = applicableToday.map((meal) =>
+      normalizeMealForMacros(meal)
+    )
+
+    const portionToday = portionPctMapFromMealLogs(todayLog?.nutrition_meal_logs ?? [])
     const consumed = calculateConsumedMacrosWithCompletionFallback(
-      mealsByPlan.get(pid) ?? [],
+      mealsTodayNorm,
       completed,
       {
         calories: (plan.daily_calories as number | null) ?? 0,
         protein: (plan.protein_g as number | null) ?? 0,
         carbs: (plan.carbs_g as number | null) ?? 0,
         fats: (plan.fats_g as number | null) ?? 0,
-      }
+      },
+      portionToday
     )
 
     const clients = plan.clients as { id: string; full_name: string } | null
@@ -299,7 +314,7 @@ export const getClientNutritionPlan = cache(async (clientId: string, coachId: st
       `
       id, client_id, coach_id, template_id, name, is_custom, is_active, daily_calories, protein_g, carbs_g, fats_g,
       nutrition_meals (
-        id, plan_id, name, order_index,
+        id, plan_id, name, order_index, day_of_week,
         food_items (
           id, meal_id, food_id, quantity, unit,
           foods(id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit)
@@ -329,7 +344,7 @@ export const getClientAdherence = cache(async (clientId: string, planId: string)
     .select(
       `
       log_date,
-      nutrition_meal_logs ( meal_id, is_completed )
+      nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )
     `
     )
     .eq('client_id', clientId)

@@ -17,11 +17,48 @@ type TemplateData = {
 type MealInput = {
     name: string;
     order_index: number;
+    day_of_week?: number | null;
     foodItems: Array<{ food_id: string; quantity: number; unit: string }>;
 };
 
+type TemplateSavedMealItem = {
+    food_id: string
+    quantity: number
+    unit: string
+}
+
+type TemplateMealWithGroups = {
+    name: string
+    order_index: number
+    template_meal_groups?: Array<{
+        saved_meals?: {
+            saved_meal_items?: TemplateSavedMealItem[]
+        } | null
+    }> | null
+}
+
 export class NutritionService {
     constructor(private supabase: SupabaseClient<Database>) {}
+
+    private getTemplateMealItems(templateMeal: TemplateMealWithGroups): TemplateSavedMealItem[] {
+        const groups = templateMeal.template_meal_groups ?? []
+        const flatItems: TemplateSavedMealItem[] = []
+        for (const group of groups) {
+            const items = group?.saved_meals?.saved_meal_items ?? []
+            for (const item of items) {
+                flatItems.push(item)
+            }
+        }
+        return flatItems
+    }
+
+    private assertTemplateMealsAreComplete(templateMeals: TemplateMealWithGroups[]) {
+        const emptyMeals = templateMeals.filter((m) => this.getTemplateMealItems(m).length === 0)
+        if (emptyMeals.length === 0) return
+
+        const names = emptyMeals.map((m) => m.name || `Comida #${m.order_index + 1}`).join(', ')
+        throw new Error(`La plantilla tiene comidas sin alimentos: ${names}. Corrige la plantilla antes de propagar.`)
+    }
 
     /**
      * Crea o actualiza una plantilla desde un payload JSON tipado.
@@ -69,6 +106,7 @@ export class NutritionService {
                     template_id: currentTemplateId,
                     name: meal.name,
                     order_index: meal.order_index,
+                    day_of_week: meal.day_of_week ?? null,
                 })
                 .select('id')
                 .single();
@@ -104,103 +142,6 @@ export class NutritionService {
         }
 
         return currentTemplateId;
-    }
-
-    /** @deprecated Usar createOrUpdateTemplateFromJson. Mantenido para saveNutritionTemplate (legacy FormData). */
-    async createOrUpdateTemplate(
-        templateId: string | null,
-        templateData: TemplateData,
-        formData: FormData
-    ) {
-        let currentTemplateId = templateId;
-
-        if (templateId) {
-            const { error: updateError } = await this.supabase
-                .from('nutrition_plan_templates')
-                .update(templateData)
-                .eq('id', templateId)
-                .eq('coach_id', templateData.coach_id);
-
-            if (updateError) throw updateError;
-
-            await this.supabase
-                .from('template_meals')
-                .delete()
-                .eq('template_id', templateId);
-        } else {
-            const { data: newTemplate, error: insertError } = await this.supabase
-                .from('nutrition_plan_templates')
-                .insert(templateData)
-                .select('id')
-                .single();
-
-            if (insertError) throw insertError;
-            currentTemplateId = newTemplate.id;
-        }
-
-        if (!currentTemplateId) throw new Error('No se pudo obtener o crear el template_id');
-
-        await this.insertTemplateMealsFromFormData(currentTemplateId, formData, templateData.coach_id);
-
-        return currentTemplateId;
-    }
-
-    private async insertTemplateMealsFromFormData(templateId: string, formData: FormData, coachId: string) {
-        let i = 0;
-        while (formData.has(`meal_name_${i}`)) {
-            const mealName = formData.get(`meal_name_${i}`) as string;
-
-            const { data: meal, error: mealError } = await this.supabase
-                .from('template_meals')
-                .insert({
-                    template_id: templateId,
-                    name: mealName,
-                    order_index: i,
-                })
-                .select('id')
-                .single();
-
-            if (mealError) throw mealError;
-
-            let j = 0;
-            const foodsToInsert = [];
-            while (formData.has(`meal_${i}_food_${j}`)) {
-                const foodData = JSON.parse(
-                    formData.get(`meal_${i}_food_${j}`) as string
-                );
-                foodsToInsert.push(foodData);
-                j++;
-            }
-
-            if (foodsToInsert.length > 0) {
-                const { data: savedMeal } = await this.supabase
-                    .from('saved_meals')
-                    .insert({
-                        coach_id: coachId,
-                        name: `Internal_${mealName}_${Date.now()}`,
-                    })
-                    .select('id')
-                    .single();
-
-                if (savedMeal) {
-                     await this.supabase.from('saved_meal_items').insert(
-                        foodsToInsert.map((f) => ({
-                            saved_meal_id: savedMeal.id,
-                            food_id: f.food_id,
-                            quantity: f.quantity,
-                            unit: f.unit,
-                        }))
-                    );
-
-                    await this.supabase.from('template_meal_groups').insert({
-                        template_meal_id: meal.id,
-                        saved_meal_id: savedMeal.id,
-                        order_index: 0,
-                    });
-                }
-            }
-            i++;
-        }
     }
 
     /**
@@ -257,6 +198,8 @@ export class NutritionService {
 
         if (!template) throw new Error('Plantilla no encontrada');
 
+        this.assertTemplateMealsAreComplete(template.template_meals as TemplateMealWithGroups[])
+
         for (const clientId of allClientIds) {
             // Buscar plan SYNCED existente para este cliente+plantilla
             const { data: existingPlan } = await this.supabase
@@ -289,7 +232,7 @@ export class NutritionService {
                 // Fetch existing meals to match by order_index (preserves IDs → nutrition_meal_logs survive)
                 const { data: existingMeals } = await this.supabase
                     .from('nutrition_meals')
-                    .select('id, order_index')
+                    .select('id, order_index, day_of_week')
                     .eq('plan_id', existingPlan.id)
                     .order('order_index', { ascending: true });
 
@@ -311,13 +254,17 @@ export class NutritionService {
                 }
 
                 for (const tMeal of templateMealsSorted) {
-                    const items = tMeal.template_meal_groups?.[0]?.saved_meals?.saved_meal_items || [];
+                    const items = this.getTemplateMealItems(tMeal as TemplateMealWithGroups);
                     const existingId = existingByIndex.get(tMeal.order_index as number);
 
                     if (existingId) {
                         await this.supabase
                             .from('nutrition_meals')
-                            .update({ name: tMeal.name, order_index: tMeal.order_index })
+                            .update({
+                                name: tMeal.name,
+                                order_index: tMeal.order_index,
+                                day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
+                            })
                             .eq('id', existingId);
                         await this.supabase.from('food_items').delete().eq('meal_id', existingId);
                         if (items.length > 0) {
@@ -333,7 +280,13 @@ export class NutritionService {
                     } else {
                         const { data: newMeal } = await this.supabase
                             .from('nutrition_meals')
-                            .insert({ plan_id: planId, name: tMeal.name, description: '', order_index: tMeal.order_index })
+                            .insert({
+                                plan_id: planId,
+                                name: tMeal.name,
+                                description: '',
+                                order_index: tMeal.order_index,
+                                day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
+                            })
                             .select('id')
                             .single();
                         if (newMeal && items.length > 0) {
@@ -390,15 +343,14 @@ export class NutritionService {
                         name: tMeal.name,
                         description: '',
                         order_index: tMeal.order_index,
+                        day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
                     })
                     .select('id')
                     .single();
 
                 if (!newMeal) continue;
 
-                const items =
-                    tMeal.template_meal_groups?.[0]?.saved_meals
-                        ?.saved_meal_items || [];
+                const items = this.getTemplateMealItems(tMeal as TemplateMealWithGroups);
                 if (items.length > 0) {
                     await this.supabase.from('food_items').insert(
                         items.map((it: any) => ({
@@ -436,6 +388,8 @@ export class NutritionService {
 
         if (fetchError || !template) throw new Error('Plantilla no encontrada');
 
+        this.assertTemplateMealsAreComplete(template.template_meals as TemplateMealWithGroups[])
+
         const { data: newTemplate, error: insertError } = await this.supabase
             .from('nutrition_plan_templates')
             .insert({
@@ -459,15 +413,14 @@ export class NutritionService {
                     template_id: newTemplate.id,
                     name: tMeal.name,
                     order_index: tMeal.order_index,
+                    day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
                 })
                 .select('id')
                 .single();
 
             if (!newMeal) continue;
 
-            const items =
-                tMeal.template_meal_groups?.[0]?.saved_meals
-                    ?.saved_meal_items || [];
+            const items = this.getTemplateMealItems(tMeal as TemplateMealWithGroups);
             if (items.length > 0) {
                 const { data: savedMeal } = await this.supabase
                     .from('saved_meals')

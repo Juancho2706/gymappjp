@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users } from 'lucide-react'
 import { format } from 'date-fns'
@@ -22,6 +22,16 @@ function computeHealthScore(c: CoachListItem): number {
     if (d !== null && d !== undefined) s += d > 30 ? 20 : d > 15 ? 10 : d > 7 ? 5 : 0
     if (c.last_activity_at) s += 10
     return s
+}
+
+function LastActivityDays({ iso }: { iso: string }) {
+    const [nowMs, setNowMs] = useState<number | null>(null)
+    useEffect(() => {
+        setNowMs(Date.now())
+    }, [])
+    if (nowMs === null) return <span className="text-[--admin-text-3]">…</span>
+    const d = Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)))
+    return <span className="text-xs text-[--admin-text-3]">hace {d}d</span>
 }
 
 function HealthBar({ score }: { score: number }) {
@@ -250,11 +260,11 @@ export function CoachTable({ coaches, total }: Props) {
                                             </span>
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            <span className="text-xs text-[--admin-text-3]">
-                                                {c.last_activity_at
-                                                    ? `hace ${Math.floor((Date.now() - new Date(c.last_activity_at).getTime()) / (1000 * 60 * 60 * 24))}d`
-                                                    : 'sin act.'}
-                                            </span>
+                                            {c.last_activity_at ? (
+                                                <LastActivityDays iso={c.last_activity_at} />
+                                            ) : (
+                                                <span className="text-xs text-[--admin-text-3]">sin act.</span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <span className="font-mono text-[11px] tabular-nums text-[--admin-text-3]" title={c.created_at}>

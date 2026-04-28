@@ -972,7 +972,6 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             nutritionTimeline={nutritionHistory}
                             mealDetails={data.mealDetails}
                             adherence30d={data.nutritionAdherence30d}
-                            adherenceTotalMeals={activeNutritionPlan?.nutrition_meals?.length ?? 0}
                             todayMacros={data.todayConsumedMacros}
                             hasTodayNutritionLog={data.hasTodayNutritionLog}
                             nutritionMonthlyAvgPct={data.nutritionMonthlyAvgPct}

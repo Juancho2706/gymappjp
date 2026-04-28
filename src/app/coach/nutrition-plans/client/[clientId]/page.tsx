@@ -34,7 +34,11 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
     plan?.id && plan.nutrition_meals?.length
       ? await getClientAdherence(clientId, plan.id)
       : []
-  const totalMeals = plan?.nutrition_meals?.length ?? 0
+  const planMealsStrip =
+    plan?.nutrition_meals?.map((m) => ({
+      id: m.id as string,
+      day_of_week: (m as { day_of_week?: number | null }).day_of_week ?? null,
+    })) ?? []
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 pb-24">
@@ -66,11 +70,11 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
             initialData={initialData}
           />
         </div>
-        {adherence.length > 0 && totalMeals > 0 && (
+        {adherence.length > 0 && planMealsStrip.length > 0 && (
           <aside className="w-full lg:w-72 shrink-0 lg:sticky lg:top-24 space-y-3">
             <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Alumno — 30 días</p>
             <div className="bg-card border border-border rounded-2xl p-4">
-              <AdherenceStrip data={adherence} totalMeals={totalMeals} />
+              <AdherenceStrip data={adherence} planMeals={planMealsStrip} />
             </div>
           </aside>
         )}

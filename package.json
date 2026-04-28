@@ -12,7 +12,9 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs"
+    "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs",
+    "audit:nutrition-empty-meals": "node scripts/audit-nutrition-empty-meals.mjs",
+    "check:meal-completions-deprecation": "node scripts/check-meal-completions-deprecation.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

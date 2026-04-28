@@ -100,12 +100,16 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
   const addMeal = useCallback(() => {
     setMeals((prev) => [
       ...prev,
-      { id: newMealId(), name: `Comida ${prev.length + 1}`, foodItems: [] },
+      { id: newMealId(), name: `Comida ${prev.length + 1}`, day_of_week: null, foodItems: [] },
     ])
   }, [])
 
   const updateMealName = useCallback((mealId: string, name: string) => {
     setMeals((prev) => prev.map((m) => (m.id === mealId ? { ...m, name } : m)))
+  }, [])
+
+  const updateMealDayOfWeek = useCallback((mealId: string, day: number | null) => {
+    setMeals((prev) => prev.map((m) => (m.id === mealId ? { ...m, day_of_week: day } : m)))
   }, [])
 
   const removeMeal = useCallback((mealId: string) => {
@@ -163,6 +167,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
     const payloadMeals = meals.map((m, i) => ({
       name: m.name,
       order_index: i,
+      day_of_week: m.day_of_week ?? null,
       foodItems: m.foodItems.map((fi) => ({
         food_id: fi.food_id,
         quantity: fi.quantity,
@@ -218,6 +223,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
     goals,
     instructions,
     meals,
+    emptyMeals.length,
     mode,
     coachId,
     clientId,
@@ -226,48 +232,51 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
   ])
 
   return (
-    <div className="flex flex-col gap-6 min-h-[60vh] lg:flex-row">
+    <div className="flex min-h-[60vh] flex-col gap-6">
       {emptyMeals.length > 0 && (
-        <div className="w-full rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm text-orange-700 dark:text-orange-300">
+        <div className="w-full shrink-0 rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm text-orange-700 dark:text-orange-300">
           <p className="font-bold">Reparación asistida: hay comidas incompletas</p>
-          <p className="text-xs mt-1">
+          <p className="mt-1 text-xs leading-relaxed">
             Completa alimentos en {emptyMeals.length} comida(s): {emptyMeals.map((m) => m.name || 'Sin nombre').join(', ')}.
             El guardado se bloquea hasta corregirlas para evitar pérdida de datos.
           </p>
         </div>
       )}
-      <div className="order-1 flex-shrink-0 lg:order-1 lg:w-80 xl:w-96">
-        <PlanBuilderSidebar
-          planName={planName}
-          onNameChange={setPlanName}
-          goals={goals}
-          onGoalsChange={setGoals}
-          realTotals={realTotals}
-          onAutoSync={handleAutoSync}
-          autoSync={autoSync}
-          onAutoSyncToggle={setAutoSync}
-          instructions={instructions}
-          onInstructionsChange={setInstructions}
-          isSaving={isSaving}
-          onSave={handleSave}
-          mode={mode}
-        />
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="order-1 w-full shrink-0 lg:order-1 lg:w-80 lg:max-w-[24rem] xl:w-96">
+          <PlanBuilderSidebar
+            planName={planName}
+            onNameChange={setPlanName}
+            goals={goals}
+            onGoalsChange={setGoals}
+            realTotals={realTotals}
+            onAutoSync={handleAutoSync}
+            autoSync={autoSync}
+            onAutoSyncToggle={setAutoSync}
+            instructions={instructions}
+            onInstructionsChange={setInstructions}
+            isSaving={isSaving}
+            onSave={handleSave}
+            mode={mode}
+          />
+        </div>
 
-      <div className="order-2 min-w-0 flex-1 lg:order-2">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={meals.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-            <MealCanvas
-              meals={meals}
-              onAddMeal={addMeal}
-              onUpdateMealName={updateMealName}
-              onRemoveMeal={removeMeal}
-              onOpenFoodSearch={openFoodSearch}
-              onUpdateFoodItem={updateFoodItem}
-              onRemoveFoodItem={removeFoodItem}
-            />
-          </SortableContext>
-        </DndContext>
+        <div className="order-2 min-w-0 w-full flex-1 lg:order-2">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={meals.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+              <MealCanvas
+                meals={meals}
+                onAddMeal={addMeal}
+                onUpdateMealName={updateMealName}
+                onUpdateMealDayOfWeek={updateMealDayOfWeek}
+                onRemoveMeal={removeMeal}
+                onOpenFoodSearch={openFoodSearch}
+                onUpdateFoodItem={updateFoodItem}
+                onRemoveFoodItem={removeFoodItem}
+              />
+            </SortableContext>
+          </DndContext>
+        </div>
       </div>
 
       <FoodSearchDrawer

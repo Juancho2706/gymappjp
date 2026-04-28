@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-04-27  
 > **Alcance:** Arquitectura, flujos, integraciones, errores detectados, plan de mejora, estrategia de migración y visión multi-disciplinaria.  
-> **Estado:** Sin modificaciones de código — análisis, recomendaciones y roadmap.
+> **Estado:** Documento vivo. Incluye ejecución incremental ya aplicada en código (desde 2026-04-27).
 
 ---
 
@@ -54,7 +54,7 @@ PERIFÉRICO (no parte del flujo principal)
 ─────────────────────────────────────────
 recipes            ← Recetas con ingredientes, creadas por coach
 recipe_ingredients ← Ingredientes de cada receta
-meal_completions   ← LEGACY sin FK formal, candidata a deprecar
+meal_completions   ← Vista de solo lectura (derivada de `nutrition_meal_logs`); tabla legacy eliminada en migración `20260428041909_meal_completions_view_and_nutrition_day_of_week.sql` (remoto y repo alineados).
 ```
 
 ### 2.2 Flujo de Datos Coach → Alumno
@@ -174,20 +174,21 @@ Alumno:
 
 | # | Problema | Impacto |
 |---|----------|---------|
-| **E1** | **Propagación SYNCED destruye `plan_id`** → Los logs históricos de adherencia quedan huérfanos. El alumno pierde su racha/historial si el coach edita la plantilla. | **Alto.** Pérdida de datos real en producción. |
-| **E2** | **Sin Zod validation** en todo el módulo. `saveCustomFood`, `upsertCoachNutritionTemplate`, `upsertClientNutritionPlanJson` usan validación manual (`parseFloat`, `isNaN`). | **Medio.** Riesgo de datos corruptos o crashes. |
-| **E3** | **NutritionService opera con FormData indexado** (`meal_name_${i}`, `meal_${i}_food_${j}`). Si el índice salta, se pierden comidas silenciosamente. | **Medio.** Deuda que dificulta mantenimiento y debug. |
-| **E4** | **`meal_completions` legacy sin FK** a `nutrition_meals`. Tabla huérfana que confunde a cualquier lector del esquema. | **Bajo.** Limpieza pendiente. |
+| **E1** | ~~**Propagación SYNCED destruye `plan_id`**~~. Corregido: update in-place preservando `plan_id` y `meal_id`; además se bloquea propagación de plantillas con comidas vacías. | **CERRADO.** |
+| **E2** | ~~**Sin Zod validation**~~ en acciones principales. Corregido en flujos JSON y creación de alimentos. | **CERRADO (principal).** |
+| **E3** | ~~**NutritionService opera con FormData indexado**~~ como ruta principal. Corregido: flujo oficial JSON; ruta legacy redirigida al flujo moderno. | **CERRADO (flujo principal).** |
+| **E4** | **`meal_completions` legacy** | **CERRADO (lectura).** Tabla sustituida por vista `meal_completions` (misma forma, solo SELECT). Código runtime ya no escribe en la tabla; script `purge-platform-email` deja de borrar esa relación. |
 | **E5** | **Unidades mixtas:** el builder y algunos componentes mantienen compatibilidad con `ml`, `gr`, `cda`, `cdta`, `taza`, `porción`. Riesgo de inconsistencia de cálculo. | **Medio.** Migración 2026-04-13 normalizó datos pero el código legacy aún existe. |
+| **E6** | **Planes activos con comidas vacías (`nutrition_meals` sin `food_items`)** detectados en producción. | **Alto.** Distorsiona macros/adherencia percibida. Mitigado por fallback + bloqueo de guardado; requiere saneamiento operativo. |
 
 ### 🟡 Code Smells
 
 | # | Problema | Ubicación |
 |---|----------|-----------|
-| **C1** | `saveNutritionTemplate` (legacy FormData) convive con wrappers JSON modernos. Lógica duplicada. | `nutrition-coach.actions.ts` |
+| **C1** | `saveNutritionTemplate` legacy aún existe por compatibilidad, pero ya delega al flujo JSON moderno. | `nutrition-coach.actions.ts` |
 | **C2** | `FoodSearch.tsx` y `FoodBrowser.tsx` duplican lógica de búsqueda/filtros con UI distinta. | `coach/foods/`, `nutrition-plans/_components/` |
 | **C3** | `getFoodLibrary` carga 120 items; `FoodSearchDrawer` carga 300 y filtra client-side. Dos estrategias inconsistentes. | queries + drawer |
-| **C4** | **Sin test coverage** dedicado para nutrición. Ni unitarios ni E2E. | `tests/`, `src/**/*.test.*` |
+| **C4** | Test coverage de nutrición aún incompleto: ya existen unit tests de `nutrition-utils`, schemas y `getWeeklyCompliance`, faltan E2E/flows completos. | `tests/`, `src/**/*.test.*` |
 | **C5** | `daily_nutrition_logs` guarda `target_*_at_log` (snapshot de metas) pero el alumno **nunca registra lo que realmente comió** — solo sí/no. Los targets se snapshotan pero no hay contraste real vs planificado. | `nutrition.actions.ts` |
 | **C6** | La cadena `template_meals → template_meal_groups → saved_meals → saved_meal_items` tiene 4 niveles de join para llegar a los alimentos de una plantilla. Overengineering vs su caso de uso real. | `nutrition-coach.queries.ts` |
 
@@ -195,7 +196,7 @@ Alumno:
 
 | # | Problema | Impacto UX |
 |---|----------|------------|
-| **B1** | **Plan 100% estático.** Un plan tiene las mismas comidas todos los días. Sin variación por día de semana, ciclos o periodización. | El coach debe crear múltiples templates y rotar manualmente. |
+| **B1** | **Plan por día de semana (MVP).** `day_of_week` en `nutrition_meals` / `template_meals`, filtrado en alumno/dashboard/board, selector en PlanBuilder. Tabs dedicados por día = mejora futura. | Coach puede asignar comidas a un día fijo o a todos los días. |
 | **B2** | **El alumno no puede ajustar cantidades.** Solo toggle sí/no. No puede registrar "comí 120g en vez de 150g". | Adherencia binaria, no datos reales de consumo calórico. |
 | **B3** | **Sin tracking de agua, pasos, suplementos, ayuno.** | Oportunidad de valor agregado perdida. |
 | **B4** | **Sin integración check-in ↔ nutrición.** El peso no cruza con calorías ni sugiere revisiones al coach. | El coach lo hace todo manualmente. |
@@ -203,7 +204,7 @@ Alumno:
 | **B6** | **Sin notificaciones/reminders.** El alumno no recibe alertas de comidas ni recordatorios de log. | Menor adherencia real. |
 | **B7** | **Sin intercambio de alimentos (food swaps).** Si el plan dice "manzana", el alumno no puede cambiarla por "pera" con macros equivalentes. | Rígido; frustra al alumno. |
 | **B8** | **Sin asignación masiva mejorada.** Se puede asignar a varios pero la UX no muestra cuántos ya tienen esa plantilla ni permite reasignación bulk. | Coach con 20+ alumnos pierde tiempo. |
-| **B9** | **Sin exportación de plan.** El alumno no puede compartir su plan como PDF o texto para WhatsApp/impresión. | Friction para coaches que trabajan con alumnos poco digitales. |
+| **B9** | Export: dos modos copiados desde alumno — **detalle del día** (ingredientes) y **resumen corto** (por comida + meta). PDF / formatos avanzados pendientes. | Friction parcial pendiente. |
 | **B10** | **Sin cálculo de macros sugeridos.** No hay fórmula que sugiera kcal/proteína al coach según perfil del alumno. | El coach calcula manualmente en calculadoras externas. |
 
 ---
@@ -272,14 +273,7 @@ La migración `20260413220000_normalize_food_units_to_g_un.sql` ya normalizó da
 
 ### 6.5 Deprecación de `meal_completions` (E4)
 
-```sql
-SELECT COUNT(*) FROM meal_completions;
-CREATE OR REPLACE VIEW meal_completions_compat AS
-  SELECT nml.id, nm.plan_id, nm.id AS meal_id, nml.is_completed, nml.created_at
-  FROM nutrition_meal_logs nml
-  JOIN nutrition_meals nm ON nm.id = nml.meal_id;
--- Verificar 0 dependencias → DROP TABLE meal_completions;
-```
+Implementación final (repo + remoto): migración `20260428041909_meal_completions_view_and_nutrition_day_of_week.sql` — `DROP TABLE` legacy, `CREATE VIEW meal_completions` (solo lectura, `security_invoker`), columnas `day_of_week`. Tipos TypeScript regenerados desde Supabase (`src/lib/database.types.ts`).
 
 ### 6.6 Nuevas Features — Retrocompatibilidad
 
@@ -341,7 +335,7 @@ La cadena de 4 niveles (`template_meals → template_meal_groups → saved_meals
 
 #### 7.2.1 Registro Gradual de Consumo (P1)
 
-Columna `consumed_quantity NUMERIC` nullable en `nutrition_meal_logs` (o nueva tabla `food_item_logs`). `NULL` = 100% del plan (toggle binario, comportamiento actual). Si tiene valor → macros proporcionales.
+**MVP en producción:** columna `consumed_quantity` nullable en `nutrition_meal_logs` (0–100 % del plan por comida). `NULL` = modo binario (100 % del plan si completada). Opcional futuro: tabla `food_item_logs` por ítem.
 
 #### 7.2.2 Intercambio de Alimentos / Food Swaps (P2)
 
@@ -1156,30 +1150,43 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 
 ## 20. Roadmap Priorizado (Vista Consolidada)
 
+### 20.0 Estado de Ejecución (2026-04-29)
+
+- ✅ E1 cerrado: propagación SYNCED in-place (sin romper historial).
+- ✅ E2 cerrado en flujos principales: Zod activo en acciones core.
+- ✅ E3 cerrado en flujo principal: JSON tipado; legacy puenteado.
+- ✅ Mitigación de producción: fallback de macros por % de comidas completadas cuando faltan `food_items`.
+- ✅ Test base añadidos: `nutrition-utils`, schemas, `getWeeklyCompliance`; suite Vitest + `tsc` verificados antes de release.
+- ⚠️ Pendiente operativo: completar planes activos con comidas vacías detectadas.
+- ✅ `meal_completions`: tabla legacy reemplazada por vista homónima + columnas `day_of_week` en comidas (migración `20260428041909`, aplicada en remoto vía MCP y archivo local con el mismo nombre).
+- ✅ PlanBuilder: selector **Día del plan** (todos los días vs lun–dom), responsive; persiste `day_of_week` al guardar.
+- ✅ **Registro gradual (B11):** columna `consumed_quantity` en `nutrition_meal_logs` (migración local `20260428183000_nutrition_meal_logs_consumed_quantity.sql` + aplicación remota vía MCP `nutrition_meal_logs_consumed_quantity`). UI alumno (`NutritionShell` / `MealCard`), acciones, queries y agregados coach/dashboard alineados.
+- ✅ PlanBuilder: layout desktop — aviso “Reparación asistida” fuera del `flex-row` para no comprimir la columna “Comidas del plan”; aviso “Comida vacía” con `min-w-0` / `w-full`.
+
 ### Fase A — Correcciones Críticas (2 semanas)
 > **Sin estas correcciones, todo lo demás se construye sobre barro.**
 
-1. **[P0] Arreglar propagación SYNCED** — Mantener `plan_id`. Los logs históricos no se pierden más.
-2. **[P1] Implementar Zod schemas** — Validación en todas las server actions de nutrición.
-3. **[P1] Refactorizar `NutritionService`** — De FormData indexado a JSON tipado.
-4. **[P2] Eliminar `meal_completions` legacy** — Vista de compatibilidad + DROP.
-5. **[P1] Tests unitarios** para `nutrition-utils.ts` y schemas Zod.
-6. **[P1] Sistema de tooltips base** — `InfoTooltip` component + tooltips Fase A (todos los que no requieren features nuevas).
+1. **[P0] Arreglar propagación SYNCED** — ✅ **Hecho**.
+2. **[P1] Implementar Zod schemas** — ✅ **Hecho en acciones core**.
+3. **[P1] Refactorizar `NutritionService`** — ✅ **Hecho en flujo principal**.
+4. **[P2] Eliminar `meal_completions` legacy** — ✅ **Hecho:** vista `meal_completions` + DROP tabla; tipos `database.types` actualizados.
+5. **[P1] Tests unitarios** para `nutrition-utils.ts` y schemas Zod. — ✅ **Hecho**.
+6. **[P1] Sistema de tooltips base** — `InfoTooltip` component + tooltips Fase A (todos los que no requieren features nuevas). — ✅ **Base implementada**.
 
 ### Fase B — UX Alumno + Quick Wins (3 semanas)
 
-7. **[P1] Exportación de plan** — Botón "Copiar para WhatsApp" / PDF.
+7. **[P1] Exportación de plan** — ⚠️ **Parcial**: WhatsApp detalle + **resumen corto** por día; falta PDF.
 8. **[P1] Creación de alimento inline** — Desde `FoodSearchDrawer` sin salir al catálogo.
 9. **[P1] Cálculo de macros sugeridos** — Widget en el builder basado en perfil del alumno.
 10. **[P1] Alimentos favoritos del alumno** — Tabla `client_food_preferences`.
-11. **[P1] Registro gradual de consumo** — `consumed_quantity` nullable en logs + UI opt-in.
+11. **[P1] Registro gradual de consumo** — ✅ **Hecho (MVP):** `consumed_quantity` 0–100 en logs, UI porciones en comida completada, macros proporcionales; PDF / modo por ítem (`food_item_logs`) pendiente si se exige.
 12. **[P1] Offline básico** — Cachear plan en SW + queue de toggles en `localStorage`.
 13. **[P1] Onboarding de nutrición** — Wizard de 3 pasos para coach nuevo.
 14. **[P1] Tooltips Fase B** — Todos los tooltips de features nuevas de esta fase.
 
 ### Fase C — Flexibilidad del Plan (3 semanas)
 
-15. **[P1] Plan por día de semana** — `day_of_week` en `nutrition_meals`, tabs en builder.
+15. **[P1] Plan por día de semana** — ✅ **Hecho (MVP):** `day_of_week` en DB + propagación/saves + filtrado alumno/coach + **selector en PlanBuilder**. Mejora opcional futura: tabs por día en lugar de dropdown por comida.
 16. **[P2] Food swaps** — Grupos de intercambio definidos por coach + UI del alumno.
 17. **[P2] Tracking de hábitos** — Agua, pasos, ayuno. Tabla `daily_habits`.
 18. **[P2] Feedback por comida** — Emoji satisfaction en `nutrition_meal_logs`.
@@ -1194,6 +1201,40 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 24. **[P2] Ciclos de dieta** — Bloques de semanas con transición automática.
 25. **[P2] Historial de versiones del plan** — Snapshots + rollback.
 26. **[P3] IA — Descripción a plan** — Claude API genera propuesta con alimentos del catálogo.
+
+---
+
+## 20.1 Checklist Operativo — Saneamiento Planes Vacíos (Sin perder historial)
+
+Objetivo: corregir planes activos con comidas vacías sin perder adherencia ni logs históricos.
+
+1. Abrir plan afectado en modo edición coach.
+2. Completar cada comida marcada como vacía con al menos 1 alimento.
+3. Guardar in-place (mismo plan, mismas comidas cuando aplique).
+4. Verificar en vista alumno:
+   - el check de comida sigue disponible,
+   - anillos/barra suben al marcar comidas.
+5. Verificar en vista coach:
+   - adherencia histórica intacta,
+   - macros del día visibles.
+6. Repetir por cada alumno afectado hasta llegar a 0 comidas vacías.
+
+Regla de seguridad: no borrar `daily_nutrition_logs` ni `nutrition_meal_logs`.
+
+## 20.2 Progreso Global (estimado)
+
+Estimación práctica para este roadmap (no matemática estricta):
+
+- **Completado:** ~52%
+- **Parcial en curso:** ~20%
+- **Pendiente:** ~28%
+
+Resumen por bloques:
+
+- **Fase A (crítico):** ~90% (`meal_completions` cerrado; cobertura tests sigue ampliable).
+- **Fase B (quick wins):** ~45% (export WhatsApp dos modos + **registro gradual MVP**; pendientes PDF, offline, onboarding, sugerencias, favoritos, tooltips Fase B, etc.).
+- **Fase C:** ~50% (`day_of_week` + consumo parcial + builder; siguen swaps/hábitos/satisfaction/etc.).
+- **Fase D:** ~0% (diferenciadores pro pendientes).
 
 ---
 
