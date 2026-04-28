@@ -361,13 +361,14 @@ export type Database = {
       }
       coaches: {
         Row: {
+          admin_notes: string | null
           billing_cycle: string
           brand_name: string
           created_at: string
           current_period_end: string | null
           full_name: string
           id: string
-          loader_icon_mode: 'eva' | 'coach' | 'none'
+          loader_icon_mode: string
           loader_show_icon: boolean
           loader_text: string | null
           loader_text_color: string | null
@@ -395,13 +396,14 @@ export type Database = {
           welcome_modal_version: number
         }
         Insert: {
+          admin_notes?: string | null
           billing_cycle?: string
           brand_name: string
           created_at?: string
           current_period_end?: string | null
           full_name: string
           id: string
-          loader_icon_mode?: 'eva' | 'coach' | 'none'
+          loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
@@ -429,13 +431,14 @@ export type Database = {
           welcome_modal_version?: number
         }
         Update: {
+          admin_notes?: string | null
           billing_cycle?: string
           brand_name?: string
           created_at?: string
           current_period_end?: string | null
           full_name?: string
           id?: string
-          loader_icon_mode?: 'eva' | 'coach' | 'none'
+          loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
@@ -958,6 +961,33 @@ export type Database = {
           },
         ]
       }
+      personal_gastos: {
+        Row: {
+          cantidad: number
+          costo: number
+          created_at: string
+          id: string
+          nombre: string
+          pagador: string
+        }
+        Insert: {
+          cantidad?: number
+          costo: number
+          created_at?: string
+          id?: string
+          nombre: string
+          pagador: string
+        }
+        Update: {
+          cantidad?: number
+          costo?: number
+          created_at?: string
+          id?: string
+          nombre?: string
+          pagador?: string
+        }
+        Relationships: []
+      }
       recipe_ingredients: {
         Row: {
           created_at: string
@@ -1406,7 +1436,7 @@ export type Database = {
         }
         Update: {
           assigned_date?: string | null
-          client_id?: string
+          client_id?: string | null
           coach_id?: string
           created_at?: string
           day_of_week?: number | null
@@ -1486,7 +1516,7 @@ export type Database = {
         }
         Update: {
           ab_mode?: boolean | null
-          client_id?: string
+          client_id?: string | null
           coach_id?: string
           created_at?: string
           cycle_length?: number | null
@@ -1580,6 +1610,59 @@ export type Database = {
         Args: { p_email: string }
         Returns: Json
       }
+      get_admin_audit_logs_paginated: {
+        Args: {
+          p_action?: string
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_target?: string
+          p_to?: string
+        }
+        Returns: {
+          action: string
+          admin_email: string
+          created_at: string
+          id: string
+          ip_address: string
+          payload: Json
+          target_id: string
+          target_table: string
+          total_count: number
+        }[]
+      }
+      get_admin_coaches_paginated: {
+        Args: {
+          p_beta?: boolean
+          p_dir?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort?: string
+          p_status?: string
+          p_tier?: string
+        }
+        Returns: {
+          active_client_count: number
+          billing_cycle: string
+          brand_name: string
+          client_count: number
+          created_at: string
+          current_period_end: string
+          days_until_expiry: number
+          full_name: string
+          id: string
+          last_activity_at: string
+          max_clients: number
+          payment_provider: string
+          slug: string
+          subscription_status: string
+          subscription_tier: string
+          total_count: number
+          trial_ends_at: string
+          utilization_pct: number
+        }[]
+      }
       get_client_current_streak: {
         Args: { p_client_id: string }
         Returns: number
@@ -1605,6 +1688,23 @@ export type Database = {
           sessions: number
         }[]
       }
+      get_platform_checkins_7d: { Args: never; Returns: number }
+      get_platform_churn_last_30d: {
+        Args: never
+        Returns: {
+          churned_at: string
+          coach_id: string
+          coach_name: string
+          tier: string
+        }[]
+      }
+      get_platform_churn_monthly: {
+        Args: never
+        Returns: {
+          churned_count: number
+          ym: string
+        }[]
+      }
       get_platform_clients_count: { Args: never; Returns: number }
       get_platform_coach_signups_last_6_months: {
         Args: never
@@ -1620,7 +1720,39 @@ export type Database = {
           tier: string
         }[]
       }
+      get_platform_coaches_by_tier_monthly: {
+        Args: never
+        Returns: {
+          coach_count: number
+          tier: string
+          ym: string
+        }[]
+      }
       get_platform_coaches_count: { Args: never; Returns: number }
+      get_platform_mrr_12_months: {
+        Args: never
+        Returns: {
+          coach_count: number
+          mrr_clp: number
+          ym: string
+        }[]
+      }
+      get_platform_revenue_by_cycle: {
+        Args: never
+        Returns: {
+          billing_cycle: string
+          coach_count: number
+          mrr_clp: number
+        }[]
+      }
+      get_platform_revenue_by_tier: {
+        Args: never
+        Returns: {
+          coach_count: number
+          mrr_clp: number
+          tier: string
+        }[]
+      }
       get_platform_subscription_events_series: {
         Args: never
         Returns: {

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
     Shield, ChevronLeft, ChevronRight,
     LayoutDashboard, Users, UserCheck,
-    TrendingUp, ClipboardList, Activity,
+    TrendingUp, ClipboardList, Activity, Wallet,
 } from 'lucide-react'
 import { AdminNavItem } from './AdminNavItem'
 import { AdminLogoutButton } from './AdminLogoutButton'
@@ -20,6 +20,9 @@ const NAV_FINANZAS = [
 const NAV_SISTEMA = [
     { href: '/admin/auditoria', label: 'Auditoría',  icon: ClipboardList },
     { href: '/admin/sistema',   label: 'Sistema',    icon: Activity },
+]
+const NAV_PERSONAL = [
+    { href: '/admin/personal',  label: 'Personal',   icon: Wallet },
 ]
 const NAV_MOBILE = [
     { href: '/admin/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
@@ -94,6 +97,16 @@ export function AdminSidebar({ userEmail }: Props) {
                             </p>
                         )}
                         {NAV_SISTEMA.map(item => (
+                            <AdminNavItem key={item.href} {...item} collapsed={collapsed} />
+                        ))}
+                    </div>
+                    <div>
+                        {!collapsed && (
+                            <p className="mb-1.5 px-3 text-[10px] font-medium uppercase tracking-widest text-[--admin-text-3]">
+                                Personal
+                            </p>
+                        )}
+                        {NAV_PERSONAL.map(item => (
                             <AdminNavItem key={item.href} {...item} collapsed={collapsed} />
                         ))}
                     </div>
