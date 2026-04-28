@@ -292,7 +292,7 @@ export const getClientNutritionPlan = cache(async (clientId: string, coachId: st
       nutrition_meals (
         id, plan_id, name, order_index,
         food_items (
-          id, meal_id, quantity, unit,
+          id, meal_id, food_id, quantity, unit,
           foods(id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit)
         )
       ),

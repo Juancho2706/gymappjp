@@ -3,6 +3,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { NutritionService } from '@/services/nutrition.service'
+import {
+  TemplateUpsertSchema,
+  ClientPlanSchema,
+  CustomFoodSchema,
+} from '@/lib/nutrition-schemas'
+
+// ─── Tipos públicos (usados por componentes del builder) ───────────────────────
 
 export type CoachTemplateMealFoodItem = {
   food_id: string
@@ -43,6 +50,19 @@ export type CoachClientPlanUpsertPayload = {
   meals: CoachTemplateMealJson[]
 }
 
+export type CoachCustomFoodInput = {
+  name: string
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fats_g: number
+  serving_size: number
+  serving_unit: string
+  category: string
+}
+
+// ─── Helpers internos ──────────────────────────────────────────────────────────
+
 async function requireCoachSession(coachId: string) {
   const supabase = await createClient()
   const {
@@ -54,52 +74,6 @@ async function requireCoachSession(coachId: string) {
   return { supabase, error: null as null }
 }
 
-function templatePayloadToFormData(data: CoachTemplateUpsertPayload): FormData {
-  const fd = new FormData()
-  if (data.id) fd.set('id', data.id)
-  fd.set('name', data.name)
-  fd.set('daily_calories', String(data.daily_calories))
-  fd.set('protein_g', String(data.protein_g))
-  fd.set('carbs_g', String(data.carbs_g))
-  fd.set('fats_g', String(data.fats_g))
-  fd.set('instructions', data.instructions ?? '')
-
-  const sorted = [...data.meals].sort((a, b) => a.order_index - b.order_index)
-  sorted.forEach((meal, i) => {
-    fd.set(`meal_name_${i}`, meal.name)
-    meal.foodItems.forEach((fi, j) => {
-      fd.set(
-        `meal_${i}_food_${j}`,
-        JSON.stringify({ food_id: fi.food_id, quantity: fi.quantity, unit: fi.unit })
-      )
-    })
-  })
-  return fd
-}
-
-function clientPlanPayloadToFormData(data: CoachClientPlanUpsertPayload): FormData {
-  const fd = new FormData()
-  if (data.id) fd.set('id', data.id)
-  fd.set('name', data.name)
-  fd.set('daily_calories', String(data.daily_calories))
-  fd.set('protein_g', String(data.protein_g))
-  fd.set('carbs_g', String(data.carbs_g))
-  fd.set('fats_g', String(data.fats_g))
-  fd.set('instructions', data.instructions ?? '')
-
-  const sorted = [...data.meals].sort((a, b) => a.order_index - b.order_index)
-  sorted.forEach((meal, i) => {
-    fd.set(`meal_name_${i}`, meal.name)
-    meal.foodItems.forEach((fi, j) => {
-      fd.set(
-        `meal_${i}_food_${j}`,
-        JSON.stringify({ food_id: fi.food_id, quantity: fi.quantity, unit: fi.unit })
-      )
-    })
-  })
-  return fd
-}
-
 async function revalidateClientNutritionPaths(coachId: string, clientId: string) {
   const supabase = await createClient()
   const { data: coach } = await supabase.from('coaches').select('slug').eq('id', coachId).maybeSingle()
@@ -109,9 +83,15 @@ async function revalidateClientNutritionPaths(coachId: string, clientId: string)
   }
 }
 
+function zodErrorMessage(issues: { message: string }[]): string {
+  return issues.map((i) => i.message).join('. ')
+}
+
+// ─── Acciones principales ──────────────────────────────────────────────────────
+
 /**
- * Crear / actualizar plantilla desde JSON (API programática).
- * Reutiliza `NutritionService` + FormData compatible con el editor actual.
+ * Crear / actualizar plantilla desde JSON con validación Zod.
+ * Usa createOrUpdateTemplateFromJson → sin FormData indexado.
  */
 export async function upsertCoachNutritionTemplate(
   coachId: string,
@@ -120,35 +100,39 @@ export async function upsertCoachNutritionTemplate(
   const { supabase, error: authErr } = await requireCoachSession(coachId)
   if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
 
-  if (!data.name?.trim()) {
-    return { success: false, error: 'El nombre es obligatorio.' }
+  const parsed = TemplateUpsertSchema.safeParse(data)
+  if (!parsed.success) {
+    return { success: false, error: zodErrorMessage(parsed.error.issues) }
   }
 
-  try {
-    const formData = templatePayloadToFormData(data)
-    const propagate = data.propagateClientIds ?? []
-    formData.set('selected_clients', JSON.stringify(propagate))
+  const { id, name, daily_calories, protein_g, carbs_g, fats_g, instructions,
+    goal_type, tags, is_favorite, meals, propagateClientIds } = parsed.data
 
+  try {
     const templateData = {
-      name: data.name,
-      daily_calories: data.daily_calories,
-      protein_g: data.protein_g,
-      carbs_g: data.carbs_g,
-      fats_g: data.fats_g,
-      instructions: data.instructions ?? null,
+      name,
+      daily_calories,
+      protein_g,
+      carbs_g,
+      fats_g,
+      instructions: instructions ?? null,
       coach_id: coachId,
-      goal_type: data.goal_type ?? null,
-      tags: data.tags ?? null,
-      is_favorite: data.is_favorite ?? null,
+      goal_type: goal_type ?? null,
+      tags: tags ?? null,
+      is_favorite: is_favorite ?? null,
     }
 
     const service = new NutritionService(supabase)
-    const templateId = await service.createOrUpdateTemplate(
-      data.id ?? null,
+    const templateId = await service.createOrUpdateTemplateFromJson(
+      id ?? null,
       templateData,
-      formData
+      meals
     )
-    await service.propagateTemplateChanges(templateId, coachId, JSON.stringify(propagate))
+    await service.propagateTemplateChanges(
+      templateId,
+      coachId,
+      JSON.stringify(propagateClientIds ?? [])
+    )
 
     revalidatePath('/coach/nutrition-plans')
     revalidatePath('/coach/clients')
@@ -161,7 +145,7 @@ export async function upsertCoachNutritionTemplate(
 }
 
 /**
- * Asignar plantilla existente a clientes (desactiva plan previo y crea plan sync).
+ * Asignar plantilla existente a clientes (preserva plan_id vía propagateTemplateChanges).
  */
 export async function assignTemplateToClientIds(
   coachId: string,
@@ -186,7 +170,8 @@ export async function assignTemplateToClientIds(
 }
 
 /**
- * Plan custom por alumno (JSON). Equivale a `saveNutritionPlan` con FormData generado.
+ * Plan custom por alumno — JSON directo con validación Zod.
+ * Sin FormData roundtrip.
  */
 export async function upsertClientNutritionPlanJson(
   coachId: string,
@@ -196,37 +181,100 @@ export async function upsertClientNutritionPlanJson(
   const { supabase, error: authErr } = await requireCoachSession(coachId)
   if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
 
-  if (!data.name?.trim()) {
-    return { success: false, error: 'El nombre del plan es requerido.' }
+  const parsed = ClientPlanSchema.safeParse(data)
+  if (!parsed.success) {
+    return { success: false, error: zodErrorMessage(parsed.error.issues) }
   }
 
+  const { id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, meals } = parsed.data
+
   try {
-    const formData = clientPlanPayloadToFormData(data)
-    const planId = data.id ?? null
     const planData = {
       client_id: clientId,
       coach_id: coachId,
-      name: data.name,
-      daily_calories: data.daily_calories,
-      protein_g: data.protein_g,
-      carbs_g: data.carbs_g,
-      fats_g: data.fats_g,
-      instructions: data.instructions ?? null,
+      name,
+      daily_calories,
+      protein_g,
+      carbs_g,
+      fats_g,
+      instructions: instructions ?? null,
       is_active: true,
       is_custom: true,
     }
 
-    let currentPlanId = planId
+    let currentPlanId = id ?? null
 
-    if (planId) {
+    const sorted = [...meals].sort((a, b) => a.order_index - b.order_index)
+
+    if (currentPlanId) {
       const { error: updateError } = await supabase
         .from('nutrition_plans')
         .update(planData)
-        .eq('id', planId)
+        .eq('id', currentPlanId)
         .eq('coach_id', coachId)
 
       if (updateError) throw updateError
-      await supabase.from('nutrition_meals').delete().eq('plan_id', planId)
+
+      // Fetch existing meals to match by order_index (preserves IDs → nutrition_meal_logs survive)
+      const { data: existingMeals } = await supabase
+        .from('nutrition_meals')
+        .select('id, order_index')
+        .eq('plan_id', currentPlanId)
+        .order('order_index', { ascending: true })
+
+      const existingByIndex = new Map<number, string>(
+        (existingMeals ?? []).map((m) => [m.order_index as number, m.id as string])
+      )
+      const newIndices = new Set(sorted.map((m) => m.order_index))
+
+      // Delete only meals whose position no longer exists in the new set
+      const toDelete = (existingMeals ?? [])
+        .filter((m) => !newIndices.has(m.order_index as number))
+        .map((m) => m.id as string)
+
+      if (toDelete.length) {
+        await supabase.from('food_items').delete().in('meal_id', toDelete)
+        await supabase.from('nutrition_meals').delete().in('id', toDelete)
+      }
+
+      for (const meal of sorted) {
+        const existingId = existingByIndex.get(meal.order_index)
+        if (existingId) {
+          // UPDATE in-place: keep meal ID → nutrition_meal_logs survive
+          await supabase
+            .from('nutrition_meals')
+            .update({ name: meal.name, order_index: meal.order_index })
+            .eq('id', existingId)
+          await supabase.from('food_items').delete().eq('meal_id', existingId)
+          if (meal.foodItems.length > 0) {
+            await supabase.from('food_items').insert(
+              meal.foodItems.map((fi) => ({
+                meal_id: existingId,
+                food_id: fi.food_id,
+                quantity: fi.quantity,
+                unit: fi.unit,
+              }))
+            )
+          }
+        } else {
+          const { data: newMeal, error: mealError } = await supabase
+            .from('nutrition_meals')
+            .insert({ plan_id: currentPlanId!, name: meal.name, description: '', order_index: meal.order_index })
+            .select('id')
+            .single()
+          if (mealError) throw mealError
+          if (meal.foodItems.length > 0) {
+            await supabase.from('food_items').insert(
+              meal.foodItems.map((fi) => ({
+                meal_id: newMeal.id,
+                food_id: fi.food_id,
+                quantity: fi.quantity,
+                unit: fi.unit,
+              }))
+            )
+          }
+        }
+      }
     } else {
       await supabase.from('nutrition_plans').update({ is_active: false }).eq('client_id', clientId)
 
@@ -238,42 +286,27 @@ export async function upsertClientNutritionPlanJson(
 
       if (planError) throw planError
       currentPlanId = newPlan.id
-    }
 
-    let i = 0
-    while (formData.has(`meal_name_${i}`)) {
-      const mealName = formData.get(`meal_name_${i}`) as string
-      const { data: insertedMeal, error: mealError } = await supabase
-        .from('nutrition_meals')
-        .insert({
-          plan_id: currentPlanId!,
-          name: mealName,
-          description: '',
-          order_index: i,
-        })
-        .select('id')
-        .single()
+      for (const meal of sorted) {
+        const { data: insertedMeal, error: mealError } = await supabase
+          .from('nutrition_meals')
+          .insert({ plan_id: currentPlanId!, name: meal.name, description: '', order_index: meal.order_index })
+          .select('id')
+          .single()
 
-      if (mealError) throw mealError
+        if (mealError) throw mealError
 
-      let j = 0
-      const itemsToInsert: { meal_id: string; food_id: string; quantity: number; unit: string }[] = []
-      while (formData.has(`meal_${i}_food_${j}`)) {
-        const raw = formData.get(`meal_${i}_food_${j}`) as string
-        const foodData = JSON.parse(raw) as { food_id: string; quantity: number; unit: string }
-        itemsToInsert.push({
-          meal_id: insertedMeal.id,
-          food_id: foodData.food_id,
-          quantity: foodData.quantity,
-          unit: foodData.unit || 'g',
-        })
-        j++
+        if (meal.foodItems.length > 0) {
+          await supabase.from('food_items').insert(
+            meal.foodItems.map((fi) => ({
+              meal_id: insertedMeal.id,
+              food_id: fi.food_id,
+              quantity: fi.quantity,
+              unit: fi.unit,
+            }))
+          )
+        }
       }
-
-      if (itemsToInsert.length > 0) {
-        await supabase.from('food_items').insert(itemsToInsert)
-      }
-      i++
     }
 
     await revalidateClientNutritionPaths(coachId, clientId)
@@ -286,19 +319,8 @@ export async function upsertClientNutritionPlanJson(
   }
 }
 
-export type CoachCustomFoodInput = {
-  name: string
-  calories: number
-  protein_g: number
-  carbs_g: number
-  fats_g: number
-  serving_size: number
-  serving_unit: string
-  category: string
-}
-
 /**
- * Alta de alimento custom del coach (JSON + categoría).
+ * Alta de alimento custom del coach con validación Zod.
  */
 export async function addCoachCustomFood(
   coachId: string,
@@ -307,21 +329,24 @@ export async function addCoachCustomFood(
   const { supabase, error: authErr } = await requireCoachSession(coachId)
   if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
 
-  if (!food.name?.trim()) {
-    return { success: false, error: 'El nombre es obligatorio.' }
+  const parsed = CustomFoodSchema.safeParse(food)
+  if (!parsed.success) {
+    return { success: false, error: zodErrorMessage(parsed.error.issues) }
   }
+
+  const { name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category } = parsed.data
 
   const { data, error } = await supabase
     .from('foods')
     .insert({
-      name: food.name.trim(),
-      calories: food.calories,
-      protein_g: food.protein_g,
-      carbs_g: food.carbs_g,
-      fats_g: food.fats_g,
-      serving_size: food.serving_size,
-      serving_unit: food.serving_unit || 'g',
-      category: food.category || 'otro',
+      name: name.trim(),
+      calories,
+      protein_g,
+      carbs_g,
+      fats_g,
+      serving_size,
+      serving_unit,
+      category,
       coach_id: coachId,
     })
     .select('id')
@@ -337,7 +362,7 @@ export async function addCoachCustomFood(
   return { success: true, foodId: data.id }
 }
 
-// --- Legacy hub actions (FormData + TemplateLibrary / AssignModal / FoodLibrary) — con sesión coach ---
+// ─── Acciones legacy (FormData) ────────────────────────────────────────────────
 
 export type TemplateFormState = {
   error?: string
@@ -350,6 +375,7 @@ function safeParseInt(value: string | null): number | null {
   return isNaN(parsed) ? null : parsed
 }
 
+/** @deprecated Usar upsertCoachNutritionTemplate. Mantenido para compatibilidad con formularios legacy. */
 export async function saveNutritionTemplate(
   coachId: string,
   prevState: TemplateFormState,
@@ -455,7 +481,7 @@ export async function unassignNutritionPlan(coachId: string, clientId: string, p
   }
 }
 
-/** Orden de args histórico (templateId, coachId, clientIds) — delega en `assignTemplateToClientIds`. */
+/** Orden de args histórico — delega en assignTemplateToClientIds. */
 export async function assignTemplateToClients(templateId: string, coachId: string, clientIds: string[]) {
   return assignTemplateToClientIds(coachId, templateId, clientIds)
 }
@@ -467,30 +493,39 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
   try {
     const name = (formData.get('name') as string)?.trim()
     const calories = Math.round(parseFloat(formData.get('calories') as string))
-    const protein = Math.round(parseFloat(formData.get('protein') as string) || 0)
-    const carbs = Math.round(parseFloat(formData.get('carbs') as string) || 0)
-    const fats = Math.round(parseFloat(formData.get('fats') as string) || 0)
-    const categoryRaw = (formData.get('category') as string | null)?.trim() || null
-    const unit = (formData.get('unit') as string | null)?.trim() || 'g'
+    const protein_g = Math.round(parseFloat(formData.get('protein') as string) || 0)
+    const carbs_g = Math.round(parseFloat(formData.get('carbs') as string) || 0)
+    const fats_g = Math.round(parseFloat(formData.get('fats') as string) || 0)
+    const category = (formData.get('category') as string | null)?.trim() || 'otro'
+    const serving_unit = ((formData.get('unit') as string | null)?.trim() || 'g') === 'un' ? 'un' : 'g'
     const servingSizeRaw = formData.get('serving_size') as string | null
     const servingParsed = parseFloat(servingSizeRaw ?? '')
     const serving_size = !isNaN(servingParsed) && servingParsed > 0 ? servingParsed : 100
 
-    if (!name) return { error: 'El nombre es obligatorio.', success: false }
-    if (isNaN(calories)) return { error: 'Las calorías son obligatorias.', success: false }
+    const parsed = CustomFoodSchema.safeParse({
+      name,
+      calories: isNaN(calories) ? -1 : calories,
+      protein_g,
+      carbs_g,
+      fats_g,
+      serving_size,
+      serving_unit,
+      category,
+    })
 
-    const validCategories = ['proteina', 'carbohidrato', 'grasa', 'lacteo', 'fruta', 'verdura', 'legumbre', 'bebida', 'snack', 'otro']
-    const category = categoryRaw && validCategories.includes(categoryRaw) ? categoryRaw : null
+    if (!parsed.success) {
+      return { error: zodErrorMessage(parsed.error.issues), success: false }
+    }
 
     const { error } = await supabase.from('foods').insert({
-      name,
-      calories,
-      protein_g: protein,
-      carbs_g: carbs,
-      fats_g: fats,
-      serving_size,
-      serving_unit: unit,
-      category,
+      name: parsed.data.name,
+      calories: parsed.data.calories,
+      protein_g: parsed.data.protein_g,
+      carbs_g: parsed.data.carbs_g,
+      fats_g: parsed.data.fats_g,
+      serving_size: parsed.data.serving_size,
+      serving_unit: parsed.data.serving_unit,
+      category: parsed.data.category,
       coach_id: coachId,
     })
 

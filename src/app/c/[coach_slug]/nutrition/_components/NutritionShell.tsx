@@ -10,9 +10,11 @@ import { toggleMealCompletion, fetchLogForDate } from '../_actions/nutrition.act
 import {
   calculateConsumedMacros,
   normalizeMealForMacros,
+  calculateFoodItemMacros,
   type NutritionMealMacroSource,
 } from '@/lib/nutrition-utils'
 import { toast } from 'sonner'
+import { Share2 } from 'lucide-react'
 
 type MealLogRow = { meal_id: string; is_completed: boolean }
 
@@ -34,6 +36,7 @@ function toMealCardMeal(m: PlanMealRow): MealCardMeal {
 interface Props {
   plan: {
     id: string
+    name?: string | null
     nutrition_meals?: PlanMealRow[]
     daily_calories?: number | null
     protein_g?: number | null
@@ -150,6 +153,42 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   const totalMeals = mealsSorted.length
   const isPending = isTogglePending || isDateLoading
 
+  const handleCopyPlan = useCallback(() => {
+    const lines: string[] = []
+    lines.push(`*Plan Nutricional: ${plan.name ?? 'Mi Plan'}*`)
+    lines.push('')
+
+    for (const meal of mealsSorted) {
+      lines.push(`*${meal.name.toUpperCase()}*`)
+      const items = meal.food_items ?? []
+      for (const fi of items) {
+        const name = fi.foods?.name ?? '—'
+        const qty = fi.quantity ?? 0
+        const unit = fi.unit ?? 'g'
+        const macros = fi.foods
+          ? calculateFoodItemMacros({ quantity: qty, unit, foods: fi.foods as Parameters<typeof calculateFoodItemMacros>[0]['foods'] })
+          : null
+        const kcalStr = macros ? ` · ${Math.round(macros.calories)} kcal` : ''
+        lines.push(`• ${name} — ${qty}${unit}${kcalStr}`)
+      }
+      lines.push('')
+    }
+
+    lines.push(`📊 Meta: ${goals.calories} kcal | P ${goals.protein}g · C ${goals.carbs}g · G ${goals.fats}g`)
+
+    const text = lines.join('\n')
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        toast.success('Plan copiado — pégalo en WhatsApp 📋')
+      }).catch(() => {
+        toast.error('No se pudo copiar automáticamente')
+      })
+    } else {
+      toast.error('Tu navegador no soporta copiar al portapapeles')
+    }
+  }, [mealsSorted, plan.name, goals])
+
   return (
     <div className="space-y-5">
       <DayNavigator
@@ -183,6 +222,17 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
           />
         ))}
       </div>
+
+      {totalMeals > 0 && (
+        <button
+          type="button"
+          onClick={handleCopyPlan}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/60 bg-muted/20 py-3 text-xs font-bold text-muted-foreground transition-colors hover:bg-muted/40 active:scale-[0.98]"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          Copiar plan para WhatsApp
+        </button>
+      )}
 
       {adherence.length > 0 && totalMeals > 0 && (
         <div className="bg-card border border-border rounded-2xl p-4">

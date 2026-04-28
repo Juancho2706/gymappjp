@@ -5,12 +5,14 @@ import { createPortal } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Loader2, Search, X, ChevronLeft, Plus } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Loader2, Search, X, ChevronLeft, Plus, PenLine } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { previewMacrosForQuantity } from './MacroCalculator'
 import type { FoodItemDraft } from './types'
 import { searchCoachFoodLibrary } from '../../_actions/food-library.actions'
+import { addCoachCustomFood } from '../../_actions/nutrition-coach.actions'
 
 type FoodRow = {
   id: string
@@ -96,7 +98,10 @@ function MacroPill({ label, value, color }: { label: string; value: number; colo
   )
 }
 
+type View = 'search' | 'create' | 'quantity'
+
 export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
+  const [view, setView] = useState<View>('search')
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -104,12 +109,23 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
   const [picked, setPicked] = useState<FoodRow | null>(null)
   const [quantity, setQuantity] = useState('100')
   const [unit, setUnit] = useState<'g' | 'ml' | 'un'>('g')
+  const [isCreating, setIsCreating] = useState(false)
+  // Inline create form state
+  const [newName, setNewName] = useState('')
+  const [newCalories, setNewCalories] = useState('')
+  const [newProtein, setNewProtein] = useState('')
+  const [newCarbs, setNewCarbs] = useState('')
+  const [newFats, setNewFats] = useState('')
+  const [newUnit, setNewUnit] = useState<'g' | 'un'>('g')
+  const [newServing, setNewServing] = useState('100')
+  const [newCategory, setNewCategory] = useState('otro')
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   // Reset on close
   useEffect(() => {
     if (!open) {
+      setView('search')
       setSearchTerm('')
       setResults([])
       setLoading(false)
@@ -117,6 +133,14 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
       setQuantity('100')
       setUnit('g')
       setCategory('todos')
+      setNewName('')
+      setNewCalories('')
+      setNewProtein('')
+      setNewCarbs('')
+      setNewFats('')
+      setNewUnit('g')
+      setNewServing('100')
+      setNewCategory('otro')
     } else {
       setTimeout(() => searchRef.current?.focus(), 100)
     }
@@ -161,12 +185,69 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
   const parsedQuantity = parseFloat(quantity) || 0
   const preview = picked ? previewMacrosForQuantity(toFoodDraftShape(picked), parsedQuantity, unit) : null
 
-  const handlePickFood = (f: FoodRow) => {
+  const handlePickFood = useCallback((f: FoodRow) => {
     setPicked(f)
+    setView('quantity')
     const defaultUnit = f.is_liquid ? 'ml' : normalizeUnit(f.serving_unit)
     setUnit(defaultUnit)
     setQuantity(String(f.serving_size || (f.is_liquid ? 200 : 100)))
-  }
+  }, [])
+
+  const handleGoCreate = useCallback(() => {
+    setNewName(searchTerm.trim())
+    setView('create')
+  }, [searchTerm])
+
+  const handleCreateFood = useCallback(async () => {
+    const name = newName.trim()
+    const calories = Math.round(parseFloat(newCalories) || 0)
+    const protein_g = Math.round(parseFloat(newProtein) || 0)
+    const carbs_g = Math.round(parseFloat(newCarbs) || 0)
+    const fats_g = Math.round(parseFloat(newFats) || 0)
+    const serving_size = parseFloat(newServing) || (newUnit === 'un' ? 60 : 100)
+
+    if (!name) { toast.error('El nombre es obligatorio'); return }
+    if (!newCalories) { toast.error('Las calorías son obligatorias'); return }
+
+    setIsCreating(true)
+    try {
+      const res = await addCoachCustomFood(coachId, {
+        name,
+        calories,
+        protein_g,
+        carbs_g,
+        fats_g,
+        serving_size,
+        serving_unit: newUnit,
+        category: newCategory,
+      })
+      if (!res.success) {
+        toast.error(res.error ?? 'Error al crear alimento')
+        return
+      }
+      toast.success('Alimento creado')
+      // Build synthetic FoodRow and auto-select it
+      const synthetic: FoodRow = {
+        id: res.foodId!,
+        name,
+        calories,
+        protein_g,
+        carbs_g,
+        fats_g,
+        serving_size,
+        serving_unit: newUnit,
+        coach_id: coachId,
+        category: newCategory,
+        is_liquid: false,
+        brand: null,
+      }
+      // Add to results so it's visible if user goes back
+      setResults((prev) => [synthetic, ...prev])
+      handlePickFood(synthetic)
+    } finally {
+      setIsCreating(false)
+    }
+  }, [coachId, newName, newCalories, newProtein, newCarbs, newFats, newUnit, newServing, newCategory, handlePickFood])
 
   const handleAdd = useCallback(() => {
     if (!picked) return
@@ -216,10 +297,13 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
       >
         {/* ── HEADER ── fixed, never scrolls */}
         <div className="flex shrink-0 items-center gap-3 border-b border-zinc-200 px-4 py-3 dark:border-white/10">
-          {picked ? (
+          {view !== 'search' ? (
             <button
               type="button"
-              onClick={() => setPicked(null)}
+              onClick={() => {
+                if (view === 'quantity') { setPicked(null); setView('search') }
+                else setView('search')
+              }}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10"
               aria-label="Volver"
             >
@@ -229,7 +313,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
             <Search className="h-4 w-4 shrink-0 text-zinc-400" />
           )}
           <span className="flex-1 text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-white">
-            {picked ? picked.name : 'Buscar alimento'}
+            {view === 'quantity' ? picked?.name : view === 'create' ? 'Nuevo alimento' : 'Buscar alimento'}
           </span>
           <button
             type="button"
@@ -242,7 +326,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
         </div>
 
         {/* ── SEARCH VIEW ── */}
-        {!picked && (
+        {view === 'search' && (
           <>
             {/* Search input — fixed below header */}
             <div className="shrink-0 px-4 pt-3 pb-2">
@@ -292,13 +376,23 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
               )}
 
               {!loading && filtered.length === 0 && (
-                <p className="py-10 text-center text-sm text-zinc-400">
-                  {results.length > 0
-                    ? 'Sin alimentos en esta categoría.'
-                    : searchTerm.trim()
-                    ? `Sin resultados para "${searchTerm}".`
-                    : 'No hay alimentos en el catálogo.'}
-                </p>
+                <div className="py-10 text-center space-y-3">
+                  <p className="text-sm text-zinc-400">
+                    {results.length > 0
+                      ? 'Sin alimentos en esta categoría.'
+                      : searchTerm.trim()
+                      ? `Sin resultados para "${searchTerm}".`
+                      : 'No hay alimentos en el catálogo.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleGoCreate}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-2 text-xs font-bold text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-white/20 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
+                  >
+                    <PenLine className="h-3.5 w-3.5" />
+                    {searchTerm.trim() ? `Crear "${searchTerm.trim()}"` : 'Crear alimento'}
+                  </button>
+                </div>
               )}
 
               {!loading && filtered.length > 0 && (
@@ -337,14 +431,121 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
                       </div>
                     </button>
                   ))}
+
+                  {/* Crear alimento al final de resultados */}
+                  <button
+                    type="button"
+                    onClick={handleGoCreate}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-xs font-bold text-zinc-500 transition-colors hover:bg-zinc-50 dark:border-white/15 dark:text-zinc-400 dark:hover:bg-white/5"
+                  >
+                    <PenLine className="h-3.5 w-3.5" />
+                    ¿No está? Crear alimento
+                  </button>
                 </div>
               )}
             </div>
           </>
         )}
 
+        {/* ── CREATE VIEW — inline food form ── */}
+        {view === 'create' && (
+          <div className="flex flex-1 flex-col overflow-y-auto p-4 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Nombre</Label>
+              <Input
+                autoFocus
+                placeholder="Ej: Pechuga de pollo"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="h-11 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10"
+              />
+            </div>
+
+            <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">
+              Macros <strong className="text-zinc-700 dark:text-zinc-300">por cada 100 gramos</strong>
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Kcal (100g)<span className="text-rose-500 ml-0.5">*</span>
+                </Label>
+                <Input type="number" step="0.1" min={0} value={newCalories} onChange={(e) => setNewCalories(e.target.value)} className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Proteína (g)</Label>
+                <Input type="number" step="0.1" min={0} value={newProtein} onChange={(e) => setNewProtein(e.target.value)} className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Carbos (g)</Label>
+                <Input type="number" step="0.1" min={0} value={newCarbs} onChange={(e) => setNewCarbs(e.target.value)} className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Grasas (g)</Label>
+                <Input type="number" step="0.1" min={0} value={newFats} onChange={(e) => setNewFats(e.target.value)} className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Unidad</Label>
+                <Select value={newUnit} onValueChange={(v) => {
+                  setNewUnit(v as 'g' | 'un')
+                  setNewServing(v === 'un' ? '60' : '100')
+                }}>
+                  <SelectTrigger className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="g">g — gramos</SelectItem>
+                    <SelectItem value="un">un — unidades</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  {newUnit === 'un' ? 'Gramos / 1 un' : 'Porción ref. (g)'}
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={newServing}
+                  onChange={(e) => setNewServing(e.target.value)}
+                  className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Categoría</Label>
+              <Select value={newCategory} onValueChange={(v) => setNewCategory(v ?? 'otro')}>
+                <SelectTrigger className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.filter((c) => c.id !== 'todos').map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="mt-auto pt-2">
+              <Button
+                type="button"
+                onClick={handleCreateFood}
+                disabled={isCreating || !newName.trim() || !newCalories}
+                className="h-12 w-full gap-2 rounded-xl bg-[color:var(--theme-primary,#007AFF)] text-sm font-black text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {isCreating ? 'Creando…' : 'Crear y agregar'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── QUANTITY VIEW — shown after picking a food ── */}
-        {picked && (
+        {view === 'quantity' && picked && (
           <div className="flex flex-1 flex-col overflow-y-auto p-4 gap-4">
             {/* Food summary card */}
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-white/5">

@@ -6,7 +6,7 @@ import { addGastoAction, deleteGastoAction } from './_actions/gasto-actions'
 import type { Gasto } from './_data/gastos.queries'
 
 const fmt = (n: number) =>
-    n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })
+    n.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })
 
 function AddGastoForm() {
     const formRef = useRef<HTMLFormElement>(null)
