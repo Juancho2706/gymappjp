@@ -544,6 +544,20 @@ export async function assignTemplateToClients(templateId: string, coachId: strin
   return assignTemplateToClientIds(coachId, templateId, clientIds)
 }
 
+/** Lightweight list of coach clients for the duplicate-plan modal. */
+export async function getCoachClientsLite(
+  coachId: string
+): Promise<{ id: string; full_name: string }[]> {
+  const { supabase, error: authErr } = await requireCoachSession(coachId)
+  if (!supabase || authErr) return []
+  const { data } = await supabase
+    .from('clients')
+    .select('id, full_name')
+    .eq('coach_id', coachId)
+    .order('full_name')
+  return (data ?? []).map((c) => ({ id: c.id as string, full_name: c.full_name as string }))
+}
+
 export async function saveCustomFood(coachId: string, prevState: unknown, formData: FormData) {
   const { supabase, error: authErr } = await requireCoachSession(coachId)
   if (!supabase) return { error: authErr ?? 'No autorizado.', success: false }
@@ -601,4 +615,141 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
         : String(err)
     return { error: `Error al guardar: ${msg}`, success: false }
   }
+}
+
+/**
+ * Clona un plan activo (SYNCED o CUSTOM) de un alumno a otro como plan CUSTOM.
+ * No modifica el plan origen ni su historial. El alumno destino recibe un plan nuevo.
+ * Los daily_nutrition_logs del destino (si los hay de un plan anterior) quedan intactos
+ * en DB — solo se desactiva el plan previo, los logs no se tocan.
+ */
+export async function duplicatePlanToClient(
+  coachId: string,
+  sourcePlanId: string,
+  targetClientId: string
+): Promise<{ success: boolean; planId?: string; error?: string }> {
+  const { supabase, error: authErr } = await requireCoachSession(coachId)
+  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+
+  try {
+    // 1. Fetch source plan — verify it belongs to this coach
+    const { data: sourcePlan, error: srcErr } = await supabase
+      .from('nutrition_plans')
+      .select('id, name, daily_calories, protein_g, carbs_g, fats_g, instructions')
+      .eq('id', sourcePlanId)
+      .eq('coach_id', coachId)
+      .maybeSingle()
+
+    if (srcErr) throw srcErr
+    if (!sourcePlan) return { success: false, error: 'Plan origen no encontrado.' }
+
+    // 2. Fetch source meals + food_items
+    const { data: sourceMeals, error: mealsErr } = await supabase
+      .from('nutrition_meals')
+      .select('id, name, order_index, day_of_week')
+      .eq('plan_id', sourcePlanId)
+      .order('order_index', { ascending: true })
+
+    if (mealsErr) throw mealsErr
+
+    const mealIds = (sourceMeals ?? []).map((m) => m.id as string)
+
+    const { data: sourceFoodItems, error: fiErr } = mealIds.length
+      ? await supabase
+          .from('food_items')
+          .select('meal_id, food_id, quantity, unit')
+          .in('meal_id', mealIds)
+      : { data: [], error: null }
+
+    if (fiErr) throw fiErr
+
+    const foodsByMeal = new Map<string, { food_id: string; quantity: number; unit: string }[]>()
+    for (const fi of sourceFoodItems ?? []) {
+      const list = foodsByMeal.get(fi.meal_id as string) ?? []
+      list.push({ food_id: fi.food_id as string, quantity: fi.quantity as number, unit: fi.unit as string })
+      foodsByMeal.set(fi.meal_id as string, list)
+    }
+
+    // 3. Deactivate any current active plan for the target (keeps logs intact)
+    await supabase
+      .from('nutrition_plans')
+      .update({ is_active: false })
+      .eq('client_id', targetClientId)
+      .eq('coach_id', coachId)
+      .eq('is_active', true)
+
+    // 4. Create new plan as CUSTOM for target
+    const { data: newPlan, error: planErr } = await supabase
+      .from('nutrition_plans')
+      .insert({
+        client_id: targetClientId,
+        coach_id: coachId,
+        name: sourcePlan.name as string,
+        daily_calories: sourcePlan.daily_calories as number,
+        protein_g: sourcePlan.protein_g as number,
+        carbs_g: sourcePlan.carbs_g as number,
+        fats_g: sourcePlan.fats_g as number,
+        instructions: (sourcePlan.instructions as string | null) ?? null,
+        is_active: true,
+        is_custom: true,
+        template_id: null,
+      })
+      .select('id')
+      .single()
+
+    if (planErr) throw planErr
+
+    // 5. Clone meals + food_items
+    for (const meal of sourceMeals ?? []) {
+      const { data: newMeal, error: mealErr } = await supabase
+        .from('nutrition_meals')
+        .insert({
+          plan_id: newPlan.id,
+          name: meal.name as string,
+          description: '',
+          order_index: meal.order_index as number,
+          day_of_week: (meal.day_of_week as number | null) ?? null,
+        })
+        .select('id')
+        .single()
+
+      if (mealErr) throw mealErr
+
+      const items = foodsByMeal.get(meal.id as string) ?? []
+      if (items.length > 0) {
+        await supabase.from('food_items').insert(
+          items.map((fi) => ({
+            meal_id: newMeal.id,
+            food_id: fi.food_id,
+            quantity: fi.quantity,
+            unit: fi.unit,
+          }))
+        )
+      }
+    }
+
+    await revalidateClientNutritionPaths(coachId, targetClientId)
+    revalidatePath('/coach/nutrition-plans')
+    return { success: true, planId: newPlan.id }
+  } catch (err: unknown) {
+    console.error('[duplicatePlanToClient]', err)
+    const msg = err instanceof Error ? err.message : 'Error al duplicar el plan.'
+    return { success: false, error: msg }
+  }
+}
+
+// ─── Preferencias de alimentos del cliente ────────────────────────────────────
+
+/**
+ * Returns the set of food_ids a client has marked as 'favorite'.
+ * Coach can read their own clients' preferences via RLS policy.
+ */
+export async function getClientFoodFavorites(clientId: string): Promise<string[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('client_food_preferences')
+    .select('food_id')
+    .eq('client_id', clientId)
+    .eq('preference_type', 'favorite')
+  return (data ?? []).map((r) => r.food_id)
 }

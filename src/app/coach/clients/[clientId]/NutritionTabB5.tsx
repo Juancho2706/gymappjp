@@ -22,7 +22,7 @@ import {
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { GlassCard } from '@/components/ui/glass-card'
-import { buttonVariants } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
@@ -43,8 +43,13 @@ import {
 import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
 import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'sonner'
 import { getClientNutritionForDate, getClientNutritionActivityDates } from './actions'
 import { calculateFoodItemMacros } from '@/lib/nutrition-utils'
+import { duplicatePlanToClient, getCoachClientsLite } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
 
 export type NutritionTimelineRow = {
   date: string
@@ -73,6 +78,7 @@ type TodayMacros = {
 
 type NutritionTabB5Props = {
   clientId: string
+  coachId: string
   coachSlug?: string
   santiagoTodayIso: string
   activeNutritionPlan: Record<string, unknown> | null | undefined
@@ -180,6 +186,7 @@ function HeatmapCell({
 
 export function NutritionTabB5({
   clientId,
+  coachId,
   coachSlug,
   santiagoTodayIso,
   activeNutritionPlan,
@@ -205,6 +212,35 @@ export function NutritionTabB5({
   const [historyData, setHistoryData] = useState<Awaited<ReturnType<typeof getClientNutritionForDate>>>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [activityDates, setActivityDates] = useState<Set<string>>(new Set())
+
+  // Duplicate plan modal state
+  const [dupOpen, setDupOpen] = useState(false)
+  const [dupClients, setDupClients] = useState<{ id: string; full_name: string }[]>([])
+  const [dupTargetId, setDupTargetId] = useState<string>('')
+  const [dupLoading, setDupLoading] = useState(false)
+
+  const handleOpenDuplicate = async () => {
+    setDupOpen(true)
+    setDupTargetId('')
+    if (dupClients.length === 0) {
+      const list = await getCoachClientsLite(coachId)
+      setDupClients(list.filter((c) => c.id !== clientId))
+    }
+  }
+
+  const handleDuplicate = async () => {
+    const sourcePlanId = (activeNutritionPlan?.id as string | undefined) ?? ''
+    if (!dupTargetId || !sourcePlanId) return
+    setDupLoading(true)
+    const res = await duplicatePlanToClient(coachId, sourcePlanId, dupTargetId)
+    setDupLoading(false)
+    if (res.success) {
+      toast.success('Plan copiado correctamente.')
+      setDupOpen(false)
+    } else {
+      toast.error(res.error ?? 'Error al duplicar el plan.')
+    }
+  }
 
   useEffect(() => {
     getClientNutritionActivityDates(clientId).then((dates) => setActivityDates(new Set(dates)))
@@ -336,22 +372,26 @@ export function NutritionTabB5({
                 <h3 className="text-xs font-black uppercase tracking-widest text-primary truncate">
                   Plan activo · {String(plan.name ?? '')}
                 </h3>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'text-[8px] font-black uppercase',
-                    isCustom
-                      ? 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                      : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25'
-                  )}
-                  title={
-                    isCustom
-                      ? 'Plan personalizado: los cambios en la plantilla global no lo modifican.'
-                      : 'Sincronizado con la plantilla: hereda actualizaciones del molde.'
-                  }
-                >
-                  {isCustom ? 'CUSTOM' : 'SYNCED'}
-                </Badge>
+                <div className="flex items-center gap-1">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[8px] font-black uppercase',
+                      isCustom
+                        ? 'bg-amber-500/10 text-amber-600 border-amber-500/25'
+                        : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25'
+                    )}
+                  >
+                    {isCustom ? 'CUSTOM' : 'SYNCED'}
+                  </Badge>
+                  <InfoTooltip
+                    content={
+                      isCustom
+                        ? 'Este plan fue editado directamente para este alumno. Los cambios en las plantillas no lo afectan.'
+                        : 'Este plan está vinculado a una plantilla. Si editas la plantilla y propagas, este plan se actualiza automáticamente. El historial de adherencia se conserva.'
+                    }
+                  />
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -376,7 +416,54 @@ export function NutritionTabB5({
                     Ver como alumno
                   </a>
                 ) : null}
+                {activeNutritionPlan && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 text-[10px] font-black uppercase gap-1"
+                    onClick={handleOpenDuplicate}
+                  >
+                    Copiar a otro alumno
+                  </Button>
+                )}
               </div>
+
+              {/* Duplicate plan dialog */}
+              <Dialog open={dupOpen} onOpenChange={setDupOpen}>
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle className="text-base font-black uppercase">Copiar plan a otro alumno</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    <p className="text-sm text-muted-foreground">
+                      El plan se copiará como <span className="font-bold">CUSTOM</span> al alumno destino.
+                      El historial de este alumno y el plan origen no se modifican.
+                    </p>
+                    <Select value={dupTargetId} onValueChange={(v) => setDupTargetId(v ?? '')}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Seleccionar alumno…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dupClients.length === 0 && (
+                          <SelectItem value="__none__" disabled>Cargando alumnos…</SelectItem>
+                        )}
+                        {dupClients.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      className="w-full h-10 font-bold"
+                      disabled={!dupTargetId || dupLoading}
+                      onClick={handleDuplicate}
+                    >
+                      {dupLoading ? 'Copiando…' : 'Confirmar copia'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
               {kcal > 0 && (
                 <p className="text-2xl font-black tabular-nums text-foreground">
                   {kcal} <span className="text-sm font-bold text-muted-foreground">kcal / día</span>
@@ -422,7 +509,7 @@ export function NutritionTabB5({
                 <p className="mb-2 text-center text-[9px] font-black uppercase tracking-widest text-muted-foreground lg:text-left">
                   Macros meta (kcal)
                 </p>
-                <div className="h-[200px] w-full">
+                <div className="h-[220px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -430,10 +517,30 @@ export function NutritionTabB5({
                         dataKey="value"
                         nameKey="name"
                         cx="50%"
-                        cy="50%"
-                        innerRadius={48}
-                        outerRadius={72}
+                        cy="46%"
+                        innerRadius={44}
+                        outerRadius={66}
                         paddingAngle={2}
+                        label={({ cx, cy, midAngle, outerRadius, name, value }) => {
+                          const RADIAN = Math.PI / 180
+                          const radius = outerRadius + 20
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              textAnchor={x > cx ? 'start' : 'end'}
+                              dominantBaseline="central"
+                              fontSize={9}
+                              fontWeight={700}
+                              fill="currentColor"
+                            >
+                              {`${name.slice(0, 4)}: ${Math.round(value)}kcal`}
+                            </text>
+                          )
+                        }}
+                        labelLine={false}
                       >
                         {pieData.map((entry, i) => (
                           <Cell key={i} fill={entry.color} stroke="transparent" />
@@ -706,7 +813,7 @@ export function NutritionTabB5({
             <h3 className="mb-2 text-xs font-black uppercase tracking-widest text-primary">
               Consumido hoy (kcal por macro)
             </h3>
-            <div className="h-[220px] w-full max-w-[280px] mx-auto">
+            <div className="h-[240px] w-full max-w-[300px] mx-auto">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -714,10 +821,30 @@ export function NutritionTabB5({
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
-                    cy="50%"
-                    innerRadius={40}
-                    outerRadius={70}
+                    cy="46%"
+                    innerRadius={38}
+                    outerRadius={62}
                     paddingAngle={2}
+                    label={({ cx, cy, midAngle, outerRadius, name, value }) => {
+                      const RADIAN = Math.PI / 180
+                      const radius = outerRadius + 20
+                      const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                      const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                      return (
+                        <text
+                          x={x}
+                          y={y}
+                          textAnchor={x > cx ? 'start' : 'end'}
+                          dominantBaseline="central"
+                          fontSize={9}
+                          fontWeight={700}
+                          fill="currentColor"
+                        >
+                          {`${name.slice(0, 4)}: ${Math.round(value)}kcal`}
+                        </text>
+                      )
+                    }}
+                    labelLine={false}
                   >
                     {pieConsumed.map((entry, i) => (
                       <Cell key={i} fill={entry.color} stroke="transparent" />

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-const mealLogSelect = 'meal_id, is_completed, consumed_quantity'
+const mealLogSelect = 'meal_id, is_completed, consumed_quantity, satisfaction_score'
 
 /**
  * Toggle de completado de una comida.
@@ -180,4 +180,113 @@ export async function fetchLogForDate(
   })
 
   return { dailyLog: data ?? null, mealCompletions }
+}
+
+const updateSatisfactionSchema = z.object({
+  clientId: z.string().uuid(),
+  dailyLogId: z.string().uuid(),
+  mealId: z.string().uuid(),
+  score: z.union([z.literal(1), z.literal(2), z.literal(3), z.null()]),
+})
+
+const toggleFoodPrefSchema = z.object({
+  clientId: z.string().uuid(),
+  foodId: z.string().uuid(),
+  preferenceType: z.enum(['favorite', 'dislike']),
+})
+
+/** Toggle a food preference for the authenticated client. */
+export async function toggleClientFoodPreference(
+  raw: z.infer<typeof toggleFoodPrefSchema>
+): Promise<{ success: boolean; active: boolean }> {
+  const parsed = toggleFoodPrefSchema.safeParse(raw)
+  if (!parsed.success) return { success: false, active: false }
+
+  const { clientId, foodId, preferenceType } = parsed.data
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user || user.id !== clientId) return { success: false, active: false }
+
+  const { data: existing } = await supabase
+    .from('client_food_preferences')
+    .select('preference_type')
+    .eq('client_id', clientId)
+    .eq('food_id', foodId)
+    .maybeSingle()
+
+  if (existing) {
+    if (existing.preference_type === preferenceType) {
+      // Same type → remove (toggle off)
+      await supabase
+        .from('client_food_preferences')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('food_id', foodId)
+      return { success: true, active: false }
+    } else {
+      // Different type → update
+      await supabase
+        .from('client_food_preferences')
+        .update({ preference_type: preferenceType })
+        .eq('client_id', clientId)
+        .eq('food_id', foodId)
+      return { success: true, active: true }
+    }
+  }
+
+  await supabase.from('client_food_preferences').insert({
+    client_id: clientId,
+    food_id: foodId,
+    preference_type: preferenceType,
+  })
+  return { success: true, active: true }
+}
+
+/** Fetch all food_ids the client has marked as favorite. */
+export async function getClientFoodFavoritesForClient(
+  clientId: string
+): Promise<string[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user || user.id !== clientId) return []
+  const { data } = await supabase
+    .from('client_food_preferences')
+    .select('food_id')
+    .eq('client_id', clientId)
+    .eq('preference_type', 'favorite')
+  return (data ?? []).map((r) => r.food_id)
+}
+
+export async function updateMealSatisfaction(
+  raw: z.infer<typeof updateSatisfactionSchema>
+): Promise<{ success: boolean }> {
+  const parsed = updateSatisfactionSchema.safeParse(raw)
+  if (!parsed.success) return { success: false }
+
+  const { clientId, dailyLogId, mealId, score } = parsed.data
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user || user.id !== clientId) return { success: false }
+
+  const { data: mealLog } = await supabase
+    .from('nutrition_meal_logs')
+    .select('id, is_completed')
+    .eq('daily_log_id', dailyLogId)
+    .eq('meal_id', mealId)
+    .maybeSingle()
+
+  if (!mealLog?.is_completed) return { success: false }
+
+  const { error } = await supabase
+    .from('nutrition_meal_logs')
+    .update({ satisfaction_score: score })
+    .eq('id', mealLog.id)
+
+  return { success: !error }
 }

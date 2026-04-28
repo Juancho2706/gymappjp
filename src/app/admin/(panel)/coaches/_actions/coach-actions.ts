@@ -3,11 +3,108 @@
 import { z } from 'zod'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
+import { normalizePlatformEmail, assertPlatformEmailAvailable } from '@/lib/auth/platform-email'
+import { getTierMaxClients } from '@/lib/constants'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
     revalidatePath('/admin/dashboard', 'page')
     revalidateTag('admin-dashboard', 'default')
+}
+
+// ── Create Coach ─────────────────────────────────────────────────
+
+const CreateCoachSchema = z.object({
+    full_name: z.string().min(2).max(100),
+    email: z.string().email(),
+    temp_password: z.string().min(8),
+    brand_name: z.string().min(2).max(80),
+    subscription_tier: z.enum(['starter', 'pro', 'elite', 'scale']),
+    billing_cycle: z.enum(['monthly', 'quarterly', 'annual']),
+    trial_days: z.coerce.number().int().min(0).max(3650),
+})
+
+export type CreateCoachResult =
+    | { success: true; coachId: string; slug: string; email: string; tempPassword: string }
+    | { error: string }
+
+export async function createCoachAction(
+    _prev: CreateCoachResult | null,
+    formData: FormData
+): Promise<CreateCoachResult> {
+    const { adminClient } = await assertAdmin()
+
+    const raw = Object.fromEntries(formData)
+    const parsed = CreateCoachSchema.safeParse(raw)
+    if (!parsed.success) {
+        return { error: parsed.error.issues.map(i => i.message).join(', ') }
+    }
+
+    const { full_name, email, temp_password, brand_name, subscription_tier, billing_cycle, trial_days } = parsed.data
+
+    // Generate unique slug
+    const baseSlug = brand_name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+
+    let slug = baseSlug
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const { data: existing } = await adminClient.from('coaches').select('id').eq('slug', slug).maybeSingle()
+        if (!existing) break
+        if (attempt === 7) return { error: 'No se pudo generar un slug único para esa marca. Prueba con otro nombre.' }
+        slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
+    }
+
+    const emailNorm = normalizePlatformEmail(email)
+    const availability = await assertPlatformEmailAvailable(adminClient, email)
+    if (!availability.ok) return { error: availability.error }
+
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+        email: emailNorm,
+        password: temp_password,
+        email_confirm: true,
+    })
+    if (authError || !authData.user) {
+        return { error: authError?.message ?? 'Error al crear el usuario' }
+    }
+
+    const periodEnd = trial_days > 0
+        ? new Date(Date.now() + trial_days * 86_400_000).toISOString()
+        : null
+    const status = trial_days > 0 ? 'trialing' : 'active'
+
+    const { error: coachError } = await adminClient.from('coaches').insert({
+        id: authData.user.id,
+        full_name,
+        brand_name,
+        slug,
+        primary_color: '#10B981',
+        subscription_status: status,
+        subscription_tier,
+        billing_cycle,
+        payment_provider: 'admin',
+        max_clients: getTierMaxClients(subscription_tier),
+        current_period_end: periodEnd,
+        trial_ends_at: periodEnd,
+    })
+
+    if (coachError) {
+        await adminClient.auth.admin.deleteUser(authData.user.id)
+        return { error: coachError.message }
+    }
+
+    await logAdminAction(adminClient, 'coach.create', 'coaches', authData.user.id, {
+        tier: subscription_tier,
+        trial_days,
+        status,
+        slug,
+    })
+    revalidateAdmin()
+
+    return { success: true, coachId: authData.user.id, slug, email: emailNorm, tempPassword: temp_password }
 }
 
 const UpdateCoachSchema = z.object({

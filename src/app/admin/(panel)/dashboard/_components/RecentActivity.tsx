@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { AlertTriangle } from 'lucide-react'
 
 interface Signup {
     id: string
@@ -24,12 +25,22 @@ interface AuditEvent {
     created_at: string
 }
 
+interface ExpiringSoon {
+    id: string
+    full_name: string | null
+    brand_name: string | null
+    current_period_end: string | null
+    subscription_status: string | null
+}
+
 interface Props {
     signups: Signup[]
     auditEvents: AuditEvent[]
+    expiringSoon: ExpiringSoon[]
 }
 
 const ACTION_LABELS: Record<string, string> = {
+    'coach.create':         'Creó coach',
     'coach.update':         'Editó coach',
     'coach.suspend':        'Suspendió coach',
     'coach.force_expire':   'Expiró trial',
@@ -38,34 +49,55 @@ const ACTION_LABELS: Record<string, string> = {
     'coach.period_end_update': 'Cambió vencimiento',
     'coach.tier_change':    'Cambió tier',
     'coach.delete':         'Eliminó coach',
+    'client.create':        'Creó alumno',
     'client.update':        'Editó alumno',
     'client.delete':        'Eliminó alumno',
 }
 
-export function RecentActivity({ signups, auditEvents }: Props) {
-    const [tab, setTab] = useState<'signups' | 'audit'>('signups')
+const TABS = ['signups', 'expiring', 'audit'] as const
+type Tab = typeof TABS[number]
+
+const TAB_LABELS: Record<Tab, string> = {
+    signups: 'Signups',
+    expiring: 'Vencimientos',
+    audit: 'Auditoría',
+}
+
+const TAB_LINKS: Record<Tab, string> = {
+    signups: '/admin/coaches',
+    expiring: '/admin/coaches?sort=expiry&dir=asc',
+    audit: '/admin/auditoria',
+}
+
+export function RecentActivity({ signups, auditEvents, expiringSoon }: Props) {
+    const [tab, setTab] = useState<Tab>('signups')
 
     return (
         <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface]">
             {/* Tabs header */}
             <div className="flex items-center justify-between border-b border-[--admin-border] px-4 py-3">
                 <div className="flex gap-1">
-                    {(['signups', 'audit'] as const).map(t => (
+                    {TABS.map(t => (
                         <button
                             key={t}
                             onClick={() => setTab(t)}
-                            className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                            className={`relative rounded px-3 py-1 text-xs font-medium transition-colors ${
                                 tab === t
                                     ? 'bg-[--admin-accent]/15 text-[--admin-accent]'
                                     : 'text-[--admin-text-3] hover:text-[--admin-text-2]'
                             }`}
                         >
-                            {t === 'signups' ? 'Signups recientes' : 'Auditoría reciente'}
+                            {TAB_LABELS[t]}
+                            {t === 'expiring' && expiringSoon.length > 0 && (
+                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[--admin-amber] px-1 text-[9px] font-bold text-black">
+                                    {expiringSoon.length}
+                                </span>
+                            )}
                         </button>
                     ))}
                 </div>
                 <Link
-                    href={tab === 'signups' ? '/admin/coaches' : '/admin/auditoria'}
+                    href={TAB_LINKS[tab]}
                     className="text-[11px] text-[--admin-accent] hover:underline"
                 >
                     Ver todos →
@@ -75,7 +107,11 @@ export function RecentActivity({ signups, auditEvents }: Props) {
             {/* Content */}
             <div className="divide-y divide-[--admin-border]">
                 {tab === 'signups' && signups.map(coach => (
-                    <div key={coach.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors">
+                    <Link
+                        key={coach.id}
+                        href={`/admin/coaches?q=${encodeURIComponent(coach.brand_name || coach.full_name || '')}`}
+                        className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                    >
                         <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-[--admin-text-1]">
                                 {coach.brand_name || coach.full_name || 'Sin nombre'}
@@ -92,8 +128,47 @@ export function RecentActivity({ signups, auditEvents }: Props) {
                                 <AdminStatusBadge value={coach.subscription_status} />
                             )}
                         </div>
-                    </div>
+                    </Link>
                 ))}
+
+                {tab === 'expiring' && expiringSoon.map(coach => {
+                    const daysLeft = coach.current_period_end
+                        ? differenceInDays(new Date(coach.current_period_end), new Date())
+                        : null
+                    const color = daysLeft !== null && daysLeft <= 2
+                        ? 'text-[--admin-red]'
+                        : 'text-[--admin-amber]'
+
+                    return (
+                        <Link
+                            key={coach.id}
+                            href={`/admin/coaches?q=${encodeURIComponent(coach.brand_name || coach.full_name || '')}`}
+                            className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                        >
+                            <div className="flex items-center gap-2 min-w-0">
+                                <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${color}`} />
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-[--admin-text-1]">
+                                        {coach.brand_name || coach.full_name || 'Sin nombre'}
+                                    </p>
+                                    <p className="text-[11px] text-[--admin-text-3]">
+                                        {coach.current_period_end
+                                            ? format(new Date(coach.current_period_end), "d MMM yyyy", { locale: es })
+                                            : '—'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <span className={`font-mono text-xs font-medium ${color}`}>
+                                    {daysLeft !== null ? `${daysLeft}d` : '—'}
+                                </span>
+                                {coach.subscription_status && (
+                                    <AdminStatusBadge value={coach.subscription_status} />
+                                )}
+                            </div>
+                        </Link>
+                    )
+                })}
 
                 {tab === 'audit' && auditEvents.map(ev => (
                     <div key={ev.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors">
@@ -113,6 +188,11 @@ export function RecentActivity({ signups, auditEvents }: Props) {
 
                 {tab === 'signups' && signups.length === 0 && (
                     <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">Sin signups recientes</p>
+                )}
+                {tab === 'expiring' && expiringSoon.length === 0 && (
+                    <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">
+                        Ningún coach vence en los próximos 7 días ✓
+                    </p>
                 )}
                 {tab === 'audit' && auditEvents.length === 0 && (
                     <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">Sin actividad reciente</p>

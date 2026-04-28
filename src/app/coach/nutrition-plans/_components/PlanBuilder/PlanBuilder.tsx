@@ -26,6 +26,7 @@ import { totalsFromMealDrafts } from './MacroCalculator'
 import {
   upsertCoachNutritionTemplate,
   upsertClientNutritionPlanJson,
+  getClientFoodFavorites,
 } from '../../_actions/nutrition-coach.actions'
 import type { FoodItemDraft, MealDraft, PlanBuilderInitialData } from './types'
 
@@ -58,6 +59,12 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
   })
   const [isSaving, setIsSaving] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
+  const [clientFavoriteIds, setClientFavoriteIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!clientId) return
+    getClientFoodFavorites(clientId).then((ids) => setClientFavoriteIds(new Set(ids)))
+  }, [clientId])
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -286,6 +293,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
         onConfirm={(item) => {
           if (searchDrawer.targetMealId) addFoodToMeal(searchDrawer.targetMealId, item)
         }}
+        clientFavoriteIds={clientFavoriteIds.size > 0 ? clientFavoriteIds : undefined}
       />
     </div>
   )

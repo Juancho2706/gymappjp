@@ -1,12 +1,12 @@
 'use client'
 
-import { useCallback, useMemo, useOptimistic, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react'
 import { DayNavigator } from './DayNavigator'
 import { MacroRingSummary } from './MacroRingSummary'
 import { MealCard, type MealCardMeal } from './MealCard'
 import { AdherenceStrip, type DayAdherence } from './AdherenceStrip'
 import { NutritionStreakBanner } from './NutritionStreakBanner'
-import { toggleMealCompletion, fetchLogForDate, updateMealConsumedPortion } from '../_actions/nutrition.actions'
+import { toggleMealCompletion, fetchLogForDate, updateMealConsumedPortion, updateMealSatisfaction, toggleClientFoodPreference, getClientFoodFavoritesForClient } from '../_actions/nutrition.actions'
 import {
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
@@ -17,7 +17,7 @@ import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { toast } from 'sonner'
 import { Share2 } from 'lucide-react'
 
-type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null }
+type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null; satisfaction_score?: number | null }
 
 type PlanMealRow = NutritionMealMacroSource & {
   name: string
@@ -58,6 +58,12 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   const [isDateLoading, startDateTransition] = useTransition()
   const [isTogglePending, startToggleTransition] = useTransition()
   const [isPortionPending, startPortionTransition] = useTransition()
+  const [isSatisfactionPending, startSatisfactionTransition] = useTransition()
+  const [favoriteFoodIds, setFavoriteFoodIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    getClientFoodFavoritesForClient(userId).then((ids) => setFavoriteFoodIds(new Set(ids)))
+  }, [userId])
 
   const mealLogs = useMemo(
     () => (currentLog?.nutrition_meal_logs as MealLogRow[] | undefined) ?? [],
@@ -241,8 +247,52 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     ]
   )
 
+  const satisfactionMap = useMemo(() => {
+    const o: Record<string, 1 | 2 | 3> = {}
+    for (const ml of mealLogs) {
+      if (ml.satisfaction_score != null && [1, 2, 3].includes(ml.satisfaction_score)) {
+        o[ml.meal_id] = ml.satisfaction_score as 1 | 2 | 3
+      }
+    }
+    return o
+  }, [mealLogs])
+
+  const handleSatisfactionChange = useCallback(
+    (mealId: string, score: 1 | 2 | 3 | null) => {
+      const dailyLogId = currentLog?.id as string | undefined
+      if (!dailyLogId || !isToday) return
+      startSatisfactionTransition(async () => {
+        await updateMealSatisfaction({ clientId: userId, dailyLogId, mealId, score })
+        const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+        setCurrentLog(dailyLog as Record<string, unknown> | null)
+      })
+    },
+    [currentLog, isToday, userId, plan.id, selectedDate]
+  )
+
+  const handleToggleFoodFavorite = useCallback(
+    (foodId: string) => {
+      setFavoriteFoodIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(foodId)) next.delete(foodId)
+        else next.add(foodId)
+        return next
+      })
+      toggleClientFoodPreference({ clientId: userId, foodId, preferenceType: 'favorite' }).catch(() => {
+        // revert on error
+        setFavoriteFoodIds((prev) => {
+          const next = new Set(prev)
+          if (next.has(foodId)) next.delete(foodId)
+          else next.add(foodId)
+          return next
+        })
+      })
+    },
+    [userId]
+  )
+
   const totalMeals = mealsVisible.length
-  const isPending = isTogglePending || isDateLoading || isPortionPending
+  const isPending = isTogglePending || isDateLoading || isPortionPending || isSatisfactionPending
 
   const copyToClipboard = useCallback((text: string, okMsg: string) => {
     if (navigator.clipboard) {
@@ -379,6 +429,10 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
               isPending={isPending}
               onToggle={handleToggle}
               onPartialPlanPctChange={handlePartialPctChange}
+              satisfactionScore={satisfactionMap[meal.id] ?? null}
+              onSatisfactionChange={isToday ? handleSatisfactionChange : undefined}
+              favoriteFoodIds={favoriteFoodIds}
+              onToggleFoodFavorite={handleToggleFoodFavorite}
             />
           ))
         )}

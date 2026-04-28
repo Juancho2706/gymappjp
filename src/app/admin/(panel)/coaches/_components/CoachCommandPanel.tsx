@@ -205,7 +205,17 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                             </div>
                             <div>
                                 <SectionLabel>Uso</SectionLabel>
-                                <InfoRow label="Alumnos" value={`${coach.active_client_count} activos / ${coach.client_count} total`} />
+                                <InfoRow label="Alumnos" value={
+                                    <span className="flex items-center gap-2">
+                                        {coach.active_client_count} activos / {coach.client_count} total
+                                        <a
+                                            href={`/admin/clients?coachId=${coach.id}`}
+                                            className="text-[10px] text-[--admin-accent] hover:underline"
+                                        >
+                                            Ver alumnos →
+                                        </a>
+                                    </span>
+                                } />
                                 <InfoRow label="Máximo" value={`${coach.max_clients} alumnos`} />
                                 <InfoRow label="Utilización" value={`${coach.utilization_pct}%`} />
                                 <InfoRow
@@ -214,6 +224,25 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         ? format(new Date(coach.last_activity_at), "d MMM yyyy HH:mm", { locale: es })
                                         : 'Sin actividad'}
                                 />
+                            </div>
+                            <div>
+                                <SectionLabel>Links rápidos</SectionLabel>
+                                <div className="flex flex-wrap gap-2">
+                                    <a
+                                        href={`/c/${coach.slug}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1.5 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2.5 py-1.5 text-xs text-[--admin-text-2] hover:border-[--admin-accent] hover:text-[--admin-accent] transition-colors"
+                                    >
+                                        <ExternalLink className="h-3 w-3" /> App pública
+                                    </a>
+                                    <a
+                                        href={`/admin/clients?coachId=${coach.id}`}
+                                        className="flex items-center gap-1.5 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2.5 py-1.5 text-xs text-[--admin-text-2] hover:border-[--admin-accent] hover:text-[--admin-accent] transition-colors"
+                                    >
+                                        Ver todos los alumnos ({coach.client_count})
+                                    </a>
+                                </div>
                             </div>
                             {(coach as any).subscription_mp_id && (
                                 <div>

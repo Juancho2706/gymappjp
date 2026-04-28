@@ -58,6 +58,7 @@ export default async function AdminDashboardPage() {
             <RecentActivity
                 signups={data.recentCoachSignups}
                 auditEvents={data.recentAuditEvents}
+                expiringSoon={data.expiringSoon}
             />
         </div>
     )

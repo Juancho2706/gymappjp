@@ -4,6 +4,7 @@
  */
 
 export type FoodMacrosRow = {
+  id?: string
   name: string
   calories: number
   protein_g: number
@@ -76,6 +77,7 @@ export type NutritionMealMacroSource = {
     quantity: number
     unit?: string | null
     foods?: {
+      id?: string
       name?: string
       calories?: number
       protein_g?: number
@@ -96,6 +98,7 @@ export function normalizeMealForMacros(meal: NutritionMealMacroSource): MealWith
       quantity: Number(fi.quantity) || 0,
       unit: fi.unit ?? 'g',
       foods: {
+        id: fi.foods?.id,
         name: fi.foods?.name ?? '',
         calories: fi.foods?.calories ?? 0,
         protein_g: fi.foods?.protein_g ?? 0,

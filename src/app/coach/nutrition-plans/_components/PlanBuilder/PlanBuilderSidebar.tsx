@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
 import { AlertTriangle, Zap } from 'lucide-react'
 
@@ -89,6 +90,7 @@ export function PlanBuilderSidebar({
               <Zap className={cn('h-3 w-3', autoSync && 'fill-emerald-500')} />
               Auto
             </span>
+            <InfoTooltip content="Cuando está activo, las metas se calculan automáticamente desde los macros reales de los alimentos que agregas. Desactívalo para definir metas manualmente." />
             <Switch
               checked={autoSync}
               onCheckedChange={(checked) => {
@@ -109,14 +111,17 @@ export function PlanBuilderSidebar({
         <div className="grid grid-cols-2 gap-2">
           {(
             [
-              ['kcal', 'calories', goals.calories],
-              ['Proteína (g)', 'protein', goals.protein],
-              ['Carbos (g)', 'carbs', goals.carbs],
-              ['Grasas (g)', 'fats', goals.fats],
+              ['kcal', 'calories', goals.calories, 'Suma total de calorías al día. Se calcula automáticamente según los alimentos que agregues, o puedes establecerlo manualmente como meta.'],
+              ['Proteína (g)', 'protein', goals.protein, 'Para ganancia muscular: 1.6–2.2 g/kg de peso corporal. Para mantención: 1.2–1.6 g/kg.'],
+              ['Carbos (g)', 'carbs', goals.carbs, 'Principal fuente de energía. Ajusta según el nivel de actividad del alumno.'],
+              ['Grasas (g)', 'fats', goals.fats, 'Esenciales para hormonas y absorción de vitaminas. No bajar de 0.5 g/kg de peso corporal.'],
             ] as const
-          ).map(([label, key, val]) => (
+          ).map(([label, key, val, tip]) => (
             <div key={key}>
-              <Label className="text-[10px] text-muted-foreground">{label}</Label>
+              <div className="flex items-center gap-1">
+                <Label className="text-[10px] text-muted-foreground">{label}</Label>
+                <InfoTooltip content={tip} />
+              </div>
               <ClampedIntInput
                 className={cn('h-9 mt-0.5 transition-opacity', autoSync && 'opacity-50 pointer-events-none')}
                 value={val}
@@ -161,7 +166,10 @@ export function PlanBuilderSidebar({
       )}
 
       <div>
-        <Label className="text-xs font-bold uppercase text-muted-foreground">Indicaciones</Label>
+        <div className="flex items-center gap-1">
+          <Label className="text-xs font-bold uppercase text-muted-foreground">Indicaciones</Label>
+          <InfoTooltip content="Notas visibles para el alumno en su plan. Úsalas para agregar contexto: horarios sugeridos, tip de preparación, o recordatorios específicos para este alumno." />
+        </div>
         <Textarea
           value={instructions}
           onChange={(e) => onInstructionsChange(e.target.value)}

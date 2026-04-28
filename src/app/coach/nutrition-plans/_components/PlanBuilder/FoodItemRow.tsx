@@ -3,6 +3,7 @@
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import {
   Select,
   SelectContent,
@@ -41,21 +42,24 @@ export function FoodItemRow({ item, onUpdate, onRemove }: Props) {
         value={item.quantity}
         onChange={(e) => onUpdate(Number(e.target.value), item.unit ?? defaultUnit)}
       />
-      <Select
-        value={item.unit ?? defaultUnit}
-        onValueChange={(u) => onUpdate(item.quantity, u == null ? defaultUnit : u)}
-      >
-        <SelectTrigger className="h-9 w-[100px] bg-white dark:bg-background text-slate-900 dark:text-foreground border-slate-300 dark:border-border">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {units.map((u) => (
-            <SelectItem key={u} value={u}>
-              {u}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-1">
+        <Select
+          value={item.unit ?? defaultUnit}
+          onValueChange={(u) => onUpdate(item.quantity, u == null ? defaultUnit : u)}
+        >
+          <SelectTrigger className="h-9 w-[80px] bg-white dark:bg-background text-slate-900 dark:text-foreground border-slate-300 dark:border-border">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {units.map((u) => (
+              <SelectItem key={u} value={u}>
+                {u}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <InfoTooltip content="g = gramos (macros proporcionales a 100g del alimento). un = unidades (macros según el tamaño de porción registrado en el alimento)." />
+      </div>
       <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onRemove}>
         <Trash2 className="h-4 w-4 text-muted-foreground" />
       </Button>

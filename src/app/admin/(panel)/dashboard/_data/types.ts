@@ -24,6 +24,13 @@ export interface PlatformOverview {
         target_id: string | null
         created_at: string
     }[]
+    expiringSoon: {
+        id: string
+        full_name: string | null
+        brand_name: string | null
+        current_period_end: string | null
+        subscription_status: string | null
+    }[]
     mrrSeries: { ym: string; mrr_clp: number; coach_count: number }[]
     tierMonthlySeries: { ym: string; tier: string; coach_count: number }[]
     workoutSessionsSeries: { day: string; sessions: number }[]

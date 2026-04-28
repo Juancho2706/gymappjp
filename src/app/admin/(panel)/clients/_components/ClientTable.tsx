@@ -5,18 +5,24 @@ import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { GlassCard } from '@/components/ui/glass-card'
-import { Search, Pencil, Trash2 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Search, Pencil, Trash2, Plus } from 'lucide-react'
 import type { ClientListItem } from '../../dashboard/_data/types'
 import { ClientEditSheet } from './ClientEditSheet'
+import { ClientCreateSheet } from './ClientCreateSheet'
+import { AdminPagination } from '../../_components/AdminPagination'
 
 interface Props {
     clients: ClientListItem[]
+    total: number
+    coaches: { id: string; full_name: string | null; brand_name: string | null; slug: string }[]
 }
 
-export function ClientTable({ clients }: Props) {
+export function ClientTable({ clients, total, coaches }: Props) {
     const [search, setSearch] = useState('')
     const [editingClient, setEditingClient] = useState<ClientListItem | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [createOpen, setCreateOpen] = useState(false)
     const router = useRouter()
 
     const filtered = clients.filter((c) => {
@@ -42,18 +48,50 @@ export function ClientTable({ clients }: Props) {
         }
     }
 
+    function handleCoachFilter(coachId: string | null) {
+        if (!coachId) return
+        const url = new URL(window.location.href)
+        if (coachId === 'all') {
+            url.searchParams.delete('coachId')
+        } else {
+            url.searchParams.set('coachId', coachId)
+        }
+        url.searchParams.delete('page')
+        router.push(url.pathname + url.search)
+    }
+
     return (
         <>
-            <div className="flex items-center gap-2">
-                <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
                     <Input
-                        placeholder="Buscar por nombre, email o coach..."
+                        placeholder="Buscar por nombre o email..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="pl-9 bg-neutral-900 border-neutral-800 text-white"
                     />
                 </div>
+                <Select onValueChange={handleCoachFilter} defaultValue="all">
+                    <SelectTrigger className="w-[200px] bg-neutral-900 border-neutral-800 text-white">
+                        <SelectValue placeholder="Todos los coaches" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-neutral-900 border-neutral-800 text-white max-h-60">
+                        <SelectItem value="all">Todos los coaches</SelectItem>
+                        {coaches.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                                {c.brand_name || c.full_name || c.id}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <button
+                    onClick={() => setCreateOpen(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-300 hover:border-blue-500 hover:text-blue-400 transition-colors whitespace-nowrap"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                    Nuevo Alumno
+                </button>
             </div>
 
             <GlassCard className="overflow-hidden">
@@ -129,6 +167,8 @@ export function ClientTable({ clients }: Props) {
                 )}
             </GlassCard>
 
+            <AdminPagination total={total} pageSize={50} />
+
             {editingClient && (
                 <ClientEditSheet
                     client={editingClient}
@@ -136,6 +176,12 @@ export function ClientTable({ clients }: Props) {
                     onClose={() => setEditingClient(null)}
                 />
             )}
+
+            <ClientCreateSheet
+                open={createOpen}
+                onClose={() => setCreateOpen(false)}
+                coaches={coaches}
+            />
         </>
     )
 }

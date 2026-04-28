@@ -7,6 +7,7 @@ import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import {
   Select,
   SelectContent,
@@ -87,9 +88,12 @@ export function MealBlock({
           </Button>
         </div>
         <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:min-w-[11rem] sm:max-w-[14rem] sm:shrink-0">
-          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-            Día del plan
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              Día del plan
+            </Label>
+            <InfoTooltip content="Todos los días: la comida aparece siempre en el plan del alumno. Día fijo: solo se muestra ese día de la semana (zona horaria Santiago). Útil para variar la alimentación según el tipo de entrenamiento." />
+          </div>
           <Select
             value={dowSelectValue}
             onValueChange={(v) => {

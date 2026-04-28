@@ -123,6 +123,42 @@ export type Database = {
           },
         ]
       }
+      client_food_preferences: {
+        Row: {
+          client_id: string
+          created_at: string
+          food_id: string
+          preference_type: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          food_id: string
+          preference_type: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          food_id?: string
+          preference_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_food_preferences_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_food_preferences_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_intake: {
         Row: {
           availability: string
@@ -728,6 +764,7 @@ export type Database = {
           id: string
           is_completed: boolean
           meal_id: string
+          satisfaction_score: number | null
         }
         Insert: {
           consumed_quantity?: number | null
@@ -736,6 +773,7 @@ export type Database = {
           id?: string
           is_completed?: boolean
           meal_id: string
+          satisfaction_score?: number | null
         }
         Update: {
           consumed_quantity?: number | null
@@ -744,6 +782,7 @@ export type Database = {
           id?: string
           is_completed?: boolean
           meal_id?: string
+          satisfaction_score?: number | null
         }
         Relationships: [
           {
@@ -1933,4 +1972,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

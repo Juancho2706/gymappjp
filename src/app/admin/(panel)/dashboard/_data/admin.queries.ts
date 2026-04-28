@@ -81,6 +81,15 @@ export const getPlatformOverview = unstable_cache(
             ? parseFloat(((mrrEstimate - prevMrr) / prevMrr * 100).toFixed(1))
             : null
 
+        const expiringSoonRes = await admin
+            .from('coaches')
+            .select('id, full_name, brand_name, current_period_end, subscription_status')
+            .in('subscription_status', ['active', 'trialing'])
+            .lt('current_period_end', new Date(Date.now() + 7 * 86_400_000).toISOString())
+            .gt('current_period_end', new Date().toISOString())
+            .order('current_period_end')
+            .limit(10)
+
         return {
             totalCoaches,
             totalClients,
@@ -97,6 +106,7 @@ export const getPlatformOverview = unstable_cache(
             tierMonthlySeries: (tierSeriesRes.data ?? []) as { ym: string; tier: string; coach_count: number }[],
             workoutSessionsSeries: workoutSessionsRes.data ?? [],
             betaInvitesCount: betaInvitesRes.count ?? 0,
+            expiringSoon: (expiringSoonRes.data ?? []) as PlatformOverview['expiringSoon'],
         }
     },
     ['admin-platform-overview'],
@@ -184,12 +194,29 @@ export async function getAllCoaches(search?: string): Promise<CoachListItem[]> {
     return coaches
 }
 
-export async function getAllClients(search?: string, coachId?: string): Promise<ClientListItem[]> {
+export async function getAllCoachesBasic(): Promise<{ id: string; full_name: string | null; brand_name: string | null; slug: string }[]> {
+    noStore()
     const admin = createServiceRoleClient()
+    const { data } = await admin
+        .from('coaches')
+        .select('id, full_name, brand_name, slug')
+        .order('full_name')
+    return (data ?? []) as { id: string; full_name: string | null; brand_name: string | null; slug: string }[]
+}
+
+export async function getAllClients(
+    search?: string,
+    coachId?: string,
+    page = 1,
+    pageSize = 50
+): Promise<{ clients: ClientListItem[]; total: number }> {
+    noStore()
+    const admin = createServiceRoleClient()
+    const offset = (page - 1) * pageSize
 
     let query = admin
         .from('clients')
-        .select('id, full_name, email, coach_id, is_active, created_at, onboarding_completed, coaches(full_name)')
+        .select('id, full_name, email, coach_id, is_active, created_at, onboarding_completed, coaches(full_name)', { count: 'exact' })
         .order('created_at', { ascending: false })
 
     if (search) {
@@ -199,10 +226,10 @@ export async function getAllClients(search?: string, coachId?: string): Promise<
         query = query.eq('coach_id', coachId)
     }
 
-    const { data, error } = await query.limit(500)
-    if (error || !data) return []
+    const { data, error, count } = await query.range(offset, offset + pageSize - 1)
+    if (error || !data) return { clients: [], total: 0 }
 
-    return data.map((c: any) => ({
+    const clients = data.map((c: any) => ({
         id: c.id,
         full_name: c.full_name,
         email: c.email,
@@ -212,4 +239,6 @@ export async function getAllClients(search?: string, coachId?: string): Promise<
         created_at: c.created_at,
         onboarding_completed: c.onboarding_completed,
     }))
+
+    return { clients, total: count ?? 0 }
 }

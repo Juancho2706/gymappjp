@@ -966,6 +966,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                     <div className="min-w-0 space-y-6 animate-in fade-in duration-500 md:col-span-12">
                         <NutritionTabB5
                             clientId={client.id}
+                            coachId={client.coach_id ?? ''}
                             coachSlug={coachSlug}
                             santiagoTodayIso={data.todayIso ?? ''}
                             activeNutritionPlan={activeNutritionPlan}

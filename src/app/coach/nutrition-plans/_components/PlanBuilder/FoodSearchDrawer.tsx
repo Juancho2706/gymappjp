@@ -1,12 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { createPortal } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, Search, X, ChevronLeft, Plus, PenLine } from 'lucide-react'
+import { Loader2, Search, X, ChevronLeft, Plus, PenLine, Heart } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { previewMacrosForQuantity } from './MacroCalculator'
@@ -34,6 +35,8 @@ interface Props {
   coachId: string
   onClose: () => void
   onConfirm: (item: FoodItemDraft) => void
+  /** food_ids the current client has marked as favorite — shows ❤️ badge */
+  clientFavoriteIds?: Set<string>
 }
 
 const CATEGORIES = [
@@ -98,9 +101,97 @@ function MacroPill({ label, value, color }: { label: string; value: number; colo
   )
 }
 
+function VirtualFoodList({
+  items,
+  clientFavoriteIds,
+  onPickFood,
+  onGoCreate,
+  scrollRef,
+}: {
+  items: FoodRow[]
+  clientFavoriteIds?: Set<string>
+  onPickFood: (f: FoodRow) => void
+  onGoCreate: () => void
+  scrollRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const parentRef = scrollRef
+  const totalCount = items.length + 1 // +1 for create button at end
+
+  const virtualizer = useVirtualizer({
+    count: totalCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 76,
+    overscan: 5,
+  })
+
+  return (
+    <div ref={parentRef} className="space-y-0" style={{ overflow: 'visible' }}>
+      <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        {virtualizer.getVirtualItems().map((vItem) => {
+          const isCreateBtn = vItem.index === items.length
+          return (
+            <div
+              key={vItem.key}
+              data-index={vItem.index}
+              ref={virtualizer.measureElement}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${vItem.start}px)` }}
+              className={vItem.index < items.length ? 'pb-1.5' : 'pb-0'}
+            >
+              {isCreateBtn ? (
+                <button
+                  type="button"
+                  onClick={onGoCreate}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-xs font-bold text-zinc-500 transition-colors hover:bg-zinc-50 dark:border-white/15 dark:text-zinc-400 dark:hover:bg-white/5"
+                >
+                  <PenLine className="h-3.5 w-3.5" />
+                  ¿No está? Crear alimento
+                </button>
+              ) : (() => {
+                const f = items[vItem.index]!
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onPickFood(f)}
+                    className={cn(
+                      'w-full rounded-xl border px-3 py-3 text-left transition-colors',
+                      'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50',
+                      'dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/[0.07] dark:hover:border-white/15',
+                      'active:scale-[0.99]'
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <p className="flex-1 text-sm font-semibold text-zinc-900 dark:text-white leading-tight">
+                        {f.name}
+                        {f.brand && <span className="ml-1.5 text-[10px] font-normal text-zinc-400">{f.brand}</span>}
+                      </p>
+                      {clientFavoriteIds?.has(f.id) && (
+                        <Heart className="h-3.5 w-3.5 shrink-0 fill-rose-400 text-rose-400" aria-label="Favorito del cliente" />
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{f.calories} kcal</span>
+                      <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                      <MacroPill label="P " value={f.protein_g} color="text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10" />
+                      <MacroPill label="C " value={f.carbs_g} color="text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10" />
+                      <MacroPill label="G " value={f.fats_g} color="text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-500/10" />
+                      {f.is_liquid && (
+                        <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-500 dark:bg-sky-500/10">ml</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })()}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 type View = 'search' | 'create' | 'quantity'
 
-export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
+export function FoodSearchDrawer({ open, coachId, onClose, onConfirm, clientFavoriteIds }: Props) {
   const [view, setView] = useState<View>('search')
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
@@ -178,9 +269,13 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
     return () => { cancelled = true; clearTimeout(t) }
   }, [searchTerm, open, coachId])
 
-  const filtered = results.filter((f) =>
-    category === 'todos' ? true : normalizeCategory(f.category) === category
-  )
+  const filtered = results
+    .filter((f) => category === 'todos' ? true : normalizeCategory(f.category) === category)
+    .sort((a, b) => {
+      const aFav = clientFavoriteIds?.has(a.id) ? 1 : 0
+      const bFav = clientFavoriteIds?.has(b.id) ? 1 : 0
+      return bFav - aFav
+    })
 
   const parsedQuantity = parseFloat(quantity) || 0
   const preview = picked ? previewMacrosForQuantity(toFoodDraftShape(picked), parsedQuantity, unit) : null
@@ -396,52 +491,13 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm }: Props) {
               )}
 
               {!loading && filtered.length > 0 && (
-                <div className="space-y-1.5">
-                  {filtered.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => handlePickFood(f)}
-                      className={cn(
-                        'w-full rounded-xl border px-3 py-3 text-left transition-colors',
-                        'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50',
-                        'dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/[0.07] dark:hover:border-white/15',
-                        'active:scale-[0.99]'
-                      )}
-                    >
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-tight">
-                        {f.name}
-                        {f.brand && (
-                          <span className="ml-1.5 text-[10px] font-normal text-zinc-400">{f.brand}</span>
-                        )}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                        <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                          {f.calories} kcal
-                        </span>
-                        <span className="text-zinc-300 dark:text-zinc-600">·</span>
-                        <MacroPill label="P " value={f.protein_g} color="text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10" />
-                        <MacroPill label="C " value={f.carbs_g} color="text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10" />
-                        <MacroPill label="G " value={f.fats_g} color="text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-500/10" />
-                        {f.is_liquid && (
-                          <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-500 dark:bg-sky-500/10">
-                            ml
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-
-                  {/* Crear alimento al final de resultados */}
-                  <button
-                    type="button"
-                    onClick={handleGoCreate}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-xs font-bold text-zinc-500 transition-colors hover:bg-zinc-50 dark:border-white/15 dark:text-zinc-400 dark:hover:bg-white/5"
-                  >
-                    <PenLine className="h-3.5 w-3.5" />
-                    ¿No está? Crear alimento
-                  </button>
-                </div>
+                <VirtualFoodList
+                  items={filtered}
+                  clientFavoriteIds={clientFavoriteIds}
+                  onPickFood={handlePickFood}
+                  onGoCreate={handleGoCreate}
+                  scrollRef={listRef}
+                />
               )}
             </div>
           </>

@@ -23,7 +23,17 @@ interface Props {
   isPending: boolean
   onToggle: (mealId: string, current: boolean) => void
   onPartialPlanPctChange?: (mealId: string, pct: number | null) => void
+  satisfactionScore?: 1 | 2 | 3 | null
+  onSatisfactionChange?: (mealId: string, score: 1 | 2 | 3 | null) => void
+  favoriteFoodIds?: Set<string>
+  onToggleFoodFavorite?: (foodId: string) => void
 }
+
+const SATISFACTION = [
+  { score: 1 as const, emoji: '😕', label: 'No me gustó' },
+  { score: 2 as const, emoji: '😐', label: 'Regular' },
+  { score: 3 as const, emoji: '😋', label: 'Muy rico' },
+]
 
 export function MealCard({
   meal,
@@ -33,6 +43,10 @@ export function MealCard({
   isPending,
   onToggle,
   onPartialPlanPctChange,
+  satisfactionScore,
+  onSatisfactionChange,
+  favoriteFoodIds,
+  onToggleFoodFavorite,
 }: Props) {
   const reduceMotion = useReducedMotion()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -174,7 +188,12 @@ export function MealCard({
               {desc && <p className="text-xs text-muted-foreground mb-3 italic">{desc}</p>}
               {meal.food_items.length > 0 ? (
                 meal.food_items.map((item, i) => (
-                  <MealIngredientRow key={(item as { id?: string }).id ?? `${meal.id}-fi-${i}`} item={item} />
+                  <MealIngredientRow
+                  key={(item as { id?: string }).id ?? `${meal.id}-fi-${i}`}
+                  item={item}
+                  isFavorite={item.foods.id ? favoriteFoodIds?.has(item.foods.id) : false}
+                  onToggleFavorite={onToggleFoodFavorite}
+                />
                 ))
               ) : (
                 <p className="text-xs text-muted-foreground text-center py-2">
@@ -244,6 +263,35 @@ export function MealCard({
                   </p>
                 </div>
               ) : null}
+              {isCompleted && onSatisfactionChange && (
+                <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                    ¿Cómo estuvo?
+                  </p>
+                  <div className="flex gap-2">
+                    {SATISFACTION.map(({ score, emoji, label }) => (
+                      <button
+                        key={score}
+                        type="button"
+                        disabled={isPending}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSatisfactionChange(meal.id, satisfactionScore === score ? null : score)
+                        }}
+                        aria-label={label}
+                        className={cn(
+                          'flex-1 rounded-xl py-2 text-xl transition-all touch-manipulation',
+                          satisfactionScore === score
+                            ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40 scale-110'
+                            : 'bg-background border border-border/80 hover:bg-muted/60 opacity-70 hover:opacity-100'
+                        )}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

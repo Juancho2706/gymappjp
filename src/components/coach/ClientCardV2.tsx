@@ -168,6 +168,9 @@ export function ClientCardV2({
         energy != null ? Math.min(5, Math.max(0, Math.round(energy / 2))) : 0
 
     const lastLog = lastLogMeta(pulse?.lastWorkoutDate)
+    const nutritionPct = pulse?.nutritionPercentage ?? 0
+    const hasNutritionData = nutritionPct > 0
+    const nutritionRisk = pulse?.attentionFlags?.includes('NUTRICION_RIESGO') ?? false
     const weekCur = pulse?.planCurrentWeek
     const weekTot = pulse?.planTotalWeeks
     const weekPct =
@@ -384,6 +387,42 @@ export function ClientCardV2({
                         </p>
                         <SparkArea data={adherenceSeries} color="#10B981" gradId={gradA} />
                     </div>
+
+                    {hasNutritionData && (
+                        <div className={cn(
+                            'flex items-center gap-3 rounded-xl border p-3',
+                            nutritionRisk
+                                ? 'border-rose-500/25 bg-rose-500/5 dark:border-rose-500/20'
+                                : 'border-emerald-500/20 bg-emerald-500/5 dark:border-emerald-500/15'
+                        )}>
+                            <Apple className={cn('h-4 w-4 shrink-0', nutritionRisk ? 'text-rose-500' : 'text-emerald-500')} />
+                            <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <p className={cn(
+                                        'text-[9px] font-bold uppercase tracking-widest',
+                                        nutritionRisk ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'
+                                    )}>
+                                        {nutritionRisk ? 'Baja adherencia nutricional' : 'Nutrición'}
+                                    </p>
+                                    <span className={cn(
+                                        'text-[10px] font-black tabular-nums',
+                                        nutritionRisk ? 'text-rose-500' : 'text-foreground'
+                                    )}>
+                                        {nutritionPct}%
+                                    </span>
+                                </div>
+                                <div className="h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                                    <div
+                                        className="h-full rounded-full transition-all"
+                                        style={{
+                                            width: `${Math.min(100, nutritionPct)}%`,
+                                            backgroundColor: nutritionRisk ? '#ef4444' : '#10b981',
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {activeProgramName ?
                         <div className="space-y-2 rounded-xl border border-primary/15 bg-primary/5 p-3 dark:border-primary/20">

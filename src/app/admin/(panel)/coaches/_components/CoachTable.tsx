@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users } from 'lucide-react'
+import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users, Plus } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
@@ -12,6 +12,7 @@ import { AdminBulkBar } from '../../_components/AdminBulkBar'
 import { CoachCommandPanel } from './CoachCommandPanel'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { bulkCoachStatusAction, deleteCoachAction } from '../_actions/coach-actions'
+import { CoachCreateSheet } from './CoachCreateSheet'
 import type { CoachListItem } from '../../dashboard/_data/types'
 
 function computeHealthScore(c: CoachListItem): number {
@@ -70,6 +71,7 @@ export function CoachTable({ coaches, total }: Props) {
     const [editing, setEditing] = useState<CoachListItem | null>(null)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [riskOpen, setRiskOpen] = useState(true)
+    const [createOpen, setCreateOpen] = useState(false)
 
     const atRisk = coaches.filter(isAtRisk)
 
@@ -111,6 +113,17 @@ export function CoachTable({ coaches, total }: Props) {
 
     return (
         <div className="space-y-3">
+            {/* Header actions */}
+            <div className="flex justify-end">
+                <button
+                    onClick={() => setCreateOpen(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-1.5 text-xs text-[--admin-text-1] hover:border-[--admin-accent] hover:text-[--admin-accent] transition-colors"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                    Nuevo Coach
+                </button>
+            </div>
+
             {/* At-risk strip */}
             {atRisk.length > 0 && (
                 <div className="rounded-lg border border-[--admin-amber]/30 bg-[--admin-amber]/5">
@@ -306,6 +319,9 @@ export function CoachTable({ coaches, total }: Props) {
                     onClose={() => setEditing(null)}
                 />
             )}
+
+            {/* Create sheet */}
+            <CoachCreateSheet open={createOpen} onClose={() => setCreateOpen(false)} />
         </div>
     )
 }
