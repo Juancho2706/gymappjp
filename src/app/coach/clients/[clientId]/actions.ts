@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { format, parseISO, subDays } from 'date-fns'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import {
-    calculateConsumedMacros,
+    calculateConsumedMacrosWithCompletionFallback,
     normalizeMealForMacros,
     type NutritionMealMacroSource,
 } from '@/lib/nutrition-utils'
@@ -398,7 +398,12 @@ export const getClientProfileData = cache(async (clientId: string) => {
         for (const ml of row.nutrition_meal_logs || []) {
             if (ml.is_completed && ml.meal_id) completed.add(ml.meal_id)
         }
-        const c = calculateConsumedMacros(mealsForMacros, completed)
+        const c = calculateConsumedMacrosWithCompletionFallback(mealsForMacros, completed, {
+            calories: Number((activeNutritionPlanFull as { daily_calories?: number } | null)?.daily_calories ?? 0),
+            protein: Number((activeNutritionPlanFull as { protein_g?: number } | null)?.protein_g ?? 0),
+            carbs: Number((activeNutritionPlanFull as { carbs_g?: number } | null)?.carbs_g ?? 0),
+            fats: Number((activeNutritionPlanFull as { fats_g?: number } | null)?.fats_g ?? 0),
+        })
         return {
             ...log,
             consumed_calories: Math.round(c.calories),
@@ -429,7 +434,12 @@ export const getClientProfileData = cache(async (clientId: string) => {
         for (const ml of tn.nutrition_meal_logs || []) {
             if (ml.is_completed && ml.meal_id) completed.add(ml.meal_id)
         }
-        todayConsumedMacros = calculateConsumedMacros(mealsForMacros, completed)
+        todayConsumedMacros = calculateConsumedMacrosWithCompletionFallback(mealsForMacros, completed, {
+            calories: Number((activeNutritionPlanFull as { daily_calories?: number } | null)?.daily_calories ?? 0),
+            protein: Number((activeNutritionPlanFull as { protein_g?: number } | null)?.protein_g ?? 0),
+            carbs: Number((activeNutritionPlanFull as { carbs_g?: number } | null)?.carbs_g ?? 0),
+            fats: Number((activeNutritionPlanFull as { fats_g?: number } | null)?.fats_g ?? 0),
+        })
     }
 
     const dateFrom30 = format(subDays(parseISO(`${todayIso}T12:00:00`), 29), 'yyyy-MM-dd')

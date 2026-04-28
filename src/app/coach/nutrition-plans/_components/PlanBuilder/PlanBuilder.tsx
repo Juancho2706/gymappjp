@@ -65,6 +65,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
   )
 
   const realTotals = useMemo(() => totalsFromMealDrafts(meals), [meals])
+  const emptyMeals = useMemo(() => meals.filter((m) => m.foodItems.length === 0), [meals])
 
   // Auto-sync goals whenever meals change and toggle is ON
   useEffect(() => {
@@ -154,6 +155,10 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
       toast.error('Agrega al menos una comida antes de guardar')
       return
     }
+    if (emptyMeals.length > 0) {
+      toast.error('Cada comida debe tener al menos 1 alimento')
+      return
+    }
 
     const payloadMeals = meals.map((m, i) => ({
       name: m.name,
@@ -222,6 +227,15 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
 
   return (
     <div className="flex flex-col gap-6 min-h-[60vh] lg:flex-row">
+      {emptyMeals.length > 0 && (
+        <div className="w-full rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm text-orange-700 dark:text-orange-300">
+          <p className="font-bold">Reparación asistida: hay comidas incompletas</p>
+          <p className="text-xs mt-1">
+            Completa alimentos en {emptyMeals.length} comida(s): {emptyMeals.map((m) => m.name || 'Sin nombre').join(', ')}.
+            El guardado se bloquea hasta corregirlas para evitar pérdida de datos.
+          </p>
+        </div>
+      )}
       <div className="order-1 flex-shrink-0 lg:order-1 lg:w-80 xl:w-96">
         <PlanBuilderSidebar
           planName={planName}

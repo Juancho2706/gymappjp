@@ -3,7 +3,7 @@ import { Apple } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { getActiveNutritionPlan, getTodayNutritionBundle } from '../../_data/dashboard.queries'
 import { getTodayInSantiago } from '@/lib/date-utils'
-import { calculateConsumedMacros, normalizeMealForMacros } from '@/lib/nutrition-utils'
+import { calculateConsumedMacrosWithCompletionFallback, normalizeMealForMacros } from '@/lib/nutrition-utils'
 import { MacroBar } from './MacroBar'
 import { MealCompletionRow } from './MealCompletionRow'
 
@@ -36,7 +36,12 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
         mealLogs.filter((m) => m.is_completed).map((m) => m.meal_id)
     )
     const mealsForMacros = meals.map((m) => normalizeMealForMacros(m))
-    const realConsumed = calculateConsumedMacros(mealsForMacros, completedIds)
+    const realConsumed = calculateConsumedMacrosWithCompletionFallback(mealsForMacros, completedIds, {
+        calories: tCal,
+        protein: tP,
+        carbs: tC,
+        fats: tF,
+    })
     const consumedCal = Math.round(realConsumed.calories)
     const consumedP = realConsumed.protein
     const consumedC = realConsumed.carbs

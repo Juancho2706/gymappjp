@@ -70,6 +70,12 @@ export function MealBlock({
         ))}
       </div>
 
+      {meal.foodItems.length === 0 && (
+        <div className="mb-3 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-[11px] font-semibold text-orange-700 dark:text-orange-300">
+          Comida vacía: agrega al menos 1 alimento para conservar consistencia del plan.
+        </div>
+      )}
+
       <Button type="button" variant="outline" className="w-full gap-2 border-dashed" onClick={onOpenFoodSearch}>
         <Plus className="h-4 w-4" />
         Agregar alimento

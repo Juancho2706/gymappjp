@@ -3,7 +3,7 @@ import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import {
-  calculateConsumedMacros,
+  calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
   type MealWithFoodItems,
   type NutritionMealMacroSource,
@@ -218,7 +218,16 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
       if (ml.is_completed) completed.add(ml.meal_id)
     }
 
-    const consumed = calculateConsumedMacros(mealsByPlan.get(pid) ?? [], completed)
+    const consumed = calculateConsumedMacrosWithCompletionFallback(
+      mealsByPlan.get(pid) ?? [],
+      completed,
+      {
+        calories: (plan.daily_calories as number | null) ?? 0,
+        protein: (plan.protein_g as number | null) ?? 0,
+        carbs: (plan.carbs_g as number | null) ?? 0,
+        fats: (plan.fats_g as number | null) ?? 0,
+      }
+    )
 
     const clients = plan.clients as { id: string; full_name: string } | null
 

@@ -122,3 +122,30 @@ export function calculateConsumedMacros(meals: MealWithFoodItems[], completedMea
       { calories: 0, protein: 0, carbs: 0, fats: 0 }
     )
 }
+
+export function hasAnyMealMacroData(meals: MealWithFoodItems[]) {
+  return meals.some((meal) => {
+    const m = sumMealMacros(meal)
+    return m.calories > 0 || m.protein > 0 || m.carbs > 0 || m.fats > 0
+  })
+}
+
+export function calculateConsumedMacrosWithCompletionFallback(
+  meals: MealWithFoodItems[],
+  completedMealIds: Set<string>,
+  goals: { calories: number; protein: number; carbs: number; fats: number }
+) {
+  const consumed = calculateConsumedMacros(meals, completedMealIds)
+  if (hasAnyMealMacroData(meals)) return consumed
+
+  const totalMeals = meals.length
+  if (totalMeals === 0) return consumed
+
+  const ratio = Math.min(Math.max(completedMealIds.size / totalMeals, 0), 1)
+  return {
+    calories: goals.calories * ratio,
+    protein: goals.protein * ratio,
+    carbs: goals.carbs * ratio,
+    fats: goals.fats * ratio,
+  }
+}

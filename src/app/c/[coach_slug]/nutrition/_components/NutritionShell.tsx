@@ -8,7 +8,7 @@ import { AdherenceStrip, type DayAdherence } from './AdherenceStrip'
 import { NutritionStreakBanner } from './NutritionStreakBanner'
 import { toggleMealCompletion, fetchLogForDate } from '../_actions/nutrition.actions'
 import {
-  calculateConsumedMacros,
+  calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
   calculateFoodItemMacros,
   type NutritionMealMacroSource,
@@ -89,17 +89,16 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     return ids
   }, [optimisticCompletions])
 
-  const consumed = useMemo(
-    () => calculateConsumedMacros(mealsForMacros, completedIds),
-    [mealsForMacros, completedIds]
-  )
-
   const goals = {
     calories: plan.daily_calories ?? 0,
     protein: plan.protein_g ?? 0,
     carbs: plan.carbs_g ?? 0,
     fats: plan.fats_g ?? 0,
   }
+
+  const consumed = useMemo(() => {
+    return calculateConsumedMacrosWithCompletionFallback(mealsForMacros, completedIds, goals)
+  }, [mealsForMacros, completedIds, goals])
 
   const adherenceDates = useMemo(() => {
     const s = new Set<string>()
@@ -224,14 +223,21 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
       </div>
 
       {totalMeals > 0 && (
-        <button
-          type="button"
-          onClick={handleCopyPlan}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/60 bg-muted/20 py-3 text-xs font-bold text-muted-foreground transition-colors hover:bg-muted/40 active:scale-[0.98]"
-        >
-          <Share2 className="h-3.5 w-3.5" />
-          Copiar plan para WhatsApp
-        </button>
+        <div className="space-y-1.5">
+          <p className="text-center text-[11px] font-black tracking-wide text-orange-500">
+            Aun no implementado
+          </p>
+          <button
+            type="button"
+            onClick={handleCopyPlan}
+            disabled
+            aria-disabled="true"
+            className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-border/40 bg-muted/15 py-3 text-xs font-bold text-muted-foreground/60 opacity-70"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            Copiar plan para WhatsApp
+          </button>
+        </div>
       )}
 
       {adherence.length > 0 && totalMeals > 0 && (
