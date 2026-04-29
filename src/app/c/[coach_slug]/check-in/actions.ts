@@ -67,7 +67,7 @@ export async function submitCheckinAction(
     formData: FormData
 ): Promise<CheckinState> {
     const raw = {
-        weight: formData.get('weight'),
+        weight: String(formData.get('weight') ?? '').replace(',', '.'),
         energy_level: formData.get('energy_level'),
         notes: formData.get('notes'),
         photo: formData.get('photo'),

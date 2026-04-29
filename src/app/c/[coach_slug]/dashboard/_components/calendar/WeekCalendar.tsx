@@ -24,7 +24,7 @@ export async function WeekCalendar({ userId }: { userId: string }) {
     const weekIdx = program ? programWeekIndex1Based(program, userLocalDate) : null
     const activeVariant = resolveActiveWeekVariantForDisplay(program, weekIdx, userLocalDate)
 
-    const logDates = new Set(logs.map((l) => l.logged_at.split('T')[0]))
+    const completedPlanIds = new Set(logs.map((l) => l.workout_blocks?.plan_id).filter(Boolean) as string[])
 
     const curr = userLocalDate
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1)
@@ -37,20 +37,21 @@ export async function WeekCalendar({ userId }: { userId: string }) {
         const dStr = `${dYear}-${dMonth}-${dDay}`
         const dDow = d.getDay() === 0 ? 7 : d.getDay()
 
-        const hasAssigned = activePlans.some((p) => p.assigned_date === dStr)
-        const hasProgram =
-            !!program &&
-            activePlans.some(
-                (p) =>
-                    p.program_id === program.id &&
-                    p.day_of_week === dDow &&
-                    workoutPlanMatchesVariant(p, activeVariant, abMode)
-            )
-        const hasWorkout = hasAssigned || hasProgram
+        const assignedPlan = activePlans.find((p) => p.assigned_date === dStr)
+        const programPlan = program
+            ? activePlans.find(
+                  (p) =>
+                      p.program_id === program.id &&
+                      p.day_of_week === dDow &&
+                      workoutPlanMatchesVariant(p, activeVariant, abMode)
+              )
+            : undefined
+        const dayPlan = assignedPlan ?? programPlan ?? null
+        const hasWorkout = !!dayPlan
 
         const isToday = dStr === today
         const isPast = dStr < today
-        const isCompleted = hasWorkout && logDates.has(dStr)
+        const isCompleted = !!dayPlan && completedPlanIds.has(dayPlan.id)
 
         return {
             dayLabel: d.toLocaleDateString('es-ES', { weekday: 'narrow' }).toUpperCase(),

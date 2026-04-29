@@ -62,6 +62,22 @@ export function timeGreetingSantiago(now = new Date()): 'Buenos días' | 'Buenas
     return 'Buenas noches'
 }
 
+/**
+ * Returns UTC ISO timestamp boundaries that cover the full calendar day `isoDate` in Santiago.
+ * Correctly handles DST (UTC-3 summer / UTC-4 winter) so late-night logs are not lost.
+ */
+export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string; endIso: string } {
+    const noonUtc = new Date(`${isoDate}T12:00:00Z`)
+    const tzStr = noonUtc.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
+    const sanDateAsLocal = new Date(tzStr)
+    const offsetMs = noonUtc.getTime() - sanDateAsLocal.getTime()
+    const midnightUtcMs = new Date(`${isoDate}T00:00:00Z`).getTime() + offsetMs
+    return {
+        startIso: new Date(midnightUtcMs).toISOString(),
+        endIso: new Date(midnightUtcMs + 86_400_000).toISOString(),
+    }
+}
+
 export function formatLongDateSantiago(now = new Date()): string {
     const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
     const d = new Date(tzStr)

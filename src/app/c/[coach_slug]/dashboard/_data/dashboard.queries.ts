@@ -104,18 +104,27 @@ export const getClientWorkoutPlans = cache(async (clientId: string) => {
     return data ?? []
 })
 
-export const getRecentWorkoutLogs = cache(async (clientId: string) => {
+export type RecentWorkoutLog = {
+    id: string
+    logged_at: string
+    block_id: string
+    weight_kg: number | null
+    reps_done: number | null
+    workout_blocks: { plan_id: string | null } | null
+}
+
+export const getRecentWorkoutLogs = cache(async (clientId: string): Promise<RecentWorkoutLog[]> => {
     const supabase = await createClient()
     const { iso } = getTodayInSantiago()
     const thirtyDaysAgo = subDays(parseISOAnchor(iso), 30)
     const { data } = await supabase
         .from('workout_logs')
-        .select('id, logged_at, block_id, weight_kg, reps_done')
+        .select('id, logged_at, block_id, weight_kg, reps_done, workout_blocks!inner(plan_id)')
         .eq('client_id', clientId)
         .gte('logged_at', thirtyDaysAgo.toISOString())
         .order('logged_at', { ascending: false })
         .limit(200)
-    return data ?? []
+    return (data ?? []) as unknown as RecentWorkoutLog[]
 })
 
 export const getActiveNutritionPlan = cache(async (clientId: string) => {

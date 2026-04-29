@@ -80,10 +80,11 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         exercise: { name: b.exercises?.name ?? 'Ejercicio' },
     }))
 
-    const blockIds = new Set(blocks.map((b) => b.id))
-    const logsToday = logs.filter((l) => l.logged_at.startsWith(today) && blockIds.has(l.block_id))
+    const logsForPlan = todayPlan
+        ? logs.filter((l) => l.workout_blocks?.plan_id === todayPlan!.id)
+        : []
     const setsPerBlock: Record<string, number> = {}
-    for (const l of logsToday) {
+    for (const l of logsForPlan) {
         setsPerBlock[l.block_id] = (setsPerBlock[l.block_id] ?? 0) + 1
     }
     const totalSetsTarget = blocks.reduce((s, b) => s + b.sets, 0)
@@ -110,7 +111,7 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
 
     const anchor = parseISOAnchor(today)
     let plannedDays = 0
-    const logDates = new Set(logs.map((l) => l.logged_at.split('T')[0]))
+    const completedPlanIds = new Set(logs.map((l) => l.workout_blocks?.plan_id).filter(Boolean) as string[])
     for (let i = 0; i < 30; i++) {
         const d = subDays(anchor, i)
         const iso = format(d, 'yyyy-MM-dd')
@@ -128,9 +129,8 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
             plannedDays++
         }
     }
-    /** §10 maestro: días únicos con log / días con plan previstos (cap 100). */
-    const loggedDaysCount = logDates.size
-    const workoutScore = plannedDays > 0 ? Math.min(100, Math.round((loggedDaysCount / plannedDays) * 100)) : 0
+    /** §10 maestro: planes completados / planes previstos en 30d (cap 100). */
+    const workoutScore = plannedDays > 0 ? Math.min(100, Math.round((completedPlanIds.size / plannedDays) * 100)) : 0
 
     const checkInsLast30 = checkInHistory.length
     const checkInScore = Math.min(100, Math.round((checkInsLast30 / 4) * 100))

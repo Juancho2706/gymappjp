@@ -9,7 +9,9 @@ export async function RecentWorkoutsSection({ userId, coachSlug }: { userId: str
 
     const byDay = new Map<string, typeof logs>()
     for (const log of logs) {
-        const d = log.logged_at.split('T')[0]
+        const utc = new Date(log.logged_at)
+        const san = new Date(utc.toLocaleString('en-US', { timeZone: 'America/Santiago' }))
+        const d = `${san.getFullYear()}-${String(san.getMonth() + 1).padStart(2, '0')}-${String(san.getDate()).padStart(2, '0')}`
         if (!byDay.has(d)) byDay.set(d, [])
         byDay.get(d)!.push(log)
     }

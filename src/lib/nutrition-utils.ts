@@ -27,9 +27,9 @@ export type FoodItemForMacros = {
  *   'g'  → gramos: proporcional directo → factor = qty / 100
  *   'un' → unidades contables: usa serving_size → factor = (qty × serving_size) / 100
  *
- * Unidades legacy compatibles (migración pendiente a 'g' o 'un'):
- *   'ml', 'gr' → tratadas como peso ('g')
- *   'cda', 'cdta', 'taza', 'porción' → tratadas como unidades ('un')
+ * Aliases legacy normalizados en tiempo de ejecución:
+ *   'ml', 'gr' → peso ('g')
+ *   'cda', 'cdta', 'taza', 'porción' → unidades ('un')
  *
  * Ejemplo:
  *   Huevo: protein_g=13 por 100g, serving_size=60 (1 huevo ≈ 60g)

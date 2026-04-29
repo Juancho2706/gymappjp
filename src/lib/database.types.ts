@@ -503,6 +503,50 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_habits: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          log_date: string
+          notes: string | null
+          sleep_hours: number | null
+          steps: number | null
+          updated_at: string
+          water_ml: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          log_date: string
+          notes?: string | null
+          sleep_hours?: number | null
+          steps?: number | null
+          updated_at?: string
+          water_ml?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          notes?: string | null
+          sleep_hours?: number | null
+          steps?: number | null
+          updated_at?: string
+          water_ml?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_habits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_nutrition_logs: {
         Row: {
           client_id: string
@@ -696,6 +740,41 @@ export type Database = {
             columns: ["meal_id"]
             isOneToOne: false
             referencedRelation: "nutrition_meals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      food_swap_groups: {
+        Row: {
+          coach_id: string
+          created_at: string
+          food_ids: string[]
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          food_ids?: string[]
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          food_ids?: string[]
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_swap_groups_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
             referencedColumns: ["id"]
           },
         ]

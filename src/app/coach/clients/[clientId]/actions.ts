@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { revalidatePath } from 'next/cache'
 import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns'
-import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
+import { getTodayInSantiago, getSantiagoUtcBoundsForDay, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import {
     calculateConsumedMacrosWithCompletionFallback,
     normalizeMealForMacros,
@@ -784,6 +784,7 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
 
+    const { startIso, endIso } = getSantiagoUtcBoundsForDay(date)
     const { data } = await supabase
         .from('workout_logs')
         .select(`
@@ -795,8 +796,8 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
             )
         `)
         .eq('client_id', clientId)
-        .gte('logged_at', `${date}T00:00:00`)
-        .lte('logged_at', `${date}T23:59:59`)
+        .gte('logged_at', startIso)
+        .lt('logged_at', endIso)
         .order('logged_at')
 
     return data ?? []
@@ -838,7 +839,12 @@ export async function getClientWorkoutActivityDates(clientId: string): Promise<s
     if (!data) return []
     const seen = new Set<string>()
     for (const row of data) {
-        seen.add((row.logged_at as string).slice(0, 10))
+        // Convert UTC timestamp to Santiago date to avoid late-night logs appearing on wrong day
+        const utcDate = new Date(row.logged_at as string)
+        const sanStr = utcDate.toLocaleString('en-US', { timeZone: 'America/Santiago' })
+        const sanDate = new Date(sanStr)
+        const iso = `${sanDate.getFullYear()}-${String(sanDate.getMonth() + 1).padStart(2, '0')}-${String(sanDate.getDate()).padStart(2, '0')}`
+        seen.add(iso)
     }
     return [...seen]
 }

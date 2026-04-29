@@ -47,7 +47,7 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
           const isMine = food.coach_id === coachId
           const unitHint =
             food.serving_unit &&
-            !['g', 'ml', 'gr'].includes(food.serving_unit.toLowerCase()) &&
+            !['g', 'ml'].includes(food.serving_unit.toLowerCase()) &&
             (food.serving_size ?? 0) > 0
               ? `1 ${food.serving_unit} ≈ ${food.serving_size}g`
               : null

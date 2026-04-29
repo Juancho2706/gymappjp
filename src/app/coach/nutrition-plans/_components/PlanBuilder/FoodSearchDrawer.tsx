@@ -55,7 +55,7 @@ const CATEGORIES = [
 
 function normalizeUnit(raw: string | null | undefined): 'g' | 'ml' | 'un' {
   const u = (raw ?? 'g').toLowerCase().trim()
-  if (u === 'un' || u === 'unidades' || u === 'unidad' || u === 'porción' || u === 'porciones') return 'un'
+  if (u === 'un' || u === 'unidades' || u === 'unidad') return 'un'
   if (u === 'ml') return 'ml'
   return 'g'
 }

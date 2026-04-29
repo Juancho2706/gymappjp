@@ -229,12 +229,10 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                 </label>
                                 <input
                                     id="weight"
-                                    type="number"
-                                    step="0.1"
-                                    min={20}
-                                    max={400}
+                                    type="text"
+                                    inputMode="decimal"
                                     value={weight}
-                                    onChange={(e) => setWeight(e.target.value)}
+                                    onChange={(e) => setWeight(e.target.value.replace(',', '.'))}
                                     onFocus={handleInputFocus}
                                     placeholder="75.5"
                                     className="w-full h-11 px-3.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none"

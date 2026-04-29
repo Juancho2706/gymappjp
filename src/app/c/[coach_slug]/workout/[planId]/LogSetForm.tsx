@@ -64,6 +64,10 @@ export function LogSetForm({
             startRest(restTimeStr)
         }
 
+        // Normalize decimal comma → dot (es/pt locales)
+        const wRaw = formData.get('weight_kg')
+        if (wRaw !== null && wRaw !== '') formData.set('weight_kg', String(wRaw).replace(',', '.'))
+
         const weightRaw = formData.get('weight_kg')
         const repsRaw = formData.get('reps_done')
         const rpeRaw = formData.get('rpe')

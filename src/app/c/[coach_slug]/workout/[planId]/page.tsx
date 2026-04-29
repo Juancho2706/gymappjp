@@ -1,8 +1,7 @@
-import { addDays, format, parseISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
 import { resolveActiveWeekVariantForDisplay } from '@/lib/workout/programWeekVariant'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 
@@ -123,15 +122,15 @@ export default async function WorkoutExecutionPage({ params }: Props) {
     }> = []
 
     if (blockIds.length > 0) {
-        // Only load logs from TODAY to avoid showing previous weeks' data as "already completed"
+        // Only load logs from TODAY (Santiago time) — correct UTC bounds prevent late-night loss
         const { iso: todayStr } = getTodayInSantiago()
-        const tomorrowStr = format(addDays(parseISO(`${todayStr}T12:00:00`), 1), 'yyyy-MM-dd')
+        const { startIso: todayStartUtc, endIso: todayEndUtc } = getSantiagoUtcBoundsForDay(todayStr)
         const { data: rawLogs } = await supabase
             .from('workout_logs')
             .select('block_id, set_number, weight_kg, reps_done, rpe, rir')
             .in('block_id', blockIds)
-            .gte('logged_at', `${todayStr}T00:00:00`)
-            .lt('logged_at', `${tomorrowStr}T00:00:00`)
+            .gte('logged_at', todayStartUtc)
+            .lt('logged_at', todayEndUtc)
 
         logs = (rawLogs || []) as typeof logs
     }

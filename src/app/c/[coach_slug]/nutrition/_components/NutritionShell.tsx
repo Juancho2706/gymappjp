@@ -7,6 +7,7 @@ import { MealCard, type MealCardMeal } from './MealCard'
 import { AdherenceStrip, type DayAdherence } from './AdherenceStrip'
 import { NutritionStreakBanner } from './NutritionStreakBanner'
 import { toggleMealCompletion, fetchLogForDate, updateMealConsumedPortion, updateMealSatisfaction, toggleClientFoodPreference, getClientFoodFavoritesForClient } from '../_actions/nutrition.actions'
+import { getSwapGroupsForClient } from '../_actions/swaps.actions'
 import {
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
@@ -16,6 +17,7 @@ import {
 import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { toast } from 'sonner'
 import { Share2 } from 'lucide-react'
+import { HabitsTracker } from './HabitsTracker'
 
 type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null; satisfaction_score?: number | null }
 
@@ -37,6 +39,7 @@ function toMealCardMeal(m: PlanMealRow): MealCardMeal {
 interface Props {
   plan: {
     id: string
+    coach_id?: string | null
     name?: string | null
     instructions?: string | null
     nutrition_meals?: PlanMealRow[]
@@ -60,10 +63,46 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   const [isPortionPending, startPortionTransition] = useTransition()
   const [isSatisfactionPending, startSatisfactionTransition] = useTransition()
   const [favoriteFoodIds, setFavoriteFoodIds] = useState<Set<string>>(new Set())
+  const [swapOptionsMap, setSwapOptionsMap] = useState<Map<string, Array<{ id: string; name: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>>>(new Map())
 
   useEffect(() => {
     getClientFoodFavoritesForClient(userId).then((ids) => setFavoriteFoodIds(new Set(ids)))
   }, [userId])
+
+  useEffect(() => {
+    const coachId = plan.coach_id
+    if (!coachId) return
+    getSwapGroupsForClient(userId, coachId).then((groups) => {
+      // Build map: food_id → other foods in the same group
+      const map = new Map<string, Array<{ id: string; name: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>>()
+      // We only have food_ids, not food details — need to resolve via plan meals
+      const allPlanFoodIds = new Set<string>()
+      for (const m of plan.nutrition_meals ?? []) {
+        for (const fi of m.food_items ?? []) {
+          const fid = fi.foods?.id
+          if (fid) allPlanFoodIds.add(fid)
+        }
+      }
+      // For swap display, we only show names + macros from plan data
+      const planFoodDetails = new Map<string, { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>()
+      for (const m of plan.nutrition_meals ?? []) {
+        for (const fi of m.food_items ?? []) {
+          const f = fi.foods
+          if (f?.id) planFoodDetails.set(f.id, { id: f.id, name: f.name ?? '', calories: f.calories ?? 0, protein_g: f.protein_g ?? 0, carbs_g: f.carbs_g ?? 0, fats_g: f.fats_g ?? 0 })
+        }
+      }
+      for (const group of groups) {
+        const ids = group.food_ids as string[]
+        for (const fid of ids) {
+          // Only map plan foods (others won't have details in memory)
+          if (!planFoodDetails.has(fid) && !allPlanFoodIds.has(fid)) continue
+          const others = ids.filter((id) => id !== fid && planFoodDetails.has(id)).map((id) => planFoodDetails.get(id)!)
+          if (others.length > 0) map.set(fid, others)
+        }
+      }
+      setSwapOptionsMap(map)
+    })
+  }, [userId, plan.coach_id, plan.nutrition_meals])
 
   const mealLogs = useMemo(
     () => (currentLog?.nutrition_meal_logs as MealLogRow[] | undefined) ?? [],
@@ -433,10 +472,18 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
               onSatisfactionChange={isToday ? handleSatisfactionChange : undefined}
               favoriteFoodIds={favoriteFoodIds}
               onToggleFoodFavorite={handleToggleFoodFavorite}
+              swapOptionsMap={swapOptionsMap.size > 0 ? swapOptionsMap : undefined}
             />
           ))
         )}
       </div>
+
+      <HabitsTracker
+        clientId={userId}
+        coachSlug={coachSlug}
+        logDate={selectedDate}
+        isToday={isToday}
+      />
 
       {totalMeals > 0 && (
         <div className="grid grid-cols-2 gap-2">
