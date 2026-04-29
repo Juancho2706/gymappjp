@@ -40,6 +40,7 @@ export const getCoachTemplateById = cache(async (coachId: string, templateId: st
               quantity,
               unit,
               food_id,
+              swap_options,
               food:foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
             )
           )
@@ -79,6 +80,7 @@ export const getCoachTemplates = cache(async (coachId: string) => {
               id,
               quantity,
               unit,
+              swap_options,
               food:foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
             )
           )
@@ -171,7 +173,7 @@ export const getActivePlansBoardData = cache(async (coachId: string): Promise<Ac
         id,
         plan_id,
         day_of_week,
-        food_items ( quantity, unit, foods ( name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit ) )
+        food_items ( quantity, unit, swap_options, foods ( name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit ) )
       `
       )
       .in('plan_id', planIds),
@@ -316,7 +318,7 @@ export const getClientNutritionPlan = cache(async (clientId: string, coachId: st
       nutrition_meals (
         id, plan_id, name, order_index, day_of_week,
         food_items (
-          id, meal_id, food_id, quantity, unit,
+          id, meal_id, food_id, quantity, unit, swap_options,
           foods(id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit)
         )
       ),

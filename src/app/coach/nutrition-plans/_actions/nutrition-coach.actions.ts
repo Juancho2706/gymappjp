@@ -15,6 +15,19 @@ export type CoachTemplateMealFoodItem = {
   food_id: string
   quantity: number
   unit: string
+  swap_options?: Array<{
+    food_id: string
+    is_liquid?: boolean
+    quantity?: number
+    unit?: 'g' | 'un' | 'ml'
+    name: string
+    calories: number
+    protein_g: number
+    carbs_g: number
+    fats_g: number
+    serving_size: number
+    serving_unit?: string | null
+  }>
 }
 
 export type CoachTemplateMealJson = {
@@ -259,6 +272,7 @@ export async function upsertClientNutritionPlanJson(
                 food_id: fi.food_id,
                 quantity: fi.quantity,
                 unit: fi.unit,
+                swap_options: fi.swap_options ?? [],
               }))
             )
           }
@@ -282,6 +296,7 @@ export async function upsertClientNutritionPlanJson(
                 food_id: fi.food_id,
                 quantity: fi.quantity,
                 unit: fi.unit,
+                swap_options: fi.swap_options ?? [],
               }))
             )
           }
@@ -321,6 +336,7 @@ export async function upsertClientNutritionPlanJson(
               food_id: fi.food_id,
               quantity: fi.quantity,
               unit: fi.unit,
+              swap_options: fi.swap_options ?? [],
             }))
           )
         }
@@ -657,16 +673,54 @@ export async function duplicatePlanToClient(
     const { data: sourceFoodItems, error: fiErr } = mealIds.length
       ? await supabase
           .from('food_items')
-          .select('meal_id, food_id, quantity, unit')
+      .select('meal_id, food_id, quantity, unit, swap_options')
           .in('meal_id', mealIds)
       : { data: [], error: null }
 
     if (fiErr) throw fiErr
 
-    const foodsByMeal = new Map<string, { food_id: string; quantity: number; unit: string }[]>()
+    const foodsByMeal = new Map<
+      string,
+      {
+        food_id: string
+        quantity: number
+        unit: string
+        swap_options?: Array<{
+            food_id: string
+            is_liquid?: boolean
+            quantity?: number
+            unit?: 'g' | 'un' | 'ml'
+            name: string
+          calories: number
+          protein_g: number
+          carbs_g: number
+          fats_g: number
+          serving_size: number
+          serving_unit?: string | null
+        }>
+      }[]
+    >()
     for (const fi of sourceFoodItems ?? []) {
       const list = foodsByMeal.get(fi.meal_id as string) ?? []
-      list.push({ food_id: fi.food_id as string, quantity: fi.quantity as number, unit: fi.unit as string })
+      list.push({
+        food_id: fi.food_id as string,
+        quantity: fi.quantity as number,
+        unit: fi.unit as string,
+        swap_options:
+          (fi.swap_options as Array<{
+            food_id: string
+            is_liquid?: boolean
+            quantity?: number
+            unit?: 'g' | 'un' | 'ml'
+            name: string
+            calories: number
+            protein_g: number
+            carbs_g: number
+            fats_g: number
+            serving_size: number
+            serving_unit?: string | null
+          }> | null) ?? [],
+      })
       foodsByMeal.set(fi.meal_id as string, list)
     }
 
@@ -723,6 +777,7 @@ export async function duplicatePlanToClient(
             food_id: fi.food_id,
             quantity: fi.quantity,
             unit: fi.unit,
+            swap_options: fi.swap_options ?? [],
           }))
         )
       }

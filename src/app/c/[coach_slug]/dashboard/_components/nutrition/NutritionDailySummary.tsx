@@ -4,6 +4,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { getActiveNutritionPlan, getTodayNutritionBundle } from '../../_data/dashboard.queries'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import {
+  applyMealFoodSwaps,
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
   portionPctMapFromMealLogs,
@@ -30,7 +31,24 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
     const mealLogs =
         (dailyLog as {
             nutrition_meal_logs?: { meal_id: string; is_completed: boolean; consumed_quantity: number | null }[]
+            nutrition_meal_food_swaps?: {
+                meal_id: string
+                original_food_id: string
+                swapped_food_id: string
+                swapped_quantity?: number | null
+                swapped_unit?: string | null
+            }[]
         } | null)?.nutrition_meal_logs ?? []
+    const mealSwaps =
+        (dailyLog as {
+            nutrition_meal_food_swaps?: {
+                meal_id: string
+                original_food_id: string
+                swapped_food_id: string
+                swapped_quantity?: number | null
+                swapped_unit?: string | null
+            }[]
+        } | null)?.nutrition_meal_food_swaps ?? []
     const doneByMeal = new Map(mealLogs.map((m) => [m.meal_id, m.is_completed]))
 
     type MealRow = NutritionMealMacroSource & { name: string }
@@ -45,7 +63,54 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
     const completedIds = new Set(
         mealLogs.filter((m) => m.is_completed).map((m) => m.meal_id)
     )
-    const mealsForMacros = mealsToday.map((m) => normalizeMealForMacros(m))
+    const swapByMealFood = new Map<string, (typeof mealSwaps)[number]>()
+    for (const s of mealSwaps) {
+        swapByMealFood.set(`${s.meal_id}:${s.original_food_id}`, s)
+    }
+    const mealsWithSwaps = mealsToday.map((meal) => {
+        const normalized = normalizeMealForMacros(meal)
+        const swapFoodsByOriginal = new Map<
+            string,
+            {
+                swappedFood: {
+                    id?: string
+                    name: string
+                    calories: number
+                    protein_g: number
+                    carbs_g: number
+                    fats_g: number
+                    serving_size: number
+                    serving_unit: string | null
+                }
+                swappedQuantity?: number | null
+                swappedUnit?: string | null
+            }
+        >()
+        for (const item of normalized.food_items) {
+            const originalFoodId = item.foods.id
+            if (!originalFoodId) continue
+            const swapLog = swapByMealFood.get(`${meal.id}:${originalFoodId}`)
+            if (!swapLog) continue
+            const option = (item.swap_options ?? []).find((x) => x.food_id === swapLog.swapped_food_id)
+            if (!option) continue
+            swapFoodsByOriginal.set(originalFoodId, {
+                swappedFood: {
+                    id: option.food_id,
+                    name: option.name,
+                    calories: option.calories,
+                    protein_g: option.protein_g,
+                    carbs_g: option.carbs_g,
+                    fats_g: option.fats_g,
+                    serving_size: option.serving_size,
+                    serving_unit: option.serving_unit ?? null,
+                },
+                swappedQuantity: swapLog.swapped_quantity ?? null,
+                swappedUnit: swapLog.swapped_unit ?? null,
+            })
+        }
+        return applyMealFoodSwaps(normalized, swapFoodsByOriginal)
+    })
+    const mealsForMacros = mealsWithSwaps
     const portionMap = portionPctMapFromMealLogs(mealLogs)
     const realConsumed = calculateConsumedMacrosWithCompletionFallback(
         mealsForMacros,

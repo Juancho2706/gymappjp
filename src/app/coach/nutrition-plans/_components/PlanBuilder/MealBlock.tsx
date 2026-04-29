@@ -39,6 +39,14 @@ interface Props {
   onOpenFoodSearch: () => void
   onUpdateFoodItem: (idx: number, qty: number, unit: string) => void
   onRemoveFoodItem: (idx: number) => void
+  onOpenSwapSearch: (idx: number) => void
+  onRemoveSwapOption: (idx: number, swapFoodId: string) => void
+  onUpdateSwapOption: (
+    idx: number,
+    swapFoodId: string,
+    quantity: number,
+    unit: 'g' | 'un' | 'ml'
+  ) => void
 }
 
 export function MealBlock({
@@ -49,6 +57,9 @@ export function MealBlock({
   onOpenFoodSearch,
   onUpdateFoodItem,
   onRemoveFoodItem,
+  onOpenSwapSearch,
+  onRemoveSwapOption,
+  onUpdateSwapOption,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: meal.id,
@@ -125,6 +136,11 @@ export function MealBlock({
             item={fi}
             onUpdate={(q, u) => onUpdateFoodItem(idx, q, u)}
             onRemove={() => onRemoveFoodItem(idx)}
+            onOpenSwapSearch={() => onOpenSwapSearch(idx)}
+            onRemoveSwapOption={(swapFoodId) => onRemoveSwapOption(idx, swapFoodId)}
+            onUpdateSwapOption={(swapFoodId, quantity, unit) =>
+              onUpdateSwapOption(idx, swapFoodId, quantity, unit)
+            }
           />
         ))}
       </div>

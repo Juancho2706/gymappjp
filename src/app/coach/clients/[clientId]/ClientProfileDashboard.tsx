@@ -979,6 +979,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             nutritionStreakDays={data.nutritionStreakDays}
                             nutritionWeeklyAvgPct={compliance.nutritionWeeklyAvgPct}
                             nutritionPrevWeeklyAvgPct={compliance.nutritionPrevWeeklyAvgPct}
+                            clientFavoriteFoods={data.clientFavoriteFoods ?? []}
                             chartGridColor={chartGridColor}
                             chartAxisColor={chartAxisColor}
                             tooltipBgColor={tooltipBgColor}

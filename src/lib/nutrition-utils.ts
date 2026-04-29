@@ -2,6 +2,7 @@
  * Cálculo de macros por ítem de comida y agregación (plan nutrición alumno/coach).
  * Los valores en BD son por 100g/ml; unidades “count” usan serving_size del alimento.
  */
+import type { Json } from './database.types'
 
 export type FoodMacrosRow = {
   id?: string
@@ -15,9 +16,75 @@ export type FoodMacrosRow = {
 }
 
 export type FoodItemForMacros = {
+  id?: string
   quantity: number
   unit: string
   foods: FoodMacrosRow
+  swap_options?: Array<{
+    food_id: string
+    quantity?: number
+    unit?: string
+    /** Persisted from PlanBuilder; if absent, infer from serving_unit === ml */
+    is_liquid?: boolean | null
+    name: string
+    calories: number
+    protein_g: number
+    carbs_g: number
+    fats_g: number
+    serving_size: number
+    serving_unit?: string | null
+  }>
+}
+
+/** Whether a swap-option row represents a liquid (for allowed units ml|un vs g|un). */
+export function swapOptionIsLiquid(opt: {
+  is_liquid?: boolean | null
+  serving_unit?: string | null
+}): boolean {
+  if (String(opt.serving_unit ?? '').toLowerCase() === 'ml') return true
+  if (typeof opt.is_liquid === 'boolean') return opt.is_liquid
+  return false
+}
+
+export function swapOptionAllowedUnits(isLiquid: boolean): readonly ('g' | 'un' | 'ml')[] {
+  return isLiquid ? (['ml', 'un'] as const) : (['g', 'un'] as const)
+}
+
+/** Coerce stored unit to one allowed for that food (fixes legacy JSON with wrong unit). */
+export function coerceSwapOptionUnit(
+  unit: string | null | undefined,
+  isLiquid: boolean
+): 'g' | 'un' | 'ml' {
+  const allowed = swapOptionAllowedUnits(isLiquid) as readonly string[]
+  const u = String(unit ?? '').toLowerCase()
+  if (allowed.includes(u)) return u as 'g' | 'un' | 'ml'
+  return isLiquid ? 'ml' : 'g'
+}
+
+/** Coach-defined quantity/unit for a swap option row (from `food_items.swap_options` JSON). */
+export function resolveCoachSwapPortionFromSwapOptions(
+  swapOptions: unknown,
+  swappedFoodId: string
+): { quantity: number; unit: 'g' | 'un' | 'ml' } | null {
+  if (!Array.isArray(swapOptions)) return null
+  for (const raw of swapOptions) {
+    if (!raw || typeof raw !== 'object') continue
+    const o = raw as Record<string, unknown>
+    if (o.food_id !== swappedFoodId) continue
+    const servingSize = Number(o.serving_size) || 100
+    const qtyRaw = o.quantity != null ? Number(o.quantity) : NaN
+    const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : servingSize || 100
+    const servingUnit = typeof o.serving_unit === 'string' ? o.serving_unit : null
+    const isLiquid =
+      String(servingUnit ?? '').toLowerCase() === 'ml'
+        ? true
+        : typeof o.is_liquid === 'boolean'
+          ? o.is_liquid
+          : false
+    const unitRaw = typeof o.unit === 'string' ? o.unit : undefined
+    return { quantity: qty, unit: coerceSwapOptionUnit(unitRaw, isLiquid) }
+  }
+  return null
 }
 
 /**
@@ -74,8 +141,10 @@ export type NutritionMealMacroSource = {
   id: string
   day_of_week?: number | null
   food_items?: Array<{
+    id?: string
     quantity: number
     unit?: string | null
+    swap_options?: Json | null
     foods?: {
       id?: string
       name?: string
@@ -89,14 +158,48 @@ export type NutritionMealMacroSource = {
   }>
 }
 
+function normalizeSwapOptions(raw: Json | null | undefined): FoodItemForMacros['swap_options'] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((v) => {
+      if (!v || typeof v !== 'object') return null
+      const obj = v as Record<string, unknown>
+      if (typeof obj.food_id !== 'string') return null
+      const servingUnit = typeof obj.serving_unit === 'string' ? obj.serving_unit : null
+      const is_liquid =
+        String(servingUnit ?? '').toLowerCase() === 'ml'
+          ? true
+          : typeof obj.is_liquid === 'boolean'
+            ? obj.is_liquid
+            : false
+      const rawUnit = typeof obj.unit === 'string' ? obj.unit : undefined
+      return {
+        food_id: obj.food_id,
+        quantity: Number(obj.quantity) || Number(obj.serving_size) || 100,
+        unit: coerceSwapOptionUnit(rawUnit, is_liquid),
+        is_liquid,
+        name: typeof obj.name === 'string' ? obj.name : '',
+        calories: Number(obj.calories) || 0,
+        protein_g: Number(obj.protein_g) || 0,
+        carbs_g: Number(obj.carbs_g) || 0,
+        fats_g: Number(obj.fats_g) || 0,
+        serving_size: Number(obj.serving_size) || 100,
+        serving_unit: servingUnit,
+      }
+    })
+    .filter((v): v is NonNullable<typeof v> => v != null)
+}
+
 /** Convierte `nutrition_meals` + `food_items` anidados desde Supabase al shape de macros. */
 export function normalizeMealForMacros(meal: NutritionMealMacroSource): MealWithFoodItems {
   const items = meal.food_items ?? []
   return {
     id: meal.id,
     food_items: items.map((fi) => ({
+      id: fi.id,
       quantity: Number(fi.quantity) || 0,
       unit: fi.unit ?? 'g',
+      swap_options: normalizeSwapOptions(fi.swap_options),
       foods: {
         id: fi.foods?.id,
         name: fi.foods?.name ?? '',
@@ -108,6 +211,46 @@ export function normalizeMealForMacros(meal: NutritionMealMacroSource): MealWith
         serving_unit: fi.foods?.serving_unit ?? null,
       },
     })),
+  }
+}
+
+export type MealFoodSwapApplied = {
+  meal_id: string
+  original_food_id: string
+  swapped_food_id: string
+  swapped_quantity?: number | null
+  swapped_unit?: string | null
+}
+
+export function applyMealFoodSwaps(
+  meal: MealWithFoodItems,
+  swapsByOriginalFoodId: ReadonlyMap<
+    string,
+    {
+      swappedFood: FoodMacrosRow
+      swappedQuantity?: number | null
+      swappedUnit?: string | null
+    }
+  >
+): MealWithFoodItems {
+  if (swapsByOriginalFoodId.size === 0) return meal
+  return {
+    ...meal,
+    food_items: meal.food_items.map((item) => {
+      const originalFoodId = item.foods.id
+      if (!originalFoodId) return item
+      const swap = swapsByOriginalFoodId.get(originalFoodId)
+      if (!swap) return item
+      return {
+        ...item,
+        foods: swap.swappedFood,
+        quantity:
+          swap.swappedQuantity != null && Number.isFinite(swap.swappedQuantity)
+            ? swap.swappedQuantity
+            : item.quantity,
+        unit: swap.swappedUnit ?? item.unit,
+      }
+    }),
   }
 }
 

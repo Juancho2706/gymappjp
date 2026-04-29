@@ -69,6 +69,49 @@ describe('nutrition-schemas', () => {
     }
   })
 
+  it('accepts meal-level swap options in food items', () => {
+    const result = TemplateUpsertSchema.safeParse({
+      name: 'Plan con swaps',
+      daily_calories: 2000,
+      protein_g: 150,
+      carbs_g: 210,
+      fats_g: 65,
+      meals: [
+        {
+          name: 'Almuerzo',
+          order_index: 0,
+          foodItems: [
+            {
+              food_id: '550e8400-e29b-41d4-a716-446655440002',
+              quantity: 100,
+              unit: 'g',
+              swap_options: [
+                {
+                  food_id: '550e8400-e29b-41d4-a716-446655440003',
+                  is_liquid: false,
+                  quantity: 180,
+                  unit: 'g',
+                  name: 'Papas cocidas',
+                  calories: 87,
+                  protein_g: 1.9,
+                  carbs_g: 20.1,
+                  fats_g: 0.1,
+                  serving_size: 100,
+                  serving_unit: 'g',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.meals[0]?.foodItems[0]?.swap_options?.[0]?.quantity).toBe(180)
+      expect(result.data.meals[0]?.foodItems[0]?.swap_options?.[0]?.unit).toBe('g')
+    }
+  })
+
   it('rejects invalid custom food unit', () => {
     const result = CustomFoodSchema.safeParse({
       name: 'Yogurt',

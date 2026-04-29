@@ -202,7 +202,7 @@ Alumno:
 | **B4** | **Sin integración check-in ↔ nutrición.** El peso no cruza con calorías ni sugiere revisiones al coach. | El coach lo hace todo manualmente. |
 | **B5** | **Offline = brick.** El SW ignora `/c/` y POST. Si el alumno marca una comida sin red, pierde el toggle. | Mala UX en móvil con red inestable. |
 | **B6** | **Sin notificaciones/reminders.** El alumno no recibe alertas de comidas ni recordatorios de log. | Menor adherencia real. |
-| **B7** | **Sin intercambio de alimentos (food swaps).** Si el plan dice "manzana", el alumno no puede cambiarla por "pera" con macros equivalentes. | Rígido; frustra al alumno. |
+| **B7** | ~~**Sin intercambio de alimentos (food swaps).**~~ **CERRADO (2026-04-29):** swaps **por ítem de plan** (`food_items.swap_options` + tabla `nutrition_meal_food_swaps`); alumno elige solo entre alternativas del coach; cantidad/unidad **solo coach**; aplicable sin marcar comida completa (get/create `daily_nutrition_logs`). Ruta global `/coach/nutrition-plans/swaps` retirada. Pendiente menor: visibilidad agregada de swaps en más vistas coach si hace falta. | — |
 | **B8** | **Sin asignación masiva mejorada.** Se puede asignar a varios pero la UX no muestra cuántos ya tienen esa plantilla ni permite reasignación bulk. | Coach con 20+ alumnos pierde tiempo. |
 | **B9** | Export: dos modos copiados desde alumno — **detalle del día** (ingredientes) y **resumen corto** (por comida + meta). PDF / formatos avanzados pendientes. | Friction parcial pendiente. |
 | **B10** | **Sin cálculo de macros sugeridos.** No hay fórmula que sugiera kcal/proteína al coach según perfil del alumno. | El coach calcula manualmente en calculadoras externas. |
@@ -1136,7 +1136,7 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 | `NutritionStreakBanner` — racha | "Días consecutivos en los que registraste al menos una comida. ¡Mantén la racha para ver mejores resultados!" |
 | `DayNavigator` | "Navega a días anteriores para ver tu historial de comidas y macros consumidos." |
 | Columna de macros en alimento | "Valores nutricionales para la cantidad exacta indicada en tu plan (no por 100g). Lo que verás cuando consumas esa porción." |
-| Botón "Intercambiar" (food swap, cuando esté implementado) | "Sustituye este alimento por otro con macros similares. Tu coach definió las opciones disponibles." |
+| Icono de alternativas (swap) en la fila del alimento | "Tu coach dejó opciones de cambio para este alimento. Elige una y pulsa Aplicar; la porción es la que definió tu coach." |
 | Input de cantidad real (modo detallado, cuando esté implementado) | "Si consumiste una cantidad diferente a la planificada, ajústala aquí. Los macros se recalcularán automáticamente." |
 
 **En /c/[slug]/dashboard — Widget de Nutrición:**
@@ -1152,6 +1152,8 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 
 ### 20.0 Estado de Ejecución (2026-04-29)
 
+- ✅ **Food swaps (B7 / sección 20.3):** columnas `swap_options` en `food_items`, tabla `nutrition_meal_food_swaps` (migraciones `20260428260000`, `20260428270000`, `20260428280000` en repo; aplicar en remoto al desplegar). PlanBuilder configura alternativas por alimento; alumno en `MealIngredientRow` / `NutritionShell`; macros en dashboard con `applyMealFoodSwaps`. Tests: `nutrition-utils`, `nutrition-day-scope`, smoke Playwright `tests/nutrition-student-smoke.spec.ts` (opcional con env E2E).
+- ✅ **Favoritos alumno:** `client_food_preferences.food_id` referencia **`foods(id)`** (migración `20260428290000`); corazón coherente entre planes; panel en `NutritionTabB5`; `toggleClientFoodPreference` revalida ficha coach.
 - ✅ E1 cerrado: propagación SYNCED in-place (sin romper historial).
 - ✅ E2 cerrado en flujos principales: Zod activo en acciones core.
 - ✅ E3 cerrado en flujo principal: JSON tipado; legacy puenteado.
@@ -1178,7 +1180,7 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 7. **[P1] Exportación de plan** — ⚠️ **Parcial**: WhatsApp detalle + **resumen corto** por día; falta PDF.
 8. **[P1] Creación de alimento inline** — Desde `FoodSearchDrawer` sin salir al catálogo.
 9. **[P1] Cálculo de macros sugeridos** — Widget en el builder basado en perfil del alumno.
-10. **[P1] Alimentos favoritos del alumno** — Tabla `client_food_preferences`.
+10. **[P1] Alimentos favoritos del alumno** — ✅ **Hecho (MVP):** `client_food_preferences` + FK catálogo `foods`, UI alumno + listado coach en nutrición del perfil.
 11. **[P1] Registro gradual de consumo** — ✅ **Hecho (MVP):** `consumed_quantity` 0–100 en logs, UI porciones en comida completada, macros proporcionales; PDF / modo por ítem (`food_item_logs`) pendiente si se exige.
 12. **[P1] Offline básico** — Cachear plan en SW + queue de toggles en `localStorage`.
 13. **[P1] Onboarding de nutrición** — Wizard de 3 pasos para coach nuevo.
@@ -1187,7 +1189,7 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 ### Fase C — Flexibilidad del Plan (3 semanas)
 
 15. **[P1] Plan por día de semana** — ✅ **Hecho (MVP):** `day_of_week` en DB + propagación/saves + filtrado alumno/coach + **selector en PlanBuilder**. Mejora opcional futura: tabs por día en lugar de dropdown por comida.
-16. **[P2] Food swaps** — Grupos de intercambio definidos por coach + UI del alumno.
+16. **[P2] Food swaps** — ✅ **Hecho (MVP):** intercambios por alimento en plan (no grupos globales); UI coach en PlanBuilder; UI alumno; persistencia por día en `nutrition_meal_food_swaps`. Mejoras futuras: tooltips dedicados, informes agregados, equivalencia estricta de macros si se exige negocio.
 17. **[P2] Tracking de hábitos** — Agua, pasos, ayuno. Tabla `daily_habits`.
 18. **[P2] Feedback por comida** — Emoji satisfaction en `nutrition_meal_logs`.
 19. **[P2] Duplicar plan entre alumnos** — `duplicatePlanToClient()`.
@@ -1225,7 +1227,7 @@ Regla de seguridad: no borrar `daily_nutrition_logs` ni `nutrition_meal_logs`.
 
 Estimación práctica para este roadmap (no matemática estricta):
 
-- **Completado:** ~52%
+- **Completado:** ~55%
 - **Parcial en curso:** ~20%
 - **Pendiente:** ~28%
 
@@ -1233,8 +1235,57 @@ Resumen por bloques:
 
 - **Fase A (crítico):** ~90% (`meal_completions` cerrado; cobertura tests sigue ampliable).
 - **Fase B (quick wins):** ~45% (export WhatsApp dos modos + **registro gradual MVP**; pendientes PDF, offline, onboarding, sugerencias, favoritos, tooltips Fase B, etc.).
-- **Fase C:** ~50% (`day_of_week` + consumo parcial + builder; siguen swaps/hábitos/satisfaction/etc.).
+- **Fase C:** ~60% (`day_of_week` + consumo parcial + builder + **food swaps MVP** + favoritos MVP; siguen hábitos, duplicar plan como P2 explícito si falta pulido, etc.).
 - **Fase D:** ~0% (diferenciadores pro pendientes).
+
+---
+
+## 20.3 Redefinición oficial Food Swap (requerimiento producto)
+
+> Esta sección reemplaza el enfoque previo de "grupos globales de intercambio por coach" como flujo principal.
+
+### Objetivo UX/Producto
+
+El food swap debe definirse **dentro del creador de planes nutricionales del coach**, por alimento específico del plan:
+
+1. Coach agrega alimento base a una comida.
+2. En ese mismo alimento, coach configura opciones de cambio (1..N alimentos alternativos), definiendo también **cantidad y unidad** por cada alternativa.
+3. Coach guarda plan.
+4. Alumno, al ver ese alimento en su plan, tiene botón de intercambio en esa fila.
+5. Alumno pulsa, elige una alternativa permitida por su coach, y se reemplaza en su ejecución diaria.
+
+### Reglas funcionales
+
+- Las opciones de swap son **contextuales al plan y al alimento** (no catálogo global desconectado).
+- Un alimento puede no tener swaps; en ese caso no se muestra botón al alumno.
+- Cada opción swap debe almacenar su propia cantidad/unidad (`g`/`un`/`ml`) para que el macro preview sea realista desde el builder.
+- El alumno solo puede elegir entre opciones configuradas por coach para ese alimento.
+- **Cantidad y unidad de la alternativa aplicada** las fija el coach en cada fila de `swap_options`; el alumno **no** las edita (evita desviaciones y simplifica soporte). El servidor persiste `swapped_quantity` / `swapped_unit` leyendo esa definición.
+- Puede aplicarse swap **sin** marcar antes la comida como completada: se obtiene o crea `daily_nutrition_logs` para la fecha.
+- El coach debe poder ver en su vista nutricional del alumno:
+  - qué swaps fueron usados,
+  - qué alimento original se cambió,
+  - cuál alternativa eligió el alumno,
+  - con qué cantidad/unidad quedó registrado el cambio.
+
+### Decisión de transición
+
+- El flujo anterior basado en gestión separada de grupos globales (`/coach/nutrition-plans/swaps`) queda deprecado para evitar doble lógica.
+- Implementación nueva será incremental:
+  1. limpiar/desactivar UI anterior,
+  2. modelar swaps por ítem del plan,
+  3. exponer configuración en PlanBuilder,
+  4. habilitar consumo en alumno,
+  5. reflejar uso en vista coach,
+  6. cubrir tests unitarios + integración + regresión.
+
+### Criterio de aceptación (Definition of Done)
+
+- Backend y frontend alineados para coach y alumno. — ✅ **MVP cumplido (2026-04-29).**
+- Persistencia completa de configuración y uso real de swaps. — ✅ **MVP cumplido.**
+- Visibilidad coach de swaps usados (p. ej. timeline / detalle día con `nutrition_meal_food_swaps` y nombres de `foods`). — ✅ **Parcial:** presente en flujos de log/historial; ampliar si el negocio pide vista dedicada.
+- No regresiones en: favoritos, porciones (`consumed_quantity`), satisfacción emoji, adherencia y macros. — ✅ **Verificado en código + Vitest**; E2E opcional con credenciales.
+- Suite de pruebas mínima pasando antes de avanzar al siguiente punto. — ✅ **Vitest** (`nutrition-utils`, `nutrition-schemas`, `nutrition-day-scope`, `date-utils`, etc.).
 
 ---
 

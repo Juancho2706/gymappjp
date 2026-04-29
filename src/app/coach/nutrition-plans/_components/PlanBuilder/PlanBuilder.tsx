@@ -23,6 +23,7 @@ const FoodSearchDrawer = dynamic(
     { loading: () => <Skeleton className="fixed inset-x-0 bottom-0 z-50 h-48 border-t border-border bg-card md:left-auto md:right-4 md:bottom-4 md:h-[min(32rem,80vh)] md:w-full md:max-w-lg md:rounded-xl md:border" /> }
 )
 import { totalsFromMealDrafts } from './MacroCalculator'
+import { coerceSwapOptionUnit } from '@/lib/nutrition-utils'
 import {
   upsertCoachNutritionTemplate,
   upsertClientNutritionPlanJson,
@@ -53,9 +54,16 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
   })
   const [instructions, setInstructions] = useState(initialData?.instructions ?? '')
   const [meals, setMeals] = useState<MealDraft[]>(initialData?.meals ?? [])
-  const [searchDrawer, setSearchDrawer] = useState<{ open: boolean; targetMealId: string | null }>({
+  const [searchDrawer, setSearchDrawer] = useState<{
+    open: boolean
+    targetMealId: string | null
+    mode: 'add-food' | 'add-swap'
+    targetFoodIndex: number | null
+  }>({
     open: false,
     targetMealId: null,
+    mode: 'add-food',
+    targetFoodIndex: null,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
@@ -124,15 +132,98 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
   }, [])
 
   const openFoodSearch = useCallback((mealId: string) => {
-    setSearchDrawer({ open: true, targetMealId: mealId })
+    setSearchDrawer({ open: true, targetMealId: mealId, mode: 'add-food', targetFoodIndex: null })
+  }, [])
+
+  const openSwapSearch = useCallback((mealId: string, foodIndex: number) => {
+    setSearchDrawer({ open: true, targetMealId: mealId, mode: 'add-swap', targetFoodIndex: foodIndex })
   }, [])
 
   const addFoodToMeal = useCallback((mealId: string, item: FoodItemDraft) => {
     setMeals((prev) =>
       prev.map((m) => (m.id === mealId ? { ...m, foodItems: [...m.foodItems, item] } : m))
     )
-    setSearchDrawer({ open: false, targetMealId: null })
+    setSearchDrawer({ open: false, targetMealId: null, mode: 'add-food', targetFoodIndex: null })
   }, [])
+
+  const addSwapOptionToFoodItem = useCallback(
+    (
+      mealId: string,
+      foodIndex: number,
+      option: {
+        food_id: string
+        quantity: number
+        unit: 'g' | 'un' | 'ml'
+        food: {
+          name: string
+          calories: number
+          protein_g: number
+          carbs_g: number
+          fats_g: number
+          serving_size: number
+          serving_unit: string
+          is_liquid?: boolean | null
+          brand?: string | null
+        }
+      }
+    ) => {
+      setMeals((prev) =>
+        prev.map((m) => {
+          if (m.id !== mealId) return m
+          const next = [...m.foodItems]
+          const base = next[foodIndex]
+          if (!base) return m
+          if (base.food_id === option.food_id) return m
+          const prevOptions = base.swapOptions ?? []
+          if (prevOptions.some((x) => x.food_id === option.food_id)) return m
+          next[foodIndex] = {
+            ...base,
+            swapOptions: [...prevOptions, option],
+          }
+          return { ...m, foodItems: next }
+        })
+      )
+      setSearchDrawer({ open: false, targetMealId: null, mode: 'add-food', targetFoodIndex: null })
+    },
+    []
+  )
+
+  const removeSwapOption = useCallback((mealId: string, foodIndex: number, swapFoodId: string) => {
+    setMeals((prev) =>
+      prev.map((m) => {
+        if (m.id !== mealId) return m
+        const next = [...m.foodItems]
+        const base = next[foodIndex]
+        if (!base) return m
+        next[foodIndex] = {
+          ...base,
+          swapOptions: (base.swapOptions ?? []).filter((x) => x.food_id !== swapFoodId),
+        }
+        return { ...m, foodItems: next }
+      })
+    )
+  }, [])
+
+  const updateSwapOption = useCallback(
+    (mealId: string, foodIndex: number, swapFoodId: string, quantity: number, unit: 'g' | 'un' | 'ml') => {
+      setMeals((prev) =>
+        prev.map((m) => {
+          if (m.id !== mealId) return m
+          const next = [...m.foodItems]
+          const base = next[foodIndex]
+          if (!base) return m
+          next[foodIndex] = {
+            ...base,
+            swapOptions: (base.swapOptions ?? []).map((opt) =>
+              opt.food_id === swapFoodId ? { ...opt, quantity, unit } : opt
+            ),
+          }
+          return { ...m, foodItems: next }
+        })
+      )
+    },
+    []
+  )
 
   const updateFoodItem = useCallback((mealId: string, idx: number, qty: number, unit: string) => {
     setMeals((prev) =>
@@ -179,6 +270,23 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
         food_id: fi.food_id,
         quantity: fi.quantity,
         unit: fi.unit,
+        swap_options:
+          fi.swapOptions?.map((opt) => {
+            const isLiquid = !!opt.food.is_liquid
+            return {
+              food_id: opt.food_id,
+              name: opt.food.name,
+              calories: opt.food.calories,
+              protein_g: opt.food.protein_g,
+              carbs_g: opt.food.carbs_g,
+              fats_g: opt.food.fats_g,
+              serving_size: opt.food.serving_size,
+              serving_unit: opt.food.serving_unit ?? null,
+              quantity: opt.quantity,
+              unit: coerceSwapOptionUnit(opt.unit, isLiquid),
+              is_liquid: isLiquid,
+            }
+          }) ?? [],
       })),
     }))
 
@@ -280,6 +388,9 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
                 onOpenFoodSearch={openFoodSearch}
                 onUpdateFoodItem={updateFoodItem}
                 onRemoveFoodItem={removeFoodItem}
+                onOpenSwapSearch={openSwapSearch}
+                onRemoveSwapOption={removeSwapOption}
+                onUpdateSwapOption={updateSwapOption}
               />
             </SortableContext>
           </DndContext>
@@ -289,10 +400,46 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
       <FoodSearchDrawer
         open={searchDrawer.open}
         coachId={coachId}
-        onClose={() => setSearchDrawer({ open: false, targetMealId: null })}
+        onClose={() =>
+          setSearchDrawer({ open: false, targetMealId: null, mode: 'add-food', targetFoodIndex: null })
+        }
         onConfirm={(item) => {
+          if (searchDrawer.mode !== 'add-food') return
           if (searchDrawer.targetMealId) addFoodToMeal(searchDrawer.targetMealId, item)
         }}
+        selectionMode={searchDrawer.mode}
+        onConfirmSwapFood={(food) => {
+          if (searchDrawer.mode !== 'add-swap') return
+          if (!searchDrawer.targetMealId || searchDrawer.targetFoodIndex == null) return
+          addSwapOptionToFoodItem(searchDrawer.targetMealId, searchDrawer.targetFoodIndex, {
+            food_id: food.id,
+            quantity: Number(food.serving_size) || 100,
+            unit: coerceSwapOptionUnit(food.serving_unit ?? undefined, !!food.is_liquid),
+            food: {
+              name: food.name,
+              calories: food.calories,
+              protein_g: food.protein_g,
+              carbs_g: food.carbs_g,
+              fats_g: food.fats_g,
+              serving_size: food.serving_size,
+              serving_unit: food.serving_unit ?? 'g',
+              is_liquid: food.is_liquid ?? false,
+              brand: food.brand ?? null,
+            },
+          })
+        }}
+        excludedFoodIds={
+          searchDrawer.mode === 'add-swap' &&
+          searchDrawer.targetMealId &&
+          searchDrawer.targetFoodIndex != null
+            ? (() => {
+                const meal = meals.find((m) => m.id === searchDrawer.targetMealId)
+                const base = meal?.foodItems[searchDrawer.targetFoodIndex]
+                if (!base) return []
+                return [base.food_id, ...(base.swapOptions ?? []).map((s) => s.food_id)]
+              })()
+            : []
+        }
         clientFavoriteIds={clientFavoriteIds.size > 0 ? clientFavoriteIds : undefined}
       />
     </div>

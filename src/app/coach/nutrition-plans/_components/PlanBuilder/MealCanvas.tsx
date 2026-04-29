@@ -14,6 +14,15 @@ interface Props {
   onOpenFoodSearch: (mealId: string) => void
   onUpdateFoodItem: (mealId: string, idx: number, qty: number, unit: string) => void
   onRemoveFoodItem: (mealId: string, idx: number) => void
+  onOpenSwapSearch: (mealId: string, idx: number) => void
+  onRemoveSwapOption: (mealId: string, idx: number, swapFoodId: string) => void
+  onUpdateSwapOption: (
+    mealId: string,
+    idx: number,
+    swapFoodId: string,
+    quantity: number,
+    unit: 'g' | 'un' | 'ml'
+  ) => void
 }
 
 export function MealCanvas({
@@ -25,6 +34,9 @@ export function MealCanvas({
   onOpenFoodSearch,
   onUpdateFoodItem,
   onRemoveFoodItem,
+  onOpenSwapSearch,
+  onRemoveSwapOption,
+  onUpdateSwapOption,
 }: Props) {
   return (
     <div className="min-w-0 space-y-4">
@@ -52,6 +64,11 @@ export function MealCanvas({
               onOpenFoodSearch={() => onOpenFoodSearch(meal.id)}
               onUpdateFoodItem={(idx, q, u) => onUpdateFoodItem(meal.id, idx, q, u)}
               onRemoveFoodItem={(idx) => onRemoveFoodItem(meal.id, idx)}
+              onOpenSwapSearch={(idx) => onOpenSwapSearch(meal.id, idx)}
+              onRemoveSwapOption={(idx, swapFoodId) => onRemoveSwapOption(meal.id, idx, swapFoodId)}
+              onUpdateSwapOption={(idx, swapFoodId, quantity, unit) =>
+                onUpdateSwapOption(meal.id, idx, swapFoodId, quantity, unit)
+              }
             />
           ))}
         </div>

@@ -27,8 +27,8 @@ interface Props {
   onSatisfactionChange?: (mealId: string, score: 1 | 2 | 3 | null) => void
   favoriteFoodIds?: Set<string>
   onToggleFoodFavorite?: (foodId: string) => void
-  /** food_id → swap alternatives for that food */
-  swapOptionsMap?: Map<string, Array<{ id: string; name: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>>
+  onApplyFoodSwap?: (mealId: string, originalFoodId: string, swappedFoodId: string) => void
+  activeSwaps?: Map<string, string>
 }
 
 const SATISFACTION = [
@@ -49,7 +49,8 @@ export function MealCard({
   onSatisfactionChange,
   favoriteFoodIds,
   onToggleFoodFavorite,
-  swapOptionsMap,
+  onApplyFoodSwap,
+  activeSwaps,
 }: Props) {
   const reduceMotion = useReducedMotion()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -196,7 +197,9 @@ export function MealCard({
                   item={item}
                   isFavorite={item.foods.id ? favoriteFoodIds?.has(item.foods.id) : false}
                   onToggleFavorite={onToggleFoodFavorite}
-                  swapOptions={item.foods.id ? swapOptionsMap?.get(item.foods.id) : undefined}
+                  mealId={meal.id}
+                  onApplySwap={onApplyFoodSwap}
+                  activeSwapFoodId={item.foods.id ? activeSwaps?.get(`${meal.id}:${item.foods.id}`) : undefined}
                 />
                 ))
               ) : (

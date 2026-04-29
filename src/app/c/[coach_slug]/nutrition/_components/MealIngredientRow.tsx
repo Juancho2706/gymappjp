@@ -1,31 +1,38 @@
 'use client'
 
 import { useState } from 'react'
-import { Heart, Flame, ArrowLeftRight } from 'lucide-react'
-import { calculateFoodItemMacros, type FoodItemForMacros } from '@/lib/nutrition-utils'
+import { ArrowLeftRight, Heart, Flame } from 'lucide-react'
+import {
+  calculateFoodItemMacros,
+  coerceSwapOptionUnit,
+  swapOptionIsLiquid,
+  type FoodItemForMacros,
+} from '@/lib/nutrition-utils'
 import { cn } from '@/lib/utils'
-
-interface SwapFood {
-  id: string
-  name: string
-  calories: number
-  protein_g: number
-  carbs_g: number
-  fats_g: number
-}
 
 interface Props {
   item: FoodItemForMacros
   isFavorite?: boolean
   onToggleFavorite?: (foodId: string) => void
-  swapOptions?: SwapFood[]
+  mealId?: string
+  activeSwapFoodId?: string
+  /** Cantidad y unidad las define el coach en la opción de cambio; el alumno solo elige y aplica. */
+  onApplySwap?: (mealId: string, originalFoodId: string, swappedFoodId: string) => void
 }
 
-export function MealIngredientRow({ item, isFavorite, onToggleFavorite, swapOptions }: Props) {
+export function MealIngredientRow({
+  item,
+  isFavorite,
+  onToggleFavorite,
+  mealId,
+  activeSwapFoodId,
+  onApplySwap,
+}: Props) {
   const macros = calculateFoodItemMacros(item)
   const displayQty = `${item.quantity} ${item.unit || (item.quantity < 10 ? 'un' : 'g')}`
   const foodId = item.foods.id
   const [showSwaps, setShowSwaps] = useState(false)
+  const swapOptions = item.swap_options ?? []
 
   return (
     <div className="rounded-xl bg-muted/30 border border-border/40 overflow-hidden">
@@ -33,10 +40,13 @@ export function MealIngredientRow({ item, isFavorite, onToggleFavorite, swapOpti
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="flex-1 text-sm font-semibold text-foreground/90 truncate">{item.foods.name}</p>
-            {swapOptions && swapOptions.length > 0 && (
+            {swapOptions.length > 0 && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setShowSwaps((v) => !v) }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowSwaps((v) => !v)
+                }}
                 aria-label="Ver alternativas"
                 className={cn(
                   'shrink-0 p-0.5 rounded-md transition-colors hover:bg-muted',
@@ -49,7 +59,10 @@ export function MealIngredientRow({ item, isFavorite, onToggleFavorite, swapOpti
             {foodId && onToggleFavorite && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onToggleFavorite(foodId) }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleFavorite(foodId)
+                }}
                 aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
                 className="shrink-0 p-0.5 rounded-md transition-colors hover:bg-muted"
               >
@@ -79,19 +92,72 @@ export function MealIngredientRow({ item, isFavorite, onToggleFavorite, swapOpti
         </div>
       </div>
 
-      {showSwaps && swapOptions && swapOptions.length > 0 && (
-        <div className="px-3 pb-3 pt-0 space-y-1.5 border-t border-border/30">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-sky-500 mt-2">Alternativas equivalentes</p>
-          {swapOptions.map((f) => (
-            <div key={f.id} className="flex items-center justify-between gap-2 rounded-lg bg-background/60 border border-border/30 px-2.5 py-1.5">
-              <p className="text-xs font-semibold text-foreground/80 truncate">{f.name}</p>
-              <div className="flex gap-1.5 shrink-0 text-[10px] font-bold">
-                <span className="text-orange-500">P{Math.round(f.protein_g * (Number(item.quantity) / 100))}g</span>
-                <span className="text-blue-500">C{Math.round(f.carbs_g * (Number(item.quantity) / 100))}g</span>
-                <span className="text-muted-foreground">{Math.round(f.calories * (Number(item.quantity) / 100))}kcal</span>
+      {showSwaps && swapOptions.length > 0 && (
+        <div className="px-3 pb-3 pt-0 space-y-2 border-t border-border/30">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-sky-500 mt-2">Opciones de cambio</p>
+          {swapOptions.map((f) => {
+            const isLiquid = swapOptionIsLiquid(f)
+            const coachQty =
+              f.quantity != null && Number.isFinite(Number(f.quantity)) && Number(f.quantity) > 0
+                ? Number(f.quantity)
+                : Number(item.quantity) || 0
+            const coachUnit = coerceSwapOptionUnit(f.unit ?? item.unit ?? undefined, isLiquid)
+            const previewMacros = calculateFoodItemMacros({
+              quantity: coachQty,
+              unit: coachUnit,
+              foods: {
+                id: f.food_id,
+                name: f.name,
+                calories: f.calories,
+                protein_g: f.protein_g,
+                carbs_g: f.carbs_g,
+                fats_g: f.fats_g,
+                serving_size: f.serving_size,
+                serving_unit: f.serving_unit ?? null,
+              },
+            })
+            return (
+              <div
+                key={f.food_id}
+                className="flex flex-col gap-2 rounded-lg bg-background/60 border border-border/30 px-2.5 py-2"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-foreground/80 min-w-0 flex-1 truncate">{f.name}</p>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 text-[10px] font-bold">
+                    <span className="text-orange-500">P{Math.round(previewMacros.protein)}g</span>
+                    <span className="text-blue-500">C{Math.round(previewMacros.carbs)}g</span>
+                    <span className="text-yellow-500">G{Math.round(previewMacros.fats)}g</span>
+                    <span className="text-muted-foreground">{Math.round(previewMacros.calories)}kcal</span>
+                    {activeSwapFoodId === f.food_id && (
+                      <span className="rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-wide border bg-emerald-500/15 text-emerald-600 border-emerald-500/40">
+                        Activo
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[10px] text-muted-foreground">
+                    Porción del coach:{' '}
+                    <span className="font-semibold text-foreground">
+                      {coachQty} {coachUnit}
+                    </span>
+                  </p>
+                  {mealId && foodId && onApplySwap && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onApplySwap(mealId, foodId, f.food_id)
+                      }}
+                      className="shrink-0 rounded-md bg-sky-500/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-sky-700 border border-sky-500/35 hover:bg-sky-500/25"
+                    >
+                      Aplicar
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

@@ -6,9 +6,9 @@ import { MacroRingSummary } from './MacroRingSummary'
 import { MealCard, type MealCardMeal } from './MealCard'
 import { AdherenceStrip, type DayAdherence } from './AdherenceStrip'
 import { NutritionStreakBanner } from './NutritionStreakBanner'
-import { toggleMealCompletion, fetchLogForDate, updateMealConsumedPortion, updateMealSatisfaction, toggleClientFoodPreference, getClientFoodFavoritesForClient } from '../_actions/nutrition.actions'
-import { getSwapGroupsForClient } from '../_actions/swaps.actions'
+import { toggleMealCompletion, fetchLogForDate, updateMealConsumedPortion, updateMealSatisfaction, toggleClientFoodPreference, getClientFoodFavoritesForClient, applyMealFoodSwap } from '../_actions/nutrition.actions'
 import {
+  applyMealFoodSwaps,
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
   calculateFoodItemMacros,
@@ -20,6 +20,13 @@ import { Share2 } from 'lucide-react'
 import { HabitsTracker } from './HabitsTracker'
 
 type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null; satisfaction_score?: number | null }
+type MealSwapRow = {
+  meal_id: string
+  original_food_id: string
+  swapped_food_id: string
+  swapped_quantity?: number | null
+  swapped_unit?: string | null
+}
 
 type PlanMealRow = NutritionMealMacroSource & {
   name: string
@@ -62,50 +69,19 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   const [isTogglePending, startToggleTransition] = useTransition()
   const [isPortionPending, startPortionTransition] = useTransition()
   const [isSatisfactionPending, startSatisfactionTransition] = useTransition()
+  const [isSwapPending, startSwapTransition] = useTransition()
   const [favoriteFoodIds, setFavoriteFoodIds] = useState<Set<string>>(new Set())
-  const [swapOptionsMap, setSwapOptionsMap] = useState<Map<string, Array<{ id: string; name: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>>>(new Map())
 
   useEffect(() => {
     getClientFoodFavoritesForClient(userId).then((ids) => setFavoriteFoodIds(new Set(ids)))
   }, [userId])
 
-  useEffect(() => {
-    const coachId = plan.coach_id
-    if (!coachId) return
-    getSwapGroupsForClient(userId, coachId).then((groups) => {
-      // Build map: food_id → other foods in the same group
-      const map = new Map<string, Array<{ id: string; name: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>>()
-      // We only have food_ids, not food details — need to resolve via plan meals
-      const allPlanFoodIds = new Set<string>()
-      for (const m of plan.nutrition_meals ?? []) {
-        for (const fi of m.food_items ?? []) {
-          const fid = fi.foods?.id
-          if (fid) allPlanFoodIds.add(fid)
-        }
-      }
-      // For swap display, we only show names + macros from plan data
-      const planFoodDetails = new Map<string, { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>()
-      for (const m of plan.nutrition_meals ?? []) {
-        for (const fi of m.food_items ?? []) {
-          const f = fi.foods
-          if (f?.id) planFoodDetails.set(f.id, { id: f.id, name: f.name ?? '', calories: f.calories ?? 0, protein_g: f.protein_g ?? 0, carbs_g: f.carbs_g ?? 0, fats_g: f.fats_g ?? 0 })
-        }
-      }
-      for (const group of groups) {
-        const ids = group.food_ids as string[]
-        for (const fid of ids) {
-          // Only map plan foods (others won't have details in memory)
-          if (!planFoodDetails.has(fid) && !allPlanFoodIds.has(fid)) continue
-          const others = ids.filter((id) => id !== fid && planFoodDetails.has(id)).map((id) => planFoodDetails.get(id)!)
-          if (others.length > 0) map.set(fid, others)
-        }
-      }
-      setSwapOptionsMap(map)
-    })
-  }, [userId, plan.coach_id, plan.nutrition_meals])
-
   const mealLogs = useMemo(
     () => (currentLog?.nutrition_meal_logs as MealLogRow[] | undefined) ?? [],
+    [currentLog]
+  )
+  const mealSwapLogs = useMemo(
+    () => (currentLog?.nutrition_meal_food_swaps as MealSwapRow[] | undefined) ?? [],
     [currentLog]
   )
 
@@ -166,7 +142,66 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     [plan.nutrition_meals]
   )
 
-  const mealsForMacros = useMemo(() => mealsVisible.map(normalizeMealForMacros), [mealsVisible])
+  const mealsVisibleWithSwaps = useMemo(() => {
+    if (mealSwapLogs.length === 0) return mealsVisible
+    const swapByMealFood = new Map<string, MealSwapRow>()
+    for (const s of mealSwapLogs) {
+      swapByMealFood.set(`${s.meal_id}:${s.original_food_id}`, s)
+    }
+
+    return mealsVisible.map((meal) => {
+      const normalized = normalizeMealForMacros(meal)
+      const swapFoodsByOriginal = new Map<
+        string,
+        {
+          swappedFood: {
+            id?: string
+            name: string
+            calories: number
+            protein_g: number
+            carbs_g: number
+            fats_g: number
+            serving_size: number
+            serving_unit: string | null
+          }
+          swappedQuantity?: number | null
+          swappedUnit?: string | null
+        }
+      >()
+      for (const item of normalized.food_items) {
+        const originalFoodId = item.foods.id
+        if (!originalFoodId) continue
+        const swapLog = swapByMealFood.get(`${meal.id}:${originalFoodId}`)
+        if (!swapLog) continue
+        const option = (item.swap_options ?? []).find((x) => x.food_id === swapLog.swapped_food_id)
+        if (!option) continue
+        swapFoodsByOriginal.set(originalFoodId, {
+          swappedFood: {
+            id: option.food_id,
+            name: option.name,
+            calories: option.calories,
+            protein_g: option.protein_g,
+            carbs_g: option.carbs_g,
+            fats_g: option.fats_g,
+            serving_size: option.serving_size,
+            serving_unit: option.serving_unit ?? null,
+          },
+          swappedQuantity: swapLog.swapped_quantity ?? null,
+          swappedUnit: swapLog.swapped_unit ?? null,
+        })
+      }
+      const swapped = applyMealFoodSwaps(normalized, swapFoodsByOriginal)
+      return {
+        ...meal,
+        food_items: swapped.food_items,
+      }
+    })
+  }, [mealsVisible, mealSwapLogs])
+
+  const mealsForMacros = useMemo(
+    () => mealsVisibleWithSwaps.map(normalizeMealForMacros),
+    [mealsVisibleWithSwaps]
+  )
 
   const completedIds = useMemo(() => {
     const ids = new Set<string>()
@@ -317,21 +352,63 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
         else next.add(foodId)
         return next
       })
-      toggleClientFoodPreference({ clientId: userId, foodId, preferenceType: 'favorite' }).catch(() => {
-        // revert on error
-        setFavoriteFoodIds((prev) => {
-          const next = new Set(prev)
-          if (next.has(foodId)) next.delete(foodId)
-          else next.add(foodId)
-          return next
-        })
+      toggleClientFoodPreference({
+        clientId: userId,
+        foodId,
+        preferenceType: 'favorite',
+        clientProfileRevalidateId: userId,
+      }).then((res) => {
+        if (!res.success) {
+          setFavoriteFoodIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(foodId)) next.delete(foodId)
+            else next.add(foodId)
+            return next
+          })
+          toast.error('No se pudo guardar el favorito')
+        }
       })
     },
     [userId]
   )
 
   const totalMeals = mealsVisible.length
-  const isPending = isTogglePending || isDateLoading || isPortionPending || isSatisfactionPending
+  const isPending = isTogglePending || isDateLoading || isPortionPending || isSatisfactionPending || isSwapPending
+  const activeSwapByMealFoodKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of mealSwapLogs) {
+      m.set(`${s.meal_id}:${s.original_food_id}`, s.swapped_food_id)
+      m.set(`${s.meal_id}:${s.swapped_food_id}`, s.swapped_food_id)
+    }
+    return m
+  }, [mealSwapLogs])
+
+  const handleApplySwap = useCallback(
+    (mealId: string, originalFoodId: string, swappedFoodId: string) => {
+      if (!isToday) return
+      startSwapTransition(async () => {
+        const dailyLogId = currentLog?.id as string | undefined
+        const { success, error } = await applyMealFoodSwap({
+          clientId: userId,
+          planId: plan.id,
+          ...(dailyLogId ? { dailyLogId } : {}),
+          mealId,
+          originalFoodId,
+          swappedFoodId,
+          coachSlug,
+          targetDate: selectedDate,
+        })
+        if (!success) {
+          toast.error(error ?? 'No se pudo aplicar el intercambio')
+          return
+        }
+        toast.success('Intercambio aplicado')
+        const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+        setCurrentLog(dailyLog as Record<string, unknown> | null)
+      })
+    },
+    [isToday, currentLog, userId, plan.id, coachSlug, selectedDate]
+  )
 
   const copyToClipboard = useCallback((text: string, okMsg: string) => {
     if (navigator.clipboard) {
@@ -359,7 +436,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
       lines.push('')
     }
 
-    for (const meal of mealsVisible) {
+    for (const meal of mealsVisibleWithSwaps) {
       lines.push(`*${meal.name.toUpperCase()}*`)
       const items = meal.food_items ?? []
       let mealCalories = 0
@@ -395,13 +472,13 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     lines.push(`📊 Meta: ${goals.calories} kcal | P ${goals.protein}g · C ${goals.carbs}g · G ${goals.fats}g`)
 
     copyToClipboard(lines.join('\n'), 'Detalle del día copiado — listo para WhatsApp 📋')
-  }, [mealsVisible, plan.name, plan.instructions, goals, selectedDate, copyToClipboard])
+  }, [mealsVisibleWithSwaps, plan.name, plan.instructions, goals, selectedDate, copyToClipboard])
 
   const handleCopyDayShort = useCallback(() => {
     const lines: string[] = []
     lines.push(`*${plan.name ?? 'Mi plan'} · ${selectedDate}*`)
     lines.push('')
-    for (const meal of mealsVisible) {
+    for (const meal of mealsVisibleWithSwaps) {
       const items = meal.food_items ?? []
       let kcal = 0
       let p = 0
@@ -429,7 +506,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     lines.push('')
     lines.push(`Meta diaria: ${goals.calories} kcal | P ${goals.protein}g · C ${goals.carbs}g · G ${goals.fats}g`)
     copyToClipboard(lines.join('\n'), 'Resumen corto copiado 📋')
-  }, [mealsVisible, plan.name, goals, selectedDate, copyToClipboard])
+  }, [mealsVisibleWithSwaps, plan.name, goals, selectedDate, copyToClipboard])
 
   return (
     <div className="space-y-5">
@@ -439,6 +516,13 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
         adherenceDates={adherenceDates}
         isLoading={isDateLoading}
       />
+
+      {mealsSorted.length > mealsVisible.length && mealsVisible.length > 0 && (
+        <p className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] leading-snug text-sky-100/90">
+          Hoy ves {mealsVisible.length} de {mealsSorted.length} comidas del plan. Las demás están fijadas a otro día
+          de la semana en el plan del coach; prueba otra fecha en el calendario o consulta con tu coach.
+        </p>
+      )}
 
       {adherence.length > 0 && totalMeals > 0 && (
         <NutritionStreakBanner adherenceData={adherence} planMeals={planMealsForAdherence} />
@@ -458,7 +542,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
             No hay comidas planificadas para este día.
           </p>
         ) : (
-          mealsVisible.map((meal) => (
+          mealsVisibleWithSwaps.map((meal) => (
             <MealCard
               key={meal.id}
               meal={toMealCardMeal(meal)}
@@ -472,7 +556,8 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
               onSatisfactionChange={isToday ? handleSatisfactionChange : undefined}
               favoriteFoodIds={favoriteFoodIds}
               onToggleFoodFavorite={handleToggleFoodFavorite}
-              swapOptionsMap={swapOptionsMap.size > 0 ? swapOptionsMap : undefined}
+              onApplyFoodSwap={isToday ? handleApplySwap : undefined}
+              activeSwaps={activeSwapByMealFoodKey}
             />
           ))
         )}

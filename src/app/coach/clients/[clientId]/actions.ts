@@ -237,6 +237,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
                 food_items (
                     quantity,
                     unit,
+                    swap_options,
                     foods ( name, calories, protein_g, carbs_g, fats_g )
                 )
             `
@@ -567,6 +568,18 @@ export const getClientProfileData = cache(async (clientId: string) => {
         checkInCompliancePercentWeekAgo,
     }
 
+    const { data: favoritePrefsRows } = await supabase
+        .from('client_food_preferences')
+        .select('food_id, foods ( id, name )')
+        .eq('client_id', clientId)
+        .eq('preference_type', 'favorite')
+        .order('created_at', { ascending: false })
+
+    const clientFavoriteFoods = (favoritePrefsRows ?? []).map((row: { food_id: string; foods?: { name?: string | null } | null }) => ({
+        id: row.food_id,
+        name: row.foods?.name?.trim() || 'Alimento',
+    }))
+
     return {
         client,
         activeProgram,
@@ -589,6 +602,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         mealDetails,
         attentionScore,
         profileLastActivityAt,
+        clientFavoriteFoods,
     }
 })
 
@@ -761,12 +775,17 @@ export async function getClientNutritionForDate(clientId: string, date: string) 
             id, log_date, plan_name_at_log,
             target_calories_at_log, target_protein_at_log,
             target_carbs_at_log, target_fats_at_log,
+            nutrition_meal_food_swaps (
+                id, meal_id, original_food_id, swapped_food_id, swapped_quantity, swapped_unit,
+                original_food:foods!nutrition_meal_food_swaps_original_food_id_fkey ( id, name ),
+                swapped_food:foods!nutrition_meal_food_swaps_swapped_food_id_fkey ( id, name )
+            ),
             nutrition_meal_logs (
                 id, is_completed,
                 nutrition_meals (
                     id, name, order_index, day_of_week,
                     food_items (
-                        id, quantity, unit,
+                        id, quantity, unit, swap_options,
                         foods (name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit)
                     )
                 )

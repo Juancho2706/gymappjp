@@ -17,7 +17,7 @@ export const getActiveNutritionPlan = cache(async (userId: string) => {
       nutrition_meals (
         id, name, order_index, plan_id, day_of_week,
         food_items (
-          id, meal_id, quantity, unit,
+          id, meal_id, quantity, unit, swap_options,
           foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
         )
       )
@@ -45,7 +45,15 @@ export const getNutritionLogForDate = cache(
       nutrition_meal_logs (
         meal_id,
         is_completed,
-        consumed_quantity
+        consumed_quantity,
+        satisfaction_score
+      ),
+      nutrition_meal_food_swaps (
+        meal_id,
+        original_food_id,
+        swapped_food_id,
+        swapped_quantity,
+        swapped_unit
       )
     `
       )

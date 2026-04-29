@@ -18,13 +18,43 @@ type MealInput = {
     name: string;
     order_index: number;
     day_of_week?: number | null;
-    foodItems: Array<{ food_id: string; quantity: number; unit: string }>;
+    foodItems: Array<{
+        food_id: string
+        quantity: number
+        unit: string
+        swap_options?: Array<{
+            food_id: string
+            is_liquid?: boolean
+            quantity?: number
+            unit?: 'g' | 'un' | 'ml'
+            name: string
+            calories: number
+            protein_g: number
+            carbs_g: number
+            fats_g: number
+            serving_size: number
+            serving_unit?: string | null
+        }>
+    }>;
 };
 
 type TemplateSavedMealItem = {
     food_id: string
     quantity: number
     unit: string
+    swap_options?: Array<{
+        food_id: string
+        is_liquid?: boolean
+        quantity?: number
+        unit?: 'g' | 'un' | 'ml'
+        name: string
+        calories: number
+        protein_g: number
+        carbs_g: number
+        fats_g: number
+        serving_size: number
+        serving_unit?: string | null
+    }>
 }
 
 type TemplateMealWithGroups = {
@@ -130,6 +160,7 @@ export class NutritionService {
                         food_id: f.food_id,
                         quantity: f.quantity,
                         unit: f.unit,
+                        swap_options: f.swap_options ?? [],
                     }))
                 );
 
@@ -274,6 +305,7 @@ export class NutritionService {
                                     food_id: it.food_id,
                                     quantity: it.quantity,
                                     unit: it.unit,
+                                    swap_options: it.swap_options ?? [],
                                 }))
                             );
                         }
@@ -296,6 +328,7 @@ export class NutritionService {
                                     food_id: it.food_id,
                                     quantity: it.quantity,
                                     unit: it.unit,
+                                    swap_options: it.swap_options ?? [],
                                 }))
                             );
                         }
@@ -358,6 +391,7 @@ export class NutritionService {
                             food_id: it.food_id,
                             quantity: it.quantity,
                             unit: it.unit,
+                            swap_options: it.swap_options ?? [],
                         }))
                     );
                 }
@@ -438,6 +472,7 @@ export class NutritionService {
                             food_id: it.food_id,
                             quantity: it.quantity,
                             unit: it.unit,
+                            swap_options: it.swap_options ?? [],
                         }))
                     );
 

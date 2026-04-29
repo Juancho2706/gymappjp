@@ -39,6 +39,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Heart,
 } from 'lucide-react'
 import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
@@ -91,6 +92,8 @@ type NutritionTabB5Props = {
   nutritionStreakDays?: number
   nutritionWeeklyAvgPct?: number
   nutritionPrevWeeklyAvgPct?: number
+  /** Catalog foods the client marked as favorite (persisted). */
+  clientFavoriteFoods?: { id: string; name: string }[]
   chartGridColor: string
   chartAxisColor: string
   tooltipBgColor: string
@@ -199,6 +202,7 @@ export function NutritionTabB5({
   nutritionStreakDays = 0,
   nutritionWeeklyAvgPct = 0,
   nutritionPrevWeeklyAvgPct = 0,
+  clientFavoriteFoods = [],
   chartGridColor,
   chartAxisColor,
   tooltipBgColor,
@@ -362,6 +366,26 @@ export function NutritionTabB5({
 
   return (
     <div className="space-y-6">
+      {clientFavoriteFoods.length > 0 && (
+        <GlassCard className="border-border/40 p-4 dark:border-white/10">
+          <div className="mb-2 flex items-center gap-2">
+            <Heart className="h-4 w-4 shrink-0 fill-rose-400 text-rose-400" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-foreground/90">
+              Alimentos favoritos del alumno
+            </h3>
+          </div>
+          <p className="mb-3 text-[11px] text-muted-foreground">
+            Marcados desde la app del alumno; se aplican a todos sus planes con esos alimentos del catálogo.
+          </p>
+          <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+            {clientFavoriteFoods.map((f) => (
+              <Badge key={f.id} variant="secondary" className="max-w-full truncate font-medium">
+                {f.name}
+              </Badge>
+            ))}
+          </div>
+        </GlassCard>
+      )}
       {plan && (
         <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10">
           <div className="absolute top-0 right-0 h-72 w-72 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
@@ -1127,6 +1151,22 @@ type NutritionDayLog = NonNullable<Awaited<ReturnType<typeof getClientNutritionF
 
 function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
   const mealLogs = (log.nutrition_meal_logs ?? []) as any[]
+  const swapLogs = (log.nutrition_meal_food_swaps ?? []) as Array<{
+    id?: string
+    meal_id: string
+    original_food_id: string
+    swapped_food_id: string
+    swapped_quantity?: number | null
+    swapped_unit?: string | null
+    original_food?: { id?: string; name?: string } | null
+    swapped_food?: { id?: string; name?: string } | null
+  }>
+  const swapsByMeal = new Map<string, typeof swapLogs>()
+  for (const s of swapLogs) {
+    const list = swapsByMeal.get(s.meal_id) ?? []
+    list.push(s)
+    swapsByMeal.set(s.meal_id, list)
+  }
 
   // Calcular macros consumidos del día
   let totalCal = 0, totalP = 0, totalC = 0, totalF = 0
@@ -1177,6 +1217,7 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
         {sortedMeals.map((ml: any) => {
           const meal = ml.nutrition_meals
           if (!meal) return null
+          const mealSwaps = swapsByMeal.get(meal.id) ?? []
           return (
             <div
               key={ml.id}
@@ -1201,6 +1242,19 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
                     </li>
                   ))}
                 </ul>
+              )}
+              {mealSwaps.length > 0 && (
+                <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 px-2.5 py-2 space-y-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sky-600">Swaps aplicados</p>
+                  {mealSwaps.map((s) => (
+                    <p key={s.id ?? `${s.meal_id}-${s.original_food_id}-${s.swapped_food_id}`} className="text-[10px] text-sky-700 dark:text-sky-300">
+                      {(s.original_food?.name ?? 'Alimento')} → {(s.swapped_food?.name ?? 'Alternativa')}
+                      {s.swapped_quantity != null
+                        ? ` (${s.swapped_quantity}${s.swapped_unit ? ` ${s.swapped_unit}` : ''})`
+                        : ''}
+                    </p>
+                  ))}
+                </div>
               )}
             </div>
           )

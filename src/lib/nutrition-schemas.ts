@@ -15,6 +15,25 @@ export const FoodItemSchema = z.object({
     .positive('La cantidad debe ser mayor a 0')
     .max(5000, 'Cantidad máxima: 5000'),
   unit: unitSchema,
+  swap_options: z
+    .array(
+      z.object({
+        food_id: z.string().uuid('ID de alimento swap inválido'),
+        quantity: z.number().positive().max(10000).optional(),
+        unit: unitSchema.optional(),
+        /** Si falta, se infiere en runtime por serving_unit === ml */
+        is_liquid: z.boolean().optional(),
+        name: z.string().min(1).max(120),
+        calories: z.number().min(0).max(9000),
+        protein_g: z.number().min(0).max(500),
+        carbs_g: z.number().min(0).max(500),
+        fats_g: z.number().min(0).max(500),
+        serving_size: z.number().positive().max(10000),
+        serving_unit: z.string().nullable().optional(),
+      })
+    )
+    .max(8, 'Máximo 8 alternativas por alimento')
+    .optional(),
 })
 
 export const MealSchema = z.object({

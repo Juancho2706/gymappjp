@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyMealFoodSwaps,
   calculateFoodItemMacros,
   calculateConsumedMacros,
   calculateConsumedMacrosWithCompletionFallback,
+  coerceSwapOptionUnit,
+  resolveCoachSwapPortionFromSwapOptions,
   mealConsumedPortionMultiplier,
   normalizeMealForMacros,
   portionPctMapFromMealLogs,
+  swapOptionIsLiquid,
   type MealWithFoodItems,
   type NutritionMealMacroSource,
 } from './nutrition-utils'
@@ -184,5 +188,141 @@ describe('nutrition-utils', () => {
     )
     expect(consumed.calories).toBe(500)
     expect(consumed.protein).toBe(25)
+  })
+
+  it('replaces meal item food macros when a swap is applied', () => {
+    const meal: MealWithFoodItems = {
+      id: 'm1',
+      food_items: [
+        {
+          quantity: 100,
+          unit: 'g',
+          foods: {
+            id: 'f-original',
+            name: 'Arroz',
+            calories: 130,
+            protein_g: 2.7,
+            carbs_g: 28,
+            fats_g: 0.3,
+            serving_size: 100,
+            serving_unit: 'g',
+          },
+        },
+      ],
+    }
+
+    const swapped = applyMealFoodSwaps(
+      meal,
+      new Map([
+        [
+          'f-original',
+          {
+            swappedFood: {
+              id: 'f-swap',
+              name: 'Papa',
+              calories: 87,
+              protein_g: 1.9,
+              carbs_g: 20.1,
+              fats_g: 0.1,
+              serving_size: 100,
+              serving_unit: 'g',
+            },
+          },
+        ],
+      ])
+    )
+
+    expect(swapped.food_items[0]?.foods.id).toBe('f-swap')
+    expect(swapped.food_items[0]?.foods.name).toBe('Papa')
+  })
+
+  it('applies swapped quantity and unit overrides when provided', () => {
+    const meal: MealWithFoodItems = {
+      id: 'm1',
+      food_items: [
+        {
+          quantity: 100,
+          unit: 'g',
+          foods: {
+            id: 'f-original',
+            name: 'Arroz',
+            calories: 130,
+            protein_g: 2.7,
+            carbs_g: 28,
+            fats_g: 0.3,
+            serving_size: 100,
+            serving_unit: 'g',
+          },
+        },
+      ],
+    }
+    const swapped = applyMealFoodSwaps(
+      meal,
+      new Map([
+        [
+          'f-original',
+          {
+            swappedFood: {
+              id: 'f-swap',
+              name: 'Papa',
+              calories: 87,
+              protein_g: 1.9,
+              carbs_g: 20.1,
+              fats_g: 0.1,
+              serving_size: 100,
+              serving_unit: 'g',
+            },
+            swappedQuantity: 180,
+            swappedUnit: 'g',
+          },
+        ],
+      ])
+    )
+    expect(swapped.food_items[0]?.quantity).toBe(180)
+    expect(swapped.food_items[0]?.unit).toBe('g')
+  })
+
+  it('coerces swap option units to allowed set for liquid vs solid', () => {
+    expect(coerceSwapOptionUnit('g', true)).toBe('ml')
+    expect(coerceSwapOptionUnit('ml', true)).toBe('ml')
+    expect(coerceSwapOptionUnit('un', true)).toBe('un')
+    expect(coerceSwapOptionUnit('ml', false)).toBe('g')
+    expect(coerceSwapOptionUnit('g', false)).toBe('g')
+    expect(coerceSwapOptionUnit('un', false)).toBe('un')
+  })
+
+  it('detects liquid swap rows from is_liquid or serving_unit', () => {
+    expect(swapOptionIsLiquid({ is_liquid: true, serving_unit: 'g' })).toBe(true)
+    expect(swapOptionIsLiquid({ is_liquid: false, serving_unit: 'ml' })).toBe(true)
+    expect(swapOptionIsLiquid({ serving_unit: 'ml' })).toBe(true)
+    expect(swapOptionIsLiquid({ serving_unit: 'g' })).toBe(false)
+    expect(swapOptionIsLiquid({ is_liquid: false, serving_unit: 'g' })).toBe(false)
+  })
+
+  it('resolveCoachSwapPortionFromSwapOptions uses coach quantity and unit', () => {
+    const opts = [
+      {
+        food_id: 'a',
+        quantity: 40,
+        unit: 'un',
+        serving_size: 100,
+        serving_unit: 'g',
+        is_liquid: false,
+      },
+    ]
+    expect(resolveCoachSwapPortionFromSwapOptions(opts, 'a')).toEqual({ quantity: 40, unit: 'un' })
+  })
+
+  it('resolveCoachSwapPortionFromSwapOptions falls back to serving_size when quantity missing', () => {
+    const opts = [
+      {
+        food_id: 'b',
+        serving_size: 200,
+        unit: 'g',
+        serving_unit: 'g',
+        is_liquid: false,
+      },
+    ]
+    expect(resolveCoachSwapPortionFromSwapOptions(opts, 'b')).toEqual({ quantity: 200, unit: 'g' })
   })
 })

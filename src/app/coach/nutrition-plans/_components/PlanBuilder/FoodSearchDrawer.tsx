@@ -35,6 +35,9 @@ interface Props {
   coachId: string
   onClose: () => void
   onConfirm: (item: FoodItemDraft) => void
+  selectionMode?: 'add-food' | 'add-swap'
+  onConfirmSwapFood?: (food: FoodRow) => void
+  excludedFoodIds?: string[]
   /** food_ids the current client has marked as favorite — shows ❤️ badge */
   clientFavoriteIds?: Set<string>
 }
@@ -191,7 +194,16 @@ function VirtualFoodList({
 
 type View = 'search' | 'create' | 'quantity'
 
-export function FoodSearchDrawer({ open, coachId, onClose, onConfirm, clientFavoriteIds }: Props) {
+export function FoodSearchDrawer({
+  open,
+  coachId,
+  onClose,
+  onConfirm,
+  selectionMode = 'add-food',
+  onConfirmSwapFood,
+  excludedFoodIds = [],
+  clientFavoriteIds,
+}: Props) {
   const [view, setView] = useState<View>('search')
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
@@ -270,6 +282,7 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm, clientFavo
   }, [searchTerm, open, coachId])
 
   const filtered = results
+    .filter((f) => !excludedFoodIds.includes(f.id))
     .filter((f) => category === 'todos' ? true : normalizeCategory(f.category) === category)
     .sort((a, b) => {
       const aFav = clientFavoriteIds?.has(a.id) ? 1 : 0
@@ -281,12 +294,17 @@ export function FoodSearchDrawer({ open, coachId, onClose, onConfirm, clientFavo
   const preview = picked ? previewMacrosForQuantity(toFoodDraftShape(picked), parsedQuantity, unit) : null
 
   const handlePickFood = useCallback((f: FoodRow) => {
+    if (selectionMode === 'add-swap') {
+      onConfirmSwapFood?.(f)
+      onClose()
+      return
+    }
     setPicked(f)
     setView('quantity')
     const defaultUnit = f.is_liquid ? 'ml' : normalizeUnit(f.serving_unit)
     setUnit(defaultUnit)
     setQuantity(String(f.serving_size || (f.is_liquid ? 200 : 100)))
-  }, [])
+  }, [selectionMode, onConfirmSwapFood, onClose])
 
   const handleGoCreate = useCallback(() => {
     setNewName(searchTerm.trim())

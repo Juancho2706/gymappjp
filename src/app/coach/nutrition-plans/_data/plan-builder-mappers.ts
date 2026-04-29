@@ -1,9 +1,23 @@
 import type { FoodItemDraft, MealDraft, PlanBuilderInitialData } from '../_components/PlanBuilder/types'
+import { coerceSwapOptionUnit } from '@/lib/nutrition-utils'
 
 type ItemRow = {
   quantity: number
   unit?: string | null
   food_id: string
+  swap_options?: Array<{
+    food_id: string
+    is_liquid?: boolean | null
+    quantity?: number
+    unit?: 'g' | 'un' | 'ml' | null
+    name: string
+    calories: number
+    protein_g: number
+    carbs_g: number
+    fats_g: number
+    serving_size: number
+    serving_unit?: string | null
+  }> | null
   food?: {
     name: string
     calories: number
@@ -22,6 +36,31 @@ function mapSavedItemsToFoodDrafts(items: ItemRow[]): FoodItemDraft[] {
       food_id: it.food_id,
       quantity: Number(it.quantity) || 0,
       unit: it.unit ?? 'g',
+      swapOptions:
+        (it.swap_options ?? []).map((opt) => {
+          const isLiquid =
+            String(opt.serving_unit ?? '').toLowerCase() === 'ml'
+              ? true
+              : typeof opt.is_liquid === 'boolean'
+                ? opt.is_liquid
+                : false
+          const unit = coerceSwapOptionUnit(typeof opt.unit === 'string' ? opt.unit : undefined, isLiquid)
+          return {
+            food_id: opt.food_id,
+            quantity: Number(opt.quantity) || Number(opt.serving_size) || 100,
+            unit,
+            food: {
+              name: opt.name,
+              calories: opt.calories,
+              protein_g: opt.protein_g,
+              carbs_g: opt.carbs_g,
+              fats_g: opt.fats_g,
+              serving_size: opt.serving_size,
+              serving_unit: opt.serving_unit ?? 'g',
+              is_liquid: isLiquid,
+            },
+          }
+        }) ?? [],
       food: {
         name: it.food!.name,
         calories: it.food!.calories,
@@ -46,6 +85,7 @@ export function mapTemplateRowToInitialData(row: any): PlanBuilderInitialData {
         quantity: it.quantity,
         unit: it.unit,
         food_id: it.food_id,
+        swap_options: it.swap_options ?? [],
         food: it.food ?? null,
       }))
     )
@@ -79,6 +119,7 @@ export function mapClientPlanRowToInitialData(row: any): PlanBuilderInitialData 
       quantity: fi.quantity,
       unit: fi.unit,
       food_id: fi.food_id,
+      swap_options: fi.swap_options ?? [],
       food: fi.foods
         ? {
             name: fi.foods.name,
