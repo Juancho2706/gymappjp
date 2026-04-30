@@ -78,6 +78,17 @@ export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string;
     }
 }
 
+/**
+ * Maps a UTC instant (e.g. `workout_logs.logged_at`) to calendar `YYYY-MM-DD` in America/Santiago.
+ * Use this instead of `logged_at.startsWith('yyyy-mm-dd')` (UTC prefix can disagree with local day).
+ */
+export function getSantiagoIsoYmdForUtcInstant(isoUtc: string): string {
+    const d = new Date(isoUtc)
+    const tzStr = d.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
+    const local = new Date(tzStr)
+    return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`
+}
+
 export function formatLongDateSantiago(now = new Date()): string {
     const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
     const d = new Date(tzStr)

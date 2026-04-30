@@ -3,7 +3,7 @@ import {
     getClientWorkoutPlans,
     getRecentWorkoutLogs,
 } from '../../_data/dashboard.queries'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
 import {
     programWeekIndex1Based,
     resolveActiveWeekVariantForDisplay,
@@ -23,8 +23,6 @@ export async function WeekCalendar({ userId }: { userId: string }) {
     const abMode = !!program?.ab_mode
     const weekIdx = program ? programWeekIndex1Based(program, userLocalDate) : null
     const activeVariant = resolveActiveWeekVariantForDisplay(program, weekIdx, userLocalDate)
-
-    const completedPlanIds = new Set(logs.map((l) => l.workout_blocks?.plan_id).filter(Boolean) as string[])
 
     const curr = userLocalDate
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1)
@@ -51,7 +49,15 @@ export async function WeekCalendar({ userId }: { userId: string }) {
 
         const isToday = dStr === today
         const isPast = dStr < today
-        const isCompleted = !!dayPlan && completedPlanIds.has(dayPlan.id)
+        const isFutureDay = dStr > today
+        const isCompleted =
+            !!dayPlan &&
+            !isFutureDay &&
+            logs.some(
+                (l) =>
+                    l.workout_blocks?.plan_id === dayPlan.id &&
+                    getSantiagoIsoYmdForUtcInstant(l.logged_at) === dStr
+            )
 
         return {
             dayLabel: d.toLocaleDateString('es-ES', { weekday: 'narrow' }).toUpperCase(),

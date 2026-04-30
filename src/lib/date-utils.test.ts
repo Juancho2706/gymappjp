@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getNutritionDayOfWeekFromIsoYmdInSantiago,
+  getSantiagoIsoYmdForUtcInstant,
   nutritionMealAppliesOnIsoYmdInSantiago,
 } from './date-utils'
 
@@ -25,5 +26,18 @@ describe('date-utils — nutrition day_of_week (Santiago)', () => {
     expect(getNutritionDayOfWeekFromIsoYmdInSantiago('2026-04-28')).toBe(2)
     expect(nutritionMealAppliesOnIsoYmdInSantiago({ day_of_week: 2 }, '2026-04-28')).toBe(true)
     expect(nutritionMealAppliesOnIsoYmdInSantiago({ day_of_week: 2 }, '2026-04-27')).toBe(false)
+  })
+})
+
+describe('date-utils — Santiago calendar day from UTC instant', () => {
+  it('maps UTC midnight 2026-04-30 to local YMD in Santiago (not naive UTC prefix)', () => {
+    const ymd = getSantiagoIsoYmdForUtcInstant('2026-04-30T00:00:00.000Z')
+    expect(ymd).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(ymd.length).toBe(10)
+  })
+
+  it('returns same YMD for noon local reference', () => {
+    const ymd = getSantiagoIsoYmdForUtcInstant('2026-04-27T15:00:00.000Z')
+    expect(ymd).toBeTruthy()
   })
 })

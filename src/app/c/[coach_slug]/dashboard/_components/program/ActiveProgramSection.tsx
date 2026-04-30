@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Calendar } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { getActiveProgram, getClientWorkoutPlans, getRecentWorkoutLogs } from '../../_data/dashboard.queries'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
 import {
     programWeekIndex1Based,
     resolveActiveWeekVariantForDisplay,
@@ -61,7 +61,11 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
     const blockIds = new Set((nestedPlan?.workout_blocks ?? []).map((b) => b.id))
     const workoutLoggedToday =
         !!todayPlan &&
-        logs.some((l) => l.logged_at.startsWith(today) && (blockIds.size === 0 || blockIds.has(l.block_id)))
+        logs.some(
+            (l) =>
+                getSantiagoIsoYmdForUtcInstant(l.logged_at) === today &&
+                (blockIds.size === 0 || blockIds.has(l.block_id))
+        )
 
     const totalWeeks = Math.max(1, program.weeks_to_repeat ?? 1)
     const currentWeek = weekIdx ?? 1

@@ -112,6 +112,22 @@ function isBlockComplete(
     return done >= block.sets
 }
 
+/** Counts unique (block_id, set_number) within each block's planned set range (handles duplicate rows). */
+function countUniqueLoggedSets(
+    blocks: BlockType[],
+    logs: Array<{ block_id: string; set_number: number }>
+) {
+    const blockById = new Map(blocks.map((b) => [b.id, b]))
+    const seen = new Set<string>()
+    for (const log of logs) {
+        const b = blockById.get(log.block_id)
+        if (!b) continue
+        if (log.set_number < 1 || log.set_number > b.sets) continue
+        seen.add(`${log.block_id}:${log.set_number}`)
+    }
+    return seen.size
+}
+
 const WORKOUT_SECTION_TITLE: Record<WorkoutSectionKey, string> = {
     warmup: 'Calentamiento',
     main: 'Bloque Principal',
@@ -187,8 +203,8 @@ export function WorkoutExecutionClient({
     }
 
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
-    const completedSetCount = sessionLogs.length
-    const completionPct = requiredSets === 0 ? 0 : Math.round((completedSetCount / requiredSets) * 100)
+    const completedSetCount = countUniqueLoggedSets(blocks, sessionLogs)
+    const completionPct = requiredSets === 0 ? 0 : Math.min(100, Math.round((completedSetCount / requiredSets) * 100))
 
     const isSetLogged = (blockId: string, setNumber: number) => sessionLogs.some((log) => log.block_id === blockId && log.set_number === setNumber)
     const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)

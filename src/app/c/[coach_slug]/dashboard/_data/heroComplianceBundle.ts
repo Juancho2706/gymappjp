@@ -7,7 +7,7 @@ import {
     getNutritionLogDays30,
     getRecentWorkoutLogs,
 } from './dashboard.queries'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
 import {
     programWeekIndex1Based,
     resolveActiveWeekVariantForDisplay,
@@ -80,11 +80,26 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         exercise: { name: b.exercises?.name ?? 'Ejercicio' },
     }))
 
-    const logsForPlan = todayPlan
-        ? logs.filter((l) => l.workout_blocks?.plan_id === todayPlan!.id)
-        : []
+    const blockIdsToday = new Set(blocks.map((b) => b.id))
+    const blockById = new Map(blocks.map((b) => [b.id, b]))
+    const logsForPlanToday =
+        todayPlan && blockIdsToday.size > 0
+            ? logs.filter(
+                  (l) =>
+                      l.workout_blocks?.plan_id === todayPlan!.id &&
+                      getSantiagoIsoYmdForUtcInstant(l.logged_at) === today &&
+                      blockIdsToday.has(l.block_id)
+              )
+            : []
+    const seenSetKeys = new Set<string>()
     const setsPerBlock: Record<string, number> = {}
-    for (const l of logsForPlan) {
+    for (const l of logsForPlanToday) {
+        const b = blockById.get(l.block_id)
+        if (!b) continue
+        if (l.set_number < 1 || l.set_number > b.sets) continue
+        const key = `${l.block_id}:${l.set_number}`
+        if (seenSetKeys.has(key)) continue
+        seenSetKeys.add(key)
         setsPerBlock[l.block_id] = (setsPerBlock[l.block_id] ?? 0) + 1
     }
     const totalSetsTarget = blocks.reduce((s, b) => s + b.sets, 0)

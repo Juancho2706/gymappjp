@@ -108,6 +108,7 @@ export type RecentWorkoutLog = {
     id: string
     logged_at: string
     block_id: string
+    set_number: number
     weight_kg: number | null
     reps_done: number | null
     workout_blocks: { plan_id: string | null } | null
@@ -119,7 +120,7 @@ export const getRecentWorkoutLogs = cache(async (clientId: string): Promise<Rece
     const thirtyDaysAgo = subDays(parseISOAnchor(iso), 30)
     const { data } = await supabase
         .from('workout_logs')
-        .select('id, logged_at, block_id, weight_kg, reps_done, workout_blocks!inner(plan_id)')
+        .select('id, logged_at, block_id, set_number, weight_kg, reps_done, workout_blocks!inner(plan_id)')
         .eq('client_id', clientId)
         .gte('logged_at', thirtyDaysAgo.toISOString())
         .order('logged_at', { ascending: false })
