@@ -11,6 +11,7 @@ const upsertHabitsSchema = z.object({
   waterMl: z.number().int().min(0).max(10000).nullable(),
   steps: z.number().int().min(0).max(100000).nullable(),
   sleepHours: z.number().min(0).max(24).nullable(),
+  fastingHours: z.number().int().min(0).max(72).nullable(),
   notes: z.string().max(500).nullable(),
 })
 
@@ -22,7 +23,7 @@ export async function upsertDailyHabits(
   const parsed = upsertHabitsSchema.safeParse(raw)
   if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
-  const { clientId, logDate, coachSlug, waterMl, steps, sleepHours, notes } = parsed.data
+  const { clientId, logDate, coachSlug, waterMl, steps, sleepHours, fastingHours, notes } = parsed.data
   const supabase = await createClient()
   const {
     data: { user },
@@ -36,6 +37,7 @@ export async function upsertDailyHabits(
       water_ml: waterMl,
       steps,
       sleep_hours: sleepHours,
+      fasting_hours: fastingHours,
       notes,
       updated_at: new Date().toISOString(),
     },
@@ -55,6 +57,7 @@ export async function getDailyHabits(
   water_ml: number | null
   steps: number | null
   sleep_hours: number | null
+  fasting_hours: number | null
   notes: string | null
 } | null> {
   const supabase = await createClient()
@@ -65,7 +68,7 @@ export async function getDailyHabits(
 
   const { data } = await supabase
     .from('daily_habits')
-    .select('water_ml, steps, sleep_hours, notes')
+    .select('water_ml, steps, sleep_hours, fasting_hours, notes')
     .eq('client_id', clientId)
     .eq('log_date', logDate)
     .maybeSingle()

@@ -283,7 +283,11 @@ export function TemplateLibrary({ templates, coachId, clients }: Props) {
                         variant="default"
                         className="h-9 text-[10px] font-black uppercase tracking-widest"
                         style={{ backgroundColor: 'var(--theme-primary)', color: 'white' }}
-                        onClick={() => setAssignTemplate({ id: template.id, name: template.name })}
+                        onClick={() => setAssignTemplate({
+                          id: template.id,
+                          name: template.name,
+                          assigned_client_ids: template.assigned_clients?.map((c) => c.id) ?? [],
+                        })}
                       >
                         <UserPlus className="w-3.5 h-3.5 mr-1" />
                         Asignar

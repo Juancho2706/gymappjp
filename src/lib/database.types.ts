@@ -507,6 +507,7 @@ export type Database = {
         Row: {
           client_id: string
           created_at: string
+          fasting_hours: number | null
           id: string
           log_date: string
           notes: string | null
@@ -518,6 +519,7 @@ export type Database = {
         Insert: {
           client_id: string
           created_at?: string
+          fasting_hours?: number | null
           id?: string
           log_date: string
           notes?: string | null
@@ -529,6 +531,7 @@ export type Database = {
         Update: {
           client_id?: string
           created_at?: string
+          fasting_hours?: number | null
           id?: string
           log_date?: string
           notes?: string | null
@@ -838,6 +841,81 @@ export type Database = {
           },
         ]
       }
+      nutrition_meal_food_swaps: {
+        Row: {
+          client_id: string
+          created_at: string
+          daily_log_id: string
+          id: string
+          meal_id: string
+          original_food_id: string
+          swapped_food_id: string
+          swapped_quantity: number | null
+          swapped_unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          daily_log_id: string
+          id?: string
+          meal_id: string
+          original_food_id: string
+          swapped_food_id: string
+          swapped_quantity?: number | null
+          swapped_unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          daily_log_id?: string
+          id?: string
+          meal_id?: string
+          original_food_id?: string
+          swapped_food_id?: string
+          swapped_quantity?: number | null
+          swapped_unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_meal_food_swaps_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_meal_food_swaps_daily_log_id_fkey"
+            columns: ["daily_log_id"]
+            isOneToOne: false
+            referencedRelation: "daily_nutrition_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_meal_food_swaps_meal_id_fkey"
+            columns: ["meal_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_meals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_meal_food_swaps_original_food_id_fkey"
+            columns: ["original_food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_meal_food_swaps_swapped_food_id_fkey"
+            columns: ["swapped_food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_meal_logs: {
         Row: {
           consumed_quantity: number | null
@@ -879,81 +957,6 @@ export type Database = {
             columns: ["meal_id"]
             isOneToOne: false
             referencedRelation: "nutrition_meals"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      nutrition_meal_food_swaps: {
-        Row: {
-          client_id: string
-          created_at: string
-          daily_log_id: string
-          id: string
-          meal_id: string
-          original_food_id: string
-          swapped_quantity: number | null
-          swapped_food_id: string
-          swapped_unit: string | null
-          updated_at: string
-        }
-        Insert: {
-          client_id: string
-          created_at?: string
-          daily_log_id: string
-          id?: string
-          meal_id: string
-          original_food_id: string
-          swapped_quantity?: number | null
-          swapped_food_id: string
-          swapped_unit?: string | null
-          updated_at?: string
-        }
-        Update: {
-          client_id?: string
-          created_at?: string
-          daily_log_id?: string
-          id?: string
-          meal_id?: string
-          original_food_id?: string
-          swapped_quantity?: number | null
-          swapped_food_id?: string
-          swapped_unit?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "nutrition_meal_food_swaps_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "nutrition_meal_food_swaps_daily_log_id_fkey"
-            columns: ["daily_log_id"]
-            isOneToOne: false
-            referencedRelation: "daily_nutrition_logs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "nutrition_meal_food_swaps_meal_id_fkey"
-            columns: ["meal_id"]
-            isOneToOne: false
-            referencedRelation: "nutrition_meals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "nutrition_meal_food_swaps_original_food_id_fkey"
-            columns: ["original_food_id"]
-            isOneToOne: false
-            referencedRelation: "foods"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "nutrition_meal_food_swaps_swapped_food_id_fkey"
-            columns: ["swapped_food_id"]
-            isOneToOne: false
-            referencedRelation: "foods"
             referencedColumns: ["id"]
           },
         ]

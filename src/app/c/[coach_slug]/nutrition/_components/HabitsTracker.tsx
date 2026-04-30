@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useTransition, useEffect } from 'react'
-import { Droplets, Footprints, Moon, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { Droplets, Footprints, Moon, Timer, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { upsertDailyHabits, getDailyHabits } from '../_actions/habits.actions'
@@ -12,6 +12,7 @@ interface HabitsData {
   water_ml: number | null
   steps: number | null
   sleep_hours: number | null
+  fasting_hours: number | null
   notes: string | null
 }
 
@@ -25,6 +26,7 @@ interface Props {
 
 const WATER_OPTIONS = [250, 500, 750, 1000, 1500, 2000, 2500, 3000]
 const SLEEP_OPTIONS = [5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
+const FASTING_OPTIONS = [12, 14, 16, 18, 20, 24]
 
 export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialData }: Props) {
   const reduceMotion = useReducedMotion()
@@ -35,6 +37,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
   const [waterMl, setWaterMl] = useState<number | null>(initialData?.water_ml ?? null)
   const [steps, setSteps] = useState<number | null>(initialData?.steps ?? null)
   const [sleepHours, setSleepHours] = useState<number | null>(initialData?.sleep_hours ?? null)
+  const [fastingHours, setFastingHours] = useState<number | null>(initialData?.fasting_hours ?? null)
   const [stepsInput, setStepsInput] = useState(initialData?.steps != null ? String(initialData.steps) : '')
 
   // Reload habits when date changes
@@ -44,6 +47,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
       setWaterMl(d?.water_ml ?? null)
       setSteps(d?.steps ?? null)
       setSleepHours(d?.sleep_hours ?? null)
+      setFastingHours(d?.fasting_hours ?? null)
       setStepsInput(d?.steps != null ? String(d.steps) : '')
     })
   }, [clientId, logDate])
@@ -55,6 +59,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
         waterMl: patch.water_ml !== undefined ? patch.water_ml : waterMl,
         steps: patch.steps !== undefined ? patch.steps : steps,
         sleepHours: patch.sleep_hours !== undefined ? patch.sleep_hours : sleepHours,
+        fastingHours: patch.fasting_hours !== undefined ? patch.fasting_hours : fastingHours,
         notes: patch.notes !== undefined ? patch.notes : (data?.notes ?? null),
       }
       startTransition(async () => {
@@ -67,7 +72,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
         if (!success) toast.error(error ?? 'Error al guardar hábitos')
       })
     },
-    [clientId, logDate, coachSlug, isToday, waterMl, steps, sleepHours, data]
+    [clientId, logDate, coachSlug, isToday, waterMl, steps, sleepHours, fastingHours, data]
   )
 
   const handleWater = (ml: number) => {
@@ -82,6 +87,12 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
     save({ sleep_hours: next })
   }
 
+  const handleFasting = (h: number) => {
+    const next = fastingHours === h ? null : h
+    setFastingHours(next)
+    save({ fasting_hours: next })
+  }
+
   const handleStepsBlur = () => {
     const v = parseInt(stepsInput, 10)
     const next = isNaN(v) || v < 0 ? null : v
@@ -89,8 +100,8 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
     save({ steps: next })
   }
 
-  const filled = [waterMl, steps, sleepHours].filter((v) => v != null).length
-  const total = 3
+  const filled = [waterMl, steps, sleepHours, fastingHours].filter((v) => v != null).length
+  const total = 4
 
   return (
     <div className={cn(
@@ -123,6 +134,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                 waterMl != null && `${(waterMl / 1000).toFixed(1).replace('.0', '')}L agua`,
                 steps != null && `${steps.toLocaleString()} pasos`,
                 sleepHours != null && `${sleepHours}h sueño`,
+                fastingHours != null && `${fastingHours}h ayuno`,
               ].filter(Boolean).join(' · ')}
             </p>
           )}
@@ -223,6 +235,34 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                         'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
                         sleepHours === h
                           ? 'bg-violet-500 text-white'
+                          : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
+                      )}
+                    >
+                      {h}h
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Ayuno intermitente */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Timer className="h-3.5 w-3.5 text-orange-500" />
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Ayuno{fastingHours != null ? ` · ${fastingHours}h` : ''}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {FASTING_OPTIONS.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      disabled={!isToday || isPending}
+                      onClick={() => handleFasting(h)}
+                      className={cn(
+                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
+                        fastingHours === h
+                          ? 'bg-orange-500 text-white'
                           : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
                       )}
                     >

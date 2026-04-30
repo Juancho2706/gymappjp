@@ -1,8 +1,8 @@
 ﻿# Analisis del Modulo de Nutricion  -  EVA Fitness Platform
 
-> **Fecha:** 2026-04-27 
+> **Fecha:** 2026-04-30 
 > **Alcance:** Arquitectura, flujos, integraciones, errores detectados, plan de mejora, estrategia de migracion y vision multi-disciplinaria. 
-> **Estado:** Documento vivo. Incluye ejecucion incremental ya aplicada en codigo (desde 2026-04-27).
+> **Estado:** Documento vivo. Incluye ejecucion incremental ya aplicada en codigo (desde 2026-04-27). Sincronizado con nuevabibliadelaapp sesion 11 (2026-04-27) + items hasta 2026-04-30.
 
 ---
 
@@ -16,7 +16,7 @@ El modulo de nutricion es uno de los mas complejos del codebase. Cubre:
 
 **Aclaracion fundamental:** La unidad base del sistema son **alimentos** (`foods`). Los planes asignan alimentos a comidas (`meals`). No se usan recetas como objeto principal del flujo  -  la tabla `recipes` existe pero es periferica; no forma parte del flujo coach  ->  alumno. El flujo correcto es: `Coach agrega alimento  ->  define cantidad (g/un)  ->  lo asigna a una comida  ->  esa comida vive en el plan del alumno`.
 
-**Completitud funcional:** ~85%. El core esta solido, pero hay brechas de UX, validacion, offline y flexibilidad del plan que lo separan de un producto "next level".
+**Completitud funcional:** ~98%. Core solido + food swaps, favoritos, habitos, feedback emoji, registro gradual, ciclos, historial versiones, offline, tooltips, onboarding coach, macros sugeridos, creacion inline, exportacion, alertas, integracion check-in/workout implementados. Pendiente operativo: saneamiento planes vacios en prod + credenciales E2E estables.
 
 ---
 
@@ -186,7 +186,7 @@ Alumno:
 | # | Problema | Ubicacion |
 |---|----------|-----------|
 | **C1** | `saveNutritionTemplate` legacy aun existe por compatibilidad, pero ya delega al flujo JSON moderno. | `nutrition-coach.actions.ts` |
-| **C2** | `FoodSearch.tsx` y `FoodBrowser.tsx` duplican logica de busqueda/filtros con UI distinta. | `coach/foods/`, `nutrition-plans/_components/` |
+| **C2** | `FoodSearch.tsx` y `FoodBrowser.tsx` duplican logica de busqueda/filtros con UI distinta. M25 (Sesion 9) migro `FoodSearchDrawer` a portal + 2-stage UX + categorias, reduciendo la brecha. Duplicacion no eliminada del todo. | `coach/foods/`, `nutrition-plans/_components/` |
 | **C3** | `getFoodLibrary` carga 120 items; `FoodSearchDrawer` carga 300 y filtra client-side. Dos estrategias inconsistentes. | queries + drawer |
 | **C4** | Test coverage de nutricion aun incompleto: ya existen unit tests de `nutrition-utils`, schemas y `getWeeklyCompliance`, faltan E2E/flows completos. | `tests/`, `src/**/*.test.*` |
 | **C5** | `daily_nutrition_logs` guarda `target_*_at_log` (snapshot de metas) pero el alumno **nunca registra lo que realmente comio**  -  solo si/no. Los targets se snapshotan pero no hay contraste real vs planificado. | `nutrition.actions.ts` |
@@ -198,7 +198,7 @@ Alumno:
 |---|----------|------------|
 | **B1** | **Plan por dia de semana (MVP).** `day_of_week` en `nutrition_meals` / `template_meals`, filtrado en alumno/dashboard/board, selector en PlanBuilder. Tabs dedicados por dia = mejora futura. | Coach puede asignar comidas a un dia fijo o a todos los dias. |
 | **B2** | **El alumno no puede ajustar cantidades.** Solo toggle si/no. No puede registrar "comi 120g en vez de 150g". | Adherencia binaria, no datos reales de consumo calorico. |
-| **B3** | **Sin tracking de agua, pasos, suplementos, ayuno.** | Oportunidad de valor agregado perdida. |
+| **B3** | ~~**Sin tracking de agua, pasos, suplementos, ayuno.**~~ **PARCIAL (2026-04-29):** `daily_habits` cubre `water_ml`, `steps`, `sleep_hours`, `notes`. Suplementos y ayuno no implementados. | Oportunidad de valor agregado parcialmente cubierta. |
 | **B4** | **Sin integracion check-in  -  nutricion.** El peso no cruza con calorias ni sugiere revisiones al coach. | El coach lo hace todo manualmente. |
 | **B5** | **Offline = brick.** El SW ignora `/c/` y POST. Si el alumno marca una comida sin red, pierde el toggle. | Mala UX en movil con red inestable. |
 | **B6** | **Sin notificaciones/reminders.** El alumno no recibe alertas de comidas ni recordatorios de log. | Menor adherencia real. |
@@ -497,7 +497,7 @@ BAJO VALOR, ALTO ESFUERZO (evaluar o descartar)
 " -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - ?
 ? Ciclos de dieta (cron job) [P2]
 ? ~~IA  ->  descripcion a plan~~ **DESCARTADO** (decision producto: no se implementa en EVA)
-? Marketplace de plantillas [P3]
+? ~~Marketplace de plantillas~~ **DESCARTADO** (2026-04-30)
 ```
 
 ### 8.4 Definicion de "Done" por Feature
@@ -1016,8 +1016,8 @@ Antes de cualquier release del modulo de nutricion:
 
 ## 18. Ideas Adicionales  -  Evaluar Factibilidad
 
-### 18.1 Plantillas Publicas / Marketplace (P3)
-Un coach puede marcar plantilla como publica. Otros coaches la usan como base. **Factibilidad:** Media-baja. Requiere permisos y posiblemente monetizacion.
+### 18.1 ~~Plantillas Publicas / Marketplace (P3)~~
+**DESCARTADO (2026-04-30):** Requiere sistema de permisos entre coaches + monetizacion + moderacion de contenido nutricional. Fuera del alcance actual de EVA.
 
 ### 18.2 Generacion automatica de planes desde texto (descartado)
 **Decision producto (2026):** no se implementara generacion de planes con modelos de lenguaje ni integraciones tipo Claude/OpenAI dentro del modulo de nutricion de EVA. Motivos tipicos: cumplimiento, responsabilidad profesional del coach, coste operativo y mantenimiento. El coach sigue armando planes con el builder, plantillas, duplicacion y macros sugeridos (Mifflin-St Jeor).
@@ -1150,7 +1150,7 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 
 ## 20. Roadmap Priorizado (Vista Consolidada)
 
-### 20.0 Estado de Ejecucion (2026-04-29)
+### 20.0 Estado de Ejecucion (2026-04-30)
 
 - o. **Food swaps (B7 / seccion 20.3):** columnas `swap_options` en `food_items`, tabla `nutrition_meal_food_swaps` (migraciones `20260428260000`, `20260428270000`, `20260428280000` en repo; aplicar en remoto al desplegar). PlanBuilder configura alternativas por alimento; alumno en `MealIngredientRow` / `NutritionShell`; macros en dashboard con `applyMealFoodSwaps`. Tests: `nutrition-utils`, `nutrition-day-scope`, smoke Playwright `tests/nutrition-student-smoke.spec.ts` (opcional con env E2E).
 - o. **Favoritos alumno:** `client_food_preferences.food_id` referencia **`foods(id)`** (migracion `20260428290000`); corazon coherente entre planes; panel en `NutritionTabB5`; `toggleClientFoodPreference` revalida ficha coach.
@@ -1159,8 +1159,9 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 - o. E3 cerrado en flujo principal: JSON tipado; legacy puenteado.
 - o. Mitigacion de produccion: fallback de macros por % de comidas completadas cuando faltan `food_items`.
 - o. Test base anadidos: `nutrition-utils`, schemas, `getWeeklyCompliance`; suite Vitest + `tsc` verificados antes de release.
-- s Pendiente operativo: completar planes activos con comidas vacias detectadas.
+- Ys **Saneamiento planes vacios:** IGNORADO por decision de producto. Los scripts de auditoria quedan en `scripts/` para uso futuro si se necesita.
 - o. `meal_completions`: tabla legacy reemplazada por vista homonima + columnas `day_of_week` en comidas (migracion `20260428041909`, aplicada en remoto via MCP y archivo local con el mismo nombre).
+- o. **Auto-sync goals en PlanBuilder (M24, Sesion 9):** PlanBuilder recalcula y sincroniza automaticamente `daily_calories`, `protein_g`, `carbs_g`, `fats_g` del plan con los totales reales de las comidas configuradas. Coach ya no necesita ingresar los macros objetivo manualmente; los valores se actualizan al agregar/quitar alimentos.
 - o. PlanBuilder: selector **Dia del plan** (todos los dias vs lun - dom), responsive; persiste `day_of_week` al guardar.
 - o. **Registro gradual (B11):** columna `consumed_quantity` en `nutrition_meal_logs` (migracion local `20260428183000_nutrition_meal_logs_consumed_quantity.sql` + aplicacion remota via MCP `nutrition_meal_logs_consumed_quantity`). UI alumno (`NutritionShell` / `MealCard`), acciones, queries y agregados coach/dashboard alineados.
 - o. PlanBuilder: layout desktop  -  aviso ?oReparacion asistida? fuera del `flex-row` para no comprimir la columna ?oComidas del plan?; aviso ?oComida vacia? con `min-w-0` / `w-full`.
@@ -1171,7 +1172,13 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 - o. **Accesibilidad nutricion (A11y, 2026-04-29 22:19 UTC-4):** `MacroRingSummary`, `AdherenceStrip` y heatmap coach (`NutritionTabB5`) con `role`/`aria-label` (`img`, `progressbar`, `grid`, `gridcell`).
 - o. **Ciclos + historial (P2 #24-25, 2026-04-29 22:38 UTC-4):** migracion `20260430103000_nutrition_plan_history_and_cycles.sql`; snapshots automaticos antes de guardar plan custom + rollback; UI coach para definir bloques de ciclo y restaurar versiones.
 - o. **Ciclos  -  job HTTP (sin IA, 2026-04-29):** `GET /api/cron/nutrition-cycles` (Bearer `CRON_SECRET` opcional) + `nutrition-cycle-automation.ts` + columnas `last_applied_week` / `last_applied_template_id` (`20260430114500_nutrition_plan_cycles_last_applied.sql`). **No** se anadio IA al producto.
+- o. **fasting_hours en daily_habits (2026-04-30):** migracion `20260430120000_daily_habits_fasting_hours.sql`; action `upsertDailyHabits` + `getDailyHabits` actualizados; `HabitsTracker.tsx` con selector de ayuno (12h/14h/16h/18h/20h/24h, color naranja, icono Timer).
+- o. **AssignModal B8 (2026-04-30):** `AssignModalTemplate` incluye `assigned_client_ids[]`; modal muestra "Ya tiene esta plantilla" (verde) vs "Plan activo diferente (se reemplazara)" (ambar) por alumno. `TemplateLibrary` pasa IDs desde `template.assigned_clients`.
+- o. **E5 codigo legacy unidades (2026-04-30):** eliminado `|| unitLower === 'ml' || unitLower === 'gr'` de `calculateFoodItemMacros`. Unidades canonicas post-migracion: solo `g` y `un`.
+- o. **Directorio swaps vacio eliminado (2026-04-30):** `/coach/nutrition-plans/swaps/` era stub sin implementacion; eliminado. El flujo de swaps vive en el PlanBuilder por alimento.
+- o. **vercel.json + CRON_SECRET (2026-04-30):** `vercel.json` creado con cron `0 11 * * *` (8am Santiago) para `GET /api/cron/nutrition-cycles`; `CRON_SECRET` documentado en `.env.example`.
 - Ys **IA en nutricion:** descartada por decision producto; no hay endpoints ni UI de ?otexto  ->  plan? con LLM en el repo.
+- Ys **Marketplace plantillas:** descartado (2026-04-30).
 - o. **Validacion tecnica ejecutada (2026-04-29 22:38 UTC-4):** `npm run typecheck` OK, Vitest OK (`MacroRingSummary`, `nutrition-plan-cycle-resolver`, `nutrition-plan-cycle-schema`), linter sin errores en archivos tocados.
 
 ### Fase A  -  Correcciones Criticas (2 semanas)
@@ -1248,16 +1255,16 @@ Soporte operativo implementado:
 
 Estimacion practica para este roadmap (no matematica estricta):
 
-- **Completado:** ~93%
-- **Parcial en curso:** ~5%
-- **Pendiente:** ~2% (operativo: ejecutar saneamiento por lotes en cuentas reales y fijar credenciales E2E estables en entorno seguro)
+- **Completado:** ~98%
+- **Parcial en curso:** ~1%
+- **Pendiente:** ~1% (fijar credenciales E2E estables en entorno seguro; suplementos en `daily_habits`)
 
 Resumen por bloques:
 
-- **Fase A (critico):** ~90% (`meal_completions` cerrado; cobertura tests sigue ampliable).
-- **Fase B (quick wins):** ~97% (export PDF+WhatsApp [OK], registro gradual [OK], favoritos [OK], creacion inline [OK], macros sugeridos [OK], onboarding [OK], offline cliente + tooltips Fase B [OK], SW reforzado [OK]).
-- **Fase C:** ~95% (`day_of_week` [OK], food swaps [OK], favoritos [OK], habitos [OK], feedback emoji [OK], duplicar plan [OK], alertas basicas [OK]).
-- **Fase D:** ~95% (21-25 [OK]; #26 IA explicitamente fuera de alcance; operacion = configurar cron en prod y validar).
+- **Fase A (critico):** ~95% (`meal_completions` cerrado; cobertura tests ampliable; Zod en acciones core, JSON tipado [OK]).
+- **Fase B (quick wins):** ~99% (export PDF+WhatsApp [OK], registro gradual [OK], favoritos [OK], creacion inline [OK], macros sugeridos [OK], auto-sync goals [OK], onboarding [OK], offline cliente + tooltips Fase B [OK], SW reforzado [OK]).
+- **Fase C:** ~99% (`day_of_week` [OK], food swaps [OK], habitos [OK], feedback emoji [OK], duplicar plan [OK], alertas basicas [OK]).
+- **Fase D:** ~98% (21-25 [OK]; #26 IA explicitamente fuera de alcance; configurar cron `nutrition-cycles` en prod pendiente de `CRON_SECRET` y scheduler hosting).
 
 Cobertura E2E hardening (implementado):
 - `tests/nutrition-student-smoke.spec.ts` usa guard centralizado de credenciales y `try/finally` para restaurar red en prueba offline.

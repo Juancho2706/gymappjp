@@ -19,6 +19,8 @@ export type AssignModalClient = {
 export type AssignModalTemplate = {
   id: string
   name: string
+  /** IDs de clientes que ya tienen esta plantilla como plan activo */
+  assigned_client_ids?: string[]
 }
 
 type Props = {
@@ -152,6 +154,7 @@ export function AssignModal({ open, onOpenChange, template, coachId, clients, on
                 ) : (
                   filteredClients.map((client) => {
                     const isSelected = selectedClients.includes(client.id)
+                    const alreadyHasThisTemplate = template?.assigned_client_ids?.includes(client.id) ?? false
                     return (
                       <div
                         key={client.id}
@@ -196,11 +199,15 @@ export function AssignModal({ open, onOpenChange, template, coachId, clients, on
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-sm truncate text-slate-900 dark:text-white">{client.full_name}</p>
-                          {client.active_plan && (
+                          {alreadyHasThisTemplate ? (
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-medium">
+                              ✓ Ya tiene esta plantilla (reasignar actualizará el plan)
+                            </p>
+                          ) : client.active_plan ? (
                             <p className="text-[10px] text-amber-600 dark:text-amber-500 font-medium">
                               Plan activo: {client.active_plan.name} (se reemplazará)
                             </p>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     )
