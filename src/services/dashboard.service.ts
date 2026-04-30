@@ -300,6 +300,9 @@ export class DashboardService {
         const lastWeekStr = subDays(now, 7).toISOString();
         const logsFrom = subDays(now, 35).toISOString();
 
+        // Raise limit to 10 000 so the adherence/1RM window isn't silently truncated.
+        // lastWorkoutDate is resolved via a dedicated RPC (see below) which uses
+        // a server-side MAX and is never affected by PostgREST row limits.
         const logChunks = await Promise.all(
             chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
                 this.supabase
@@ -307,8 +310,25 @@ export class DashboardService {
                     .select('client_id, logged_at, weight_kg, reps_done, plan_name_at_log')
                     .in('client_id', chunk)
                     .gte('logged_at', logsFrom)
+                    .limit(10000)
             )
         );
+
+        // True last-workout-date per client via server-side GROUP BY.
+        // This bypasses the PostgREST row-count limit that would truncate individual rows.
+        const lastWorkoutDateMap = new Map<string, string>();
+        for (const chunk of chunkIds(clientIds, CLIENT_ID_IN_CHUNK)) {
+            const { data: lwdRows } = await (this.supabase as any).rpc(
+                'get_clients_last_workout_date',
+                { p_client_ids: chunk, p_since: logsFrom }
+            );
+            if (lwdRows) {
+                for (const row of lwdRows as { client_id: string; last_logged_at: string }[]) {
+                    if (row.last_logged_at) lastWorkoutDateMap.set(row.client_id, row.last_logged_at);
+                }
+            }
+        }
+
         const checkChunks = await Promise.all(
             chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
                 this.supabase
@@ -473,13 +493,16 @@ export class DashboardService {
                       'Plan Actual'
                     : 'Sin actividad reciente';
 
+            // Use the RPC-derived value (exact MAX, no row-limit truncation).
+            // Fall back to in-memory reduce only when the RPC returned nothing.
             const lastWorkoutDate =
-                logs.length > 0
+                lastWorkoutDateMap.get(id) ??
+                (logs.length > 0
                     ? logs.reduce((max, l) =>
                           new Date(l.logged_at) > new Date(max) ? l.logged_at : max,
                           logs[0]!.logged_at
                       )
-                    : null;
+                    : null);
 
             const sortedChecks = [...checkIns].sort(
                 (a, b) =>
