@@ -59,6 +59,14 @@ const GOAL_ADJUSTMENTS: Record<GoalKey, { kcalDelta: number; proteinMultiplier: 
   bulk: { kcalDelta: 300, proteinMultiplier: 2.0, label: 'Volumen (ganar músculo)' },
 }
 
+const ACTIVITY_LABELS: Record<ActivityKey, string> = {
+  sedentary: 'Sedentario (sin ejercicio)',
+  light: 'Ligero (1–3 días/sem)',
+  moderate: 'Moderado (3–5 días/sem)',
+  active: 'Activo (6–7 días/sem)',
+  very_active: 'Muy activo (doble sesión)',
+}
+
 function calcMacros(
   weightKg: number,
   heightCm: number,
@@ -291,7 +299,7 @@ export function PlanBuilderSidebar({
                 <Label className="text-[10px] text-muted-foreground">Actividad</Label>
                 <Select value={suggActivity} onValueChange={(v) => setSuggActivity(v as ActivityKey)}>
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
+                    <SelectValue>{ACTIVITY_LABELS[suggActivity]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sedentary">Sedentario (sin ejercicio)</SelectItem>
@@ -307,7 +315,7 @@ export function PlanBuilderSidebar({
                 <Label className="text-[10px] text-muted-foreground">Objetivo</Label>
                 <Select value={suggGoal} onValueChange={(v) => setSuggGoal(v as GoalKey)}>
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
+                    <SelectValue>{GOAL_ADJUSTMENTS[suggGoal].label}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {Object.entries(GOAL_ADJUSTMENTS).map(([k, v]) => (

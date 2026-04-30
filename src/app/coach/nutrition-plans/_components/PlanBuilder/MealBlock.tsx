@@ -81,8 +81,8 @@ export function MealBlock({
       style={style}
       className={`w-full min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm ${isDragging ? 'z-10 opacity-90 ring-2 ring-[color:var(--theme-primary)]' : ''}`}
     >
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="mb-3 space-y-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             className="touch-none shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
@@ -94,13 +94,14 @@ export function MealBlock({
           <Input
             value={meal.name}
             onChange={(e) => onUpdateName(e.target.value)}
-            className="h-10 min-w-0 flex-1 font-bold"
+            placeholder="Nombre de la comida"
+            className="h-10 flex-1 font-bold"
           />
           <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={onRemove}>
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:min-w-[11rem] sm:max-w-[14rem] sm:shrink-0">
+        <div className="flex w-full flex-col gap-1.5">
           <div className="flex items-center gap-1">
             <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
               Día del plan

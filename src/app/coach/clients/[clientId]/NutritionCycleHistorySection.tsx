@@ -182,7 +182,7 @@ export function NutritionCycleHistorySection({
             <div className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-primary" />
               <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Ciclo de dieta</h3>
-              <InfoTooltip content="Define bloques de semanas vinculados a plantillas. La rotación automática al cambiar de semana se activará con el job programado (próximo paso DevOps)." />
+              <InfoTooltip content="Organiza el plan de tu alumno en fases semanales, cada una con su propia plantilla de alimentación. El sistema calcula automáticamente en qué fase está el alumno hoy según la fecha de inicio que definas." />
             </div>
             <p className="text-[11px] text-muted-foreground max-w-xl">
               Vista previa de en qué bloque va el alumno según la fecha de inicio del ciclo y el calendario.
@@ -223,7 +223,9 @@ export function NutritionCycleHistorySection({
             </p>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Sin ciclo activo. Puedes definir uno para documentar fases.</p>
+          <p className="text-sm text-muted-foreground">
+            Sin ciclo activo. Usa <strong className="font-semibold text-foreground">Definir ciclo</strong> para organizar el plan de tu alumno por fases semanales con diferentes plantillas de alimentación.
+          </p>
         )}
 
         {historyEntries.length > 0 && (
@@ -267,6 +269,9 @@ export function NutritionCycleHistorySection({
             <DialogTitle className="text-base font-black uppercase">
               {activeCycle ? 'Editar ciclo' : 'Nuevo ciclo'}
             </DialogTitle>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Define las fases del plan de tu alumno. Cada bloque cubre un rango de semanas y aplica una plantilla de alimentación distinta. El sistema detecta automáticamente en qué fase está tu alumno según la fecha de inicio.
+            </p>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
@@ -291,34 +296,44 @@ export function NutritionCycleHistorySection({
                     className={cn('grid gap-2 rounded-lg border border-border/40 p-3 sm:grid-cols-2')}
                   >
                     <div className="space-y-1">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Semanas</span>
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          className="h-9"
-                          value={b.week_start}
-                          onChange={(e) =>
-                            setFormBlocks((prev) =>
-                              prev.map((row, j) =>
-                                j === i ? { ...row, week_start: Number(e.target.value) || 1 } : row
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Semanas del ciclo</span>
+                        <InfoTooltip content="Indica en qué semanas del ciclo aplica este bloque. Ejemplo: semanas 1 a 4 usan la plantilla A, semanas 5 a 8 la plantilla B. La semana 1 comienza en la fecha de inicio que definiste." />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-1 flex-col gap-0.5">
+                          <span className="text-[9px] text-muted-foreground">Desde</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            className="h-9"
+                            value={b.week_start}
+                            onChange={(e) =>
+                              setFormBlocks((prev) =>
+                                prev.map((row, j) =>
+                                  j === i ? { ...row, week_start: Number(e.target.value) || 1 } : row
+                                )
                               )
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          min={1}
-                          className="h-9"
-                          value={b.week_end}
-                          onChange={(e) =>
-                            setFormBlocks((prev) =>
-                              prev.map((row, j) =>
-                                j === i ? { ...row, week_end: Number(e.target.value) || 1 } : row
+                            }
+                          />
+                        </div>
+                        <span className="mt-4 text-muted-foreground">–</span>
+                        <div className="flex flex-1 flex-col gap-0.5">
+                          <span className="text-[9px] text-muted-foreground">Hasta</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            className="h-9"
+                            value={b.week_end}
+                            onChange={(e) =>
+                              setFormBlocks((prev) =>
+                                prev.map((row, j) =>
+                                  j === i ? { ...row, week_end: Number(e.target.value) || 1 } : row
+                                )
                               )
-                            )
-                          }
-                        />
+                            }
+                          />
+                        </div>
                       </div>
                     </div>
                     <div className="space-y-1 sm:col-span-2">
@@ -334,7 +349,10 @@ export function NutritionCycleHistorySection({
                       />
                     </div>
                     <div className="space-y-1 sm:col-span-2">
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Plantilla</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Plantilla</span>
+                        <InfoTooltip content="Qué plan de alimentación aplica en este bloque. Puedes crear y editar plantillas en la sección Nutrición del panel." />
+                      </div>
                       <Select
                         value={b.template_id}
                         onValueChange={(v) => {
@@ -345,7 +363,9 @@ export function NutritionCycleHistorySection({
                         }}
                       >
                         <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Plantilla…" />
+                          <SelectValue placeholder="Elige plantilla…">
+                            {templates.find((t) => t.id === b.template_id)?.name ?? 'Elige plantilla…'}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {templates.map((t) => (
