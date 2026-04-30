@@ -24,7 +24,6 @@ import {
   isLikelyOfflineError,
 } from '@/lib/nutrition-offline-queue'
 import { trackNutritionEvent } from '@/lib/product-analytics'
-import { buildNutritionDayPlainTextLines } from '@/lib/nutrition-day-plain-text'
 import { downloadNutritionDayPdf } from '@/lib/nutrition-day-pdf'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { readNutritionReadModelCache, writeNutritionReadModelCache } from '@/lib/nutrition-plan-local-cache'
@@ -634,21 +633,20 @@ export function NutritionShell({
   }, [mealsVisibleWithSwaps, plan.name, goals, selectedDate, copyToClipboard])
 
   const handleDownloadDayPdf = useCallback(() => {
-    const plainMeals = mealsVisibleWithSwaps.map((m) => ({
+    const meals = mealsVisibleWithSwaps.map((m) => ({
       name: m.name,
       food_items: normalizeMealForMacros(m).food_items,
     }))
-    const lines = buildNutritionDayPlainTextLines({
-      planName: plan.name ?? 'Plan nutricional',
-      date: selectedDate,
-      instructions: plan.instructions,
-      meals: plainMeals,
-      goals,
-    })
-    const stem = `plan-nutricion-${selectedDate}`
     startPdfTransition(async () => {
       try {
-        await downloadNutritionDayPdf(lines, stem)
+        await downloadNutritionDayPdf({
+          planName: plan.name ?? 'Plan nutricional',
+          date: selectedDate,
+          instructions: plan.instructions,
+          meals,
+          goals,
+          fileStem: `plan-nutricion-${selectedDate}`,
+        })
         trackNutritionEvent('nutrition_plan_pdf_downloaded', { date_is_today: selectedDate === today ? 1 : 0 })
         toast.success('PDF descargado')
       } catch (e) {

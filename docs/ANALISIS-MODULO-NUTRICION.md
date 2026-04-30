@@ -198,13 +198,13 @@ Alumno:
 |---|----------|------------|
 | **B1** | **Plan por dia de semana (MVP).** `day_of_week` en `nutrition_meals` / `template_meals`, filtrado en alumno/dashboard/board, selector en PlanBuilder. Tabs dedicados por dia = mejora futura. | Coach puede asignar comidas a un dia fijo o a todos los dias. |
 | **B2** | **El alumno no puede ajustar cantidades.** Solo toggle si/no. No puede registrar "comi 120g en vez de 150g". | Adherencia binaria, no datos reales de consumo calorico. |
-| **B3** | ~~**Sin tracking de agua, pasos, suplementos, ayuno.**~~ **PARCIAL (2026-04-29):** `daily_habits` cubre `water_ml`, `steps`, `sleep_hours`, `notes`. Suplementos y ayuno no implementados. | Oportunidad de valor agregado parcialmente cubierta. |
+| **B3** | ~~**Sin tracking de agua, pasos, suplementos, ayuno.**~~ **CERRADO (2026-04-30):** `daily_habits` cubre `water_ml`, `steps`, `sleep_hours`, `fasting_hours`, `supplements TEXT[]`, `notes`. HabitsTracker rediseñado con UI por secciones, chips de suplementos (9 opciones), indicador animado de guardado. Visible en dashboard + nutrition. Coach ve todos los campos en `NutritionTabB5`. | — |
 | **B4** | **Sin integracion check-in  -  nutricion.** El peso no cruza con calorias ni sugiere revisiones al coach. | El coach lo hace todo manualmente. |
 | **B5** | **Offline = brick.** El SW ignora `/c/` y POST. Si el alumno marca una comida sin red, pierde el toggle. | Mala UX en movil con red inestable. |
-| **B6** | **Sin notificaciones/reminders.** El alumno no recibe alertas de comidas ni recordatorios de log. | Menor adherencia real. |
+| **B6** | ~~**Sin notificaciones/reminders.**~~ **CERRADO (2026-04-30):** Web Push con VAPID. `push_subscriptions` tabla; `/api/push/subscribe` + `/api/push/unsubscribe`; `PushNotificationBanner` en nutrition page (opt-in explícito, localStorage dismiss); SW con handlers `push` + `notificationclick`; `/api/cron/nutrition-reminder` (0 0 * * * UTC) omite clientes con log del día. Requiere VAPID keys en Vercel env. | — |
 | **B7** | ~~**Sin intercambio de alimentos (food swaps).**~~ **CERRADO (2026-04-29):** swaps **por item de plan** (`food_items.swap_options` + tabla `nutrition_meal_food_swaps`); alumno elige solo entre alternativas del coach; cantidad/unidad **solo coach**; aplicable sin marcar comida completa (get/create `daily_nutrition_logs`). Ruta global `/coach/nutrition-plans/swaps` retirada. Pendiente menor: visibilidad agregada de swaps en mas vistas coach si hace falta. |  -  |
 | **B8** | **Sin asignacion masiva mejorada.** Se puede asignar a varios pero la UX no muestra cuantos ya tienen esa plantilla ni permite reasignacion bulk. | Coach con 20+ alumnos pierde tiempo. |
-| **B9** | Export: dos modos copiados desde alumno  -  **detalle del dia** (ingredientes) y **resumen corto** (por comida + meta). PDF / formatos avanzados pendientes. | Friction parcial pendiente. |
+| **B9** | ~~**PDF / formatos avanzados pendientes.**~~ **CERRADO (2026-04-30):** PDF estructurado con jsPDF: header dark branding (EVA Fitness + nombre plan), chips de macros goal con color por macro, secciones por comida con fondo, tabla de alimentos con macros alineados a la derecha, subtotales por comida, recuadro resumen consumido vs meta, footer con disclaimer legal y timestamp. Firma de `downloadNutritionDayPdf` cambiada de `lines[]` a params estructurados. | — |
 | **B10** | **Sin calculo de macros sugeridos.** No hay formula que sugiera kcal/proteina al coach segun perfil del alumno. | El coach calcula manualmente en calculadoras externas. |
 
 ---
@@ -1173,6 +1173,10 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 - o. **Ciclos + historial (P2 #24-25, 2026-04-29 22:38 UTC-4):** migracion `20260430103000_nutrition_plan_history_and_cycles.sql`; snapshots automaticos antes de guardar plan custom + rollback; UI coach para definir bloques de ciclo y restaurar versiones.
 - o. **Ciclos  -  job HTTP (sin IA, 2026-04-29):** `GET /api/cron/nutrition-cycles` (Bearer `CRON_SECRET` opcional) + `nutrition-cycle-automation.ts` + columnas `last_applied_week` / `last_applied_template_id` (`20260430114500_nutrition_plan_cycles_last_applied.sql`). **No** se anadio IA al producto.
 - o. **fasting_hours en daily_habits (2026-04-30):** migracion `20260430120000_daily_habits_fasting_hours.sql`; action `upsertDailyHabits` + `getDailyHabits` actualizados; `HabitsTracker.tsx` con selector de ayuno (12h/14h/16h/18h/20h/24h, color naranja, icono Timer).
+- o. **supplements + push_subscriptions (2026-04-30):** migracion `daily_habits_supplements_push_subscriptions` aplica `supplements TEXT[]` a `daily_habits` + crea tabla `push_subscriptions` con RLS; `upsertHabitsSchema` + `getDailyHabits` incluyen `supplements`.
+- o. **HabitsTracker redesign + dashboard (2026-04-30):** `HabitsTracker.tsx` rediseñado — `SectionHeader` component con icono coloreado, hover effects en pills, chips multi-select para 9 suplementos (Creatina/Proteína/Omega-3/etc.) con checkmark activo, indicador de guardado con pulse dot animado, summary en header incluye conteo suplementos. `HabitsTrackerWidget.tsx` (server component) en `dashboard/_components/habits/` con fetch SSR de hábitos del día; añadido a `DashboardSidebarBlocks` con `HabitsSkeleton`. Coach en `NutritionTabB5`: state type + select + display actualizados para `fasting_hours` (naranja) y `supplements` (chips rose).
+- o. **Push notifications Web Push/VAPID (2026-04-30):** `public/sw.js` handlers `push` + `notificationclick`; `/api/push/subscribe` (POST, auth, upsert con service role); `/api/push/unsubscribe` (POST, delete); `/api/cron/nutrition-reminder` (GET Bearer, consulta suscripciones activas, omite clientes con log hoy, limpia subs expiradas 410/404); `PushNotificationBanner.tsx` en nutrition page (opt-in, dismiss con localStorage, VAPID key env); `vercel.json` segundo cron `0 0 * * *`; `.env.example` con 4 vars VAPID; `web-push` + `@types/web-push` instalados.
+- o. **PDF avanzado (2026-04-30):** `nutrition-day-pdf.ts` reescrito con jsPDF estructurado — header dark slate con barra accent emerald, chips macro por color (kcal/naranja, P/azul, C/emerald, G/purple), secciones por comida con accent bar verde y fondo slate-100, filas alternadas, macros right-aligned, subtotal con divider, recuadro resumen dark con consumido vs meta, footer con disclaimer legal. Firma: `(params: NutritionPdfParams)` en lugar de `(lines: string[], stem)`. `NutritionShell` actualizado; import `buildNutritionDayPlainTextLines` removido.
 - o. **AssignModal B8 (2026-04-30):** `AssignModalTemplate` incluye `assigned_client_ids[]`; modal muestra "Ya tiene esta plantilla" (verde) vs "Plan activo diferente (se reemplazara)" (ambar) por alumno. `TemplateLibrary` pasa IDs desde `template.assigned_clients`.
 - o. **E5 codigo legacy unidades (2026-04-30):** eliminado `|| unitLower === 'ml' || unitLower === 'gr'` de `calculateFoodItemMacros`. Unidades canonicas post-migracion: solo `g` y `un`.
 - o. **Directorio swaps vacio eliminado (2026-04-30):** `/coach/nutrition-plans/swaps/` era stub sin implementacion; eliminado. El flujo de swaps vive en el PlanBuilder por alimento.
@@ -1206,7 +1210,7 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 
 15. **[P1] Plan por dia de semana**  - [OK] **Hecho (MVP):** `day_of_week` en DB + propagacion/saves + filtrado alumno/coach + **selector en PlanBuilder**. Mejora opcional futura: tabs por dia en lugar de dropdown por comida.
 16. **[P2] Food swaps**  - [OK] **Hecho (MVP):** intercambios por alimento en plan (no grupos globales); UI coach en PlanBuilder; UI alumno; persistencia por dia en `nutrition_meal_food_swaps`. Mejoras futuras: tooltips dedicados, informes agregados, equivalencia estricta de macros si se exige negocio.
-17. **[P2] Tracking de habitos**  - [OK] **Hecho (MVP):** tabla `daily_habits` (`water_ml`, `steps`, `sleep_hours`, `notes`); `HabitsTracker.tsx` en vista alumno; `habits.actions.ts`; migracion aplicada.
+17. **[P2] Tracking de habitos**  - [OK] **Hecho (MVP+, 2026-04-30):** tabla `daily_habits` (`water_ml`, `steps`, `sleep_hours`, `fasting_hours`, `supplements TEXT[]`, `notes`); `HabitsTracker.tsx` rediseñado con secciones coloreadas + chips suplementos + indicador animado; `HabitsTrackerWidget.tsx` servidor en dashboard (`DashboardSidebarBlocks`); `habits.actions.ts` actualizado; coach ve fasting + supplements en `NutritionTabB5`.
 18. **[P2] Feedback por comida**  - [OK] **Hecho (MVP):** `satisfaction_score` en `nutrition_meal_logs`; UI emoji en `MealCard.tsx`; accion `updateMealSatisfaction`.
 19. **[P2] Duplicar plan entre alumnos**  - [OK] **Hecho (MVP):** `duplicatePlanToClient()` + flujo UI desde perfil nutricion coach.
 20. **[P2] Alertas basicas de bajo cumplimiento**  - [OK] **Hecho (MVP):** badge rojo/indicadores de riesgo nutricional en directorio.
@@ -1255,16 +1259,16 @@ Soporte operativo implementado:
 
 Estimacion practica para este roadmap (no matematica estricta):
 
-- **Completado:** ~98%
-- **Parcial en curso:** ~1%
-- **Pendiente:** ~1% (fijar credenciales E2E estables en entorno seguro; suplementos en `daily_habits`)
+- **Completado:** ~99%
+- **Parcial en curso:** ~0%
+- **Pendiente:** ~1% (fijar credenciales E2E estables en entorno seguro)
 
 Resumen por bloques:
 
 - **Fase A (critico):** ~95% (`meal_completions` cerrado; cobertura tests ampliable; Zod en acciones core, JSON tipado [OK]).
-- **Fase B (quick wins):** ~99% (export PDF+WhatsApp [OK], registro gradual [OK], favoritos [OK], creacion inline [OK], macros sugeridos [OK], auto-sync goals [OK], onboarding [OK], offline cliente + tooltips Fase B [OK], SW reforzado [OK]).
-- **Fase C:** ~99% (`day_of_week` [OK], food swaps [OK], habitos [OK], feedback emoji [OK], duplicar plan [OK], alertas basicas [OK]).
-- **Fase D:** ~98% (21-25 [OK]; #26 IA explicitamente fuera de alcance; configurar cron `nutrition-cycles` en prod pendiente de `CRON_SECRET` y scheduler hosting).
+- **Fase B (quick wins):** ~100% (export PDF avanzado [OK], push notifications [OK], registro gradual [OK], favoritos [OK], creacion inline [OK], macros sugeridos [OK], auto-sync goals [OK], onboarding [OK], offline cliente + tooltips Fase B [OK], SW reforzado [OK]).
+- **Fase C:** ~100% (`day_of_week` [OK], food swaps [OK], habitos completos fasting+supplements [OK], dashboard HabitsTracker [OK], feedback emoji [OK], duplicar plan [OK], alertas basicas [OK]).
+- **Fase D:** ~99% (21-25 [OK]; #26 IA explicitamente fuera de alcance; crons nutrition-cycles + nutrition-reminder configurados en `vercel.json` [OK], VAPID keys pendientes de activar en entorno prod).
 
 Cobertura E2E hardening (implementado):
 - `tests/nutrition-student-smoke.spec.ts` usa guard centralizado de credenciales y `try/finally` para restaurar red en prueba offline.
