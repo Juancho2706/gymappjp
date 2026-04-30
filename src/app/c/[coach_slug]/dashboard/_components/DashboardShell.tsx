@@ -13,7 +13,7 @@ interface DashboardShellProps {
 export function DashboardShell({ beforeSidebar, sidebarMobile, sidebarDesktop, afterSidebar }: DashboardShellProps) {
     return (
         <div className="min-h-dvh bg-background">
-            <div className="mx-auto max-w-5xl px-4 pt-[var(--mobile-content-top-offset)] pb-[calc(1rem+var(--mobile-content-bottom-offset))] sm:px-6 md:pb-6 lg:pt-4">
+            <div className="mx-auto max-w-5xl px-4 pt-2 pb-[calc(1rem+var(--mobile-content-bottom-offset))] sm:px-6 md:pb-6 lg:pt-4">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_300px]">
                     <div className="min-w-0 space-y-4">
                         {beforeSidebar}
