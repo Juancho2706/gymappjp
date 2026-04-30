@@ -63,9 +63,14 @@
   --safe-area-inset-bottom: env(safe-area-inset-bottom);
   --safe-area-inset-left: env(safe-area-inset-left);
   --safe-area-inset-right: env(safe-area-inset-right);
+  /* CoachSidebar móvil: pt-safe + fila h-8 + pb-3 (~2.75rem) + borde; 3.5rem deja margen para ascenders */
   --mobile-top-bar-h: 3.5rem;
-  --mobile-bottom-bar-h: 80px;
+  /* Bottom nav coach: icono + texto 2 líneas + py; alumno comparte pb del main */
+  --mobile-bottom-bar-h: 88px;
+  /* Alumno / rutas sin barra superior fija (solo notch) */
   --mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + 1rem);
+  /* Panel /coach: header fijo móvil en CoachSidebar */
+  --coach-mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-bar-h));
   --mobile-content-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-bar-h));
 
   /* Pale Grey Background from Brand Guidelines */
