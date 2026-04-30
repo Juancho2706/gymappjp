@@ -223,6 +223,15 @@ export function ClientCardV2({
                 <div className="relative z-10 space-y-4 p-5 md:p-6">
                     <div className="flex gap-4">
                         <div className="relative h-[72px] w-[72px] shrink-0">
+                            {nutritionRisk && hasNutritionData ?
+                                <span
+                                    className="absolute -right-1 -top-1 z-10 flex h-5 min-w-5 items-center justify-center rounded-full border border-rose-700 bg-rose-500 px-1 text-[9px] font-black leading-none text-white shadow-md"
+                                    title={`Nutrición baja: ${nutritionPct}%`}
+                                    aria-label={`Nutrición baja, adherencia ${nutritionPct} por ciento`}
+                                >
+                                    !
+                                </span>
+                            : null}
                             <CircularProgressbar
                                 value={adherencePct}
                                 strokeWidth={6}

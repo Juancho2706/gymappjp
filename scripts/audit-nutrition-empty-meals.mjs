@@ -1,15 +1,16 @@
-/**
+﻿/**
  * audit-nutrition-empty-meals.mjs
  *
- * Reporta planes nutricionales activos con comidas vacías (sin food_items),
+ * Reporta planes nutricionales activos con comidas vacias (sin food_items),
  * agrupados por coach y alumno.
  *
  * Uso:
  *   node scripts/audit-nutrition-empty-meals.mjs
- *
- * Variables de entorno requeridas:
- *   NEXT_PUBLIC_SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY
+ *   node scripts/audit-nutrition-empty-meals.mjs --coach-slug=juan
+ *   node scripts/audit-nutrition-empty-meals.mjs --json
+ *   node scripts/audit-nutrition-empty-meals.mjs --csv
+ *   node scripts/audit-nutrition-empty-meals.mjs --only-with-logs
+ *   node scripts/audit-nutrition-empty-meals.mjs --fail-on-find
  */
 
 import dotenv from 'dotenv'
@@ -32,6 +33,15 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUTPUT_DIR = join(__dirname, 'output')
 mkdirSync(OUTPUT_DIR, { recursive: true })
+
+const args = process.argv.slice(2)
+const options = {
+  coachSlug: args.find((a) => a.startsWith('--coach-slug='))?.split('=')[1] ?? null,
+  json: args.includes('--json'),
+  csv: args.includes('--csv'),
+  onlyWithLogs: args.includes('--only-with-logs'),
+  failOnFind: args.includes('--fail-on-find'),
+}
 
 async function fetchActivePlans(supabase) {
   const { data, error } = await supabase
@@ -110,6 +120,7 @@ function renderMarkdown(rows) {
   let md = `# Auditoria Planes Nutricionales con Comidas Vacias\n\n`
   md += `Generado: ${now}\n\n`
   md += `Total comidas vacias detectadas: **${rows.length}**\n\n`
+  md += `Filtros: coach_slug=${options.coachSlug ?? 'ALL'} | only_with_logs=${options.onlyWithLogs ? 'true' : 'false'}\n\n`
 
   const grouped = groupByCoachAndPlan(rows)
   for (const [coachKey, plans] of grouped.entries()) {
@@ -128,6 +139,55 @@ function renderMarkdown(rows) {
   return md
 }
 
+function printSummary(rows) {
+  const plans = new Set(rows.map((r) => r.plan_id)).size
+  const coaches = new Set(rows.map((r) => r.coach_slug)).size
+  console.log(`Comidas vacias: ${rows.length} | Planes afectados: ${plans} | Coaches: ${coaches}`)
+  if (rows.length > 0) {
+    const top = rows.slice(0, 10)
+    for (const r of top) {
+      console.log(`- ${r.coach_slug} | ${r.client_name} | ${r.plan_name} | ${r.meal_name}`)
+    }
+    if (rows.length > top.length) {
+      console.log(`... (${rows.length - top.length} filas mas)`)
+    }
+  }
+}
+
+function toCsv(rows) {
+  const headers = [
+    'coach_slug',
+    'coach_name',
+    'client_name',
+    'plan_name',
+    'plan_id',
+    'meal_name',
+    'order_index',
+    'daily_logs_count',
+    'completed_marks',
+    'last_log_date',
+  ]
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const lines = [headers.join(',')]
+  for (const r of rows) {
+    lines.push(
+      [
+        r.coach_slug,
+        r.coach_name,
+        r.client_name,
+        r.plan_name,
+        r.plan_id,
+        r.meal_name,
+        r.order_index,
+        r.daily_logs_count,
+        r.completed_marks,
+        r.last_log_date ?? '',
+      ].map(esc).join(',')
+    )
+  }
+  return lines.join('\n')
+}
+
 async function main() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   const plans = await fetchActivePlans(supabase)
@@ -139,6 +199,7 @@ async function main() {
     fetchMeals(supabase, planIds),
     fetchLogs(supabase, planIds),
   ])
+
   const mealIds = meals.map((m) => m.id)
   const foodItems = await fetchFoodItems(supabase, mealIds)
   const coachIds = [...new Set(clients.map((c) => c.coach_id).filter(Boolean))]
@@ -165,8 +226,12 @@ async function main() {
     if (!plan) continue
     const client = clientById.get(plan.client_id)
     const coach = client ? coachById.get(client.coach_id) : null
+    if (options.coachSlug && coach?.slug !== options.coachSlug) continue
+
     const planLogs = logsByPlan.get(plan.id) ?? []
     const dailyLogsCount = planLogs.length
+    if (options.onlyWithLogs && dailyLogsCount === 0) continue
+
     const completedMarks = planLogs.reduce(
       (acc, l) => acc + (l.nutrition_meal_logs ?? []).filter((x) => x.is_completed).length,
       0
@@ -200,7 +265,26 @@ async function main() {
   const md = renderMarkdown(rows)
   const outputFile = join(OUTPUT_DIR, 'nutrition-empty-meals-audit.md')
   writeFileSync(outputFile, md, 'utf8')
+
+  if (options.json) {
+    const outputJson = join(OUTPUT_DIR, 'nutrition-empty-meals-audit.json')
+    writeFileSync(outputJson, JSON.stringify({ generatedAt: new Date().toISOString(), rows }, null, 2), 'utf8')
+    console.log(`JSON generado: ${outputJson}`)
+  }
+
+  if (options.csv) {
+    const outputCsv = join(OUTPUT_DIR, 'nutrition-empty-meals-audit.csv')
+    writeFileSync(outputCsv, toCsv(rows), 'utf8')
+    console.log(`CSV generado: ${outputCsv}`)
+  }
+
+  printSummary(rows)
   console.log(`Reporte generado: ${outputFile}`)
+
+  if (options.failOnFind && rows.length > 0) {
+    console.error('Se encontraron comidas vacias (fail-on-find activo).')
+    process.exit(2)
+  }
 }
 
 main().catch((err) => {

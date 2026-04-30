@@ -568,17 +568,46 @@ export const getClientProfileData = cache(async (clientId: string) => {
         checkInCompliancePercentWeekAgo,
     }
 
-    const { data: favoritePrefsRows } = await supabase
-        .from('client_food_preferences')
-        .select('food_id, foods ( id, name )')
-        .eq('client_id', clientId)
-        .eq('preference_type', 'favorite')
-        .order('created_at', { ascending: false })
+    const [
+        { data: favoritePrefsRows },
+        { data: nutritionPlanCyclesRows },
+        { data: nutritionTemplatesLiteRows },
+    ] = await Promise.all([
+        supabase
+            .from('client_food_preferences')
+            .select('food_id, foods ( id, name )')
+            .eq('client_id', clientId)
+            .eq('preference_type', 'favorite')
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('nutrition_plan_cycles')
+            .select('id, name, start_date, blocks, is_active, created_at')
+            .eq('client_id', clientId)
+            .eq('coach_id', user.id)
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('nutrition_plan_templates')
+            .select('id, name')
+            .eq('coach_id', user.id)
+            .order('name', { ascending: true }),
+    ])
 
     const clientFavoriteFoods = (favoritePrefsRows ?? []).map((row: { food_id: string; foods?: { name?: string | null } | null }) => ({
         id: row.food_id,
         name: row.foods?.name?.trim() || 'Alimento',
     }))
+
+    const activePlanIdForHistory = (activeNutritionPlanFull as { id?: string } | null)?.id
+    let nutritionPlanHistoryEntries: { id: string; created_at: string; label: string | null }[] = []
+    if (activePlanIdForHistory) {
+        const { data: histRows } = await supabase
+            .from('nutrition_plan_history')
+            .select('id, created_at, label')
+            .eq('nutrition_plan_id', activePlanIdForHistory)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        nutritionPlanHistoryEntries = histRows ?? []
+    }
 
     return {
         client,
@@ -603,6 +632,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
         attentionScore,
         profileLastActivityAt,
         clientFavoriteFoods,
+        nutritionPlanCycles: nutritionPlanCyclesRows ?? [],
+        nutritionTemplatesLite: nutritionTemplatesLiteRows ?? [],
+        nutritionPlanHistoryEntries,
     }
 })
 

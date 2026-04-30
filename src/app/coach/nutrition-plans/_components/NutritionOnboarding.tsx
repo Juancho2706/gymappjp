@@ -1,58 +1,38 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Apple, ChevronRight, BookOpen, Users, Check } from 'lucide-react'
+import { ChevronRight, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  readCoachNutritionOnboardingDismissed,
+  writeCoachNutritionOnboardingDismissed,
+} from '@/lib/coach-nutrition-onboarding-storage'
+import { COACH_NUTRITION_ONBOARDING_STEPS } from './nutrition-onboarding-shared'
 
 interface Props {
+  coachId: string
   hasClients: boolean
   onAssign?: () => void
 }
 
-const STEPS = [
-  {
-    number: 1,
-    icon: Apple,
-    iconColor: 'text-emerald-500',
-    iconBg: 'bg-emerald-500/10',
-    title: 'Agrega tus alimentos',
-    description:
-      'Busca en el catálogo (~250 alimentos chilenos y globales) o crea los tuyos propios. Los alimentos son la base de todos tus planes.',
-    cta: 'Ir al catálogo',
-    href: '/coach/foods',
-    external: false,
-  },
-  {
-    number: 2,
-    icon: BookOpen,
-    iconColor: 'text-violet-500',
-    iconBg: 'bg-violet-500/10',
-    title: 'Crea tu primera plantilla',
-    description:
-      'Una plantilla es un modelo de plan reutilizable. Arma las comidas con sus alimentos y cantidades. Tarda menos de 5 minutos.',
-    cta: 'Crear plantilla',
-    href: '/coach/nutrition-plans/new',
-    external: false,
-  },
-  {
-    number: 3,
-    icon: Users,
-    iconColor: 'text-sky-500',
-    iconBg: 'bg-sky-500/10',
-    title: 'Asigna el plan a un alumno',
-    description:
-      'Una vez tengas una plantilla lista, asígnala a tus alumnos. Puedes asignar la misma plantilla a varios a la vez.',
-    cta: 'Asignar plan',
-    href: null,
-    external: false,
-  },
-] as const
+export function NutritionOnboarding({ coachId, hasClients, onAssign }: Props) {
+  const [dismissed, setDismissed] = useState<boolean | null>(null)
 
-export function NutritionOnboarding({ hasClients, onAssign }: Props) {
-  const [dismissed, setDismissed] = useState(false)
+  useEffect(() => {
+    setDismissed(readCoachNutritionOnboardingDismissed(coachId))
+  }, [coachId])
+
+  if (dismissed === null) {
+    return <div className="min-h-[200px] rounded-2xl border border-dashed border-border/40 bg-muted/10 animate-pulse" aria-hidden />
+  }
 
   if (dismissed) return null
+
+  const dismiss = () => {
+    writeCoachNutritionOnboardingDismissed(coachId)
+    setDismissed(true)
+  }
 
   return (
     <div className="rounded-2xl border border-dashed border-border/80 bg-card p-6 space-y-6">
@@ -69,7 +49,7 @@ export function NutritionOnboarding({ hasClients, onAssign }: Props) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        {STEPS.map((step) => {
+        {COACH_NUTRITION_ONBOARDING_STEPS.map((step) => {
           const Icon = step.icon
           const isDisabled = step.number === 3 && !hasClients
           return (
@@ -134,13 +114,13 @@ export function NutritionOnboarding({ hasClients, onAssign }: Props) {
         })}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-[10px] text-muted-foreground">
           {!hasClients && 'Necesitas al menos un alumno para el paso 3.'}
         </p>
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={dismiss}
           className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted/60 transition-colors"
         >
           <Check className="h-3 w-3" />

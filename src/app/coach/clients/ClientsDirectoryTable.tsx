@@ -4,7 +4,7 @@ import { useRef, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, Eye, Pencil } from 'lucide-react'
+import { Apple, ArrowUpDown, Eye, Pencil } from 'lucide-react'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectorySortKey } from './directory-types'
 import { defaultSortDir, sortClientsByKey } from './clientsDirectorySort'
@@ -204,7 +204,16 @@ export function ClientsDirectoryTable({
                     <ScoreBadge score={p?.attentionScore ?? 0} />
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    {p?.attentionFlags?.includes('NUTRICION_RIESGO') ?
+                        <span
+                            className="shrink-0 rounded-full border border-rose-500/40 bg-rose-500/15 p-1"
+                            title="Adherencia nutricional baja (menos del 60%)"
+                        >
+                            <Apple className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+                            <span className="sr-only">Nutrición baja</span>
+                        </span>
+                    : null}
+                    <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                         <div
                             className="h-full rounded-full"
                             style={{
@@ -213,7 +222,7 @@ export function ClientsDirectoryTable({
                             }}
                         />
                     </div>
-                    <span className="w-8 text-right text-xs font-bold tabular-nums">
+                    <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">
                         {p?.percentage ?? 0}%
                     </span>
                 </div>

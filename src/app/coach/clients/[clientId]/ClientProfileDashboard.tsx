@@ -865,6 +865,14 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             tooltipBgColor={tooltipBgColor}
                             tooltipBorderColor={tooltipBorderColor}
                             tooltipTextColor={tooltipTextColor}
+                            recentCheckIns={(data.checkIns || []).slice(0, 16).map((c: { created_at: string; weight?: number | null; energy_level?: number | null }) => ({
+                                created_at: c.created_at,
+                                weight: c.weight ?? null,
+                                energy_level: c.energy_level ?? null,
+                            }))}
+                            nutritionPlanCycles={data.nutritionPlanCycles ?? []}
+                            nutritionTemplatesLite={data.nutritionTemplatesLite ?? []}
+                            nutritionPlanHistoryEntries={data.nutritionPlanHistoryEntries ?? []}
                         />
                     </div>
                     </motion.div>

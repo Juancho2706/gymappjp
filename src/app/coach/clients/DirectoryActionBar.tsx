@@ -236,7 +236,7 @@ export function DirectoryActionBar({
                                     On Track
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => onRiskFilterChange('nutrition_low')}>
-                                    Nutrición baja ({'<'}60%)
+                                    {'Nutrición baja (<60%)'}
                                 </DropdownMenuItem>
                             </DropdownMenuGroup>
                             <DropdownMenuSeparator />

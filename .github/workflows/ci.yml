@@ -42,3 +42,39 @@ jobs:
           E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
           E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
           E2E_WORKOUT_PLAN_ID: ${{ secrets.E2E_WORKOUT_PLAN_ID }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-e2e
+          path: playwright-report/
+          if-no-files-found: ignore
+
+  nutrition-smoke:
+    needs: quality
+    if: ${{ secrets.E2E_COACH_SLUG != '' && secrets.E2E_CLIENT_EMAIL != '' && secrets.E2E_CLIENT_PASSWORD != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npm run e2e:check-env
+      - run: npm run test:e2e:nutrition
+        env:
+          CI: true
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_COACH_SLUG: ${{ secrets.E2E_COACH_SLUG }}
+          E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
+          E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-nutrition-smoke
+          path: playwright-report/
+          if-no-files-found: ignore

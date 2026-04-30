@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react'
 import { DayNavigator } from './DayNavigator'
 import { MacroRingSummary } from './MacroRingSummary'
 import { MealCard, type MealCardMeal } from './MealCard'
@@ -16,8 +16,18 @@ import {
 } from '@/lib/nutrition-utils'
 import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { toast } from 'sonner'
-import { Share2 } from 'lucide-react'
+import { FileDown, Share2 } from 'lucide-react'
 import { HabitsTracker } from './HabitsTracker'
+import { WorkoutContextBanner } from './WorkoutContextBanner'
+import {
+  enqueueNutritionOfflineToggle,
+  isLikelyOfflineError,
+} from '@/lib/nutrition-offline-queue'
+import { trackNutritionEvent } from '@/lib/product-analytics'
+import { buildNutritionDayPlainTextLines } from '@/lib/nutrition-day-plain-text'
+import { downloadNutritionDayPdf } from '@/lib/nutrition-day-pdf'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { readNutritionReadModelCache, writeNutritionReadModelCache } from '@/lib/nutrition-plan-local-cache'
 
 type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null; satisfaction_score?: number | null }
 type MealSwapRow = {
@@ -44,6 +54,8 @@ function toMealCardMeal(m: PlanMealRow): MealCardMeal {
 }
 
 interface Props {
+  /** Entreno previsto para hoy (microciclo / fecha asignada), vía dashboard bundle. */
+  hasTodayWorkout?: boolean
   plan: {
     id: string
     coach_id?: string | null
@@ -62,86 +74,97 @@ interface Props {
   today: string
 }
 
-const OFFLINE_QUEUE_KEY = 'eva_offline_toggle_queue'
-
-interface OfflineToggleItem {
-  userId: string
-  planId: string
-  mealId: string
-  completed: boolean
-  logId?: string
-  coachSlug: string
-  date: string
-}
-
-function readOfflineQueue(): OfflineToggleItem[] {
-  try {
-    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) ?? '[]') as OfflineToggleItem[]
-  } catch {
-    return []
-  }
-}
-
-function writeOfflineQueue(q: OfflineToggleItem[]) {
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q))
-}
-
-function enqueueOfflineToggle(item: OfflineToggleItem) {
-  const q = readOfflineQueue()
-  // Dedupe: if same mealId+date already queued, replace (last write wins)
-  const idx = q.findIndex((x) => x.mealId === item.mealId && x.date === item.date)
-  if (idx >= 0) q[idx] = item
-  else q.push(item)
-  writeOfflineQueue(q)
-}
-
-export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug, today }: Props) {
+export function NutritionShell({
+  hasTodayWorkout = false,
+  plan,
+  initialLog,
+  adherence,
+  userId,
+  coachSlug,
+  today,
+}: Props) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [currentLog, setCurrentLog] = useState<Record<string, unknown> | null>(initialLog)
+  useEffect(() => {
+    if (selectedDate !== today) return
+    if (initialLog != null) {
+      setCurrentLog(initialLog)
+      return
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const c = readNutritionReadModelCache(coachSlug, plan.id)
+      if (
+        c &&
+        c.today === today &&
+        (c.clientUserId == null || c.clientUserId === userId) &&
+        c.dailyLog != null
+      ) {
+        setCurrentLog(c.dailyLog as Record<string, unknown>)
+        return
+      }
+    }
+    setCurrentLog(initialLog)
+  }, [initialLog, selectedDate, today, coachSlug, plan.id, userId])
   const [isDateLoading, startDateTransition] = useTransition()
   const [isTogglePending, startToggleTransition] = useTransition()
   const [isPortionPending, startPortionTransition] = useTransition()
   const [isSatisfactionPending, startSatisfactionTransition] = useTransition()
   const [isSwapPending, startSwapTransition] = useTransition()
+  const [isPdfPending, startPdfTransition] = useTransition()
   const [favoriteFoodIds, setFavoriteFoodIds] = useState<Set<string>>(new Set())
-  const planIdRef = useRef(plan.id)
-  const selectedDateRef = useRef(selectedDate)
-  selectedDateRef.current = selectedDate
-
-  // Flush offline toggle queue when back online
-  useEffect(() => {
-    async function flushQueue() {
-      const q = readOfflineQueue()
-      if (q.length === 0) return
-      let flushed = 0
-      const remaining: OfflineToggleItem[] = []
-      for (const item of q) {
-        try {
-          await toggleMealCompletion(item.userId, item.planId, item.mealId, item.completed, item.logId, item.coachSlug, item.date)
-          flushed++
-        } catch {
-          remaining.push(item)
-        }
-      }
-      writeOfflineQueue(remaining)
-      if (flushed > 0) {
-        toast.success(`${flushed} acción${flushed !== 1 ? 'es' : ''} sincronizada${flushed !== 1 ? 's' : ''}`)
-        // Refresh log if the flushed date matches current view
-        const hasToday = q.some((x) => x.date === selectedDateRef.current && x.planId === planIdRef.current)
-        if (hasToday) {
-          const { dailyLog } = await fetchLogForDate(userId, planIdRef.current, selectedDateRef.current)
-          setCurrentLog(dailyLog as Record<string, unknown> | null)
-        }
-      }
-    }
-    flushQueue()
-    window.addEventListener('online', flushQueue)
-    return () => window.removeEventListener('online', flushQueue)
-  }, [userId])
-
   useEffect(() => {
     getClientFoodFavoritesForClient(userId).then((ids) => setFavoriteFoodIds(new Set(ids)))
   }, [userId])
+
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const on = () => setIsOnline(true)
+    const off = () => setIsOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+
+  const [adherenceBoost, setAdherenceBoost] = useState<DayAdherence[] | null>(null)
+  useEffect(() => {
+    if (isOnline) {
+      setAdherenceBoost(null)
+      return
+    }
+    if (adherence.length > 0) {
+      setAdherenceBoost(null)
+      return
+    }
+    const c = readNutritionReadModelCache(coachSlug, plan.id)
+    if (!c || c.today !== today) return
+    if (c.clientUserId != null && c.clientUserId !== userId) return
+    if (Array.isArray(c.adherence) && c.adherence.length > 0) {
+      setAdherenceBoost(c.adherence as DayAdherence[])
+    }
+  }, [isOnline, adherence, coachSlug, plan.id, today, userId])
+
+  const adherenceEffective = useMemo(
+    () => adherenceBoost ?? adherence,
+    [adherenceBoost, adherence]
+  )
+
+  /** Copia local del read model del día actual (resiliencia offline; no reemplaza servidor). */
+  useEffect(() => {
+    if (selectedDate !== today) return
+    writeNutritionReadModelCache(coachSlug, {
+      plan,
+      today,
+      adherence: adherenceEffective,
+      clientUserId: userId,
+      dailyLog: currentLog,
+    })
+  }, [coachSlug, plan, today, adherenceEffective, selectedDate, userId, currentLog])
 
   const mealLogs = useMemo(
     () => (currentLog?.nutrition_meal_logs as MealLogRow[] | undefined) ?? [],
@@ -300,7 +323,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   const adherenceDates = useMemo(() => {
     const s = new Set<string>()
     const allMeals = plan.nutrition_meals ?? []
-    for (const d of adherence) {
+    for (const d of adherenceEffective) {
       const applicableIds = new Set(
         allMeals.filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, d.log_date)).map((m) => m.id)
       )
@@ -309,10 +332,14 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
       }
     }
     return s
-  }, [adherence, plan.nutrition_meals])
+  }, [adherenceEffective, plan.nutrition_meals])
 
   const handleDateChange = useCallback(
     (date: string) => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        toast.error('Sin conexión — no se puede cargar otro día')
+        return
+      }
       setSelectedDate(date)
       startDateTransition(async () => {
         const { dailyLog } = await fetchLogForDate(userId, plan.id, date)
@@ -328,7 +355,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
       startToggleTransition(async () => {
         setOptimisticCompletion({ mealId, isCompleted: next })
         try {
-          await toggleMealCompletion(
+          const res = await toggleMealCompletion(
             userId,
             plan.id,
             mealId,
@@ -337,12 +364,23 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
             coachSlug,
             selectedDate
           )
+          if (!res.success) {
+            toast.error('Error al registrar comida')
+            const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+            setCurrentLog(dailyLog as Record<string, unknown> | null)
+            return
+          }
+          trackNutritionEvent('nutrition_meal_toggled', {
+            source: 'nutrition_shell',
+            completed: next ? 1 : 0,
+            date_is_today: selectedDate === today ? 1 : 0,
+          })
           const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
           setCurrentLog(dailyLog as Record<string, unknown> | null)
         } catch (e) {
           console.error(e)
-          if (!navigator.onLine) {
-            enqueueOfflineToggle({
+          if (isLikelyOfflineError(e)) {
+            enqueueNutritionOfflineToggle({
               userId,
               planId: plan.id,
               mealId,
@@ -350,6 +388,10 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
               logId: currentLog?.id as string | undefined,
               coachSlug,
               date: selectedDate,
+            })
+            trackNutritionEvent('nutrition_meal_toggle_queued', {
+              source: 'nutrition_shell',
+              date_is_today: selectedDate === today ? 1 : 0,
             })
             toast('Sin conexión — se sincronizará automáticamente', { icon: '📶' })
           } else {
@@ -360,7 +402,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
         }
       })
     },
-    [setOptimisticCompletion, userId, plan.id, currentLog, coachSlug, selectedDate]
+    [setOptimisticCompletion, userId, plan.id, currentLog, coachSlug, selectedDate, today]
   )
 
   const handlePartialPctChange = useCallback(
@@ -453,7 +495,8 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   )
 
   const totalMeals = mealsVisible.length
-  const isPending = isTogglePending || isDateLoading || isPortionPending || isSatisfactionPending || isSwapPending
+  const isPending =
+    isTogglePending || isDateLoading || isPortionPending || isSatisfactionPending || isSwapPending || isPdfPending
   const activeSwapByMealFoodKey = useMemo(() => {
     const m = new Map<string, string>()
     for (const s of mealSwapLogs) {
@@ -552,6 +595,7 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     lines.push(`📊 Meta: ${goals.calories} kcal | P ${goals.protein}g · C ${goals.carbs}g · G ${goals.fats}g`)
 
     copyToClipboard(lines.join('\n'), 'Detalle del día copiado — listo para WhatsApp 📋')
+    trackNutritionEvent('nutrition_plan_export_copied', { format: 'detail' })
   }, [mealsVisibleWithSwaps, plan.name, plan.instructions, goals, selectedDate, copyToClipboard])
 
   const handleCopyDayShort = useCallback(() => {
@@ -586,16 +630,58 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
     lines.push('')
     lines.push(`Meta diaria: ${goals.calories} kcal | P ${goals.protein}g · C ${goals.carbs}g · G ${goals.fats}g`)
     copyToClipboard(lines.join('\n'), 'Resumen corto copiado 📋')
+    trackNutritionEvent('nutrition_plan_export_copied', { format: 'short' })
   }, [mealsVisibleWithSwaps, plan.name, goals, selectedDate, copyToClipboard])
+
+  const handleDownloadDayPdf = useCallback(() => {
+    const plainMeals = mealsVisibleWithSwaps.map((m) => ({
+      name: m.name,
+      food_items: normalizeMealForMacros(m).food_items,
+    }))
+    const lines = buildNutritionDayPlainTextLines({
+      planName: plan.name ?? 'Plan nutricional',
+      date: selectedDate,
+      instructions: plan.instructions,
+      meals: plainMeals,
+      goals,
+    })
+    const stem = `plan-nutricion-${selectedDate}`
+    startPdfTransition(async () => {
+      try {
+        await downloadNutritionDayPdf(lines, stem)
+        trackNutritionEvent('nutrition_plan_pdf_downloaded', { date_is_today: selectedDate === today ? 1 : 0 })
+        toast.success('PDF descargado')
+      } catch (e) {
+        console.error(e)
+        toast.error('No se pudo generar el PDF. Intenta de nuevo.')
+      }
+    })
+  }, [mealsVisibleWithSwaps, plan.name, plan.instructions, selectedDate, goals, today])
 
   return (
     <div className="space-y-5">
+      {!isOnline && (
+        <div
+          role="status"
+          className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[11px] leading-snug text-amber-950 dark:text-amber-50"
+        >
+          <span className="font-semibold">Sin conexión.</span> Este dispositivo guarda una copia del plan de hoy y
+          la barra de adherencia. Las marcas de comidas pueden quedar en cola y se sincronizan al volver la red.
+        </div>
+      )}
+      <WorkoutContextBanner hasTodayWorkout={hasTodayWorkout} />
       <DayNavigator
         selectedDate={selectedDate}
         onDateChange={handleDateChange}
         adherenceDates={adherenceDates}
         isLoading={isDateLoading}
       />
+
+      {!isToday && (
+        <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-200">
+          Estás viendo un día histórico. Puedes revisar adherencia y hábitos, pero no editar registros.
+        </p>
+      )}
 
       {mealsSorted.length > mealsVisible.length && mealsVisible.length > 0 && (
         <p className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] leading-snug text-sky-100/90">
@@ -604,8 +690,8 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
         </p>
       )}
 
-      {adherence.length > 0 && totalMeals > 0 && (
-        <NutritionStreakBanner adherenceData={adherence} planMeals={planMealsForAdherence} />
+      {adherenceEffective.length > 0 && totalMeals > 0 && (
+        <NutritionStreakBanner adherenceData={adherenceEffective} planMeals={planMealsForAdherence} />
       )}
 
       <MacroRingSummary
@@ -651,29 +737,58 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
       />
 
       {totalMeals > 0 && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={handleCopyDayDetail}
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/20 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40 active:scale-[0.98]"
-          >
-            <Share2 className="h-3.5 w-3.5 shrink-0" />
-            WhatsApp · Detalle
-          </button>
-          <button
-            type="button"
-            onClick={handleCopyDayShort}
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/10 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/30 active:scale-[0.98]"
-          >
-            <Share2 className="h-3.5 w-3.5 shrink-0" />
-            WhatsApp · Resumen
-          </button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="space-y-1">
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">WhatsApp detalle</span>
+              <InfoTooltip content="Copia comidas y alimentos uno por uno, ideal para enviar el plan completo del día." iconClassName="w-3 h-3" />
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyDayDetail}
+              disabled={isPending}
+              className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/20 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40 active:scale-[0.98] disabled:opacity-50"
+            >
+              <Share2 className="h-3.5 w-3.5 shrink-0" />
+              Copiar detalle
+            </button>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">WhatsApp resumen</span>
+              <InfoTooltip content="Copia un resumen breve por comida y meta diaria, útil para mensajes rápidos." iconClassName="w-3 h-3" />
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyDayShort}
+              disabled={isPending}
+              className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/10 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/30 active:scale-[0.98] disabled:opacity-50"
+            >
+              <Share2 className="h-3.5 w-3.5 shrink-0" />
+              Copiar resumen
+            </button>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Exportar PDF</span>
+              <InfoTooltip content="Genera un PDF con comidas, alimentos y metas del día seleccionado." iconClassName="w-3 h-3" />
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadDayPdf}
+              disabled={isPending}
+              className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-primary/10 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-primary transition-colors hover:bg-primary/15 active:scale-[0.98] disabled:opacity-50"
+            >
+              <FileDown className="h-3.5 w-3.5 shrink-0" />
+              Descargar PDF
+            </button>
+          </div>
         </div>
       )}
 
-      {adherence.length > 0 && (plan.nutrition_meals?.length ?? 0) > 0 && (
+      {adherenceEffective.length > 0 && (plan.nutrition_meals?.length ?? 0) > 0 && (
         <div className="bg-card border border-border rounded-2xl p-4">
-          <AdherenceStrip data={adherence} planMeals={planMealsForAdherence} />
+          <AdherenceStrip data={adherenceEffective} planMeals={planMealsForAdherence} />
         </div>
       )}
     </div>

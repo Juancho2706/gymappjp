@@ -12,9 +12,16 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:nutrition": "playwright test tests/nutrition-student-smoke.spec.ts",
     "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs",
     "audit:nutrition-empty-meals": "node scripts/audit-nutrition-empty-meals.mjs",
-    "check:meal-completions-deprecation": "node scripts/check-meal-completions-deprecation.mjs"
+    "check:meal-completions-deprecation": "node scripts/check-meal-completions-deprecation.mjs",
+    "audit:nutrition-empty-meals:strict": "node scripts/audit-nutrition-empty-meals.mjs --fail-on-find",
+    "e2e:check-env": "node scripts/validate-e2e-env.mjs",
+    "audit:nutrition-empty-meals:runbook": "node scripts/build-nutrition-remediation-runbook.mjs",
+    "audit:nutrition-empty-meals:priority": "node scripts/build-nutrition-remediation-priority.mjs",
+    "audit:nutrition-empty-meals:baseline": "node scripts/snapshot-nutrition-audit-baseline.mjs",
+    "audit:nutrition-empty-meals:delta": "node scripts/build-nutrition-audit-delta.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -40,6 +47,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.38.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",

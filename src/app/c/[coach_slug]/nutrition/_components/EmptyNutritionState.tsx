@@ -1,5 +1,8 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowLeft, Apple } from 'lucide-react'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 export function EmptyNutritionState({ coachSlug }: { coachSlug: string }) {
   return (
@@ -11,7 +14,13 @@ export function EmptyNutritionState({ coachSlug }: { coachSlug: string }) {
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <h1 className="text-lg font-black">Plan Nutricional</h1>
+        <h1 className="text-lg font-black inline-flex flex-wrap items-center gap-1.5">
+          Plan Nutricional
+          <InfoTooltip
+            title="Sin plan activo"
+            content="Aquí verás comidas, metas y adherencia cuando tu coach te asigne un plan nutricional activo en EVA. Si crees que deberías tener uno, escribe a tu coach."
+          />
+        </h1>
       </header>
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-8 text-center gap-4">
         <div className="w-20 h-20 rounded-3xl bg-muted/50 flex items-center justify-center">

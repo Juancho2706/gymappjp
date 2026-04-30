@@ -16,6 +16,7 @@ import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
+import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
 
 interface Props {
@@ -157,6 +158,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 data-brand-name={brandName}
             >
                 <NetworkProvider brandName={brandName} logoUrl={logoUrl} primaryColor={primaryColor}>
+                    <OfflineNutritionQueueSync />
                     <ClientNav
                         coachSlug={coach_slug}
                         coachBrand={brandName}

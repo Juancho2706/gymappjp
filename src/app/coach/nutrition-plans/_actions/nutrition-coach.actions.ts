@@ -1,6 +1,8 @@
 'use server'
 
+import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
+import type { Json } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { NutritionService } from '@/services/nutrition.service'
 import {
@@ -8,6 +10,11 @@ import {
   ClientPlanSchema,
   CustomFoodSchema,
 } from '@/lib/nutrition-schemas'
+import { fetchClientPlanSnapshotPayload } from '@/lib/nutrition-plan-snapshot'
+import {
+  nutritionPlanCycleUpsertSchema,
+  type NutritionPlanCycleUpsertInput,
+} from '@/lib/nutrition-plan-cycle-schema'
 
 // ─── Tipos públicos (usados por componentes del builder) ───────────────────────
 
@@ -222,6 +229,20 @@ export async function upsertClientNutritionPlanJson(
     const sorted = [...meals].sort((a, b) => a.order_index - b.order_index)
 
     if (currentPlanId) {
+      const snapshotPayload = await fetchClientPlanSnapshotPayload(supabase, currentPlanId, coachId)
+      if (snapshotPayload) {
+        const label = format(new Date(), 'yyyy-MM-dd HH:mm')
+        const { error: histErr } = await supabase.from('nutrition_plan_history').insert({
+          coach_id: coachId,
+          client_id: clientId,
+          nutrition_plan_id: currentPlanId,
+          snapshot: JSON.parse(JSON.stringify(snapshotPayload)) as Json,
+          label,
+          source: 'auto_before_save',
+        })
+        if (histErr) console.warn('[nutrition_plan_history]', histErr)
+      }
+
       const { error: updateError } = await supabase
         .from('nutrition_plans')
         .update(planData)
@@ -789,6 +810,113 @@ export async function duplicatePlanToClient(
   } catch (err: unknown) {
     console.error('[duplicatePlanToClient]', err)
     const msg = err instanceof Error ? err.message : 'Error al duplicar el plan.'
+    return { success: false, error: msg }
+  }
+}
+
+export async function restoreClientNutritionPlanFromHistory(
+  coachId: string,
+  clientId: string,
+  historyId: string
+): Promise<{ success: boolean; error?: string }> {
+  const { supabase, error: authErr } = await requireCoachSession(coachId)
+  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('nutrition_plan_history')
+    .select('nutrition_plan_id, snapshot, client_id')
+    .eq('id', historyId)
+    .eq('coach_id', coachId)
+    .eq('client_id', clientId)
+    .maybeSingle()
+
+  if (fetchErr || !row) return { success: false, error: 'Versión no encontrada.' }
+
+  const parsed = ClientPlanSchema.safeParse(row.snapshot)
+  if (!parsed.success) {
+    return { success: false, error: 'Snapshot inválido o incompatible con el validador actual.' }
+  }
+
+  const d = parsed.data
+  return upsertClientNutritionPlanJson(coachId, clientId, {
+    id: row.nutrition_plan_id,
+    name: d.name,
+    daily_calories: d.daily_calories,
+    protein_g: d.protein_g,
+    carbs_g: d.carbs_g,
+    fats_g: d.fats_g,
+    instructions: d.instructions ?? null,
+    meals: d.meals.map((m) => ({
+      name: m.name,
+      order_index: m.order_index,
+      day_of_week: m.day_of_week ?? null,
+      foodItems: m.foodItems.map((fi) => ({
+        food_id: fi.food_id,
+        quantity: fi.quantity,
+        unit: fi.unit,
+        swap_options: fi.swap_options,
+      })),
+    })),
+  })
+}
+
+export async function upsertNutritionPlanCycle(
+  coachId: string,
+  clientId: string,
+  data: NutritionPlanCycleUpsertInput
+): Promise<{ success: boolean; error?: string; cycleId?: string }> {
+  const { supabase, error: authErr } = await requireCoachSession(coachId)
+  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+
+  const parsed = nutritionPlanCycleUpsertSchema.safeParse(data)
+  if (!parsed.success) {
+    return { success: false, error: zodErrorMessage(parsed.error.issues) }
+  }
+
+  const { id, name, start_date, blocks, is_active } = parsed.data
+  const now = new Date().toISOString()
+
+  try {
+    if (is_active) {
+      await supabase
+        .from('nutrition_plan_cycles')
+        .update({ is_active: false, updated_at: now })
+        .eq('client_id', clientId)
+        .eq('coach_id', coachId)
+    }
+
+    const base = {
+      coach_id: coachId,
+      client_id: clientId,
+      name,
+      start_date,
+      blocks: JSON.parse(JSON.stringify(blocks)) as Json,
+      is_active,
+      updated_at: now,
+    }
+
+    if (id) {
+      const { data: updated, error } = await supabase
+        .from('nutrition_plan_cycles')
+        .update(base)
+        .eq('id', id)
+        .eq('coach_id', coachId)
+        .select('id')
+        .single()
+      if (error) throw error
+      await revalidateClientNutritionPaths(coachId, clientId)
+      revalidatePath('/coach/nutrition-plans')
+      return { success: true, cycleId: updated.id }
+    }
+
+    const { data: inserted, error } = await supabase.from('nutrition_plan_cycles').insert(base).select('id').single()
+    if (error) throw error
+    await revalidateClientNutritionPaths(coachId, clientId)
+    revalidatePath('/coach/nutrition-plans')
+    return { success: true, cycleId: inserted.id }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error al guardar el ciclo.'
+    console.error('[upsertNutritionPlanCycle]', e)
     return { success: false, error: msg }
   }
 }

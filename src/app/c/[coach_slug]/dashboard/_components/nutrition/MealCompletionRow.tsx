@@ -3,10 +3,16 @@
 import { useOptimistic, useTransition } from 'react'
 import { motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { toggleMealCompletion } from '@/app/c/[coach_slug]/nutrition/_actions/nutrition.actions'
 import { useRouter } from 'next/navigation'
+import {
+  enqueueNutritionOfflineToggle,
+  isLikelyOfflineError,
+} from '@/lib/nutrition-offline-queue'
+import { trackNutritionEvent } from '@/lib/product-analytics'
 
 interface MealCompletionRowProps {
     mealId: string
@@ -33,18 +39,52 @@ export function MealCompletionRow({
 
     const onToggle = () => {
         const next = !optimistic
+        const targetDate = getTodayInSantiago().iso
         startTransition(async () => {
             setOptimistic(next)
-            await toggleMealCompletion(
-                clientId,
-                planId,
-                mealId,
-                next,
-                dailyLogId,
-                coachSlug,
-                getTodayInSantiago().iso
-            )
-            router.refresh()
+            try {
+                const res = await toggleMealCompletion(
+                    clientId,
+                    planId,
+                    mealId,
+                    next,
+                    dailyLogId,
+                    coachSlug,
+                    targetDate
+                )
+                if (!res.success) {
+                    toast.error('No se pudo registrar la comida')
+                    router.refresh()
+                    return
+                }
+                trackNutritionEvent('nutrition_meal_toggled', {
+                    source: 'dashboard',
+                    completed: next ? 1 : 0,
+                    date_is_today: 1,
+                })
+                router.refresh()
+            } catch (e) {
+                if (isLikelyOfflineError(e)) {
+                    enqueueNutritionOfflineToggle({
+                        userId: clientId,
+                        planId,
+                        mealId,
+                        completed: next,
+                        logId: dailyLogId,
+                        coachSlug,
+                        date: targetDate,
+                    })
+                    trackNutritionEvent('nutrition_meal_toggle_queued', {
+                        source: 'dashboard',
+                        date_is_today: 1,
+                    })
+                    toast('Sin conexión — se sincronizará al volver la señal', { icon: '📶' })
+                } else {
+                    console.error(e)
+                    toast.error('Error al registrar comida')
+                    router.refresh()
+                }
+            }
         })
     }
 

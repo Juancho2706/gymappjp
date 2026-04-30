@@ -1,6 +1,7 @@
 'use client'
 
 import type { CSSProperties, ReactNode } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { LayoutTemplate, Users, Apple, Plus, HelpCircle } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -11,6 +12,7 @@ import type { ActivePlanBoardRow } from '../_data/nutrition-coach.queries'
 import { FoodLibrary } from './FoodLibrary'
 import type { AssignModalClient } from './AssignModal'
 import { NutritionOnboarding } from './NutritionOnboarding'
+import { CoachNutritionGuideDialog } from './CoachNutritionGuideDialog'
 
 type FoodLib = {
   foods: {
@@ -45,12 +47,19 @@ export function NutritionHub({
   foods,
   coachId,
 }: Props) {
+  const [hubTab, setHubTab] = useState('templates')
+  const hasClients = assignClients.length > 0
+
   return (
     <div className="w-full max-w-[2000px] mx-auto animate-fade-in space-y-8">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="space-y-2">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter font-display leading-none">Nutrición</h1>
+            <CoachNutritionGuideDialog
+              hasClients={hasClients}
+              onAssign={() => setHubTab('clients')}
+            />
             <Dialog>
               <DialogTrigger
                 render={
@@ -138,7 +147,7 @@ export function NutritionHub({
         </div>
       </div>
 
-      <Tabs defaultValue="templates" className="w-full flex flex-col gap-8">
+      <Tabs value={hubTab} onValueChange={setHubTab} className="w-full flex flex-col gap-8">
         <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0 flex justify-center">
           <TabsList
             className="bg-muted/50 p-1.5 h-auto flex gap-1 w-full max-w-2xl rounded-2xl border border-border/50 shadow-sm"
@@ -173,7 +182,11 @@ export function NutritionHub({
           <div className="space-y-6">
             <SectionHeading icon={<LayoutTemplate className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Protocolos maestros" />
             {templates.length === 0 && (
-              <NutritionOnboarding hasClients={assignClients.length > 0} />
+              <NutritionOnboarding
+                coachId={coachId}
+                hasClients={hasClients}
+                onAssign={() => setHubTab('clients')}
+              />
             )}
             <TemplateLibrary templates={templates} coachId={coachId} clients={assignClients} />
           </div>

@@ -22,6 +22,15 @@ interface Props {
   isReadOnly?: boolean
 }
 
+/** Etiquetas ARIA para anillos de macros (proteína, carbos, grasas). Exportado para tests. */
+export function macroRingAriaLabel(label: string, consumed: number, target: number, over: boolean): string {
+  const c = Math.round(consumed)
+  const t = Math.round(target)
+  if (t <= 0) return `${label}: sin meta definida, valor mostrado ${c} gramos`
+  if (over) return `${label}: ${c} gramos consumidos, por encima de la meta de ${t} gramos`
+  return `${label}: ${c} de ${t} gramos respecto a la meta del día`
+}
+
 function MacroRing({
   consumed,
   target,
@@ -36,11 +45,17 @@ function MacroRing({
   const radius = (size - 8) / 2
   const circumference = 2 * Math.PI * radius
   const strokeDash = circumference * Math.min(pct, 1)
+  const ringLabel = macroRingAriaLabel(label, consumed, target, over)
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
+      <div
+        role="img"
+        aria-label={ringLabel}
+        className="relative"
+        style={{ width: size, height: size }}
+      >
+        <svg width={size} height={size} className="-rotate-90" aria-hidden>
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -64,7 +79,7 @@ function MacroRing({
             transition={ringTrans}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center" aria-hidden>
           {over ? (
             <AlertTriangle className="w-4 h-4 text-red-500" />
           ) : (
@@ -125,7 +140,15 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           </div>
         </div>
 
-        <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-3 w-full bg-muted rounded-full overflow-hidden"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(calPct)}
+          aria-valuetext={`${Math.round(calories.consumed)} de ${calories.target} kilocalorías, ${Math.round(calPct)} por ciento`}
+          aria-label="Progreso de calorías del día respecto a la meta"
+        >
           <motion.div
             className={cn(
               'h-full rounded-full shadow-[0_0_10px_rgba(16,185,129,0.3)]',
@@ -134,6 +157,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
             initial={{ width: '0%' }}
             animate={{ width: `${calPct}%` }}
             transition={barTrans}
+            aria-hidden
           />
         </div>
       </div>

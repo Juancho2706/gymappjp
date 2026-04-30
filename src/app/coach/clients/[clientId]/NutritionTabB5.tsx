@@ -52,6 +52,14 @@ import { toast } from 'sonner'
 import { getClientNutritionForDate, getClientNutritionActivityDates, getClientHabitsForDate } from './actions'
 import { calculateFoodItemMacros } from '@/lib/nutrition-utils'
 import { duplicatePlanToClient, getCoachClientsLite } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
+import { deriveNutritionCoachAlerts } from '@/lib/nutrition-coach-alerts'
+import { NutritionCoachAlertsPanel } from './NutritionCoachAlertsPanel'
+import { NutritionCheckinContextCard, type NutritionCheckInLite } from './NutritionCheckinContextCard'
+import {
+  NutritionCycleHistorySection,
+  type NutritionCycleRow,
+  type NutritionHistoryEntryLite,
+} from './NutritionCycleHistorySection'
 
 export type NutritionTimelineRow = {
   date: string
@@ -100,6 +108,10 @@ type NutritionTabB5Props = {
   tooltipBgColor: string
   tooltipBorderColor: string
   tooltipTextColor: string
+  recentCheckIns?: NutritionCheckInLite[]
+  nutritionPlanCycles?: NutritionCycleRow[]
+  nutritionTemplatesLite?: { id: string; name: string }[]
+  nutritionPlanHistoryEntries?: NutritionHistoryEntryLite[]
 }
 
 const MACRO_COLORS = {
@@ -176,7 +188,8 @@ function HeatmapCell({
 
   return (
     <motion.div
-      title={title}
+      role="gridcell"
+      aria-label={title}
       className={cn(
         'aspect-square rounded-md border text-[0] min-h-[26px]',
         bg,
@@ -209,6 +222,10 @@ export function NutritionTabB5({
   tooltipBgColor,
   tooltipBorderColor,
   tooltipTextColor,
+  recentCheckIns = [],
+  nutritionPlanCycles = [],
+  nutritionTemplatesLite = [],
+  nutritionPlanHistoryEntries = [],
 }: NutritionTabB5Props) {
   const reduceMotion = useReducedMotion()
   const [openMealId, setOpenMealId] = useState<string | null>(null)
@@ -273,6 +290,28 @@ export function NutritionTabB5({
     (plan?.daily_calories as number | undefined) ??
     (plan?.target_calories as number | undefined) ??
     0
+
+  const nutritionAlerts = useMemo(
+    () =>
+      deriveNutritionCoachAlerts({
+        hasActivePlan: !!plan,
+        kcalTarget: kcal,
+        weeklyAvgPct: nutritionWeeklyAvgPct,
+        prevWeeklyAvgPct: nutritionPrevWeeklyAvgPct,
+        monthlyAvgPct: nutritionMonthlyAvgPct,
+        nutritionTimeline: nutritionTimeline ?? [],
+        santiagoTodayIso,
+      }),
+    [
+      plan,
+      kcal,
+      nutritionWeeklyAvgPct,
+      nutritionPrevWeeklyAvgPct,
+      nutritionMonthlyAvgPct,
+      nutritionTimeline,
+      santiagoTodayIso,
+    ]
+  )
   const prot =
     (plan?.protein_g as number | undefined) ?? (plan?.target_protein as number | undefined) ?? 0
   const carb =
@@ -370,6 +409,20 @@ export function NutritionTabB5({
 
   return (
     <div className="space-y-6">
+      <NutritionCoachAlertsPanel alerts={nutritionAlerts} />
+      <NutritionCheckinContextCard
+        recentCheckIns={recentCheckIns}
+        nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
+      />
+      <NutritionCycleHistorySection
+        coachId={coachId}
+        clientId={clientId}
+        planId={typeof activeNutritionPlan?.id === 'string' ? activeNutritionPlan.id : undefined}
+        santiagoTodayIso={santiagoTodayIso}
+        activeCycle={nutritionPlanCycles.find((c) => c.is_active) ?? null}
+        templates={nutritionTemplatesLite}
+        historyEntries={nutritionPlanHistoryEntries}
+      />
       {clientFavoriteFoods.length > 0 && (
         <GlassCard className="border-border/40 p-4 dark:border-white/10">
           <div className="mb-2 flex items-center gap-2">
@@ -674,7 +727,11 @@ export function NutritionTabB5({
                 <p className="mb-3 text-[10px] font-medium text-muted-foreground">
                   Color según % de comidas del plan completadas ese día.
                 </p>
-                <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-10">
+                <div
+                  className="grid grid-cols-6 gap-1.5 sm:grid-cols-10"
+                  role="grid"
+                  aria-label="Mapa de adherencia nutricional de los últimos 30 días; cada celda es un día"
+                >
                   {heatmapDays.map((day) => (
                     <HeatmapCell key={day.dateKey} day={day} reduceMotion={reduceMotion} />
                   ))}

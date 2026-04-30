@@ -10,8 +10,9 @@ import {
   getNutritionLogForDate,
   getNutritionAdherence30d,
 } from './_data/nutrition.queries'
+import { getHeroComplianceBundle } from '../dashboard/_data/heroComplianceBundle'
 import { NutritionShell } from './_components/NutritionShell'
-import { EmptyNutritionState } from './_components/EmptyNutritionState'
+import { NutritionNoPlanFromServer } from './_components/NutritionNoPlanFromServer'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -33,14 +34,16 @@ export default async function ClientNutritionPage({ params }: Props) {
 
   const plan = await getActiveNutritionPlan(user.id)
   if (!plan) {
-    return <EmptyNutritionState coachSlug={coach_slug} />
+    return <NutritionNoPlanFromServer coachSlug={coach_slug} userId={user.id} />
   }
 
   const { iso: today } = getTodayInSantiago()
-  const [todayLog, adherence] = await Promise.all([
+  const [todayLog, adherence, heroBundle] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
+    getHeroComplianceBundle(user.id, coach_slug),
   ])
+  const hasTodayWorkout = heroBundle.hero.hasWorkout
 
   return (
     <div className="min-h-dvh bg-background">
@@ -81,6 +84,7 @@ export default async function ClientNutritionPage({ params }: Props) {
         )}
 
         <NutritionShell
+          hasTodayWorkout={hasTodayWorkout}
           plan={plan}
           initialLog={todayLog as Record<string, unknown> | null}
           adherence={adherence}

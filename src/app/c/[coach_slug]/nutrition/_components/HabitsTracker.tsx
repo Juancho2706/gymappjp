@@ -6,6 +6,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { upsertDailyHabits, getDailyHabits } from '../_actions/habits.actions'
 import { toast } from 'sonner'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 interface HabitsData {
   water_ml: number | null
@@ -103,8 +104,18 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
       >
         <Droplets className={cn('h-4 w-4 shrink-0', filled > 0 ? 'text-sky-500' : 'text-muted-foreground/50')} />
         <div className="flex-1 text-left">
-          <p className={cn('text-[10px] font-bold uppercase tracking-widest', filled > 0 ? 'text-sky-500' : 'text-muted-foreground/60')}>
-            Hábitos del día
+          <p
+            className={cn(
+              'flex flex-wrap items-center gap-1 text-[10px] font-bold uppercase tracking-widest',
+              filled > 0 ? 'text-sky-500' : 'text-muted-foreground/60'
+            )}
+          >
+            <span>Hábitos del día</span>
+            <InfoTooltip
+              title="Hábitos opcionales"
+              content="Agua, pasos y sueño sirven como contexto para tu coach (cuando use esta vista). Son orientativos y no reemplazan valoración clínica ni planes terapéuticos."
+              className="normal-case tracking-normal"
+            />
           </p>
           {filled > 0 && (
             <p className="text-[11px] text-muted-foreground mt-0.5">

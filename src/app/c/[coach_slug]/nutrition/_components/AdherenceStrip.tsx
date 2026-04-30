@@ -62,16 +62,21 @@ export function AdherenceStrip({ data, planMeals }: Props) {
         </span>
       </div>
 
-      <div className="grid grid-cols-10 gap-0.5 sm:gap-1">
+      <div
+        className="grid grid-cols-10 gap-0.5 sm:gap-1"
+        role="grid"
+        aria-label="Adherencia nutricional de los últimos 30 días, cada celda es un día"
+      >
         {days.map((day) => (
           <div
             key={day.iso}
+            role="gridcell"
+            aria-label={`${day.iso}: ${Math.round(day.pct * 100)} por ciento de comidas del plan completadas`}
             className={cn(
               'h-2 w-full rounded-sm transition-all sm:aspect-square sm:h-auto',
               getColor(day.pct),
               day.isToday && 'ring-2 ring-[color:var(--theme-primary)] ring-offset-1 ring-offset-background'
             )}
-            title={`${day.iso}: ${Math.round(day.pct * 100)}%`}
           />
         ))}
       </div>

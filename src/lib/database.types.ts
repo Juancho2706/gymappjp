@@ -996,6 +996,125 @@ export type Database = {
           },
         ]
       }
+      nutrition_plan_cycles: {
+        Row: {
+          blocks: Json
+          client_id: string
+          coach_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          last_applied_template_id: string | null
+          last_applied_week: number | null
+          name: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          client_id: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_applied_template_id?: string | null
+          last_applied_week?: number | null
+          name: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          client_id?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_applied_template_id?: string | null
+          last_applied_week?: number | null
+          name?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plan_cycles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_cycles_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_cycles_last_applied_template_id_fkey"
+            columns: ["last_applied_template_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_plan_history: {
+        Row: {
+          client_id: string
+          coach_id: string
+          created_at: string
+          id: string
+          label: string | null
+          nutrition_plan_id: string
+          snapshot: Json
+          source: string
+        }
+        Insert: {
+          client_id: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          nutrition_plan_id: string
+          snapshot: Json
+          source?: string
+        }
+        Update: {
+          client_id?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          nutrition_plan_id?: string
+          snapshot?: Json
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plan_history_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_history_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_history_nutrition_plan_id_fkey"
+            columns: ["nutrition_plan_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_plan_templates: {
         Row: {
           carbs_g: number | null
