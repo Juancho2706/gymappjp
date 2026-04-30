@@ -104,6 +104,26 @@ export const getClientWorkoutPlans = cache(async (clientId: string) => {
     return data ?? []
 })
 
+/** Bloques del plan para el hero cuando el plan no viene anidado en `getActiveProgram`. */
+export const getWorkoutPlanBlocksForHero = cache(async (clientId: string, planId: string) => {
+    const supabase = await createClient()
+    const { data } = await supabase
+        .from('workout_plans')
+        .select(
+            `
+            id,
+            workout_blocks (
+                id, sets, reps, exercise_id,
+                exercises ( id, name )
+            )
+        `
+        )
+        .eq('id', planId)
+        .eq('client_id', clientId)
+        .maybeSingle()
+    return data
+})
+
 export type RecentWorkoutLog = {
     id: string
     logged_at: string

@@ -1,11 +1,11 @@
 import { cache } from 'react'
-import { format, subDays } from 'date-fns'
 import {
     getActiveProgram,
     getCheckInHistory30Days,
     getClientWorkoutPlans,
     getNutritionLogDays30,
     getRecentWorkoutLogs,
+    getWorkoutPlanBlocksForHero,
 } from './dashboard.queries'
 import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
 import {
@@ -14,6 +14,8 @@ import {
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import type { HeroBlock } from '../_components/hero/WorkoutHeroCard'
+import type { AdherenceProgramRow } from '@/lib/workout/workoutAdherence30d'
+import { computeWorkoutScore30d } from '@/lib/workout/workoutAdherence30d'
 
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
@@ -37,11 +39,6 @@ export type HeroComplianceBundle = {
         /** §10: sin `daily_nutrition_logs` en 30d → anillo gris "Sin datos". */
         nutritionHasLogs: boolean
     }
-}
-
-function parseISOAnchor(iso: string) {
-    const [y, m, d] = iso.split('-').map(Number)
-    return new Date(y, m - 1, d, 12, 0, 0, 0)
 }
 
 export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: string): Promise<HeroComplianceBundle> => {
@@ -72,7 +69,14 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
     }
 
     const nestedPlan = program?.workout_plans?.find((p) => p.id === todayPlan?.id)
-    const blocksRaw = nestedPlan?.workout_blocks ?? []
+    let blocksRaw = nestedPlan?.workout_blocks ?? []
+    if (todayPlan?.id && blocksRaw.length === 0) {
+        const fullPlan = await getWorkoutPlanBlocksForHero(userId, todayPlan.id)
+        const wb = (fullPlan as { workout_blocks?: typeof blocksRaw } | null)?.workout_blocks
+        if (Array.isArray(wb) && wb.length > 0) {
+            blocksRaw = wb
+        }
+    }
     const blocks: HeroBlock[] = blocksRaw.map((b) => ({
         id: b.id,
         sets: b.sets,
@@ -124,28 +128,12 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         }
     }
 
-    const anchor = parseISOAnchor(today)
-    let plannedDays = 0
-    const completedPlanIds = new Set(logs.map((l) => l.workout_blocks?.plan_id).filter(Boolean) as string[])
-    for (let i = 0; i < 30; i++) {
-        const d = subDays(anchor, i)
-        const iso = format(d, 'yyyy-MM-dd')
-        const dow = d.getDay() === 0 ? 7 : d.getDay()
-        const hasAssigned = activePlans.some((p) => p.assigned_date === iso)
-        const hasProg =
-            !!program &&
-            activePlans.some(
-                (p) =>
-                    p.program_id === program.id &&
-                    p.day_of_week === dow &&
-                    workoutPlanMatchesVariant(p, activeVariant, abMode)
-            )
-        if (hasAssigned || hasProg) {
-            plannedDays++
-        }
-    }
-    /** §10 maestro: planes completados / planes previstos en 30d (cap 100). */
-    const workoutScore = plannedDays > 0 ? Math.min(100, Math.round((completedPlanIds.size / plannedDays) * 100)) : 0
+    const { score: workoutScore } = computeWorkoutScore30d({
+        todaySantiagoIso: today,
+        activePlans,
+        program: program as AdherenceProgramRow | null,
+        logs,
+    })
 
     const checkInsLast30 = checkInHistory.length
     const checkInScore = Math.min(100, Math.round((checkInsLast30 / 4) * 100))
