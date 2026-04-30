@@ -7,13 +7,13 @@ import { Dumbbell } from 'lucide-react'
 export function WorkoutLogItems({
     items,
 }: {
-    items: Array<{ dateLabel: string; sets: number; subtitle: string }>
+    items: Array<{ dayKey: string; dateLabel: string; sets: number; subtitle: string }>
 }) {
     return (
         <div className="divide-y divide-border/30">
             {items.map((item, i) => (
                 <motion.div
-                    key={item.dateLabel}
+                    key={item.dayKey}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ ...springs.smooth, delay: i * 0.05 }}
@@ -29,7 +29,9 @@ export function WorkoutLogItems({
                         <p className="text-sm font-medium text-foreground">{item.dateLabel}</p>
                         <p className="text-[10px] text-muted-foreground">{item.subtitle}</p>
                     </div>
-                    <span className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{item.sets} se</span>
+                    <span className="shrink-0 whitespace-nowrap text-xs font-bold tabular-nums text-muted-foreground">
+                        {item.sets} {item.sets === 1 ? 'serie' : 'series'}
+                    </span>
                 </motion.div>
             ))}
         </div>

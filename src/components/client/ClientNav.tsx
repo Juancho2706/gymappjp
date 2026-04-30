@@ -101,7 +101,8 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
         return null
     }
 
-    const isWorkout = pathname.includes('/workout')
+    // Solo ejecución de plan (/workout/[planId]); no ocultar rutas tipo /workout-history
+    const isWorkout = pathname.includes('/workout/')
 
     return (
         <>
@@ -156,7 +157,11 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                 {/* Navigation Links */}
                 <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 py-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar pb-safe">
                     {navItems.map((item) => {
-                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/workout') || isNavigating === item.href
+                        const isActive =
+                            pathname === item.href ||
+                            pathname.startsWith(item.href + '/workout') ||
+                            (item.href === `/c/${coachSlug}/dashboard` && pathname === `/c/${coachSlug}/workout-history`) ||
+                            isNavigating === item.href
                         const Icon = item.icon
                         return (
                             <Link

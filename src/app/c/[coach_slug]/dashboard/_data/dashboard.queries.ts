@@ -148,6 +148,59 @@ export const getRecentWorkoutLogs = cache(async (clientId: string): Promise<Rece
     return (data ?? []) as unknown as RecentWorkoutLog[]
 })
 
+/** Misma forma que el widget del dashboard; ventana más larga para la página «historial completo». */
+export const getWorkoutHistoryLogsFull = cache(async (clientId: string): Promise<RecentWorkoutLog[]> => {
+    const supabase = await createClient()
+    const { iso } = getTodayInSantiago()
+    const fromDate = subDays(parseISOAnchor(iso), 365)
+    const { data } = await supabase
+        .from('workout_logs')
+        .select('id, logged_at, block_id, set_number, weight_kg, reps_done, workout_blocks!inner(plan_id)')
+        .eq('client_id', clientId)
+        .gte('logged_at', fromDate.toISOString())
+        .order('logged_at', { ascending: false })
+        .limit(8000)
+    return (data ?? []) as unknown as RecentWorkoutLog[]
+})
+
+export type WorkoutLogDaySummary = {
+    dayKey: string
+    dateLabel: string
+    sets: number
+    subtitle: string
+}
+
+/** Agrupa series por día calendario en America/Santiago (misma lógica que el widget). */
+export function buildWorkoutLogDaySummaries(logs: RecentWorkoutLog[], opts?: { dayLimit?: number }): WorkoutLogDaySummary[] {
+    const byDay = new Map<string, RecentWorkoutLog[]>()
+    for (const log of logs) {
+        const utc = new Date(log.logged_at)
+        const san = new Date(utc.toLocaleString('en-US', { timeZone: 'America/Santiago' }))
+        const d = `${san.getFullYear()}-${String(san.getMonth() + 1).padStart(2, '0')}-${String(san.getDate()).padStart(2, '0')}`
+        if (!byDay.has(d)) byDay.set(d, [])
+        byDay.get(d)!.push(log)
+    }
+
+    const days = [...byDay.keys()].sort((a, b) => b.localeCompare(a))
+    const limited = opts?.dayLimit != null ? days.slice(0, opts.dayLimit) : days
+
+    return limited.map((d) => {
+        const dayLogs = byDay.get(d) ?? []
+        const sets = dayLogs.length
+        const dateLabel = new Date(d + 'T12:00:00').toLocaleDateString('es-CL', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'short',
+        })
+        return {
+            dayKey: d,
+            dateLabel,
+            sets,
+            subtitle: `${sets} ${sets === 1 ? 'serie registrada' : 'series registradas'}`,
+        }
+    })
+}
+
 export const getActiveNutritionPlan = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data } = await supabase
