@@ -513,6 +513,7 @@ export type Database = {
           notes: string | null
           sleep_hours: number | null
           steps: number | null
+          supplements: string[] | null
           updated_at: string
           water_ml: number | null
         }
@@ -525,6 +526,7 @@ export type Database = {
           notes?: string | null
           sleep_hours?: number | null
           steps?: number | null
+          supplements?: string[] | null
           updated_at?: string
           water_ml?: number | null
         }
@@ -537,6 +539,7 @@ export type Database = {
           notes?: string | null
           sleep_hours?: number | null
           steps?: number | null
+          supplements?: string[] | null
           updated_at?: string
           water_ml?: number | null
         }
@@ -1279,6 +1282,44 @@ export type Database = {
           pagador?: string
         }
         Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          client_id: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+        }
+        Insert: {
+          auth: string
+          client_id: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+        }
+        Update: {
+          auth?: string
+          client_id?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recipe_ingredients: {
         Row: {

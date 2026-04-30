@@ -904,14 +904,14 @@ export async function getClientWorkoutActivityDates(clientId: string): Promise<s
 export async function getClientHabitsForDate(
   clientId: string,
   date: string
-): Promise<{ water_ml: number | null; steps: number | null; sleep_hours: number | null; notes: string | null } | null> {
+): Promise<{ water_ml: number | null; steps: number | null; sleep_hours: number | null; fasting_hours: number | null; supplements: string[] | null; notes: string | null } | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
   const { data } = await supabase
     .from('daily_habits')
-    .select('water_ml, steps, sleep_hours, notes')
+    .select('water_ml, steps, sleep_hours, fasting_hours, supplements, notes')
     .eq('client_id', clientId)
     .eq('log_date', date)
     .maybeSingle()

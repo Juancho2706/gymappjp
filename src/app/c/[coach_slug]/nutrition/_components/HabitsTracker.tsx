@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useTransition, useEffect } from 'react'
-import { Droplets, Footprints, Moon, Timer, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { Droplets, Footprints, Moon, Timer, Pill, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { upsertDailyHabits, getDailyHabits } from '../_actions/habits.actions'
@@ -13,6 +13,7 @@ interface HabitsData {
   steps: number | null
   sleep_hours: number | null
   fasting_hours: number | null
+  supplements: string[] | null
   notes: string | null
 }
 
@@ -27,6 +28,29 @@ interface Props {
 const WATER_OPTIONS = [250, 500, 750, 1000, 1500, 2000, 2500, 3000]
 const SLEEP_OPTIONS = [5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
 const FASTING_OPTIONS = [12, 14, 16, 18, 20, 24]
+const SUPPLEMENT_OPTIONS = [
+  'Creatina', 'Proteína', 'Omega-3', 'Vitamina D',
+  'Multivit.', 'Magnesio', 'Zinc', 'Cafeína', 'BCAA',
+]
+
+function SectionHeader({
+  icon,
+  label,
+  colorClass,
+}: {
+  icon: React.ReactNode
+  label: string
+  colorClass: string
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={cn('flex h-5 w-5 items-center justify-center rounded-md', colorClass)}>
+        {icon}
+      </span>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+    </div>
+  )
+}
 
 export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialData }: Props) {
   const reduceMotion = useReducedMotion()
@@ -38,9 +62,9 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
   const [steps, setSteps] = useState<number | null>(initialData?.steps ?? null)
   const [sleepHours, setSleepHours] = useState<number | null>(initialData?.sleep_hours ?? null)
   const [fastingHours, setFastingHours] = useState<number | null>(initialData?.fasting_hours ?? null)
+  const [supplements, setSupplements] = useState<string[]>(initialData?.supplements ?? [])
   const [stepsInput, setStepsInput] = useState(initialData?.steps != null ? String(initialData.steps) : '')
 
-  // Reload habits when date changes
   useEffect(() => {
     getDailyHabits(clientId, logDate).then((d) => {
       setData(d)
@@ -48,6 +72,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
       setSteps(d?.steps ?? null)
       setSleepHours(d?.sleep_hours ?? null)
       setFastingHours(d?.fasting_hours ?? null)
+      setSupplements(d?.supplements ?? [])
       setStepsInput(d?.steps != null ? String(d.steps) : '')
     })
   }, [clientId, logDate])
@@ -60,6 +85,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
         steps: patch.steps !== undefined ? patch.steps : steps,
         sleepHours: patch.sleep_hours !== undefined ? patch.sleep_hours : sleepHours,
         fastingHours: patch.fasting_hours !== undefined ? patch.fasting_hours : fastingHours,
+        supplements: patch.supplements !== undefined ? (patch.supplements as string[]) : supplements,
         notes: patch.notes !== undefined ? patch.notes : (data?.notes ?? null),
       }
       startTransition(async () => {
@@ -72,7 +98,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
         if (!success) toast.error(error ?? 'Error al guardar hábitos')
       })
     },
-    [clientId, logDate, coachSlug, isToday, waterMl, steps, sleepHours, fastingHours, data]
+    [clientId, logDate, coachSlug, isToday, waterMl, steps, sleepHours, fastingHours, supplements, data]
   )
 
   const handleWater = (ml: number) => {
@@ -93,6 +119,14 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
     save({ fasting_hours: next })
   }
 
+  const handleSupplement = (name: string) => {
+    const next = supplements.includes(name)
+      ? supplements.filter((s) => s !== name)
+      : [...supplements, name]
+    setSupplements(next)
+    save({ supplements: next })
+  }
+
   const handleStepsBlur = () => {
     const v = parseInt(stepsInput, 10)
     const next = isNaN(v) || v < 0 ? null : v
@@ -100,8 +134,9 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
     save({ steps: next })
   }
 
-  const filled = [waterMl, steps, sleepHours, fastingHours].filter((v) => v != null).length
-  const total = 4
+  const hasSupplements = supplements.length > 0
+  const filled = [waterMl, steps, sleepHours, fastingHours, hasSupplements || null].filter((v) => v != null).length
+  const total = 5
 
   return (
     <div className={cn(
@@ -115,26 +150,25 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
       >
         <Droplets className={cn('h-4 w-4 shrink-0', filled > 0 ? 'text-sky-500' : 'text-muted-foreground/50')} />
         <div className="flex-1 text-left">
-          <p
-            className={cn(
-              'flex flex-wrap items-center gap-1 text-[10px] font-bold uppercase tracking-widest',
-              filled > 0 ? 'text-sky-500' : 'text-muted-foreground/60'
-            )}
-          >
+          <p className={cn(
+            'flex flex-wrap items-center gap-1 text-[10px] font-bold uppercase tracking-widest',
+            filled > 0 ? 'text-sky-500' : 'text-muted-foreground/60'
+          )}>
             <span>Hábitos del día</span>
             <InfoTooltip
               title="Hábitos opcionales"
-              content="Agua, pasos y sueño sirven como contexto para tu coach (cuando use esta vista). Son orientativos y no reemplazan valoración clínica ni planes terapéuticos."
+              content="Agua, pasos, sueño, ayuno y suplementos sirven de contexto para tu coach. Son orientativos y no reemplazan valoración clínica."
               className="normal-case tracking-normal"
             />
           </p>
           {filled > 0 && (
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
               {[
                 waterMl != null && `${(waterMl / 1000).toFixed(1).replace('.0', '')}L agua`,
                 steps != null && `${steps.toLocaleString()} pasos`,
                 sleepHours != null && `${sleepHours}h sueño`,
                 fastingHours != null && `${fastingHours}h ayuno`,
+                supplements.length > 0 && `${supplements.length} supl.`,
               ].filter(Boolean).join(' · ')}
             </p>
           )}
@@ -143,7 +177,9 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
           {filled > 0 && (
             <span className="text-[10px] font-bold text-sky-500">{filled}/{total}</span>
           )}
-          {open ? <ChevronUp className="h-4 w-4 text-muted-foreground/40" /> : <ChevronDown className="h-4 w-4 text-muted-foreground/40" />}
+          {open
+            ? <ChevronUp className="h-4 w-4 text-muted-foreground/40" />
+            : <ChevronDown className="h-4 w-4 text-muted-foreground/40" />}
         </div>
       </button>
 
@@ -161,13 +197,12 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
               <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
               {/* Agua */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Droplets className="h-3.5 w-3.5 text-sky-500" />
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                    Agua{waterMl != null ? ` · ${(waterMl / 1000).toFixed(1).replace('.0', '')}L` : ''}
-                  </p>
-                </div>
+              <div className="space-y-2">
+                <SectionHeader
+                  icon={<Droplets className="h-3 w-3 text-sky-500" />}
+                  label={`Agua${waterMl != null ? ` · ${(waterMl / 1000).toFixed(1).replace('.0', '')}L` : ''}`}
+                  colorClass="bg-sky-500/10"
+                />
                 <div className="flex flex-wrap gap-1.5">
                   {WATER_OPTIONS.map((ml) => (
                     <button
@@ -176,10 +211,10 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                       disabled={!isToday || isPending}
                       onClick={() => handleWater(ml)}
                       className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
+                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
                         waterMl === ml
-                          ? 'bg-sky-500 text-white'
-                          : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
+                          ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
+                          : 'bg-background border border-border/80 text-foreground hover:border-sky-500/40 hover:bg-sky-500/5'
                       )}
                     >
                       {ml < 1000 ? `${ml}ml` : `${ml / 1000}L`}
@@ -189,11 +224,12 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
               </div>
 
               {/* Pasos */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Footprints className="h-3.5 w-3.5 text-emerald-500" />
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Pasos</p>
-                </div>
+              <div className="space-y-2">
+                <SectionHeader
+                  icon={<Footprints className="h-3 w-3 text-emerald-500" />}
+                  label="Pasos"
+                  colorClass="bg-emerald-500/10"
+                />
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -207,8 +243,11 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                   />
                   {steps != null && (
                     <span className={cn(
-                      'text-[11px] font-bold',
-                      steps >= 8000 ? 'text-emerald-500' : steps >= 5000 ? 'text-yellow-500' : 'text-muted-foreground'
+                      'rounded-lg px-2 py-1 text-[10px] font-bold',
+                      steps >= 10000 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : steps >= 8000 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : steps >= 5000 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : 'bg-muted text-muted-foreground'
                     )}>
                       {steps >= 10000 ? '🏆 Meta!' : steps >= 8000 ? '✓ Buen día' : steps >= 5000 ? 'En progreso' : 'Poco activo'}
                     </span>
@@ -217,13 +256,12 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
               </div>
 
               {/* Sueño */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Moon className="h-3.5 w-3.5 text-violet-500" />
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                    Sueño{sleepHours != null ? ` · ${sleepHours}h` : ''}
-                  </p>
-                </div>
+              <div className="space-y-2">
+                <SectionHeader
+                  icon={<Moon className="h-3 w-3 text-violet-500" />}
+                  label={`Sueño${sleepHours != null ? ` · ${sleepHours}h` : ''}`}
+                  colorClass="bg-violet-500/10"
+                />
                 <div className="flex flex-wrap gap-1.5">
                   {SLEEP_OPTIONS.map((h) => (
                     <button
@@ -232,10 +270,10 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                       disabled={!isToday || isPending}
                       onClick={() => handleSleep(h)}
                       className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
+                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
                         sleepHours === h
-                          ? 'bg-violet-500 text-white'
-                          : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
+                          ? 'bg-violet-500 text-white shadow-sm shadow-violet-500/30'
+                          : 'bg-background border border-border/80 text-foreground hover:border-violet-500/40 hover:bg-violet-500/5'
                       )}
                     >
                       {h}h
@@ -245,13 +283,12 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
               </div>
 
               {/* Ayuno intermitente */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Timer className="h-3.5 w-3.5 text-orange-500" />
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                    Ayuno{fastingHours != null ? ` · ${fastingHours}h` : ''}
-                  </p>
-                </div>
+              <div className="space-y-2">
+                <SectionHeader
+                  icon={<Timer className="h-3 w-3 text-orange-500" />}
+                  label={`Ayuno${fastingHours != null ? ` · ${fastingHours}h` : ''}`}
+                  colorClass="bg-orange-500/10"
+                />
                 <div className="flex flex-wrap gap-1.5">
                   {FASTING_OPTIONS.map((h) => (
                     <button
@@ -260,10 +297,10 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                       disabled={!isToday || isPending}
                       onClick={() => handleFasting(h)}
                       className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
+                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
                         fastingHours === h
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
+                          ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                          : 'bg-background border border-border/80 text-foreground hover:border-orange-500/40 hover:bg-orange-500/5'
                       )}
                     >
                       {h}h
@@ -272,14 +309,46 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                 </div>
               </div>
 
+              {/* Suplementos */}
+              <div className="space-y-2">
+                <SectionHeader
+                  icon={<Pill className="h-3 w-3 text-rose-500" />}
+                  label={`Suplementos${supplements.length > 0 ? ` · ${supplements.length}` : ''}`}
+                  colorClass="bg-rose-500/10"
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  {SUPPLEMENT_OPTIONS.map((name) => {
+                    const active = supplements.includes(name)
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        disabled={!isToday || isPending}
+                        onClick={() => handleSupplement(name)}
+                        className={cn(
+                          'flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
+                          active
+                            ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
+                            : 'bg-background border border-border/80 text-foreground hover:border-rose-500/40 hover:bg-rose-500/5'
+                        )}
+                      >
+                        {active && <Check className="h-2.5 w-2.5" />}
+                        {name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {!isToday && (
                 <p className="text-[10px] text-muted-foreground/50 text-center">Solo se puede editar el día de hoy</p>
               )}
 
               {isPending && (
-                <p className="text-[10px] text-sky-500 text-center flex items-center justify-center gap-1">
-                  <Check className="h-3 w-3" /> Guardando…
-                </p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
+                  <p className="text-[10px] text-sky-500">Guardando…</p>
+                </div>
               )}
             </div>
           </motion.div>

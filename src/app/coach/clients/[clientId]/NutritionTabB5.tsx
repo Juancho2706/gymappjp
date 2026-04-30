@@ -234,7 +234,7 @@ export function NutritionTabB5({
   const [historyData, setHistoryData] = useState<Awaited<ReturnType<typeof getClientNutritionForDate>>>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [activityDates, setActivityDates] = useState<Set<string>>(new Set())
-  const [habitsForDate, setHabitsForDate] = useState<{ water_ml: number | null; steps: number | null; sleep_hours: number | null; notes: string | null } | null>(null)
+  const [habitsForDate, setHabitsForDate] = useState<{ water_ml: number | null; steps: number | null; sleep_hours: number | null; fasting_hours: number | null; supplements: string[] | null; notes: string | null } | null>(null)
 
   // Duplicate plan modal state
   const [dupOpen, setDupOpen] = useState(false)
@@ -756,12 +756,12 @@ export function NutritionTabB5({
         </div>
       )}
 
-      {habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null) && (
+      {habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
         <GlassCard className="border-dashed border-sky-500/20 bg-sky-500/[0.02] p-4 dark:border-sky-500/15">
           <h3 className="mb-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">
             <Droplets className="h-3.5 w-3.5" />
             Hábitos del día
-            <InfoTooltip content="Agua, pasos y sueño registrados por el alumno desde su app." iconClassName="w-3 h-3" />
+            <InfoTooltip content="Agua, pasos, sueño, ayuno y suplementos registrados por el alumno desde su app." iconClassName="w-3 h-3" />
           </h3>
           <div className="flex flex-wrap gap-4 text-sm">
             {habitsForDate.water_ml != null && (
@@ -794,6 +794,26 @@ export function NutritionTabB5({
                 )}>
                   {habitsForDate.sleep_hours}h
                 </p>
+              </div>
+            )}
+            {habitsForDate.fasting_hours != null && (
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground">Ayuno</p>
+                <p className="font-black tabular-nums text-orange-600 dark:text-orange-400">
+                  {habitsForDate.fasting_hours}h
+                </p>
+              </div>
+            )}
+            {(habitsForDate.supplements?.length ?? 0) > 0 && (
+              <div className="w-full">
+                <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Suplementos</p>
+                <div className="flex flex-wrap gap-1">
+                  {habitsForDate.supplements!.map((s) => (
+                    <span key={s} className="rounded-md bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                      {s}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
             {habitsForDate.notes?.trim() && (

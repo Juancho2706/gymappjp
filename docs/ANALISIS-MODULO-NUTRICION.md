@@ -1222,7 +1222,7 @@ Los tooltips son **fundamentales** para que coaches y alumnos entiendan el siste
 
 ---
 
-## 20.1 Checklist Operativo  -  Saneamiento Planes Vacios (Sin perder historial)
+## 20.1 ~~Checklist Operativo  -  Saneamiento Planes Vacios~~ (IGNORADO por decision de producto)
 
 Objetivo: corregir planes activos con comidas vacias sin perder adherencia ni logs historicos.
 

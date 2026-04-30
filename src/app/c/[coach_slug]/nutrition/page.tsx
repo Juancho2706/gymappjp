@@ -13,6 +13,7 @@ import {
 import { getHeroComplianceBundle } from '../dashboard/_data/heroComplianceBundle'
 import { NutritionShell } from './_components/NutritionShell'
 import { NutritionNoPlanFromServer } from './_components/NutritionNoPlanFromServer'
+import { PushNotificationBanner } from './_components/PushNotificationBanner'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -69,6 +70,8 @@ export default async function ClientNutritionPage({ params }: Props) {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-5 pb-28 space-y-5 relative z-0">
+        <PushNotificationBanner />
+
         {plan.instructions && (
           <details className="bg-muted/30 border border-border rounded-2xl">
             <summary className="px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground cursor-pointer list-none flex items-center justify-between">

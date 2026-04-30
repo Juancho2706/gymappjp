@@ -111,6 +111,10 @@ export function NutritionSkeleton() {
     )
 }
 
+export function HabitsSkeleton() {
+    return <BrandSkeleton className="h-12 w-full rounded-2xl" />
+}
+
 export function WeightSkeleton() {
     return (
         <div className="rounded-2xl border border-border bg-card p-4">
