@@ -65,7 +65,7 @@
   --safe-area-inset-right: env(safe-area-inset-right);
   --mobile-top-bar-h: 3.5rem;
   --mobile-bottom-bar-h: 80px;
-  --mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-bar-h) + 0.5rem);
+  --mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + 1rem);
   --mobile-content-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-bar-h));
 
   /* Pale Grey Background from Brand Guidelines */

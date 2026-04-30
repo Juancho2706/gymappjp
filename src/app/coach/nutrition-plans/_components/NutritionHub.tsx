@@ -10,6 +10,7 @@ import { ActivePlansBoard } from './ActivePlansBoard'
 import type { ActivePlanBoardRow } from '../_data/nutrition-coach.queries'
 import { FoodLibrary } from './FoodLibrary'
 import type { AssignModalClient } from './AssignModal'
+import { NutritionOnboarding } from './NutritionOnboarding'
 
 type FoodLib = {
   foods: {
@@ -171,6 +172,9 @@ export function NutritionHub({
         <TabsContent value="templates" className="mt-0 focus-visible:outline-none">
           <div className="space-y-6">
             <SectionHeading icon={<LayoutTemplate className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Protocolos maestros" />
+            {templates.length === 0 && (
+              <NutritionOnboarding hasClients={assignClients.length > 0} />
+            )}
             <TemplateLibrary templates={templates} coachId={coachId} clients={assignClients} />
           </div>
         </TabsContent>

@@ -119,6 +119,12 @@ export function DirectoryActionBar({
             label: 'Pendiente sync',
             onRemove: () => onRiskFilterChange('all'),
         })
+    } else if (riskFilter === 'nutrition_low') {
+        chips.push({
+            key: 'risk-nutri',
+            label: 'Nutrición baja',
+            onRemove: () => onRiskFilterChange('all'),
+        })
     }
 
     if (statusFilter === 'active') {
@@ -228,6 +234,9 @@ export function DirectoryActionBar({
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => onRiskFilterChange('on_track')}>
                                     On Track
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onRiskFilterChange('nutrition_low')}>
+                                    Nutrición baja ({'<'}60%)
                                 </DropdownMenuItem>
                             </DropdownMenuGroup>
                             <DropdownMenuSeparator />

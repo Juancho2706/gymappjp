@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
 import { DayNavigator } from './DayNavigator'
 import { MacroRingSummary } from './MacroRingSummary'
 import { MealCard, type MealCardMeal } from './MealCard'
@@ -62,6 +62,39 @@ interface Props {
   today: string
 }
 
+const OFFLINE_QUEUE_KEY = 'eva_offline_toggle_queue'
+
+interface OfflineToggleItem {
+  userId: string
+  planId: string
+  mealId: string
+  completed: boolean
+  logId?: string
+  coachSlug: string
+  date: string
+}
+
+function readOfflineQueue(): OfflineToggleItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) ?? '[]') as OfflineToggleItem[]
+  } catch {
+    return []
+  }
+}
+
+function writeOfflineQueue(q: OfflineToggleItem[]) {
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q))
+}
+
+function enqueueOfflineToggle(item: OfflineToggleItem) {
+  const q = readOfflineQueue()
+  // Dedupe: if same mealId+date already queued, replace (last write wins)
+  const idx = q.findIndex((x) => x.mealId === item.mealId && x.date === item.date)
+  if (idx >= 0) q[idx] = item
+  else q.push(item)
+  writeOfflineQueue(q)
+}
+
 export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug, today }: Props) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [currentLog, setCurrentLog] = useState<Record<string, unknown> | null>(initialLog)
@@ -71,6 +104,40 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
   const [isSatisfactionPending, startSatisfactionTransition] = useTransition()
   const [isSwapPending, startSwapTransition] = useTransition()
   const [favoriteFoodIds, setFavoriteFoodIds] = useState<Set<string>>(new Set())
+  const planIdRef = useRef(plan.id)
+  const selectedDateRef = useRef(selectedDate)
+  selectedDateRef.current = selectedDate
+
+  // Flush offline toggle queue when back online
+  useEffect(() => {
+    async function flushQueue() {
+      const q = readOfflineQueue()
+      if (q.length === 0) return
+      let flushed = 0
+      const remaining: OfflineToggleItem[] = []
+      for (const item of q) {
+        try {
+          await toggleMealCompletion(item.userId, item.planId, item.mealId, item.completed, item.logId, item.coachSlug, item.date)
+          flushed++
+        } catch {
+          remaining.push(item)
+        }
+      }
+      writeOfflineQueue(remaining)
+      if (flushed > 0) {
+        toast.success(`${flushed} acción${flushed !== 1 ? 'es' : ''} sincronizada${flushed !== 1 ? 's' : ''}`)
+        // Refresh log if the flushed date matches current view
+        const hasToday = q.some((x) => x.date === selectedDateRef.current && x.planId === planIdRef.current)
+        if (hasToday) {
+          const { dailyLog } = await fetchLogForDate(userId, planIdRef.current, selectedDateRef.current)
+          setCurrentLog(dailyLog as Record<string, unknown> | null)
+        }
+      }
+    }
+    flushQueue()
+    window.addEventListener('online', flushQueue)
+    return () => window.removeEventListener('online', flushQueue)
+  }, [userId])
 
   useEffect(() => {
     getClientFoodFavoritesForClient(userId).then((ids) => setFavoriteFoodIds(new Set(ids)))
@@ -274,9 +341,22 @@ export function NutritionShell({ plan, initialLog, adherence, userId, coachSlug,
           setCurrentLog(dailyLog as Record<string, unknown> | null)
         } catch (e) {
           console.error(e)
-          toast.error('Error al registrar comida')
-          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
-          setCurrentLog(dailyLog as Record<string, unknown> | null)
+          if (!navigator.onLine) {
+            enqueueOfflineToggle({
+              userId,
+              planId: plan.id,
+              mealId,
+              completed: next,
+              logId: currentLog?.id as string | undefined,
+              coachSlug,
+              date: selectedDate,
+            })
+            toast('Sin conexión — se sincronizará automáticamente', { icon: '📶' })
+          } else {
+            toast.error('Error al registrar comida')
+            const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+            setCurrentLog(dailyLog as Record<string, unknown> | null)
+          }
         }
       })
     },

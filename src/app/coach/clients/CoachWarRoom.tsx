@@ -13,6 +13,7 @@ import {
     Star,
     RefreshCw,
     ChevronRight,
+    Salad,
 } from 'lucide-react'
 import { motion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
 import { CreateClientModal } from './CreateClientModal'
@@ -103,6 +104,9 @@ export function CoachWarRoom({
         (p.attentionFlags ?? []).includes('SIN_CHECKIN_1M')
     ).length
     const pendingPassword = clients.filter((c) => c.force_password_change).length
+    const nutritionLowCount = pulse.filter((p) =>
+        (p.attentionFlags ?? []).includes('NUTRICION_RIESGO')
+    ).length
 
     const handleCopy = () => {
         if (loginUrl) {
@@ -167,6 +171,16 @@ export function CoachWarRoom({
             gradient: 'from-emerald-500/10 to-transparent',
             filter: 'all' as DirectoryRiskFilter,
             isPercent: true,
+        },
+        {
+            key: 'nutrition_low' as const,
+            label: 'Nutri. baja',
+            sub: '🥗',
+            value: nutritionLowCount,
+            icon: Salad,
+            color: 'text-red-500',
+            gradient: 'from-red-500/10 to-transparent',
+            filter: 'nutrition_low' as DirectoryRiskFilter,
         },
     ]
 
@@ -252,7 +266,7 @@ export function CoachWarRoom({
                 </div>
 
                 <motion.div
-                    className="relative z-10 grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:gap-4 lg:grid-cols-5"
+                    className="relative z-10 grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:gap-4 lg:grid-cols-6"
                     variants={cardContainer}
                     initial="hidden"
                     animate="show"
@@ -377,6 +391,25 @@ export function CoachWarRoom({
                             type="button"
                             onClick={() => onFilterChange('password_reset')}
                             className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-800 transition-all hover:gap-2 dark:text-amber-400"
+                        >
+                            Ver <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </motion.div>
+                )}
+
+                {nutritionLowCount > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3"
+                    >
+                        <p className="min-w-0 flex-1 break-words text-sm font-bold text-red-700 dark:text-red-400">
+                            🥗 {nutritionLowCount} alumno{nutritionLowCount !== 1 ? 's' : ''} con cumplimiento nutricional bajo ({'<'}60%)
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => onFilterChange('nutrition_low')}
+                            className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-700 transition-all hover:gap-2 dark:text-red-400"
                         >
                             Ver <ChevronRight className="w-4 h-4" />
                         </button>

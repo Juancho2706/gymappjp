@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ClampedIntInput } from '@/components/ui/clamped-int-input'
@@ -8,15 +8,21 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
-import { AlertTriangle, Zap } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react'
 
 interface Goals {
   calories: number
   protein: number
   carbs: number
   fats: number
+}
+
+export interface ClientProfileHint {
+  weight_kg?: number | null
+  height_cm?: number | null
 }
 
 interface Props {
@@ -33,6 +39,46 @@ interface Props {
   isSaving: boolean
   onSave: () => void
   mode: 'template' | 'client-plan'
+  clientProfile?: ClientProfileHint | null
+}
+
+type ActivityKey = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
+type GoalKey = 'cut' | 'maintain' | 'bulk'
+
+const ACTIVITY_MULTIPLIERS: Record<ActivityKey, number> = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  active: 1.725,
+  very_active: 1.9,
+}
+
+const GOAL_ADJUSTMENTS: Record<GoalKey, { kcalDelta: number; proteinMultiplier: number; label: string }> = {
+  cut: { kcalDelta: -400, proteinMultiplier: 2.2, label: 'Déficit (bajar grasa)' },
+  maintain: { kcalDelta: 0, proteinMultiplier: 1.8, label: 'Mantención' },
+  bulk: { kcalDelta: 300, proteinMultiplier: 2.0, label: 'Volumen (ganar músculo)' },
+}
+
+function calcMacros(
+  weightKg: number,
+  heightCm: number,
+  ageYears: number,
+  gender: 'M' | 'F',
+  activity: ActivityKey,
+  goal: GoalKey
+): Goals {
+  const bmr =
+    gender === 'M'
+      ? 10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5
+      : 10 * weightKg + 6.25 * heightCm - 5 * ageYears - 161
+  const tdee = bmr * ACTIVITY_MULTIPLIERS[activity]
+  const adj = GOAL_ADJUSTMENTS[goal]
+  const calories = Math.round(tdee + adj.kcalDelta)
+  const protein = Math.round(weightKg * adj.proteinMultiplier)
+  const fats = Math.round(weightKg * 0.9)
+  const carbsKcal = calories - protein * 4 - fats * 9
+  const carbs = Math.max(0, Math.round(carbsKcal / 4))
+  return { calories, protein, carbs, fats }
 }
 
 function overMacroMismatch(real: number, target: number) {
@@ -54,7 +100,22 @@ export function PlanBuilderSidebar({
   isSaving,
   onSave,
   mode,
+  clientProfile,
 }: Props) {
+  const [suggOpen, setSuggOpen] = useState(false)
+  const [suggAge, setSuggAge] = useState('25')
+  const [suggGender, setSuggGender] = useState<'M' | 'F'>('M')
+  const [suggActivity, setSuggActivity] = useState<ActivityKey>('moderate')
+  const [suggGoal, setSuggGoal] = useState<GoalKey>('maintain')
+
+  const suggested = useMemo(() => {
+    const w = clientProfile?.weight_kg
+    const h = clientProfile?.height_cm
+    const age = Number.parseInt(suggAge, 10)
+    if (!w || !h || !Number.isFinite(age) || age < 10 || age > 99) return null
+    return calcMacros(w, h, age, suggGender, suggActivity, suggGoal)
+  }, [clientProfile, suggAge, suggGender, suggActivity, suggGoal])
+
   const mismatch = useMemo(
     () =>
       overMacroMismatch(realTotals.calories, goals.calories) ||
@@ -162,6 +223,128 @@ export function PlanBuilderSidebar({
               Sincronizar metas con lo calculado
             </Button>
           </div>
+        </div>
+      )}
+
+      {mode === 'client-plan' && clientProfile?.weight_kg && clientProfile?.height_cm && (
+        <div className="rounded-xl border border-violet-500/25 bg-violet-500/5">
+          <button
+            type="button"
+            onClick={() => setSuggOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+          >
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+              <span className="text-[11px] font-bold text-violet-700 dark:text-violet-300">
+                Macros sugeridos (Mifflin-St Jeor)
+              </span>
+              <InfoTooltip
+                content="Cálculo estimado basado en peso, altura, edad y nivel de actividad del alumno. Es solo una referencia — tú defines los valores finales."
+                iconClassName="w-3 h-3"
+              />
+            </div>
+            {suggOpen ? (
+              <ChevronUp className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+            )}
+          </button>
+
+          {suggOpen && (
+            <div className="border-t border-violet-500/20 px-3 pb-3 pt-2 space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                <div>
+                  <span className="font-bold">Peso:</span> {clientProfile.weight_kg} kg
+                </div>
+                <div>
+                  <span className="font-bold">Altura:</span> {clientProfile.height_cm} cm
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Edad</Label>
+                  <Input
+                    type="number"
+                    value={suggAge}
+                    onChange={(e) => setSuggAge(e.target.value)}
+                    className="h-8 mt-0.5 text-sm"
+                    min={10}
+                    max={99}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Género</Label>
+                  <Select value={suggGender} onValueChange={(v) => setSuggGender(v as 'M' | 'F')}>
+                    <SelectTrigger className="h-8 mt-0.5 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="M">Masculino</SelectItem>
+                      <SelectItem value="F">Femenino</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[10px] text-muted-foreground">Actividad</Label>
+                <Select value={suggActivity} onValueChange={(v) => setSuggActivity(v as ActivityKey)}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sedentary">Sedentario (sin ejercicio)</SelectItem>
+                    <SelectItem value="light">Ligero (1–3 días/sem)</SelectItem>
+                    <SelectItem value="moderate">Moderado (3–5 días/sem)</SelectItem>
+                    <SelectItem value="active">Activo (6–7 días/sem)</SelectItem>
+                    <SelectItem value="very_active">Muy activo (doble sesión)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[10px] text-muted-foreground">Objetivo</Label>
+                <Select value={suggGoal} onValueChange={(v) => setSuggGoal(v as GoalKey)}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(GOAL_ADJUSTMENTS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {suggested && (
+                <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 p-2.5 space-y-2">
+                  <div className="grid grid-cols-2 gap-1 text-[11px] font-bold">
+                    <span className="text-muted-foreground">kcal:</span>
+                    <span className="tabular-nums text-violet-700 dark:text-violet-300">{suggested.calories}</span>
+                    <span className="text-muted-foreground">Proteína:</span>
+                    <span className="tabular-nums text-orange-600">{suggested.protein}g</span>
+                    <span className="text-muted-foreground">Carbos:</span>
+                    <span className="tabular-nums text-blue-600">{suggested.carbs}g</span>
+                    <span className="text-muted-foreground">Grasas:</span>
+                    <span className="tabular-nums text-yellow-600">{suggested.fats}g</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-7 text-[10px] font-bold border-violet-500/40 text-violet-700 dark:text-violet-300 hover:bg-violet-500/10"
+                    onClick={() => {
+                      onGoalsChange(suggested)
+                      if (autoSync) onAutoSyncToggle(false)
+                    }}
+                  >
+                    Aplicar sugerencia
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

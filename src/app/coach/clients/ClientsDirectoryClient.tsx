@@ -48,6 +48,8 @@ function matchesRiskFilter(
             )
         case 'password_reset':
             return !!client.force_password_change
+        case 'nutrition_low':
+            return !!pulse && (pulse.attentionFlags ?? []).includes('NUTRICION_RIESGO')
         default:
             return true
     }

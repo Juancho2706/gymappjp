@@ -5,6 +5,7 @@ export type DirectoryRiskFilter =
     | 'on_track'
     | 'expired_program'
     | 'password_reset'
+    | 'nutrition_low'
 
 export type DirectorySortKey =
     | 'attention_score'

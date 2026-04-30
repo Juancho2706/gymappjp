@@ -40,6 +40,7 @@ import {
   TrendingDown,
   Minus,
   Heart,
+  Droplets,
 } from 'lucide-react'
 import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
@@ -48,7 +49,7 @@ import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { getClientNutritionForDate, getClientNutritionActivityDates } from './actions'
+import { getClientNutritionForDate, getClientNutritionActivityDates, getClientHabitsForDate } from './actions'
 import { calculateFoodItemMacros } from '@/lib/nutrition-utils'
 import { duplicatePlanToClient, getCoachClientsLite } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
 
@@ -216,6 +217,7 @@ export function NutritionTabB5({
   const [historyData, setHistoryData] = useState<Awaited<ReturnType<typeof getClientNutritionForDate>>>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [activityDates, setActivityDates] = useState<Set<string>>(new Set())
+  const [habitsForDate, setHabitsForDate] = useState<{ water_ml: number | null; steps: number | null; sleep_hours: number | null; notes: string | null } | null>(null)
 
   // Duplicate plan modal state
   const [dupOpen, setDupOpen] = useState(false)
@@ -248,10 +250,12 @@ export function NutritionTabB5({
 
   useEffect(() => {
     getClientNutritionActivityDates(clientId).then((dates) => setActivityDates(new Set(dates)))
-  }, [clientId])
+    getClientHabitsForDate(clientId, santiagoTodayIso).then(setHabitsForDate)
+  }, [clientId, santiagoTodayIso])
 
   const handleHistoryDateChange = (date: string) => {
     setHistoryDate(date)
+    getClientHabitsForDate(clientId, date).then(setHabitsForDate)
     if (date === santiagoTodayIso) {
       setHistoryData(null)
       setHistoryLoaded(false)
@@ -530,9 +534,12 @@ export function NutritionTabB5({
             </div>
             {pieData.length > 0 && (
               <div className="mx-auto w-full max-w-[220px] lg:mx-0 lg:w-[240px]">
-                <p className="mb-2 text-center text-[9px] font-black uppercase tracking-widest text-muted-foreground lg:text-left">
-                  Macros meta (kcal)
-                </p>
+                <div className="mb-2 flex items-center justify-center gap-1 lg:justify-start">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                    Macros meta (kcal)
+                  </p>
+                  <InfoTooltip content="Distribución porcentual de las calorías del plan. Referencia: 30% proteína / 40% carbos / 30% grasas para hipertrofia." iconClassName="w-3 h-3" />
+                </div>
                 <div className="h-[220px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -620,6 +627,7 @@ export function NutritionTabB5({
           <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
             <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
               <Utensils className="h-4 w-4" /> Adherencia · 30 días
+              <InfoTooltip content="Cada cuadrado es un día. Verde = el alumno completó al menos una comida ese día. Gris = sin registro. No indica el 100% de las comidas, solo que logueó." />
             </h3>
             {useAdherenceStrip ? (
               <div className="space-y-4">
@@ -633,18 +641,27 @@ export function NutritionTabB5({
                 <div className="flex flex-wrap gap-4 text-sm">
                   {nutritionMonthlyAvgPct != null && (
                     <div>
-                      <p className="text-[9px] font-black uppercase text-muted-foreground">Promedio mensual</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-[9px] font-black uppercase text-muted-foreground">Promedio mensual</p>
+                        <InfoTooltip content="Promedio de comidas completadas vs totales del plan en los últimos 30 días. Considera solo los días con registro." iconClassName="w-3 h-3" />
+                      </div>
                       <p className="text-2xl font-black tabular-nums">{nutritionMonthlyAvgPct}%</p>
                     </div>
                   )}
                   <div>
-                    <p className="text-[9px] font-black uppercase text-muted-foreground">Racha (≥80%)</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[9px] font-black uppercase text-muted-foreground">Racha (≥80%)</p>
+                      <InfoTooltip content="Días consecutivos hacia atrás donde el alumno completó ≥80% de las comidas del día." iconClassName="w-3 h-3" />
+                    </div>
                     <p className="text-2xl font-black tabular-nums">{nutritionStreakDays} días</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <WeekIcon className="w-5 h-5 text-muted-foreground" />
                     <div>
-                      <p className="text-[9px] font-black uppercase text-muted-foreground">Semana vs anterior</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-[9px] font-black uppercase text-muted-foreground">Semana vs anterior</p>
+                        <InfoTooltip content="Adherencia promedio de esta semana comparada con la semana anterior. Flecha arriba = mejora." iconClassName="w-3 h-3" />
+                      </div>
                       <p className="font-bold tabular-nums">
                         {nutritionWeeklyAvgPct}% vs {nutritionPrevWeeklyAvgPct}%
                       </p>
@@ -655,7 +672,7 @@ export function NutritionTabB5({
             ) : (
               <>
                 <p className="mb-3 text-[10px] font-medium text-muted-foreground">
-                  Color según % de comidas completadas del día.
+                  Color según % de comidas del plan completadas ese día.
                 </p>
                 <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-10">
                   {heatmapDays.map((day) => (
@@ -682,10 +699,61 @@ export function NutritionTabB5({
         </div>
       )}
 
+      {habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null) && (
+        <GlassCard className="border-dashed border-sky-500/20 bg-sky-500/[0.02] p-4 dark:border-sky-500/15">
+          <h3 className="mb-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">
+            <Droplets className="h-3.5 w-3.5" />
+            Hábitos del día
+            <InfoTooltip content="Agua, pasos y sueño registrados por el alumno desde su app." iconClassName="w-3 h-3" />
+          </h3>
+          <div className="flex flex-wrap gap-4 text-sm">
+            {habitsForDate.water_ml != null && (
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground">Agua</p>
+                <p className="font-black tabular-nums text-sky-600 dark:text-sky-400">
+                  {habitsForDate.water_ml >= 1000
+                    ? `${(habitsForDate.water_ml / 1000).toFixed(1).replace('.0', '')} L`
+                    : `${habitsForDate.water_ml} ml`}
+                </p>
+              </div>
+            )}
+            {habitsForDate.steps != null && (
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground">Pasos</p>
+                <p className={cn(
+                  'font-black tabular-nums',
+                  habitsForDate.steps >= 8000 ? 'text-emerald-500' : habitsForDate.steps >= 5000 ? 'text-amber-500' : 'text-muted-foreground'
+                )}>
+                  {habitsForDate.steps.toLocaleString('es-CL')}
+                </p>
+              </div>
+            )}
+            {habitsForDate.sleep_hours != null && (
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground">Sueño</p>
+                <p className={cn(
+                  'font-black tabular-nums',
+                  habitsForDate.sleep_hours >= 7 ? 'text-emerald-500' : habitsForDate.sleep_hours >= 6 ? 'text-amber-500' : 'text-rose-500'
+                )}>
+                  {habitsForDate.sleep_hours}h
+                </p>
+              </div>
+            )}
+            {habitsForDate.notes?.trim() && (
+              <div className="w-full">
+                <p className="text-[9px] font-black uppercase text-muted-foreground">Nota del alumno</p>
+                <p className="text-xs text-muted-foreground mt-0.5 italic">{habitsForDate.notes}</p>
+              </div>
+            )}
+          </div>
+        </GlassCard>
+      )}
+
       {plan && (
         <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
-          <h3 className="mb-1 text-xs font-black uppercase tracking-widest text-primary">
+          <h3 className="mb-1 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-primary">
             Últimos 7 días · kcal consumidas vs meta del log
+            <InfoTooltip content="Barras azules = calorías consumidas (suma de comidas completadas × porción). Línea naranja = meta calórica diaria del plan." />
           </h3>
           <p className="mb-4 text-[10px] font-medium text-muted-foreground">
             Consumo estimado según comidas del plan marcadas como hechas.

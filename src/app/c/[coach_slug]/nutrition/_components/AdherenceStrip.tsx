@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { format, parseISO, subDays } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 export interface DayAdherence {
   log_date: string
@@ -49,7 +50,13 @@ export function AdherenceStrip({ data, planMeals }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Adherencia — 30 días</p>
+        <div className="flex items-center gap-1">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Adherencia — 30 días</p>
+          <InfoTooltip
+            content="Cada cuadrado es un día. Los cuadrados verdes son días en los que registraste al menos una comida. Intenta mantener la racha."
+            iconClassName="w-3 h-3"
+          />
+        </div>
         <span className="text-xs font-bold text-foreground">
           {registeredDays}/30 días
         </span>

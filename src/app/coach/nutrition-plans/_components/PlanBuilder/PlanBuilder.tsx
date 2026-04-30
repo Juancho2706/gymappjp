@@ -30,6 +30,7 @@ import {
   getClientFoodFavorites,
 } from '../../_actions/nutrition-coach.actions'
 import type { FoodItemDraft, MealDraft, PlanBuilderInitialData } from './types'
+import type { ClientProfileHint } from './PlanBuilderSidebar'
 
 function newMealId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return `meal-${crypto.randomUUID()}`
@@ -41,9 +42,10 @@ interface Props {
   coachId: string
   clientId?: string
   initialData?: PlanBuilderInitialData | null
+  clientProfile?: ClientProfileHint | null
 }
 
-export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
+export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfile }: Props) {
   const router = useRouter()
   const [planName, setPlanName] = useState(initialData?.name ?? '')
   const [goals, setGoals] = useState({
@@ -373,6 +375,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData }: Props) {
             isSaving={isSaving}
             onSave={handleSave}
             mode={mode}
+            clientProfile={clientProfile}
           />
         </div>
 

@@ -3,7 +3,7 @@
 import { useState, useCallback, useTransition } from 'react'
 import { useTheme } from 'next-themes'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Activity, Dumbbell, User, Edit2, Plus, ChevronDown, ChevronUp, CheckCircle2, PieChart as PieChartIcon, Flame, TrendingUp, Camera, ArrowUpRight, ArrowDownRight, Minus, Trophy, Layers } from 'lucide-react'
+import { Activity, Dumbbell, User, Edit2, Plus, PieChart as PieChartIcon, Flame, TrendingUp, Camera, ArrowUpRight, ArrowDownRight, Minus, Trophy, Layers } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart, ReferenceLine } from 'recharts'
@@ -48,7 +48,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
         })
     }, [])
     const [activeChart, setActiveChart] = useState('peso_composicion')
-    const [expandedWorkouts, setExpandedWorkouts] = useState<string[]>([])
+
     const { resolvedTheme } = useTheme()
     const { client, checkIns, payments } = data
     const [goalWeight, setGoalWeight] = useState<number | null>(
@@ -64,11 +64,6 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
               ? client.coaches[0]?.slug
               : client.coaches.slug
 
-    const toggleWorkout = (id: string) => {
-        setExpandedWorkouts(prev => 
-            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        )
-    }
 
     const isDark = resolvedTheme === 'dark'
     const chartGridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
@@ -818,121 +813,6 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             </div>
                         )}
 
-                        <GlassCard className="p-8 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-2 relative z-10">
-                                <Dumbbell className="w-4 h-4" /> Historial de Entrenamientos
-                            </h3>
-                            {data.workoutHistory && data.workoutHistory.length > 0 ? (
-                                <div className="space-y-4 relative z-10">
-                                    {data.workoutHistory.slice(0, 10).map((plan: any) => {
-                                        const isExpanded = expandedWorkouts.includes(plan.id)
-                                        return (
-                                            <div key={plan.id} className="overflow-hidden bg-secondary/50 dark:bg-white/5 border border-border/50 dark:border-white/10 rounded-xl transition-all duration-300">
-                                                <button 
-                                                    onClick={() => toggleWorkout(plan.id)}
-                                                    className="w-full flex justify-between items-center p-4 hover:bg-primary/5 transition-colors"
-                                                >
-                                                    <div className="text-left">
-                                                        <p className="text-sm font-black uppercase text-foreground tracking-tight">{plan.title}</p>
-                                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{new Date(plan.assigned_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-4">
-                                                        <span className="text-[10px] uppercase bg-primary/10 text-primary px-2 py-1 rounded font-black border border-primary/20 tracking-widest">
-                                                            {plan.workout_blocks?.length || 0} EJERCICIOS
-                                                        </span>
-                                                        {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                                                    </div>
-                                                </button>
-                                                
-                                                {isExpanded && (
-                                                    <div className="p-4 border-t border-border/50 dark:border-white/5 animate-in slide-in-from-top-2 duration-300">
-                                                        <div className="space-y-4">
-                                                            {[...(plan.workout_blocks || [])]
-                                                                .sort(
-                                                                    (a: any, b: any) =>
-                                                                        (a.order_index ?? 0) - (b.order_index ?? 0)
-                                                                )
-                                                                .map((block: any, idx: number) => {
-                                                                    const sec = effectiveWorkoutSection(block.section)
-                                                                    const secShort =
-                                                                        sec === 'warmup'
-                                                                            ? 'CAL'
-                                                                            : sec === 'main'
-                                                                              ? 'PRI'
-                                                                              : sec === 'cooldown'
-                                                                                ? 'ENF'
-                                                                                : '—'
-                                                                    const ss = block.superset_group?.trim()
-                                                                    return (
-                                                                <div key={block.id ?? idx} className="space-y-2">
-                                                                    <div className="flex flex-wrap items-center gap-2">
-                                                                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-black text-primary shrink-0">
-                                                                            {idx + 1}
-                                                                        </div>
-                                                                        <h4 className="text-xs font-black uppercase tracking-tight min-w-0 flex-1">
-                                                                            {block.exercises?.name}
-                                                                        </h4>
-                                                                        <span className="rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground shrink-0">
-                                                                            {secShort}
-                                                                        </span>
-                                                                        {ss && (
-                                                                            <span
-                                                                                className="rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest shrink-0"
-                                                                                style={{
-                                                                                    color: 'var(--theme-primary, #007AFF)',
-                                                                                    borderColor:
-                                                                                        'color-mix(in srgb, var(--theme-primary, #007AFF) 35%, transparent)',
-                                                                                    backgroundColor:
-                                                                                        'color-mix(in srgb, var(--theme-primary, #007AFF) 10%, transparent)',
-                                                                                }}
-                                                                            >
-                                                                                SS · {ss}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="pl-8 overflow-x-auto">
-                                                                        <table className="w-full text-[10px] uppercase font-bold tracking-widest">
-                                                                            <thead>
-                                                                                <tr className="text-muted-foreground border-b border-border/50 dark:border-white/5">
-                                                                                    <th className="text-left py-2">Set</th>
-                                                                                    <th className="text-left py-2">Reps</th>
-                                                                                    <th className="text-left py-2">Peso</th>
-                                                                                    <th className="text-right py-2">Estado</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody>
-                                                                                {(block.workout_logs || []).map((log: any, lIdx: number) => (
-                                                                                    <tr key={lIdx} className="border-b border-border/5 dark:border-white/5 last:border-0">
-                                                                                        <td className="py-2">{lIdx + 1}</td>
-                                                                                        <td className="py-2">{log.reps_done ?? log.reps ?? '-'}</td>
-                                                                                        <td className="py-2">{log.weight_kg ?? log.weight ?? '-'} kg</td>
-                                                                                        <td className="py-2 text-right">
-                                                                                            <CheckCircle2 className="w-3 h-3 text-emerald-500 ml-auto" />
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                ))}
-                                                                                {(!block.workout_logs || block.workout_logs.length === 0) && (
-                                                                                    <tr>
-                                                                                        <td colSpan={4} className="py-4 text-center text-muted-foreground normal-case font-medium italic">Sin logs registrados para este ejercicio.</td>
-                                                                                    </tr>
-                                                                                )}
-                                                                            </tbody>
-                                                                        </table>
-                                                                    </div>
-                                                                </div>
-                                                                    )
-                                                                })}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground text-center relative z-10">No hay entrenamientos registrados recientemente.</p>
-                            )}
-                        </GlassCard>
                     </div>
                     </motion.div>
                 )}

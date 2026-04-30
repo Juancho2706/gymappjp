@@ -19,11 +19,10 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: client } = await supabase
-    .from('clients')
-    .select('id, full_name, coach_id')
-    .eq('id', clientId)
-    .maybeSingle()
+  const [{ data: client }, { data: intake }] = await Promise.all([
+    supabase.from('clients').select('id, full_name, coach_id').eq('id', clientId).maybeSingle(),
+    supabase.from('client_intake').select('weight_kg, height_cm').eq('client_id', clientId).maybeSingle(),
+  ])
 
   if (!client || client.coach_id !== user.id) notFound()
 
@@ -68,6 +67,7 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
             coachId={user.id}
             clientId={clientId}
             initialData={initialData}
+            clientProfile={intake ? { weight_kg: intake.weight_kg, height_cm: intake.height_cm } : null}
           />
         </div>
         {adherence.length > 0 && planMealsStrip.length > 0 && (

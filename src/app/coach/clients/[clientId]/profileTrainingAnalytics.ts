@@ -163,21 +163,26 @@ export type WeeklyWeightPR = {
     muscleGroup: string
     newWeightKg: number
     newReps: number
+    newOneRm: number
     prevWeightKg: number
     prevReps: number
+    prevOneRm: number
     pctChange: number | null
 }
 
-/** PR de peso en la semana calendario (lunes → hoy): supera el máximo previo registrado. */
+/** PR de 1RM Epley en la semana calendario (lunes → hoy).
+ *  Solo considera sets con reps ≤ 30 (fuerza, no resistencia). */
 export function findWeeklyWeightPRs(workoutHistory: any[], now: Date = new Date()): WeeklyWeightPR[] {
     const weekStart = startOfWeek(now, { weekStartsOn: 1 })
 
     type Agg = {
         name: string
         muscle: string
-        beforeMax: number
+        before1rm: number
+        beforeWeightKg: number
         beforeReps: number
-        inWeekMax: number
+        inWeek1rm: number
+        inWeekWeightKg: number
         inWeekReps: number
     }
     const byEx = new Map<string, Agg>()
@@ -195,32 +200,31 @@ export function findWeeklyWeightPRs(workoutHistory: any[], now: Date = new Date(
                 const w = log.weight_kg as number | null | undefined
                 if (w == null || w <= 0) continue
                 const r = (log.reps_done as number | null | undefined) ?? 0
+                if (r <= 0 || r > 30) continue
                 if (!log.logged_at) continue
                 const d = new Date(log.logged_at)
                 if (!isFinite(d.getTime())) continue
 
+                const orm = epleyOneRM(w, r)
+                if (orm <= 0) continue
+
                 let row = byEx.get(exId)
                 if (!row) {
-                    row = {
-                        name,
-                        muscle,
-                        beforeMax: 0,
-                        beforeReps: 0,
-                        inWeekMax: 0,
-                        inWeekReps: 0,
-                    }
+                    row = { name, muscle, before1rm: 0, beforeWeightKg: 0, beforeReps: 0, inWeek1rm: 0, inWeekWeightKg: 0, inWeekReps: 0 }
                     byEx.set(exId, row)
                 }
 
                 const inWeek = d >= weekStart
                 if (inWeek) {
-                    if (w > row.inWeekMax || (w === row.inWeekMax && r > row.inWeekReps)) {
-                        row.inWeekMax = w
+                    if (orm > row.inWeek1rm || (orm === row.inWeek1rm && w > row.inWeekWeightKg)) {
+                        row.inWeek1rm = orm
+                        row.inWeekWeightKg = w
                         row.inWeekReps = r
                     }
                 } else {
-                    if (w > row.beforeMax || (w === row.beforeMax && r > row.beforeReps)) {
-                        row.beforeMax = w
+                    if (orm > row.before1rm || (orm === row.before1rm && w > row.beforeWeightKg)) {
+                        row.before1rm = orm
+                        row.beforeWeightKg = w
                         row.beforeReps = r
                     }
                 }
@@ -230,28 +234,26 @@ export function findWeeklyWeightPRs(workoutHistory: any[], now: Date = new Date(
 
     const out: WeeklyWeightPR[] = []
     for (const [exerciseId, row] of byEx) {
-        if (row.inWeekMax <= 0) continue
-        if (row.beforeMax <= 0) continue
-        if (row.inWeekMax <= row.beforeMax) continue
+        if (row.inWeek1rm <= 0 || row.before1rm <= 0) continue
+        if (row.inWeek1rm <= row.before1rm) continue
 
-        const pct =
-            row.beforeMax > 0
-                ? Math.round(((row.inWeekMax - row.beforeMax) / row.beforeMax) * 1000) / 10
-                : null
+        const pct = Math.round(((row.inWeek1rm - row.before1rm) / row.before1rm) * 1000) / 10
 
         out.push({
             exerciseId,
             exerciseName: row.name,
             muscleGroup: row.muscle,
-            newWeightKg: row.inWeekMax,
+            newWeightKg: row.inWeekWeightKg,
             newReps: row.inWeekReps,
-            prevWeightKg: row.beforeMax,
+            newOneRm: Math.round(row.inWeek1rm * 10) / 10,
+            prevWeightKg: row.beforeWeightKg,
             prevReps: row.beforeReps,
+            prevOneRm: Math.round(row.before1rm * 10) / 10,
             pctChange: pct,
         })
     }
 
-    return out.sort((a, b) => b.newWeightKg - a.newWeightKg)
+    return out.sort((a, b) => b.newOneRm - a.newOneRm)
 }
 
 export type SessionTonnagePoint = {

@@ -868,6 +868,25 @@ export async function getClientWorkoutActivityDates(clientId: string): Promise<s
     return [...seen]
 }
 
+/** Hábitos del día del alumno (coach lee por RLS: coach_id = auth.uid() en client_profiles). */
+export async function getClientHabitsForDate(
+  clientId: string,
+  date: string
+): Promise<{ water_ml: number | null; steps: number | null; sleep_hours: number | null; notes: string | null } | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data } = await supabase
+    .from('daily_habits')
+    .select('water_ml, steps, sleep_hours, notes')
+    .eq('client_id', clientId)
+    .eq('log_date', date)
+    .maybeSingle()
+
+  return data ?? null
+}
+
 /** Días (YYYY-MM-DD) con daily_nutrition_logs para el cliente en los últimos 90 días. */
 export async function getClientNutritionActivityDates(clientId: string): Promise<string[]> {
     const supabase = await createClient()

@@ -6,6 +6,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { sumMealMacros, type FoodItemForMacros } from '@/lib/nutrition-utils'
 import { MealIngredientRow } from './MealIngredientRow'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 export interface MealCardMeal {
   id: string
@@ -209,9 +210,12 @@ export function MealCard({
               )}
               {isToday && isCompleted && onPartialPlanPctChange ? (
                 <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                    Porción del plan
-                  </p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      Porción del plan
+                    </p>
+                    <InfoTooltip content="Si consumiste una cantidad diferente a la planificada, ajústala aquí. Los macros se recalcularán automáticamente." iconClassName="w-3 h-3" />
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {([25, 50, 75] as const).map((pct) => (
                       <button
@@ -272,9 +276,12 @@ export function MealCard({
               ) : null}
               {isCompleted && onSatisfactionChange && (
                 <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                    ¿Cómo estuvo?
-                  </p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      ¿Cómo estuvo?
+                    </p>
+                    <InfoTooltip content="Tu coach puede ver este feedback para ajustar tu plan. Es opcional." iconClassName="w-3 h-3" />
+                  </div>
                   <div className="flex gap-2">
                     {SATISFACTION.map(({ score, emoji, label }) => (
                       <button

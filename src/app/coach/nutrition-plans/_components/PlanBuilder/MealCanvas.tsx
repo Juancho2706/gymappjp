@@ -2,6 +2,7 @@
 
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { MealBlock } from './MealBlock'
 import type { MealDraft } from './types'
 
@@ -41,7 +42,10 @@ export function MealCanvas({
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-black tracking-tight">Comidas del plan</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-lg font-black tracking-tight">Comidas del plan</h2>
+          <InfoTooltip content="Cada comida es un momento del día (Desayuno, Almuerzo, etc.). Agrega alimentos con su cantidad dentro de cada comida. Arrastra para reordenar." />
+        </div>
         <Button type="button" onClick={onAddMeal} size="sm" className="gap-1">
           <Plus className="h-4 w-4" />
           Comida

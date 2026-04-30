@@ -3,6 +3,7 @@
 import { motion, useReducedMotion, type Transition } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 interface MacroData {
   consumed: number
@@ -10,6 +11,7 @@ interface MacroData {
   label: string
   color: string
   bgColor: string
+  tooltip?: string
 }
 
 interface Props {
@@ -25,6 +27,7 @@ function MacroRing({
   target,
   label,
   color,
+  tooltip,
   size = 80,
   ringTransition: ringTrans,
 }: MacroData & { size?: number; ringTransition: Transition }) {
@@ -70,7 +73,10 @@ function MacroRing({
         </div>
       </div>
       <div className="text-center">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+        <div className="flex items-center justify-center gap-0.5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+          {tooltip && <InfoTooltip content={tooltip} iconClassName="w-3 h-3" />}
+        </div>
         <p className="text-[9px] text-muted-foreground/60 tabular-nums">/ {Math.round(target)}g</p>
       </div>
     </div>
@@ -97,9 +103,12 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
       <div className="space-y-2">
         <div className="flex items-baseline justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-              Energía {isReadOnly ? '· Solo lectura' : 'diaria'}
-            </p>
+            <div className="flex items-center gap-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                Energía {isReadOnly ? '· Solo lectura' : 'diaria'}
+              </p>
+              <InfoTooltip content="Meta calórica diaria definida por tu coach. Si completaste todas tus comidas, estarás cerca del 100%." iconClassName="w-3 h-3" />
+            </div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-4xl font-black tabular-nums tracking-tight">
                 {Math.round(calories.consumed)}
@@ -138,6 +147,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           bgColor="#7c2d12"
           size={88}
           ringTransition={ringTrans}
+          tooltip="La proteína ayuda a mantener y construir músculo. Tu meta diaria está definida en tu plan."
         />
         <MacroRing
           consumed={carbs.consumed}
@@ -147,6 +157,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           bgColor="#1e3a5f"
           size={88}
           ringTransition={ringTrans}
+          tooltip="Los carbohidratos son tu fuente principal de energía. Son especialmente importantes en días de entrenamiento."
         />
         <MacroRing
           consumed={fats.consumed}
@@ -156,6 +167,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           bgColor="#713f12"
           size={88}
           ringTransition={ringTrans}
+          tooltip="Las grasas saludables son esenciales para el equilibrio hormonal y la absorción de vitaminas."
         />
       </div>
     </div>
