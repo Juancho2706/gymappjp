@@ -129,6 +129,10 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     setMeals((prev) => prev.map((m) => (m.id === mealId ? { ...m, day_of_week: day } : m)))
   }, [])
 
+  const updateMealNotes = useCallback((mealId: string, notes: string) => {
+    setMeals((prev) => prev.map((m) => (m.id === mealId ? { ...m, notes: notes || null } : m)))
+  }, [])
+
   const removeMeal = useCallback((mealId: string) => {
     setMeals((prev) => prev.filter((m) => m.id !== mealId))
   }, [])
@@ -266,6 +270,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
 
     const payloadMeals = meals.map((m, i) => ({
       name: m.name,
+      notes: m.notes ?? null,
       order_index: i,
       day_of_week: m.day_of_week ?? null,
       foodItems: m.foodItems.map((fi) => ({
@@ -387,6 +392,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
                 onAddMeal={addMeal}
                 onUpdateMealName={updateMealName}
                 onUpdateMealDayOfWeek={updateMealDayOfWeek}
+                onUpdateMealNotes={updateMealNotes}
                 onRemoveMeal={removeMeal}
                 onOpenFoodSearch={openFoodSearch}
                 onUpdateFoodItem={updateFoodItem}

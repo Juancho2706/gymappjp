@@ -16,6 +16,7 @@ type TemplateData = {
 
 type MealInput = {
     name: string;
+    notes?: string | null;
     order_index: number;
     day_of_week?: number | null;
     foodItems: Array<{
@@ -135,6 +136,7 @@ export class NutritionService {
                 .insert({
                     template_id: currentTemplateId,
                     name: meal.name,
+                    description: meal.notes ?? '',
                     order_index: meal.order_index,
                     day_of_week: meal.day_of_week ?? null,
                 })
@@ -293,6 +295,7 @@ export class NutritionService {
                             .from('nutrition_meals')
                             .update({
                                 name: tMeal.name,
+                                description: (tMeal as { description?: string }).description ?? '',
                                 order_index: tMeal.order_index,
                                 day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
                             })
@@ -315,7 +318,7 @@ export class NutritionService {
                             .insert({
                                 plan_id: planId,
                                 name: tMeal.name,
-                                description: '',
+                                description: (tMeal as { description?: string }).description ?? '',
                                 order_index: tMeal.order_index,
                                 day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
                             })
@@ -374,7 +377,7 @@ export class NutritionService {
                     .insert({
                         plan_id: planId,
                         name: tMeal.name,
-                        description: '',
+                        description: (tMeal as { description?: string }).description ?? '',
                         order_index: tMeal.order_index,
                         day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
                     })

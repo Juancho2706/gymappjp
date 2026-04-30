@@ -39,6 +39,7 @@ export type CoachTemplateMealFoodItem = {
 
 export type CoachTemplateMealJson = {
   name: string
+  notes?: string | null
   order_index: number
   /** 1=Lun … 7=Dom; omitir = todos los días */
   day_of_week?: number | null
@@ -254,7 +255,7 @@ export async function upsertClientNutritionPlanJson(
       // Fetch existing meals to match by order_index (preserves IDs → nutrition_meal_logs survive)
       const { data: existingMeals } = await supabase
         .from('nutrition_meals')
-        .select('id, order_index, day_of_week')
+        .select('id, order_index, day_of_week, description')
         .eq('plan_id', currentPlanId)
         .order('order_index', { ascending: true })
 
@@ -281,6 +282,7 @@ export async function upsertClientNutritionPlanJson(
             .from('nutrition_meals')
             .update({
               name: meal.name,
+              description: meal.notes ?? '',
               order_index: meal.order_index,
               day_of_week: meal.day_of_week ?? null,
             })
@@ -303,7 +305,7 @@ export async function upsertClientNutritionPlanJson(
             .insert({
               plan_id: currentPlanId!,
               name: meal.name,
-              description: '',
+              description: meal.notes ?? '',
               order_index: meal.order_index,
               day_of_week: meal.day_of_week ?? null,
             })
@@ -341,7 +343,7 @@ export async function upsertClientNutritionPlanJson(
           .insert({
             plan_id: currentPlanId!,
             name: meal.name,
-            description: '',
+            description: meal.notes ?? '',
             order_index: meal.order_index,
             day_of_week: meal.day_of_week ?? null,
           })
@@ -683,7 +685,7 @@ export async function duplicatePlanToClient(
     // 2. Fetch source meals + food_items
     const { data: sourceMeals, error: mealsErr } = await supabase
       .from('nutrition_meals')
-      .select('id, name, order_index, day_of_week')
+      .select('id, name, order_index, day_of_week, description')
       .eq('plan_id', sourcePlanId)
       .order('order_index', { ascending: true })
 
@@ -781,7 +783,7 @@ export async function duplicatePlanToClient(
         .insert({
           plan_id: newPlan.id,
           name: meal.name as string,
-          description: '',
+          description: (meal.description as string | null) ?? '',
           order_index: meal.order_index as number,
           day_of_week: (meal.day_of_week as number | null) ?? null,
         })

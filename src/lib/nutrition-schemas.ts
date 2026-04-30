@@ -41,6 +41,7 @@ export const MealSchema = z.object({
     .string()
     .min(1, 'El nombre de la comida es requerido')
     .max(100, 'Máximo 100 caracteres'),
+  notes: z.string().max(500).nullish(),
   order_index: z.number().int().nonnegative(),
   /** 1=Lun … 7=Dom; omitir o null = todos los días */
   day_of_week: z.number().int().min(1).max(7).nullable().optional(),

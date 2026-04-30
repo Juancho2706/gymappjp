@@ -35,6 +35,7 @@ interface Props {
   meal: MealDraft
   onUpdateName: (name: string) => void
   onUpdateDayOfWeek: (day: number | null) => void
+  onUpdateNotes: (notes: string) => void
   onRemove: () => void
   onOpenFoodSearch: () => void
   onUpdateFoodItem: (idx: number, qty: number, unit: string) => void
@@ -53,6 +54,7 @@ export function MealBlock({
   meal,
   onUpdateName,
   onUpdateDayOfWeek,
+  onUpdateNotes,
   onRemove,
   onOpenFoodSearch,
   onUpdateFoodItem,
@@ -150,6 +152,21 @@ export function MealBlock({
           Comida vacía: agrega al menos 1 alimento para conservar consistencia del plan.
         </div>
       )}
+
+      <div className="mb-3 space-y-1">
+        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          Nota para el alumno
+          <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground/60">(opcional)</span>
+        </Label>
+        <textarea
+          value={meal.notes ?? ''}
+          onChange={(e) => onUpdateNotes(e.target.value)}
+          placeholder="Ej: Puedes reemplazar el arroz por papa. Comer 30 min antes del entrenamiento."
+          maxLength={500}
+          rows={2}
+          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+        />
+      </div>
 
       <Button type="button" variant="outline" className="w-full gap-2 border-dashed" onClick={onOpenFoodSearch}>
         <Plus className="h-4 w-4" />
