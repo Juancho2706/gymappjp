@@ -75,7 +75,7 @@ export function FoodItemRow({
             ))}
           </SelectContent>
         </Select>
-        <InfoTooltip content="g = gramos (macros proporcionales a 100g del alimento). un = unidades (macros según el tamaño de porción registrado en el alimento)." />
+        <InfoTooltip content="g = gramos (macros proporcionales a 100g). ml = mililitros, mismo cálculo que g (para líquidos y aceites). un = unidades (macros según la porción registrada en el alimento)." />
       </div>
       <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onRemove}>
         <Trash2 className="h-4 w-4 text-muted-foreground" />

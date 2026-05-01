@@ -38,6 +38,61 @@ describe('nutrition-utils', () => {
     })
   })
 
+  it('calculates item macros for ml (direct proportion, same as g)', () => {
+    // Bug fix: ml was using serving_size multiplier → inflated macros
+    // 15ml aceite (884 kcal/100ml) → should be 132.6 kcal, not 15*14/100*884
+    const macros = calculateFoodItemMacros({
+      quantity: 15,
+      unit: 'ml',
+      foods: {
+        name: 'Aceite de oliva',
+        calories: 884,
+        protein_g: 0,
+        carbs_g: 0,
+        fats_g: 100,
+        serving_size: 14,
+        serving_unit: 'ml',
+      },
+    })
+    expect(macros.calories).toBe(132.6)
+    expect(macros.fats).toBe(15)
+    expect(macros.protein).toBe(0)
+  })
+
+  it('calculates item macros for ml liquid drink (200ml)', () => {
+    // Bug fix: 200ml jugo con serving_size=200 daba factor=400x
+    const macros = calculateFoodItemMacros({
+      quantity: 200,
+      unit: 'ml',
+      foods: {
+        name: 'Jugo de naranja',
+        calories: 45,
+        protein_g: 0.7,
+        carbs_g: 10.4,
+        fats_g: 0.2,
+        serving_size: 200,
+        serving_unit: 'ml',
+      },
+    })
+    expect(macros.calories).toBe(90)
+    expect(macros.carbs).toBe(20.8)
+  })
+
+  it('ml and g produce same factor (density approximation for liquids)', () => {
+    const base = {
+      name: 'Leche',
+      calories: 60,
+      protein_g: 3.2,
+      carbs_g: 4.7,
+      fats_g: 3.3,
+      serving_size: 200,
+      serving_unit: 'ml',
+    }
+    const withMl = calculateFoodItemMacros({ quantity: 200, unit: 'ml', foods: base })
+    const withG = calculateFoodItemMacros({ quantity: 200, unit: 'g', foods: base })
+    expect(withMl).toEqual(withG)
+  })
+
   it('calculates item macros for unit-based foods', () => {
     const macros = calculateFoodItemMacros({
       quantity: 2,
