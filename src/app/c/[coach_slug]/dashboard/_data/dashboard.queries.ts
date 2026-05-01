@@ -252,21 +252,22 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
         const { iso } = getTodayInSantiago()
         const fourteenAgo = subDays(parseISOAnchor(iso), 14)
 
-        const { data: recentLogs } = await supabase
-            .from('workout_logs')
-            .select('weight_kg, block_id, logged_at')
-            .eq('client_id', clientId)
-            .not('weight_kg', 'is', null)
-            .gte('logged_at', fourteenAgo.toISOString())
-            .order('logged_at', { ascending: false })
-            .limit(120)
-
-        const { data: histLogs } = await supabase
-            .from('workout_logs')
-            .select('weight_kg, block_id')
-            .eq('client_id', clientId)
-            .not('weight_kg', 'is', null)
-            .limit(3000)
+        const [{ data: recentLogs }, { data: histLogs }] = await Promise.all([
+            supabase
+                .from('workout_logs')
+                .select('weight_kg, block_id, logged_at')
+                .eq('client_id', clientId)
+                .not('weight_kg', 'is', null)
+                .gte('logged_at', fourteenAgo.toISOString())
+                .order('logged_at', { ascending: false })
+                .limit(120),
+            supabase
+                .from('workout_logs')
+                .select('weight_kg, block_id')
+                .eq('client_id', clientId)
+                .not('weight_kg', 'is', null)
+                .limit(3000),
+        ])
 
         const recent = recentLogs ?? []
         const allW = histLogs ?? []

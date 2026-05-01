@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
@@ -15,6 +16,15 @@ import { WeightFullChartSection } from './_components/WeightFullChartSection'
 import { DashboardSidebarBlocks } from './_components/DashboardSidebarBlocks'
 import { WelcomeModal } from './_components/WelcomeModal'
 import { getClientProfile } from './_data/dashboard.queries'
+import {
+    DashboardHeaderSkeleton,
+    CalendarSkeleton,
+    CheckInSkeleton,
+    HeroAndComplianceSkeleton,
+    ProgramSkeleton,
+    HistorySkeleton,
+    WeightChartSkeleton,
+} from './_components/dashboard-skeletons'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -44,24 +54,38 @@ export default async function ClientDashboardPage({ params }: Props) {
 
     const beforeSidebar = (
         <>
-            <DashboardHeader
-                userId={user.id}
-                coachSlug={coach_slug}
-                initialUseBrandColors={initialUseBrandColors}
-                brandName={coachBranding?.brand_name}
-                welcomeMessage={coachBranding?.welcome_message}
-            />
-            <WeekCalendar userId={user.id} />
-            <CheckInBanner userId={user.id} coachSlug={coach_slug} />
-            <HeroAndComplianceGroup userId={user.id} coachSlug={coach_slug} />
+            <Suspense fallback={<DashboardHeaderSkeleton />}>
+                <DashboardHeader
+                    userId={user.id}
+                    coachSlug={coach_slug}
+                    initialUseBrandColors={initialUseBrandColors}
+                    brandName={coachBranding?.brand_name}
+                    welcomeMessage={coachBranding?.welcome_message}
+                />
+            </Suspense>
+            <Suspense fallback={<CalendarSkeleton />}>
+                <WeekCalendar userId={user.id} />
+            </Suspense>
+            <Suspense fallback={<CheckInSkeleton />}>
+                <CheckInBanner userId={user.id} coachSlug={coach_slug} />
+            </Suspense>
+            <Suspense fallback={<HeroAndComplianceSkeleton />}>
+                <HeroAndComplianceGroup userId={user.id} coachSlug={coach_slug} />
+            </Suspense>
         </>
     )
 
     const afterSidebar = (
         <>
-            <ActiveProgramSection userId={user.id} coachSlug={coach_slug} />
-            <RecentWorkoutsSection userId={user.id} coachSlug={coach_slug} />
-            <WeightFullChartSection userId={user.id} coachSlug={coach_slug} />
+            <Suspense fallback={<ProgramSkeleton />}>
+                <ActiveProgramSection userId={user.id} coachSlug={coach_slug} />
+            </Suspense>
+            <Suspense fallback={<HistorySkeleton />}>
+                <RecentWorkoutsSection userId={user.id} coachSlug={coach_slug} />
+            </Suspense>
+            <Suspense fallback={<WeightChartSkeleton />}>
+                <WeightFullChartSection userId={user.id} coachSlug={coach_slug} />
+            </Suspense>
         </>
     )
 

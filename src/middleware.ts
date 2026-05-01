@@ -72,6 +72,16 @@ export async function middleware(request: NextRequest) {
         }
     )
 
+    // For /c/ routes, coach fetch is independent of auth — start both in parallel to save ~100-200ms TTFB
+    const cRouteSlug = pathname.startsWith('/c/') ? pathname.split('/')[2] ?? null : null
+    const coachBrandingPromise = cRouteSlug
+        ? supabase
+              .from('coaches')
+              .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode')
+              .eq('slug', cRouteSlug)
+              .maybeSingle()
+        : null
+
     // Refresh session — IMPORTANT: do not remove
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -145,20 +155,14 @@ export async function middleware(request: NextRequest) {
     // 2. WHITE-LABEL route handling for /c/[coach_slug]/*
     // ============================================================
     if (pathname.startsWith('/c/')) {
-        const segments = pathname.split('/')
-        const coachSlug = segments[2] // /c/[coach_slug]/...
+        const coachSlug = cRouteSlug
 
         if (!coachSlug) {
             return supabaseResponse
         }
 
-        // 1. Fetch coach branding by slug (public read — no auth required)
-        // NOTE: We removed use_brand_colors from the query because it might not exist in the DB yet
-        const { data: coachData } = await supabase
-            .from('coaches')
-            .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode')
-            .eq('slug', coachSlug)
-            .maybeSingle()
+        // Coach branding fetch was started in parallel with getUser() above — await the result
+        const { data: coachData } = await coachBrandingPromise!
 
         const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode'> | null
 
@@ -339,6 +343,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|api/manifest/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 }

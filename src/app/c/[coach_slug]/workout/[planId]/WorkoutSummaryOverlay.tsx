@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import confetti from 'canvas-confetti'
+const fireConfetti = (opts: Parameters<typeof import('canvas-confetti').default>[0]) =>
+    import('canvas-confetti').then(m => m.default(opts))
 import { Trophy, Zap } from 'lucide-react'
 import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
@@ -148,17 +149,11 @@ export function WorkoutSummaryOverlay({
 
     useEffect(() => {
         if (detectedPRs.length > 0) {
-            confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } })
-            setTimeout(
-                () => confetti({ particleCount: 80, spread: 60, origin: { x: 0.2, y: 0.6 } }),
-                300
-            )
-            setTimeout(
-                () => confetti({ particleCount: 80, spread: 60, origin: { x: 0.8, y: 0.6 } }),
-                500
-            )
+            fireConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } })
+            setTimeout(() => fireConfetti({ particleCount: 80, spread: 60, origin: { x: 0.2, y: 0.6 } }), 300)
+            setTimeout(() => fireConfetti({ particleCount: 80, spread: 60, origin: { x: 0.8, y: 0.6 } }), 500)
         } else {
-            confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
+            fireConfetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
         }
     }, [])
 

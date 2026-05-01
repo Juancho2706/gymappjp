@@ -1,10 +1,6 @@
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata, Viewport } from 'next'
-import type { Tables } from '@/lib/database.types'
-
-type Coach = Tables<'coaches'>
 import {
     BRAND_APP_ICON,
     BRAND_OG_IMAGE,
@@ -26,15 +22,10 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { coach_slug } = await params
-    const supabase = await createClient()
-    const { data } = await supabase
-        .from('coaches')
-        .select('brand_name, logo_url, primary_color')
-        .eq('slug', coach_slug)
-        .maybeSingle()
-
-    const coach = data as Pick<Coach, 'brand_name' | 'logo_url' | 'primary_color'> & { use_brand_colors?: boolean } | null
-    const brandName = coach?.brand_name ?? 'Mi Coach'
+    // Read branding from middleware headers — no extra DB query needed
+    const headersList = await headers()
+    const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
+    const logoUrl = headersList.get('x-coach-logo-url') || null
 
     const metadataBase = resolveMetadataBase()
     const openGraphImageAbsoluteUrl = new URL(BRAND_OG_IMAGE, metadataBase).href
@@ -54,11 +45,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             statusBarStyle: 'black-translucent',
             title: brandName,
         },
-        icons: coach?.logo_url
+        icons: logoUrl
             ? {
-                icon: [{ url: coach.logo_url }],
-                shortcut: [{ url: coach.logo_url }],
-                apple: [{ url: coach.logo_url }],
+                icon: [{ url: logoUrl }],
+                shortcut: [{ url: logoUrl }],
+                apple: [{ url: logoUrl }],
             }
             : {
                 icon: [{ url: BRAND_APP_ICON, type: 'image/png' }],

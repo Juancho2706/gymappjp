@@ -3,10 +3,9 @@
 import { useActionState, useRef, useOptimistic, useState, startTransition } from 'react'
 import { Check, Loader2 } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { logSetAction, type LogState } from './actions'
 import { useWorkoutTimer } from './WorkoutTimerProvider'
-import { springs } from '@/lib/animation-presets'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 
@@ -111,15 +110,8 @@ export function LogSetForm({
     }
 
     return (
-        <motion.div
-            layout
-            animate={{
-                backgroundColor: isLogged
-                    ? 'color-mix(in srgb, #10b981 10%, transparent)'
-                    : 'transparent',
-            }}
-            transition={{ duration: reducedMotion ? 0 : 0.4 }}
-            className="rounded-xl"
+        <div
+            className={`rounded-xl transition-colors duration-[400ms] ${isLogged ? 'bg-emerald-500/10' : 'bg-transparent'}`}
         >
             <form
                 key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'}
@@ -257,26 +249,21 @@ export function LogSetForm({
                     </motion.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </div>
     )
 }
 
 function SubmitSetButton({ isLogged }: { isLogged: boolean }) {
     const { pending } = useFormStatus()
-    const reducedMotion = useReducedMotion()
     return (
-        <motion.button
+        <button
             type="submit"
-            key={isLogged ? 'logged' : 'idle'}
-            initial={isLogged && !reducedMotion ? { scale: 0.5, opacity: 0 } : false}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={reducedMotion ? { duration: 0 } : springs.elastic}
             className={`w-10 h-10 md:w-7 md:h-7 rounded-md flex items-center justify-center transition-all shadow-sm
             ${isLogged ? 'bg-emerald-500/20 text-emerald-400' : 'bg-secondary text-muted-foreground hover:bg-violet-600 hover:text-white'}`}
             title={pending ? 'Guardando set...' : isLogged ? 'Set guardado · toca para editar' : 'Guardar set'}
             aria-label={pending ? 'Guardando set...' : isLogged ? 'Set guardado, toca para editar' : 'Guardar set'}
         >
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-5 h-5 md:w-4 md:h-4" />}
-        </motion.button>
+        </button>
     )
 }
