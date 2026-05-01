@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Circle, Copy, ExternalLink, Monitor, Smartphone, Sparkles, X } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
@@ -135,15 +135,27 @@ export function CoachOnboardingChecklist({
     const ahaRef = useRef(false)
     const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+    /** Evita re-hidratar el checklist en cada re-render del padre con el mismo JSON por referencia distinta. */
+    const initialOnboardingGuideKey = useMemo(
+        () => JSON.stringify(initialOnboardingGuide ?? null),
+        [initialOnboardingGuide]
+    )
+
     useEffect(() => {
         const fromServer = normalizeGuideFromJson(initialOnboardingGuide)
         const ls = readPersistedState(coachId)
 
         if (persistedStateHasActivity(fromServer)) {
-            setManualCompleted(fromServer.completed ?? {})
-            setDismissed(Boolean(fromServer.dismissed))
-            ahaRef.current = Boolean(fromServer.ahaMomentSent)
-            writePersistedState(coachId, fromServer)
+            const mergedDismissed = fromServer.dismissed === true || ls.dismissed === true
+            const merged: PersistedState = {
+                completed: fromServer.completed ?? {},
+                dismissed: mergedDismissed,
+                ahaMomentSent: fromServer.ahaMomentSent === true,
+            }
+            setManualCompleted(merged.completed ?? {})
+            setDismissed(mergedDismissed)
+            ahaRef.current = Boolean(merged.ahaMomentSent)
+            writePersistedState(coachId, merged)
             setReady(true)
             return
         }
@@ -165,9 +177,10 @@ export function CoachOnboardingChecklist({
                 }
             })
         }
-    }, [coachId, initialOnboardingGuide])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- initialOnboardingGuideKey serializa la guía (evita `{}` nuevo cada render)
+    }, [coachId, initialOnboardingGuideKey])
 
-    function schedulePersistToServer(snapshot: PersistedState) {
+    const schedulePersistToServer = useCallback((snapshot: PersistedState) => {
         writePersistedState(coachId, snapshot)
         if (persistTimerRef.current) {
             clearTimeout(persistTimerRef.current)
@@ -184,7 +197,7 @@ export function CoachOnboardingChecklist({
                 }
             })
         }, 450)
-    }
+    }, [coachId])
 
     useEffect(() => {
         return () => {
@@ -232,7 +245,11 @@ export function CoachOnboardingChecklist({
 
     const completed: Record<StepKey, boolean> = useMemo(
         () => ({
-            profile_branding: autoCompleted.profile_branding || Boolean(manualCompleted.profile_branding),
+            /** `false` explícito = “Desmarcar” aunque haya logo/tour (auto). */
+            profile_branding:
+                manualCompleted.profile_branding === false
+                    ? false
+                    : autoCompleted.profile_branding || manualCompleted.profile_branding === true,
             first_client: autoCompleted.first_client || Boolean(manualCompleted.first_client),
             first_plan: autoCompleted.first_plan || Boolean(manualCompleted.first_plan),
             first_checkin: autoCompleted.first_checkin || Boolean(manualCompleted.first_checkin),
@@ -284,13 +301,20 @@ export function CoachOnboardingChecklist({
             ahaMomentSent: ahaRef.current,
             dismissed,
         })
-    }, [allDone, coachId, completed, dismissed, manualCompleted, progressPct, ready])
+    }, [allDone, coachId, completed, dismissed, manualCompleted, progressPct, ready, schedulePersistToServer])
 
     function toggleProfileStep() {
-        setManualCompleted((prev) => ({
-            ...prev,
-            profile_branding: !prev.profile_branding,
-        }))
+        setManualCompleted((prev) => {
+            const autoBranding = hasCoachLogo || brandTourSeen
+            const currentlyDone =
+                prev.profile_branding === false
+                    ? false
+                    : autoBranding || prev.profile_branding === true
+            if (currentlyDone) {
+                return { ...prev, profile_branding: false }
+            }
+            return { ...prev, profile_branding: true }
+        })
     }
 
     function dismiss() {
@@ -455,7 +479,11 @@ export function CoachOnboardingChecklist({
                                 type="button"
                                 variant="ghost"
                                 className="h-11 min-h-11 touch-manipulation text-muted-foreground"
-                                onClick={toggleProfileStep}
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    toggleProfileStep()
+                                }}
                             >
                                 {completed.profile_branding ? 'Desmarcar paso' : 'Ya lo dejé listo'}
                             </Button>
@@ -561,8 +589,13 @@ export function CoachOnboardingChecklist({
                         Seguir viendo
                     </AlertDialogCancel>
                     <AlertDialogAction
+                        type="button"
                         className="h-11 min-h-11 touch-manipulation rounded-xl bg-[color:var(--theme-primary)] text-primary-foreground hover:opacity-95"
-                        onClick={() => dismiss()}
+                        onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            dismiss()
+                        }}
                     >
                         Ocultar
                     </AlertDialogAction>
