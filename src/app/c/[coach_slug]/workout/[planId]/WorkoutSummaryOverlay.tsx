@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-const fireConfetti = (opts: Parameters<typeof import('canvas-confetti').default>[0]) =>
-    import('canvas-confetti').then(m => m.default(opts))
 import { Trophy, Zap } from 'lucide-react'
 import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
+
+// canvas-confetti uses CommonJS export=; bundler wraps it as { default: fn } at runtime
+const fireConfetti = (opts: object) =>
+    (import('canvas-confetti') as Promise<any>).then(m => (m.default ?? m)(opts))  // eslint-disable-line @typescript-eslint/no-explicit-any
 
 interface ExerciseType {
     id: string
