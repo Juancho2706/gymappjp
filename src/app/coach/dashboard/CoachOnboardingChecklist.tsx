@@ -40,14 +40,19 @@ type PersistedState = {
     dismissed?: boolean
 }
 
-const STORAGE_KEY = 'eva:coach-onboarding:v1'
+/** Por coach: evita que dismiss/completado de otra cuenta en el mismo browser oculte la guía aquí. */
+function onboardingGuideStorageKey(coachId: string) {
+    return `eva:coach-onboarding:v1:${coachId}`
+}
 
 /** Evita doble confetti (p. ej. Strict Mode dev) en la misma sesión de navegador. */
-const CONFETTI_100_SESSION_KEY = 'eva:coach-onboarding-100-confetti-fired'
+function confetti100SessionKey(coachId: string) {
+    return `eva:coach-onboarding-100-confetti-fired:${coachId}`
+}
 
-function readPersistedState(): PersistedState {
+function readPersistedState(coachId: string): PersistedState {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY)
+        const raw = localStorage.getItem(onboardingGuideStorageKey(coachId))
         if (!raw) return { completed: {} }
         return JSON.parse(raw) as PersistedState
     } catch {
@@ -55,8 +60,8 @@ function readPersistedState(): PersistedState {
     }
 }
 
-function writePersistedState(state: PersistedState) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+function writePersistedState(coachId: string, state: PersistedState) {
+    localStorage.setItem(onboardingGuideStorageKey(coachId), JSON.stringify(state))
 }
 
 function normalizeGuideFromJson(raw: Json | undefined | null): PersistedState {
@@ -132,13 +137,13 @@ export function CoachOnboardingChecklist({
 
     useEffect(() => {
         const fromServer = normalizeGuideFromJson(initialOnboardingGuide)
-        const ls = readPersistedState()
+        const ls = readPersistedState(coachId)
 
         if (persistedStateHasActivity(fromServer)) {
             setManualCompleted(fromServer.completed ?? {})
             setDismissed(Boolean(fromServer.dismissed))
             ahaRef.current = Boolean(fromServer.ahaMomentSent)
-            writePersistedState(fromServer)
+            writePersistedState(coachId, fromServer)
             setReady(true)
             return
         }
@@ -160,10 +165,10 @@ export function CoachOnboardingChecklist({
                 }
             })
         }
-    }, [initialOnboardingGuide])
+    }, [coachId, initialOnboardingGuide])
 
     function schedulePersistToServer(snapshot: PersistedState) {
-        writePersistedState(snapshot)
+        writePersistedState(coachId, snapshot)
         if (persistTimerRef.current) {
             clearTimeout(persistTimerRef.current)
         }
@@ -258,9 +263,9 @@ export function CoachOnboardingChecklist({
                 const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
                 if (
                     !prefersReduced &&
-                    !sessionStorage.getItem(CONFETTI_100_SESSION_KEY)
+                    !sessionStorage.getItem(confetti100SessionKey(coachId))
                 ) {
-                    sessionStorage.setItem(CONFETTI_100_SESSION_KEY, '1')
+                    sessionStorage.setItem(confetti100SessionKey(coachId), '1')
                     confetti({
                         particleCount: 130,
                         spread: 72,
@@ -279,7 +284,7 @@ export function CoachOnboardingChecklist({
             ahaMomentSent: ahaRef.current,
             dismissed,
         })
-    }, [allDone, completed, dismissed, manualCompleted, progressPct, ready])
+    }, [allDone, coachId, completed, dismissed, manualCompleted, progressPct, ready])
 
     function toggleProfileStep() {
         setManualCompleted((prev) => ({
