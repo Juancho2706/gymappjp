@@ -90,21 +90,24 @@ export function resolveCoachSwapPortionFromSwapOptions(
 /**
  * Calcula macros de un ítem de comida según cantidad y unidad.
  *
- * Unidades canónicas (post migración 20260413):
+ * Unidades canónicas:
  *   'g'  → gramos: proporcional directo → factor = qty / 100
+ *   'ml' → mililitros: igual que gramos (macros en BD son por 100ml) → factor = qty / 100
  *   'un' → unidades contables: usa serving_size → factor = (qty × serving_size) / 100
  *
  * Ejemplo:
  *   Huevo: protein_g=13 por 100g, serving_size=60 (1 huevo ≈ 60g)
  *   - 1 un → factor = (1 × 60) / 100 = 0.6 → proteína = 7.8g
  *   - 100 g → factor = 1.0 → proteína = 13g
+ *   Aceite: fats_g=100 por 100ml, serving_size=14
+ *   - 15 ml → factor = 15/100 = 0.15 → grasas = 15g  ✓ (antes: 15×14/100=2.1 → 210g ✗)
  */
 export function calculateFoodItemMacros(item: FoodItemForMacros) {
   const { quantity, unit, foods } = item
 
   const unitLower = unit?.toLowerCase() ?? 'g'
-  const isWeight = unitLower === 'g'
-  const factor = isWeight
+  const isDirectProportion = unitLower === 'g' || unitLower === 'ml'
+  const factor = isDirectProportion
     ? quantity / 100
     : (quantity * foods.serving_size) / 100
 

@@ -1,252 +1,375 @@
-# Plan modo empresarial (B2B multi-coach) — EVA Fitness Platform
+# EVA Empresas — Plan Maestro B2B Multi-Coach
 
-> **Versión documento:** 2026-04-30 (rev. 4 — edición enterprise completa)
-> **Estado:** planificación activa. Sin cambios de código en repo hasta aprobar §18.
-> **Contexto del equipo:** startup 2 fundadores (sin empresa registrada aún). Billing manual hasta ~30 orgs. Escalar infraestructura de pagos solo cuando el volumen lo justifique.
-> **Fuentes internas:** [AGENTS.md](AGENTS.md) · [nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md](nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md) · [nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md](nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md) · [nuevabibliadelaapp/05-PAGOS-Y-OPERACIONES.md](nuevabibliadelaapp/05-PAGOS-Y-OPERACIONES.md)
+> **Versión:** 2026-04-30 · rev. 5 (edición mega plan — estructura definitiva)
+> **Estado:** planificación completa. Todas las decisiones bloqueantes resueltas. Sin código hasta que equipo apruebe.
+> **Equipo:** 2 fundadores · sin empresa registrada aún · billing manual hasta ~30 orgs.
+> **Cuenta oficial:** contacto@eva-app.cl (Gmail profesional + cuenta MP verificada)
+> **Documentos relacionados:** [DECISIONES_B2B.md](DECISIONES_B2B.md) · [AGENTS.md](AGENTS.md) · [nuevabibliadelaapp/](nuevabibliadelaapp/)
 
 ---
 
-## 1. Principio rector: coexistencia sin interrupción
+## Índice
 
-El modo empresarial es un **producto paralelo** al flujo actual EVA (coach independiente B2B2C). Todo lo siguiente debe cumplirse siempre:
+| # | Sección | Tipo |
+|---|---------|------|
+| 1 | Principios rectores | Estrategia |
+| 2 | Resumen ejecutivo | Estrategia |
+| 3 | Contexto del equipo y etapa | Estrategia |
+| 4 | Modelo de datos conceptual | Arquitectura |
+| 5 | Personas y jobs-to-be-done | Producto |
+| 6 | Alcance MVP vs Post-MVP | Producto |
+| 7 | Reglas de precedencia billing y acceso | Producto |
+| 8 | Go-to-Market completo | Negocio |
+| 9 | UX / UI — dashboard empresarial | Diseño |
+| 10 | Frontend Developer | Técnico |
+| 11 | Backend Developer | Técnico |
+| 12 | Modelo de billing manual | Operaciones |
+| 13 | DevOps | Técnico |
+| 14 | QA | Calidad |
+| 15 | Data & Analytics | Datos |
+| 16 | Customer Success | Operaciones |
+| 17 | Legal y privacidad | Legal |
+| 18 | Riesgos y mitigaciones | Gestión |
+| 19 | Roadmap por olas | Ejecución |
+| 20 | Registro de decisiones | Gestión |
+| 21 | Análisis competitivo e ideas | Estrategia |
 
-| Regla | Implicación técnica |
-|--------|---------------------|
-| **Opt-in por datos** | `organization_id IS NULL` = comportamiento idéntico al de hoy en 100% de los flujos. |
-| **Sin migración forzada** | Ningún coach existente pasa a "empresa" sin acción explícita (invitación aceptada o script documentado). |
-| **Sin rutas rotas** | `/c/[coach_slug]`, PWA manifests, webhooks MP retail siguen siendo fuente de verdad para el segmento retail. |
-| **Feature isolation** | Todo código nuevo detrás de `organization_id IS NOT NULL` o rutas `/org/*`. Cero cambios a defaults globales. |
-| **Dos vías de monetización independientes** | Retail: N coaches × suscripción individual MP. Empresa: 1 pago manual a EVA → activación org → N coaches cubiertos. |
-| **Un coach, una org** | `coaches.organization_id` es FK única. Coach en org A no puede ser invitado a org B sin desvincularse primero. |
+---
 
-**Anti-patrón explícito:** convertir `coaches` en unidad de suscripción compartida para retail y org sin discriminar `organization_id`. El modelo correcto: **"coach retail con billing propio OR coach staff con billing org"**, con reglas de precedencia explícitas (§6).
+## 1. Principios rectores
+
+El modo empresarial es un **producto paralelo** al flujo coach individual. Las siguientes reglas son no negociables:
+
+| Regla | Qué significa en la práctica |
+|-------|------------------------------|
+| **Opt-in por datos** | `organization_id IS NULL` = comportamiento 100% idéntico al de hoy. Cero cambios para coaches retail. |
+| **Sin migración forzada** | Ningún coach existente entra a una org sin invitación explícita aceptada por él. |
+| **Sin rutas rotas** | `/c/[coach_slug]`, PWA, manifests, webhooks MP retail siguen igual. |
+| **Feature isolation** | Todo código nuevo vive detrás de `organization_id IS NOT NULL` o rutas `/org/*`. |
+| **Dos monetizaciones independientes** | Retail: N coaches × MP individual. Empresa: 1 pago manual a EVA → fundadores activan. |
+| **Un coach, una org** | `coaches.organization_id` es FK única. Coach en org A no puede estar en org B sin desvincularse. |
+| **Billing source explícito** | `billing_source = 'self'` (retail) o `'org'` (empresa). Sin ambigüedad. |
+
+**Anti-patrón a evitar:** tratar `coaches` como unidad única de suscripción sin discriminar por `organization_id`. Genera doble cobro o doble bloqueo.
 
 ---
 
 ## 2. Resumen ejecutivo
 
-### El problema que resolvemos
+### El problema
 
-Un gym con 5 coaches hoy en EVA paga 5 suscripciones individuales, tiene 5 dashboards separados, no sabe cuántos alumnos tiene en total, y si un coach se va, pierde visibilidad de sus alumnos. El dueño del gym gestiona el negocio a ciegas.
+Un gym con 5 coaches en EVA hoy:
+- Paga 5 suscripciones separadas = $149.950/mes
+- Tiene 5 dashboards distintos sin vista consolidada
+- No sabe cuántos alumnos totales tiene su negocio
+- Si un coach se va, el gym pierde visibilidad de sus alumnos
+- El dueño gestiona el negocio a ciegas
 
 ### La solución
 
-**"EVA para equipos"** — un solo contrato, panel unificado de gestión, cada coach mantiene su identidad y flujo de trabajo intactos. El gym ve el negocio; cada coach ve sus alumnos.
+**EVA Empresas** — un solo contrato, panel de administración unificado, cada coach mantiene su identidad y flujo de trabajo intactos.
+
+> "Un contrato. Todo tu equipo. Cada coach con su marca."
+
+### El diferenciador único
+
+EVA es el único sistema donde **cada coach mantiene su white-label propio dentro de la misma organización**. El alumno de Ana sigue viendo la app de Ana. El dueño del gym ve a Ana + Pedro + Carlos en un panel. Identidad del coach + visión del negocio. Sin sacrificar ninguna de las dos.
+
+Trainerize, Glofox, Mindbody: todos homogenizan la marca del gym → los coaches pierden identidad. EVA no.
 
 ### Propuesta de valor por persona
 
-| Persona | Antes | Con EVA empresas |
+| Persona | Antes | Con EVA Empresas |
 |---------|-------|-----------------|
-| **Dueño del gym** | 5 logins distintos, sin vista global, 5 facturas | 1 panel, 1 pago, métricas del equipo en tiempo real |
-| **Coach staff** | Misma pantalla + sin saber si el gym pagó por ellos | Misma pantalla + badge "cubierto por [Gym]" |
-| **Alumno** | Sin cambio | Sin cambio |
-
-### Diferenciador vs competencia
-
-EVA es el único sistema donde **cada coach mantiene su white-label propio dentro de la misma organización**. Trainerize y Glofox homogenizan la marca del gym → los coaches pierden identidad. En EVA, el alumno de Ana sigue viendo la marca de Ana; el dueño del gym ve a Ana + Pedro + Carlos en un solo panel.
-
-### Estado del equipo y billing
-
-- **Equipo:** 2 fundadores, sin empresa registrada.
-- **Billing org MVP:** manual — la org paga a los fundadores (MP link o transferencia bancaria); un fundador activa la org en `/admin`. Escala hasta ~30 orgs sin fricción operativa relevante.
-- **Billing org automatizado:** cuando el volumen lo justifique (post-MVP). No antes.
+| Dueño del gym | 5 logins, sin vista global, 5 facturas | 1 panel, 1 pago, métricas del equipo en tiempo real |
+| Coach staff | Pantalla de pago propia aunque el gym ya pagó | Misma pantalla + "Tu acceso está cubierto por [Gym]" |
+| Alumno | Sin cambio | Sin cambio |
 
 ---
 
-## 3. Estado actual (baseline)
+## 3. Contexto del equipo y etapa
 
-- **Grafo de datos:** `coaches` → `clients` → workouts, nutrition, check-ins.
-- **Suscripción:** `coaches.subscription_tier`, `max_clients`, `subscription_mp_id` (1:1 coach ↔ pagador MP).
-- **Auth:** middleware coach + RLS por `coach_id`; 24 tablas con políticas activas.
-- **Pain actual B2B:** múltiples cuentas coach sin vista unificada → workaround manual hoy.
-- **Deuda de datos conocida:** `coaches.subscription_mp_id` es 1:1; el modelo org requiere desacoplar billing del coach individual.
+- **Equipo:** 2 fundadores, sin empresa registrada.
+- **Cuenta oficial:** `contacto@eva-app.cl` — Gmail profesional + cuenta MP verificada.
+- **Billing MVP:** manual — gym paga via link MP o transferencia a `contacto@eva-app.cl`; fundador activa org en `/admin` en < 30 min. Ver §12.
+- **Formalizar empresa (SpA):** cuando MRR org supere ~$500k CLP/mes. Antes no tiene ROI legal.
+- **Objetivo etapa actual:** cerrar 2–3 gyms piloto, validar modelo, construir primer case study.
+- **Capacidad operativa:** billing manual escala hasta ~30 orgs sin fricción. Automatizar pagos cuando llegue ese volumen.
 
 ---
 
 ## 4. Modelo de datos conceptual
 
-```text
+```
 Organization
   ├── status: trial | active | grace | suspended | cancelled
-  ├── billing_source: manual (MVP) | mp_org (post-MVP)
-  ├── max_coaches, max_clients_total, period_end
+  ├── billing_source: manual (MVP) → mp_org (post-MVP)
+  ├── max_coaches, max_clients_total (NULL=suma coaches), period_end
   │
-  ├── OrganizationMember (admin_org | coach_staff)
-  │       └── Coach [coach_id intacto — sin cambio de FK en el producto]
-  │               └── Clients → workouts, nutrition, check-ins (sin tocar)
+  ├── OrganizationMember
+  │     role: admin_org | coach_staff
+  │     └── Coach [coach_id intacto — FK dominante del producto]
+  │           └── Clients → workouts, nutrition, check-ins [sin tocar]
   │
-  └── OrganizationInvite (email + token_hash + role + expires_at)
+  └── OrganizationInvite
+        email + token_hash + role + expires_at (7d)
 ```
 
-**Principio de estabilidad:** `coach_id` sigue siendo la FK dominante en todo el producto. Agregar `organization_id` es una extensión, no una reescritura. Las 24+ políticas RLS de `coach_id` no se modifican.
+**Principio:** `coach_id` sigue siendo la FK dominante en todo el producto. `organization_id` es extensión, no reescritura. Las 24+ políticas RLS de `coach_id` no se tocan.
 
-**Roles org MVP:** `admin_org` (gestiona equipo + ve billing), `coach_staff` (solo su dashboard coach).
-**Roles org post-MVP:** `viewer` (métricas sin PII), `billing_only` (solo facturación).
+**Roles MVP:** `admin_org` (equipo + billing), `coach_staff` (solo su dashboard).
+**Roles post-MVP:** `viewer` (métricas sin PII), `billing_only` (solo facturación).
 
 ---
 
-## 5. Product Manager — alcance, MVP, métricas
+## 5. Personas y jobs-to-be-done
 
-### 5.1 Personas y jobs-to-be-done
+| Persona | Job principal | Pain hoy | Señal de éxito |
+|---------|--------------|----------|----------------|
+| **Dueño/ops del gym** | Ver cómo va el negocio sin llamar a cada coach | Ciego, 5 pagos distintos | Entra al panel 3×/semana |
+| **Coach staff** | Trabajar con alumnos sin preocuparse por suscripciones | Le aparece checkout aunque el gym ya pagó | Nunca ve una pantalla de pago |
+| **Alumno** | Sin cambio | — | Flujo idéntico a hoy |
+| **Fundadores EVA** | Cerrar contratos B2B, activar en < 1h | Proceso sin infraestructura | Activación < 30 min desde pago |
 
-| Persona | Job principal | Pain sin EVA empresas | Señal de éxito |
-|---------|--------------|----------------------|----------------|
-| **Org admin (dueño/ops)** | "Quiero ver cómo va mi negocio hoy sin llamar a cada coach" | Ciego operativamente, 5 pagos distintos | Entra al panel 3+ veces por semana |
-| **Coach staff** | "Quiero trabajar con mis alumnos sin preocuparme por suscripciones" | Le aparece pantalla de pago aunque el gym ya pagó | Nunca ve una pantalla de checkout |
-| **Alumno** | Sin cambio de job | — | Flujo idéntico a hoy |
-| **EVA (fundadores)** | "Quiero cerrar contratos B2B y activarlos en < 1 hora" | Proceso manual sin infraestructura | Activación org < 30 min desde pago recibido |
+---
 
-### 5.2 MVP — qué entra, qué no
+## 6. Alcance MVP vs Post-MVP
 
 | Feature | MVP | Post-MVP | Razón del corte |
-|---------|-----|----------|-----------------|
-| Schema `organizations` + vínculo coach | ✅ | — | Base de todo |
-| Invitaciones email (7d expiración) | ✅ | Recordatorios automáticos | Mínimo funcional |
-| Panel `/org/*` con KPIs básicos | ✅ | Reportes exportables, sedes | Valor inmediato |
+|---------|:---:|:--------:|-----------------|
+| Schema org + vínculo coach | ✅ | — | Base de todo |
+| Invitaciones email (7d) | ✅ | Recordatorios automáticos | Mínimo funcional |
+| Panel `/org/*` con KPIs básicos | ✅ | Reportes CSV, sedes | Valor inmediato |
 | Activación manual por fundadores | ✅ | — | Suficiente para 30 orgs |
-| Billing panel (estado, historial, instrucciones pago) | ✅ | Checkout embebido | Ver §16 |
-| Email automático de renovación con link MP | ✅ | — | ROI alto, costo bajo |
-| Enforcement seats en tiempo real | ✅ | — | Evita over-provisioning |
+| Billing panel (estado + historial + instrucciones) | ✅ | Checkout embebido | Ver §12 |
+| Email automático renovación D-7 con link MP | ✅ | — | ROI alto, 0 código nuevo |
+| Enforcement seats en transacción DB | ✅ | — | Evita over-provisioning |
 | Desvincular coach de org | ✅ | Transferencia alumnos entre coaches | Flujo crítico |
-| Trial 14 días para piloto | ✅ | Trial configurable por deal | Cerrar demos |
-| Notificaciones: invitación, grace, límite seats | ✅ | Digest semanal, inactividad | Mínimo viable CS |
+| Trial 14 días para piloto | ✅ | Trial configurable por deal | Cierra demos |
+| Notificaciones: invitación, grace, límite seats | ✅ | Digest semanal, inactividad coach | CS mínimo viable |
+| Sección `/pricing#equipos` + landing B2B | ✅ (ola 4) | Página `/empresas` dedicada | Go-to-market |
+| Calendly "Demo EVA Empresas" | ✅ (antes ola 3) | — | No es código; 30 min de setup |
 | MP org automatizado | ❌ | Post-MVP v1 | Complejidad alta, ROI post-piloto |
-| SSO / API pública / dominio propio | ❌ | Fase enterprise | Fuera de alcance actual |
 | Pool global alumnos cross-coach | ❌ | Post-MVP | Decisión de datos compleja |
-
-### 5.3 Métricas de éxito
-
-**Adquisición B2B**
-- Demo solicitada → org activada: objetivo ≤ 48h desde primer contacto.
-- Conversion rate demo → piloto pagado: > 50% (señal de fit de mercado).
-
-**Activación**
-- Time to first coach activo tras crear org: objetivo < 24h.
-- % coaches en org que completan invitación en 7d: > 80%.
-
-**Retención y expansión**
-- ARPA org vs ARPA coach retail: objetivo ≥ 3×.
-- Net Revenue Retention org a 12 meses: > 110% (expansión de seats).
-- Churn org anual: < 10%.
-
-**Producto**
-- % coaches bajo org sin MP propio: objetivo 100% (validación del modelo).
-- Orgs que usan ≥ 80% de seats: señal de upgrade inminente → acción CS.
-
-**Operativo (fundadores)**
-- Tiempo de activación manual org: < 30 min por org.
-- Incidencias P0 org: objetivo 0/mes; SLA resolución < 2h.
-
-### 5.4 Criterios de no-regresión retail (bloqueantes de merge)
-
-- Coach nuevo retail: flujo idéntico a hoy — MP, `processing`, tiempos, UI sin mención de org.
-- Coach con `organization_id IS NULL`: middleware y gate solo leen columnas `coaches`.
-- `p95` de queries coach retail no se degrada al añadir índices org.
-- Suite "retail-only" en CI pasa en verde en cada PR que toque gate/middleware/RLS.
-
-### 5.5 Definición de Done — MVP
-
-- [ ] Coach retail se registra sin ver ningún concepto de organización.
-- [ ] Fundador puede crear org desde `/admin`, setear período, activar manualmente.
-- [ ] Org admin puede invitar coaches, ver lista con estados, ver KPIs básicos.
-- [ ] Coach staff trabaja en `/coach/*` sin pantalla de pago si org activa.
-- [ ] Org admin ve billing panel con estado, historial manual, instrucciones de pago.
-- [ ] Suite retail en CI verde.
-- [ ] Runbook CS aprobado.
+| SSO / API pública / dominio propio | ❌ | Fase enterprise | Fuera de alcance |
 
 ---
 
-## 6. Reglas de precedencia — billing y acceso
+## 7. Reglas de precedencia — billing y acceso
 
-Definición explícita para eliminar doble bloqueo o doble cobro:
-
-| Condición | Acceso coach | Billing mostrado |
-|-----------|-------------|-----------------|
+| Condición | Acceso coach | UI que ve el coach |
+|-----------|-------------|-------------------|
 | `organization_id IS NULL` | Reglas actuales `coaches.subscription_*` | `/coach/subscription` normal |
-| `organization_id NOT NULL` + org **active** | ✅ Sin necesidad de MP propio | Banner "Cubierto por [Org]"; ocultar checkout |
-| Org en **grace** (7d) | ✅ Con banners de aviso | Banner rojo en org admin; amarillo en coach staff |
-| Org **vencida/suspendida** | ❌ Bloqueado | "Tu acceso está pausado. Contacta al administrador de [Gym]." — no pantalla de pago retail |
-| Coach intenta salir con alumnos activos | ❌ UI bloquea | "Transfiere o descarga datos de alumnos antes de desvincular." |
+| Org **active**, coach miembro | ✅ Sin MP propio | "Tu acceso está cubierto por [Gym]" |
+| Org en **grace** (7d) | ✅ Con banners de aviso | Banner amarillo + "Contacta al administrador" |
+| Org **vencida** | ❌ Bloqueado | "Tu acceso está pausado. Contacta al administrador de [Gym]." — jamás pantalla de pago retail |
+| Coach sale con alumnos activos | ❌ UI bloquea salida | "Transfiere o descarga datos antes de desvincular." |
+| Datos del alumno (siempre) | ✅ Accesibles | Su historial propio nunca se bloquea |
 
-**Nunca:** mostrar checkout MP a coach staff si `billing_source = 'org'`.
-**Siempre:** datos históricos del alumno accesibles aunque org venza (sus datos son suyos).
+**Nunca:** mostrar checkout MP a coach con `billing_source = 'org'`.
 
 ---
 
-## 7. UX / UI — dashboard empresarial
+## 8. Go-to-Market completo
 
-### 7.1 Los tres mundos (nunca mezclar)
+### 8.1 Pricing
 
-| Mundo | Usuario | Experiencia | Rutas |
-|-------|---------|-------------|-------|
-| **A — Retail** | Coach independiente | "Mi negocio, mi marca, mi ritmo" | `/coach/*` |
-| **B — Staff** | Coach contratado por gym | Idéntico a A + badge sutil | `/coach/*` + banner |
-| **C — Admin org** | Dueño/ops/contador del gym | "Mi equipo, mi contrato, mi data" | `/org/*` |
+| Plan | Coaches | Precio mensual | Vs retail Pro×N | Ahorro/mes |
+|------|---------|----------------|-----------------|------------|
+| **Starter Gym** | Hasta 5 | $59.990 | $149.950 | $90.000 |
+| **Pro Gym** | Hasta 10 | $109.990 | $299.900 | $189.910 |
+| **Elite Gym** | Hasta 20 | $199.990 | $599.800 | $399.810 |
+| **Enterprise** | 21+ | Desde $300.000 · Cotizar | — | — |
 
-El admin org **nunca** ve el Panel CEO de EVA (`/admin/*`). Son cliente, no operador de plataforma.
+**Descuento anual (–20%):**
 
-### 7.2 Dirección visual
+| Plan | Mensualizado anual | Total anual |
+|------|--------------------|-------------|
+| Starter Gym | $47.990/mes | $575.880 |
+| Pro Gym | $87.990/mes | $1.055.880 |
+| Elite Gym | $159.990/mes | $1.919.880 |
 
-- **Personalidad:** "control tower" — datos primero, calma, densidad informativa. Sin animaciones gamificadas del dashboard coach.
-- **Marca:** logo del **gym** en cabecera. "Powered by EVA" en footer, pequeño. El gym es el protagonista.
-- **Color:** paleta neutra (slate/zinc) + un acento (primario del gym si está configurado, azul sistema si no). Sin verde EVA de landing como fondo completo.
-- **Layout:** sidebar en desktop + bottom tab bar en móvil (máx. 5 ítems).
-- **Cards KPI:** número grande + delta + contexto. Métricas siempre **agregadas**.
-- **Tablas:** estilo directorio — badges de estado, densidad legible, acciones inline.
-- **Celebraciones:** toasts sobrios únicamente. Sin confetti.
-- **Estados vacíos:** ícono + 2 líneas + un CTA. "Invita a tu primer coach →"
+**Copy de ancla para landing:**
+> "5 coaches individuales en EVA = $149.950/mes. Pack Starter Gym = $59.990/mes. Ahorrás $90.000 al mes más panel de gestión incluido."
+
+**Incluye en todos los packs:** límites Pro por coach (30 alumnos, nutrición), panel org admin, invitaciones, audit log.
+
+### 8.2 Proceso de venta (5 pasos)
+
+```
+PASO 1 — DESCUBRIMIENTO (D+0)
+  Canal: referido de coach EVA → su gym / LinkedIn / contacto directo
+  Pregunta clave: "¿Cuántos coaches tienes? ¿Cómo gestionas el día a día del equipo?"
+  Calificar: ≥ 3 coaches + quieren visión unificada = fit
+
+PASO 2 — DEMO VÍA CALENDLY (D+1 a D+3)
+  El gym agenda desde el link de la landing → videollamada 30 min
+  Mostrar: panel org → invitar coach → KPIs → billing simple
+  No mostrar: nada que no exista todavía
+  CTA al final: "Piloto 14 días, sin costo, lo activo hoy."
+
+PASO 3 — PILOTO (D+3 a D+17)
+  Fundador activa org manualmente (trial 14 días)
+  CS check-in D+3: "¿Todos los coaches aceptaron la invitación?"
+  CS check-in D+14: "¿Qué falta para que esto sea tu herramienta principal?"
+
+PASO 4 — CIERRE (D+17 a D+20)
+  Si piloto exitoso → fundador envía link MP o datos de transferencia desde contacto@eva-app.cl
+  Gym paga → fundador activa org (< 30 min)
+  Email de bienvenida con PDF de términos adjunto
+
+PASO 5 — EXPANSIÓN (D+90+)
+  CS detecta org en > 80% de seats → "Tus coaches llenan el plan. ¿Agregamos más?"
+  Upgrade = nuevo link MP con diferencia de precio
+```
+
+### 8.3 Calendly — "Demo EVA Empresas"
+
+Calendly es una herramienta donde vos configurás tus horarios disponibles y compartís un link. El gym hace clic, ve los slots disponibles, elige uno, y queda agendado automáticamente. Sin emails de ida y vuelta. Sin coordinación.
+
+**Configuración (ver detalles en [DECISIONES_B2B.md](DECISIONES_B2B.md) §Parte 4):**
+- Cuenta: calendly.com con `contacto@eva-app.cl`
+- Evento: "Demo EVA Empresas" · 30 minutos
+- Disponibilidad: lunes a viernes, horario que fijen los fundadores
+- Preguntas al agendar: nombre, nombre del gym, cuántos coaches, cómo nos conocieron
+- Link va en el botón CTA de la landing
+
+**Por qué Calendly y no un formulario:**
+- Formulario → alguien chequea email → responde → coordina → 2–3 días de friction → el gym enfrió
+- Calendly → el gym agenda mientras está caliente → vos recibís notificación → show up → más conversión
+
+### 8.4 Canales de adquisición (priorizados)
+
+| Canal | Cuándo | Prioridad |
+|-------|--------|----------|
+| Red actual de coaches EVA → sus gyms | Ahora | 🔴 Alta — costo cero, conversión máxima |
+| Calendly en landing `/pricing#equipos` | Ola 4 | 🔴 Alta |
+| WhatsApp directo wa.me/+56XXXXXXXXX | Ola 4 | 🔴 Alta — LATAM prefiere WhatsApp |
+| LinkedIn (dueños de gym, gerentes Chile) | Post-piloto | 🟡 Media |
+| SEO `/empresas` | Post-piloto | 🟡 Media |
+| Referidos: coach que trae su gym → descuento | Post-MVP | 🟢 Baja |
+
+### 8.5 Landing — sección `/pricing#equipos`
+
+**Etapa actual (ola 4):** sección nueva en la página de pricing existente con anchor `#equipos`. Más rápido; el tráfico ya llega a `/pricing`.
+
+**Post-piloto (cuando haya 1 case study):** página dedicada `/empresas` con SEO propio.
+
+**Estructura de la sección:**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│   EVA para equipos                                       │
+│   Un contrato. Todo tu equipo. Cada coach con su marca.  │
+│                                                          │
+│   ┌────────────┐  ┌────────────┐  ┌────────────┐        │
+│   │  1 panel   │  │  1 pago   │  │  N coaches │        │
+│   │ unificado  │  │  mensual  │  │  su marca  │        │
+│   └────────────┘  └────────────┘  └────────────┘        │
+│                                                          │
+│   Starter Gym   hasta 5 coaches      $59.990/mes         │
+│   Pro Gym       hasta 10 coaches    $109.990/mes         │
+│   Elite Gym     hasta 20 coaches    $199.990/mes         │
+│   Enterprise    21+ coaches          Cotizar             │
+│                                                          │
+│   "5 cuentas sueltas = $149.950/mes                      │
+│    Pack Starter = $59.990/mes — ahorrás $90.000"         │
+│                                                          │
+│   [Agendar demo gratuita →]    [Hablar por WhatsApp →]   │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Materiales de venta a preparar antes de ola 4:**
+- One-pager B2B: problema → solución → precios → CTA (1 página A4, PDF)
+- Comparativa visual: "3 cuentas sueltas vs Pack Starter"
+- FAQ B2B: ¿qué pasa con los alumnos si cancelo? ¿cada coach sigue con su app? ¿cómo pago?
+- Email de bienvenida template (con PDF de términos adjunto)
+
+### 8.6 Métricas de go-to-market
+
+| Métrica | Objetivo | Señal |
+|---------|---------|-------|
+| Demo agendada → piloto activado | > 70% | Fit de mercado |
+| Piloto → primer pago | > 60% | Producto + pricing correctos |
+| Time to first coach activo | < 24h | Onboarding funciona |
+| ARPA org vs ARPA retail | ≥ 3× | Modelo B2B viable |
+| Orgs en > 80% de seats | > 30% | Expansión natural |
+| Churn org anual | < 10% | Retención B2B |
+
+---
+
+## 9. UX / UI — Dashboard Empresarial
+
+### 9.1 Los tres mundos (nunca mezclar)
+
+| Mundo | Usuario | Rutas | Sensación |
+|-------|---------|-------|-----------|
+| **A — Retail** | Coach independiente | `/coach/*` | "Mi negocio, mi marca, mi ritmo" |
+| **B — Staff** | Coach contratado por gym | `/coach/*` + banner sutil | Idéntico a A + "Cubierto por [Gym]" |
+| **C — Admin org** | Dueño/ops/contador del gym | `/org/*` | "Mi equipo, mi contrato, mi data" |
+
+El admin org nunca ve `/admin/*` (Panel CEO de EVA). Son cliente, no operador de plataforma.
+
+### 9.2 Dirección visual
+
+- **Personalidad:** "control tower" — datos primero, sin animaciones gamificadas del coach dashboard.
+- **Marca:** logo del gym en cabecera. "Powered by EVA" en footer, secundario.
+- **Color:** paleta neutra slate/zinc + acento del gym (o azul sistema si no configurado). Sin verde EVA landing.
+- **Layout:** sidebar desktop + bottom tabs móvil (máx. 5 ítems MVP).
+- **KPI cards:** número grande + delta + contexto. Siempre métricas agregadas.
+- **Tablas:** badges de estado, densidad legible, acciones inline.
+- **Celebraciones:** toasts sobrios únicamente.
+- **Estados vacíos:** ícono + 2 líneas + 1 CTA. Ejemplo: "Invita a tu primer coach →"
 - **Dark mode:** sí, desde MVP.
-- **Accesibilidad:** WCAG 2.1 AA — contraste ≥ 4.5:1, focus visible, navegación teclado, `aria-label` en todas las acciones de tabla.
+- **Accesibilidad:** WCAG 2.1 AA — contraste ≥ 4.5:1, focus visible, teclado en tablas y modales, `aria-label` en acciones.
 
-### 7.3 Flujos con todos los estados
+### 9.3 Flujos críticos completos
 
-**Invitar coach**
+**Invitar coach:**
 ```
 Modal: email → rol (admin_org / coach_staff) → confirmar
-  ├── Email sin cuenta EVA     → invitación nueva; coach crea cuenta y se vincula
+  ├── Email sin cuenta EVA     → invitación nueva; coach crea cuenta y se vincula al aceptar
   ├── Email = coach retail     → "Este coach ya tiene cuenta. ¿Vincularla? Deberá aceptar."
-  ├── Email ya en otra org     → Error: "Este coach pertenece a [Otra Org]. Debe desvincularse primero."
+  │     Coach recibe: "[Gym] te invitó. Tu acceso quedaría cubierto. [Aceptar] [Rechazar]"
+  ├── Email ya en otra org     → Error: "Este coach pertenece a otra org. Debe desvincularse primero."
   └── Org en max_coaches       → Error: "Límite de X coaches alcanzado. Actualiza tu plan."
-Estado en tabla: Pendiente (7d) → Aceptada | Expirada | Revocada
+Estado tabla: Pendiente (7d) → Aceptada | Expirada | Revocada
 ```
 
-**Coach sale del gym**
+**Coach sale del gym:**
 ```
 Org admin → "Desvincular" →
-  ├── Coach con alumnos        → Modal: "X alumnos activos. Descarga o transfiere antes."
-  └── Coach sin alumnos        → Confirmación → coach vuelve a retail (necesita MP propio)
-→ Audit log: quién, cuándo, qué acción
-→ Email coach: "Tu acceso ahora es independiente. Configura tu suscripción."
+  ├── Coach con alumnos activos  → Modal bloqueante: "X alumnos activos. Descarga o transfiere antes."
+  └── Coach sin alumnos          → Confirmación → coach vuelve a retail (necesita MP propio)
+→ Audit log: quién, cuándo, qué
+→ Email al coach: "Tu acceso ahora es independiente. Configura tu suscripción en EVA."
 ```
 
-**Org vence**
+**Org vence:**
 ```
-D-7: Email org admin "Tu plan vence en 7 días. [Instrucciones de renovación]"
-D-0: Org pasa a grace (7d)
-     → Banner rojo org admin: "Plan vencido. Renueva para evitar pausa."
-     → Banner amarillo coach staff: "Tu acceso podría pausarse. Contacta al administrador."
-D+7: Org suspendida
-     → Coach bloqueado: página informativa, sin pantalla MP
-     → Alumno: historial accesible, sin crear contenido nuevo
-     → Email org admin: "Acceso pausado. Escríbenos para reactivar."
+D-7  → Email a org admin: "Tu plan vence en 7 días. [Ver instrucciones de renovación]"
+D-0  → Grace period (7 días)
+       Banner rojo org admin: "Plan vencido. Renueva antes del [fecha]."
+       Banner amarillo coach: "Tu acceso podría pausarse. Contacta al administrador."
+D+7  → Org suspendida
+       Coach bloqueado: página informativa sin checkout MP
+       Alumno: historial accesible; sin crear nuevo contenido
+       Email org admin: "Acceso pausado. Escríbenos para reactivar."
 ```
 
-### 7.4 Arquitectura de información `/org`
+### 9.4 Arquitectura de información `/org`
 
-**Sidebar MVP (5 ítems máximo):**
+| # | Tab | Contenido MVP | Post-MVP |
+|---|-----|--------------|---------|
+| 1 | **Resumen** | KPIs, estado suscripción, actividad equipo | Comparativas históricas |
+| 2 | **Equipo** | Coaches + invitaciones + barra seats | Acciones masivas |
+| 3 | **Uso** | Alumnos vs cupo, desglose por coach (counts) | Export CSV, desglose por período |
+| 4 | **Facturación** | Estado plan, historial manual, instrucciones | Checkout embebido |
+| 5 | **Ajustes** | Nombre legal, RUT, contacto, logo | Sedes, roles finos |
 
-| # | Sección | Qué muestra |
-|---|---------|-------------|
-| 1 | **Resumen** | KPIs del negocio, estado suscripción, actividad reciente |
-| 2 | **Equipo** | Coaches, invitaciones, progreso de seats |
-| 3 | **Uso** | Alumnos vs cupo, desglose por coach (solo counts en MVP) |
-| 4 | **Facturación** | Estado del plan, historial de pagos manuales, instrucciones renovación |
-| 5 | **Ajustes** | Nombre legal, RUT, contacto, logo org |
-
-**Post-MVP (no en v1):** Sedes, roles finos, reportes CSV, comparativas, integraciones.
-
-### 7.5 Pantalla "Resumen"
+### 9.5 Wireframe: Pantalla "Resumen"
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -254,7 +377,7 @@ D+7: Org suspendida
 ├──────────────┬──────────────┬────────────┬─────────────┤
 │  Coaches     │  Alumnos     │ Sesiones   │ Adherencia  │
 │  7 / 10      │  142 / 200   │ 89 (7d)    │ 74% (7d)    │
-│  ▲2 este mes │  ▲8 este mes │ ▼3% vs sem │ — baseline  │
+│  ▲2 este mes │  ▲8 este mes │ ▼3% sem    │ — baseline  │
 ├──────────────┴──────────────┴────────────┴─────────────┤
 │  🟢 Plan Pro · Activo · Renueva 15 May 2026            │
 │     [Ver instrucciones de pago]                        │
@@ -262,102 +385,95 @@ D+7: Org suspendida
 │  Actividad reciente del equipo                         │
 │  · Ana López aceptó invitación — hace 2h               │
 │  · Pedro Ruiz alcanzó límite de alumnos — 1d           │
-│  · María Torres no inicia sesión hace 8d ⚠️            │
+│  · María Torres sin sesión hace 8d  ⚠️                 │
 └────────────────────────────────────────────────────────┘
 ```
 
-### 7.6 Pantalla "Equipo"
-
-- Lista coach: avatar/iniciales, nombre, slug (link a PWA del coach), rol, badge (Activo / Invitado / Suspendido / Sin actividad).
-- Barra de progreso seats: "7 / 10 coaches en plan. [Ampliar plan]"
-- Drawer al hacer clic en coach: email, fecha alta, alumnos activos, última sesión, acciones (desvincular, cambiar rol).
-- Invitaciones pendientes con reenviar / revocar / copiar link.
-
-### 7.7 Pantalla "Facturación" (sin checkout embebido — §16)
+### 9.6 Wireframe: Pantalla "Facturación"
 
 ```
 ┌────────────────────────────────────────────────────────┐
 │  Tu plan                                               │
-│  Pro Gym · 10 coaches · 200 alumnos                    │
+│  Pro Gym · hasta 10 coaches · 30 alumnos c/u           │
 │  Estado: 🟢 Activo                                     │
 │  Próxima renovación: 15 de mayo 2026                   │
 ├────────────────────────────────────────────────────────┤
 │  Historial de pagos                                    │
-│  15 mar 2026   $XXX.XXX CLP   ✓ Confirmado            │
-│  15 feb 2026   $XXX.XXX CLP   ✓ Confirmado            │
-│  15 ene 2026   $XXX.XXX CLP   ✓ Confirmado            │
+│  15 abr 2026   $109.990 CLP   ✓ Confirmado            │
+│  15 mar 2026   $109.990 CLP   ✓ Confirmado            │
+│  15 feb 2026   $109.990 CLP   ✓ Confirmado            │
 ├────────────────────────────────────────────────────────┤
-│  ¿Necesitas renovar o cambiar de plan?                 │
-│  [Ver instrucciones de pago]  [Contactar a EVA]        │
+│  [Ver instrucciones de renovación]  [Contactar a EVA]  │
 └────────────────────────────────────────────────────────┘
 ```
 
-"Ver instrucciones de pago" → modal con link MP o datos de transferencia (configurable por el fundador que activa la org).
+"Ver instrucciones" → modal con link MP o datos de transferencia.
 
-### 7.8 Micro-UX para coach staff
+### 9.7 Micro-UX: coach staff
 
 - Banner delgado en `/coach/dashboard`: "Tu acceso está incluido en el plan de **[Gym]**."
 - Settings coach: ocultar "Cambiar plan" si `billing_source = 'org'`. Mostrar "Plan gestionado por [Org]."
 - Sin checkout MP visible si org activa.
-- Si org entra en grace: "Tu acceso podría pausarse en X días. Contacta a tu administrador de [Gym]."
+- Si org en grace: "Tu acceso podría pausarse en X días. Contacta al administrador de [Gym]."
 
-### 7.9 Onboarding org admin
+### 9.8 Onboarding org admin
 
 ```
-Email bienvenida: "Tu cuenta empresarial EVA está activa" →
+Email bienvenida (fundadores lo envían manualmente en MVP) →
 
-Checklist en /org/dashboard (desaparece al completar):
+Checklist en /org/dashboard (desaparece al completar 4 pasos):
   ☐ 1. Completa los datos de tu organización (nombre, RUT, contacto)
   ☐ 2. Sube el logo de tu gimnasio
   ☐ 3. Invita a tu primer coach
-  ☐ 4. Coach acepta la invitación
-  → [Todo listo 🎉 — Tu equipo está en EVA]
+  ☐ 4. El coach acepta la invitación
+  → [Todo listo — Tu equipo está en EVA 🎉]
 ```
 
-### 7.10 Rutas nuevas
+### 9.9 Rutas nuevas
 
 | Ruta | Propósito | Auth |
 |------|-----------|------|
-| `/org` | Redirect a `/org/dashboard` | `admin_org` |
-| `/org/dashboard` | Resumen | `admin_org` |
+| `/org` | Redirect → `/org/dashboard` | `admin_org` |
+| `/org/dashboard` | Resumen KPIs + actividad | `admin_org` |
 | `/org/team` | Equipo + invitaciones | `admin_org` |
 | `/org/usage` | Uso vs límites | `admin_org` |
 | `/org/billing` | Estado plan, historial, instrucciones | `admin_org` |
 | `/org/settings` | Datos org, logo | `admin_org` |
 | `/org/invite/accept` | Aceptar invitación | Token válido (pública) |
-| `/empresas` | Landing B2B | Pública |
+| `/pricing#equipos` | Sección B2B en landing pricing | Pública (ola 4) |
 
-### 7.11 Reutilizar del producto actual
+### 9.10 Qué reutilizar
 
-| Activo | Cómo sirve |
-|--------|-----------|
-| Layout `admin/(panel)` | Estructura sidebar + mobile tabs; renombrar KPIs |
+| Activo actual | Cómo sirve |
+|---------------|-----------|
+| Layout `admin/(panel)` | Estructura sidebar + mobile tabs |
 | Tablas + badges (CEO panel) | Lista coaches en `/org/team` |
 | `GlassCard`, `InfoTooltip`, paginación | Coherencia visual |
 | Charts Recharts | Uso agregado en `/org/usage` |
-| Copy estados suscripción (grace, active) | Adaptar a "cuenta empresa" |
+| Copy estados suscripción | Adaptar a "cuenta empresa" |
 | `useOptimistic` | Feedback inmediato en invite/revoke |
 
-### 7.12 NO reutilizar
+### 9.11 Qué NO reutilizar
 
 | Activo | Por qué |
 |--------|---------|
-| `/admin/*` Panel CEO | Operación EVA interna; cliente empresa nunca lo ve |
-| `/coach/subscription` como UI pago org | Mezcla mentalidades |
-| Perfil alumno completo en vista org | Riesgo legal; solo aggregados en MVP |
+| `/admin/*` Panel CEO | Operación EVA interna; cliente nunca lo ve ni se parece |
+| `/coach/subscription` como UI de pago org | Mezcla mentalidades |
+| Perfil alumno completo en vista org | Riesgo legal; solo counts agregados en MVP |
 
-### 7.13 Accesibilidad y móvil
+### 9.12 Accesibilidad y móvil
 
-- `dvh` / `min-h-dvh`; sin `h-screen` en layouts org.
+- `dvh` / `min-h-dvh`. Sin `h-screen` en layouts org.
 - `pb-safe` en bottom nav móvil.
 - Focus trap en modales de invitación.
 - `aria-label` descriptivo en reenviar, revocar, desvincular.
+- Dark mode desde MVP.
 
 ---
 
-## 8. Frontend Developer
+## 10. Frontend Developer
 
-### 8.1 Estructura de rutas
+### 10.1 Estructura de rutas
 
 ```
 src/app/org/
@@ -388,7 +504,7 @@ src/app/org/
 │   │       └── UsageByCoachTable.tsx
 │   ├── billing/
 │   │   ├── page.tsx
-│   │   ├── _data/billing.queries.ts  # getOrgBillingHistory()
+│   │   ├── _data/billing.queries.ts
 │   │   └── _components/
 │   │       ├── PlanStatusCard.tsx
 │   │       ├── PaymentHistoryTable.tsx
@@ -402,20 +518,22 @@ src/app/org/
         └── page.tsx                  # RSC pública — verifica token, muestra estado
 ```
 
-### 8.2 Estado y datos
+### 10.2 Estado y datos
 
 - `React.cache` en `_data/*.queries.ts` — deduplicación por request.
 - `Promise.all()` para KPIs paralelos en dashboard.
-- `useTransition` + server actions + `revalidatePath('/org/...')` como patrón estándar.
-- `useOptimistic` para invite/revoke (feedback instantáneo).
-- Props opcionales en componentes shared: `managedByOrg?: { name: string; orgId: string }` — sin romper contratos existentes.
+- `useTransition` + server actions + `revalidatePath` como patrón único.
+- `useOptimistic` para invite/revoke → feedback instantáneo.
+- Props opcionales en componentes shared: `managedByOrg?: { name: string; orgId: string }` sin romper contratos existentes.
+- Sin Redux, Zustand, SWR, React Query — regla de producto EVA.
 
-### 8.3 Helpers de contexto
+### 10.3 Helpers de contexto org
 
 ```typescript
 // src/lib/org/get-org-context.ts
 export const getOrgContext = cache(async (coachId: string): Promise<OrgContext | null> => {
   // Fallo silencioso → null → modo retail (safe default siempre)
+  // Nunca lanzar excepción — degradar a retail si falla
 })
 
 // src/lib/org/require-org-admin.ts
@@ -426,73 +544,72 @@ export async function requireOrgAdminMember(): Promise<OrgMember> {
 }
 ```
 
-### 8.4 Middleware
+### 10.4 Middleware
 
-- Matcher `/org/*`: verificar sesión + rol `admin_org`; si no → `redirect('/coach/dashboard')`.
-- `/org/invite/accept`: pública. Verificación de token en RSC (no en middleware — puede ser email sin sesión).
-- Rutas `/coach/*` y `/c/[slug]/*`: **no tocar**. Mismo comportamiento que hoy.
+- `/org/*`: verificar sesión + rol `admin_org`; si no → `redirect('/coach/dashboard')`.
+- `/org/invite/accept`: pública — verificación de token en RSC, no en middleware.
+- `/coach/*` y `/c/[slug]/*`: no tocar. Mismo comportamiento de hoy.
 
-### 8.5 Caching y revalidación
+### 10.5 Caching y revalidación
 
 - Tags: `['org-team', orgId]`, `['org-usage', orgId]`, `['org-billing', orgId]`.
-- `revalidateTag('org-team', orgId)` tras invite/revoke/unlink.
-- `revalidateTag('org-billing', orgId)` tras activación manual desde `/admin`.
-- Sin `unstable_cache` — incompatible con Supabase SSR.
+- `revalidateTag` tras invite/revoke/unlink/billing update.
+- Sin `unstable_cache` — incompatible con Supabase SSR (regla EVA global).
 
-### 8.6 Error boundaries
+### 10.6 Error boundaries
 
-- `error.tsx` en cada módulo org con mensajes específicos.
-- Queries org fallidas → datos parciales; no pantalla en blanco total.
-- Server action errors: `useActionState` → mensajes inline vía Zod v4.
+- `error.tsx` en cada módulo org con mensaje específico.
+- Queries org fallidas → datos parciales; nunca pantalla en blanco.
+- Server action errors → `useActionState` + Zod v4 → mensajes inline.
 
 ---
 
-## 9. Backend Developer (Supabase, RLS, RPCs)
+## 11. Backend Developer
 
-### 9.1 Schema completo
+### 11.1 Schema completo
 
 ```sql
 -- ============================================================
--- TABLA: organizations
+-- organizations
 -- ============================================================
 CREATE TABLE organizations (
-  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name                  TEXT NOT NULL,
-  legal_name            TEXT,
-  tax_id                TEXT,           -- RUT/RUC; cifrar en reposo (pgcrypto/vault)
-  billing_email         TEXT,
-  status                TEXT NOT NULL DEFAULT 'trial'
-                          CHECK (status IN ('trial','active','grace','suspended','cancelled')),
-  billing_source        TEXT NOT NULL DEFAULT 'manual'
-                          CHECK (billing_source IN ('manual','mp_org')),
-  max_coaches           INT NOT NULL DEFAULT 5,
-  max_clients_total     INT,            -- NULL = suma max_clients por coach; INT = pool global
-  trial_ends_at         TIMESTAMPTZ,
-  current_period_start  TIMESTAMPTZ,
-  current_period_end    TIMESTAMPTZ,
-  grace_ends_at         TIMESTAMPTZ,   -- = current_period_end + INTERVAL '7 days'
-  mp_preapproval_id     TEXT,          -- post-MVP; NULL en MVP
-  notes                 TEXT,          -- notas internas EVA (no visibles por org)
-  metadata              JSONB DEFAULT '{}',
-  created_at            TIMESTAMPTZ DEFAULT now(),
-  updated_at            TIMESTAMPTZ DEFAULT now()
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                 TEXT NOT NULL,
+  legal_name           TEXT,
+  tax_id               TEXT,          -- RUT/RUC; cifrar en reposo
+  billing_email        TEXT,
+  status               TEXT NOT NULL DEFAULT 'trial'
+                         CHECK (status IN ('trial','active','grace','suspended','cancelled')),
+  billing_source       TEXT NOT NULL DEFAULT 'manual'
+                         CHECK (billing_source IN ('manual','mp_org')),
+  max_coaches          INT NOT NULL DEFAULT 5,
+  max_clients_total    INT,           -- NULL = suma max_clients por coach; INT = pool global (post-MVP)
+  trial_ends_at        TIMESTAMPTZ,
+  current_period_start TIMESTAMPTZ,
+  current_period_end   TIMESTAMPTZ,
+  grace_ends_at        TIMESTAMPTZ,  -- = current_period_end + '7 days'
+  mp_preapproval_id    TEXT,         -- NULL en MVP; post-MVP mp_org
+  notes                TEXT,         -- notas internas EVA (invisibles para org admin)
+  calendly_demo_at     TIMESTAMPTZ,  -- fecha de la demo agendada (tracking)
+  metadata             JSONB DEFAULT '{}',
+  created_at           TIMESTAMPTZ DEFAULT now(),
+  updated_at           TIMESTAMPTZ DEFAULT now()
 );
 
 -- ============================================================
--- ALTERACIONES: coaches
+-- coaches (alteraciones)
 -- ============================================================
 ALTER TABLE coaches
   ADD COLUMN organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
   ADD COLUMN billing_source  TEXT DEFAULT 'self'
                                CHECK (billing_source IN ('self','org'));
 
--- Índice parcial — sin overhead para coaches retail (organization_id IS NULL)
 CREATE INDEX CONCURRENTLY idx_coaches_org
   ON coaches(organization_id)
   WHERE organization_id IS NOT NULL;
 
 -- ============================================================
--- TABLA: organization_members
+-- organization_members
 -- ============================================================
 CREATE TABLE organization_members (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -501,20 +618,20 @@ CREATE TABLE organization_members (
   coach_id        UUID REFERENCES coaches(id) ON DELETE SET NULL,
   role            TEXT NOT NULL CHECK (role IN ('admin_org','coach_staff')),
   joined_at       TIMESTAMPTZ DEFAULT now(),
-  UNIQUE (organization_id, user_id)  -- un user = un rol por org
+  UNIQUE (organization_id, user_id)
 );
 CREATE INDEX idx_org_members_org  ON organization_members(organization_id);
 CREATE INDEX idx_org_members_user ON organization_members(user_id);
 
 -- ============================================================
--- TABLA: organization_invites
+-- organization_invites
 -- ============================================================
 CREATE TABLE organization_invites (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   email           TEXT NOT NULL,
   role            TEXT NOT NULL CHECK (role IN ('admin_org','coach_staff')),
-  token_hash      TEXT NOT NULL UNIQUE,  -- hash del token enviado por email (nunca guardar token plano)
+  token_hash      TEXT NOT NULL UNIQUE, -- hash del token; nunca guardar token plano
   expires_at      TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '7 days'),
   invited_by      UUID REFERENCES auth.users(id),
   accepted_at     TIMESTAMPTZ,
@@ -525,7 +642,7 @@ CREATE INDEX idx_org_invites_org   ON organization_invites(organization_id);
 CREATE INDEX idx_org_invites_email ON organization_invites(email) WHERE accepted_at IS NULL;
 
 -- ============================================================
--- TABLA: org_payment_records (billing manual MVP)
+-- org_payment_records (billing manual MVP)
 -- ============================================================
 CREATE TABLE org_payment_records (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -534,25 +651,26 @@ CREATE TABLE org_payment_records (
   paid_at         TIMESTAMPTZ NOT NULL,
   period_start    TIMESTAMPTZ NOT NULL,
   period_end      TIMESTAMPTZ NOT NULL,
-  payment_method  TEXT DEFAULT 'manual' CHECK (payment_method IN ('manual','mp_link','transfer','mp_org')),
-  reference       TEXT,     -- número de transferencia, referencia MP, etc.
-  activated_by    UUID REFERENCES auth.users(id),  -- fundador que activó
+  payment_method  TEXT DEFAULT 'manual'
+                    CHECK (payment_method IN ('manual','mp_link','transfer','mp_org')),
+  reference       TEXT,      -- número de transferencia o referencia MP
+  activated_by    UUID REFERENCES auth.users(id), -- fundador que activó
   notes           TEXT,
   created_at      TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX idx_payment_records_org ON org_payment_records(organization_id, paid_at DESC);
 
 -- ============================================================
--- TABLA: org_audit_logs
+-- org_audit_logs
 -- ============================================================
 CREATE TABLE org_audit_logs (
   id              BIGSERIAL PRIMARY KEY,
   organization_id UUID NOT NULL REFERENCES organizations(id),
   actor_user_id   UUID REFERENCES auth.users(id),
   action          TEXT NOT NULL,
-  -- Valores: invite_sent | invite_accepted | invite_revoked | invite_expired
-  --          coach_linked | coach_unlinked | org_activated | org_suspended
-  --          org_renewed | role_changed | settings_updated
+  -- invite_sent | invite_accepted | invite_revoked | invite_expired
+  -- coach_linked | coach_unlinked | org_activated | org_suspended
+  -- org_renewed | role_changed | settings_updated
   target_user_id  UUID,
   target_coach_id UUID,
   metadata        JSONB DEFAULT '{}',
@@ -561,12 +679,11 @@ CREATE TABLE org_audit_logs (
 CREATE INDEX idx_org_audit_org ON org_audit_logs(organization_id, created_at DESC);
 ```
 
-### 9.2 RLS — políticas aditivas
+### 11.2 RLS — políticas aditivas
 
 ```sql
--- Org admin: leer coaches de su org
-CREATE POLICY "org_admin_read_own_coaches"
-ON coaches FOR SELECT
+-- Org admin lee coaches de su org
+CREATE POLICY "org_admin_read_own_coaches" ON coaches FOR SELECT
 USING (
   organization_id IS NOT NULL AND
   EXISTS (
@@ -577,9 +694,8 @@ USING (
   )
 );
 
--- Org admin: leer miembros de su org
-CREATE POLICY "org_admin_read_own_members"
-ON organization_members FOR SELECT
+-- Org admin lee miembros de su org
+CREATE POLICY "org_admin_read_own_members" ON organization_members FOR SELECT
 USING (
   EXISTS (
     SELECT 1 FROM organization_members me
@@ -589,9 +705,8 @@ USING (
   )
 );
 
--- Org admin: leer historial de pagos de su org
-CREATE POLICY "org_admin_read_payments"
-ON org_payment_records FOR SELECT
+-- Org admin lee historial de pagos de su org
+CREATE POLICY "org_admin_read_payments" ON org_payment_records FOR SELECT
 USING (
   EXISTS (
     SELECT 1 FROM organization_members
@@ -601,55 +716,39 @@ USING (
   )
 );
 
--- IMPORTANTE: las políticas existentes de coaches (coach_id = auth.uid()) NO se modifican.
--- Las políticas org son ADITIVAS — OR implícito en evaluación de políticas Supabase.
+-- IMPORTANTE: las políticas existentes coach_id = auth.uid() NO se modifican.
+-- Nuevas políticas son ADITIVAS. Las existentes no se tocan.
 ```
 
-### 9.3 RPCs de métricas
+### 11.3 RPC métricas dashboard
 
 ```sql
 CREATE OR REPLACE FUNCTION get_org_dashboard_metrics(p_org_id UUID)
 RETURNS TABLE (
-  active_coaches   INT,
-  total_seats      INT,
-  active_clients   INT,
-  max_clients      INT,
-  sessions_7d      INT,
-  checkins_7d      INT,
-  org_status       TEXT,
-  period_end       TIMESTAMPTZ
+  active_coaches  INT, total_seats     INT,
+  active_clients  INT, max_clients     INT,
+  sessions_7d     INT, checkins_7d     INT,
+  org_status      TEXT, period_end     TIMESTAMPTZ
 )
 LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  -- Auth check: caller debe ser admin_org
   IF NOT EXISTS (
     SELECT 1 FROM organization_members
-    WHERE organization_id = p_org_id
-      AND user_id = auth.uid()
-      AND role = 'admin_org'
-  ) THEN RAISE EXCEPTION 'unauthorized: not an admin_org of this organization'; END IF;
+    WHERE organization_id = p_org_id AND user_id = auth.uid() AND role = 'admin_org'
+  ) THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   RETURN QUERY
     SELECT
-      COUNT(c.id)::INT                      FILTER (WHERE c.subscription_status IN ('active','trial')),
+      COUNT(c.id)::INT FILTER (WHERE c.subscription_status IN ('active','trial')),
       o.max_coaches,
-      COALESCE(SUM(c.current_client_count), 0)::INT,
+      COALESCE(SUM(c.current_client_count),0)::INT,
       COALESCE(o.max_clients_total, SUM(c.max_clients))::INT,
-      COALESCE((
-        SELECT COUNT(*)::INT FROM workout_logs wl
-        JOIN coaches cc ON cc.id = wl.coach_id
-        WHERE cc.organization_id = p_org_id
-          AND wl.created_at >= now() - INTERVAL '7 days'
-      ), 0),
-      COALESCE((
-        SELECT COUNT(*)::INT FROM check_ins ci
-        JOIN clients cl ON cl.id = ci.client_id
-        JOIN coaches cc ON cc.id = cl.coach_id
-        WHERE cc.organization_id = p_org_id
-          AND ci.created_at >= now() - INTERVAL '7 days'
-      ), 0),
-      o.status,
-      o.current_period_end
+      (SELECT COUNT(*)::INT FROM workout_logs wl JOIN coaches cc ON cc.id = wl.coach_id
+       WHERE cc.organization_id = p_org_id AND wl.created_at >= now() - INTERVAL '7 days'),
+      (SELECT COUNT(*)::INT FROM check_ins ci JOIN clients cl ON cl.id = ci.client_id
+       JOIN coaches cc ON cc.id = cl.coach_id
+       WHERE cc.organization_id = p_org_id AND ci.created_at >= now() - INTERVAL '7 days'),
+      o.status, o.current_period_end
     FROM organizations o
     JOIN coaches c ON c.organization_id = o.id
     WHERE o.id = p_org_id
@@ -658,41 +757,31 @@ END;
 $$;
 ```
 
-### 9.4 Enforcement de seats (transaccional)
+### 11.4 Enforcement de seats (transaccional — sin race condition)
 
 ```sql
--- Función llamada al aceptar invitación
 CREATE OR REPLACE FUNCTION accept_org_invite(p_token TEXT, p_user_id UUID)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
-  v_invite   organization_invites%ROWTYPE;
-  v_org      organizations%ROWTYPE;
-  v_count    INT;
+  v_invite organization_invites%ROWTYPE;
+  v_org    organizations%ROWTYPE;
+  v_count  INT;
 BEGIN
-  -- 1. Verificar token y no expirado
   SELECT * INTO v_invite FROM organization_invites
   WHERE token_hash = crypt(p_token, token_hash)
-    AND accepted_at IS NULL AND revoked_at IS NULL
-    AND expires_at > now()
-  FOR UPDATE;  -- lock para prevenir race condition
+    AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+  FOR UPDATE;
   IF NOT FOUND THEN RETURN '{"error":"invalid_or_expired_token"}'::JSONB; END IF;
 
-  -- 2. Verificar seats disponibles
   SELECT * INTO v_org FROM organizations WHERE id = v_invite.organization_id FOR UPDATE;
   SELECT COUNT(*) INTO v_count FROM organization_members WHERE organization_id = v_org.id;
-  IF v_count >= v_org.max_coaches THEN
-    RETURN '{"error":"seats_limit_reached"}'::JSONB;
-  END IF;
+  IF v_count >= v_org.max_coaches THEN RETURN '{"error":"seats_limit_reached"}'::JSONB; END IF;
 
-  -- 3. Vincular coach y marcar invitación
   UPDATE organization_invites SET accepted_at = now() WHERE id = v_invite.id;
   INSERT INTO organization_members(organization_id, user_id, role)
     VALUES (v_org.id, p_user_id, v_invite.role)
     ON CONFLICT (organization_id, user_id) DO NOTHING;
-  UPDATE coaches SET organization_id = v_org.id, billing_source = 'org'
-    WHERE user_id = p_user_id;
-
-  -- 4. Audit log
+  UPDATE coaches SET organization_id = v_org.id, billing_source = 'org' WHERE user_id = p_user_id;
   INSERT INTO org_audit_logs(organization_id, actor_user_id, action, target_user_id)
     VALUES (v_org.id, p_user_id, 'invite_accepted', p_user_id);
 
@@ -701,120 +790,162 @@ END;
 $$;
 ```
 
-### 9.5 Cascade y retención
+### 11.5 Cascade y retención de datos
 
 | Evento | Comportamiento |
 |--------|---------------|
-| Org cancelada | `coaches.organization_id = NULL`, `billing_source = 'self'` (via ON DELETE SET NULL + trigger) |
-| Coach desvinculado | `organization_members` row deleted; coach → retail |
+| Org cancelada | `coaches.organization_id = NULL`, `billing_source = 'self'` via ON DELETE SET NULL + trigger |
+| Coach desvinculado | Row en `organization_members` deleted; coach → retail |
 | Datos de alumnos | **Nunca** cascade delete por cambio de org |
 | `org_payment_records` | Retener 6 años (SII Chile) |
 | `org_audit_logs` | Retener 2 años |
 
 ---
 
-## 10. DevOps
+## 12. Modelo de billing manual
 
-### 10.1 Variables de entorno
+### 12.1 Por qué manual es correcto ahora
 
-```env
-# Feature flag — false = rutas /org/* retornan 404
-ENTERPRISE_ORG_ENABLED=true
+MercadoPago pre-approvals son 1:1 con pagador-persona y tarjeta específica. Para B2B (tarjetas corporativas, múltiples administradores, pago por transferencia) este modelo genera problemas: si el pagador se va de la empresa la pre-approval queda en su cuenta personal; si expira la tarjeta el gym debe hacer checkout completo de nuevo; empresas chilenas con RUT prefieren transferencia + boleta.
 
-# Grace period configurable sin redeploy
-ORG_GRACE_PERIOD_DAYS=7
+Con 2–30 orgs el costo operativo de activación manual es ~5 min/org/mes. Correcto para esta etapa.
 
-# Email de renovación (si se usa Resend/SendGrid para los automáticos)
-ORG_RENEWAL_EMAIL_FROM=pagos@eva.fitness
+### 12.2 Cuenta oficial
+
+**MercadoPago y email:** `contacto@eva-app.cl` (cuenta MP verificada).
+Todos los links de pago, transferencias y comunicaciones de billing salen desde esta cuenta.
+
+### 12.3 Flujo de cobro
+
+```
+D-7 antes de vencimiento:
+  Fundador envía email desde contacto@eva-app.cl:
+    Opción A — Link MP: [Pagar $XXX.XXX CLP →]
+               (generado en cuenta MP contacto@eva-app.cl)
+    Opción B — Transferencia bancaria a cuenta vinculada
+               Referencia: GYM-[nombre]-[mes-año]
+
+Gym paga → pago visible en cuenta MP/banco
+
+Fundador en /admin (< 5 min):
+  1. Selecciona org
+  2. Registra en org_payment_records: monto, método, referencia
+  3. Extiende current_period_end
+  4. Confirma status = 'active'
+
+Automatización sin código nuevo:
+  Notion/Google Sheets con calendario de vencimientos por org
+  Cron job simple para cambiar status a 'grace' y 'suspended' (ola 4)
 ```
 
-### 10.2 CI/CD
+### 12.4 Panel `/org/billing` (sin checkout embebido)
 
-- Job separado `retail-regression` en CI — ejecuta suite retail en cada PR que toque: gate, middleware, cualquier política RLS, `organizations/*`.
-- Feature branch `feat/enterprise-org` → staging → producción controlada.
-- Deploy staging: `ENTERPRISE_ORG_ENABLED=true`; producción inicial: `false` hasta validar.
+El org admin ve estado + historial + instrucciones. El "Pagar" abre un modal con el link MP o datos de transferencia — es profesional. Muchos SaaS B2B chilenos (Bsale, Defontana) operan exactamente así.
 
-### 10.3 Monitoreo
+### 12.5 Cuándo automatizar billing
 
-- Logs estructurados: `{ event: "org_invite_accepted", orgId, coachId, durationMs, actorId }`.
-- Alerta: cualquier error 5xx en rutas `/org/*` → notificación inmediata fundadores.
-- Dashboard Supabase: RPCs org → alerta si p95 > 300ms.
-- Métrica separada: requests `/org/*` vs `/coach/*` — no contaminar baseline retail.
+Automatizar tiene sentido cuando:
+- **> 30 orgs activas** → el tiempo operativo empieza a ser relevante.
+- **Empresa registrada** → necesitás facturación electrónica SII automática.
+- **Deal enterprise** que exija automatización contractual.
 
-### 10.4 Scripts operativos
+---
+
+## 13. DevOps
+
+### 13.1 Variables de entorno
+
+```env
+ENTERPRISE_ORG_ENABLED=true       # false = rutas /org/* retornan 404
+ORG_GRACE_PERIOD_DAYS=7
+ORG_RENEWAL_EMAIL_FROM=contacto@eva-app.cl
+```
+
+### 13.2 CI/CD
+
+- Job `retail-regression` en CI — corre en cada PR que toque gate, middleware, RLS, `organizations/*`.
+- Feature branch `feat/enterprise-org` → staging (ENTERPRISE_ORG_ENABLED=true) → producción controlada.
+- Producción inicial: `ENTERPRISE_ORG_ENABLED=false` hasta validar en staging.
+
+### 13.3 Monitoreo
+
+- Logs estructurados: `{ event, orgId, coachId, durationMs, actorId }`.
+- Alerta: cualquier 5xx en `/org/*` → notificación inmediata fundadores.
+- RPCs org: alerta si p95 > 300ms.
+- Métricas separadas `/org/*` vs `/coach/*` — no contaminar baseline retail.
+
+### 13.4 Scripts operativos
 
 ```
 scripts/
-├── provision-org.ts         # Crear org + vincular coaches (staging/prod manual)
-├── deactivate-org.ts        # Suspender org + notificar coaches (dry-run primero siempre)
-├── renew-org.ts             # Extender period_end tras confirmar pago manual
-└── migrate-retail-to-org.ts # Para gyms que ya tienen cuentas sueltas → org
+├── provision-org.ts          # Crear org + vincular coaches (staging/prod)
+├── renew-org.ts              # Extender period_end tras pago manual
+├── deactivate-org.ts         # Suspender org + notificar coaches (dry-run primero)
+└── migrate-retail-to-org.ts  # Para gyms con varias cuentas sueltas
 ```
 
-### 10.5 Backup y PII
+### 13.5 Backup y PII
 
 - `organizations` (RUT, contacto): backup diferencial diario.
 - `org_payment_records`: retención 6 años; backup semanal adicional.
 - `org_audit_logs`: retención 2 años.
-- DR: documentar RTO/RPO para tabla `organizations` en runbook ops.
+- DR: documentar RTO/RPO para `organizations` en runbook ops.
 
 ---
 
-## 11. QA
+## 14. QA
 
-### 11.1 Matriz de regresión (obligatoria en cada PR)
+### 14.1 Matriz de regresión (obligatoria en cada PR)
 
 | Escenario | Resultado esperado |
 |-----------|-------------------|
 | Coach nuevo retail | Flujo idéntico a hoy; cero menciones de org |
 | Coach `organization_id IS NULL` | Gate idéntico; sin queries org en logs |
 | Coach retail visita `/org/*` | Redirect a `/coach/dashboard` |
-| Org activa, coach staff | Acceso sin MP propio; banner "Cubierto por [Gym]" visible |
-| Org en grace (día 3) | Coach con acceso; banner amarillo; org admin con banner rojo |
-| Org vencida (día 8) | Coach bloqueado; página informativa correcta; sin checkout MP |
+| Org activa, coach staff | Acceso sin MP; banner "Cubierto por [Gym]" visible |
+| Org en grace (día 3) | Coach con acceso; banners de aviso correctos |
+| Org vencida (día 8) | Coach bloqueado; página informativa; sin checkout MP |
 | Invitación expirada | "Esta invitación ha expirado." — no vincula |
 | Invitación revocada | "Esta invitación fue revocada." — no vincula |
 | Email ya en otra org | Error claro; sin vincular |
-| Seats en límite (max_coaches) | Invitación rechazada; UI muestra límite |
-| Race condition: 2 invites simultáneas en último seat | Solo una pasa; otra → error seats_limit |
+| Seats en límite | Invitación rechazada; UI muestra límite |
+| Race condition: 2 invites en último seat | Solo una pasa; otra → error seats_limit |
 | Coach desvinculado | `billing_source = 'self'`; necesita MP propio |
 | Alumno `/c/[slug]` | Sin cambio de permisos; historial accesible |
 | IDOR: org admin A intenta ver org B | 403 / datos vacíos |
-| Coach staff intenta acceder `/org/*` | Redirect a `/coach/dashboard` |
-| Token de invitación usado dos veces | Segunda vez → error invalid_token |
+| Token usado dos veces | Segunda vez → invalid_token |
 
-### 11.2 Tests de seguridad
+### 14.2 Tests de seguridad
 
-- Org admin A no accede a coaches/métricas de org B (test RLS con dos JWTs distintos).
-- SQL injection en campos texto org: Zod bloquea antes de DB.
-- Token de invitación: hash nunca expuesto en respuestas de API.
-- Audit log: cada acción crítica produce registro (test en server actions).
+- Org A no accede a coaches/métricas de org B (RLS con dos JWTs).
+- Coach staff no accede a `/org/*` sin rol `admin_org`.
+- Token hash nunca expuesto en respuestas API.
+- Audit log generado en cada acción crítica.
 
-### 11.3 Automatización
+### 14.3 Automatización
 
 ```
 tests/
-├── rls/rls-org-isolation.test.ts   # JWT admin_org vs otra org; JWT coach_staff vs /org/*
-├── e2e/org-smoke.test.ts            # Flujo completo: crear org → invitar → aceptar → ver panel
-├── e2e/retail-smoke.test.ts         # Flujo retail sin cambios (existente, extender si falta)
-└── unit/accept-org-invite.test.ts   # Race condition seats; token expirado; token revocado
+├── rls/rls-org-isolation.test.ts    # JWT admin_org vs otra org
+├── e2e/org-smoke.test.ts            # crear org → invitar → aceptar → ver panel
+├── e2e/retail-smoke.test.ts         # flujo retail sin cambios
+└── unit/accept-org-invite.test.ts   # race condition; token expirado; token revocado
 ```
 
 ---
 
-## 12. Data & Analytics
+## 15. Data & Analytics
 
-### 12.1 Modelo de eventos
+### 15.1 Tabla de eventos org
 
 ```sql
--- Tabla separada de eventos org (no mezclar con coach_subscription_events)
 CREATE TABLE org_subscription_events (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id),
   event_type      TEXT NOT NULL,
-  -- Valores: trial_start | activated | renewed | seat_added | seat_removed
-  --          grace_entered | suspended | cancelled | reactivated
-  mrr_delta_clp   INT,         -- cambio en MRR mensual (positivo = expansión, negativo = contracción)
+  -- trial_start | activated | renewed | seat_added | seat_removed
+  -- grace_entered | suspended | cancelled | reactivated
+  mrr_delta_clp   INT,
   seats_after     INT,
   payment_record_id UUID REFERENCES org_payment_records(id),
   metadata        JSONB DEFAULT '{}',
@@ -822,403 +953,244 @@ CREATE TABLE org_subscription_events (
 );
 ```
 
-### 12.2 Funnels B2B
+### 15.2 Funnel B2B
 
 ```
-Visita /empresas →
-Demo solicitada →
-Org creada (trial) →
-Primer coach invitado →
+Visita /pricing#equipos →
+Demo agendada (Calendly) →
+Demo realizada →
+Piloto activado (trial) →
 Primer coach activo (aceptó + log de alumno) →
 Primer pago recibido →
 Renovación mes 2 →
 Seat adicional (expansión)
 ```
 
-Medir conversion en cada paso. Drop-off alto en "primer coach activo" → problema de onboarding.
+Medir drop-off en cada paso. Si alto en "demo agendada → demo realizada" → problema de no-show → agregar recordatorio.
 
-### 12.3 Dashboards CEO (nuevas dimensiones)
+### 15.3 Dashboards CEO
 
-- **MRR:** org vs retail stacked; trend mensual.
-- **Orgs:** activas / trial / grace / canceladas.
-- **ARPA:** org vs retail; objetivo org ≥ 3×.
-- **Heatmap expansión:** orgs usando > 80% de seats → candidatas a upgrade.
-- **Cohort retención org:** mes 1 → 3 → 6 → 12; alertar si mes 1 churn > 15%.
+- MRR org vs MRR retail stacked.
+- Orgs: activas / trial / grace / canceladas.
+- ARPA org vs retail; objetivo ≥ 3×.
+- Heatmap: orgs > 80% de seats → candidatas a upgrade.
+- Cohort retención org mes 1 → 3 → 6 → 12.
 
-### 12.4 Alertas automáticas (accionables)
+### 15.4 Alertas accionables
 
 | Señal | Acción |
 |-------|--------|
 | Org en grace + sin pago en 3d | CS envía WhatsApp/email proactivo |
-| Org usando > 90% alumnos del pack | CS ofrece upgrade de plan |
-| Coach inactivo > 14d en org | Alerta org admin (post-MVP digest) |
+| Demo agendada pero no se realizó | Fundador hace follow-up en 24h |
+| Org > 90% alumnos del pack | CS ofrece upgrade |
 | Cohort mes 1 churn > 15% | Revisar onboarding — reunión equipo |
 
 ---
 
-## 13. Sales & Product Marketing
+## 16. Customer Success
 
-### 13.1 Narrativa de producto (mensaje único)
-
-**Para gyms:** "Un contrato. Todo tu equipo. Cada coach con su sello."
-
-**Expansión del mensaje:**
-> Tus coaches trabajan con su propia marca, sus alumnos los conocen así. Pero tú, como dueño del gym, necesitas ver el negocio completo. EVA te da las dos cosas: cada coach mantiene su identidad, tú tienes la visión de equipo que nunca tuviste.
-
-**Por qué EVA vs alternativas:**
-- Trainerize: borra la identidad del coach, todo es marca Trainerize.
-- Glofox/Mindbody: para reservas y pagos presenciales, no para coaching digital personalizado.
-- Varias cuentas sueltas: sin visión de negocio, sin un solo contrato, más caro.
-
-### 13.2 Proceso de venta
+### 16.1 Runbook: Alta org manual
 
 ```
-1. DESCUBRIMIENTO (D+0)
-   Canal: referido de coach existente / LinkedIn / contacto directo
-   Pregunta: "¿Cuántos coaches tienes? ¿Cómo gestionas el día a día?"
-   Objetivo: confirmar fit (≥ 3 coaches, quieren visión unificada)
-
-2. DEMO (D+2 a D+5)
-   Formato: videollamada 30 min
-   Mostrar: panel org → invitar coach → ver KPIs → billing simple
-   No mostrar: nada que no exista aún
-   CTA: "Piloto 14 días, sin costo, yo lo activo hoy."
-
-3. PILOTO (D+5 a D+19)
-   Fundador activa org manualmente
-   CS hace check-in D+3: "¿Todos los coaches aceptaron?"
-   CS hace check-in D+14: "¿Qué falta para que esto sea tu herramienta principal?"
-
-4. CIERRE (D+20)
-   Si piloto exitoso → enviar link MP o datos de transferencia
-   Pago recibido → fundador activa org (< 30 min)
-   Email: "Tu plan está activo. Bienvenido a EVA."
-
-5. EXPANSIÓN (D+90)
-   CS detecta org en 80%+ de seats → "Tus coaches llenan el plan, ¿agregamos más?"
-```
-
-### 13.3 Pricing (propuesta — decidir antes de ola 4)
-
-| Plan | Seats coaches | Alumnos máx. | Precio mensual | Precio anual |
-|------|--------------|-------------|----------------|-------------|
-| **Starter** | 3 | 75 | $XX.XXX CLP | $XX.XXX × 10 (2 meses gratis) |
-| **Pro** | 10 | 250 | $XX.XXX CLP | $XX.XXX × 10 |
-| **Elite** | 25 | 600 | $XX.XXX CLP | $XX.XXX × 10 |
-| **Enterprise** | Ilimitado | Ilimitado | Contactar | Contrato anual |
-
-**Ancla de precio:** mostrar siempre "vs X cuentas individuales" en la comparativa. Si un coach individual paga $Z/mes, Pro Gym (10 coaches) debe ser visiblemente más barato que $Z×10.
-
-**Descuento anual:** 2 meses gratis (≈17%) → incentiva pago adelantado → cash flow para startup.
-
-**Piloto:** 14 días sin costo → baja barrera de entrada → cierra demos más rápido.
-
-### 13.4 Materiales de venta
-
-- **One-pager B2B** (1 página A4): problema → solución → cómo funciona → precios → CTA demo.
-- **Comparativa** en `/pricing#equipos`: 3 cuentas sueltas vs Pack Starter (tabla visual).
-- **FAQ B2B:** ¿Qué pasa con los alumnos si cancelo? ¿Puede cada coach seguir con su app? ¿Cómo pago?
-- **Case study piloto** (post ola 3): gym X → resultados → cita del dueño.
-
-### 13.5 Canales de adquisición
-
-| Canal | Etapa | Prioridad |
-|-------|-------|----------|
-| Red actual de coaches EVA → sus gyms | Ahora | 🔴 Alta |
-| LinkedIn (dueños de gym, gerentes fitness Chile) | Ola 4 | 🟡 Media |
-| SEO `/empresas` ("software para gimnasios Chile") | Ola 4 | 🟡 Media |
-| Referidos: coach retail que trae su gym → descuento | Post-MVP | 🟢 Baja |
-| LinkedIn Ads Latinoamérica | Post-piloto | 🟢 Baja |
-
-**Prioridad absoluta en etapa actual:** hablar con los coaches que ya usan EVA y preguntarles si su gym pagaría por visión unificada. Son el canal de menor costo y mayor conversión.
-
----
-
-## 14. Customer Success
-
-### 14.1 Runbook: Alta org manual (MVP)
-
-```
-1. Fundador recibe pago (MP link o transferencia)
-2. Fundador verifica pago en su cuenta MP o banco
-3. Fundador abre /admin → crea org → setea:
-     - max_coaches, max_clients_total
-     - current_period_start, current_period_end
-     - status = 'active'
-     - Registra en org_payment_records
-4. Script: scripts/renew-org.ts --orgId=XXX (o UI /admin)
-5. Fundador envía email de bienvenida al org admin con:
-     - Link a /org/dashboard
-     - Checklist de primeros pasos
+1. Gym agenda demo via Calendly
+2. Demo 30 min → gym dice sí → fundador envía link MP desde contacto@eva-app.cl
+3. Gym paga → fundador confirma recepción en cuenta MP
+4. Fundador en /admin:
+     → Crea org (nombre, max_coaches según plan)
+     → Registra en org_payment_records
+     → status = 'active' (o 'trial' para piloto)
+5. Fundador envía email de bienvenida:
+     → Link a /org/dashboard
+     → Checklist de primeros pasos
+     → PDF de términos adjunto
 6. CS check-in D+3: "¿Coaches aceptaron invitaciones?"
 7. CS check-in D+30: "¿Están usando el panel? ¿Qué les falta?"
 ```
 
-### 14.2 Runbook: Coach sale del gym
+### 16.2 Runbook: Coach sale del gym
 
 ```
-1. Org admin desvincula en /org/team → UI bloquea si tiene alumnos activos
-2. Org admin decide: ¿alumnos quedan con la org (otro coach) o se van con él?
-3. Fundador ejecuta scripts/deactivate-org.ts --coachId=XXX --orgId=XXX (dry-run primero)
-4. Coach recibe email: "Tu acceso es ahora independiente. Configura tu suscripción."
-5. Audit log registra actor + timestamp + metadata
+1. Org admin desvincula en /org/team
+   (UI bloquea si tiene alumnos activos → org admin debe transferir o descargar primero)
+2. Fundador ejecuta scripts/deactivate-org.ts --coachId=XXX (dry-run primero)
+3. Coach recibe email: "Tu acceso es ahora independiente. Configura tu suscripción en EVA."
+4. Audit log registra actor + timestamp
 ```
 
-### 14.3 Runbook: Escalación P0 (org pagó, coaches bloqueados)
+### 16.3 Runbook: Escalación P0 (org pagó, coaches bloqueados)
 
 ```
-1. CS recibe reporte → entra a /admin → verifica org.status
-2. Status OK pero coaches bloqueados → bug de gate → rollback ENTERPRISE_ORG_ENABLED → investigar
-3. Status incorrecto → activación manual inmediata → notificar org admin + coaches afectados
+1. CS recibe reporte → /admin → verifica org.status
+2. Status 'active' pero coaches bloqueados → bug de gate → ENTERPRISE_ORG_ENABLED=false → investigar
+3. Status incorrecto → activación manual inmediata → notificar org admin + coaches
 4. SLA resolución: < 2 horas desde reporte
-5. Post-mortem en 48h: causa raíz + acción preventiva documentada
+5. Post-mortem en 48h: causa raíz + acción preventiva
 ```
 
-### 14.4 Health Score por org
+### 16.4 Health Score
 
 | Señal | Peso | Cálculo |
 |-------|------|---------|
 | % coaches activos (log < 7d) | 40% | coaches_activos / total_seats |
-| % alumnos activos (log < 7d) | 30% | alumnos_con_log / total_alumnos |
+| % alumnos activos (log < 7d) | 30% | alumnos_con_log / total |
 | Uso de seats | 20% | seats_usados / max_coaches |
-| Días hasta renovación | 10% | min(días_restantes / 30, 1.0) |
+| Días hasta renovación | 10% | min(días_restantes/30, 1.0) |
 
-- Score 0–49: alerta CS → contacto proactivo en 24h.
-- Score 50–74: monitoreo semanal.
-- Score 75–100: saludable; check-in mensual.
+Score < 50 → alerta CS → contacto proactivo en 24h.
 
-### 14.5 Plantillas de email
+### 16.5 Plantillas de email clave
 
 ```
+BIENVENIDA ORG:
+Asunto: Tu cuenta EVA Empresas está activa — [Nombre Gym]
+Cuerpo: "Bienvenido/a. Tu panel está en [link]. Checklist de primeros pasos: [...]
+         Cualquier duda: contacto@eva-app.cl o WhatsApp [número]."
+Adjunto: PDF Términos de uso
+
 INVITACIÓN COACH:
 Asunto: [Gym] te invitó a EVA
-"[Nombre], [Dueño] del [Gym] te invitó a unirte como coach en EVA.
-Tu acceso está cubierto por el plan del gimnasio.
-[Aceptar invitación →]  (válido 7 días)"
+"[Nombre], [Dueño] del [Gym] te invitó como coach.
+Tu acceso queda cubierto por el plan del gym.
+[Aceptar invitación →] — válido 7 días."
 
-RENOVACIÓN PRÓXIMA (D-7):
-Asunto: Tu plan EVA renueva el [fecha]
-"[Gym], tu plan Pro renueva el [fecha].
-Sin acción requerida si ya coordinaste el pago.
-¿Preguntas? Responde este email."
+RENOVACIÓN D-7:
+Asunto: Tu plan EVA renueva el [fecha] — [Gym]
+"Sin acción requerida si ya coordinaste el pago.
+Si necesitas renovar: [link MP] o responde este email."
 
-GRACE PERIOD (D+0):
-Asunto: ⚠️ Tu plan EVA venció — tienes 7 días
-"El acceso de tu equipo está activo 7 días más.
-Para renovar: [Ver instrucciones de pago →]
-Después del [fecha], el acceso se pausará."
-
-LIMITE SEATS ALCANZADO:
-Asunto: Tu equipo EVA llegó al límite de coaches
-"[Gym], tu plan cubre X coaches y ya los tienes todos activos.
-Para agregar más: [Ver opciones de plan →]"
+GRACE PERIOD:
+Asunto: ⚠️ Tu plan EVA venció — acceso activo 7 días más
+"Para renovar antes del [fecha]: [Ver instrucciones de pago]
+Después de esa fecha el acceso se pausará."
 ```
 
 ---
 
-## 15. Legal y privacidad
+## 17. Legal y privacidad
 
-### 15.1 Contexto del equipo (startup sin empresa registrada)
+### 17.1 Situación del equipo
 
-**Situación actual:** 2 fundadores como personas naturales. Sin RUT empresa. Los contratos y cobros se hacen a nombre de los fundadores hasta formalizar.
+- 2 fundadores como personas naturales. Contratos firmados a nombre propio → válidos en Chile.
+- Sin RUT empresa → cobros vía MP personal de `contacto@eva-app.cl` o cuenta bancaria.
+- Formalizar SpA/SRL cuando MRR org > ~$500k CLP/mes.
 
-**Implicaciones prácticas:**
-- Contratos B2B firmados como persona natural → válidos legalmente en Chile.
-- Boleta de honorarios (si están en segunda categoría) o factura de empresa cuando se registren.
-- Cobros vía MP personal o transferencia bancaria personal → registrar en `org_payment_records` con nombre del fundador que recibió el pago.
-- Formalizar empresa (SpA o SRL) cuando MRR org supere ~$500k CLP/mes → antes de eso el overhead legal no vale la pena.
+### 17.2 Términos B2B
 
-### 15.2 Términos de servicio B2B (mínimo viable)
+Documento de 1–2 páginas (template completo en [DECISIONES_B2B.md](DECISIONES_B2B.md) §Parte 3). El pago = aceptación. Se envía como PDF adjunto al email de bienvenida. Sin firma digital por ahora.
 
-Documento de 1–2 páginas (no contrato legal complejo en esta etapa) que cubra:
+### 17.3 Ley 19.628 (Chile)
 
-- **Qué se ofrece:** acceso a EVA para N coaches durante el período pagado.
-- **Pago:** monto, período, forma de pago, qué pasa si no se paga (grace 7d → suspensión).
-- **Datos:** EVA no comparte datos de alumnos con terceros. La org accede solo a métricas agregadas (counts, no nombres).
-- **Cancelación:** preaviso de 30 días; datos exportables en 30d post-cancelación.
-- **Limitación de responsabilidad:** EVA no responde por pérdida de datos causada por el gym.
-- **Aceptación:** email de confirmación de pago = aceptación de términos.
+- Datos de coaches: base legal = contrato de servicio.
+- Datos de alumnos: gym actúa como responsable; EVA como encargado.
+- MVP: panel org solo ve counts agregados. Sin nombres ni datos de salud individuales.
+- Post-MVP (si org ve datos individuales): DPA firmado + mención en política de privacidad.
 
-### 15.3 Ley 19.628 (Chile)
+### 17.4 Roles de datos
 
-- **Datos de coaches** (email, nombre): tratados bajo contrato de servicio — base legal art. 4.
-- **Datos de alumnos**: el gym (org) actúa como responsable; EVA actúa como encargado.
-- **En MVP**: panel org solo ve counts. Sin nombres, sin datos de salud individuales de alumnos.
-- **Post-MVP (si org ve datos individuales de alumnos)**: requiere DPA firmado + mención explícita en política de privacidad.
+| Actor | Rol | Datos |
+|-------|-----|-------|
+| EVA (plataforma) | Encargado | Procesa según instrucciones del gym |
+| Gym (org) | Responsable | Decide qué datos recoger de sus clientes |
+| Coach staff | Sub-encargado | Datos de alumnos de su cartera |
 
-### 15.4 Datos financieros
+### 17.5 Datos sensibles
 
-- `tax_id` (RUT org): cifrar en reposo con `pgcrypto` o Supabase Vault.
+- `tax_id` (RUT org): cifrar en reposo con pgcrypto o Supabase Vault.
 - `org_payment_records`: no almacenar datos de tarjeta — solo referencia de transacción.
-- Retención contable: 6 años (SII Chile) para `org_payment_records`.
+- Retención contable: 6 años (SII Chile).
 
 ---
 
-## 16. Modelo de billing manual — cómo funciona en la práctica
-
-### 16.1 Por qué manual es la decisión correcta ahora
-
-MercadoPago pre-approvals son 1:1 con un pagador persona natural y una tarjeta específica. Para B2B (orgs con múltiples administradores, tarjetas corporativas, pago por transferencia) esto genera problemas:
-- Si el pagador se va de la empresa, la pre-approval queda en su cuenta personal.
-- Si expira la tarjeta, el gym debe volver a hacer checkout completo.
-- Empresas chilenas con RUT prefieren transferencia bancaria + boleta/factura, no MP.
-
-Con 2–30 orgs, el costo operativo de activación manual es ~5 min/org/mes. El costo de implementar MP org mal es incalculable en churn y credibilidad.
-
-### 16.2 Cuenta de cobro oficial
-
-**Cuenta MercadoPago:** `contacto@eva-app.cl` (cuenta verificada, email profesional de la app).
-
-Esta es la única cuenta que recibe pagos de orgs. Toda comunicación de pago, links MP y referencias de transferencia salen desde esta cuenta o mencionan este email.
-
-### 16.3 Flujo de cobro manual
-
-```
-INICIO DE PERÍODO:
-  D-7: Enviar email desde contacto@eva-app.cl con instrucciones:
-       Opción A — Link MP: [Pagar $XXX.XXX →]
-                  (link generado en cuenta MP contacto@eva-app.cl)
-       Opción B — Transferencia bancaria + referencia GYM-[nombre]-[mes]
-                  (datos de la cuenta vinculada a contacto@eva-app.cl)
-
-  Org paga → Pago visible en cuenta MP contacto@eva-app.cl o banco
-
-  Fundador en /admin:
-    1. Selecciona org
-    2. Registra en org_payment_records: monto, método, referencia MP o transfer
-    3. Extiende current_period_end
-    4. Confirma status = 'active'
-    → Org renovada en < 5 min
-
-AUTOMATIZACIÓN PARCIAL (sin construir nada nuevo):
-  Herramienta: Notion / Google Sheets con calendario de vencimientos por org
-  D-7: email template desde contacto@eva-app.cl
-  D+0 sin pago: status → grace (cron job simple)
-  D+7 sin pago: status → suspended (cron job)
-```
-
-### 16.3 Panel `/org/billing` sin checkout embebido
-
-El panel muestra estado + historial + instrucciones. **No** tiene formulario de pago. El org admin ve:
-
-1. Estado del plan y fecha de vencimiento.
-2. Historial de pagos confirmados (los que el fundador registra en `org_payment_records`).
-3. Botón "¿Cómo renovar?" → modal con instrucciones (link MP o datos de transferencia).
-4. Botón "Contactar a EVA" → email/WhatsApp directo.
-
-Esto es profesional. Muchos SaaS B2B chilenos (Bsale, Defontana, Nubox) operan exactamente así.
-
-### 16.4 Cuándo automatizar billing org
-
-Automatizar tiene sentido cuando:
-- **> 30 orgs activas** → el tiempo operativo empieza a ser relevante.
-- **Empresa formalmente registrada** → necesitás emisión automática de facturas.
-- **Deal de empresa grande** que exija facturación electrónica SII automática.
-
-Hasta entonces: manual es más rápido de implementar, más fácil de debuggear, y permite personalizar el trato con cada cliente.
-
----
-
-## 17. Riesgos y mitigaciones
+## 18. Riesgos y mitigaciones
 
 | Riesgo | Prob. | Impacto | Mitigación |
 |--------|-------|---------|------------|
 | RLS org rompe políticas retail | Media | Alto | Políticas aditivas; tests JWT en CI antes de merge |
 | Race condition en seats | Baja | Medio | `accept_org_invite()` usa `FOR UPDATE` lock |
-| Coach huérfano sin alumnos al desvincular | Alta | Alto | UI bloquea desvinculación si hay alumnos activos |
-| Org admin ve datos PII alumnos sin DPA | Media | Alto | MVP solo counts; acceso granular post-DPA |
-| Email invite en spam | Media | Medio | SPF/DKIM configurado; texto de invitación sin palabras spam; link directo |
+| Alumnos huérfanos al desvincular coach | Alta | Alto | UI bloquea si hay alumnos activos; transferencia obligatoria |
+| Org admin ve PII alumnos sin DPA | Media | Alto | MVP solo counts; acceso granular post-DPA |
+| Email invite en spam | Media | Medio | SPF/DKIM configurado; texto sin palabras spam |
+| No-show en demos Calendly | Media | Medio | Recordatorio automático Calendly 24h antes + 1h antes |
 | Scope creep SSO/API | Alta | Medio | Documentado fuera de MVP; rechazar en backlog |
 | Churn temprano por mal onboarding | Media | Alto | Checklist + health score + CS D+3 y D+30 |
-| Billing manual no escala > 30 orgs | Alta (a futuro) | Medio | Documentado; automatizar cuando llegue ese momento |
-| Fundadores sin empresa registrada = limitación para contratos | Media | Bajo | Contratos como persona natural son válidos; formalizar a $500k CLP MRR org |
+| Billing manual no escala > 30 orgs | Alta (futuro) | Medio | Documentado; automatizar cuando llegue ese volumen |
+| Fundadores sin empresa = limitación contratos grandes | Media | Bajo | Persona natural válido; formalizar a $500k CLP MRR |
 
 ---
 
-## 18. Roadmap por olas
+## 19. Roadmap por olas
 
-| Ola | Bloque A | Bloque B | Salida | Est. |
-|-----|----------|----------|--------|------|
-| **1 — Base de datos** | Schema `organizations` + `coaches.organization_id` nullable + tipos TS + índices | Precedencia gate/middleware solo cuando `org_id IS NOT NULL` + suite retail en CI | Retail intacto; DB lista para org | 1 sem |
-| **2 — Flujo B2B cerrado** | `organization_members` + `organization_invites` + RLS aditivas + `accept_org_invite()` + audit log | UI `/org/team` (lista + invitar + aceptar) + `/org/invite/accept` tokenizada | Piloto staging con datos reales | 2 sem |
-| **3 — Activación y panel** | Activación manual desde `/admin` + `org_payment_records` + enforcement seats + UX grace/blocked | RPCs métricas + `/org/dashboard` KPIs + `/org/billing` (estado + historial + instrucciones) | Venta piloto 2–3 gyms | 1–2 sem |
-| **4 — Go-to-market** | Email automático renovación (D-7) + cron grace/suspend + `/org/usage` | `/empresas` landing + pricing B2B + one-pager + runbook CS aprobado | Go-to-market controlado | 1 sem |
-| **5 — Expansión producto** | Digest semanal org admin + notificación seat límite | `/org/settings` (logo, datos) + health score en CEO panel | Producto más autónomo | 1 sem |
-| **Post-MVP** | MP org automatizado (cuando > 30 orgs) | Reportes exportables, pool global, transferencia alumnos entre coaches | Escala | TBD |
+| Ola | Bloque A | Bloque B | Entregable | Est. |
+|-----|----------|----------|-----------|------|
+| **1 — Base datos** | Schema `organizations` + `coaches.organization_id` nullable + tipos TS + índices | Precedencia gate/middleware solo con `org_id IS NOT NULL` + job `retail-regression` en CI verde | Retail intacto; DB lista | 1 sem |
+| **2 — Flujo B2B** | `organization_members` + `organization_invites` + RLS aditivas + `accept_org_invite()` + audit log | UI `/org/team` (lista + invitar + aceptar) + `/org/invite/accept` tokenizada | Flujo cerrado en staging | 2 sem |
+| **3 — Panel + activación** | Activación manual desde `/admin` + `org_payment_records` + enforcement seats + UX grace/blocked | RPCs métricas + `/org/dashboard` KPIs + `/org/billing` estado + historial + instrucciones | Piloto 2–3 gyms posible | 1–2 sem |
+| **4 — Go-to-market** | Email automático renovación D-7 + cron grace/suspend + `/org/usage` + `/org/settings` | **Sección `/pricing#equipos`** + Calendly "Demo EVA Empresas" configurado + one-pager B2B + runbook CS | Ventas abiertas | 1 sem |
+| **5 — Autonomía producto** | Digest semanal org admin + notificación seat límite + onboarding checklist interactivo | Health score en CEO panel + `/org/settings` con logo | Producto más autónomo | 1 sem |
+| **Post-MVP** | MP org automatizado (> 30 orgs) + factura electrónica SII | Reportes CSV + pool global + transferencia alumnos entre coaches + `/empresas` página dedicada | Escala | TBD |
 
----
-
-## 19. Checklist pre-implementación (decisiones bloqueantes)
-
-Ninguna línea de código de ola 1 hasta tener todas marcadas:
-
-- [x] **Billing:** cuenta MP `contacto@eva-app.cl` (verificada). Links MP y transferencias salen desde esta cuenta. ✅
-- [x] **Pool alumnos:** suma de `max_clients` por coach. `organizations.max_clients_total = NULL` en MVP. Pool global post-MVP cuando un gym lo pida. ✅
-- [x] **Invite email duplicado:** vincular con confirmación del coach. Email al coach "¿Aceptas unirte a [Gym]?" → Aceptar activa vínculo / Rechazar revoca invitación / Ignorar 7d = expirada. ✅
-- [x] **Naming:** `organization` / `org_` en código y DB. "Plan de equipo" en copy de UI. "EVA Empresas" en marketing y landing. Nunca mezclar en la misma pantalla. ✅
-- [x] **Pricing:** Starter Gym $59.990/mes (hasta 5 coaches) · Pro Gym $109.990/mes (hasta 10) · Elite Gym $199.990/mes (hasta 20) · Enterprise desde $300.000 cotizar. Anual –20%. Ver DECISIONES_B2B.md. ✅
-- [x] **Suite retail CI:** job `retail-regression` con 5 casos obligatorios antes de merge ola 1. Template en DECISIONES_B2B.md. Tarea técnica ~3h. ✅
-- [x] **Runbook alta org:** simulacro en staging entre los dos fundadores — crear org ficticia → activar → invitar coach → confirmar acceso sin MP. Documento en §14.1. ✅
-- [x] **Términos B2B:** documento de 1–2 páginas listo. Template completo en DECISIONES_B2B.md. Enviar como PDF adjunto al email de bienvenida. ✅
-- [x] **Cuenta de email:** `contacto@eva-app.cl` — Gmail profesional comprado para la app; también es la cuenta MP. ✅
+**Nota ola 4:** Calendly es configuración externa (30 min) — no es código. Se hace en paralelo con la sección de landing.
 
 ---
 
-## 20. Referencia cruzada — actualizar con implementación real
+## 20. Registro de decisiones
 
-- [nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md](nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md) — sección "Modelo B2B" y fases.
-- [nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md](nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md) — diagrama de datos y middleware.
-- [AGENTS.md](AGENTS.md) — patrones `_data/_actions`, Zod v4, `revalidatePath`, sin nuevas libs de estado.
+Todas resueltas. Sin decisiones bloqueantes pendientes. Se puede arrancar ola 1.
+
+| # | Decisión | Resolución |
+|---|----------|-----------|
+| 1 | Pool alumnos | Suma de `max_clients` por coach. `max_clients_total = NULL` en MVP. Pool global post-MVP. |
+| 2 | Email duplicado en invite | Vincular con confirmación del coach. Coach recibe email con [Aceptar] / [Rechazar]. |
+| 3 | Naming | `organization`/`org_` en código. "Plan de equipo" en UI. "EVA Empresas" en marketing. |
+| 4 | Pricing | Starter $59.990 · Pro $109.990 · Elite $199.990 · Enterprise cotizar. Anual –20%. |
+| 5 | Suite retail CI | Job `retail-regression`, 5 casos obligatorios, ~3h técnicas. Template en §14. |
+| 6 | Runbook alta org | Documentado en §16.1. Simulacro en staging entre los dos fundadores. |
+| 7 | Términos B2B | Template en [DECISIONES_B2B.md](DECISIONES_B2B.md) §Parte 3. Pago = aceptación. |
+| 8 | Cuenta billing | `contacto@eva-app.cl` (MP verificado + Gmail profesional). |
+| 9 | Email comunicaciones | `contacto@eva-app.cl` — misma cuenta. |
+| 10 | Landing B2B | Sección `/pricing#equipos` en ola 4. Página `/empresas` post-piloto. |
+| 11 | Cómo reciben demos | Calendly configurado antes de ola 3. Link en landing. WhatsApp como secundario. |
 
 ---
 
-## 21. Análisis competitivo y ventaja diferencial
+## 21. Análisis competitivo e ideas
 
 ### 21.1 Mapa competitivo
 
 | Competidor | Fortaleza | Debilidad crítica vs EVA |
 |-----------|-----------|--------------------------|
-| **Trainerize** | Team management maduro, marketplace | Sin white-label por coach; marca Trainerize siempre visible. El gym absorbe la identidad de cada coach. |
-| **TrueCoach** | UX limpia, excelente coach-first | Sin modo B2B real; sin billing org; sin panel de gestión de equipo. |
-| **Mindbody / ABC Fitness** | Gestión gym completa (reservas, pagos presenciales, clases grupales) | No tiene herramientas de coaching digital personalizado; no reemplaza lo que hace EVA. |
-| **Glofox** | App branded por gym, buena para clases | Sin programación personalizada por coach; sin nutrición; no coaching 1:1 serio. |
-| **Wodify** | Fuerte en CrossFit/box | Nicho muy específico; sin white-label individual; sin nutrición avanzada. |
-| **Varias cuentas sueltas** | "Ya funciona" | Sin visión unificada; más caro; no escala; el gym está ciego operativamente. |
+| **Trainerize** | Team management maduro | Sin white-label por coach; marca Trainerize visible siempre |
+| **TrueCoach** | UX limpia, coach-first | Sin modo B2B; sin billing org; sin panel de equipo |
+| **Mindbody / ABC Fitness** | Gestión gym completa, reservas, pagos presenciales | Sin coaching digital personalizado |
+| **Glofox** | App branded por gym, clases grupales | Sin programación 1:1; sin nutrición avanzada |
+| **Wodify** | CrossFit/box fuerte | Nicho muy específico; sin white-label individual |
+| **Varias cuentas sueltas** | "Ya funciona" | Sin visión unificada; más caro; gym ciego |
 
-### 21.2 Ventaja diferencial de EVA (irreplicable a corto plazo)
+**Conclusión:** EVA tiene el diferenciador correcto. Nadie ofrece white-label por coach dentro de una org. Ese es el argumento de venta.
 
-**"White-label por coach dentro de la misma organización"**
+### 21.2 Moat a construir
 
-Ningún competidor ofrece esto:
-- Trainerize: todos los coaches bajo marca Trainerize.
-- Glofox: todos bajo marca del gym.
-- EVA: cada coach tiene su app con su marca (`/c/[coach_slug]`), y el gym tiene visión consolidada.
+1. **Datos históricos:** más tiempo en EVA = más historial de alumnos, adherencia, progresión. Difícil migrar.
+2. **Identidad del coach:** coaches construyen su marca en `/c/[coach_slug]`. Cambiar plataforma = perder esa URL e historial.
+3. **Red de referidos:** coach EVA recomienda a su gym → gym se convierte en cliente B2B → flywheel.
 
-El alumno de Ana ve la app de Ana. El alumno de Pedro ve la app de Pedro. El dueño del gym ve a Ana y Pedro en un solo panel. **Identidad del coach + visión del negocio**. Sin sacrificar ninguna de las dos.
+### 21.3 Ideas post-MVP para evaluar
 
-### 21.3 Moat a construir
+**Producto:**
+- Asignación de alumnos entre coaches de la org (sin que el alumno pierda historial).
+- Rol `viewer` para inversores/directivos: métricas sin acceso operativo.
+- Digest semanal org admin por email sin entrar al panel.
 
-1. **Datos de rendimiento del gym:** a más tiempo con EVA, más histórico de alumnos, adherencia, progresión. Difícil de migrar.
-2. **Identidad del coach:** los coaches construyen su marca en `/c/[coach_slug]`; cambiar de plataforma = perder esa URL y el historial de sus alumnos.
-3. **Red de coaches referidos:** si los coaches recomiendan EVA a su gym, el gym puede convertirse en cliente B2B → flywheel.
+**Monetización:**
+- Referido: coach retail que convierte su gym → descuento en plan propio.
+- Add-on análisis avanzado: CSV, LTV por alumno, comparativas históricas.
+- Franquicia: cadena de gyms con sub-orgs por sede, una factura matriz.
 
-### 21.4 Ideas de producto para explorar (post-MVP)
-
-**Corto plazo:**
-- **Digest semanal org admin por email:** "Esta semana: X sesiones, Y alumnos nuevos." Sin entrar al panel.
-- **Asignación de alumnos entre coaches de la org:** org admin puede mover un alumno de Ana a Pedro sin que el alumno pierda su historial.
-- **Rol `viewer` para directivos:** métricas sin acceso a datos operativos. Ideal para inversores o socios del gym.
-
-**Mediano plazo:**
-- **Referidos gym:** coach retail que convierte su gym → descuento en plan personal.
-- **Add-on análisis avanzado:** exportación CSV, LTV por alumno, comparativas históricas → cobro adicional.
-- **Franquicia digital:** cadena de gyms con sub-orgs por sede y una factura matriz.
-
-**Largo plazo:**
-- **API pública org:** webhooks salientes (alumno completa workout → CRM del gym).
-- **Dominio propio por org:** `app.mygym.cl` sirviendo EVA con branding completo del gym.
-- **Integración Mindbody/Glofox:** importar roster de alumnos del gym → crear clients en EVA automáticamente.
+**Técnico:**
+- API pública org: webhooks salientes → integración con CRM del gym.
+- Dominio propio por org: `app.mygym.cl`.
+- Integración Mindbody/Glofox: importar roster de alumnos automáticamente.
 
 ---
 
-*Fin del plan rev. 4 — edición enterprise completa. Siguiente paso: aprobar decisiones bloqueantes (§19) y comenzar ola 1 cuando estén todas marcadas.*
+*Fin del plan rev. 5. Todas las decisiones resueltas. Arrancar ola 1 cuando equipo apruebe.*
