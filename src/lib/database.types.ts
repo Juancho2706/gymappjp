@@ -410,6 +410,7 @@ export type Database = {
           loader_text_color: string | null
           logo_url: string | null
           max_clients: number
+          onboarding_guide: Json
           payment_provider: string
           previous_slugs: string[] | null
           primary_color: string
@@ -445,6 +446,7 @@ export type Database = {
           loader_text_color?: string | null
           logo_url?: string | null
           max_clients?: number
+          onboarding_guide?: Json
           payment_provider?: string
           previous_slugs?: string[] | null
           primary_color?: string
@@ -480,6 +482,7 @@ export type Database = {
           loader_text_color?: string | null
           logo_url?: string | null
           max_clients?: number
+          onboarding_guide?: Json
           payment_provider?: string
           previous_slugs?: string[] | null
           primary_color?: string

@@ -1,12 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
+ * Read environment variables from file (PERF_COACH_*, PLAYWRIGHT_BASE_URL, etc.).
+ * Same idea as Next: `.env.local` first so local overrides win over `.env`.
  */
-// import dotenv from 'dotenv';
-// import path from 'path';
-// dotenv.config({ path: path.resolve(__dirname, '.env') });
+import dotenv from 'dotenv'
+import path from 'path'
+
+dotenv.config({ path: path.resolve(__dirname, '.env.local') })
+dotenv.config({ path: path.resolve(__dirname, '.env') })
 
 /**
  * See https://playwright.dev/docs/test-configuration.

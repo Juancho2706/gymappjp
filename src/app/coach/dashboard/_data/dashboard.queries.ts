@@ -212,6 +212,7 @@ async function getCoachDashboardDataInner(userId: string) {
         workoutPlansCount,
         recentClientsRaw,
         recentCheckinsRaw,
+        checkinSignal30dRaw,
         expiringProgramsRaw,
         signupsByMonthRaw,
         workoutSessionsSeriesRaw,
@@ -235,6 +236,13 @@ async function getCoachDashboardDataInner(userId: string) {
             .eq('clients.coach_id', userId)
             .order('created_at', { ascending: false })
             .limit(5),
+        // Onboarding paso "alumno activo": al menos un check-in en ventana 30d (alineado a workout_logs 30d abajo).
+        supabase
+            .from('check_ins')
+            .select('id, clients!inner(coach_id)')
+            .eq('clients.coach_id', userId)
+            .gte('created_at', thirtyDaysAgo)
+            .limit(1),
         supabase
             .from('workout_programs')
             .select('id, name, end_date, client_id, clients:client_id (id, full_name, slug)')
@@ -319,6 +327,9 @@ async function getCoachDashboardDataInner(userId: string) {
 
     const signupMap = new Map(signupsRows.map((r) => [r.ym, Number(r.client_count)]))
     const workoutLogs30d = workoutLogs30dRaw.data || []
+    const hasCheckinLast30d = ((checkinSignal30dRaw.data as { id: string }[] | null) || []).length > 0
+    const hasWorkoutLast30d = workoutLogs30d.length > 0
+    const hasStudentSignal30d = hasCheckinLast30d || hasWorkoutLast30d
     const workoutSessionsSeries =
         !workoutSessionsSeriesRaw.error && Array.isArray(workoutSessionsSeriesRaw.data)
             ? (workoutSessionsSeriesRaw.data as { day: string; sessions: number }[])
@@ -486,6 +497,7 @@ async function getCoachDashboardDataInner(userId: string) {
     return {
         totalClients: clientsCount.count ?? 0,
         activePlans: workoutPlansCount.count ?? 0,
+        hasStudentSignal30d,
         avgAdherence,
         avgNutrition,
         adherenceStats,

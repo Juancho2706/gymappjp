@@ -5,8 +5,11 @@ import { HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BrandSettingsTour } from './BrandSettingsTour'
 import type { BrandTourStep } from './BrandSettingsTour'
-
-const storageKey = (coachId: string) => `eva:brand-settings-tour-seen:${coachId}`
+import {
+    brandTourSeenStorageKey,
+    BRAND_TOUR_SEEN_CHANGED_EVENT,
+    type BrandTourSeenChangedDetail,
+} from '@/lib/coach-brand-tour'
 
 const TOUR_STEPS: BrandTourStep[] = [
     {
@@ -59,18 +62,27 @@ const TOUR_STEPS: BrandTourStep[] = [
 export function BrandSettingsTourClient({ coachId }: { coachId: string }) {
     const [tourOpen, setTourOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
-    const key = storageKey(coachId)
+    const key = brandTourSeenStorageKey(coachId)
 
     useEffect(() => {
         setMounted(true)
         try {
+            const params = new URLSearchParams(window.location.search)
+            if (params.get('tour') === '1') {
+                setTourOpen(true)
+                const u = new URL(window.location.href)
+                u.searchParams.delete('tour')
+                const next = u.pathname + (u.search ? u.search : '')
+                window.history.replaceState({}, '', next)
+                return
+            }
             const seen = localStorage.getItem(key)
             if (seen !== 'true') {
                 const timer = setTimeout(() => setTourOpen(true), 600)
                 return () => clearTimeout(timer)
             }
         } catch {
-            // localStorage no disponible
+            // localStorage / URL no disponible
         }
     }, [key])
 
@@ -84,6 +96,15 @@ export function BrandSettingsTourClient({ coachId }: { coachId: string }) {
         setTourOpen(false)
         try {
             localStorage.setItem(key, 'true')
+        } catch {
+            /* ignore */
+        }
+        try {
+            window.dispatchEvent(
+                new CustomEvent(BRAND_TOUR_SEEN_CHANGED_EVENT, {
+                    detail: { coachId } satisfies BrandTourSeenChangedDetail,
+                })
+            )
         } catch {
             /* ignore */
         }

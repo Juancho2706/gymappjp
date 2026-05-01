@@ -7,6 +7,7 @@ import { ClipboardList } from 'lucide-react'
 import { CreateClientModal } from './CreateClientModal'
 import { GlassCard } from '@/components/ui/glass-card'
 import { GlassButton } from '@/components/ui/glass-button'
+import { LOTTIE_CLIPBOARD_LIST_URL } from '@/lib/lottie-assets'
 
 const Player = dynamic(
     () =>
@@ -22,8 +23,6 @@ const Player = dynamic(
     ) }
 )
 
-const LOTTIE_URL = 'https://assets2.lottiefiles.com/packages/lf20_m6cuL6.json'
-
 export function ClientsDirectoryEmpty() {
     const [open, setOpen] = useState(false)
 
@@ -31,7 +30,7 @@ export function ClientsDirectoryEmpty() {
         <>
             <GlassCard className="mx-4 flex flex-col items-center justify-center py-16 text-center md:mx-0 md:py-24">
                 <div className="mb-8 flex h-40 w-full max-w-xs items-center justify-center">
-                    <Player autoplay loop src={LOTTIE_URL} style={{ height: '160px' }} />
+                    <Player autoplay loop src={LOTTIE_CLIPBOARD_LIST_URL} style={{ height: '160px' }} />
                 </div>
                 <h3 className="font-display text-xl font-black uppercase tracking-tighter text-foreground md:text-2xl">
                     Tu equipo te espera

@@ -41,12 +41,30 @@ const itemVariants = {
     visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.4, 0.25, 1] as const } },
 }
 
+import type { Json } from '@/lib/database.types'
+import type { SubscriptionTier } from '@/lib/constants'
+
 interface Props {
     data: DashboardV2Data
+    coachId: string
     coachName: string
+    coachSlug: string
+    absoluteStudentAppUrl: string
+    initialOnboardingGuide: Json
+    subscriptionTier: SubscriptionTier
+    hasCoachLogo: boolean
 }
 
-export function DashboardShell({ data, coachName }: Props) {
+export function DashboardShell({
+    data,
+    coachId,
+    coachName,
+    coachSlug,
+    absoluteStudentAppUrl,
+    initialOnboardingGuide,
+    subscriptionTier,
+    hasCoachLogo,
+}: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
     const [revenueSheetOpen, setRevenueSheetOpen] = useState(false)
 
@@ -80,6 +98,20 @@ export function DashboardShell({ data, coachName }: Props) {
                 </motion.header>
 
                 <motion.section variants={itemVariants}>
+                    <CoachOnboardingChecklist
+                        coachId={coachId}
+                        coachSlug={coachSlug}
+                        absoluteStudentAppUrl={absoluteStudentAppUrl}
+                        initialOnboardingGuide={initialOnboardingGuide}
+                        totalClients={data.kpi.totalClients}
+                        activePlans={data.activePlans}
+                        hasStudentSignal30d={data.hasStudentSignal30d}
+                        subscriptionTier={subscriptionTier}
+                        hasCoachLogo={hasCoachLogo}
+                    />
+                </motion.section>
+
+                <motion.section variants={itemVariants}>
                     <KpiStrip kpi={data.kpi} onAdherenceClick={() => setStatsSheetOpen(true)} onMrrClick={() => setRevenueSheetOpen(true)} />
                 </motion.section>
 
@@ -109,13 +141,6 @@ export function DashboardShell({ data, coachName }: Props) {
                     <DashboardCharts areaData={data.areaData} barData={data.barData} />
                 </motion.section>
 
-                <motion.section variants={itemVariants}>
-                    <CoachOnboardingChecklist
-                        totalClients={data.kpi.totalClients}
-                        activePlans={data.activePlans}
-                        hasRecentCheckin={data.recentActivities.some((a) => a.type === 'check-in')}
-                    />
-                </motion.section>
             </motion.div>
 
             <ClientStatsSheet

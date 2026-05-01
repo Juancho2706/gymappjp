@@ -111,6 +111,8 @@ export interface ClientListItem {
 export interface DashboardV2Data {
     kpi: KpiSummary
     activePlans: number
+    /** Check-in o workout_log de alumnos del coach en los últimos 30 días (alineado a `thirtyDaysAgo` en dashboard.queries). */
+    hasStudentSignal30d: boolean
     clientList: ClientListItem[]
     clientPaymentSummary: ClientPaymentSummary[]
     adherenceStats: AdherenceStat[]

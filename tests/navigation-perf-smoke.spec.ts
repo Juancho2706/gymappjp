@@ -21,11 +21,12 @@ test.describe('navigation perf smoke', () => {
         test.skip(!email || !password, 'Define PERF_COACH_EMAIL y PERF_COACH_PASSWORD para habilitar esta prueba')
 
         await page.goto('/login')
-        await page.getByLabel('Correo electrónico').fill(email!)
+        await expect(page.getByRole('heading', { name: 'Bienvenido de vuelta' })).toBeVisible({ timeout: 60_000 })
+        await page.getByLabel('Email').fill(email!)
         await page.getByLabel('Contraseña').fill(password!)
-        await page.getByRole('button', { name: /iniciar sesión/i }).click()
+        await page.getByRole('button', { name: /ingresar al panel/i }).click()
 
-        await expect(page).toHaveURL(/\/coach\/dashboard/)
+        await expect(page).toHaveURL(/\/coach\/dashboard/, { timeout: 30_000 })
 
         const routes = [
             '/coach/clients',
@@ -37,7 +38,7 @@ test.describe('navigation perf smoke', () => {
         for (const route of routes) {
             const t0 = Date.now()
             await page.goto(route)
-            await expect(page.locator('main, body')).toBeVisible()
+            await expect(page.locator('body')).toBeVisible()
             expect(Date.now() - t0).toBeLessThan(30_000)
         }
     })

@@ -1,8 +1,36 @@
 'use client'
 
+import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Circle, Sparkles, X } from 'lucide-react'
+import { CheckCircle2, Circle, Copy, ExternalLink, Monitor, Smartphone, Sparkles, X } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { toast } from 'sonner'
+import confetti from 'canvas-confetti'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { GlassCard } from '@/components/ui/glass-card'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
+import type { Json } from '@/lib/database.types'
+import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
+import { COACH_NUTRITION_ONBOARDING_STEPS } from '@/app/coach/nutrition-plans/_components/nutrition-onboarding-shared'
+import { brandTourSeenStorageKey, BRAND_TOUR_SEEN_CHANGED_EVENT } from '@/lib/coach-brand-tour'
+import { persistOnboardingGuideAction } from './_actions/onboarding-guide.actions'
+import { OnboardingCompactLoopStrip } from './_components/onboarding/OnboardingCompactLoopStrip'
+import { OnboardingStepsJumpNav } from './_components/onboarding/OnboardingStepsJumpNav'
+import { OnboardingStepsVignetteCarousel } from './_components/onboarding/OnboardingStepsVignetteCarousel'
+import { OnboardingThreeSlot } from './_components/onboarding/OnboardingThreeSlot'
+import { postGuideEngagement } from './_lib/onboarding-telemetry.client'
 
 type StepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_checkin'
 
@@ -13,6 +41,9 @@ type PersistedState = {
 }
 
 const STORAGE_KEY = 'eva:coach-onboarding:v1'
+
+/** Evita doble confetti (p. ej. Strict Mode dev) en la misma sesión de navegador. */
+const CONFETTI_100_SESSION_KEY = 'eva:coach-onboarding-100-confetti-fired'
 
 function readPersistedState(): PersistedState {
     try {
@@ -28,6 +59,35 @@ function writePersistedState(state: PersistedState) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
 
+function normalizeGuideFromJson(raw: Json | undefined | null): PersistedState {
+    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+        return { completed: {} }
+    }
+    const o = raw as Record<string, unknown>
+    const completed: Partial<Record<StepKey, boolean>> = {}
+    const cr = o.completed
+    if (cr && typeof cr === 'object' && !Array.isArray(cr)) {
+        const keys: StepKey[] = ['profile_branding', 'first_client', 'first_plan', 'first_checkin']
+        for (const k of keys) {
+            const v = (cr as Record<string, unknown>)[k]
+            if (typeof v === 'boolean') {
+                completed[k] = v
+            }
+        }
+    }
+    return {
+        completed,
+        dismissed: o.dismissed === true,
+        ahaMomentSent: o.ahaMomentSent === true,
+    }
+}
+
+function persistedStateHasActivity(p: PersistedState): boolean {
+    if (p.dismissed) return true
+    if (p.ahaMomentSent) return true
+    return Object.keys(p.completed).length > 0
+}
+
 async function emitOnboardingEvent(
     stepKey: StepKey,
     eventType: 'step_completed' | 'step_reopened' | 'aha_moment',
@@ -41,46 +101,138 @@ async function emitOnboardingEvent(
 }
 
 export function CoachOnboardingChecklist({
+    coachId,
+    coachSlug,
+    absoluteStudentAppUrl,
+    initialOnboardingGuide,
     totalClients,
     activePlans,
-    hasRecentCheckin,
+    hasStudentSignal30d,
+    subscriptionTier,
+    hasCoachLogo,
 }: {
+    coachId: string
+    coachSlug: string
+    absoluteStudentAppUrl: string
+    initialOnboardingGuide: Json
     totalClients: number
     activePlans: number
-    hasRecentCheckin: boolean
+    hasStudentSignal30d: boolean
+    subscriptionTier: SubscriptionTier
+    hasCoachLogo: boolean
 }) {
     const [ready, setReady] = useState(false)
     const [dismissed, setDismissed] = useState(false)
     const [manualCompleted, setManualCompleted] = useState<Partial<Record<StepKey, boolean>>>({})
+    const [brandTourSeen, setBrandTourSeen] = useState(false)
+    const [dismissConfirmOpen, setDismissConfirmOpen] = useState(false)
     const previousStateRef = useRef<Partial<Record<StepKey, boolean>>>({})
     const ahaRef = useRef(false)
+    const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     useEffect(() => {
-        const persisted = readPersistedState()
-        setManualCompleted(persisted.completed ?? {})
-        ahaRef.current = Boolean(persisted.ahaMomentSent)
-        setDismissed(Boolean(persisted.dismissed))
+        const fromServer = normalizeGuideFromJson(initialOnboardingGuide)
+        const ls = readPersistedState()
+
+        if (persistedStateHasActivity(fromServer)) {
+            setManualCompleted(fromServer.completed ?? {})
+            setDismissed(Boolean(fromServer.dismissed))
+            ahaRef.current = Boolean(fromServer.ahaMomentSent)
+            writePersistedState(fromServer)
+            setReady(true)
+            return
+        }
+
+        setManualCompleted(ls.completed ?? {})
+        setDismissed(Boolean(ls.dismissed))
+        ahaRef.current = Boolean(ls.ahaMomentSent)
         setReady(true)
+
+        const lsSnapshot: PersistedState = {
+            completed: ls.completed ?? {},
+            dismissed: Boolean(ls.dismissed),
+            ahaMomentSent: Boolean(ls.ahaMomentSent),
+        }
+        if (persistedStateHasActivity(lsSnapshot)) {
+            void persistOnboardingGuideAction(lsSnapshot).then((r) => {
+                if (!r.ok) {
+                    toast.error('No se pudo guardar la guía en tu cuenta', { description: r.error })
+                }
+            })
+        }
+    }, [initialOnboardingGuide])
+
+    function schedulePersistToServer(snapshot: PersistedState) {
+        writePersistedState(snapshot)
+        if (persistTimerRef.current) {
+            clearTimeout(persistTimerRef.current)
+        }
+        persistTimerRef.current = setTimeout(() => {
+            persistTimerRef.current = null
+            void persistOnboardingGuideAction({
+                dismissed: snapshot.dismissed,
+                completed: snapshot.completed,
+                ahaMomentSent: snapshot.ahaMomentSent,
+            }).then((r) => {
+                if (!r.ok) {
+                    toast.error('No se pudo sincronizar la guía', { description: r.error })
+                }
+            })
+        }, 450)
+    }
+
+    useEffect(() => {
+        return () => {
+            if (persistTimerRef.current) {
+                clearTimeout(persistTimerRef.current)
+            }
+        }
     }, [])
+
+    useEffect(() => {
+        const tourKey = brandTourSeenStorageKey(coachId)
+        const readTourSeen = () => {
+            try {
+                setBrandTourSeen(localStorage.getItem(tourKey) === 'true')
+            } catch {
+                setBrandTourSeen(false)
+            }
+        }
+        readTourSeen()
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === tourKey && e.newValue === 'true') {
+                readTourSeen()
+            }
+        }
+        const onTourSeenSameTab = () => {
+            readTourSeen()
+        }
+        window.addEventListener('storage', onStorage)
+        window.addEventListener(BRAND_TOUR_SEEN_CHANGED_EVENT, onTourSeenSameTab)
+        return () => {
+            window.removeEventListener('storage', onStorage)
+            window.removeEventListener(BRAND_TOUR_SEEN_CHANGED_EVENT, onTourSeenSameTab)
+        }
+    }, [coachId])
 
     const autoCompleted = useMemo(
         () => ({
-            profile_branding: false,
+            profile_branding: hasCoachLogo || brandTourSeen,
             first_client: totalClients > 0,
             first_plan: activePlans > 0,
-            first_checkin: hasRecentCheckin,
+            first_checkin: hasStudentSignal30d,
         }),
-        [activePlans, hasRecentCheckin, totalClients]
+        [activePlans, brandTourSeen, hasCoachLogo, hasStudentSignal30d, totalClients]
     )
 
     const completed: Record<StepKey, boolean> = useMemo(
         () => ({
-            profile_branding: Boolean(manualCompleted.profile_branding),
+            profile_branding: autoCompleted.profile_branding || Boolean(manualCompleted.profile_branding),
             first_client: autoCompleted.first_client || Boolean(manualCompleted.first_client),
             first_plan: autoCompleted.first_plan || Boolean(manualCompleted.first_plan),
             first_checkin: autoCompleted.first_checkin || Boolean(manualCompleted.first_checkin),
         }),
-        [autoCompleted.first_checkin, autoCompleted.first_client, autoCompleted.first_plan, manualCompleted]
+        [autoCompleted, manualCompleted]
     )
 
     const completedCount = (Object.values(completed).filter(Boolean) || []).length
@@ -102,12 +254,31 @@ export function CoachOnboardingChecklist({
         }
 
         if (allDone && !ahaRef.current) {
+            if (typeof window !== 'undefined') {
+                const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                if (
+                    !prefersReduced &&
+                    !sessionStorage.getItem(CONFETTI_100_SESSION_KEY)
+                ) {
+                    sessionStorage.setItem(CONFETTI_100_SESSION_KEY, '1')
+                    confetti({
+                        particleCount: 130,
+                        spread: 72,
+                        origin: { y: 0.4 },
+                        colors: ['#10B981', '#007AFF', '#22c55e', '#38bdf8', '#34d399'],
+                    })
+                }
+            }
             void emitOnboardingEvent('first_checkin', 'aha_moment', { progressPct: 100 })
             ahaRef.current = true
         }
 
         previousStateRef.current = completed
-        writePersistedState({ completed: manualCompleted, ahaMomentSent: ahaRef.current, dismissed })
+        schedulePersistToServer({
+            completed: manualCompleted,
+            ahaMomentSent: ahaRef.current,
+            dismissed,
+        })
     }, [allDone, completed, dismissed, manualCompleted, progressPct, ready])
 
     function toggleProfileStep() {
@@ -118,79 +289,508 @@ export function CoachOnboardingChecklist({
     }
 
     function dismiss() {
+        void postGuideEngagement('profile_branding', {
+            widget: 'onboarding_checklist',
+            action: 'dismiss_confirm',
+            progress_pct: progressPct,
+            all_done: allDone,
+        })
         setDismissed(true)
-        writePersistedState({ completed: manualCompleted, ahaMomentSent: ahaRef.current, dismissed: true })
+        setDismissConfirmOpen(false)
     }
 
-    if (!ready || dismissed) return null
+    function resumeGuide() {
+        setDismissed(false)
+    }
+
+    if (!ready) {
+        return (
+            <div
+                className="min-h-[120px] rounded-2xl border border-dashed border-border/40 bg-muted/10 animate-pulse"
+                aria-hidden
+            />
+        )
+    }
+
+    if (dismissed && allDone) {
+        return null
+    }
+
+    if (dismissed && !allDone) {
+        return (
+            <div className="rounded-2xl border border-[color:var(--theme-primary)]/25 bg-[color:var(--theme-primary)]/5 px-4 py-3 sm:px-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-medium text-foreground">
+                        Seguís con pasos pendientes en tu guía de inicio.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="default"
+                        className="h-11 min-h-11 shrink-0 touch-manipulation sm:w-auto w-full"
+                        onClick={resumeGuide}
+                    >
+                        Continuar guía
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    const studentAppPath = `/c/${encodeURIComponent(coachSlug)}`
 
     return (
-        <GlassCard className="p-5 border-border bg-white/90 dark:bg-zinc-950">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Onboarding coach</p>
-                    <h3 className="text-lg font-black tracking-tight text-foreground mt-1">Activa tu beta en 4 pasos</h3>
+        <>
+        <GlassCard className="overflow-hidden border-border bg-white/90 p-5 dark:bg-zinc-950 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                        Tu ruta en EVA
+                    </p>
+                    <h3 className="text-lg font-black tracking-tight text-foreground sm:text-xl">
+                        Pon tu estudio en marcha
+                    </h3>
+                    <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                        Cuatro pasos para cerrar el circuito: tu marca → un alumno → un plan asignado → señal de que tu
+                        alumno ya usa la app.
+                    </p>
                 </div>
-                <div className="flex items-start gap-3">
-                    <div className="text-right">
+                <div className="flex shrink-0 items-start justify-between gap-3 sm:flex-col sm:items-end sm:text-right">
+                    <div>
                         <p className="text-2xl font-black text-[color:var(--theme-primary)]">{progressPct}%</p>
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Completado</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            Completado
+                        </p>
                     </div>
                     <button
                         type="button"
-                        onClick={dismiss}
-                        className="mt-1 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-                        aria-label="Cerrar onboarding"
+                        onClick={() => setDismissConfirmOpen(true)}
+                        className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground min-h-11 min-w-11 inline-flex items-center justify-center touch-manipulation"
+                        aria-label="Ocultar guía de inicio"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="h-4 w-4" />
                     </button>
                 </div>
             </div>
 
-            <div className="h-2 rounded-full bg-muted mt-4 overflow-hidden">
+            {!allDone ? (
+                <>
+                    <OnboardingThreeSlot />
+                    <OnboardingCompactLoopStrip />
+                </>
+            ) : null}
+
+            {/* V3 gemelo: tabs en móvil, grid desde md (plan §5.2) */}
+            <div className="mt-5 md:hidden">
+                <Tabs defaultValue="coach" className="flex w-full flex-col gap-3">
+                    <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 p-1" variant="default">
+                        <TabsTrigger
+                            value="coach"
+                            className="min-h-11 gap-2 px-2 py-2 text-xs font-semibold sm:text-sm"
+                        >
+                            <Monitor className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
+                            Tu panel
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="student"
+                            className="min-h-11 gap-2 px-2 py-2 text-xs font-semibold sm:text-sm"
+                        >
+                            <Smartphone className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
+                            Tu alumno
+                        </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="coach" className="focus-visible:outline-none">
+                        <OnboardingGemelliCoachCard />
+                    </TabsContent>
+                    <TabsContent value="student" className="focus-visible:outline-none">
+                        <OnboardingGemelliStudentCard studentAppPath={studentAppPath} />
+                    </TabsContent>
+                </Tabs>
+            </div>
+            <div className="mt-5 hidden gap-4 md:grid md:grid-cols-2">
+                <OnboardingGemelliCoachCard />
+                <OnboardingGemelliStudentCard studentAppPath={studentAppPath} />
+            </div>
+
+            <ShareAppBlock absoluteUrl={absoluteStudentAppUrl} />
+
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-muted">
                 <div
                     className="h-full bg-[color:var(--theme-primary)] transition-all duration-300"
                     style={{ width: `${progressPct}%` }}
+                    role="progressbar"
+                    aria-valuenow={progressPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Progreso de la guía de inicio"
                 />
             </div>
 
-            <div className="space-y-2 mt-4">
-                <button
-                    type="button"
-                    onClick={toggleProfileStep}
-                    className="w-full flex items-center justify-between rounded-lg border border-border px-3 py-2 text-left hover:bg-muted/40 transition-colors"
-                >
-                    <span className="text-sm text-foreground">Completar branding inicial</span>
-                    {completed.profile_branding ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    ) : (
-                        <Circle className="w-4 h-4 text-muted-foreground" />
-                    )}
-                </button>
+            {!allDone ? <OnboardingStepsVignetteCarousel completed={completed} /> : null}
 
-                <StatusRow label="Registrar primer alumno" done={completed.first_client} />
-                <StatusRow label="Asignar primer plan" done={completed.first_plan} />
-                <StatusRow label="Recibir primer check-in" done={completed.first_checkin} />
+            <OnboardingStepsJumpNav />
+
+            <div className="mt-5 space-y-3">
+                <OnboardingStepBlock
+                    anchorId="coach-onboarding-step-1"
+                    title="1. Tu marca en la app del alumno"
+                    description="Logo, color y mensajes: lo que ves en Mi Marca es lo que ellos ven al instalar tu espacio."
+                    done={completed.profile_branding}
+                    actions={
+                        <>
+                            <Link
+                                href="/coach/settings?tour=1"
+                                className={cn(
+                                    buttonVariants({ variant: 'default' }),
+                                    'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center'
+                                )}
+                            >
+                                Ir a Mi Marca y guía
+                            </Link>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="h-11 min-h-11 touch-manipulation text-muted-foreground"
+                                onClick={toggleProfileStep}
+                            >
+                                {completed.profile_branding ? 'Desmarcar paso' : 'Ya lo dejé listo'}
+                            </Button>
+                        </>
+                    }
+                />
+
+                <OnboardingStepBlock
+                    anchorId="coach-onboarding-step-2"
+                    title="2. Primer alumno"
+                    description="Creá o importá al menos un perfil para poder asignarle un plan."
+                    done={completed.first_client}
+                    actions={
+                        <Link
+                            href="/coach/clients"
+                            className={cn(
+                                buttonVariants({ variant: 'secondary' }),
+                                'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
+                            )}
+                        >
+                            Ir a alumnos
+                        </Link>
+                    }
+                />
+
+                <OnboardingStepBlock
+                    anchorId="coach-onboarding-step-3"
+                    title="3. Primer plan asignado"
+                    description="Desde programas o el constructor: activá un plan para ese alumno."
+                    done={completed.first_plan}
+                    actions={
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <Link
+                                href="/coach/workout-programs"
+                                className={cn(
+                                    buttonVariants({ variant: 'secondary' }),
+                                    'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
+                                )}
+                            >
+                                Ver programas
+                            </Link>
+                            <Link
+                                href="/coach/workout-programs/builder"
+                                className={cn(
+                                    buttonVariants({ variant: 'outline' }),
+                                    'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
+                                )}
+                            >
+                                Abrir constructor
+                            </Link>
+                        </div>
+                    }
+                />
+
+                <OnboardingStepBlock
+                    anchorId="coach-onboarding-step-4"
+                    title="4. Tu alumno ya usó la app"
+                    description="Se marca listo si en los últimos 30 días hay al menos un check-in o un registro de entreno de tus alumnos (misma ventana que el dashboard)."
+                    done={completed.first_checkin}
+                    actions={
+                        <Link
+                            href="/coach/clients"
+                            className={cn(
+                                buttonVariants({ variant: 'outline' }),
+                                'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
+                            )}
+                        >
+                            Ver alumnos
+                        </Link>
+                    }
+                />
             </div>
 
+            <NutritionTierBlock subscriptionTier={subscriptionTier} />
+
             {allDone ? (
-                <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-500 mt-0.5" />
+                <div className="mt-5 flex gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
                     <div>
-                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Aha moment alcanzado</p>
-                        <p className="text-xs text-muted-foreground">Ya completaste el flujo minimo de activacion beta.</p>
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                            Activación lista
+                        </p>
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                            Completaste el circuito mínimo: marca, alumno, plan y señal de uso en los últimos 30 días.
+                            El enlace y el QR de arriba siguen disponibles para invitar a más gente.
+                        </p>
                     </div>
                 </div>
             ) : null}
         </GlassCard>
+
+        <AlertDialog open={dismissConfirmOpen} onOpenChange={setDismissConfirmOpen}>
+            <AlertDialogContent className="rounded-2xl border-border bg-card text-foreground sm:max-w-md">
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Ocultar la guía de inicio?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Podés volver con el botón “Continuar guía” si todavía tenés pasos pendientes. La guía no se
+                        borra: solo se minimiza en el dashboard.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="gap-2 sm:gap-0">
+                    <AlertDialogCancel className="h-11 min-h-11 touch-manipulation rounded-xl">
+                        Seguir viendo
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                        className="h-11 min-h-11 touch-manipulation rounded-xl bg-[color:var(--theme-primary)] text-primary-foreground hover:opacity-95"
+                        onClick={() => dismiss()}
+                    >
+                        Ocultar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        </>
     )
 }
 
-function StatusRow({ label, done }: { label: string; done: boolean }) {
+function OnboardingGemelliCoachCard() {
     return (
-        <div className="w-full flex items-center justify-between rounded-lg border border-border/70 px-3 py-2">
-            <span className="text-sm text-foreground">{label}</span>
-            {done ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
+        <div className="rounded-2xl border border-border/80 bg-muted/20 p-4">
+            <div className="mb-2 flex items-center gap-2 text-foreground">
+                <Monitor className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
+                <span className="text-xs font-bold uppercase tracking-wide">Tu panel</span>
+            </div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+                Acá sumás alumnos, armás o duplicás programas y asignás planes. Todo lo que configurás acá es lo que
+                vos controlás como coach.
+            </p>
+        </div>
+    )
+}
+
+function OnboardingGemelliStudentCard({ studentAppPath }: { studentAppPath: string }) {
+    return (
+        <div className="rounded-2xl border border-border/80 bg-gradient-to-br from-[color:var(--theme-primary)]/12 to-transparent p-4">
+            <div className="mb-2 flex items-center gap-2 text-foreground">
+                <Smartphone className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
+                <span className="text-xs font-bold uppercase tracking-wide">Tu alumno</span>
+            </div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+                Tus alumnos entran a tu espacio con tu marca, ven su plan y registran entrenos o check-ins.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Link
+                    href="/coach/settings/preview"
+                    className={cn(
+                        buttonVariants({ variant: 'secondary', size: 'sm' }),
+                        'h-10 min-h-10 touch-manipulation inline-flex items-center justify-center px-3'
+                    )}
+                >
+                    Vista previa alumno
+                </Link>
+                <Link
+                    href={studentAppPath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                        buttonVariants({ variant: 'outline', size: 'sm' }),
+                        'h-10 min-h-10 touch-manipulation inline-flex items-center justify-center gap-1.5 px-3'
+                    )}
+                >
+                    Abrir app alumno
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+            </div>
+        </div>
+    )
+}
+
+function NutritionTierBlock({ subscriptionTier }: { subscriptionTier: SubscriptionTier }) {
+    const { canUseNutrition } = getTierCapabilities(subscriptionTier)
+
+    if (!canUseNutrition) {
+        return (
+            <div className="mt-5 rounded-2xl border border-border/70 bg-muted/20 p-4 sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Nutrición</p>
+                <h4 className="mt-1 text-sm font-black tracking-tight text-foreground sm:text-base">
+                    Planes de nutrición en Pro o superior
+                </h4>
+                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                    Tu plan Starter incluye entrenos y marca. Cuando subas de plan, desbloqueás plantillas, catálogo de
+                    alimentos y asignación de planes nutricionales a tus alumnos.
+                </p>
+                <Link
+                    href="/coach/subscription"
+                    className={cn(
+                        buttonVariants({ variant: 'secondary' }),
+                        'mt-3 inline-flex h-11 min-h-11 items-center justify-center px-4 touch-manipulation'
+                    )}
+                >
+                    Ver planes y upgrade
+                </Link>
+            </div>
+        )
+    }
+
+    return (
+        <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 sm:p-5 dark:border-emerald-500/25 dark:bg-emerald-500/10">
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400/90">
+                Nutrición (opcional)
+            </p>
+            <h4 className="mt-1 text-sm font-black tracking-tight text-foreground sm:text-base">
+                Cuando quieras, seguí esta ruta
+            </h4>
+            <p className="mt-1 max-w-2xl text-xs text-muted-foreground sm:text-sm">
+                Ya tenés nutrición en tu plan. Estos tres pasos son independientes del circuito principal de arriba.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {COACH_NUTRITION_ONBOARDING_STEPS.map((step) => {
+                    const Icon = step.icon
+                    const href = step.href ?? '/coach/nutrition-plans'
+                    return (
+                        <div
+                            key={step.number}
+                            className="flex flex-col rounded-xl border border-border/60 bg-card/50 p-3"
+                        >
+                            <div className="flex items-center gap-2">
+                                <span
+                                    className={cn(
+                                        'inline-flex h-8 w-8 items-center justify-center rounded-lg',
+                                        step.iconBg
+                                    )}
+                                >
+                                    <Icon className={cn('h-4 w-4', step.iconColor)} aria-hidden />
+                                </span>
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                    Paso {step.number}
+                                </span>
+                            </div>
+                            <p className="mt-2 text-sm font-bold text-foreground">{step.title}</p>
+                            <p className="mt-1 flex-1 text-xs leading-relaxed text-muted-foreground">{step.description}</p>
+                            <Link
+                                href={href}
+                                className={cn(
+                                    buttonVariants({ variant: 'outline', size: 'sm' }),
+                                    'mt-3 h-9 min-h-9 touch-manipulation inline-flex items-center justify-center px-2 text-center'
+                                )}
+                            >
+                                {step.cta}
+                            </Link>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+function ShareAppBlock({ absoluteUrl }: { absoluteUrl: string }) {
+    async function copyLink() {
+        try {
+            await navigator.clipboard.writeText(absoluteUrl)
+            toast.success('Enlace copiado al portapapeles')
+        } catch {
+            toast.error('No se pudo copiar. Copiá el enlace manualmente.')
+        }
+    }
+
+    return (
+        <div className="mt-5 rounded-2xl border border-dashed border-border/90 bg-muted/15 p-4 sm:p-5">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Compartir app</p>
+            <h4 className="mt-1 text-sm font-black tracking-tight text-foreground sm:text-base">
+                Enviá tu enlace o mostrá el QR
+            </h4>
+            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                Tus alumnos entran a tu espacio con tu marca. Copiá el enlace para WhatsApp o usá el QR en el gym; en Mi
+                Marca tenés opciones extra (tamaños y descarga).
+            </p>
+            <p className="mt-3 break-all rounded-lg border border-border/60 bg-background/80 px-3 py-2 font-mono text-[11px] leading-relaxed text-foreground/90 sm:text-xs">
+                {absoluteUrl}
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button
+                    type="button"
+                    variant="default"
+                    className="h-11 min-h-11 touch-manipulation gap-2"
+                    onClick={() => void copyLink()}
+                >
+                    <Copy className="h-4 w-4 shrink-0" aria-hidden />
+                    Copiar enlace
+                </Button>
+                <Link
+                    href="/coach/settings"
+                    className={cn(
+                        buttonVariants({ variant: 'outline' }),
+                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center gap-2 px-4'
+                    )}
+                >
+                    Mi Marca (link y QR)
+                </Link>
+            </div>
+            <div className="mt-4 flex justify-center">
+                <div
+                    className="rounded-xl bg-white p-3 shadow-sm dark:bg-zinc-100"
+                    aria-label="Código QR del enlace de tu app"
+                >
+                    <QRCodeSVG value={absoluteUrl} size={120} level="M" />
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function OnboardingStepBlock({
+    anchorId,
+    title,
+    description,
+    done,
+    actions,
+}: {
+    anchorId?: string
+    title: string
+    description: string
+    done: boolean
+    actions: ReactNode
+}) {
+    return (
+        <div
+            id={anchorId}
+            className={cn(
+                'rounded-xl border border-border/70 bg-card/40 p-4',
+                anchorId && 'scroll-mt-24 md:scroll-mt-28'
+            )}
+        >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                        {done ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
+                        ) : (
+                            <Circle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                        )}
+                        <h4 className="text-sm font-bold text-foreground">{title}</h4>
+                    </div>
+                    <p className="pl-6 text-xs leading-relaxed text-muted-foreground sm:text-sm">{description}</p>
+                </div>
+            </div>
+            <div className="mt-3 flex flex-col gap-2 pl-0 sm:mt-4 sm:flex-row sm:flex-wrap sm:items-center sm:pl-6">
+                {actions}
+            </div>
         </div>
     )
 }
