@@ -6,6 +6,7 @@ type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
 import type { Metadata } from 'next'
 import { WeeklyPlanBuilder } from './WeeklyPlanBuilder'
+import { getCoach } from '@/lib/coach/get-coach'
 
 export const metadata: Metadata = { title: 'Planificador Semanal | EVA' }
 
@@ -22,6 +23,8 @@ export default async function BuilderPage(
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
+
+    const coach = await getCoach()
 
     // Verify client belongs to coach
     const { data: rawClient } = await supabase
@@ -74,10 +77,11 @@ export default async function BuilderPage(
     }
 
     return (
-        <WeeklyPlanBuilder 
-            client={client} 
-            exercises={exercises} 
-            initialProgram={initialProgramData} 
+        <WeeklyPlanBuilder
+            client={client}
+            exercises={exercises}
+            initialProgram={initialProgramData}
+            coachName={coach?.brand_name ?? coach?.full_name ?? undefined}
         />
     )
 }

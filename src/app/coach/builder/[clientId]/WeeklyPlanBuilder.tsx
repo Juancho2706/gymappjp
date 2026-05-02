@@ -166,7 +166,7 @@ function trackRecentExercise(exerciseId: string) {
     } catch { /* silently ignore storage errors */ }
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any }) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -1777,6 +1777,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram }: { clien
                 onClose={() => setShowPrint(false)}
                 programName={programName || 'Programa'}
                 clientName={client?.full_name ?? undefined}
+                coachName={coachName}
                 weeksToRepeat={weeksToRepeat}
                 days={builderA.days}
                 daysB={isABMode ? builderB.days : undefined}
