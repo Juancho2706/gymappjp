@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Trophy } from 'lucide-react'
-import confetti from 'canvas-confetti'
+
 import { springs } from '@/lib/animation-presets'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fireConfetti = (opts: object) => (import('canvas-confetti') as Promise<any>).then(m => (m.default ?? m)(opts))
 
 interface PRBadgeProps {
     exerciseName: string
@@ -27,7 +30,7 @@ export function PRBadge({ exerciseName, weightKg, achievedAt, index }: PRBadgePr
         const key = `pr-confetti-${exerciseName}-${achievedAt.slice(0, 10)}`
         if (sessionStorage.getItem(key)) return
         sessionStorage.setItem(key, '1')
-        confetti({ particleCount: 60, spread: 50, origin: { x: 0.5, y: 0.75 } })
+        fireConfetti({ particleCount: 60, spread: 50, origin: { x: 0.5, y: 0.75 } })
     }, [mounted, achievedAt, exerciseName])
 
     return (

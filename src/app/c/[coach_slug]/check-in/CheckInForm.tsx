@@ -313,7 +313,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                 </p>
                                 {frontPreview ? (
                                     <div className="relative w-full aspect-[3/4] max-h-72 rounded-xl overflow-hidden border border-border">
-                                        <Image src={frontPreview} alt="Frontal" fill className="object-cover" />
+                                        <Image src={frontPreview} alt="Frontal" fill sizes="(max-width: 768px) 100vw, 400px" className="object-cover" />
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -350,7 +350,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                 </p>
                                 {backPreview ? (
                                     <div className="relative w-full aspect-[3/4] max-h-72 rounded-xl overflow-hidden border border-border">
-                                        <Image src={backPreview} alt="Espalda" fill className="object-cover" />
+                                        <Image src={backPreview} alt="Espalda" fill sizes="(max-width: 768px) 100vw, 400px" className="object-cover" />
                                         <button
                                             type="button"
                                             onClick={() => {

@@ -73,7 +73,7 @@ export function CheckInCard({ date, weight, energyLevel, notes, photoUrl }: Chec
             {isPhotoOpen && photoUrl && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setIsPhotoOpen(false)}>
                     <div className="relative w-full max-w-lg aspect-[3/4] max-h-[90vh] rounded-2xl overflow-hidden bg-card border border-border shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <Image src={photoUrl} alt={`Foto progreso ${formattedDate}`} fill className="object-cover" />
+                        <Image src={photoUrl} alt={`Foto progreso ${formattedDate}`} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
                         <button
                             onClick={() => setIsPhotoOpen(false)}
                             className="absolute top-4 right-4 w-10 h-10 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black border border-white/10 backdrop-blur-sm transition-colors"

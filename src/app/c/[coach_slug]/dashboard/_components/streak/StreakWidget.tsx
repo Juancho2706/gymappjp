@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Flame } from 'lucide-react'
-import confetti from 'canvas-confetti'
+
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fireConfetti = (opts: object) => (import('canvas-confetti') as Promise<any>).then(m => (m.default ?? m)(opts))
 
 interface StreakWidgetProps {
     streak: number
@@ -22,7 +25,7 @@ export function StreakWidget({ streak }: StreakWidgetProps) {
         const key = `streak-confetti-${streak}`
         if (typeof window !== 'undefined' && !sessionStorage.getItem(key)) {
             sessionStorage.setItem(key, '1')
-            confetti({ particleCount: 60, spread: 50, origin: { x: 0.85, y: 0.12 } })
+            fireConfetti({ particleCount: 60, spread: 50, origin: { x: 0.85, y: 0.12 } })
         }
     }, [mounted, reduce, streak])
 

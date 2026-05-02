@@ -82,8 +82,18 @@ export async function middleware(request: NextRequest) {
               .maybeSingle()
         : null
 
-    // Refresh session — IMPORTANT: do not remove
-    const { data: { user } } = await supabase.auth.getUser()
+    // On /c/[slug]/login with no session cookie, skip the Supabase auth round-trip — the user
+    // is definitely unauthenticated, so there is no session to refresh.
+    const isClientLoginPage = /^\/c\/[^/]+\/login$/.test(pathname)
+    const noSessionCookie = isClientLoginPage && (() => {
+        const projectRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').match(/https?:\/\/([^.]+)\./)?.[1] ?? ''
+        return !request.cookies.getAll().some(c => c.name.startsWith(`sb-${projectRef}-auth-token`))
+    })()
+
+    // Refresh session — IMPORTANT: do not remove (skipped only on login page with no session)
+    const { data: { user } } = noSessionCookie
+        ? { data: { user: null } }
+        : await supabase.auth.getUser()
 
     // ============================================================
     // ADMIN ROUTE PROTECTION
@@ -289,25 +299,16 @@ export async function middleware(request: NextRequest) {
     // 3. AUTO-REDIRECT authenticated users away from root /
     // ============================================================
     if (pathname === '/' && user) {
-        // Is it a coach?
-        const { data: coachData } = await supabase
-            .from('coaches')
-            .select('id')
-            .eq('id', user.id)
-            .maybeSingle()
+        const [{ data: coachData }, { data: clientData }] = await Promise.all([
+            supabase.from('coaches').select('id').eq('id', user.id).maybeSingle(),
+            supabase.from('clients').select('id, coach_id, coaches(slug)').eq('id', user.id).maybeSingle(),
+        ])
 
         if (coachData) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/coach/dashboard'
             return NextResponse.redirect(redirectUrl)
         }
-
-        // Is it a client?
-        const { data: clientData } = await supabase
-            .from('clients')
-            .select('id, coach_id, coaches(slug)')
-            .eq('id', user.id)
-            .maybeSingle()
 
         if (clientData?.coaches) {
             const coach = clientData.coaches as unknown as Pick<Coach, 'slug'>

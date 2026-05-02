@@ -141,7 +141,7 @@ export function ProfileCheckInSnapshot({ checkIn, onViewHistory }: ProfileCheckI
                             </DialogTitle>
                         </DialogHeader>
                         <div className="relative aspect-[3/4] w-full max-h-[70vh] rounded-lg overflow-hidden bg-black">
-                            <Image src={photo} alt="Check-in ampliado" fill className="object-contain" />
+                            <Image src={photo} alt="Check-in ampliado" fill sizes="(max-width: 768px) 100vw, 600px" className="object-contain" />
                         </div>
                     </DialogContent>
                 </Dialog>

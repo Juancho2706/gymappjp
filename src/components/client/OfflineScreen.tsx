@@ -25,7 +25,7 @@ export function OfflineScreen({ brandName, logoUrl, primaryColor }: Props) {
             <div className="relative z-10 flex flex-col items-center gap-5">
                 {logoUrl ? (
                     <div className="relative w-20 h-20 rounded-2xl overflow-hidden border border-border/50 shadow-lg">
-                        <Image src={logoUrl} alt={brandName} fill className="object-contain p-2" />
+                        <Image src={logoUrl} alt={brandName} fill sizes="80px" className="object-contain p-2" />
                     </div>
                 ) : (
                     <div

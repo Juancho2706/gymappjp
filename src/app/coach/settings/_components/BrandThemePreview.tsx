@@ -409,7 +409,7 @@ export function BrandThemePreview({
                 <div className="px-4 py-6 text-center space-y-4">
                     {logoUrl ? (
                         <div className="w-16 h-16 rounded-2xl overflow-hidden border mx-auto relative">
-                            <Image src={logoUrl} alt={brandName} fill className="object-contain p-1.5" />
+                            <Image src={logoUrl} alt={brandName} fill sizes="64px" className="object-contain p-1.5" />
                         </div>
                     ) : (
                         <div
