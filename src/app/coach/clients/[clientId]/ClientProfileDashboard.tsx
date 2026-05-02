@@ -118,14 +118,14 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                 
                 if (block.workout_logs) {
                     block.workout_logs.forEach((log: any) => {
-                        if (log.weight && log.reps) {
+                        if (log.weight_kg && log.reps_done) {
                             planLoggedSets = true;
-                            const volume = log.weight * log.reps;
+                            const volume = log.weight_kg * log.reps_done;
                             planVolume += volume;
                             totalVolume += volume;
-                            
+
                             if (isKeyExercise) {
-                                const rep1RM = calculate1RM(log.weight, log.reps);
+                                const rep1RM = calculate1RM(log.weight_kg, log.reps_done);
                                 if (rep1RM > exMax1RM) {
                                     exMax1RM = rep1RM;
                                 }
@@ -201,7 +201,8 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                 mealsDone: done,
                 compliancePct: pct,
                 mealLogs,
-                diferencial: 0,
+                diferencial: ((log.consumed_calories as number) || 0) -
+                    ((log.target_calories_at_log as number) || targetCalories),
                 isAdherent: pct >= 80,
             }
         })
@@ -649,9 +650,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                                     contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
                                                 />
                                                 <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                                                <Bar dataKey="proteina" name="Proteína" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
-                                                <Bar dataKey="carbohidratos" name="Carbs" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                                                <Bar dataKey="grasas" name="Grasas" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="consumed_protein" name="Proteína" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
+                                                <Bar dataKey="consumed_carbs" name="Carbs" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+                                                <Bar dataKey="consumed_fats" name="Grasas" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     ) : (
@@ -672,7 +673,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                                     contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
                                                     cursor={{fill: 'transparent'}}
                                                 />
-                                                <Bar dataKey="calorias" name="Calorías Reales" radius={[4, 4, 0, 0]}>
+                                                <Bar dataKey="consumed_calories" name="Calorías Reales" radius={[4, 4, 0, 0]}>
                                                     {nutritionHistory.map((entry, index) => (
                                                         <Cell 
                                                             key={`cell-${index}`} 
