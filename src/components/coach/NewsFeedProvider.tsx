@@ -41,6 +41,12 @@ export function NewsFeedProvider({
   const [items] = useState(initialItems)
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [optimisticCount, setOptimisticCount] = useOptimistic(unreadCount)
+
+  // Sync when layout re-renders with new initial count (client-side navigation)
+  useEffect(() => {
+    setUnreadCount(initialUnreadCount)
+  }, [initialUnreadCount])
+
   const handleMarkAllAsRead = useCallback(async () => {
     if (optimisticCount === 0) return
     const currentCount = unreadCount

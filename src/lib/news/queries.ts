@@ -4,21 +4,37 @@ import { cache } from 'react'
 export const getUnreadNewsCount = cache(async function getUnreadNewsCount(coachId: string): Promise<number> {
   const supabase = await createClient()
 
-  const { count, error } = await supabase
+  // Fetch published news IDs
+  const { data: newsItems, error: newsError } = await supabase
     .from('news_items')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .eq('status', 'published')
     .lte('published_at', new Date().toISOString())
-    .not('id', 'in', (
-      supabase.from('news_reads').select('news_item_id').eq('coach_id', coachId)
-    ))
 
-  if (error) {
-    console.error('[news] unread count error:', error)
+  if (newsError) {
+    console.error('[news] unread count error (news):', newsError)
     return 0
   }
 
-  return count ?? 0
+  if (!newsItems || newsItems.length === 0) {
+    return 0
+  }
+
+  // Fetch reads for this coach
+  const { data: reads, error: readsError } = await supabase
+    .from('news_reads')
+    .select('news_item_id')
+    .eq('coach_id', coachId)
+
+  if (readsError) {
+    console.error('[news] unread count error (reads):', readsError)
+    return 0
+  }
+
+  const readIds = new Set(reads?.map((r) => r.news_item_id) ?? [])
+  const unreadCount = newsItems.filter((ni) => !readIds.has(ni.id)).length
+
+  return unreadCount
 })
 
 export async function getPublishedNewsItems() {
