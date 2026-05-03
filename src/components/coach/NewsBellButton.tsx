@@ -129,11 +129,22 @@ function BellIconWithBadge({ unreadCount }: { unreadCount: number }) {
 
 export function NewsBellButton() {
   const { unreadCount, markAllAsRead } = useNewsFeed()
-  const [isOpen, setIsOpen] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isDesktopOpen, setIsDesktopOpen] = useState(false)
 
-  const handleOpen = useCallback(
+  const handleMobileOpen = useCallback(
     async (open: boolean) => {
-      setIsOpen(open)
+      setIsMobileOpen(open)
+      if (open) {
+        await markAllAsRead()
+      }
+    },
+    [markAllAsRead]
+  )
+
+  const handleDesktopOpen = useCallback(
+    async (open: boolean) => {
+      setIsDesktopOpen(open)
       if (open) {
         await markAllAsRead()
       }
@@ -145,10 +156,10 @@ export function NewsBellButton() {
     <>
       {/* Mobile: Sheet */}
       <div className="md:hidden flex items-center">
-        <Sheet open={isOpen} onOpenChange={handleOpen}>
+        <Sheet open={isMobileOpen} onOpenChange={handleMobileOpen}>
           <button
             type="button"
-            onClick={() => handleOpen(true)}
+            onClick={() => handleMobileOpen(true)}
             className="relative flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Novedades"
           >
@@ -159,7 +170,7 @@ export function NewsBellButton() {
               <SheetTitle>Novedades</SheetTitle>
             </SheetHeader>
             <div className="overflow-y-auto pb-safe">
-              <NewsFeedList onNavigate={() => setIsOpen(false)} />
+              <NewsFeedList onNavigate={() => setIsMobileOpen(false)} />
             </div>
           </SheetContent>
         </Sheet>
@@ -167,7 +178,7 @@ export function NewsBellButton() {
 
       {/* Desktop: Popover */}
       <div className="hidden md:block">
-        <Popover open={isOpen} onOpenChange={handleOpen}>
+        <Popover open={isDesktopOpen} onOpenChange={handleDesktopOpen}>
           <PopoverTrigger
             className="relative text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Novedades"
@@ -183,7 +194,7 @@ export function NewsBellButton() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold">Novedades</h3>
             </div>
-            <NewsFeedList onNavigate={() => setIsOpen(false)} />
+            <NewsFeedList onNavigate={() => setIsDesktopOpen(false)} />
           </PopoverContent>
         </Popover>
       </div>
