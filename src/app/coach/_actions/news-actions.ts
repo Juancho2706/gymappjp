@@ -13,28 +13,43 @@ export async function markAllNewsAsRead(): Promise<{ success: boolean; error?: s
 
   const coachId = user.id
 
-  // Obtener IDs de novedades publicadas no leídas
-  const { data: unreadItems, error: fetchError } = await supabase
+  // Fetch published news IDs
+  const { data: newsItems, error: newsError } = await supabase
     .from('news_items')
     .select('id')
     .eq('status', 'published')
     .lte('published_at', new Date().toISOString())
-    .not('id', 'in', (
-      supabase.from('news_reads').select('news_item_id').eq('coach_id', coachId)
-    ))
 
-  if (fetchError) {
-    console.error('[news] fetch unread error:', fetchError)
+  if (newsError) {
+    console.error('[news] mark read fetch error:', newsError)
     return { success: false, error: 'Error al obtener novedades' }
   }
 
-  if (!unreadItems || unreadItems.length === 0) {
+  if (!newsItems || newsItems.length === 0) {
     return { success: true }
   }
 
-  const rows = unreadItems.map((item) => ({
+  // Fetch existing reads for this coach
+  const { data: reads, error: readsError } = await supabase
+    .from('news_reads')
+    .select('news_item_id')
+    .eq('coach_id', coachId)
+
+  if (readsError) {
+    console.error('[news] mark read reads error:', readsError)
+    return { success: false, error: 'Error al verificar lecturas' }
+  }
+
+  const readIds = new Set(reads?.map((r) => r.news_item_id) ?? [])
+  const unreadIds = newsItems.filter((ni) => !readIds.has(ni.id)).map((ni) => ni.id)
+
+  if (unreadIds.length === 0) {
+    return { success: true }
+  }
+
+  const rows = unreadIds.map((id) => ({
     coach_id: coachId,
-    news_item_id: item.id,
+    news_item_id: id,
   }))
 
   const { error: insertError } = await supabase
@@ -60,19 +75,33 @@ export async function refreshNewsCount(): Promise<{ count: number; error?: strin
 
   const coachId = user.id
 
-  const { count, error } = await supabase
+  const { data: newsItems, error: newsError } = await supabase
     .from('news_items')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .eq('status', 'published')
     .lte('published_at', new Date().toISOString())
-    .not('id', 'in', (
-      supabase.from('news_reads').select('news_item_id').eq('coach_id', coachId)
-    ))
 
-  if (error) {
-    console.error('[news] refresh count error:', error)
+  if (newsError) {
+    console.error('[news] refresh count error:', newsError)
     return { count: 0, error: 'Error al obtener novedades' }
   }
 
-  return { count: count ?? 0 }
+  if (!newsItems || newsItems.length === 0) {
+    return { count: 0 }
+  }
+
+  const { data: reads, error: readsError } = await supabase
+    .from('news_reads')
+    .select('news_item_id')
+    .eq('coach_id', coachId)
+
+  if (readsError) {
+    console.error('[news] refresh reads error:', readsError)
+    return { count: 0, error: 'Error al verificar lecturas' }
+  }
+
+  const readIds = new Set(reads?.map((r) => r.news_item_id) ?? [])
+  const unreadCount = newsItems.filter((ni) => !readIds.has(ni.id)).length
+
+  return { count: unreadCount }
 }

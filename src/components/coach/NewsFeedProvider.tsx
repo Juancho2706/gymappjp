@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, useOptimistic } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { markAllNewsAsRead, refreshNewsCount } from '@/app/coach/_actions/news-actions'
 
 export type NewsItem = {
@@ -40,7 +40,6 @@ export function NewsFeedProvider({
 }) {
   const [items] = useState(initialItems)
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
-  const [optimisticCount, setOptimisticCount] = useOptimistic(unreadCount)
 
   // Sync when layout re-renders with new initial count (client-side navigation)
   useEffect(() => {
@@ -48,21 +47,20 @@ export function NewsFeedProvider({
   }, [initialUnreadCount])
 
   const handleMarkAllAsRead = useCallback(async () => {
-    if (optimisticCount === 0) return
-    const currentCount = unreadCount
-    setOptimisticCount(0)
+    if (unreadCount === 0) return
+    const previousCount = unreadCount
+    setUnreadCount(0)
     try {
       const result = await markAllNewsAsRead()
-      if (result.success) {
-        setUnreadCount(0)
-      } else {
-        setOptimisticCount(currentCount)
+      if (!result.success) {
+        setUnreadCount(previousCount)
+        console.error('[news] mark read failed:', result.error)
       }
     } catch (err) {
-      setOptimisticCount(currentCount)
+      setUnreadCount(previousCount)
       console.error('[news] mark read exception:', err)
     }
-  }, [optimisticCount, unreadCount, setOptimisticCount])
+  }, [unreadCount])
 
   // Refresh count when user returns to the tab to catch newly published items
   useEffect(() => {
@@ -85,7 +83,7 @@ export function NewsFeedProvider({
     <NewsFeedContext.Provider
       value={{
         items,
-        unreadCount: optimisticCount,
+        unreadCount,
         markAllAsRead: handleMarkAllAsRead,
       }}
     >
