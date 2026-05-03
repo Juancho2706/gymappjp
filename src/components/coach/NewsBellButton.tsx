@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import Image from 'next/image'
 import { Bell, Newspaper, Pin } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -113,8 +113,23 @@ function NewsFeedList({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
+function BellIconWithBadge({ unreadCount }: { unreadCount: number }) {
+  const badgeContent = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : null
+  return (
+    <>
+      <Bell className="h-5 w-5" />
+      {badgeContent && (
+        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+          {badgeContent}
+        </span>
+      )}
+    </>
+  )
+}
+
 export function NewsBellButton() {
-  const { unreadCount, markAllAsRead, isOpen, setIsOpen } = useNewsFeed()
+  const { unreadCount, markAllAsRead } = useNewsFeed()
+  const [isOpen, setIsOpen] = useState(false)
 
   const handleOpen = useCallback(
     async (open: boolean) => {
@@ -123,28 +138,21 @@ export function NewsBellButton() {
         await markAllAsRead()
       }
     },
-    [markAllAsRead, setIsOpen]
+    [markAllAsRead]
   )
-
-  const badgeContent = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : null
 
   return (
     <>
       {/* Mobile: Sheet */}
-      <div className="md:hidden">
+      <div className="md:hidden flex items-center">
         <Sheet open={isOpen} onOpenChange={handleOpen}>
           <button
             type="button"
             onClick={() => handleOpen(true)}
-            className="relative text-muted-foreground hover:text-foreground transition-colors"
+            className="relative flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Novedades"
           >
-            <Bell className="h-5 w-5" />
-            {badgeContent && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
-                {badgeContent}
-              </span>
-            )}
+            <BellIconWithBadge unreadCount={unreadCount} />
           </button>
           <SheetContent side="bottom" className="max-h-[80dvh] rounded-t-2xl">
             <SheetHeader className="pb-4">
@@ -164,12 +172,7 @@ export function NewsBellButton() {
             className="relative text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Novedades"
           >
-            <Bell className="h-5 w-5" />
-            {badgeContent && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
-                {badgeContent}
-              </span>
-            )}
+            <BellIconWithBadge unreadCount={unreadCount} />
           </PopoverTrigger>
           <PopoverContent
             align="end"

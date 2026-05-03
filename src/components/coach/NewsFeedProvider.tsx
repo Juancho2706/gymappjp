@@ -19,8 +19,6 @@ interface NewsFeedContextValue {
   items: NewsItem[]
   unreadCount: number
   markAllAsRead: () => Promise<void>
-  isOpen: boolean
-  setIsOpen: (open: boolean) => void
 }
 
 const NewsFeedContext = createContext<NewsFeedContextValue | null>(null)
@@ -43,8 +41,6 @@ export function NewsFeedProvider({
   const [items] = useState(initialItems)
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [optimisticCount, setOptimisticCount] = useOptimistic(unreadCount)
-  const [isOpen, setIsOpen] = useState(false)
-
   const handleMarkAllAsRead = useCallback(async () => {
     if (optimisticCount === 0) return
     const currentCount = unreadCount
@@ -85,8 +81,6 @@ export function NewsFeedProvider({
         items,
         unreadCount: optimisticCount,
         markAllAsRead: handleMarkAllAsRead,
-        isOpen,
-        setIsOpen,
       }}
     >
       {children}
