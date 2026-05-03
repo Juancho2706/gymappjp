@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
+import { NewsFeedProvider } from '@/components/coach/NewsFeedProvider'
 import { getCoach } from '@/lib/coach/get-coach'
+import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
@@ -30,6 +32,11 @@ export default async function CoachLayout({
     if (!coach) {
         redirect('/login')
     }
+
+    const [unreadCount, newsItems] = await Promise.all([
+        getUnreadNewsCount(coach.id),
+        getPublishedNewsItems(),
+    ])
 
     const primaryColor =
         coach.use_brand_colors_coach === false
@@ -75,25 +82,27 @@ export default async function CoachLayout({
             className="coach-layout-container flex min-h-[100dvh] min-w-0 flex-col bg-white transition-colors selection:bg-primary/30 selection:text-primary dark:bg-black md:min-h-screen md:flex-row has-[.coach-builder-shell]:h-dvh has-[.coach-builder-shell]:max-h-dvh has-[.coach-builder-shell]:min-h-0 has-[.coach-builder-shell]:overflow-hidden"
             style={{ '--theme-primary': palette.primary, '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
         >
-            <CoachSidebar
-                coachName={coach.full_name}
-                coachBrand={coach.brand_name}
-                primaryColor={primaryColor}
-                subscriptionStatus={coach.subscription_status}
-            />
-            <CoachMainWrapper>
-                {/* Background ambient glow */}
-                <div
-                    className="fixed top-0 right-0 w-[500px] h-[500px] blur-[120px] rounded-full -z-10 pointer-events-none opacity-20 dark:opacity-10"
-                    style={{ backgroundColor: 'var(--theme-primary)' }}
+            <NewsFeedProvider initialUnreadCount={unreadCount} initialItems={newsItems}>
+                <CoachSidebar
+                    coachName={coach.full_name}
+                    coachBrand={coach.brand_name}
+                    primaryColor={primaryColor}
+                    subscriptionStatus={coach.subscription_status}
                 />
-                <div
-                    className="fixed bottom-0 left-0 w-[300px] h-[300px] blur-[100px] rounded-full -z-10 pointer-events-none opacity-10 dark:opacity-5"
-                    style={{ backgroundColor: 'var(--theme-primary)' }}
-                />
-                {children}
-            </CoachMainWrapper>
-            <CoachSuccessAnimationLazy />
+                <CoachMainWrapper>
+                    {/* Background ambient glow */}
+                    <div
+                        className="fixed top-0 right-0 w-[500px] h-[500px] blur-[120px] rounded-full -z-10 pointer-events-none opacity-20 dark:opacity-10"
+                        style={{ backgroundColor: 'var(--theme-primary)' }}
+                    />
+                    <div
+                        className="fixed bottom-0 left-0 w-[300px] h-[300px] blur-[100px] rounded-full -z-10 pointer-events-none opacity-10 dark:opacity-5"
+                        style={{ backgroundColor: 'var(--theme-primary)' }}
+                    />
+                    {children}
+                </CoachMainWrapper>
+                <CoachSuccessAnimationLazy />
+            </NewsFeedProvider>
         </div>
         </>
     )

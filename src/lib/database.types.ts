@@ -847,6 +847,90 @@ export type Database = {
           },
         ]
       }
+      news_items: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string | null
+          cta_label: string | null
+          cta_url: string | null
+          id: string
+          image_url: string | null
+          is_pinned: boolean | null
+          published_at: string | null
+          status: string | null
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          cta_label?: string | null
+          cta_url?: string | null
+          id?: string
+          image_url?: string | null
+          is_pinned?: boolean | null
+          published_at?: string | null
+          status?: string | null
+          title: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          cta_label?: string | null
+          cta_url?: string | null
+          id?: string
+          image_url?: string | null
+          is_pinned?: boolean | null
+          published_at?: string | null
+          status?: string | null
+          title?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      news_reads: {
+        Row: {
+          coach_id: string
+          id: string
+          news_item_id: string
+          read_at: string | null
+        }
+        Insert: {
+          coach_id: string
+          id?: string
+          news_item_id: string
+          read_at?: string | null
+        }
+        Update: {
+          coach_id?: string
+          id?: string
+          news_item_id?: string
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_reads_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "news_reads_news_item_id_fkey"
+            columns: ["news_item_id"]
+            isOneToOne: false
+            referencedRelation: "news_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_meal_food_swaps: {
         Row: {
           client_id: string
@@ -2035,6 +2119,13 @@ export type Database = {
       get_client_current_streak: {
         Args: { p_client_id: string }
         Returns: number
+      }
+      get_clients_last_workout_date: {
+        Args: { p_client_ids: string[]; p_since: string }
+        Returns: {
+          client_id: string
+          last_logged_at: string
+        }[]
       }
       get_coach_client_signups_last_6_months: {
         Args: { p_coach_id: string }

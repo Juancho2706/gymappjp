@@ -2,6 +2,8 @@ type SendEmailInput = {
     to: string
     subject: string
     html: string
+    replyTo?: string
+    text?: string
 }
 
 type SendEmailResult =
@@ -15,18 +17,26 @@ export async function sendTransactionalEmail(input: SendEmailInput): Promise<Sen
         return { ok: false, error: 'Missing RESEND_API_KEY or EMAIL_FROM' }
     }
 
+    const body: Record<string, unknown> = {
+        from,
+        to: [input.to],
+        subject: input.subject,
+        html: input.html,
+    }
+    if (input.replyTo) {
+        body.reply_to = input.replyTo
+    }
+    if (input.text) {
+        body.text = input.text
+    }
+
     const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            from,
-            to: [input.to],
-            subject: input.subject,
-            html: input.html,
-        }),
+        body: JSON.stringify(body),
     })
 
     if (!res.ok) {

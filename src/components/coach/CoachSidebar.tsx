@@ -15,11 +15,13 @@ import {
     ClipboardList,
     CreditCard,
     HelpCircle,
+    LifeBuoy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 
@@ -64,6 +66,12 @@ const navItems = [
         label: 'Suscripción',
         shortLabel: 'Plan',
         icon: CreditCard,
+    },
+    {
+        href: '/coach/support',
+        label: 'Soporte',
+        shortLabel: 'Ayuda',
+        icon: LifeBuoy,
     },
 ]
 
@@ -133,6 +141,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     </span>
                 </div>
                 <div className="flex items-center gap-3">
+                    <NewsBellButton />
                     {pathname === '/coach/settings' && (
                         <button
                             type="button"
@@ -242,14 +251,17 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
 
                 {/* Bottom area (Desktop only) */}
                 <div className={cn("hidden md:flex flex-col border-t border-sidebar-border bg-sidebar-accent/50 dark:bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-6 space-y-4")}>
-                    <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between px-2")}>
+                    <div className={cn("flex items-center", isCollapsed ? "justify-center gap-4" : "justify-between px-2")}>
                         {!isCollapsed && (
                             <div className="flex flex-col">
                                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Terminal</p>
                                 <p className="text-xs text-sidebar-foreground font-medium truncate max-w-[120px]">{coachName}</p>
                             </div>
                         )}
-                        <ThemeToggle />
+                        <div className="flex items-center gap-2">
+                            <NewsBellButton />
+                            <ThemeToggle />
+                        </div>
                     </div>
 
                     <button

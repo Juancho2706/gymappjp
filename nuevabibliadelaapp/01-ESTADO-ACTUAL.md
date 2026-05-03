@@ -1,8 +1,8 @@
 # 01 — Estado Actual de EVA Fitness Platform
 
-> **Actualizado:** 2026-04-27 America/Santiago (Sesión 11)
-> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits hasta 2026-04-27
-> **Completitud global estimada: ~99%** (Sesiones 1–11; Admin Panel CEO rework total — Phases 0–3 completas)
+> **Actualizado:** 2026-05-02 22:30 America/Santiago (Sesión 12)
+> **Fuentes:** ESTADO-PROYECTO.md, MAPA-MAESTRO.md, ESTADO-COMPONENTES.md, ROAD-TO-100.md + commits hasta 2026-05-02
+> **Completitud global estimada: ~99.5%** (Sesiones 1–12; Soporte Coach + Centro de Novedades implementados)
 
 ---
 
@@ -28,7 +28,7 @@
 | QR | qrcode.react | ^4.2.0 |
 | Recharts fix | react-is | ^19.2.5 |
 
-**Base de código:** 250+ archivos TypeScript/TSX · **26 tablas** Supabase + col `coaches.admin_notes` · 48+ rutas · 11+ API routes · **22+ funciones RPC** en `public`: `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier`, `get_platform_mrr_12_months`, `get_platform_coaches_by_tier_monthly`, `get_platform_checkins_7d`, `get_platform_churn_last_30d`, `get_admin_coaches_paginated`, `get_platform_churn_monthly`, `get_admin_audit_logs_paginated`, `get_platform_revenue_by_cycle`, `get_platform_revenue_by_tier`
+**Base de código:** 250+ archivos TypeScript/TSX · **28 tablas** Supabase (incl. `news_items`, `news_reads`) + col `coaches.admin_notes` · 48+ rutas · 11+ API routes · **22+ funciones RPC** en `public`: `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_client_current_streak`, `search_foods`, `check_platform_email_availability`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier`, `get_platform_mrr_12_months`, `get_platform_coaches_by_tier_monthly`, `get_platform_checkins_7d`, `get_platform_churn_last_30d`, `get_admin_coaches_paginated`, `get_platform_churn_monthly`, `get_admin_audit_logs_paginated`, `get_platform_revenue_by_cycle`, `get_platform_revenue_by_tier`
 
 ---
 
@@ -61,6 +61,8 @@
 | Ejercicios Coach | 40% | CRUD + catálogo. Pendiente: upload GIF, bulk edit |
 | Testing | 28% | Vitest básico + Playwright. Sin cobertura real |
 | Panel CEO / Superadmin | ~99% | Rework total Sesión 11. 7 páginas (`dashboard`, `coaches`, `clients`, `finanzas`, `auditoria`, `sistema` + login). Sidebar colapsable. Dark design system con tokens CSS. CoachCommandPanel 3 tabs + acciones masivas. Trial fix. `admin_notes`. CSV export. |
+| Soporte Coach | 100% | Formulario `/coach/support` con tabs (Ayuda/Bug/Idea), prioridad, adjuntos, metadata automática (URL, UA, coachId), rate limit 5/h. Email vía Resend con replyTo. |
+| Centro de Novedades | 100% | Badge campana en mobile top header + desktop sidebar footer. Feed responsive (sheet mobile / popover desktop). Pinned items, fecha relativa, CTA opcional. Tracking de lectura por coach. Panel CEO `/admin/novedades` con CRUD + publish + pin. |
 
 **TOTAL GLOBAL: ~98%**
 
@@ -115,7 +117,7 @@ Generado con `node scripts/list-coaches.mjs` (lee `coaches` + email desde Auth).
 - **Arquitectura `_data/_actions/_components`:** Patrón establecido en dashboard alumno y nutrición. Seguir en nuevos módulos.
 - **React.cache:** Para queries deduplicadas en RSC. No usar `unstable_cache` (incompatible con Supabase SSR en prod).
 - **PWA:** `public/sw.js` + manifests dinámicos por coach (`/api/manifest/[coach_slug]` + `/c/[slug]/manifest.webmanifest`).
-- **26 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`, `beta_invite_registrations`, `admin_audit_logs`.
+- **28 tablas Supabase:** `coaches`, `clients`, `client_intake`, `client_payments`, `check_ins`, `exercises`, `workout_programs`, `workout_plans`, `workout_blocks`, `workout_logs`, `nutrition_plans`, `nutrition_plan_templates`, `nutrition_meals`, `food_items`, `foods`, `daily_nutrition_logs`, `nutrition_meal_logs`, `recipes`, `recipe_ingredients`, `saved_meals`, `saved_meal_items`, `template_meals`, `template_meal_groups`, `beta_invite_registrations`, `admin_audit_logs`, `news_items`, `news_reads`.
 - **RPC `public`:** `search_foods`, `get_client_current_streak`, `get_coach_clients_streaks`, `get_coach_workout_sessions_30d`, `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals`, `check_platform_email_availability` (email único plataforma coach/cliente; ver [`src/lib/auth/platform-email.ts`](src/lib/auth/platform-email.ts)), `get_platform_coaches_count`, `get_platform_clients_count`, `get_platform_coach_signups_last_6_months`, `get_platform_workout_sessions_30d`, `get_platform_subscription_events_series`, `get_platform_coaches_by_tier` (analytics plataforma para Panel CEO).
 
 ### Arquitectura Móvil (Sesión 7)
@@ -431,6 +433,37 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 - 6 nuevos `loading.tsx` creados: `/coach/builder/[clientId]/`, `/coach/meals/`, `/coach/nutrition-plans/[templateId]/edit/`, `/coach/nutrition-plans/new/`, `/coach/recipes/`, `/coach/workout-programs/builder/`
 - `WeeklyPlanBuilder` y `PlanBuilder` → `next/dynamic` con skeletons.
 
+### Sesión 12 — 2026-05-02 — Soporte Coach + Centro de Novedades
+
+**Soporte Coach (`/coach/support`):**
+- Servicio email: `send-email.ts` extendido con `replyTo` + `text` fallback para anti-spam.
+- Template `support-templates.ts`: email HTML/text con metadata table (URL, User Agent, Timestamp, Coach ID).
+- Server action `sendSupportMessage`: Zod validation, rate limiting 5/h por coach (`rateLimitSupport` en `src/lib/rate-limit.ts`), adjunto opcional a bucket `support-attachments`.
+- UI `SupportForm.tsx`: react-hook-form + zod, tabs segmentados (Necesito ayuda / Reportar bug / Sugerir mejora), selector prioridad solo para bugs, textarea con `pb-safe`, disclaimer legal.
+- Navegación: `LifeBuoy` icon en `CoachSidebar.tsx` navItems (mobile bottom bar + desktop sidebar).
+
+**Centro de Novedades — Coach:**
+- Tablas `news_items` + `news_reads` creadas en Supabase con RLS e índices. `news_items`: title, type, content, image_url, cta_url, cta_label, is_pinned, status, published_at. `news_reads`: coach_id, news_item_id, read_at, unique constraint.
+- Buckets Storage: `news` (public read, upload admin) + `support-attachments` (private, coach own read).
+- Queries: `getUnreadNewsCount()` + `getPublishedNewsItems()` en `src/lib/news/queries.ts` con `React.cache`.
+- Server actions: `markAllNewsAsRead()` (batch insert + ON CONFLICT DO NOTHING) + `refreshNewsCount()` en `src/app/coach/_actions/news-actions.ts`.
+- `NewsFeedProvider`: React Context con `useOptimistic` para badge count instantáneo + `useEffect` con `visibilitychange` para detectar novedades publicadas mientras la app está en background.
+- `NewsBellButton`: campana con badge rojo (count exacto o "9+"). Mobile: sheet bottom. Desktop: popover. `NewsFeedList` embebido con pinned items primero, fecha relativa ("Hoy"/"Ayer"/"Hace X días"), `<Image>` de Next.js para imágenes, CTA opcional como link.
+- Integración en `CoachLayout.tsx`: `NewsFeedProvider` wrap con `initialUnreadCount` + `initialItems` desde RSC. `CoachSidebar`: `<NewsBellButton />` en mobile top header (z-[55]) y desktop sidebar footer (sobre ThemeToggle).
+
+**Centro de Novedades — Panel CEO (`/admin/novedades`):**
+- Patrón `_data/_actions/_components` igual que `/admin/coaches`.
+- Queries: `getAllNewsItems()` con service role.
+- Server actions: `createNewsItem`, `updateNewsItem`, `deleteNewsItem`, `publishNewsItem`, `togglePinNewsItem` — todas con `assertAdmin()` + `logAdminAction()`.
+- UI: `NewsAdminList` (cards responsive con estado, tipo, pin, fecha), `NewsCreateSheet` (editor en sheet lateral: título, tipo, contenido, imagen, CTA, pin), `NewsTypeBadge`.
+- `AdminSidebar.tsx`: link "Novedades" con icono `Megaphone` en grupo Plataforma.
+
+**QA / Testing:**
+- `npx tsc --noEmit`: 0 errores.
+- `npm run test`: 111 tests pasaron, 0 fallos.
+- `npm run lint`: 0 errores (solo warnings preexistentes).
+- Playwright E2E nuevo (`tests/support-news.spec.ts`): 4/4 passed.
+
 ---
 
 ### Sesiones previas (Sprint 8 — 2026-04-14)
@@ -547,6 +580,8 @@ Todos los usos de `h-screen`/`min-h-screen` fuera de breakpoint `md:` reemplazad
 | `workout_programs_duration_type_check` constraint (Sesión 7) | ✅ Corregido — ahora acepta `('weeks', 'calendar_days', 'async')` |
 | Migración `20260417_fix_duration_type_constraint.sql` | ✅ Guardada en `supabase/migrations/` |
 | Índices perf dashboard + RPCs `get_coach_client_signups_last_6_months`, `get_workout_program_planned_set_totals` | ✅ Sesión 9 (`20260423120000_*`) |
+| Tablas `news_items`, `news_reads` + índices + RLS (Sesión 12) | ✅ Creadas vía MCP |
+| Buckets Storage `news`, `support-attachments` (Sesión 12) | ✅ Creados con policies |
 
 ---
 

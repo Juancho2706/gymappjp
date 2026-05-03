@@ -1,8 +1,8 @@
 # 02 — Roadmap y Tareas Pendientes
 
-> **Actualizado:** 2026-04-27 America/Santiago (Sesión 11)
-> **Fuentes:** ROAD-TO-100.md (Sesiones 1–11), Supabase MCP / panel según entorno
-> **Estado global:** ~99% completado. Estimación restante: ~3–6 días de desarrollo (sin contar QA pagos real).
+> **Actualizado:** 2026-05-02 22:30 America/Santiago (Sesión 12)
+> **Fuentes:** ROAD-TO-100.md (Sesiones 1–12), Supabase MCP / panel según entorno
+> **Estado global:** ~99.5% completado. Estimación restante: ~2–4 días de desarrollo (sin contar QA pagos real).
 
 ---
 
@@ -59,6 +59,18 @@ Los siguientes archivos fueron borrados de `supabase/migrations/` el 2026-04-17.
 **Sesión 7 (ya documentado):** migraciones antiguas eliminadas del árbol tras aplicarlas por MCP — ver tabla “Migraciones SQL Eliminadas” arriba.
 
 ---
+
+## BLOQUE M0f — Sesión 12 (2026-05-02 — completado)
+
+| ID | Tarea | Estado |
+|----|-------|--------|
+| M42 | Soporte Coach: formulario `/coach/support` con tabs, prioridad, adjuntos, metadata, rate limit | ✅ Sesión 12 |
+| M43 | Email service: `replyTo` + `text` fallback en `send-email.ts` + `support-templates.ts` | ✅ Sesión 12 |
+| M44 | Centro de Novedades DB: `news_items` + `news_reads` + RLS + índices | ✅ Sesión 12 |
+| M45 | Centro de Novedades UI coach: `NewsBellButton` badge, `NewsFeedProvider` con `useOptimistic`, `visibilitychange` refresh, sheet/popover responsive | ✅ Sesión 12 |
+| M46 | Centro de Novedades UI admin: `/admin/novedades` CRUD + publish + pin + `NewsCreateSheet` | ✅ Sesión 12 |
+| M47 | Storage buckets: `news` (public) + `support-attachments` (private) | ✅ Sesión 12 |
+| M48 | Playwright E2E smoke tests soporte + novedades | ✅ Sesión 12 |
 
 ## BLOQUE M0e — Sesión 11 (2026-04-27 — completado)
 
@@ -241,6 +253,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 | Pagos | Verificar cuenta MP (KYC completo) | 🔴 P0 | — | ⏳ (usuario) |
 | Features | Check-in medidas corporales | 🟠 P1 | 2d | ⏳ |
 | Features | Workout retry automático + offline banner | 🟠 P1 | 1d | ⏳ |
+| Features | Soporte Coach + Centro de Novedades | 🔴 P0 | 2d | ✅ Sesión 12 |
 | Features | Panel CEO superadmin | 🟠 P1 | 4d | ✅ Sesión 9 |
 | UX | Nav alumno reestructura (Entrenar/Progreso/Más) | 🟡 P2 | 1d | ⏳ |
 | Features | Mi Marca preview real + tour + loader customizable | 🟡 P2 | 1.5d | ✅ Sesión 10 |
@@ -254,7 +267,7 @@ Todas las tareas de este bloque están **completadas** (Sesiones 1–3):
 | Features | SEO técnico (sitemap, JSON-LD) | 🟢 P3 | 1d | ⏳ |
 | Features | Email confirmación de pago | 🟢 P3 | 1d | ⏳ |
 
-**Total estimado restante al 100%: ~12–16 días de desarrollo**
+**Total estimado restante al 100%: ~10–14 días de desarrollo**
 
 ---
 

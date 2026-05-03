@@ -15,6 +15,7 @@ let paymentRatelimit: Ratelimit | null | undefined
 let recipesRatelimit: Ratelimit | null | undefined
 let adminRatelimit: Ratelimit | null | undefined
 let coachOnboardingEventsRatelimit: Ratelimit | null | undefined
+let supportRatelimit: Ratelimit | null | undefined
 
 function getAuthRatelimit(): Ratelimit | null {
     if (authRatelimit !== undefined) return authRatelimit
@@ -135,6 +136,21 @@ function getCoachOnboardingEventsRatelimit(): Ratelimit | null {
     return coachOnboardingEventsRatelimit
 }
 
+function getSupportRatelimit(): Ratelimit | null {
+    if (supportRatelimit !== undefined) return supportRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        supportRatelimit = null
+        return null
+    }
+    supportRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '1 h'),
+        prefix: 'ratelimit:support',
+    })
+    return supportRatelimit
+}
+
 /** Límite por coach autenticado (evita spam de eventos de onboarding / re-renders). */
 export async function rateLimitCoachOnboardingEvents(
     coachUserId: string
@@ -154,6 +170,18 @@ export async function rateLimitAdmin(
     const limiter = getAdminRatelimit()
     if (!limiter) return { ok: true }
     const res = await limiter.limit(`admin:${identifier}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+export async function rateLimitSupport(
+    identifier: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getSupportRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`support:${identifier}`)
     await res.pending.catch(() => undefined)
     if (res.success) return { ok: true }
     const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
