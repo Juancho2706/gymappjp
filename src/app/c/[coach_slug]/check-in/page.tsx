@@ -71,7 +71,7 @@ export default async function ClientCheckInPage({ params }: Props) {
                     </div>
                     <InfoTooltip content="Registro mensual de tu progreso: peso corporal, fotos front y back, y notas opcionales. Tu coach lo verá en tu perfil para hacer seguimiento de tu evolución." />
                 </div>
-                <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
                     EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
                 </p>
             </header>

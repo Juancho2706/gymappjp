@@ -676,13 +676,13 @@ export function NutritionShell({
       />
 
       {!isToday && (
-        <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-200">
+        <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
           Estás viendo un día histórico. Puedes revisar adherencia y hábitos, pero no editar registros.
         </p>
       )}
 
       {mealsSorted.length > mealsVisible.length && mealsVisible.length > 0 && (
-        <p className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] leading-snug text-sky-100/90">
+        <p className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] leading-snug text-sky-800 dark:text-sky-100">
           Hoy ves {mealsVisible.length} de {mealsSorted.length} comidas del plan. Las demás están fijadas a otro día
           de la semana en el plan del coach; prueba otra fecha en el calendario o consulta con tu coach.
         </p>
