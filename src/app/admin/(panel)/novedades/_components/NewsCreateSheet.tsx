@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -28,10 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { createNewsItemAction, updateNewsItemAction } from '../_actions/novedades-actions'
 import { toast } from 'sonner'
-import { Loader2, Plus, Save } from 'lucide-react'
+import { Loader2, Plus, Save, Upload, X, ImageIcon } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 const formSchema = z.object({
   title: z.string().min(3).max(200),
@@ -62,6 +64,8 @@ interface Props {
 export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const isEditing = !!newsItem
 
   const form = useForm<FormValues>({
@@ -76,6 +80,52 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
       is_pinned: newsItem?.is_pinned ?? false,
     },
   })
+
+  const imageUrl = form.watch('image_url')
+
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('La imagen no puede superar los 2MB')
+      return
+    }
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Solo se permiten imágenes PNG, JPG o WebP')
+      return
+    }
+
+    setUploadingImage(true)
+    try {
+      const supabase = createClient()
+      const ext = file.name.split('.').pop()
+      const path = `news/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+      const { error } = await supabase.storage.from('news').upload(path, file, {
+        contentType: file.type,
+        upsert: false,
+      })
+
+      if (error) throw error
+
+      const { data: { publicUrl } } = supabase.storage.from('news').getPublicUrl(path)
+      form.setValue('image_url', publicUrl)
+      toast.success('Imagen subida correctamente')
+    } catch (err) {
+      console.error('Upload error:', err)
+      toast.error('No se pudo subir la imagen')
+    } finally {
+      setUploadingImage(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }, [form])
+
+  const removeImage = useCallback(() => {
+    form.setValue('image_url', '')
+  }, [form])
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true)
@@ -125,7 +175,7 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
           </>
         )}
       </Button>
-      <SheetContent side="right" className="w-full sm:max-w-lg">
+      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="pb-4">
           <SheetTitle>{isEditing ? 'Editar novedad' : 'Crear novedad'}</SheetTitle>
         </SheetHeader>
@@ -180,19 +230,81 @@ export function NewsCreateSheet({ newsItem, onSuccess }: Props) {
                 </FormItem>
               )}
             />
+
+            {/* Image Upload */}
             <FormField
               control={form.control}
               name="image_url"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>URL de imagen (opcional)</FormLabel>
+                  <FormLabel>Imagen (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://..." {...field} />
+                    <div className="space-y-3">
+                      {imageUrl ? (
+                        <div className="relative rounded-lg border border-border overflow-hidden bg-black/20">
+                          <Image
+                            src={imageUrl}
+                            alt="Preview"
+                            width={400}
+                            height={200}
+                            className="w-full h-auto object-cover max-h-48"
+                          />
+                          <button
+                            type="button"
+                            onClick={removeImage}
+                            className="absolute top-2 right-2 p-1 rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors"
+                            title="Eliminar imagen"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          className={cn(
+                            'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-6 cursor-pointer transition-colors hover:border-primary/50 hover:bg-primary/[0.02]',
+                            uploadingImage && 'opacity-60 pointer-events-none'
+                          )}
+                        >
+                          {uploadingImage ? (
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          ) : (
+                            <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                          )}
+                          <p className="text-xs text-muted-foreground text-center">
+                            {uploadingImage ? 'Subiendo...' : 'Haz clic o arrastra una imagen'}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground/60">PNG, JPG, WebP · Max 2MB</p>
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      {!imageUrl && (
+                        <div className="flex items-center gap-2">
+                          <div className="h-px flex-1 bg-border" />
+                          <span className="text-[10px] text-muted-foreground uppercase">o pegar URL</span>
+                          <div className="h-px flex-1 bg-border" />
+                        </div>
+                      )}
+                      {!imageUrl && (
+                        <Input
+                          placeholder="https://..."
+                          value={field.value}
+                          onChange={(e) => field.onChange(e.target.value)}
+                        />
+                      )}
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
