@@ -8,9 +8,9 @@ const newsSchema = z.object({
   title: z.string().min(3).max(200),
   type: z.enum(['feature', 'improvement', 'fix', 'announcement']),
   content: z.string().min(10).max(10000),
-  image_url: z.string().url().optional().or(z.literal('')),
-  cta_url: z.string().max(500).optional().or(z.literal('')),
-  cta_label: z.string().max(100).optional().or(z.literal('')),
+  image_url: z.string().url().optional().or(z.literal('')).nullable(),
+  cta_url: z.string().max(500).optional().or(z.literal('')).nullable(),
+  cta_label: z.string().max(100).optional().or(z.literal('')).nullable(),
   is_pinned: z.boolean().default(false),
 })
 
@@ -28,9 +28,9 @@ export async function createNewsItemAction(
     title: formData.get('title') as string,
     type: formData.get('type') as string,
     content: formData.get('content') as string,
-    image_url: (formData.get('image_url') as string) || null,
-    cta_url: (formData.get('cta_url') as string) || null,
-    cta_label: (formData.get('cta_label') as string) || null,
+    image_url: formData.get('image_url') as string | null,
+    cta_url: formData.get('cta_url') as string | null,
+    cta_label: formData.get('cta_label') as string | null,
     is_pinned: formData.get('is_pinned') === 'on',
   }
 
@@ -39,10 +39,18 @@ export async function createNewsItemAction(
     return { success: false, error: parsed.error.issues.map((i) => i.message).join(', ') }
   }
 
+  // Convertir strings vacíos a null para la base de datos
+  const payload = {
+    ...parsed.data,
+    image_url: parsed.data.image_url || null,
+    cta_url: parsed.data.cta_url || null,
+    cta_label: parsed.data.cta_label || null,
+  }
+
   const { data, error } = await adminClient
     .from('news_items')
     .insert({
-      ...parsed.data,
+      ...payload,
       created_by: user.id,
       status: 'draft',
     })
@@ -69,9 +77,9 @@ export async function updateNewsItemAction(
     title: formData.get('title') as string,
     type: formData.get('type') as string,
     content: formData.get('content') as string,
-    image_url: (formData.get('image_url') as string) || null,
-    cta_url: (formData.get('cta_url') as string) || null,
-    cta_label: (formData.get('cta_label') as string) || null,
+    image_url: formData.get('image_url') as string | null,
+    cta_url: formData.get('cta_url') as string | null,
+    cta_label: formData.get('cta_label') as string | null,
     is_pinned: formData.get('is_pinned') === 'on',
   }
 
@@ -80,9 +88,17 @@ export async function updateNewsItemAction(
     return { success: false, error: parsed.error.issues.map((i) => i.message).join(', ') }
   }
 
+  // Convertir strings vacíos a null para la base de datos
+  const payload = {
+    ...parsed.data,
+    image_url: parsed.data.image_url || null,
+    cta_url: parsed.data.cta_url || null,
+    cta_label: parsed.data.cta_label || null,
+  }
+
   const { error } = await adminClient
     .from('news_items')
-    .update(parsed.data)
+    .update(payload)
     .eq('id', id)
 
   if (error) {
