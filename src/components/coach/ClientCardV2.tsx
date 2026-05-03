@@ -274,6 +274,15 @@ export function ClientCardV2({
                                         clientName={client.full_name}
                                         isActive={client.is_active !== false}
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setDeleteOpen(true)}
+                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 px-0 text-rose-500 shadow-sm transition-colors hover:bg-rose-500 hover:text-white dark:border-rose-500/40 dark:bg-rose-500/20 dark:hover:bg-rose-500"
+                                        aria-label="Eliminar alumno"
+                                        title="Eliminar alumno"
+                                    >
+                                        <Trash2 className="h-5 w-5" strokeWidth={2.5} />
+                                    </button>
                                     <DropdownMenu modal={false}>
                                         <DropdownMenuTrigger
                                             type="button"
@@ -311,14 +320,7 @@ export function ClientCardV2({
                                                 <Apple className="mr-2 h-4 w-4" />
                                                 Nutrición
                                             </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                                variant="destructive"
-                                                onClick={() => setDeleteOpen(true)}
-                                            >
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Eliminar
-                                            </DropdownMenuItem>
+
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>

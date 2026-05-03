@@ -11,6 +11,7 @@ import { defaultSortDir, sortClientsByKey } from './clientsDirectorySort'
 import { cn } from '@/lib/utils'
 import { differenceInDays } from 'date-fns'
 import { EditClientDataModal } from './EditClientDataModal'
+import { DeleteClientButton } from './DeleteClientButton'
 
 type ColId =
     | 'name'
@@ -284,6 +285,10 @@ export function ClientsDirectoryTable({
                     >
                         <Pencil className="h-4 w-4" />
                     </button>
+                    <DeleteClientButton
+                        clientId={client.id}
+                        clientName={client.full_name}
+                    />
                 </div>
             </div>
         )

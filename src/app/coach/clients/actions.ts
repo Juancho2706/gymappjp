@@ -308,6 +308,9 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
     if (!client) return { error: 'Alumno no encontrado.' }
 
     const admin = await createRawAdminClient()
+
+    // If this user is also a coach, preserve their auth account and coach data.
+    // Only remove the client row; CASCADE cleans up all client-related data.
     const { data: coachProfile } = await admin.from('coaches').select('id').eq('id', clientId).maybeSingle()
 
     if (coachProfile) {
@@ -318,6 +321,9 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
             .eq('coach_id', coachUser.id)
         if (delErr) return { error: delErr.message }
     } else {
+        // Regular client: delete the auth user. The clients row (and all related
+        // data via CASCADE) is automatically removed because clients.id FKs
+        // to auth.users(id) ON DELETE CASCADE.
         const { error } = await admin.auth.admin.deleteUser(clientId)
         if (error) return { error: error.message }
     }
