@@ -249,12 +249,12 @@ export function ClientCardV2({
                         </div>
 
                         <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Link
                                             href={profileHref}
-                                            className="font-display text-base font-black uppercase tracking-tighter text-foreground hover:text-primary"
+                                            className="font-display text-base font-black uppercase tracking-tighter text-foreground hover:text-primary truncate"
                                         >
                                             {client.full_name}
                                         </Link>
@@ -264,7 +264,7 @@ export function ClientCardV2({
                                         {client.email}
                                     </p>
                                 </div>
-                                <div className="flex shrink-0 items-center gap-0.5">
+                                <div className="flex shrink-0 items-center gap-0.5 self-end sm:self-start">
                                     <ResetPasswordButton
                                         clientId={client.id}
                                         clientName={client.full_name}
