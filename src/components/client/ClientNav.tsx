@@ -135,7 +135,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                             />
                         </div>
                         {!isCollapsed && (
-                            <div>
+                            <div className="min-w-0 overflow-hidden">
                                 <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">
                                     Mi Coach
                                 </p>
