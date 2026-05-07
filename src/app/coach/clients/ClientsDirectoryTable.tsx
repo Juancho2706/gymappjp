@@ -298,7 +298,7 @@ export function ClientsDirectoryTable({
         <>
         <div className="overflow-hidden rounded-2xl border border-border/50 bg-white/40 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/40">
             {/* Una sola zona de scroll horizontal: encabezado y filas comparten el mismo ancho mínimo */}
-            <div className="touch-pan-x overscroll-x-contain overflow-x-auto">
+            <div className="touch-auto overscroll-x-contain overflow-x-auto">
                 <div className="min-w-[920px]">
                     <div
                         role="row"
