@@ -196,7 +196,7 @@ export function CoachTable({ coaches, total }: Props) {
                                 <th className="px-3 py-2 text-left">
                                     <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">
                                         Util.
-                                        <InfoTooltip content="Alumnos activos vs el máximo permitido por su plan. Al llegar al 100% el coach no puede agregar más alumnos. Pro=30, Elite=60, Scale=100." />
+                                        <InfoTooltip content="Alumnos activos vs el máximo permitido por su plan. Al llegar al 100% el coach no puede agregar más alumnos. Pro=30, Elite=60, Scale=500." />
                                     </span>
                                 </th>
                                 <AdminSortHeader label="Vence" sortKey="expiry" />

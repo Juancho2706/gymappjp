@@ -102,7 +102,7 @@ export default function AvisoLegalPage() {
                 <h2 className="text-2xl font-bold text-white">7. Suscripción y Cobros Recurrentes</h2>
                 <p className="leading-relaxed text-sm md:text-base">
                   EVA funciona con suscripciones para coaches. Los planes de 1-5, 6-10 y 11-30 alumnos
-                  tienen cobro mensual. Los planes de 31-60 y 61-100 alumnos operan con cobro trimestral
+                  tienen cobro mensual. Los planes de 31-60 y hasta 500 alumnos operan con cobro trimestral
                   o anual. Al confirmar el pago, autorizas los cobros recurrentes correspondientes al ciclo
                   elegido hasta que canceles la suscripción.
                 </p>

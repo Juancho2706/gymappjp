@@ -48,6 +48,7 @@ export type TierConfig = {
     label: string
     maxClients: number
     monthlyPriceClp: number
+    annualPriceClp?: number
     features: string[]
     isMostAffordable?: boolean
 }
@@ -68,7 +69,7 @@ export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
     starter: '1–10 alumnos',
     pro: '11–30 alumnos',
     elite: '31–60 alumnos',
-    scale: '61–100 alumnos',
+    scale: 'Hasta 500 alumnos',
 }
 
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
@@ -93,8 +94,9 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     },
     scale: {
         label: 'Scale',
-        maxClients: 100,
-        monthlyPriceClp: 64990,
+        maxClients: 500,
+        monthlyPriceClp: 190000,
+        annualPriceClp: 1_900_000,
         features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
     },
 }
@@ -137,9 +139,11 @@ function applyDiscount(price: number, discount: number) {
 }
 
 export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
-    const monthly = TIER_CONFIG[tier].monthlyPriceClp
+    const config = TIER_CONFIG[tier]
+    const monthly = config.monthlyPriceClp
     if (cycle === 'monthly') return monthly
     if (cycle === 'quarterly') return applyDiscount(monthly * 3, QUARTERLY_DISCOUNT)
+    if (config.annualPriceClp) return config.annualPriceClp
     return applyDiscount(monthly * 12, ANNUAL_DISCOUNT)
 }
 

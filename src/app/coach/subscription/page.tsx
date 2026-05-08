@@ -171,7 +171,7 @@ export default function CoachSubscriptionPage() {
                         (11–30). Sin nutrición en Starter; Pro incluye nutrición.
                     </li>
                     <li>
-                        <span className="font-semibold text-foreground">Elite (31–60) y Scale (61–100):</span> mensual,
+                        <span className="font-semibold text-foreground">Elite (31–60) y Scale (hasta 500):</span> mensual,
                         trimestral o anual; son los únicos planes con prepago trimestral o anual. Incluyen nutrición.
                     </li>
                 </ul>

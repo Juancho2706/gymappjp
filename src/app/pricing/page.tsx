@@ -108,7 +108,7 @@ export default function PricingPage() {
                             <strong className="text-foreground">Solo mensual:</strong> Starter (1–10) y Pro (11–30).
                         </li>
                         <li>
-                            <strong className="text-foreground">Elite y Scale (31–100):</strong> mensual, trimestral o
+                            <strong className="text-foreground">Elite (31–60) y Scale (hasta 500):</strong> mensual, trimestral o
                             anual; son los únicos planes con opción de prepago trimestral o anual.
                         </li>
                         <li>
@@ -176,7 +176,7 @@ export default function PricingPage() {
 
                 {/* Enterprise callout */}
                 <p className="mt-10 text-center text-xs text-muted-foreground">
-                    ¿Necesitas más de 100 alumnos o funciones personalizadas? Tenemos{' '}
+                    ¿Necesitas más de 500 alumnos o funciones personalizadas? Tenemos{' '}
                     <strong className="text-foreground">planes empresariales</strong>.{' '}
                     Escríbenos a{' '}
                     <a href="mailto:contacto@eva-app.cl" className="underline hover:text-foreground transition-colors">

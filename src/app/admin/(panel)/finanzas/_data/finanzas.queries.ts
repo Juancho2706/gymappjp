@@ -26,7 +26,7 @@ const TIER_PRICES: Record<string, number> = {
     starter: 19990,
     pro: 29990,
     elite: 44990,
-    scale: 64990,
+    scale: 190000,
 }
 
 export const getFinanzasData = unstable_cache(

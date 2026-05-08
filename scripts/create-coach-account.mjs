@@ -19,7 +19,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 config({ path: resolve(__dirname, '../.env.local') })
 
-const TIER_MAX = { starter: 10, pro: 30, elite: 60, scale: 100 }
+const TIER_MAX = { starter: 10, pro: 30, elite: 60, scale: 500 }
 
 function parseArgs(argv) {
     const out = {}
