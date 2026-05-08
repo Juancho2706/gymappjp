@@ -1,151 +1,122 @@
-# GymAppJP (OmniCoach OS)
+# EVA Fitness Platform
 
-GymAppJP (also known as OmniCoach OS) is an advanced web application designed to empower gym coaches, personal trainers, and fitness professionals. It provides a comprehensive suite of tools to manage clients, build customized workout and nutrition plans, track progress, and operate under a professional white-label experience.
+**B2B2C white-label SaaS for fitness coaches and personal trainers.**
 
-## Documentación canónica (estado del producto y arquitectura)
+Each coach gets a branded PWA — their own logo, colors, and domain — that their clients install as a native-like app. Built with Next.js 15, Supabase, and Tailwind CSS v4.
 
-| Documento | Contenido |
-|-----------|-----------|
-| [AGENTS.md](AGENTS.md) | Stack, patrones arquitectónicos, flujos E2E y reglas de código para agentes de IA |
-| [nuevabibliadelaapp/01-ESTADO-ACTUAL.md](nuevabibliadelaapp/01-ESTADO-ACTUAL.md) | Snapshot de completitud por módulo, sesiones y estado DB |
-| [nuevabibliadelaapp/02-ROADMAP-PENDIENTES.md](nuevabibliadelaapp/02-ROADMAP-PENDIENTES.md) | Roadmap por bloques, tareas manuales, UX, seguridad y performance |
-| [nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md](nuevabibliadelaapp/03-ARQUITECTURA-TECNICA.md) | Rutas, flujos de auth, modelo de datos, patrones, PWA y móvil |
-| [nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md](nuevabibliadelaapp/04-NEGOCIO-Y-ESTRATEGIA.md) | Tiers, MRR, go-to-market, escalabilidad y proveedores de pago |
-| [nuevabibliadelaapp/05-PAGOS-Y-OPERACIONES.md](nuevabibliadelaapp/05-PAGOS-Y-OPERACIONES.md) | Flujo MercadoPago, webhooks, grace period y smoke tests |
-| [docs/BRANDING-IMAGENES-IA.md](docs/BRANDING-IMAGENES-IA.md) | Guía de branding para generación de imágenes con IA |
+---
 
-## 🚀 Features
+## Features
 
-- **Workout Builder:** Create professional routines using a catalog of 230+ exercises, each with animated GIFs and instructions.
-- **Nutrition Plans:** Assign personalized meal plans to each client. Clients can log their daily food intake.
-- **Check-ins & Progress Tracking:** Clients can upload progress photos and log their weight/measurements.
-- **White-Label App:** A branded PWA experience that clients can install on their smartphones.
-- **Coach Dashboard:** Manage all active clients, track their engagement, and handle subscriptions in one place.
-- **Multilingual Support:** English and Spanish interfaces.
-- **Dark & Light Themes:** First-class support for system preferences and manual theme toggling.
+- **Workout Builder** — Drag-and-drop program builder with 230+ exercises (animated GIFs, instructions, A/B variants).
+- **Workout Execution** — Client-facing timer, set logging (weight/reps/RIR), PR detection, streaks, and confetti.
+- **Nutrition Plans** — Assign meal plans per client. Clients log daily intake with macro tracking and 30-day adherence.
+- **Check-ins & Progress** — Photo uploads (front/lateral), weight log, and progress charts.
+- **Client Directory** — Attention score dashboard, full client profiles (6 tabs: overview, analytics, nutrition, progress, plan, billing).
+- **White-Label** — Coach uploads logo, sets primary color, customizes loader and QR install screen.
+- **Subscriptions** — 4 tiers (Starter / Pro / Elite / Scale) via MercadoPago recurring payments in CLP.
+- **Admin Panel** — Platform CEO dashboard: MRR/ARR/churn, coach management, audit log.
+- **Multilingual** — Spanish and English interfaces.
+- **Dark / Light theme** — System preference + manual toggle.
 
-## 🛠️ Tech Stack
+---
 
-- **Framework:** Next.js 15+ (App Router, React Server Components)
-- **Styling:** Tailwind CSS + Shadcn UI + Framer Motion
-- **Database & Auth:** Supabase (PostgreSQL, Auth, Storage)
-- **PWA Support:** Manual service worker (`public/sw.js`) + dynamic manifests per coach
+## Tech Stack
 
-## 🏃‍♂️ Getting Started
+| Layer | Choice |
+|-------|--------|
+| Framework | Next.js 15 (App Router, RSC, Server Actions) |
+| Styling | Tailwind CSS v4 · shadcn/ui · Radix primitives |
+| Database & Auth | Supabase (PostgreSQL + RLS + Storage) |
+| Forms | react-hook-form + Zod v4 |
+| Drag & Drop | @dnd-kit |
+| Payments | MercadoPago pre-approvals (CLP) |
+| PWA | Manual `public/sw.js` + dynamic manifests per coach |
+| Rate limiting | Upstash Redis (middleware) |
+| CI | GitHub Actions (lint + typecheck + Vitest + Playwright) |
+
+---
+
+## Getting Started
 
 ### Prerequisites
-- Node.js (v18 or higher)
-- npm, yarn, pnpm, or bun
+
+- Node.js 18+
 - A Supabase project
 
-### 1. Clone & Install
+### Install
+
 ```bash
 git clone https://github.com/Juancho2706/gymappjp.git
 cd gymappjp
 npm install
 ```
 
-### 2. Environment Variables
-Copy `.env.example` to `.env.local` and replace placeholder values.
+### Environment Variables
 
 ```bash
 cp .env.example .env.local
 ```
 
-Required variables:
-
 | Variable | Required | Purpose |
-|---|---|---|
+|----------|----------|---------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Public anon key for client and middleware sessions |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side admin operations only |
-| `NEXT_PUBLIC_SITE_URL` | No (recommended) | Canonical base URL for metadata and links |
-| `VERCEL_URL` | No | Auto-set in Vercel deployments |
-| `EDAMAM_APP_ID` | Optional | Recipe search integration |
-| `EDAMAM_APP_KEY` | Optional | Recipe search integration |
-| `PAYMENT_PROVIDER` | Recommended | `mercadopago` (default) or `stripe` |
-| `MERCADOPAGO_ACCESS_TOKEN` | Yes (if MercadoPago) | Server token for payment API and webhooks |
-| `MERCADOPAGO_TEST_PAYER_EMAIL` | Sandbox only | Required in tests (`@testuser.com`) when using TEST access token |
-| `MERCADOPAGO_WEBHOOK_TOKEN` | **Required in production** | Shared token for `/api/payments/webhook` query `token` or `x-webhook-token` header |
-| `MERCADOPAGO_WEBHOOK_SIGNING_SECRET` | Optional | Mercado Pago webhook signing secret for `x-signature` HMAC verification |
-| `STRIPE_SECRET_KEY` | Future | Stripe server key (provider prepared for future) |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Future | Stripe client public key |
-| `STRIPE_WEBHOOK_SECRET` | Future | Stripe webhook signature secret |
-| `PLAYWRIGHT_BASE_URL` | Optional | Playwright base URL override |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Recommended in production | Rate limiting for auth and payment POSTs (middleware); if unset, limits are disabled |
-| `NEXT_PUBLIC_DEMO_VIDEO_URL` | Optional | YouTube id or URL for the embedded demo on the landing page |
-| `E2E_*` | Optional (CI) | See **GitHub Actions** below for Playwright QA-014/015 |
-| `E2E_PAYMENT_COACH_EMAIL` / `E2E_PAYMENT_COACH_PASSWORD` | Optional | Coach user (`pending_payment` ideal) for mocked payment flow spec |
-| `RESEND_API_KEY` / `EMAIL_FROM` | Optional (Sprint 5) | Provider + sender identity for RET-002 email drip |
-| `DRIP_CRON_TOKEN` | Optional (Sprint 5) | Protects `POST /api/internal/email-drip/run` |
-| `BETA_MONITOR_TOKEN` | Optional (Sprint 5) | Protects `GET /api/ops/beta-health` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Client / middleware anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side admin operations |
+| `MERCADOPAGO_ACCESS_TOKEN` | Yes | MercadoPago server token |
+| `MERCADOPAGO_WEBHOOK_TOKEN` | Prod | Webhook HMAC protection |
+| `UPSTASH_REDIS_REST_URL` / `_REST_TOKEN` | Prod | Rate limiting |
+| `NEXT_PUBLIC_SITE_URL` | Recommended | Canonical URL for metadata |
 
-### 3. Run the Development Server
+See `.env.example` for the full list.
+
+### Run
 
 ```bash
-npm run dev
+npm run dev      # http://localhost:3000
+npm run build    # Production build
+npm run typecheck
+npm run lint
+npm run test     # Vitest unit tests
+npm run test:e2e # Playwright E2E
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the app.
+### Database Migrations
 
-### GitHub Actions (CI)
-
-Workflow: `.github/workflows/ci.yml`.
-
-- **Quality job:** `npm run lint`, `npm run typecheck`, `npx vitest run` (unit tests under `src/**/*.test.*` and `tests/**/*.test.*`; Playwright specs under `tests/*.spec.ts` are excluded from Vitest).
-- **E2E job:** Playwright headless with `npm run dev` (see `playwright.config.ts`). Configure repository **Secrets** for a real Supabase project at minimum:
-  - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (and `SUPABASE_SERVICE_ROLE_KEY` if the app reads it at startup).
-  - Optional for **QA-014 / QA-015:** `E2E_COACH_SLUG`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD`, `E2E_WORKOUT_PLAN_ID` (alumno con programa activo y plan de entreno válido; sin ellos esas pruebas se omiten pero el resto de E2E sigue ejecutándose).
-
-### Operations
-
-- **Beta registrations:** `/registro-beta` with token query param (manual distribution).
-- **Supabase management:** `npm run supabase:disable-signup` to toggle public signups via Management API.
-
-### Vercel preview deployments (OPS-004)
-
-Con el repositorio conectado a Vercel, cada pull request recibe una **Preview URL** en el comentario/check de despliegue. Usa ese enlace para validar cambios antes de fusionar; las variables sensibles se configuran en el proyecto Vercel (Environment Variables → Preview).
-
-### Supabase migration workflow
-This repository keeps migration SQL under `supabase/migrations` (historical snapshots in `supabase/migrations_backup/`).
-
-1. Authenticate with Supabase CLI:
 ```bash
 npx supabase login
-```
-2. Link the local repo to the right remote project:
-```bash
 npx supabase link --project-ref <project-ref>
-```
-3. Pull the current remote migration history:
-```bash
-npx supabase db pull
-```
-4. Create and edit new migration files:
-```bash
-npx supabase migration new <name_in_snake_case>
-```
-5. Apply local migrations to the linked project:
-```bash
+npx supabase migration new <name>
 npx supabase db push
 ```
 
-Security hardening:
-- Keep `Enable email signups` disabled in Supabase Auth if registration is managed by server-side admin flows only.
-- Integration tests: set `SUPABASE_RLS_INTEGRATION=1` and variables listed in `.env.example`.
-- Never commit real secret values. Use `.env.example` for placeholders.
-- To disable public signup via Management API, set `SUPABASE_ACCESS_TOKEN` and run:
-```bash
-npm run supabase:disable-signup
-```
-- Payments architecture is provider-agnostic. Configure `PAYMENT_PROVIDER=mercadopago` for Sprint 2.
+Migration files live in `supabase/migrations/`.
 
-## 📚 Learn More
+---
 
-- Learn about the [Next.js App Router](https://nextjs.org/docs/app).
-- Explore the [Supabase Documentation](https://supabase.com/docs).
-- Learn about [Shadcn UI](https://ui.shadcn.com/).
+## Architecture
 
-## 📝 License
+Two protected zones:
 
-This project is licensed under the MIT License.
+- `/coach/*` — Coach dashboard (client management, workout builder, nutrition, branding, subscription).
+- `/c/[coach_slug]/*` — Client white-label app (workout execution, nutrition log, check-ins).
+
+Data flow: RSC fetches via `React.cache` → props to client components → server actions → `revalidatePath()`.
+
+No Redux, Zustand, SWR, or React Query. State is local (`useState`), pending (`useTransition`), or optimistic (`useOptimistic`).
+
+---
+
+## CI / CD
+
+`.github/workflows/ci.yml` runs on every push:
+1. `npm run lint` + `npm run typecheck` + `npx vitest run`
+2. Playwright E2E (headless, requires Supabase secrets in repository Secrets)
+
+Deployments via Vercel — each PR gets a Preview URL automatically.
+
+---
+
+## License
+
+MIT

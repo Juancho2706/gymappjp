@@ -1,5 +1,32 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# ── Docs internos / AI instructions (no van al repo público) ──
+AGENTS.md
+CLAUDE.md
+README-APP.md
+ANALISIS_PRECIOS.md
+COACH_ONBOARDING_PREMIUM_PLAN.md
+DECISIONES_B2B.md
+ENTERPRISE_B2B_KIMIEDITION.md
+ENTERPRISE_B2B_PACKS_PLAN.md
+EVA_EMPRESAS_MASTER.md
+EXPLICACIONENTERPRISE.md
+PLAN-MI-MARCA.md
+PLAN-SOPORTE-NOVEDADES.md
+nuevabibliadelaapp/
+docs/ANALISIS-MODULO-NUTRICION.md
+docs/BRANDING-IMAGENES-IA.md
+docs/CAPACITOR-WHITELABEL-ROADMAP.md
+docs/WHITE-LABEL-ROADMAP.md
+
+# ── AI tool configs ──
+.claude/
+.roo/
+
+# ── Script outputs ──
+build-output.txt
+scripts/output/
+
 # ── Seguridad / secretos (nunca subir al remoto) ──
 # Variables de entorno (local, staging, producción)
 .env*
