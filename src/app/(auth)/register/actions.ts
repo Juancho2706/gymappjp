@@ -15,6 +15,9 @@ import {
     isAuthDuplicateEmailMessage,
     normalizePlatformEmail,
 } from '@/lib/auth/platform-email'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
+import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
 
 export type RegisterState = {
     error?: string
@@ -144,6 +147,18 @@ export async function registerAction(
     await supabase.auth.signInWithPassword({ email: emailNorm, password })
 
     if (isFreeTier) {
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        const { subject, html } = buildFreeCoachWelcomeEmail({
+            coachName: fullName,
+            brandName,
+            dashboardUrl: `${appUrl}/coach/dashboard`,
+            clientsUrl: `${appUrl}/coach/clients`,
+            subscriptionUrl: `${appUrl}/coach/subscription`,
+        })
+        // Both calls are best-effort — failures never block registration redirect
+        sendTransactionalEmail({ to: emailNorm, subject, html }).catch(() => null)
+        scheduleFreeCoachDripSequence({ email: emailNorm, coachName: fullName, brandName }).catch(() => null)
+
         redirect('/coach/dashboard?welcome=free')
     }
 

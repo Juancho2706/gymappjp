@@ -4,6 +4,7 @@ type SendEmailInput = {
     html: string
     replyTo?: string
     text?: string
+    scheduledAt?: string // ISO datetime — Resend sends at this time
 }
 
 type SendEmailResult =
@@ -23,12 +24,9 @@ export async function sendTransactionalEmail(input: SendEmailInput): Promise<Sen
         subject: input.subject,
         html: input.html,
     }
-    if (input.replyTo) {
-        body.reply_to = input.replyTo
-    }
-    if (input.text) {
-        body.text = input.text
-    }
+    if (input.replyTo) body.reply_to = input.replyTo
+    if (input.text) body.text = input.text
+    if (input.scheduledAt) body.scheduled_at = input.scheduledAt
 
     const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -46,4 +44,32 @@ export async function sendTransactionalEmail(input: SendEmailInput): Promise<Sen
 
     const payload = (await res.json()) as { id?: string }
     return { ok: true, providerMessageId: payload.id ?? null }
+}
+
+type AddAudienceContactInput = {
+    audienceId: string
+    email: string
+    firstName?: string
+    lastName?: string
+    data?: Record<string, string>
+}
+
+export async function addResendAudienceContact(input: AddAudienceContactInput): Promise<void> {
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey || !input.audienceId) return
+
+    await fetch(`https://api.resend.com/audiences/${input.audienceId}/contacts`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            email: input.email,
+            first_name: input.firstName ?? '',
+            last_name: input.lastName ?? '',
+            unsubscribed: false,
+            data: input.data ?? {},
+        }),
+    }).catch(() => null) // best-effort
 }

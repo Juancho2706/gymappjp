@@ -175,6 +175,24 @@ async function handleWebhook(request: Request, rawBody: string) {
         }
     }
 
+    // Ola 6: when subscription terminates, downgrade to free tier instead of blocking.
+    // Coaches keep access with up to 3 clients — drastically reduces churn trauma and
+    // makes reactivation frictionless. Admin-forced expiry bypasses this (direct DB write).
+    const periodExpiredOrNull =
+        !coach.current_period_end ||
+        new Date(coach.current_period_end).getTime() <= Date.now()
+    const isTerminatedEvent =
+        statusForUpdate === 'expired' ||
+        (statusForUpdate === 'canceled' && periodExpiredOrNull)
+
+    if (isTerminatedEvent) {
+        coachUpdate.subscription_status = 'active'
+        coachUpdate.subscription_tier = 'free'
+        coachUpdate.billing_cycle = 'monthly'
+        coachUpdate.max_clients = getTierMaxClients('free' as SubscriptionTier)
+        coachUpdate.current_period_end = null
+    }
+
     const { error: coachUpdateError } = await admin.from('coaches').update(coachUpdate).eq('id', coach.id)
 
     if (coachUpdateError) {
