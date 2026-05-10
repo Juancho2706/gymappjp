@@ -148,9 +148,14 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
 export async function deleteCoachAction(coachId: string) {
     const { adminClient } = await assertAdmin()
 
-    // Delete clients assigned to this coach first to avoid FK violation
-    const { error: clientsError } = await adminClient.from('clients').delete().eq('coach_id', coachId)
-    if (clientsError) console.error('[admin] failed to delete clients for coach:', clientsError)
+    // Delete in dependency order — CASCADE tables handled automatically,
+    // but foods/nutrition_plans/saved_meals use NO ACTION and must be deleted first
+    const deletions: Array<{ table: string; error: unknown }> = []
+    for (const table of ['saved_meals', 'foods', 'nutrition_plans', 'clients'] as const) {
+        const { error } = await adminClient.from(table).delete().eq('coach_id', coachId)
+        if (error) deletions.push({ table, error })
+    }
+    if (deletions.length) console.error('[admin] deleteCoach: partial pre-delete failures', deletions)
 
     const { error: authError } = await adminClient.auth.admin.deleteUser(coachId)
     if (authError) console.error('[admin] failed to delete auth user:', authError)

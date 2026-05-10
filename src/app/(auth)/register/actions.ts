@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
@@ -87,7 +87,7 @@ export async function registerAction(
         return { error: 'Este nombre de marca no está disponible. Intentá con otro nombre.' }
     }
 
-    const adminDb = await createRawAdminClient()
+    const adminDb = createServiceRoleClient()
 
     let slug = baseSlug
     for (let attempt = 0; attempt < 8; attempt++) {
