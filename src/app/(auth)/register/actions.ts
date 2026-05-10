@@ -42,6 +42,8 @@ export async function registerAction(
     const password = formData.get('password') as string
     const brandName = formData.get('brand_name') as string
     const acceptLegal = formData.get('accept_legal')
+    const acceptHealthData = formData.get('accept_health_data')
+    const acceptMarketing = formData.get('accept_marketing') === 'on'
     const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'starter'
     const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
 
@@ -64,7 +66,11 @@ export async function registerAction(
     }
 
     if (!acceptLegal) {
-        return { error: 'Debes aceptar los términos para crear tu cuenta.' }
+        return { error: 'Debes aceptar los términos de servicio y la política de privacidad.' }
+    }
+
+    if (!acceptHealthData) {
+        return { error: 'Debes aceptar el tratamiento de datos de salud para usar EVA (Ley 21.719, Art. 16).' }
     }
 
     if (!isTierValid || !isCycleValid) {
@@ -133,6 +139,8 @@ export async function registerAction(
             billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
             payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
             max_clients: getTierMaxClients(selectedTier),
+            health_data_consent_at: new Date().toISOString(),
+            marketing_consent: acceptMarketing,
             ...(isFreeTier && { trial_used_email: emailNorm }),
         })
 

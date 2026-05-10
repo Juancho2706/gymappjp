@@ -406,13 +406,14 @@ export default function RegisterPage() {
                         </div>
                     )}
 
-                    <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-3">
+                        {/* Checkbox 1: ToS + Privacy (required) */}
                         <label className="flex items-start gap-2 text-xs text-muted-foreground">
                             <input
                                 type="checkbox"
                                 name="accept_legal"
                                 required
-                                className="mt-0.5 h-4 w-4 rounded border-border"
+                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
                             />
                             <span>
                                 Acepto los{' '}
@@ -423,7 +424,35 @@ export default function RegisterPage() {
                                 <Link href="/privacidad" className="text-primary hover:opacity-80">
                                     política de privacidad
                                 </Link>
-                                .
+                                .{' '}
+                                <span className="text-destructive font-medium">*</span>
+                            </span>
+                        </label>
+                        {/* Checkbox 2: Health data consent (required — Ley 21.719 Art. 16) */}
+                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                name="accept_health_data"
+                                required
+                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                            />
+                            <span>
+                                Acepto el tratamiento de datos de salud de mis alumnos (registros de entrenamiento,
+                                nutrición y métricas corporales) para prestar el servicio de coaching digital,
+                                conforme a la Ley 21.719.{' '}
+                                <span className="text-destructive font-medium">*</span>
+                            </span>
+                        </label>
+                        {/* Checkbox 3: Marketing (optional — must be unchecked by default) */}
+                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                name="accept_marketing"
+                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                            />
+                            <span>
+                                Quiero recibir novedades, ofertas y consejos de EVA por email.{' '}
+                                <span className="text-muted-foreground/60">(opcional)</span>
                             </span>
                         </label>
                     </div>

@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -270,8 +270,10 @@ export type Database = {
           goal_weight_kg: number | null
           id: string
           is_active: boolean | null
+          notes: string | null
           onboarding_completed: boolean
           phone: string | null
+          profile_photo_url: string | null
           subscription_start_date: string | null
           updated_at: string
           use_coach_brand_colors: boolean | null
@@ -285,8 +287,10 @@ export type Database = {
           goal_weight_kg?: number | null
           id: string
           is_active?: boolean | null
+          notes?: string | null
           onboarding_completed?: boolean
           phone?: string | null
+          profile_photo_url?: string | null
           subscription_start_date?: string | null
           updated_at?: string
           use_coach_brand_colors?: boolean | null
@@ -300,8 +304,10 @@ export type Database = {
           goal_weight_kg?: number | null
           id?: string
           is_active?: boolean | null
+          notes?: string | null
           onboarding_completed?: boolean
           phone?: string | null
+          profile_photo_url?: string | null
           subscription_start_date?: string | null
           updated_at?: string
           use_coach_brand_colors?: boolean | null
@@ -403,12 +409,14 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           full_name: string
+          health_data_consent_at: string | null
           id: string
           loader_icon_mode: string
           loader_show_icon: boolean
           loader_text: string | null
           loader_text_color: string | null
           logo_url: string | null
+          marketing_consent: boolean
           max_clients: number
           onboarding_guide: Json
           payment_provider: string
@@ -439,12 +447,14 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           full_name: string
+          health_data_consent_at?: string | null
           id: string
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
           logo_url?: string | null
+          marketing_consent?: boolean
           max_clients?: number
           onboarding_guide?: Json
           payment_provider?: string
@@ -475,12 +485,14 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           full_name?: string
+          health_data_consent_at?: string | null
           id?: string
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
           logo_url?: string | null
+          marketing_consent?: boolean
           max_clients?: number
           onboarding_guide?: Json
           payment_provider?: string
@@ -1777,6 +1789,7 @@ export type Database = {
         Row: {
           block_id: string
           client_id: string
+          coach_id: string | null
           exercise_name_at_log: string | null
           id: string
           logged_at: string
@@ -1792,6 +1805,7 @@ export type Database = {
         Insert: {
           block_id: string
           client_id: string
+          coach_id?: string | null
           exercise_name_at_log?: string | null
           id?: string
           logged_at?: string
@@ -1807,6 +1821,7 @@ export type Database = {
         Update: {
           block_id?: string
           client_id?: string
+          coach_id?: string | null
           exercise_name_at_log?: string | null
           id?: string
           logged_at?: string
@@ -2252,12 +2267,6 @@ export type Database = {
           serving_size: number
           serving_unit: string | null
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "foods"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       unaccent: { Args: { "": string }; Returns: string }
     }

@@ -9,6 +9,7 @@ import type { Tables } from '@/lib/database.types'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { Check, Palette } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
+import { DangerZone } from './_components/DangerZone'
 
 type Coach = Tables<'coaches'>
 import type { Metadata } from 'next'
@@ -154,6 +155,9 @@ export default async function CoachSettingsPage() {
 
                 {/* Brand settings form */}
                 <BrandSettingsForm coach={coach} />
+
+                {/* Danger zone — account deletion */}
+                <DangerZone />
             </div>
 
             <BrandSettingsTourClient coachId={coach.id} />
