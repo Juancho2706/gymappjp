@@ -8,6 +8,7 @@ import { BrandSettingsTourClient } from './_components/BrandSettingsTourClient'
 import type { Tables } from '@/lib/database.types'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { Check, Palette } from 'lucide-react'
+import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 
 type Coach = Tables<'coaches'>
 import type { Metadata } from 'next'
@@ -36,6 +37,7 @@ export default async function CoachSettingsPage() {
     if (!capabilities.canUseBranding) {
         return (
             <div className="p-4 md:p-8 max-w-2xl mx-auto animate-fade-in space-y-4">
+            <UpgradeGateTracker gate="branding" currentTier={tier} />
                 {/* Hero */}
                 <div className="relative overflow-hidden rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/10 via-card to-card p-6">
                     <div className="relative z-10">

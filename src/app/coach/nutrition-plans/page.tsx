@@ -9,6 +9,7 @@ import {
 } from './_data/nutrition-coach.queries'
 import { getTierCapabilities, getTierPriceClp, type SubscriptionTier } from '@/lib/constants'
 import { Check, Salad } from 'lucide-react'
+import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 
 type NutritionPlanRow = { id: string; name: string; is_active: boolean | null }
 
@@ -35,6 +36,7 @@ export default async function NutritionPlansPage() {
 
     return (
       <main className="mx-auto max-w-2xl px-4 py-10 animate-fade-in space-y-4">
+        <UpgradeGateTracker gate="nutrition" currentTier={tier} />
         {/* Hero */}
         <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-card to-card p-6">
           <div className="relative z-10">

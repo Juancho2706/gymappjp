@@ -1,4 +1,4 @@
-import { wrapEmailLayout, ctaButton, divider, featureRow } from './base-layout'
+import { wrapEmailLayout, ctaButton, divider, featureRow, badge } from './base-layout'
 
 // ── Client Welcome ──────────────────────────────────────────────────────────
 
@@ -216,6 +216,77 @@ export function buildUpgradeRequiredEmail(ctx: UpgradeRequiredContext) {
     const html = wrapEmailLayout(body, {
         previewText: `Llegaste al límite de ${ctx.currentLimit} alumnos en EVA. Expandí tu plan en 2 minutos.`,
         headerTitle: 'Expandí tu plan — EVA',
+    })
+
+    return { subject, html }
+}
+
+// ── Existing Coach Announcement ───────────────────────────────────────────────
+
+type ExistingCoachAnnouncementContext = {
+    coachName: string
+    currentTier: string
+    subscriptionUrl: string
+}
+
+export function buildExistingCoachAnnouncementEmail(ctx: ExistingCoachAnnouncementContext) {
+    const subject = `Novedades en EVA — billing anual, nuevo plan Growth y plan Free`
+
+    const isStarterOrPro = ctx.currentTier === 'starter' || ctx.currentTier === 'pro'
+    const isElite = ctx.currentTier === 'elite'
+
+    const annualCallout = isStarterOrPro ? `
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#065f46;">💡 Novedad para tu plan</p>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
+        Ahora podés cambiar a <strong>billing anual y ahorrar un 20%</strong>. Tu plan ${ctx.currentTier === 'starter' ? 'Starter pasaría de $19.990/mes a $15.992/mes' : 'Pro pasaría de $29.990/mes a $23.992/mes'} — cobrado una vez al año. Si preferís seguir mensual, no cambia nada.
+      </p>
+    </td>
+  </tr>
+</table>` : ''
+
+    const growthCallout = isElite ? `
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#065f46;">🆕 Nuevo plan Growth para vos</p>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
+        Si estás cerca del límite de 60 alumnos, ahora hay un plan <strong>Growth ($84.990/mes, 120 alumnos)</strong> entre Elite y Scale. El salto que faltaba.
+      </p>
+    </td>
+  </tr>
+</table>` : ''
+
+    const body = `
+${badge('Novedades · Mayo 2026')}
+<h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+  Hola ${ctx.coachName}, hay novedades en EVA
+</h1>
+<p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">
+  Escuchamos feedback y lanzamos 3 cosas que estaban pendientes.
+</p>
+
+${annualCallout}
+${growthCallout}
+
+${featureRow('🆓', 'Plan Free permanente', 'Ahora los coaches pueden empezar gratis con 3 alumnos, sin tarjeta. Ideal para recomendar a colegas que quieran probar EVA.')}
+${featureRow('📈', 'Nuevo tier Growth — $84.990/mes', '120 alumnos. El plan que faltaba entre Elite (60) y Scale (500).')}
+${featureRow('📅', 'Billing anual en Starter y Pro', 'Ahorraá un 20% comprometiéndote anualmente. Sin costos extra de cancelación.')}
+
+${divider()}
+
+<div style="margin-bottom:12px;">
+  ${ctaButton('Ver mis opciones de plan →', ctx.subscriptionUrl)}
+</div>
+<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+  Si no querés cambiar nada, no tenés que hacer nada. Tu plan actual sigue igual.
+</p>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: `Billing anual (−20%), plan Growth y plan Free permanente ya están disponibles en EVA.`,
+        headerTitle: 'Novedades — EVA',
     })
 
     return { subject, html }

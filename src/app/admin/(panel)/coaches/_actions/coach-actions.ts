@@ -6,6 +6,8 @@ import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { normalizePlatformEmail, assertPlatformEmailAvailable } from '@/lib/auth/platform-email'
 import { getTierMaxClients } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildExistingCoachAnnouncementEmail } from '@/lib/email/transactional-templates'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -303,4 +305,45 @@ export async function bulkCoachTierAction(coachIds: string[], tier: string, maxC
     }
     revalidateAdmin()
     return { success: true }
+}
+
+// Send announcement email to all active paid coaches about new features
+// (annual billing, Growth tier, Free tier for referrals).
+export async function sendAnnouncementEmailAction(): Promise<
+    { success: true; sent: number; failed: number } | { error: string }
+> {
+    const { adminClient } = await assertAdmin()
+
+    const { data: coaches, error } = await adminClient
+        .from('coaches')
+        .select('id, full_name, subscription_tier')
+        .eq('subscription_status', 'active')
+        .neq('subscription_tier', 'free')
+
+    if (error) return { error: error.message }
+    if (!coaches?.length) return { success: true, sent: 0, failed: 0 }
+
+    const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+    let sent = 0
+    let failed = 0
+
+    for (const coach of coaches) {
+        // Fetch email from auth.users
+        const { data: authUser } = await adminClient.auth.admin.getUserById(coach.id)
+        const email = authUser?.user?.email
+        if (!email) { failed++; continue }
+
+        const { subject, html } = buildExistingCoachAnnouncementEmail({
+            coachName: coach.full_name?.split(' ')[0] ?? 'Coach',
+            currentTier: coach.subscription_tier ?? 'starter',
+            subscriptionUrl: `${appUrl}/coach/subscription`,
+        })
+        const result = await sendTransactionalEmail({ to: email, subject, html })
+        if (result.ok) { sent++ } else { failed++ }
+        // Small delay to respect Resend rate limits (2 req/s on free plan)
+        await new Promise(r => setTimeout(r, 600))
+    }
+
+    await logAdminAction(adminClient, 'coach.announcement_email', 'coaches', 'bulk', { sent, failed })
+    return { success: true, sent, failed }
 }
