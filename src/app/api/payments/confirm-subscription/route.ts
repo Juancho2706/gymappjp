@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('id, subscription_tier, billing_cycle, subscription_mp_id, current_period_end')
+            .select('id, subscription_tier, billing_cycle, subscription_mp_id, current_period_end, subscription_status')
             .eq('id', user.id)
             .maybeSingle()
 
@@ -56,9 +56,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
         }
 
-        const preapprovalId = parsed.data.preapprovalId ?? coach.subscription_mp_id ?? undefined
+        const explicitPreapprovalId = parsed.data.preapprovalId
+        const preapprovalId = explicitPreapprovalId ?? coach.subscription_mp_id ?? undefined
         if (!preapprovalId) {
             return NextResponse.json({ error: 'No subscription id to confirm.' }, { status: 400 })
+        }
+
+        // Guard: if coach is admin-blocked (expired/paused) and no explicit preapproval ID came
+        // from a fresh MP redirect, reject — prevents "Ya pagué" reactivating with a stale stored ID.
+        const adminBlockedStatuses = new Set(['expired', 'paused'])
+        if (!explicitPreapprovalId && adminBlockedStatuses.has(coach.subscription_status ?? '')) {
+            return NextResponse.json(
+                { error: 'Tu cuenta tiene acceso restringido. Para reactivar, iniciá un nuevo proceso de pago.' },
+                { status: 403 }
+            )
         }
 
         const provider = getPaymentsProvider()

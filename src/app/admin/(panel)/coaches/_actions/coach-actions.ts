@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { normalizePlatformEmail, assertPlatformEmailAvailable } from '@/lib/auth/platform-email'
 import { getTierMaxClients } from '@/lib/constants'
+import { getPaymentsProvider } from '@/lib/payments/provider'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -194,16 +195,35 @@ export async function suspendCoachAction(coachId: string, reason?: string) {
     return { success: true }
 }
 
-// Force expired — coach will see /reactivate on next visit
+// Force expired — coach will see /reactivate on next visit.
+// Also cancels the stored MP preapproval so "Ya pagué" can't bypass the block.
 export async function expireCoachAction(coachId: string) {
     const { adminClient } = await assertAdmin()
+
+    const { data: coach } = await adminClient
+        .from('coaches')
+        .select('subscription_mp_id')
+        .eq('id', coachId)
+        .maybeSingle()
 
     const { error } = await adminClient.from('coaches')
         .update({ subscription_status: 'expired' })
         .eq('id', coachId)
     if (error) return { error: error.message }
 
-    await logAdminAction(adminClient, 'coach.force_expire', 'coaches', coachId, {})
+    // Best-effort: cancel preapproval at provider so confirm-subscription can't reactivate with stale ID
+    const mpId = coach?.subscription_mp_id?.trim()
+    if (mpId) {
+        try {
+            const provider = getPaymentsProvider()
+            await provider.cancelCheckoutAtProvider(mpId)
+        } catch {
+            // Non-fatal — DB is already expired, log and continue
+            console.warn('[admin] expireCoach: could not cancel preapproval at provider', { coachId, mpId })
+        }
+    }
+
+    await logAdminAction(adminClient, 'coach.force_expire', 'coaches', coachId, { mp_cancelled: !!mpId })
     revalidateAdmin()
     return { success: true }
 }
