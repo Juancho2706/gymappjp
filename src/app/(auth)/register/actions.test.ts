@@ -12,6 +12,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: createClientMock,
 }))
 
+vi.mock('@/lib/supabase/admin-client', () => ({
+  createServiceRoleClient: createRawAdminClientMock,
+}))
+
 vi.mock('@/lib/supabase/admin-raw', () => ({
   createRawAdminClient: createRawAdminClientMock,
 }))
@@ -73,7 +77,7 @@ describe('registerAction', () => {
         },
       },
     }
-    createRawAdminClientMock.mockResolvedValue(adminDb)
+    createRawAdminClientMock.mockReturnValue(adminDb)
 
     const result = await registerAction({}, buildRegisterFormData())
 
@@ -107,7 +111,7 @@ describe('registerAction', () => {
       },
     }
 
-    createRawAdminClientMock.mockResolvedValue(adminDb)
+    createRawAdminClientMock.mockReturnValue(adminDb)
 
     const result = await registerAction({}, buildRegisterFormData({ brand_name: 'Mi Marca' }))
 
@@ -174,7 +178,7 @@ describe('registerAction', () => {
       },
     }
 
-    createRawAdminClientMock.mockResolvedValue(adminDb)
+    createRawAdminClientMock.mockReturnValue(adminDb)
 
     const result = await registerAction({}, buildRegisterFormData())
 
@@ -224,7 +228,7 @@ describe('registerAction', () => {
       },
     }
 
-    createRawAdminClientMock.mockResolvedValue(adminDb)
+    createRawAdminClientMock.mockReturnValue(adminDb)
     createClientMock.mockResolvedValue(userSupabase)
 
     await expect(registerAction({}, buildRegisterFormData())).rejects.toThrow(

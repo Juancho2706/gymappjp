@@ -1,6 +1,18 @@
 import type { NextConfig } from "next";
 
+const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com'
+
 const nextConfig: NextConfig = {
+  // Proxy PostHog through our domain to bypass adblockers.
+  // Path /ph/* maps to the PostHog ingestion endpoint.
+  async rewrites() {
+    return [
+      { source: '/ph/static/:path*', destination: `${POSTHOG_HOST}/static/:path*` },
+      { source: '/ph/array/:path*',  destination: `${POSTHOG_HOST}/array/:path*` },
+      { source: '/ph/:path*',        destination: `${POSTHOG_HOST}/:path*` },
+    ]
+  },
+  skipTrailingSlashRedirect: true,
   reactCompiler: true,
   experimental: {
     serverActions: {

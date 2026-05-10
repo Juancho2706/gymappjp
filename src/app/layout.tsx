@@ -11,6 +11,7 @@ import { ScrollRestoration } from '@/components/ScrollRestoration'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { BRAND_APP_ICON, BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
+import { PostHogProvider } from '@/lib/posthog/provider'
 
 const metadataBase = resolveMetadataBase()
 /** Crawlers (WhatsApp, X) suelen exigir URL absoluta y sin caracteres problemáticos en la ruta. */
@@ -94,22 +95,24 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${inter.variable} ${montserrat.variable} antialiased`} suppressHydrationWarning>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange={false}
-        >
-          <LanguageProvider>
-            <PwaRegister />
-            <ScrollRestoration />
-            <InstallPrompt brandName="EVA" />
-            {children}
-            <Toaster richColors position="bottom-center" />
-            <Analytics />
-            <SpeedInsights />
-          </LanguageProvider>
-        </ThemeProvider>
+        <PostHogProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange={false}
+          >
+            <LanguageProvider>
+              <PwaRegister />
+              <ScrollRestoration />
+              <InstallPrompt brandName="EVA" />
+              {children}
+              <Toaster richColors position="bottom-center" />
+              <Analytics />
+              <SpeedInsights />
+            </LanguageProvider>
+          </ThemeProvider>
+        </PostHogProvider>
       </body>
     </html>
   )

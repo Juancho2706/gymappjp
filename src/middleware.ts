@@ -7,6 +7,7 @@ import {
     clientIpFromRequest,
     jsonRateLimited,
     rateLimitAuth,
+    rateLimitSignup,
     rateLimitPayment,
     rateLimitAdmin,
 } from '@/lib/rate-limit'
@@ -22,6 +23,26 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next({ request })
     }
 
+    // Edge Config kill switch — disable free tier registration without a deploy.
+    // Set free_tier_kill_switch=true in Vercel Edge Config to block /register and /pricing.
+    if (pathname === '/register' || pathname === '/registro-beta') {
+        const edgeConfigId = process.env.EDGE_CONFIG
+        if (edgeConfigId) {
+            try {
+                const { get } = await import('@vercel/edge-config')
+                const killed = await get<boolean>('free_tier_kill_switch')
+                if (killed) {
+                    const url = request.nextUrl.clone()
+                    url.pathname = '/pricing'
+                    url.searchParams.set('notice', 'registration_paused')
+                    return NextResponse.redirect(url)
+                }
+            } catch {
+                // Edge Config unavailable — allow through (fail open)
+            }
+        }
+    }
+
     const ip = clientIpFromRequest(request)
 
     // SEC-002: rate limit auth-related POSTs (login, register, password flows, client login).
@@ -35,6 +56,11 @@ export async function middleware(request: NextRequest) {
             /^\/c\/[^/]+\/login$/.test(pathname)
         if (authPost) {
             const rl = await rateLimitAuth(ip)
+            if (!rl.ok) return jsonRateLimited(rl.retryAfter)
+        }
+        // Tighter per-IP limit for account creation (5/hour) — prevents free-tier abuse
+        if (pathname === '/register' || pathname === '/registro-beta') {
+            const rl = await rateLimitSignup(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
         }
 
