@@ -10,6 +10,7 @@ import {
     BRAND_TOUR_SEEN_CHANGED_EVENT,
     type BrandTourSeenChangedDetail,
 } from '@/lib/coach-brand-tour'
+import { markBrandTourSeenAction } from '@/app/coach/dashboard/_actions/onboarding-guide.actions'
 
 const TOUR_STEPS: BrandTourStep[] = [
     {
@@ -59,7 +60,13 @@ const TOUR_STEPS: BrandTourStep[] = [
     },
 ]
 
-export function BrandSettingsTourClient({ coachId }: { coachId: string }) {
+export function BrandSettingsTourClient({
+    coachId,
+    brandTourSeenServer,
+}: {
+    coachId: string
+    brandTourSeenServer?: boolean
+}) {
     const [tourOpen, setTourOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
     const key = brandTourSeenStorageKey(coachId)
@@ -76,15 +83,22 @@ export function BrandSettingsTourClient({ coachId }: { coachId: string }) {
                 window.history.replaceState({}, '', next)
                 return
             }
-            const seen = localStorage.getItem(key)
-            if (seen !== 'true') {
-                const timer = setTimeout(() => setTourOpen(true), 600)
-                return () => clearTimeout(timer)
+            // Merge server value with localStorage: server wins for "seen"
+            const lsSeen = localStorage.getItem(key) === 'true'
+            const initialSeen = brandTourSeenServer === true || lsSeen
+            if (initialSeen) {
+                // Ensure localStorage stays in sync with server value
+                if (brandTourSeenServer === true && !lsSeen) {
+                    localStorage.setItem(key, 'true')
+                }
+                return
             }
+            const timer = setTimeout(() => setTourOpen(true), 600)
+            return () => clearTimeout(timer)
         } catch {
             // localStorage / URL no disponible
         }
-    }, [key])
+    }, [key, brandTourSeenServer])
 
     useEffect(() => {
         const handler = () => setTourOpen(true)
@@ -108,6 +122,7 @@ export function BrandSettingsTourClient({ coachId }: { coachId: string }) {
         } catch {
             /* ignore */
         }
+        markBrandTourSeenAction().catch(() => null)
     }
 
     const handleRestartTour = () => {

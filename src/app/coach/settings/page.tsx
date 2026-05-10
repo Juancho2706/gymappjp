@@ -26,7 +26,7 @@ export default async function CoachSettingsPage() {
 
     const { data: rawCoach } = await supabase
         .from('coaches')
-        .select('*')
+        .select('id, full_name, brand_name, slug, slug_changed_at, primary_color, logo_url, welcome_message, welcome_modal_content, welcome_modal_enabled, welcome_modal_type, welcome_modal_updated_at, welcome_modal_version, loader_text, loader_text_color, loader_icon_mode, loader_show_icon, use_custom_loader, onboarding_guide, subscription_tier, subscription_status, subscription_mp_id, superseded_mp_preapproval_id, billing_cycle, current_period_end, trial_ends_at, trial_used_email, payment_provider, max_clients, marketing_consent, previous_slugs, use_brand_colors_coach, admin_notes, health_data_consent_at, updated_at, created_at')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -160,7 +160,15 @@ export default async function CoachSettingsPage() {
                 <DangerZone />
             </div>
 
-            <BrandSettingsTourClient coachId={coach.id} />
+            <BrandSettingsTourClient
+                coachId={coach.id}
+                brandTourSeenServer={
+                    typeof coach.onboarding_guide === 'object' &&
+                    coach.onboarding_guide !== null &&
+                    !Array.isArray(coach.onboarding_guide) &&
+                    (coach.onboarding_guide as Record<string, unknown>).brand_tour_seen === true
+                }
+            />
         </div>
     )
 }
