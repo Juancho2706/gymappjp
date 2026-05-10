@@ -1,156 +1,187 @@
-'use client'
-
 import Link from 'next/link'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import { ArrowLeft } from 'lucide-react'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+    title: 'Política de Privacidad | EVA',
+    description: 'Política de privacidad de EVA conforme a la Ley 21.719 de Chile.',
+}
+
+const LAST_UPDATED = '10 de mayo de 2026'
+const CONTACT_EMAIL = 'privacidad@eva-app.cl'
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">{title}</h2>
+            <div className="text-zinc-300 text-sm leading-relaxed space-y-2">{children}</div>
+        </section>
+    )
+}
 
 export default function PrivacidadPage() {
-  return (
-    <div className="min-h-dvh bg-background text-foreground overflow-x-hidden relative">
-      {/* Background glow orbs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-0 right-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-[#00E5FF]/10 blur-[100px] md:blur-[150px]" />
-      </div>
-
-      {/* Subtle grid pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.02] pointer-events-none z-0"
-        style={{
-          backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }}
-      />
-
-      <div className="relative z-10">
-        {/* Simple Header */}
-        <header className="border-b border-white/5 bg-transparent py-6">
-            <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
-                <LandingBrandMark
-                    className="transition-transform hover:scale-[1.02]"
-                    iconClassName="h-8 w-8 sm:h-9 sm:w-9"
-                />
-                <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-                    <ArrowLeft className="w-4 h-4" />
-                    Volver
-                </Link>
+    return (
+        <div className="min-h-dvh bg-background text-foreground overflow-x-hidden relative">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                <div className="absolute top-0 left-1/4 w-[300px] md:w-[600px] h-[300px] md:h-[600px] rounded-full bg-[#007AFF]/10 blur-[100px] md:blur-[150px]" />
             </div>
-        </header>
+            <div
+                className="absolute inset-0 opacity-[0.02] pointer-events-none z-0"
+                style={{
+                    backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                }}
+            />
 
-        {/* Content */}
-        <main className="py-20 px-6">
-          <div className="max-w-3xl mx-auto space-y-12">
-            <div>
-              <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">
-                Privacidad
-              </span>
-              <h1 className="text-4xl md:text-5xl font-black font-display tracking-tight text-white mb-4">Política de Privacidad</h1>
-              <p className="text-zinc-400">Última actualización: {new Date().toLocaleDateString()}</p>
-            </div>
-
-            <div className="space-y-8 bg-white/[0.02] border border-white/5 backdrop-blur-xl rounded-[2rem] p-8 md:p-12 text-zinc-300">
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">1. Identidad del Responsable de los Datos</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  {`Los datos personales recopilados a través de esta plataforma (la "Plataforma") serán incorporados y tratados bajo la responsabilidad del titular de la Plataforma. `}
-                  <br /><br />
-                  <strong>Nombre:</strong> EVA
-                  <br />
-                  <strong>Contacto:</strong> contacto@eva-app.cl
-                </p>
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">2. Datos Recopilados</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  La Plataforma recopila datos personales necesarios para el funcionamiento de los servicios, incluyendo:
-                </p>
-                <ul className="list-disc list-inside space-y-2 text-sm md:text-base ml-2 text-zinc-400">
-                  <li><strong>Datos de Identificación y Contacto:</strong> Nombre, apellidos, correo electrónico y contraseña (encriptada).</li>
-                  <li><strong>Datos de Uso y Perfilamiento:</strong> Datos relacionados a los entrenamientos, medidas antropométricas, macronutrientes, alergias y preferencias de dieta.</li>
-                  <li><strong>Datos de Navegación:</strong> Direcciones IP, cookies y datos de sesión en la plataforma.</li>
-                </ul>
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">3. Finalidad del Tratamiento de los Datos</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  El tratamiento de sus datos personales tiene como finalidades:
-                </p>
-                <ul className="list-disc list-inside space-y-2 text-sm md:text-base ml-2 text-zinc-400">
-                  <li>Proporcionar, operar, mantener y mejorar los servicios de entrenamiento y nutrición ofrecidos.</li>
-                  <li>Permitir la gestión de clientes por parte de los entrenadores (creación de rutinas, planes de nutrición, check-ins).</li>
-                  <li>Enviar comunicaciones operativas relacionadas con la cuenta o cambios en los servicios.</li>
-                  <li>Garantizar la seguridad de la Plataforma, detectar y prevenir fraudes.</li>
-                </ul>
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">4. Base Legitimadora del Tratamiento</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  La base legal para el tratamiento de los datos es el consentimiento expreso otorgado por el usuario al registrarse en la Plataforma, así como la ejecución de un contrato o términos de servicio acordados.
-                </p>
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">5. Conservación de los Datos</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  Los datos personales se conservarán mientras exista una relación contractual y/o comercial con el usuario, o hasta que este solicite la supresión de los mismos. Una vez finalizada la relación, los datos podrán conservarse bloqueados durante los plazos legales aplicables para atender posibles responsabilidades.
-                </p>
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">6. Comunicación a Terceros</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  Los datos personales no serán vendidos a terceros. Pueden ser comunicados a proveedores de servicios de infraestructura tecnológica (por ejemplo, Supabase para base de datos y autenticación, Vercel para hosting) que actúan como encargados del tratamiento bajo estrictas políticas de confidencialidad.
-                </p>
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">6.1 Pagos y Suscripción</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  Para procesar suscripciones, EVA utiliza proveedores externos de pago (ej. MercadoPago). EVA no
-                  almacena datos completos de tarjeta. Solo se guardan identificadores de suscripción y eventos
-                  necesarios para validar el estado de pago, prevenir fraude y auditar incidencias.
-                </p>
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">7. Derechos de los Usuarios</h2>
-                <p className="leading-relaxed text-sm md:text-base">
-                  El usuario tiene derecho a:
-                </p>
-                <ul className="list-disc list-inside space-y-2 text-sm md:text-base ml-2 text-zinc-400">
-                  <li>Acceder a sus datos personales.</li>
-                  <li>Solicitar la rectificación de los datos inexactos.</li>
-                  <li>Solicitar la supresión o borrado (derecho al olvido).</li>
-                  <li>Solicitar la limitación del tratamiento.</li>
-                  <li>Oponerse al tratamiento y solicitar la portabilidad de los datos.</li>
-                </ul>
-                <p className="leading-relaxed text-sm md:text-base mt-4 text-zinc-400">
-                  Para ejercer estos derechos, el usuario puede enviar una solicitud por escrito al correo de contacto especificado en la sección 1, adjuntando una prueba de identidad válida.
-                </p>
-              </section>
-            </div>
-          </div>
-        </main>
-
-        {/* Footer */}
-        <footer className="border-t border-white/5 bg-transparent py-12 mt-10">
-            <div className="max-w-4xl mx-auto px-6">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                    <LandingBrandMark
-                        className="opacity-90 hover:opacity-100"
-                        iconClassName="h-8 w-8 sm:h-9 sm:w-9"
-                    />
-
-                    <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">
-                        <Link href="/legal" className="transition-colors hover:text-foreground">Aviso Legal</Link>
-                        <Link href="/privacidad" className="transition-colors hover:text-foreground">Privacidad</Link>
+            <div className="relative z-10">
+                <header className="border-b border-white/5 bg-transparent py-6">
+                    <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
+                        <LandingBrandMark className="transition-transform hover:scale-[1.02]" iconClassName="h-8 w-8 sm:h-9 sm:w-9" />
+                        <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                            <ArrowLeft className="w-4 h-4" />
+                            Volver
+                        </Link>
                     </div>
-                </div>
+                </header>
+
+                <main className="py-20 px-6">
+                    <div className="max-w-3xl mx-auto space-y-12">
+                        <div>
+                            <span className="text-cyan-400 text-xs font-bold uppercase tracking-[0.2em] mb-4 block">Privacidad</span>
+                            <h1 className="text-4xl md:text-5xl font-black font-display tracking-tight text-white mb-4">
+                                Política de Privacidad
+                            </h1>
+                            <p className="text-zinc-400 text-sm">
+                                Última actualización: {LAST_UPDATED} · Conforme a la Ley 21.719 (Chile)
+                            </p>
+                        </div>
+
+                        <div className="space-y-10 bg-white/[0.02] border border-white/5 backdrop-blur-xl rounded-[2rem] p-8 md:p-12">
+
+                            <Section title="1. Responsable del tratamiento">
+                                <p>
+                                    <strong className="text-white">Antigravity SpA</strong>, con domicilio en Santiago, Chile,
+                                    es el responsable del tratamiento de los datos personales recopilados a través de{' '}
+                                    <strong className="text-white">eva-app.cl</strong>.
+                                </p>
+                                <p>
+                                    Consultas y ejercicio de derechos:{' '}
+                                    <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a>
+                                </p>
+                            </Section>
+
+                            <Section title="2. Datos que recopilamos">
+                                <ul className="list-disc list-inside space-y-1.5 ml-2">
+                                    <li><strong className="text-white">Identificación:</strong> nombre completo, correo electrónico, contraseña (hash bcrypt).</li>
+                                    <li><strong className="text-white">Marca:</strong> nombre de marca, slug de URL, logo, colores personalizados.</li>
+                                    <li><strong className="text-white">Datos de salud (categoría sensible — Art. 16 Ley 21.719):</strong> registros de entrenamiento, métricas corporales, check-ins de bienestar, planes de nutrición y logs de alimentación de los alumnos del coach.</li>
+                                    <li><strong className="text-white">Pago:</strong> historial de transacciones procesado por MercadoPago. EVA no almacena datos de tarjetas.</li>
+                                    <li><strong className="text-white">Uso:</strong> eventos de sesión y navegación para análisis anonimizado del producto.</li>
+                                </ul>
+                            </Section>
+
+                            <Section title="3. Base legal del tratamiento">
+                                <ul className="list-disc list-inside space-y-1.5 ml-2">
+                                    <li><strong className="text-white">Ejecución del contrato:</strong> datos necesarios para prestar el servicio (Art. 13 Ley 21.719).</li>
+                                    <li><strong className="text-white">Consentimiento explícito:</strong> datos de salud de los alumnos (Art. 16 Ley 21.719) — otorgado al momento del registro.</li>
+                                    <li><strong className="text-white">Consentimiento opcional:</strong> envío de comunicaciones de marketing.</li>
+                                    <li><strong className="text-white">Obligación legal:</strong> retención de registros contables conforme a la Ley SII (mínimo 6 años).</li>
+                                </ul>
+                            </Section>
+
+                            <Section title="4. Finalidades del tratamiento">
+                                <ul className="list-disc list-inside space-y-1.5 ml-2">
+                                    <li>Proveer y mantener la plataforma EVA.</li>
+                                    <li>Gestionar la relación coach–alumno dentro del servicio.</li>
+                                    <li>Procesar pagos y gestionar suscripciones.</li>
+                                    <li>Enviar comunicaciones transaccionales del servicio (bienvenida, límites, facturación).</li>
+                                    <li>Enviar comunicaciones de marketing si el usuario otorgó consentimiento explícito.</li>
+                                    <li>Mejorar el producto mediante análisis agregado y anonimizado de uso.</li>
+                                </ul>
+                            </Section>
+
+                            <Section title="5. Subprocesadores">
+                                <ul className="list-disc list-inside space-y-1.5 ml-2">
+                                    <li><strong className="text-white">Supabase Inc.</strong> — base de datos y autenticación. AWS us-east-1, EE.UU.</li>
+                                    <li><strong className="text-white">Vercel Inc.</strong> — hosting de la aplicación. EE.UU. y UE.</li>
+                                    <li><strong className="text-white">MercadoPago S.A.</strong> — procesamiento de pagos. Argentina y región.</li>
+                                    <li><strong className="text-white">Resend Inc.</strong> — correos transaccionales. EE.UU.</li>
+                                    <li><strong className="text-white">PostHog Inc.</strong> — analítica anonimizada. EE.UU.</li>
+                                </ul>
+                                <p>
+                                    Las transferencias internacionales se realizan con garantías adecuadas mediante cláusulas contractuales estándar.
+                                </p>
+                            </Section>
+
+                            <Section title="6. Plazos de retención">
+                                <ul className="list-disc list-inside space-y-1.5 ml-2">
+                                    <li><strong className="text-white">Datos de cuenta activa:</strong> durante toda la vigencia del contrato.</li>
+                                    <li><strong className="text-white">Datos de salud (alumnos):</strong> durante la relación coach–alumno + 1 año.</li>
+                                    <li><strong className="text-white">Registros contables y de pago:</strong> 6 años (obligación SII).</li>
+                                    <li><strong className="text-white">Logs de auditoría de eliminación:</strong> 6 años.</li>
+                                    <li><strong className="text-white">Datos de marketing:</strong> hasta retiro del consentimiento.</li>
+                                </ul>
+                            </Section>
+
+                            <Section title="7. Derechos ARCO+ (Art. 5–12 Ley 21.719)">
+                                <p>Tenés derecho a:</p>
+                                <ul className="list-disc list-inside space-y-1.5 ml-2">
+                                    <li><strong className="text-white">Acceso:</strong> conocer qué datos tenemos sobre vos.</li>
+                                    <li><strong className="text-white">Rectificación:</strong> corregir datos inexactos.</li>
+                                    <li><strong className="text-white">Cancelación / Supresión:</strong> eliminar tu cuenta y datos asociados.</li>
+                                    <li><strong className="text-white">Oposición:</strong> oponerte al tratamiento para fines de marketing.</li>
+                                    <li><strong className="text-white">Portabilidad:</strong> recibir tus datos en formato estructurado.</li>
+                                    <li><strong className="text-white">Revocación:</strong> retirar cualquier consentimiento en cualquier momento.</li>
+                                </ul>
+                                <p>
+                                    Ejercicio de derechos:{' '}
+                                    <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a>.
+                                    Respondemos en máximo 30 días hábiles.
+                                </p>
+                                <p>
+                                    También podés reclamar ante la <strong className="text-white">Agencia de Protección de Datos Personales de Chile</strong>.
+                                </p>
+                            </Section>
+
+                            <Section title="8. Eliminación de cuenta">
+                                <p>
+                                    Podés eliminar tu cuenta desde{' '}
+                                    <strong className="text-white">Configuración → Zona de peligro → Eliminar cuenta</strong>.
+                                    Al eliminar:
+                                </p>
+                                <ul className="list-disc list-inside space-y-1.5 ml-2">
+                                    <li>Los datos personales de tus alumnos serán anonimizados (nombre, email, teléfono).</li>
+                                    <li>Los registros de entrenamiento y nutrición serán eliminados.</li>
+                                    <li>Tu suscripción activa será cancelada en MercadoPago.</li>
+                                    <li>Serás eliminado de todas las listas de email de marketing.</li>
+                                    <li>Los registros contables se conservarán anonimizados por obligación legal (6 años).</li>
+                                </ul>
+                            </Section>
+
+                            <Section title="9. Cookies y analítica">
+                                <p>
+                                    EVA utiliza cookies de sesión estrictamente necesarias para la autenticación.
+                                    No usamos cookies de rastreo de terceros. La analítica se realiza con datos anonimizados
+                                    mediante PostHog, configurado sin perfiles identificados por defecto (conforme a Ley 21.719, Art. 4).
+                                </p>
+                            </Section>
+
+                            <Section title="10. Cambios a esta política">
+                                <p>
+                                    Notificaremos cambios materiales por correo electrónico con al menos 15 días de anticipación.
+                                    El uso continuado del servicio tras la notificación implica aceptación de los cambios.
+                                </p>
+                            </Section>
+                        </div>
+
+                        <p className="text-center text-xs text-zinc-500">
+                            ¿Preguntas?{' '}
+                            <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a>
+                        </p>
+                    </div>
+                </main>
             </div>
-        </footer>
-      </div>
-    </div>
-  )
+        </div>
+    )
 }

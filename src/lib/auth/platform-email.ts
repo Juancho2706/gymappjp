@@ -1,8 +1,26 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 
+const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
+const PLUS_ALIAS_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com'])
+
 export function normalizePlatformEmail(email: string): string {
-    return email.trim().toLowerCase()
+    const trimmed = email.trim().toLowerCase()
+    const atIdx = trimmed.lastIndexOf('@')
+    if (atIdx === -1) return trimmed
+
+    const local = trimmed.slice(0, atIdx)
+    const domain = trimmed.slice(atIdx + 1)
+
+    // Strip +alias from supported providers
+    const withoutAlias = PLUS_ALIAS_DOMAINS.has(domain) ? (local.split('+')[0] ?? local) : local
+
+    // Gmail ignores dots in local part; googlemail.com and gmail.com are the same inbox
+    if (GMAIL_DOMAINS.has(domain)) {
+        return `${withoutAlias.replace(/\./g, '')}@gmail.com`
+    }
+
+    return `${withoutAlias}@${domain}`
 }
 
 type AvailabilityPayload = {

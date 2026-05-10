@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
-import { Loader2, User, Mail, Lock, Store, CheckCircle2 } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles } from 'lucide-react'
 import { registerAction, type RegisterState } from './actions'
 import { cn } from '@/lib/utils'
 import {
@@ -27,7 +27,7 @@ const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
 ][]
 
-function SubmitButton() {
+function SubmitButton({ isFreeTier }: { isFreeTier: boolean }) {
     const { pending } = useFormStatus()
     return (
         <button
@@ -45,6 +45,8 @@ function SubmitButton() {
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Creando tu cuenta...
                 </span>
+            ) : isFreeTier ? (
+                'Crear mi cuenta gratuita'
             ) : (
                 'Crear Cuenta'
             )}
@@ -69,6 +71,7 @@ export default function RegisterPage() {
         () => cycleOptions.filter(([key]) => allowedCycles.includes(key)),
         [allowedCycles]
     )
+    const isFreeTier = tier === 'free'
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -94,10 +97,10 @@ export default function RegisterPage() {
     }, [])
 
     useEffect(() => {
-        if (!isBillingCycleAllowedForTier(tier, billingCycle)) {
+        if (!isFreeTier && !isBillingCycleAllowedForTier(tier, billingCycle)) {
             setBillingCycle(getDefaultBillingCycleForTier(tier))
         }
-    }, [tier, billingCycle])
+    }, [tier, billingCycle, isFreeTier])
 
     function nextStep() {
         if (step === 1) {
@@ -122,7 +125,9 @@ export default function RegisterPage() {
                     Crea tu cuenta
                 </h1>
                 <p className="mt-2 text-muted-foreground text-sm">
-                    Paso {step} de 3 — Regístrate, elige plan y activa tu suscripción
+                    {isFreeTier
+                        ? `Paso ${step} de 3 — Regístrate y accedé gratis`
+                        : `Paso ${step} de 3 — Regístrate, elige plan y activa tu suscripción`}
                 </p>
             </div>
 
@@ -131,6 +136,15 @@ export default function RegisterPage() {
                 <form action={formAction} className="space-y-4">
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
+                    {/* Honeypot — bots fill this, humans don't */}
+                    <input
+                        name="website"
+                        type="text"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        style={{ position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' }}
+                        aria-hidden="true"
+                    />
                     {step !== 1 ? (
                         <>
                             <input type="hidden" name="full_name" value={fullName} />
@@ -253,6 +267,7 @@ export default function RegisterPage() {
                                         const cycleText = getTierBillingCycleSummary(key)
                                         const defaultCycleForKey = getDefaultBillingCycleForTier(key)
                                         const displayPrice = getTierPriceClp(key, defaultCycleForKey)
+                                        const isFree = key === 'free'
                                         return (
                                             <button
                                                 key={key}
@@ -266,7 +281,14 @@ export default function RegisterPage() {
                                                 )}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <p className="font-semibold text-foreground">{option.label}</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className="font-semibold text-foreground">{option.label}</p>
+                                                        {isFree && (
+                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-slate-500/15 text-slate-600 dark:text-slate-400">
+                                                                Gratis para siempre
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span
                                                         className={cn(
                                                             'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold',
@@ -282,8 +304,14 @@ export default function RegisterPage() {
                                                     Hasta {option.maxClients} alumnos · {cycleText}
                                                 </p>
                                                 <p className="text-sm text-foreground mt-1 font-medium">
-                                                    ${displayPrice.toLocaleString('es-CL')} CLP /{' '}
-                                                    {BILLING_CYCLE_CONFIG[defaultCycleForKey].label.toLowerCase()}
+                                                    {isFree ? (
+                                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">$0 · Sin tarjeta</span>
+                                                    ) : (
+                                                        <>
+                                                            ${displayPrice.toLocaleString('es-CL')} CLP /{' '}
+                                                            {BILLING_CYCLE_CONFIG[defaultCycleForKey].label.toLowerCase()}
+                                                        </>
+                                                    )}
                                                 </p>
                                             </button>
                                         )
@@ -321,16 +349,24 @@ export default function RegisterPage() {
 
                     {step === 3 ? (
                         <section className="rounded-xl border border-border p-4 space-y-3">
-                            <h2 className="font-semibold text-foreground">Resumen antes de pagar</h2>
+                            <h2 className="font-semibold text-foreground">
+                                {isFreeTier ? 'Tu plan gratuito' : 'Resumen antes de pagar'}
+                            </h2>
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Plan</span>
                                     <span className="font-semibold text-foreground">{selectedTier.label}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Facturación</span>
-                                    <span className="font-semibold text-foreground">{BILLING_CYCLE_CONFIG[billingCycle].label}</span>
+                                    <span className="text-muted-foreground">Alumnos</span>
+                                    <span className="font-semibold text-foreground">Hasta {selectedTier.maxClients}</span>
                                 </div>
+                                {!isFreeTier && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Facturación</span>
+                                        <span className="font-semibold text-foreground">{BILLING_CYCLE_CONFIG[billingCycle].label}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Nutrición</span>
                                     <span className={cn('font-semibold', getTierCapabilities(tier).canUseNutrition ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>
@@ -338,31 +374,46 @@ export default function RegisterPage() {
                                     </span>
                                 </div>
                                 <div className="flex justify-between border-t border-border pt-2 mt-2">
-                                    <span className="text-muted-foreground">Total a pagar</span>
-                                    <span className="text-lg font-black text-foreground">${selectedPrice.toLocaleString('es-CL')} CLP</span>
+                                    <span className="text-muted-foreground">{isFreeTier ? 'Costo' : 'Total a pagar'}</span>
+                                    <span className="text-lg font-black text-foreground">
+                                        {isFreeTier ? (
+                                            <span className="text-emerald-600 dark:text-emerald-400">$0 — Gratis</span>
+                                        ) : (
+                                            `$${selectedPrice.toLocaleString('es-CL')} CLP`
+                                        )}
+                                    </span>
                                 </div>
                             </div>
-                            <p className="text-xs text-muted-foreground pt-1">
-                                Al crear tu cuenta, te llevaremos directamente al checkout de MercadoPago para completar el pago.
-                            </p>
+                            {isFreeTier ? (
+                                <div className="flex items-start gap-2 pt-1 text-xs text-muted-foreground">
+                                    <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" />
+                                    <span>
+                                        Sin tarjeta de crédito. Acceso inmediato. Podés hacer upgrade cuando quieras desde tu dashboard.
+                                    </span>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-muted-foreground pt-1">
+                                    Al crear tu cuenta, te llevaremos directamente al checkout de MercadoPago para completar el pago.
+                                </p>
+                            )}
                         </section>
                     ) : null}
 
                     {/* Error */}
                     {(clientError || state?.error) && (
                         <div className="animate-fade-in rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                            {/* Prefer server errors (e.g. email already used) over stale client-side validation */}
                             {state.error ?? clientError}
                         </div>
                     )}
 
-                    <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                    <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-3">
+                        {/* Checkbox 1: ToS + Privacy (required) */}
                         <label className="flex items-start gap-2 text-xs text-muted-foreground">
                             <input
                                 type="checkbox"
                                 name="accept_legal"
                                 required
-                                className="mt-0.5 h-4 w-4 rounded border-border"
+                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
                             />
                             <span>
                                 Acepto los{' '}
@@ -373,7 +424,35 @@ export default function RegisterPage() {
                                 <Link href="/privacidad" className="text-primary hover:opacity-80">
                                     política de privacidad
                                 </Link>
-                                .
+                                .{' '}
+                                <span className="text-destructive font-medium">*</span>
+                            </span>
+                        </label>
+                        {/* Checkbox 2: Health data consent (required — Ley 21.719 Art. 16) */}
+                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                name="accept_health_data"
+                                required
+                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                            />
+                            <span>
+                                Acepto el tratamiento de datos de salud de mis alumnos (registros de entrenamiento,
+                                nutrición y métricas corporales) para prestar el servicio de coaching digital,
+                                conforme a la Ley 21.719.{' '}
+                                <span className="text-destructive font-medium">*</span>
+                            </span>
+                        </label>
+                        {/* Checkbox 3: Marketing (optional — must be unchecked by default) */}
+                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                name="accept_marketing"
+                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                            />
+                            <span>
+                                Quiero recibir novedades, ofertas y consejos de EVA por email.{' '}
+                                <span className="text-muted-foreground/60">(opcional)</span>
                             </span>
                         </label>
                     </div>
@@ -398,7 +477,7 @@ export default function RegisterPage() {
                             </button>
                         ) : (
                             <div className="flex-1">
-                                <SubmitButton />
+                                <SubmitButton isFreeTier={isFreeTier} />
                             </div>
                         )}
                     </div>
@@ -423,9 +502,8 @@ export default function RegisterPage() {
 
             <p className="mt-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Registro seguro + activación automática de suscripción.
+                {isFreeTier ? 'Registro seguro · Acceso inmediato · Sin tarjeta.' : 'Registro seguro + activación automática de suscripción.'}
             </p>
         </div>
     )
 }
-

@@ -2,8 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { getPaymentsProvider } from '@/lib/payments/provider'
 
 const brandSchema = z.object({
     full_name: z.string().min(2, 'Nombre requerido').max(100),
@@ -203,4 +206,87 @@ export async function updateLogoAction(
     revalidatePath('/coach/dashboard', 'layout')
     revalidatePath('/', 'layout')
     return { success: true }
+}
+
+// ── Delete Account (Ley 21.719 — right to erasure) ───────────────────────────
+
+export type DeleteAccountResult = { success: true } | { error: string }
+
+export async function deleteCoachAccountAction(
+    confirmText: string
+): Promise<DeleteAccountResult> {
+    if (confirmText !== 'ELIMINAR') {
+        return { error: 'Confirmación incorrecta.' }
+    }
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado.' }
+
+    const coachId = user.id
+    const adminDb = createServiceRoleClient()
+
+    // 1. Get coach data needed for cleanup (subscription ID, storage)
+    const { data: coach } = await adminDb
+        .from('coaches')
+        .select('subscription_mp_id, subscription_status, subscription_tier')
+        .eq('id', coachId)
+        .maybeSingle()
+
+    // 2. Cancel MP subscription (best-effort — non-fatal)
+    const mpId = coach?.subscription_mp_id?.trim()
+    if (mpId && coach?.subscription_status === 'active' && coach?.subscription_tier !== 'free') {
+        try {
+            const provider = getPaymentsProvider()
+            await provider.cancelCheckoutAtProvider(mpId)
+        } catch {
+            console.warn('[deleteAccount] could not cancel MP preapproval', { coachId, mpId })
+        }
+    }
+
+    // 3. Anonymize client PII (preserve workout structure as coach IP, just erase identifiers)
+    const { data: coachClients } = await adminDb
+        .from('clients')
+        .select('id')
+        .eq('coach_id', coachId)
+    const clientIds = (coachClients ?? []).map((c) => c.id)
+
+    await adminDb
+        .from('clients')
+        .update({
+            full_name: '[Eliminado]',
+            email: `eliminado-${coachId}@anonymized.eva`,
+            phone: null,
+        })
+        .eq('coach_id', coachId)
+
+    // 4. Delete health data logs (sensitive data — must be erased)
+    await adminDb.from('workout_logs').delete().eq('coach_id', coachId)
+    if (clientIds.length > 0) {
+        const { data: dailyLogs } = await adminDb
+            .from('daily_nutrition_logs')
+            .select('id')
+            .in('client_id', clientIds)
+        const dailyLogIds = (dailyLogs ?? []).map((l) => l.id)
+        if (dailyLogIds.length > 0) {
+            await adminDb.from('nutrition_meal_logs').delete().in('daily_log_id', dailyLogIds)
+        }
+        await adminDb.from('check_ins').delete().in('client_id', clientIds)
+    }
+
+    // 5. Delete logo from storage (best-effort)
+    try {
+        await supabase.storage.from('logos').remove([`${coachId}/logo.jpg`, `${coachId}/logo.png`])
+    } catch {
+        // Non-fatal
+    }
+
+    // 6. Delete auth user — CASCADE will delete coaches row via FK
+    const { error: authError } = await adminDb.auth.admin.deleteUser(coachId)
+    if (authError) {
+        console.error('[deleteAccount] failed to delete auth user:', authError)
+        return { error: 'Error al eliminar la cuenta. Contacta soporte en privacidad@eva-app.cl' }
+    }
+
+    redirect('/login?deleted=true')
 }

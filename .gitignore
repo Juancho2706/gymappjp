@@ -122,3 +122,5 @@ PLAN-REDISENO-UI-TOTAL.md
 scripts/WELCOME-NEWS-ITEM.md
 scripts/seed-welcome-news.sql
 EVA_VIDEO_PLAN.md
+supabase/migrations/20260510163503_add_free_growth_subscription_tiers.sql
+supabase/migrations/20260510171453_add_free_growth_tier_indexes.sql

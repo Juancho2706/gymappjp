@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
+import { buildClientWelcomeEmail, buildUpgradeRequiredEmail } from '@/lib/email/transactional-templates'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
@@ -36,6 +36,8 @@ export type CreateClientState = {
     newClientPhone?: string
     loginUrl?: string
     clientName?: string
+    upgradeRequired?: boolean
+    currentLimit?: number
 }
 
 export async function createClientAction(
@@ -81,8 +83,19 @@ export async function createClientAction(
         return { error: 'No pudimos validar el límite de alumnos de tu plan.' }
     }
     if ((activeClientsCount ?? 0) >= maxClients) {
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        const { subject, html } = buildUpgradeRequiredEmail({
+            coachName: coach.full_name ?? 'Coach',
+            brandName: coach.brand_name ?? 'EVA',
+            currentLimit: maxClients,
+            subscriptionUrl: `${appUrl}/coach/subscription`,
+        })
+        sendTransactionalEmail({ to: coachUser.email!, subject, html }).catch(() => null)
+
         return {
-            error: `Alcanzaste el límite de ${maxClients} alumnos de tu plan actual. Haz upgrade para seguir agregando alumnos.`,
+            error: `Alcanzaste el límite de ${maxClients} alumnos de tu plan actual.`,
+            upgradeRequired: true,
+            currentLimit: maxClients,
         }
     }
 

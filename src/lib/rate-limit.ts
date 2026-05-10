@@ -11,6 +11,7 @@ function redisFromEnv(): Redis | null {
 }
 
 let authRatelimit: Ratelimit | null | undefined
+let signupRatelimit: Ratelimit | null | undefined
 let paymentRatelimit: Ratelimit | null | undefined
 let recipesRatelimit: Ratelimit | null | undefined
 let adminRatelimit: Ratelimit | null | undefined
@@ -30,6 +31,21 @@ function getAuthRatelimit(): Ratelimit | null {
         prefix: 'ratelimit:auth',
     })
     return authRatelimit
+}
+
+function getSignupRatelimit(): Ratelimit | null {
+    if (signupRatelimit !== undefined) return signupRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        signupRatelimit = null
+        return null
+    }
+    signupRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '1 h'),
+        prefix: 'ratelimit:signup',
+    })
+    return signupRatelimit
 }
 
 function getPaymentRatelimit(): Ratelimit | null {
@@ -76,6 +92,18 @@ export async function rateLimitAuth(
     const limiter = getAuthRatelimit()
     if (!limiter) return { ok: true }
     const res = await limiter.limit(`auth:${identifier}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+export async function rateLimitSignup(
+    identifier: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getSignupRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`signup:${identifier}`)
     await res.pending.catch(() => undefined)
     if (res.success) return { ok: true }
     const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))

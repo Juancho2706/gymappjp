@@ -5,6 +5,9 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { normalizePlatformEmail, assertPlatformEmailAvailable } from '@/lib/auth/platform-email'
 import { getTierMaxClients } from '@/lib/constants'
+import { getPaymentsProvider } from '@/lib/payments/provider'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildExistingCoachAnnouncementEmail } from '@/lib/email/transactional-templates'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -19,7 +22,7 @@ const CreateCoachSchema = z.object({
     email: z.string().email(),
     temp_password: z.string().min(8),
     brand_name: z.string().min(2).max(80),
-    subscription_tier: z.enum(['starter', 'pro', 'elite', 'scale']),
+    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']),
     billing_cycle: z.enum(['monthly', 'quarterly', 'annual']),
     trial_days: z.coerce.number().int().min(0).max(3650),
 })
@@ -111,7 +114,7 @@ const UpdateCoachSchema = z.object({
     coachId: z.string().uuid(),
     full_name: z.string().min(1).optional(),
     brand_name: z.string().min(1).optional(),
-    subscription_tier: z.enum(['starter', 'pro', 'elite', 'scale']).optional(),
+    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']).optional(),
     subscription_status: z.enum(['active', 'trialing', 'canceled', 'pending_payment', 'expired', 'past_due', 'paused']).optional(),
     max_clients: z.coerce.number().int().min(1).max(500).optional(),
     billing_cycle: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
@@ -147,9 +150,14 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
 export async function deleteCoachAction(coachId: string) {
     const { adminClient } = await assertAdmin()
 
-    // Delete clients assigned to this coach first to avoid FK violation
-    const { error: clientsError } = await adminClient.from('clients').delete().eq('coach_id', coachId)
-    if (clientsError) console.error('[admin] failed to delete clients for coach:', clientsError)
+    // Delete in dependency order — CASCADE tables handled automatically,
+    // but foods/nutrition_plans/saved_meals use NO ACTION and must be deleted first
+    const deletions: Array<{ table: string; error: unknown }> = []
+    for (const table of ['saved_meals', 'foods', 'nutrition_plans', 'clients'] as const) {
+        const { error } = await adminClient.from(table).delete().eq('coach_id', coachId)
+        if (error) deletions.push({ table, error })
+    }
+    if (deletions.length) console.error('[admin] deleteCoach: partial pre-delete failures', deletions)
 
     const { error: authError } = await adminClient.auth.admin.deleteUser(coachId)
     if (authError) console.error('[admin] failed to delete auth user:', authError)
@@ -194,16 +202,35 @@ export async function suspendCoachAction(coachId: string, reason?: string) {
     return { success: true }
 }
 
-// Force expired — coach will see /reactivate on next visit
+// Force expired — coach will see /reactivate on next visit.
+// Also cancels the stored MP preapproval so "Ya pagué" can't bypass the block.
 export async function expireCoachAction(coachId: string) {
     const { adminClient } = await assertAdmin()
+
+    const { data: coach } = await adminClient
+        .from('coaches')
+        .select('subscription_mp_id')
+        .eq('id', coachId)
+        .maybeSingle()
 
     const { error } = await adminClient.from('coaches')
         .update({ subscription_status: 'expired' })
         .eq('id', coachId)
     if (error) return { error: error.message }
 
-    await logAdminAction(adminClient, 'coach.force_expire', 'coaches', coachId, {})
+    // Best-effort: cancel preapproval at provider so confirm-subscription can't reactivate with stale ID
+    const mpId = coach?.subscription_mp_id?.trim()
+    if (mpId) {
+        try {
+            const provider = getPaymentsProvider()
+            await provider.cancelCheckoutAtProvider(mpId)
+        } catch {
+            // Non-fatal — DB is already expired, log and continue
+            console.warn('[admin] expireCoach: could not cancel preapproval at provider', { coachId, mpId })
+        }
+    }
+
+    await logAdminAction(adminClient, 'coach.force_expire', 'coaches', coachId, { mp_cancelled: !!mpId })
     revalidateAdmin()
     return { success: true }
 }
@@ -262,7 +289,7 @@ export async function bulkCoachStatusAction(coachIds: string[], status: string) 
 
 // Bulk tier update
 export async function bulkCoachTierAction(coachIds: string[], tier: string, maxClients: number) {
-    const tierSchema = z.enum(['starter', 'pro', 'elite', 'scale'])
+    const tierSchema = z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale'])
     if (!tierSchema.safeParse(tier).success) return { error: 'Tier inválido' }
     if (!coachIds.length) return { error: 'Sin coaches seleccionados' }
 
@@ -278,4 +305,45 @@ export async function bulkCoachTierAction(coachIds: string[], tier: string, maxC
     }
     revalidateAdmin()
     return { success: true }
+}
+
+// Send announcement email to all active paid coaches about new features
+// (annual billing, Growth tier, Free tier for referrals).
+export async function sendAnnouncementEmailAction(): Promise<
+    { success: true; sent: number; failed: number } | { error: string }
+> {
+    const { adminClient } = await assertAdmin()
+
+    const { data: coaches, error } = await adminClient
+        .from('coaches')
+        .select('id, full_name, subscription_tier')
+        .eq('subscription_status', 'active')
+        .neq('subscription_tier', 'free')
+
+    if (error) return { error: error.message }
+    if (!coaches?.length) return { success: true, sent: 0, failed: 0 }
+
+    const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+    let sent = 0
+    let failed = 0
+
+    for (const coach of coaches) {
+        // Fetch email from auth.users
+        const { data: authUser } = await adminClient.auth.admin.getUserById(coach.id)
+        const email = authUser?.user?.email
+        if (!email) { failed++; continue }
+
+        const { subject, html } = buildExistingCoachAnnouncementEmail({
+            coachName: coach.full_name?.split(' ')[0] ?? 'Coach',
+            currentTier: coach.subscription_tier ?? 'starter',
+            subscriptionUrl: `${appUrl}/coach/subscription`,
+        })
+        const result = await sendTransactionalEmail({ to: email, subject, html })
+        if (result.ok) { sent++ } else { failed++ }
+        // Small delay to respect Resend rate limits (2 req/s on free plan)
+        await new Promise(r => setTimeout(r, 600))
+    }
+
+    await logAdminAction(adminClient, 'coach.announcement_email', 'coaches', 'bulk', { sent, failed })
+    return { success: true, sent, failed }
 }

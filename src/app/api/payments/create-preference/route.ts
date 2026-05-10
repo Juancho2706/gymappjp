@@ -13,7 +13,7 @@ import {
 import { getPaymentsProvider } from '@/lib/payments/provider'
 
 const schema = z.object({
-    tier: z.enum(['starter', 'pro', 'elite', 'scale']),
+    tier: z.enum(['starter', 'pro', 'elite', 'growth', 'scale']),
     billingCycle: z.enum(['monthly', 'quarterly', 'annual']),
 })
 
@@ -47,9 +47,13 @@ export async function POST(request: Request) {
         // Check if this is a mid-cycle upgrade (coach already active)
         const { data: currentCoach } = await supabase
             .from('coaches')
-            .select('subscription_status, current_period_end, subscription_mp_id')
+            .select('subscription_status, subscription_tier, current_period_end, subscription_mp_id')
             .eq('id', user.id)
             .maybeSingle()
+
+        // Free coaches must NOT be set to pending_payment — they would lose access if they
+        // abandon the checkout. The webhook will upgrade them when payment is confirmed.
+        const isFreeTierCoach = currentCoach?.subscription_tier === 'free'
 
         const isActiveUpgrade =
             currentCoach?.subscription_status === 'active' &&
@@ -97,14 +101,20 @@ export async function POST(request: Request) {
         const supersededMpPreapprovalId =
             previousMpId && previousMpId !== newMpId ? previousMpId : null
 
-        // For active-coach upgrades: keep status = 'active' so they don't lose access.
-        // The webhook will update status + current_period_end when the new plan activates.
-        // For new / reactivating coaches: set 'pending_payment' as usual.
+        // Free coaches: only store the MP subscription ID and provider.
+        // Status/tier/max_clients stay as free+active so the coach can keep using the app
+        // if they abandon the checkout. The webhook upgrades them when payment is confirmed.
+        //
+        // Active paid upgrades: keep status='active' during transition.
+        // New/reactivating paid coaches: set 'pending_payment' as usual.
         const newStatus = isActiveUpgrade ? 'active' : 'pending_payment'
 
-        const { error: updateError } = await supabase
-            .from('coaches')
-            .update({
+        const updatePayload = isFreeTierCoach
+            ? {
+                payment_provider: provider.name,
+                subscription_mp_id: checkout.checkoutId,
+            }
+            : {
                 subscription_tier: tier,
                 subscription_status: newStatus,
                 billing_cycle: billingCycle,
@@ -112,7 +122,11 @@ export async function POST(request: Request) {
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
                 superseded_mp_preapproval_id: supersededMpPreapprovalId,
-            })
+            }
+
+        const { error: updateError } = await supabase
+            .from('coaches')
+            .update(updatePayload)
             .eq('id', user.id)
 
         if (updateError) {

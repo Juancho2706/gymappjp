@@ -41,8 +41,8 @@ export const MUSCLE_MAPPING: Record<string, string[]> = {
 };
 
 export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
-export type PaymentProvider = 'mercadopago' | 'stripe'
-export type SubscriptionTier = 'starter' | 'pro' | 'elite' | 'scale'
+export type PaymentProvider = 'mercadopago' | 'stripe' | 'admin'
+export type SubscriptionTier = 'free' | 'starter' | 'pro' | 'elite' | 'growth' | 'scale'
 
 export type TierConfig = {
     label: string
@@ -66,13 +66,27 @@ const SHARED_TIER_FEATURES = [
 
 /** Rango de alumnos por tier (copy marketing / UI). */
 export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
+    free: 'Hasta 3 alumnos',
     starter: '1–10 alumnos',
     pro: '11–30 alumnos',
     elite: '31–60 alumnos',
+    growth: '61–120 alumnos',
     scale: 'Hasta 500 alumnos',
 }
 
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
+    free: {
+        label: 'Free',
+        maxClients: 3,
+        monthlyPriceClp: 0,
+        features: [
+            'Rutinas ilimitadas con GIFs',
+            'Catálogo de ejercicios con GIF',
+            'Programas de entrenamiento',
+            'Check-in y progreso',
+            'Dashboard coach',
+        ],
+    },
     starter: {
         label: 'Starter',
         maxClients: 10,
@@ -92,6 +106,12 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
         monthlyPriceClp: 44990,
         features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
     },
+    growth: {
+        label: 'Growth',
+        maxClients: 120,
+        monthlyPriceClp: 84990,
+        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+    },
     scale: {
         label: 'Scale',
         maxClients: 500,
@@ -103,7 +123,8 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
 
 /**
  * Feature gates by tier.
- * Business policy: starter does not include nutrition plans.
+ * free/starter: no nutrition (upgrade driver). free: no branding (upgrade driver).
+ * canUseAdvancedReports reserved for future implementation — gate not active yet.
  */
 export type TierCapabilities = {
     canUseNutrition: boolean
@@ -112,6 +133,11 @@ export type TierCapabilities = {
 }
 
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
+    free: {
+        canUseNutrition: false,
+        canUseBranding: false,
+        canUseAdvancedReports: false,
+    },
     starter: {
         canUseNutrition: false,
         canUseBranding: true,
@@ -123,6 +149,11 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         canUseAdvancedReports: true,
     },
     elite: {
+        canUseNutrition: true,
+        canUseBranding: true,
+        canUseAdvancedReports: true,
+    },
+    growth: {
         canUseNutrition: true,
         canUseBranding: true,
         canUseAdvancedReports: true,
@@ -165,10 +196,12 @@ export const BILLING_CYCLE_CONFIG: Record<
 }
 
 export const TIER_ALLOWED_BILLING_CYCLES: Record<SubscriptionTier, BillingCycle[]> = {
-    starter: ['monthly'],
-    pro: ['monthly'],
-    elite: ['monthly', 'quarterly', 'annual'],
-    scale: ['monthly', 'quarterly', 'annual'],
+    free:    [],
+    starter: ['monthly', 'annual'],
+    pro:     ['monthly', 'annual'],
+    elite:   ['monthly', 'quarterly', 'annual'],
+    growth:  ['monthly', 'quarterly', 'annual'],
+    scale:   ['monthly', 'quarterly', 'annual'],
 }
 
 export function getTierAllowedBillingCycles(tier: SubscriptionTier): BillingCycle[] {
@@ -182,6 +215,7 @@ export function isBillingCycleAllowedForTier(
     return TIER_ALLOWED_BILLING_CYCLES[tier].includes(cycle)
 }
 
+// Free tier returns 'monthly' as placeholder — it has no billing cycle in practice
 export function getDefaultBillingCycleForTier(tier: SubscriptionTier): BillingCycle {
     return TIER_ALLOWED_BILLING_CYCLES[tier][0] ?? 'monthly'
 }
@@ -189,14 +223,12 @@ export function getDefaultBillingCycleForTier(tier: SubscriptionTier): BillingCy
 /** Texto corto para badges: cobro permitido por plan. */
 export function getTierBillingCycleSummary(tier: SubscriptionTier): string {
     const cycles = TIER_ALLOWED_BILLING_CYCLES[tier]
-    if (cycles.length === 1 && cycles[0] === 'monthly') {
-        return 'Solo cobro mensual'
+    if (cycles.length === 0) return 'Plan gratuito'
+    if (cycles.length === 1 && cycles[0] === 'monthly') return 'Solo cobro mensual'
+    if (cycles.includes('monthly') && cycles.includes('annual') && !cycles.includes('quarterly')) {
+        return 'Cobro mensual o anual'
     }
-    if (
-        cycles.includes('monthly') &&
-        cycles.includes('quarterly') &&
-        cycles.includes('annual')
-    ) {
+    if (cycles.includes('monthly') && cycles.includes('quarterly') && cycles.includes('annual')) {
         return 'Cobro mensual, trimestral o anual'
     }
     return 'Solo cobro trimestral o anual'

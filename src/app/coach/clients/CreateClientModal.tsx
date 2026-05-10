@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from 'react'
 import { useFormStatus } from 'react-dom'
+import { usePostHog } from 'posthog-js/react'
 import {
     Dialog,
     DialogContent,
@@ -10,7 +11,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, UserPlus, MessageCircle, CheckCircle2 } from 'lucide-react'
+import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock } from 'lucide-react'
+import Link from 'next/link'
 import { createClientAction, type CreateClientState } from './actions'
 import { cn } from '@/lib/utils'
 
@@ -52,6 +54,7 @@ interface CreateClientModalProps {
 export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
     const [state, formAction] = useActionState(createClientAction, initialState)
     const formRef = useRef<HTMLFormElement>(null)
+    const ph = usePostHog()
 
     // Auto-close only when success but no phone (no WhatsApp CTA to show)
     useEffect(() => {
@@ -107,6 +110,54 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                         >
                             Omitir por ahora
+                        </button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        )
+    }
+
+    // Upgrade required — limit reached
+    if (state.upgradeRequired) {
+        return (
+            <Dialog open={open} onOpenChange={(isOpen) => {
+                if (!isOpen) {
+                    ph?.capture('upgrade_modal_dismissed', { gate: 'client_limit', current_limit: state.currentLimit })
+                    handleClose()
+                }
+            }}>
+                <DialogContent className="bg-card border border-border text-foreground max-w-sm rounded-2xl shadow-2xl">
+                    <div className="flex flex-col items-center gap-5 py-4 text-center">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15">
+                            <Lock className="h-8 w-8 text-amber-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-extrabold text-foreground">
+                                Límite de {state.currentLimit} alumnos alcanzado
+                            </h2>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                Hacé upgrade para seguir creciendo. Tus alumnos actuales no se ven afectados.
+                            </p>
+                        </div>
+                        <Link
+                            href="/coach/subscription"
+                            onClick={() => {
+                                ph?.capture('upgrade_initiated', { gate: 'client_limit', source: 'modal_cta', current_limit: state.currentLimit })
+                                handleClose()
+                            }}
+                            className="w-full flex items-center justify-center h-11 rounded-xl bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                            Ver planes →
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                ph?.capture('upgrade_modal_dismissed', { gate: 'client_limit', current_limit: state.currentLimit })
+                                handleClose()
+                            }}
+                            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            Ahora no
                         </button>
                     </div>
                 </DialogContent>

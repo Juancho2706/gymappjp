@@ -13,9 +13,11 @@ const TOOLTIP_STYLE = {
 }
 
 const TIER_COLORS: Record<string, string> = {
+    free:    '#64748b',
     starter: '#475569',
     pro:     '#60a5fa',
     elite:   '#a78bfa',
+    growth:  '#34d399',
     scale:   '#22c55e',
 }
 
@@ -116,7 +118,7 @@ export function ChartSection({ mrrSeries, tierSeries, sessions, coachesByTier }:
                                 <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#475569' }} />
                                 <YAxis tick={{ fontSize: 10, fill: '#475569' }} allowDecimals={false} />
                                 <Tooltip {...TOOLTIP_STYLE} />
-                                {['starter', 'pro', 'elite', 'scale'].map(tier => (
+                                {['free', 'starter', 'pro', 'elite', 'growth', 'scale'].map(tier => (
                                     <Bar key={tier} dataKey={tier} stackId="a"
                                         fill={TIER_COLORS[tier]} radius={tier === 'scale' ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                                 ))}

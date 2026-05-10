@@ -1,9 +1,10 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BillingBanners } from './banners/BillingBanners'
+import { FreeWelcomeModal } from './FreeWelcomeModal'
 import { GreetingHeader } from './header/GreetingHeader'
 import { QuickActionsBar } from './header/QuickActionsBar'
 import { KpiStrip } from './kpi/KpiStrip'
@@ -43,6 +44,8 @@ const itemVariants = {
 
 import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
+import { TIER_CONFIG } from '@/lib/constants'
+import Link from 'next/link'
 
 interface Props {
     data: DashboardV2Data
@@ -74,6 +77,9 @@ export function DashboardShell({
     return (
         <>
             <AmbientBackground />
+            <Suspense>
+                <FreeWelcomeModal />
+            </Suspense>
 
             <motion.div
                 variants={containerVariants}
@@ -87,6 +93,12 @@ export function DashboardShell({
                         currentPeriodEnd={data.currentPeriodEnd}
                         trialEndsAt={data.trialEndsAt}
                     />
+                    {subscriptionTier === 'free' && (
+                        <FreeTierBanner totalClients={data.kpi.totalClients} />
+                    )}
+                    {subscriptionTier === 'elite' && data.kpi.totalClients >= 48 && (
+                        <GrowthUpgradeBanner totalClients={data.kpi.totalClients} />
+                    )}
                 </motion.div>
 
                 <motion.header
@@ -156,6 +168,63 @@ export function DashboardShell({
                 clientPaymentSummary={data.clientPaymentSummary}
             />
         </>
+    )
+}
+
+function FreeTierBanner({ totalClients }: { totalClients: number }) {
+    const max = TIER_CONFIG.free.maxClients
+    const used = Math.min(totalClients, max)
+    const pct = Math.round((used / max) * 100)
+    const full = used >= max
+
+    return (
+        <div className={`mt-3 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 ${
+            full
+                ? 'border-amber-500/30 bg-amber-500/10'
+                : 'border-border bg-card/60'
+        }`}>
+            <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground">
+                    {used}/{max} alumnos · Plan gratuito
+                </p>
+                <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                        className={`h-full rounded-full transition-all ${full ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                        style={{ width: `${pct}%` }}
+                    />
+                </div>
+            </div>
+            <Link
+                href="/coach/subscription"
+                className="shrink-0 text-xs font-semibold text-primary hover:underline"
+            >
+                {full ? 'Expandir límite →' : 'Ver planes →'}
+            </Link>
+        </div>
+    )
+}
+
+function GrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
+    const max = TIER_CONFIG.elite.maxClients
+    const pct = Math.round((Math.min(totalClients, max) / max) * 100)
+
+    return (
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+            <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground">
+                    {totalClients}/{max} alumnos · {pct}% de tu plan Elite
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Hay un plan Growth para coaches con 60–120 alumnos
+                </p>
+            </div>
+            <Link
+                href="/coach/subscription?upgrade=growth"
+                className="shrink-0 text-xs font-semibold text-emerald-500 hover:underline"
+            >
+                Ver Growth →
+            </Link>
+        </div>
     )
 }
 

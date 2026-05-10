@@ -58,7 +58,7 @@ export function RevenueSheet({ open, onOpenChange, kpi, clientPaymentSummary }: 
                     </p>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto px-1 py-2 sm:px-2">
+                <div className="flex-1 overflow-y-auto px-1 py-2 sm:px-2" style={{ touchAction: 'pan-y' }}>
                     {sorted.length === 0 ? (
                         <p className="py-8 text-center text-sm text-muted-foreground">
                             Sin datos de pagos registrados.

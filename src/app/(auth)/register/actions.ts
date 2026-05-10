@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
@@ -15,10 +15,23 @@ import {
     isAuthDuplicateEmailMessage,
     normalizePlatformEmail,
 } from '@/lib/auth/platform-email'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
+import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
 
 export type RegisterState = {
     error?: string
 }
+
+const VALID_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+const VALID_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
+
+const RESERVED_SLUGS = new Set([
+    'admin', 'api', 'coach', 'coaches', 'register', 'login', 'logout', 'pricing',
+    'about', 'contact', 'eva', 'antigravity', 'soporte', 'help', 'blog', 'app',
+    'www', 'mail', 'support', 'dashboard', 'settings', 'subscription',
+    'nike', 'adidas', 'crossfit', 'gym',
+])
 
 export async function registerAction(
     _prev: RegisterState,
@@ -29,11 +42,20 @@ export async function registerAction(
     const password = formData.get('password') as string
     const brandName = formData.get('brand_name') as string
     const acceptLegal = formData.get('accept_legal')
+    const acceptHealthData = formData.get('accept_health_data')
+    const acceptMarketing = formData.get('accept_marketing') === 'on'
     const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'starter'
     const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
 
-    const isTierValid = ['starter', 'pro', 'elite', 'scale'].includes(selectedTier)
-    const isCycleValid = ['monthly', 'quarterly', 'annual'].includes(selectedBillingCycle)
+    // Honeypot check — bots fill hidden fields, humans don't
+    const honeypot = formData.get('website') as string
+    if (honeypot) {
+        return { error: 'Algo salió mal. Intentá de nuevo en unos minutos.' }
+    }
+
+    const isTierValid = VALID_TIERS.includes(selectedTier)
+    const isCycleValid = VALID_CYCLES.includes(selectedBillingCycle)
+    const isFreeTier = selectedTier === 'free'
 
     if (!fullName || !email || !password || !brandName) {
         return { error: 'Todos los campos son obligatorios' }
@@ -44,12 +66,18 @@ export async function registerAction(
     }
 
     if (!acceptLegal) {
-        return { error: 'Debes aceptar los términos para crear tu cuenta.' }
+        return { error: 'Debes aceptar los términos de servicio y la política de privacidad.' }
     }
+
+    if (!acceptHealthData) {
+        return { error: 'Debes aceptar el tratamiento de datos de salud para usar EVA (Ley 21.719, Art. 16).' }
+    }
+
     if (!isTierValid || !isCycleValid) {
         return { error: 'Debes seleccionar un plan y una frecuencia válidos.' }
     }
-    if (!isBillingCycleAllowedForTier(selectedTier, selectedBillingCycle)) {
+
+    if (!isFreeTier && !isBillingCycleAllowedForTier(selectedTier, selectedBillingCycle)) {
         return { error: 'La frecuencia elegida no está disponible para ese plan.' }
     }
 
@@ -57,11 +85,15 @@ export async function registerAction(
     const baseSlug = brandName
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
 
-    const adminDb = await createRawAdminClient()
+    if (RESERVED_SLUGS.has(baseSlug)) {
+        return { error: 'Este nombre de marca no está disponible. Intentá con otro nombre.' }
+    }
+
+    const adminDb = createServiceRoleClient()
 
     let slug = baseSlug
     for (let attempt = 0; attempt < 8; attempt++) {
@@ -102,11 +134,14 @@ export async function registerAction(
             brand_name: brandName,
             slug,
             primary_color: '#10B981',
-            subscription_status: 'pending_payment',
+            subscription_status: isFreeTier ? 'active' : 'pending_payment',
             subscription_tier: selectedTier,
-            billing_cycle: selectedBillingCycle,
-            payment_provider: process.env.PAYMENT_PROVIDER ?? 'mercadopago',
+            billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
+            payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
             max_clients: getTierMaxClients(selectedTier),
+            health_data_consent_at: new Date().toISOString(),
+            marketing_consent: acceptMarketing,
+            ...(isFreeTier && { trial_used_email: emailNorm }),
         })
 
     if (coachError) {
@@ -118,6 +153,22 @@ export async function registerAction(
     // Sign in the user
     const supabase = await createClient()
     await supabase.auth.signInWithPassword({ email: emailNorm, password })
+
+    if (isFreeTier) {
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        const { subject, html } = buildFreeCoachWelcomeEmail({
+            coachName: fullName,
+            brandName,
+            dashboardUrl: `${appUrl}/coach/dashboard`,
+            clientsUrl: `${appUrl}/coach/clients`,
+            subscriptionUrl: `${appUrl}/coach/subscription`,
+        })
+        // Both calls are best-effort — failures never block registration redirect
+        sendTransactionalEmail({ to: emailNorm, subject, html }).catch(() => null)
+        scheduleFreeCoachDripSequence({ email: emailNorm, coachName: fullName, brandName }).catch(() => null)
+
+        redirect('/coach/dashboard?welcome=free')
+    }
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(

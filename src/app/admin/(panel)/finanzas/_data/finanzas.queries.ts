@@ -23,9 +23,11 @@ export interface FinanzasData {
 }
 
 const TIER_PRICES: Record<string, number> = {
+    free: 0,
     starter: 19990,
     pro: 29990,
     elite: 44990,
+    growth: 84990,
     scale: 190000,
 }
 

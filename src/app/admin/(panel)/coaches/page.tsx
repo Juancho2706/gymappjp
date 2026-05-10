@@ -3,6 +3,7 @@ import { getAllCoachesPaginated } from '../dashboard/_data/admin.queries'
 import { CoachTable } from './_components/CoachTable'
 import { CoachFilterBar } from './_components/CoachFilterBar'
 import { PageInfoButton } from '../_components/PageInfoButton'
+import { AnnouncementEmailButton } from './_components/AnnouncementEmailButton'
 
 export const metadata = { title: 'Coaches' }
 
@@ -70,7 +71,10 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
                         {total} coach{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''} en la plataforma.
                     </p>
                 </div>
-                <PageInfoButton title="Coaches — Guía completa" sections={COACHES_INFO} />
+                <div className="flex items-center gap-2">
+                    <AnnouncementEmailButton />
+                    <PageInfoButton title="Coaches — Guía completa" sections={COACHES_INFO} />
+                </div>
             </div>
 
             <Suspense>

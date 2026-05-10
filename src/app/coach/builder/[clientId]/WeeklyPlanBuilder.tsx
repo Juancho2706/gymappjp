@@ -1614,7 +1614,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     {/* FAB stack — mobile only */}
                     {isMobile && (
                         <div
-                            className="fixed right-4 z-40 flex flex-col items-end gap-3"
+                            className="fixed right-4 z-40 flex flex-row items-center gap-3"
                             style={{
                                 bottom: isSimpleMode
                                     ? `calc(env(safe-area-inset-bottom, 0px) + 16px)`

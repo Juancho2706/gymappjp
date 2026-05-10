@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata, Viewport } from 'next'
 import {
     BRAND_APP_ICON,
+    SYSTEM_PRIMARY_COLOR,
     BRAND_OG_IMAGE,
     BRAND_OG_IMAGE_HEIGHT,
     BRAND_OG_IMAGE_WIDTH,
@@ -99,8 +100,15 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const headersList = await headers()
 
     // Read branding from middleware headers (set in middleware.ts)
-    const primaryColor = headersList.get('x-coach-primary-color') ?? BRAND_PRIMARY_COLOR
-    const logoUrl = headersList.get('x-coach-logo-url') || BRAND_APP_ICON
+    // Free coaches: enforce EVA branding — white-label is a paid feature
+    const subscriptionTier = headersList.get('x-coach-subscription-tier') ?? 'starter'
+    const isFreeTier = subscriptionTier === 'free'
+    const primaryColor = isFreeTier
+        ? SYSTEM_PRIMARY_COLOR
+        : (headersList.get('x-coach-primary-color') ?? BRAND_PRIMARY_COLOR)
+    const logoUrl = isFreeTier
+        ? BRAND_APP_ICON
+        : (headersList.get('x-coach-logo-url') || BRAND_APP_ICON)
     const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
     const coachId = headersList.get('x-coach-id') ?? ''
     const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
@@ -160,6 +168,16 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
                     <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
                         {children}
+                        {isFreeTier && (
+                            <a
+                                href="https://www.eva-app.cl?utm_source=free_footer&utm_medium=client_app&utm_campaign=powered_by"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block w-full py-2 text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                            >
+                                Potenciado por EVA
+                            </a>
+                        )}
                     </main>
                 </NetworkProvider>
             </div>
