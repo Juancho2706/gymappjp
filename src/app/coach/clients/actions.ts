@@ -36,6 +36,8 @@ export type CreateClientState = {
     newClientPhone?: string
     loginUrl?: string
     clientName?: string
+    upgradeRequired?: boolean
+    currentLimit?: number
 }
 
 export async function createClientAction(
@@ -82,7 +84,9 @@ export async function createClientAction(
     }
     if ((activeClientsCount ?? 0) >= maxClients) {
         return {
-            error: `Alcanzaste el límite de ${maxClients} alumnos de tu plan actual. Haz upgrade para seguir agregando alumnos.`,
+            error: `Alcanzaste el límite de ${maxClients} alumnos de tu plan actual.`,
+            upgradeRequired: true,
+            currentLimit: maxClients,
         }
     }
 

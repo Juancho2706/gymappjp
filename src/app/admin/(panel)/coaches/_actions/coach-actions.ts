@@ -19,7 +19,7 @@ const CreateCoachSchema = z.object({
     email: z.string().email(),
     temp_password: z.string().min(8),
     brand_name: z.string().min(2).max(80),
-    subscription_tier: z.enum(['starter', 'pro', 'elite', 'scale']),
+    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']),
     billing_cycle: z.enum(['monthly', 'quarterly', 'annual']),
     trial_days: z.coerce.number().int().min(0).max(3650),
 })
@@ -111,7 +111,7 @@ const UpdateCoachSchema = z.object({
     coachId: z.string().uuid(),
     full_name: z.string().min(1).optional(),
     brand_name: z.string().min(1).optional(),
-    subscription_tier: z.enum(['starter', 'pro', 'elite', 'scale']).optional(),
+    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']).optional(),
     subscription_status: z.enum(['active', 'trialing', 'canceled', 'pending_payment', 'expired', 'past_due', 'paused']).optional(),
     max_clients: z.coerce.number().int().min(1).max(500).optional(),
     billing_cycle: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
@@ -262,7 +262,7 @@ export async function bulkCoachStatusAction(coachIds: string[], status: string) 
 
 // Bulk tier update
 export async function bulkCoachTierAction(coachIds: string[], tier: string, maxClients: number) {
-    const tierSchema = z.enum(['starter', 'pro', 'elite', 'scale'])
+    const tierSchema = z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale'])
     if (!tierSchema.safeParse(tier).success) return { error: 'Tier inválido' }
     if (!coachIds.length) return { error: 'Sin coaches seleccionados' }
 

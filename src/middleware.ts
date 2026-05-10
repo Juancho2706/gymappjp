@@ -77,7 +77,7 @@ export async function middleware(request: NextRequest) {
     const coachBrandingPromise = cRouteSlug
         ? supabase
               .from('coaches')
-              .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode')
+              .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier')
               .eq('slug', cRouteSlug)
               .maybeSingle()
         : null
@@ -196,6 +196,7 @@ export async function middleware(request: NextRequest) {
         requestHeaders.set('x-coach-use-custom-loader', String((coach as any).use_custom_loader ?? false))
         requestHeaders.set('x-coach-loader-text-color', (coach as any).loader_text_color?.trim() || '')
         requestHeaders.set('x-coach-loader-icon-mode', (coach as any).loader_icon_mode || 'eva')
+        requestHeaders.set('x-coach-subscription-tier', (coach as any).subscription_tier ?? 'starter')
 
         const response = NextResponse.next({ request: { headers: requestHeaders } })
 
@@ -214,6 +215,7 @@ export async function middleware(request: NextRequest) {
         response.headers.set('x-coach-use-custom-loader', String((coach as any).use_custom_loader ?? false))
         response.headers.set('x-coach-loader-text-color', (coach as any).loader_text_color?.trim() || '')
         response.headers.set('x-coach-loader-icon-mode', (coach as any).loader_icon_mode || 'eva')
+        response.headers.set('x-coach-subscription-tier', (coach as any).subscription_tier ?? 'starter')
 
         // Check if client is authenticated for protected /c/* routes (not login page)
         const isLoginPage = pathname.endsWith('/login')

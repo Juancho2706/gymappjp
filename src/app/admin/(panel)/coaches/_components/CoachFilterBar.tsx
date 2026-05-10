@@ -14,9 +14,11 @@ const STATUS_OPTIONS = [
 ]
 
 const TIER_OPTIONS = [
+    { value: 'free',    label: 'Free' },
     { value: 'starter', label: 'Starter' },
     { value: 'pro',     label: 'Pro' },
     { value: 'elite',   label: 'Elite' },
+    { value: 'growth',  label: 'Growth' },
     { value: 'scale',   label: 'Scale' },
 ]
 

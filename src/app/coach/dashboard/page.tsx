@@ -14,7 +14,7 @@ const DEFAULT_COACH_ONBOARDING_GUIDE: Json = {}
 
 function normalizeCoachSubscriptionTier(raw: string | null | undefined): SubscriptionTier {
     const v = String(raw ?? 'starter').toLowerCase()
-    if (v === 'starter' || v === 'pro' || v === 'elite' || v === 'scale') return v
+    if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
     return 'starter'
 }
 

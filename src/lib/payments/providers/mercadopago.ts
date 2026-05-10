@@ -33,7 +33,6 @@ function buildMpHeaders(accessToken: string) {
 }
 
 function resolvePayerEmail(accessToken: string, coachEmail: string) {
-    const isSandbox = accessToken.startsWith('TEST-')
     const configured = process.env.MERCADOPAGO_TEST_PAYER_EMAIL?.trim()
     let normalizedConfigured = ''
     if (configured) {
@@ -42,13 +41,18 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
         } else {
             const match = configured.match(/^testuser(\d+)$/i)
             if (match) {
-                // MP test usernames usually map to test_user_<id>@testuser.com
                 normalizedConfigured = `test_user_${match[1]}@testuser.com`
             } else {
                 normalizedConfigured = `${configured.toLowerCase()}@testuser.com`
             }
         }
     }
+
+    // Sandbox if token starts with TEST- OR if MERCADOPAGO_TEST_PAYER_EMAIL is set.
+    // MP test accounts issue APP_USR- tokens (production credentials of a test account)
+    // which still require @testuser.com payer emails — same sandbox rules apply.
+    const isSandbox = accessToken.startsWith('TEST-') || !!normalizedConfigured
+
     if (isSandbox) {
         const payerEmail = normalizedConfigured || coachEmail
         if (!payerEmail.toLowerCase().endsWith('@testuser.com')) {
@@ -57,12 +61,6 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
             )
         }
         return payerEmail
-    }
-
-    if (normalizedConfigured) {
-        throw new Error(
-            'MERCADOPAGO_TEST_PAYER_EMAIL solo aplica a sandbox con token TEST-. En produccion debe estar vacio para usar un payer real.'
-        )
     }
 
     if (coachEmail.toLowerCase().endsWith('@testuser.com')) {

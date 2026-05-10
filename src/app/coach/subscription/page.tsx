@@ -14,6 +14,24 @@ import {
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
+import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, type LucideIcon } from 'lucide-react'
+
+const TIER_ICON: Record<SubscriptionTier, LucideIcon> = {
+    free: Leaf, starter: Zap, pro: Rocket, elite: Crown, growth: TrendingUp, scale: Building2,
+}
+const TIER_COLOR: Record<SubscriptionTier, string> = {
+    free: 'text-slate-400', starter: 'text-sky-400', pro: 'text-violet-400',
+    elite: 'text-amber-400', growth: 'text-emerald-400', scale: 'text-rose-400',
+}
+const TIER_ICON_BG: Record<SubscriptionTier, string> = {
+    free: 'bg-slate-500/10 border-slate-500/20', starter: 'bg-sky-500/10 border-sky-500/20',
+    pro: 'bg-violet-500/10 border-violet-500/20', elite: 'bg-amber-500/10 border-amber-500/20',
+    growth: 'bg-emerald-500/10 border-emerald-500/20', scale: 'bg-rose-500/10 border-rose-500/20',
+}
+const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
+    pro:    { label: 'Más popular', cls: 'bg-violet-500/15 text-violet-400' },
+    growth: { label: 'Nuevo',       cls: 'bg-emerald-500/15 text-emerald-400' },
+}
 
 type CoachSubscription = {
     id: string
@@ -48,7 +66,8 @@ function extractAmountClpFromEventPayload(payload: unknown): number | null {
     return null
 }
 
-const tierOptions = Object.keys(TIER_CONFIG) as SubscriptionTier[]
+// Free is excluded — coaches can't manually downgrade to free; it's automatic on cancellation
+const tierOptions = (Object.keys(TIER_CONFIG) as SubscriptionTier[]).filter((t) => t !== 'free')
 const cycleOptions = Object.keys(BILLING_CYCLE_CONFIG) as BillingCycle[]
 
 export default function CoachSubscriptionPage() {
@@ -157,155 +176,199 @@ export default function CoachSubscriptionPage() {
     const selectedPrice = getTierPriceClp(selectedTier, selectedCycle)
 
     return (
-        <main className="mx-auto max-w-4xl px-4 py-10">
-            <h1 className="text-2xl font-bold text-foreground">Mi Suscripción</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-                Gestiona tu plan, frecuencia de cobro y ajustes de suscripción.
+        <main className="mx-auto max-w-4xl px-4 py-8">
+            <h1 className="text-2xl font-extrabold text-foreground">Mi Suscripción</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+                Gestioná tu plan, frecuencia de cobro y cancelación.
             </p>
 
-            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
-                <h2 className="text-sm font-semibold text-foreground">Cómo funcionan los planes</h2>
-                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                    <li>
-                        <span className="font-semibold text-foreground">Solo mensual:</span> Starter (1–10) y Pro
-                        (11–30). Sin nutrición en Starter; Pro incluye nutrición.
-                    </li>
-                    <li>
-                        <span className="font-semibold text-foreground">Elite (31–60) y Scale (hasta 500):</span> mensual,
-                        trimestral o anual; son los únicos planes con prepago trimestral o anual. Incluyen nutrición.
-                    </li>
-                </ul>
-            </section>
-
+    
             {loading ? (
                 <p className="mt-6 text-sm text-muted-foreground">Cargando estado de suscripción...</p>
             ) : null}
 
             {coach ? (
-                <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
-                    {/* Status badge */}
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            coach.subscription_status === 'active' ? 'bg-emerald-500/15 text-emerald-500' :
-                            coach.subscription_status === 'canceled' ? 'bg-red-500/15 text-red-400' :
-                            coach.subscription_status === 'trialing' ? 'bg-blue-500/15 text-blue-400' :
-                            'bg-amber-500/15 text-amber-400'
-                        }`}>
-                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                            {coach.subscription_status === 'active' ? 'Activo' :
-                             coach.subscription_status === 'canceled' ? 'Cancelado — acceso hasta el período pagado' :
-                             coach.subscription_status === 'trialing' ? 'En prueba' :
-                             coach.subscription_status === 'pending_payment' ? 'Procesando pago' :
-                             coach.subscription_status}
-                        </span>
+                <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Plan actual</p>
+                    <div className="flex items-start gap-4">
+                        {(() => {
+                            const t = (coach.subscription_tier in TIER_CONFIG ? coach.subscription_tier : 'starter') as SubscriptionTier
+                            const TierIcon = TIER_ICON[t]
+                            return (
+                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${TIER_ICON_BG[t]}`}>
+                                    <TierIcon className={`h-5 w-5 ${TIER_COLOR[t]}`} />
+                                </div>
+                            )
+                        })()}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-bold text-foreground text-lg">
+                                    {(() => {
+                                        const t = coach.subscription_tier as SubscriptionTier
+                                        return (t in TIER_CONFIG) ? TIER_CONFIG[t].label : coach.subscription_tier
+                                    })()}
+                                </p>
+                                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                    coach.subscription_status === 'active'          ? 'bg-emerald-500/15 text-emerald-500' :
+                                    coach.subscription_status === 'canceled'        ? 'bg-red-500/15 text-red-400' :
+                                    coach.subscription_status === 'trialing'        ? 'bg-blue-500/15 text-blue-400' :
+                                    'bg-amber-500/15 text-amber-400'
+                                }`}>
+                                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                    {coach.subscription_status === 'active'          ? 'Activo' :
+                                     coach.subscription_status === 'canceled'        ? 'Cancelado' :
+                                     coach.subscription_status === 'trialing'        ? 'En prueba' :
+                                     coach.subscription_status === 'pending_payment' ? 'Procesando' :
+                                     coach.subscription_status}
+                                </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                                {TIER_STUDENT_RANGE_LABEL[coach.subscription_tier as SubscriptionTier] ?? ''}
+                            </p>
+                            {coach.current_period_end ? (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    {coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'}:{' '}
+                                    <span className="font-semibold text-foreground">
+                                        {new Date(coach.current_period_end).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </span>
+                                    {coach.subscription_status === 'active' && (() => {
+                                        const t = coach.subscription_tier as SubscriptionTier
+                                        const c = coach.billing_cycle as BillingCycle
+                                        const price = getTierPriceClp(t, c)
+                                        return price > 0 ? <span className="text-muted-foreground"> · ${price.toLocaleString('es-CL')} CLP</span> : null
+                                    })()}
+                                </p>
+                            ) : coach.subscription_tier === 'free' ? (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Sin fecha de vencimiento · <span className="text-foreground font-semibold">Gratis para siempre</span>
+                                </p>
+                            ) : null}
+                        </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                        Plan:{' '}
-                        <span className="font-semibold text-foreground">
-                            {(() => {
-                                const t = coach.subscription_tier as SubscriptionTier
-                                if (!(t in TIER_CONFIG)) return coach.subscription_tier
-                                return `${TIER_CONFIG[t].label} · ${TIER_STUDENT_RANGE_LABEL[t]}`
-                            })()}
-                        </span>
-                    </p>
-                    {coach.current_period_end ? (
-                        <p className="text-sm text-muted-foreground mt-1">
-                            {coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'}:{' '}
-                            <span className="font-semibold text-foreground">
-                                {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
-                                    day: 'numeric', month: 'long', year: 'numeric',
-                                })}
-                            </span>
-                            {coach.subscription_status === 'active' && (() => {
-                                const t = coach.subscription_tier as SubscriptionTier
-                                const c = coach.billing_cycle as BillingCycle
-                                const price = getTierPriceClp(t, c)
-                                return price > 0 ? (
-                                    <span className="text-muted-foreground"> · ${price.toLocaleString('es-CL')} CLP</span>
-                                ) : null
-                            })()}
-                        </p>
-                    ) : null}
-                    {coach.subscription_status === 'active' && coach.payment_provider === 'mercadopago' && coach.current_period_end && (
-                        <p className="mt-2 text-xs text-muted-foreground/60">
-                            Mercado Pago tiene autorizado el débito automático para esa fecha.
-                        </p>
-                    )}
                 </section>
             ) : null}
 
-            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
-                <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
-                <div className="mt-4 grid gap-2 md:grid-cols-2">
-                    {tierOptions.map((tier) => {
-                        const defaultCycle = getDefaultBillingCycleForTier(tier)
-                        const defaultPrice = getTierPriceClp(tier, defaultCycle)
-                        return (
-                        <button
-                            key={tier}
-                            type="button"
-                            onClick={() => setSelectedTier(tier)}
-                            className={`rounded-xl border p-3 text-left ${
-                                selectedTier === tier ? 'border-primary bg-primary/10' : 'border-border'
-                            }`}
-                        >
-                            <p className="font-semibold text-foreground">{TIER_CONFIG[tier].label}</p>
-                            <p className="text-xs text-muted-foreground">
-                                {TIER_STUDENT_RANGE_LABEL[tier]} · Hasta {TIER_CONFIG[tier].maxClients} alumnos
-                            </p>
-                            <p className="mt-2 text-sm font-bold text-foreground">
-                                ${defaultPrice.toLocaleString('es-CL')} CLP
-                                <span className="text-xs font-normal text-muted-foreground">
-                                    {' '}/ {BILLING_CYCLE_CONFIG[defaultCycle].label.toLowerCase()}
-                                </span>
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                                <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                    {getTierBillingCycleSummary(tier)}
-                                </span>
-                                <span
-                                    className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                                        getTierNutritionSummary(tier).startsWith('Sin')
-                                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
-                                            : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+            <section className="mt-6 rounded-2xl border border-border bg-card p-5 space-y-5">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                    <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
+                    {/* Cycle pills — shown per selected tier */}
+                    {allowedCycleOptions.length > 1 && (
+                        <div className="flex items-center gap-1 rounded-xl border border-border bg-secondary/50 p-1">
+                            {allowedCycleOptions.map((cycle) => (
+                                <button
+                                    key={cycle}
+                                    type="button"
+                                    onClick={() => setSelectedCycle(cycle)}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                        selectedCycle === cycle
+                                            ? 'bg-background text-foreground shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground'
                                     }`}
                                 >
-                                    {getTierNutritionSummary(tier)}
-                                </span>
-                            </div>
-                        </button>
+                                    {BILLING_CYCLE_CONFIG[cycle].label}
+                                    {cycle === 'annual' && (
+                                        <span className="ml-1.5 rounded bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold text-emerald-400">−20%</span>
+                                    )}
+                                    {cycle === 'quarterly' && (
+                                        <span className="ml-1.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-400">−10%</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {tierOptions.map((tier) => {
+                        const TierIcon = TIER_ICON[tier]
+                        const cycleForPrice = allowedCycleOptions.includes(selectedCycle)
+                            ? selectedCycle
+                            : getDefaultBillingCycleForTier(tier)
+                        const price = getTierPriceClp(tier, isBillingCycleAllowedForTier(tier, selectedCycle) ? selectedCycle : getDefaultBillingCycleForTier(tier))
+                        const monthlyPrice = getTierPriceClp(tier, 'monthly')
+                        const isSelected = selectedTier === tier
+                        const badge = TIER_BADGE[tier]
+                        const hasNutrition = !getTierNutritionSummary(tier).startsWith('Sin')
+                        const features = TIER_CONFIG[tier].features.slice(0, 3)
+                        return (
+                            <button
+                                key={tier}
+                                type="button"
+                                onClick={() => setSelectedTier(tier)}
+                                className={`relative rounded-2xl border p-4 text-left transition-all ${
+                                    isSelected
+                                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
+                                        : 'border-border hover:border-border/80 hover:bg-secondary/30'
+                                }`}
+                            >
+                                {badge && (
+                                    <span className={`absolute right-3 top-3 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>
+                                        {badge.label}
+                                    </span>
+                                )}
+
+                                <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl border ${TIER_ICON_BG[tier]}`}>
+                                    <TierIcon className={`h-4.5 w-4.5 ${TIER_COLOR[tier]}`} />
+                                </div>
+
+                                <p className="font-bold text-foreground">{TIER_CONFIG[tier].label}</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{TIER_STUDENT_RANGE_LABEL[tier]}</p>
+
+                                <div className="mt-3">
+                                    <span className="text-xl font-extrabold text-foreground">
+                                        ${price.toLocaleString('es-CL')}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground"> CLP/mes</span>
+                                    {selectedCycle === 'annual' && isBillingCycleAllowedForTier(tier, 'annual') && (
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                            ${(price * 12).toLocaleString('es-CL')} cobrado anualmente
+                                        </p>
+                                    )}
+                                </div>
+
+                                <ul className="mt-3 space-y-1.5">
+                                    {features.map((f) => (
+                                        <li key={f} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                                            <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
+                                            {f}
+                                        </li>
+                                    ))}
+                                </ul>
+
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                    <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        {getTierBillingCycleSummary(tier)}
+                                    </span>
+                                    <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                                        hasNutrition
+                                            ? 'bg-emerald-500/15 text-emerald-500'
+                                            : 'bg-amber-500/15 text-amber-500'
+                                    }`}>
+                                        {getTierNutritionSummary(tier)}
+                                    </span>
+                                </div>
+                            </button>
                         )
                     })}
                 </div>
 
-                <div className="mt-4 grid gap-2 md:grid-cols-3">
-                    {allowedCycleOptions.map((cycle) => (
-                        <button
-                            key={cycle}
-                            type="button"
-                            onClick={() => setSelectedCycle(cycle)}
-                            className={`rounded-xl border p-3 text-left ${
-                                selectedCycle === cycle ? 'border-primary bg-primary/10' : 'border-border'
-                            }`}
-                        >
-                            <p className="font-semibold text-foreground">{BILLING_CYCLE_CONFIG[cycle].label}</p>
-                        </button>
-                    ))}
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-secondary/30 px-4 py-3">
+                    <div>
+                        <p className="text-xs text-muted-foreground">Total a pagar</p>
+                        <p className="text-lg font-extrabold text-foreground">
+                            ${selectedPrice.toLocaleString('es-CL')} CLP
+                            <span className="text-sm font-normal text-muted-foreground"> / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}</span>
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowUpgradeConfirm(true)}
+                        disabled={saving}
+                        className="shrink-0 h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
+                    >
+                        Continuar →
+                    </button>
                 </div>
-
-                <p className="mt-4 text-sm text-muted-foreground">
-                    Nuevo monto estimado: <span className="font-semibold text-foreground">${selectedPrice.toLocaleString('es-CL')} CLP</span>
-                </p>
-
-                <button
-                    type="button"
-                    onClick={() => setShowUpgradeConfirm(true)}
-                    disabled={saving}
-                    className="mt-4 inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                >
-                    Continuar cambio de plan
-                </button>
             </section>
 
             {/* Upgrade confirmation modal */}

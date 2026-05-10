@@ -42,7 +42,9 @@ export default function SubscriptionProcessingPage() {
     )
     const fromRegister = searchParams.get('from') === 'register'
     const rawTierParam = searchParams.get('tier')
-    const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter' : rawTierParam
+    const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter'
+        : rawTierParam === 'free' ? null  // free coaches don't use this page
+        : rawTierParam
     const tierFromUrl = (
         normalizedTierParam && normalizedTierParam in TIER_CONFIG ? normalizedTierParam : 'starter'
     ) as SubscriptionTier
@@ -81,6 +83,15 @@ export default function SubscriptionProcessingPage() {
     }
 
     useEffect(() => {
+        // Guard: free coaches are active without payment — redirect to dashboard
+        if (rawTierParam === 'free') {
+            router.replace('/coach/dashboard')
+            return
+        }
+    }, [rawTierParam, router])
+
+    useEffect(() => {
+        if (rawTierParam === 'free') return
         let alive = true
 
         async function confirmNow() {

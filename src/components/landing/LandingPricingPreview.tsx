@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { Check, Crown, Dumbbell, Zap } from 'lucide-react'
+import { Check, Crown, Dumbbell, Zap, Sprout, TrendingUp } from 'lucide-react'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -36,7 +36,17 @@ const planDisplay: Array<{
     bg: string
     border: string
     popular?: boolean
+    badge?: string
 }> = [
+    {
+        id: 'free',
+        descKey: 'landing.pricing.plan.free.desc',
+        icon: Sprout,
+        color: 'text-slate-500 dark:text-slate-400',
+        bg: 'bg-slate-500/10',
+        border: 'border-slate-500/20',
+        badge: 'Gratis para siempre',
+    },
     {
         id: 'starter',
         descKey: 'landing.pricing.plan.starter.desc',
@@ -63,6 +73,15 @@ const planDisplay: Array<{
         border: 'border-amber-500/20',
     },
     {
+        id: 'growth',
+        descKey: 'landing.pricing.plan.growth.desc',
+        icon: TrendingUp,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/20',
+        badge: 'Nuevo',
+    },
+    {
         id: 'scale',
         descKey: 'landing.pricing.plan.scale.desc',
         icon: Crown,
@@ -72,7 +91,7 @@ const planDisplay: Array<{
     },
 ]
 
-const ALL_ORDER: SubscriptionTier[] = ['starter', 'pro', 'elite', 'scale']
+const ALL_ORDER: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
 
 function planById(id: SubscriptionTier) {
     const p = planDisplay.find((x) => x.id === id)
@@ -80,16 +99,9 @@ function planById(id: SubscriptionTier) {
     return p
 }
 
-function isMonthlyTier(id: SubscriptionTier) {
-    const c = getTierAllowedBillingCycles(id)
-    return c.length === 1 && c[0] === 'monthly'
-}
-
 type PlanCardProps = {
     plan: (typeof planDisplay)[0]
-    /** Carrusel móvil: evita animación whileInView en cada tarjeta */
     suppressEntrance?: boolean
-    /** Badge “Más popular” dentro del flujo (evita recorte por overflow-x del carrusel) */
     inlinePopularBadge?: boolean
 }
 
@@ -101,9 +113,15 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
     const allowed = getTierAllowedBillingCycles(plan.id)
     const monthlyCycles = cycleOrder.filter((c) => c === 'monthly' && allowed.includes(c))
     const prepaidCycles = cycleOrder.filter((c) => c !== 'monthly' && allowed.includes(c))
-    const monthlyTier = isMonthlyTier(plan.id)
+    const isFree = plan.id === 'free'
 
     const formatMoney = (n: number) => `$${n.toLocaleString(locale)}`
+
+    const topBorderClass = isFree
+        ? 'border-t-slate-500/50'
+        : allowed.length === 0 || (allowed.includes('monthly') && !allowed.includes('quarterly'))
+        ? 'border-t-sky-500/70 dark:border-t-sky-400/60'
+        : 'border-t-violet-500/70 dark:border-t-violet-400/60'
 
     return (
         <motion.div
@@ -114,9 +132,9 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
             data-plan-card={plan.id}
             className={cn(
                 'relative flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm shadow-black/5 dark:shadow-black/20 sm:p-5',
-                monthlyTier
-                    ? 'border-t-[3px] border-t-sky-500/70 border-border dark:border-t-sky-400/60'
-                    : 'border-t-[3px] border-t-violet-500/70 border-border dark:border-t-violet-400/60',
+                'border-t-[3px]',
+                topBorderClass,
+                'border-border',
                 plan.popular &&
                     'z-[1] border-primary/45 ring-2 ring-primary/25 shadow-[0_0_40px_-12px_rgba(0,122,255,0.35)] lg:scale-[1.03]',
                 plan.popular && inlinePopularBadge && 'pt-1'
@@ -134,6 +152,14 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
                     {t('landing.pricing.popular')}
                 </div>
             ) : null}
+            {plan.badge && !plan.popular ? (
+                <div className={cn(
+                    'absolute -top-2.5 left-1/2 z-[2] -translate-x-1/2 rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                    plan.badge === 'Nuevo' ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-white'
+                )}>
+                    {plan.badge}
+                </div>
+            ) : null}
 
             <div className={cn('mb-3 flex h-10 w-10 items-center justify-center rounded-xl border', plan.bg, plan.border)}>
                 <Icon className={cn('h-5 w-5', plan.color)} />
@@ -149,9 +175,13 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
 
             <div className="mt-3 flex flex-wrap gap-1.5">
                 <span className="rounded-md bg-secondary px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {monthlyTier
-                        ? t('landing.pricing.billing.monthlyOnly')
-                        : t('landing.pricing.billing.monthlyQuarterlyAnnual')}
+                    {isFree
+                        ? (language === 'es' ? 'Plan gratuito' : 'Free plan')
+                        : allowed.includes('monthly') && allowed.includes('annual') && !allowed.includes('quarterly')
+                        ? (language === 'es' ? 'Mensual o anual' : 'Monthly or annual')
+                        : allowed.includes('quarterly')
+                        ? t('landing.pricing.billing.monthlyQuarterlyAnnual')
+                        : t('landing.pricing.billing.monthlyOnly')}
                 </span>
                 <span
                     className={cn(
@@ -168,7 +198,20 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
             </div>
 
             <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
-                {monthlyCycles.length > 0 ? (
+                {isFree ? (
+                    <div className="rounded-xl border border-slate-500/20 bg-slate-500/[0.06] p-2.5">
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/80 px-2.5 py-1.5">
+                            <span className="text-xs text-muted-foreground">
+                                {language === 'es' ? 'Siempre' : 'Always'}
+                            </span>
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                {language === 'es' ? '$0 — Gratis' : '$0 — Free'}
+                            </span>
+                        </div>
+                    </div>
+                ) : null}
+
+                {!isFree && monthlyCycles.length > 0 ? (
                     <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.06] p-2.5 dark:border-sky-500/25 dark:bg-sky-500/10">
                         <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300">
                             {t('landing.pricing.priceBlock.monthly')}
@@ -199,7 +242,7 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
                     </div>
                 ) : null}
 
-                {prepaidCycles.length > 0 ? (
+                {!isFree && prepaidCycles.length > 0 ? (
                     <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.07] p-2.5 dark:bg-violet-500/10">
                         <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-violet-800 dark:text-violet-200">
                             {t('landing.pricing.priceBlock.prepaid')}
@@ -235,15 +278,19 @@ function PlanCard({ plan, suppressEntrance, inlinePopularBadge }: PlanCardProps)
             <div className="mt-4 flex-1" />
 
             <Link
-                href={`/register?tier=${plan.id}&cycle=${getDefaultBillingCycleForTier(plan.id)}`}
+                href={isFree ? '/register?tier=free' : `/register?tier=${plan.id}&cycle=${getDefaultBillingCycleForTier(plan.id)}`}
                 className={cn(
                     'mt-5 block w-full rounded-xl py-2.5 text-center text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    plan.popular
+                    isFree
+                        ? 'border border-border bg-secondary/50 text-foreground hover:bg-secondary'
+                        : plan.popular
                         ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                         : 'border border-border bg-secondary/50 text-foreground hover:bg-secondary'
                 )}
             >
-                {t('landing.pricing.choosePlan')}
+                {isFree
+                    ? (language === 'es' ? 'Empezar gratis' : 'Start free')
+                    : t('landing.pricing.choosePlan')}
             </Link>
         </motion.div>
     )
@@ -327,13 +374,9 @@ function PricingMobileCarousel() {
                 ))}
             </div>
             <p className="mt-3 flex items-center justify-center gap-2 px-2 text-center text-xs leading-relaxed text-muted-foreground">
-                <span className="inline sm:hidden" aria-hidden>
-                    ←
-                </span>
+                <span className="inline sm:hidden" aria-hidden>←</span>
                 {t('landing.pricing.swipeHint')}
-                <span className="inline sm:hidden" aria-hidden>
-                    →
-                </span>
+                <span className="inline sm:hidden" aria-hidden>→</span>
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2" role="group" aria-label={t('landing.pricing.dotsAria')}>
                 {ALL_ORDER.map((id) => {
@@ -365,7 +408,7 @@ function PricingMobileCarousel() {
     )
 }
 
-/** Static “aurora” columns — heavy blur, primary tint only (no animation). */
+/** Static "aurora" columns — heavy blur, primary tint only (no animation). */
 function PricingAuroraBackdrop() {
     return (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
@@ -451,7 +494,8 @@ export function LandingPricingPreview() {
 
                 <PricingMobileCarousel />
 
-                <div className="hidden gap-3 overflow-x-clip overflow-y-visible py-2 lg:grid lg:grid-cols-4 xl:gap-4">
+                {/* Desktop: 3-col grid, 2 rows */}
+                <div className="hidden gap-3 overflow-x-clip overflow-y-visible py-2 lg:grid lg:grid-cols-3 xl:gap-4">
                     {ALL_ORDER.map((id) => (
                         <PlanCard key={id} plan={planById(id)} />
                     ))}

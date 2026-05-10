@@ -20,6 +20,16 @@ export type RegisterState = {
     error?: string
 }
 
+const VALID_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+const VALID_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
+
+const RESERVED_SLUGS = new Set([
+    'admin', 'api', 'coach', 'coaches', 'register', 'login', 'logout', 'pricing',
+    'about', 'contact', 'eva', 'antigravity', 'soporte', 'help', 'blog', 'app',
+    'www', 'mail', 'support', 'dashboard', 'settings', 'subscription',
+    'nike', 'adidas', 'crossfit', 'gym',
+])
+
 export async function registerAction(
     _prev: RegisterState,
     formData: FormData
@@ -32,8 +42,15 @@ export async function registerAction(
     const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'starter'
     const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
 
-    const isTierValid = ['starter', 'pro', 'elite', 'scale'].includes(selectedTier)
-    const isCycleValid = ['monthly', 'quarterly', 'annual'].includes(selectedBillingCycle)
+    // Honeypot check — bots fill hidden fields, humans don't
+    const honeypot = formData.get('website') as string
+    if (honeypot) {
+        return { error: 'Algo salió mal. Intentá de nuevo en unos minutos.' }
+    }
+
+    const isTierValid = VALID_TIERS.includes(selectedTier)
+    const isCycleValid = VALID_CYCLES.includes(selectedBillingCycle)
+    const isFreeTier = selectedTier === 'free'
 
     if (!fullName || !email || !password || !brandName) {
         return { error: 'Todos los campos son obligatorios' }
@@ -46,10 +63,12 @@ export async function registerAction(
     if (!acceptLegal) {
         return { error: 'Debes aceptar los términos para crear tu cuenta.' }
     }
+
     if (!isTierValid || !isCycleValid) {
         return { error: 'Debes seleccionar un plan y una frecuencia válidos.' }
     }
-    if (!isBillingCycleAllowedForTier(selectedTier, selectedBillingCycle)) {
+
+    if (!isFreeTier && !isBillingCycleAllowedForTier(selectedTier, selectedBillingCycle)) {
         return { error: 'La frecuencia elegida no está disponible para ese plan.' }
     }
 
@@ -57,9 +76,13 @@ export async function registerAction(
     const baseSlug = brandName
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
+
+    if (RESERVED_SLUGS.has(baseSlug)) {
+        return { error: 'Este nombre de marca no está disponible. Intentá con otro nombre.' }
+    }
 
     const adminDb = await createRawAdminClient()
 
@@ -102,11 +125,12 @@ export async function registerAction(
             brand_name: brandName,
             slug,
             primary_color: '#10B981',
-            subscription_status: 'pending_payment',
+            subscription_status: isFreeTier ? 'active' : 'pending_payment',
             subscription_tier: selectedTier,
-            billing_cycle: selectedBillingCycle,
-            payment_provider: process.env.PAYMENT_PROVIDER ?? 'mercadopago',
+            billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
+            payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
             max_clients: getTierMaxClients(selectedTier),
+            ...(isFreeTier && { trial_used_email: emailNorm }),
         })
 
     if (coachError) {
@@ -118,6 +142,10 @@ export async function registerAction(
     // Sign in the user
     const supabase = await createClient()
     await supabase.auth.signInWithPassword({ email: emailNorm, password })
+
+    if (isFreeTier) {
+        redirect('/coach/dashboard?welcome=free')
+    }
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(

@@ -279,7 +279,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
-                                            {['starter', 'pro', 'elite', 'scale'].map(v => (
+                                            {['free', 'starter', 'pro', 'elite', 'growth', 'scale'].map(v => (
                                                 <SelectItem key={v} value={v}>{v}</SelectItem>
                                             ))}
                                         </SelectContent>
