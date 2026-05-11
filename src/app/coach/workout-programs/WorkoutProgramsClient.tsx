@@ -590,8 +590,8 @@ export function WorkoutProgramsClient({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Sticky hero: backdrop + header + toolbar */}
-            <div className="sticky top-0 z-20 w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-border/40 bg-background/90 shadow-[0_8px_28px_-14px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-background/85 dark:shadow-[0_8px_32px_-16px_rgba(0,0,0,0.5)]">
+            {/* Hero: backdrop + header + toolbar */}
+            <div className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-border/40 bg-background/90 shadow-[0_8px_28px_-14px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-background/85 dark:shadow-[0_8px_32px_-16px_rgba(0,0,0,0.5)]">
                 <LibraryHeroBackdrop />
                 <div className="relative z-10 space-y-4 px-3 pb-4 pt-3 sm:px-5">
                     <LibraryHeader
