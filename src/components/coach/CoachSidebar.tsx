@@ -250,7 +250,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 </nav>
 
                 {/* iOS safe-area spacer: extends sidebar background under home indicator, no content */}
-                <div aria-hidden className="h-[env(safe-area-inset-bottom,0px)] flex-none md:hidden" />
+                <div aria-hidden className="h-[var(--pwa-sab,env(safe-area-inset-bottom,0px))] flex-none md:hidden" />
 
                 {/* Bottom area (Desktop only) */}
                 <div className={cn("hidden md:flex flex-col border-t border-sidebar-border bg-sidebar-accent/50 dark:bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-6 space-y-4")}>

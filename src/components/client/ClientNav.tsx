@@ -224,7 +224,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                 </nav>
 
                 {/* iOS safe-area spacer: extends nav background under home indicator, no content */}
-                <div aria-hidden className="h-[env(safe-area-inset-bottom,0px)] flex-none md:hidden" />
+                <div aria-hidden className="h-[var(--pwa-sab,env(safe-area-inset-bottom,0px))] flex-none md:hidden" />
 
                 {/* Bottom area (Desktop only) */}
                     <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 items-center" : "px-3 py-4 space-y-2")}>
