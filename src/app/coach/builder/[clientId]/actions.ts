@@ -59,12 +59,12 @@ const optionalProgression = z.union([z.number().min(0).max(1000), z.null()]).opt
 
 const blockSchema = z.object({
     exercise_id: z.string().uuid(),
-    sets: z.preprocess(preprocessSets, z.number().int().min(1).max(20)),
-    reps: z.string().min(1).max(20),
+    sets: z.preprocess(preprocessSets, z.number().int().min(1, 'Mínimo 1 serie').max(20, 'Máximo 20 series')),
+    reps: z.string().min(1, 'Las repeticiones son obligatorias').max(20, 'Máximo 20 caracteres en repeticiones'),
     target_weight_kg: z.preprocess(preprocessOptionalFiniteKg, optionalKg),
-    tempo: z.string().max(20).nullable().optional(),
-    rir: z.string().max(10).nullable().optional(),
-    rest_time: z.string().max(20).nullable().optional(),
+    tempo: z.string().max(20, 'Máximo 20 caracteres en tempo').nullable().optional(),
+    rir: z.string().max(10, 'Máximo 10 caracteres en RIR').nullable().optional(),
+    rest_time: z.string().max(20, 'Máximo 20 caracteres en recuperación').nullable().optional(),
     notes: z.string().max(1000, 'Las notas del ejercicio no pueden superar 1000 caracteres').nullable().optional(),
     superset_group: z.string().max(10).nullable().optional(),
     progression_type: z.enum(['weight', 'reps']).nullable().optional(),
@@ -74,14 +74,14 @@ const blockSchema = z.object({
 })
 
 const programPhaseSchema = z.object({
-    name: z.string().min(1).max(80),
-    weeks: z.preprocess(preprocessIntInRange(1, 52, 1), z.number().int().min(1).max(52)),
+    name: z.string().min(1, 'El nombre de la fase es obligatorio').max(80, 'Máximo 80 caracteres en nombre de fase'),
+    weeks: z.preprocess(preprocessIntInRange(1, 52, 1), z.number().int().min(1, 'Mínimo 1 semana por fase').max(52, 'Máximo 52 semanas por fase')),
     color: z.string().max(32).optional(),
 })
 
 const workoutDaySchema = z.object({
     day_of_week: z.preprocess(preprocessDayOfWeek, z.number().int().min(1).max(28)),
-    title: z.string().max(100).optional(),
+    title: z.string().max(100, 'Máximo 100 caracteres en el título del día').optional(),
     week_variant: z.enum(['A', 'B']).optional().default('A'),
     blocks: z.array(blockSchema).min(1, 'Agrega al menos un ejercicio'),
 })

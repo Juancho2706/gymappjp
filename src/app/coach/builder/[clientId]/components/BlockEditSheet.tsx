@@ -174,10 +174,11 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                                 value={block.sets ?? 0}
                                 onValueChange={(sets) => onChange({ ...block, sets })}
                                 min={1}
-                                max={99}
+                                max={20}
                                 placeholder="Ej. 3"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
                             />
+                            <p className="text-[10px] text-muted-foreground/50 text-center">1–20 series</p>
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
@@ -187,9 +188,12 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                             <Input
                                 value={block.reps}
                                 onChange={e => onChange({...block, reps: e.target.value})}
-                                placeholder="Ej. 10-12"
+                                placeholder="Ej. 10-12 o AMRAP"
+                                maxLength={20}
+                                autoComplete="off"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
                             />
+                            <p className="text-[10px] text-muted-foreground/50 text-center">número, rango o AMRAP</p>
                         </div>
                     </div>
 
@@ -202,9 +206,12 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                             <Input
                                 value={block.target_weight_kg || ''}
                                 onChange={e => onChange({...block, target_weight_kg: e.target.value})}
-                                placeholder="Opcional"
+                                placeholder="Ej. 60 o 62.5"
+                                inputMode="decimal"
+                                autoComplete="off"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                             />
+                            <p className="text-[10px] text-muted-foreground/50">en kg, acepta decimales</p>
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
@@ -214,9 +221,12 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                             <Input
                                 value={block.rir || ''}
                                 onChange={e => onChange({...block, rir: e.target.value})}
-                                placeholder="Ej. RIR 2"
+                                placeholder="Ej. 2 (reps en reserva)"
+                                maxLength={10}
+                                autoComplete="off"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                             />
+                            <p className="text-[10px] text-muted-foreground/50">cuántas reps quedan en el tanque</p>
                         </div>
                     </div>
 
@@ -230,8 +240,11 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                                 value={block.tempo || ''}
                                 onChange={e => onChange({...block, tempo: e.target.value})}
                                 placeholder="Ej. 3-1-X-1"
+                                maxLength={20}
+                                autoComplete="off"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                             />
+                            <p className="text-[10px] text-muted-foreground/50">excéntrica · pausa · concéntrica · pausa</p>
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
@@ -241,9 +254,12 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                             <Input
                                 value={block.rest_time || ''}
                                 onChange={e => onChange({...block, rest_time: e.target.value})}
-                                placeholder="Ej. 120s"
+                                placeholder="Ej. 90s o 2min"
+                                maxLength={20}
+                                autoComplete="off"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                             />
+                            <p className="text-[10px] text-muted-foreground/50">segundos o minutos entre series</p>
                         </div>
                     </div>
 

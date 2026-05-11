@@ -216,6 +216,8 @@ function DayColumnInner({
                                 value={title}
                                 onChange={(e) => onUpdateTitle(dayId, e.target.value)}
                                 placeholder="TITULO DEL DIA (EJ: EMPUJE)"
+                                maxLength={100}
+                                autoComplete="off"
                                 className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/5 dark:bg-black/20 border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground text-[16px] md:text-[10px]"
                             />
                         </div>

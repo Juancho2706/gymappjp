@@ -72,13 +72,18 @@ export function ProgramConfigHeader({
                         </label>
                         <div className="relative">
                             <Edit2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input 
+                            <Input
                                 value={programName}
                                 onChange={e => setProgramName(e.target.value)}
                                 placeholder="EJ: HYPERTROPHY BLOCK 1"
+                                maxLength={100}
+                                autoComplete="off"
                                 className="h-12 pl-11 rounded-xl bg-background border-border font-bold text-xs uppercase tracking-widest placeholder:text-muted-foreground"
                             />
                         </div>
+                        <p className={`text-right text-[10px] tabular-nums ${programName.length > 85 ? 'text-amber-500' : 'text-muted-foreground/40'}`}>
+                            {programName.length}/100
+                        </p>
                     </div>
 
                     {/* Modo de Estructura: Semanal / Ciclo */}
@@ -170,9 +175,10 @@ export function ProgramConfigHeader({
                                         value={weeksToRepeat}
                                         onValueChange={setWeeksToRepeat}
                                         min={1}
-                                        max={12}
+                                        max={52}
                                         className="h-12 bg-background border-border font-bold text-xs text-center"
                                     />
+                                    <p className="text-[10px] text-muted-foreground/50 text-center">1–52 semanas</p>
                                 </div>
                             )}
                             {(durationType === 'async' || durationType === 'calendar_days') && (
@@ -182,10 +188,11 @@ export function ProgramConfigHeader({
                                         value={durationDays}
                                         onValueChange={setDurationDays}
                                         min={1}
-                                        max={730}
+                                        max={365}
                                         placeholder="Ej: 10"
                                         className="h-12 bg-background border-border font-bold text-xs text-center"
                                     />
+                                    <p className="text-[10px] text-muted-foreground/50 text-center">1–365 días</p>
                                 </div>
                             )}
                         </div>
@@ -220,12 +227,16 @@ export function ProgramConfigHeader({
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Notas y reglas del programa</label>
-                        <textarea 
+                        <textarea
                             className="w-full h-[88px] p-4 text-sm rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none resize-none placeholder:text-muted-foreground"
                             value={programNotes}
                             onChange={e => setProgramNotes(e.target.value)}
                             placeholder="Reglas del macrociclo, RIR general, consideraciones..."
+                            maxLength={2000}
                         />
+                        <p className={`text-right text-[10px] tabular-nums ${(programNotes?.length ?? 0) > 1800 ? 'text-amber-500' : 'text-muted-foreground/40'}`}>
+                            {programNotes?.length ?? 0}/2000
+                        </p>
                     </div>
                 </div>
             </div>
@@ -286,6 +297,8 @@ export function ProgramConfigHeader({
                                     setProgramPhases(next)
                                 }}
                                 placeholder="Nombre de la fase"
+                                maxLength={80}
+                                autoComplete="off"
                                 className="h-9 flex-1 min-w-[120px] text-xs font-bold uppercase tracking-widest"
                             />
                             <div className="flex items-center gap-1">
