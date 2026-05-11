@@ -257,7 +257,11 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
                             value={block.notes || ''}
                             onChange={e => onChange({...block, notes: e.target.value})}
                             placeholder="Detalles biomecánicos o notas..."
+                            maxLength={1000}
                         />
+                        <p className={`text-right text-[10px] tabular-nums ${(block.notes?.length ?? 0) > 900 ? 'text-amber-500' : 'text-muted-foreground/50'}`}>
+                            {block.notes?.length ?? 0}/1000
+                        </p>
                     </div>
 
                     {/* Auto-progression */}

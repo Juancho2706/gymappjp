@@ -79,7 +79,7 @@ export default async function CoachLayout({
             }
         ` }} />
         <div
-            className="coach-layout-container flex min-h-[100dvh] min-w-0 flex-col bg-white transition-colors selection:bg-primary/30 selection:text-primary dark:bg-black md:min-h-screen md:flex-row has-[.coach-builder-shell]:h-dvh has-[.coach-builder-shell]:max-h-dvh has-[.coach-builder-shell]:min-h-0 has-[.coach-builder-shell]:overflow-hidden"
+            className="coach-layout-container flex h-dvh min-w-0 flex-col overflow-hidden bg-white transition-colors selection:bg-primary/30 selection:text-primary dark:bg-black md:h-auto md:min-h-screen md:overflow-visible md:flex-row has-[.coach-builder-shell]:h-dvh has-[.coach-builder-shell]:max-h-dvh has-[.coach-builder-shell]:min-h-0 has-[.coach-builder-shell]:overflow-hidden"
             style={{ '--theme-primary': palette.primary, '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
         >
             <NewsFeedProvider initialUnreadCount={unreadCount} initialItems={newsItems}>

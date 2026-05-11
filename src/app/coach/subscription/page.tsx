@@ -253,13 +253,13 @@ export default function CoachSubscriptionPage() {
                     <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
                     {/* Cycle pills — shown per selected tier */}
                     {allowedCycleOptions.length > 1 && (
-                        <div className="flex items-center gap-1 rounded-xl border border-border bg-secondary/50 p-1">
+                        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-secondary/50 p-1">
                             {allowedCycleOptions.map((cycle) => (
                                 <button
                                     key={cycle}
                                     type="button"
                                     onClick={() => setSelectedCycle(cycle)}
-                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                    className={`flex items-center rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors sm:px-3 ${
                                         selectedCycle === cycle
                                             ? 'bg-background text-foreground shadow-sm'
                                             : 'text-muted-foreground hover:text-foreground'
@@ -267,10 +267,10 @@ export default function CoachSubscriptionPage() {
                                 >
                                     {BILLING_CYCLE_CONFIG[cycle].label}
                                     {cycle === 'annual' && (
-                                        <span className="ml-1.5 rounded bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold text-emerald-400">−20%</span>
+                                        <span className="ml-1 rounded bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold text-emerald-400">−20%</span>
                                     )}
                                     {cycle === 'quarterly' && (
-                                        <span className="ml-1.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-400">−10%</span>
+                                        <span className="ml-1 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-400">−10%</span>
                                     )}
                                 </button>
                             ))}

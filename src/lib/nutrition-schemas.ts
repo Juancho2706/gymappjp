@@ -109,7 +109,7 @@ export const CustomFoodSchema = z.object({
     .number()
     .positive('El tamaño de porción debe ser mayor a 0')
     .max(10000),
-  serving_unit: z.enum(['g', 'un']),
+  serving_unit: z.enum(['g', 'un', 'ml']),
   category: z.enum(VALID_FOOD_CATEGORIES),
 })
 

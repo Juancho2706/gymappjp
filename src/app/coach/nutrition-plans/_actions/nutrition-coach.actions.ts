@@ -608,7 +608,9 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
     const carbs_g = Math.round(parseFloat(formData.get('carbs') as string) || 0)
     const fats_g = Math.round(parseFloat(formData.get('fats') as string) || 0)
     const category = (formData.get('category') as string | null)?.trim() || 'otro'
-    const serving_unit = ((formData.get('unit') as string | null)?.trim() || 'g') === 'un' ? 'un' : 'g'
+    const rawUnit = (formData.get('unit') as string | null)?.trim() || 'g'
+    const serving_unit: 'g' | 'un' | 'ml' = rawUnit === 'un' ? 'un' : rawUnit === 'ml' ? 'ml' : 'g'
+    const is_liquid = serving_unit === 'ml'
     const servingSizeRaw = formData.get('serving_size') as string | null
     const servingParsed = parseFloat(servingSizeRaw ?? '')
     const serving_size = !isNaN(servingParsed) && servingParsed > 0 ? servingParsed : 100
@@ -636,6 +638,7 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       fats_g: parsed.data.fats_g,
       serving_size: parsed.data.serving_size,
       serving_unit: parsed.data.serving_unit,
+      is_liquid,
       category: parsed.data.category,
       coach_id: coachId,
     })
