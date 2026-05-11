@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { ArrowLeftRight, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +32,44 @@ interface Props {
   onUpdateSwapOption: (swapFoodId: string, quantity: number, unit: 'g' | 'un' | 'ml') => void
 }
 
+function SwapQtyInput({
+  quantity,
+  effectiveUnit,
+  foodId,
+  onUpdateSwapOption,
+}: {
+  quantity: number
+  effectiveUnit: 'g' | 'un' | 'ml'
+  foodId: string
+  onUpdateSwapOption: (swapFoodId: string, quantity: number, unit: 'g' | 'un' | 'ml') => void
+}) {
+  const [qtyStr, setQtyStr] = useState(String(quantity))
+  useEffect(() => {
+    if (Number(qtyStr) !== quantity) setQtyStr(String(quantity))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quantity])
+  return (
+    <Input
+      type="number"
+      min={0}
+      step="any"
+      className="h-8 w-20 bg-white dark:bg-background text-[11px] font-bold"
+      value={qtyStr}
+      onChange={(e) => {
+        setQtyStr(e.target.value)
+        const n = parseFloat(e.target.value)
+        if (!isNaN(n) && n >= 0) onUpdateSwapOption(foodId, n, effectiveUnit)
+      }}
+      onBlur={() => {
+        const n = parseFloat(qtyStr)
+        const safe = isNaN(n) || n < 0 ? 0 : n
+        setQtyStr(String(safe))
+        onUpdateSwapOption(foodId, safe, effectiveUnit)
+      }}
+    />
+  )
+}
+
 export function FoodItemRow({
   item,
   onUpdate,
@@ -41,6 +80,17 @@ export function FoodItemRow({
 }: Props) {
   const units = item.food.is_liquid ? UNITS_LIQUID : UNITS_SOLID
   const defaultUnit = item.food.is_liquid ? 'ml' : 'g'
+
+  // Local string state so user can clear the field before typing a new number
+  const [qtyStr, setQtyStr] = useState(String(item.quantity))
+
+  useEffect(() => {
+    // Sync from parent only when the numeric value actually differs (avoids loop)
+    if (Number(qtyStr) !== item.quantity) {
+      setQtyStr(String(item.quantity))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.quantity])
 
   return (
     <div className="rounded-xl border border-slate-200 dark:border-border/60 bg-slate-50 dark:bg-muted/20 px-3 py-2 space-y-2">
@@ -56,8 +106,18 @@ export function FoodItemRow({
         min={0}
         step="any"
         className="h-9 w-20 font-mono text-sm bg-white dark:bg-background text-slate-900 dark:text-foreground border-slate-300 dark:border-border"
-        value={item.quantity}
-        onChange={(e) => onUpdate(Number(e.target.value), item.unit ?? defaultUnit)}
+        value={qtyStr}
+        onChange={(e) => {
+          setQtyStr(e.target.value)
+          const n = parseFloat(e.target.value)
+          if (!isNaN(n) && n >= 0) onUpdate(n, item.unit ?? defaultUnit)
+        }}
+        onBlur={() => {
+          const n = parseFloat(qtyStr)
+          const safe = isNaN(n) || n < 0 ? 0 : n
+          setQtyStr(String(safe))
+          onUpdate(safe, item.unit ?? defaultUnit)
+        }}
       />
       <div className="flex items-center gap-1">
         <Select
@@ -122,15 +182,11 @@ export function FoodItemRow({
                 </div>
 
                 <div className="mt-2 flex items-center gap-1.5">
-                  <Input
-                    type="number"
-                    min={0}
-                    step="any"
-                    className="h-8 w-20 bg-white dark:bg-background text-[11px] font-bold"
-                    value={opt.quantity}
-                    onChange={(e) =>
-                      onUpdateSwapOption(opt.food_id, Number(e.target.value), effectiveUnit)
-                    }
+                  <SwapQtyInput
+                    quantity={opt.quantity}
+                    effectiveUnit={effectiveUnit}
+                    foodId={opt.food_id}
+                    onUpdateSwapOption={onUpdateSwapOption}
                   />
                   <Select
                     value={effectiveUnit}
