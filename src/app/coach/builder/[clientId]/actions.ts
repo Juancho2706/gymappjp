@@ -65,7 +65,7 @@ const blockSchema = z.object({
     tempo: z.string().max(20).nullable().optional(),
     rir: z.string().max(10).nullable().optional(),
     rest_time: z.string().max(20).nullable().optional(),
-    notes: z.string().max(200).nullable().optional(),
+    notes: z.string().max(1000, 'Las notas del ejercicio no pueden superar 1000 caracteres').nullable().optional(),
     superset_group: z.string().max(10).nullable().optional(),
     progression_type: z.enum(['weight', 'reps']).nullable().optional(),
     progression_value: z.preprocess(preprocessOptionalFiniteProgression, optionalProgression),

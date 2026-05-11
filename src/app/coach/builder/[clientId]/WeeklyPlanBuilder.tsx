@@ -1418,7 +1418,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     width: `${100 / days.length}%`,
                                                     /* Solo altura del sheet: el sheet ya lleva paddingBottom safe-area; sumar inset aquí duplicaba hueco */
                                                     paddingBottom: isSimpleMode
-                                                        ? `calc(env(safe-area-inset-bottom, 0px) + 12px)`
+                                                        ? `calc(env(safe-area-inset-bottom, 0px) + 88px)`
                                                         : `calc(${sheetHeight}vh + 6px)`,
                                                     WebkitOverflowScrolling: 'touch',
                                                 } as React.CSSProperties}
