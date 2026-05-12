@@ -419,6 +419,29 @@ export async function addCoachCustomFood(
   return { success: true, foodId: data.id }
 }
 
+export async function deleteCoachCustomFood(
+  coachId: string,
+  foodId: string
+): Promise<{ success: boolean; error?: string }> {
+  const { supabase, error: authErr } = await requireCoachSession(coachId)
+  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+
+  const { error } = await supabase
+    .from('foods')
+    .delete()
+    .eq('id', foodId)
+    .eq('coach_id', coachId)
+
+  if (error) {
+    console.error('[deleteCoachCustomFood]', error)
+    return { success: false, error: 'No se pudo eliminar el alimento.' }
+  }
+
+  revalidatePath('/coach/nutrition-plans')
+  revalidatePath('/coach/foods')
+  return { success: true }
+}
+
 // ─── Acciones legacy (FormData) ────────────────────────────────────────────────
 
 export type TemplateFormState = {

@@ -250,6 +250,18 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     )
   }, [])
 
+  const reorderFoodItems = useCallback((mealId: string, fromIndex: number, toIndex: number) => {
+    setMeals((prev) =>
+      prev.map((m) => {
+        if (m.id !== mealId) return m
+        const items = [...m.foodItems]
+        const [moved] = items.splice(fromIndex, 1)
+        items.splice(toIndex, 0, moved)
+        return { ...m, foodItems: items }
+      })
+    )
+  }, [])
+
   const handleSave = useCallback(async () => {
     if (!planName.trim()) {
       toast.error('El nombre es obligatorio.')
@@ -397,6 +409,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
                 onOpenFoodSearch={openFoodSearch}
                 onUpdateFoodItem={updateFoodItem}
                 onRemoveFoodItem={removeFoodItem}
+                onReorderFoodItems={reorderFoodItems}
                 onOpenSwapSearch={openSwapSearch}
                 onRemoveSwapOption={removeSwapOption}
                 onUpdateSwapOption={updateSwapOption}

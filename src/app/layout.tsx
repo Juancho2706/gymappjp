@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     default: 'EVA | Escala tu Negocio de Personal Training y Coaching',
     template: '%s | EVA',
   },
-  description: 'EVA es la plataforma definitiva para Personal Trainers y Coaches. Crea rutinas profesionales, planes de nutrición, gestiona alumnos, automatiza check-ins y ten tu propia app móvil white-label.',
+  description: 'EVA: plataforma SaaS para Personal Trainers y Coaches. Crea rutinas, planes de nutrición, gestiona alumnos y lanza tu app móvil white-label. Prueba gratis.',
   keywords: ['fitness', 'coaching', 'entrenamiento', 'SaaS', 'personal trainer', 'gym', 'rutinas', 'nutrición', 'white label', 'software entrenadores'],
   authors: [{ name: 'EVA' }],
   applicationName: 'EVA',
@@ -82,8 +82,12 @@ export const metadata: Metadata = {
   metadataBase,
   manifest: '/api/manifest/default',
   icons: {
-    icon: [{ url: BRAND_APP_ICON, type: 'image/png' }],
-    apple: [{ url: BRAND_APP_ICON, type: 'image/png' }],
+    icon: [
+      { url: '/icon.png', type: 'image/png', sizes: 'any' },
+      { url: BRAND_APP_ICON, type: 'image/png' },
+    ],
+    shortcut: '/icon.png',
+    apple: [{ url: BRAND_APP_ICON, type: 'image/png', sizes: '180x180' }],
   },
 }
 

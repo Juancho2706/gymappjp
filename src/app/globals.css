@@ -558,6 +558,7 @@ body.immersive-workout-mode main {
 html {
   overflow-x: hidden;
   overflow-x: clip;
+  overscroll-behavior-y: none;
 }
 
 body {

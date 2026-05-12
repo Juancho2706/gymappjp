@@ -291,7 +291,7 @@ function DayColumnInner({
 
             <div
                 ref={setNodeRef}
-                className="flex-1 p-4 space-y-2 overflow-y-auto min-h-[200px] pb-safe"
+                className="flex-1 p-4 space-y-2 overflow-y-auto min-h-[200px]"
                 style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
                 {/* Overlay para cerrar sugerencias */}

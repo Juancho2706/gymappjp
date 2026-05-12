@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useSortable } from '@dnd-kit/sortable'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ interface Props {
   onOpenFoodSearch: () => void
   onUpdateFoodItem: (idx: number, qty: number, unit: string) => void
   onRemoveFoodItem: (idx: number) => void
+  onReorderFoodItems: (fromIndex: number, toIndex: number) => void
   onOpenSwapSearch: (idx: number) => void
   onRemoveSwapOption: (idx: number, swapFoodId: string) => void
   onUpdateSwapOption: (
@@ -59,6 +61,7 @@ export function MealBlock({
   onOpenFoodSearch,
   onUpdateFoodItem,
   onRemoveFoodItem,
+  onReorderFoodItems,
   onOpenSwapSearch,
   onRemoveSwapOption,
   onUpdateSwapOption,
@@ -66,6 +69,16 @@ export function MealBlock({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: meal.id,
   })
+
+  const foodItemSortableIds = useMemo(() => meal.foodItems.map((_, i) => `food-item-${i}`), [meal.foodItems])
+
+  function handleFoodDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIdx = foodItemSortableIds.indexOf(active.id as string)
+    const newIdx = foodItemSortableIds.indexOf(over.id as string)
+    if (oldIdx !== -1 && newIdx !== -1) onReorderFoodItems(oldIdx, newIdx)
+  }
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -133,19 +146,24 @@ export function MealBlock({
       </div>
 
       <div className="space-y-2 mb-3">
-        {meal.foodItems.map((fi, idx) => (
-          <FoodItemRow
-            key={`${fi.food_id}-${idx}`}
-            item={fi}
-            onUpdate={(q, u) => onUpdateFoodItem(idx, q, u)}
-            onRemove={() => onRemoveFoodItem(idx)}
-            onOpenSwapSearch={() => onOpenSwapSearch(idx)}
-            onRemoveSwapOption={(swapFoodId) => onRemoveSwapOption(idx, swapFoodId)}
-            onUpdateSwapOption={(swapFoodId, quantity, unit) =>
-              onUpdateSwapOption(idx, swapFoodId, quantity, unit)
-            }
-          />
-        ))}
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleFoodDragEnd}>
+          <SortableContext items={foodItemSortableIds} strategy={verticalListSortingStrategy}>
+            {meal.foodItems.map((fi, idx) => (
+              <FoodItemRow
+                key={`${fi.food_id}-${idx}`}
+                sortableId={foodItemSortableIds[idx]}
+                item={fi}
+                onUpdate={(q, u) => onUpdateFoodItem(idx, q, u)}
+                onRemove={() => onRemoveFoodItem(idx)}
+                onOpenSwapSearch={() => onOpenSwapSearch(idx)}
+                onRemoveSwapOption={(swapFoodId) => onRemoveSwapOption(idx, swapFoodId)}
+                onUpdateSwapOption={(swapFoodId, quantity, unit) =>
+                  onUpdateSwapOption(idx, swapFoodId, quantity, unit)
+                }
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
 
       {meal.foodItems.length === 0 && (

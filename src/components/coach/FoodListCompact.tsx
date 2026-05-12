@@ -1,7 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
-import { Globe, LayoutList, Star } from 'lucide-react'
+import { Globe, LayoutList, Star, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type FoodListItem = {
@@ -21,9 +21,10 @@ type Props = {
   items: FoodListItem[]
   coachId: string
   emptyLabel?: string
+  onDelete?: (foodId: string) => void
 }
 
-export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos con estos filtros.' }: Props) {
+export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos con estos filtros.', onDelete }: Props) {
   return (
     <div className="rounded-2xl border border-border/60 bg-card/40 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/20">
@@ -67,9 +68,21 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                       <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" aria-hidden />
                     )}
                   </span>
-                  <span className="text-xs font-bold tabular-nums text-foreground shrink-0">
-                    {food.calories} <span className="text-muted-foreground font-semibold">kcal/100g</span>
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-xs font-bold tabular-nums text-foreground">
+                      {food.calories} <span className="text-muted-foreground font-semibold">kcal/100g</span>
+                    </span>
+                    {isMine && onDelete && (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(food.id)}
+                        className="rounded p-1 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        aria-label={`Eliminar ${food.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                   <span className="tabular-nums">
@@ -107,8 +120,18 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                 <span className="text-right tabular-nums text-xs text-blue-600/90 dark:text-blue-400">{food.protein_g}</span>
                 <span className="text-right tabular-nums text-xs text-emerald-600/90 dark:text-emerald-400">{food.carbs_g}</span>
                 <span className="text-right tabular-nums text-xs text-purple-600/90 dark:text-purple-400">{food.fats_g}</span>
-                <span className="text-right text-[10px] text-muted-foreground truncate max-w-[7rem]">
+                <span className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
                   {isMine ? 'Propio' : 'Global'}
+                  {isMine && onDelete && (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(food.id)}
+                      className="rounded p-0.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                      aria-label={`Eliminar ${food.name}`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </span>
               </div>
             </li>

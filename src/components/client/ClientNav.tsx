@@ -155,7 +155,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                 </div>
 
                 {/* Navigation Links */}
-                <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 py-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar">
+                <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 pt-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar">
                     {navItems.map((item) => {
                         const isActive =
                             pathname === item.href ||

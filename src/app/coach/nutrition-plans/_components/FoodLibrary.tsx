@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { saveCustomFood } from '../_actions/nutrition-coach.actions'
+import { saveCustomFood, deleteCoachCustomFood } from '../_actions/nutrition-coach.actions'
 import { toast } from 'sonner'
 import { useFormStatus } from 'react-dom'
 import { searchCoachFoodLibrary } from '../_actions/food-library.actions'
@@ -52,6 +52,7 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   const [state, formAction] = useActionState(saveCustomFood.bind(null, coachId), { error: undefined, success: false })
   const skipNextFetch = useRef(true)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const pendingDeletes = useRef<Map<string, { food: Food; timer: ReturnType<typeof setTimeout> }>>(new Map())
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350)
@@ -73,6 +74,44 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
       })
     },
     [coachId]
+  )
+
+  const handleDelete = useCallback(
+    (foodId: string) => {
+      const food = foods.find((f) => f.id === foodId)
+      if (!food) return
+
+      setFoods((prev) => prev.filter((f) => f.id !== foodId))
+      setTotal((prev) => prev - 1)
+
+      const timer = setTimeout(async () => {
+        pendingDeletes.current.delete(foodId)
+        const result = await deleteCoachCustomFood(coachId, foodId)
+        if (!result.success) {
+          toast.error(result.error ?? 'No se pudo eliminar el alimento.')
+          setFoods((prev) => [...prev, food])
+          setTotal((prev) => prev + 1)
+        }
+      }, 5000)
+
+      pendingDeletes.current.set(foodId, { food, timer })
+
+      toast.success('Alimento eliminado', {
+        duration: 5000,
+        action: {
+          label: 'Deshacer',
+          onClick: () => {
+            const entry = pendingDeletes.current.get(foodId)
+            if (!entry) return
+            clearTimeout(entry.timer)
+            pendingDeletes.current.delete(foodId)
+            setFoods((prev) => [...prev, entry.food])
+            setTotal((prev) => prev + 1)
+          },
+        },
+      })
+    },
+    [foods, coachId]
   )
 
   const loadMore = useCallback(
@@ -244,7 +283,7 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
             <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/40" />
           ))}
         </div>
-      : <FoodListCompact items={displayed} coachId={coachId} />}
+      : <FoodListCompact items={displayed} coachId={coachId} onDelete={handleDelete} />}
 
       <div ref={sentinelRef} className="h-4" />
       {loadingMore && (

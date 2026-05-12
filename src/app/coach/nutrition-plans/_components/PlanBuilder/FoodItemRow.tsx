@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeftRight, Trash2, X } from 'lucide-react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { ArrowLeftRight, GripVertical, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
@@ -24,6 +26,7 @@ const UNITS_SOLID = ['g', 'un']
 const UNITS_LIQUID = ['ml', 'un']
 
 interface Props {
+  sortableId: string
   item: FoodItemDraft
   onUpdate: (qty: number, unit: string) => void
   onRemove: () => void
@@ -71,6 +74,7 @@ function SwapQtyInput({
 }
 
 export function FoodItemRow({
+  sortableId,
   item,
   onUpdate,
   onRemove,
@@ -78,6 +82,11 @@ export function FoodItemRow({
   onRemoveSwapOption,
   onUpdateSwapOption,
 }: Props) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: sortableId,
+  })
+  const dragStyle = { transform: CSS.Translate.toString(transform), transition }
+
   const units = item.food.is_liquid ? UNITS_LIQUID : UNITS_SOLID
   const defaultUnit = item.food.is_liquid ? 'ml' : 'g'
 
@@ -93,8 +102,21 @@ export function FoodItemRow({
   }, [item.quantity])
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-border/60 bg-slate-50 dark:bg-muted/20 px-3 py-2 space-y-2">
+    <div
+      ref={setNodeRef}
+      style={dragStyle}
+      className={`rounded-xl border border-slate-200 dark:border-border/60 bg-slate-50 dark:bg-muted/20 px-3 py-2 space-y-2 ${isDragging ? 'z-10 opacity-80 ring-2 ring-[color:var(--theme-primary)]' : ''}`}
+    >
       <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        className="touch-none shrink-0 cursor-grab text-muted-foreground hover:text-foreground"
+        {...attributes}
+        {...listeners}
+        aria-label="Arrastrar para reordenar"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
       <span className="flex-1 min-w-[120px] text-sm font-semibold text-foreground truncate">
         {item.food.name}
         {item.food.brand && (
