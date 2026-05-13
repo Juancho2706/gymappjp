@@ -158,19 +158,31 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
+        // OAuth onboarding complete page: user is authenticated but has no coaches record yet
+        if (pathname === '/coach/onboarding/complete') {
+            return supabaseResponse
+        }
+
         // Verify the user has a coaches record
         const { data: coachData } = await supabase
             .from('coaches')
-            .select('id, subscription_status, current_period_end')
+            .select('id, subscription_status, subscription_tier, current_period_end')
             .eq('id', user.id)
             .maybeSingle()
 
-        const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end'> | null
+        const coach = coachData as Pick<Coach, 'id' | 'subscription_status' | 'current_period_end'> & { subscription_tier?: string } | null
 
         if (!coach) {
-            // User is logged in but isn't a coach → redirect
+            // User is logged in but isn't a coach → send to OAuth onboarding
             const redirectUrl = request.nextUrl.clone()
-            redirectUrl.pathname = '/login'
+            redirectUrl.pathname = '/coach/onboarding/complete'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        // Free tier email pending: block access until email confirmed
+        if (coach.subscription_status === 'pending_email' && coach.subscription_tier === 'free') {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/verify-email'
             return NextResponse.redirect(redirectUrl)
         }
 

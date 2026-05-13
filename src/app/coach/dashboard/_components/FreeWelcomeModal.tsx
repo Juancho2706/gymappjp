@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Sparkles, Users, Palette, Zap } from 'lucide-react'
+import { Sparkles, Users, Palette, Zap, CheckCircle2, XCircle } from 'lucide-react'
 import Link from 'next/link'
 
 const STORAGE_KEY = 'eva_free_welcome_seen'
@@ -79,6 +79,29 @@ export function FreeWelcomeModal() {
                             </div>
                         </li>
                     </ul>
+                </div>
+
+                {/* Plan limits */}
+                <div className="px-6 pb-4">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">Tu plan Free incluye</p>
+                    <div className="grid grid-cols-2 gap-1.5 text-xs">
+                        {[
+                            { ok: true,  text: '3 alumnos activos' },
+                            { ok: true,  text: 'Entrenos ilimitados' },
+                            { ok: true,  text: 'App para tus alumnos' },
+                            { ok: true,  text: 'Check-ins' },
+                            { ok: false, text: 'Marca personalizada' },
+                            { ok: false, text: 'Nutrición' },
+                        ].map(({ ok, text }) => (
+                            <div key={text} className={`flex items-center gap-1.5 ${ok ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
+                                {ok
+                                    ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                                    : <XCircle className="w-3.5 h-3.5 shrink-0 text-muted-foreground/40" />
+                                }
+                                {text}
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Actions */}

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { NextResponse } from 'next/server'
 import { type NextRequest } from 'next/server'
 
@@ -9,12 +10,25 @@ export async function GET(request: NextRequest) {
 
     if (code) {
         const supabase = await createClient()
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (!error) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!error && data.user) {
+            // Check if this user already has a coaches record
+            const adminDb = createServiceRoleClient()
+            const { data: coach } = await adminDb
+                .from('coaches')
+                .select('id')
+                .eq('id', data.user.id)
+                .maybeSingle()
+
+            if (coach) {
+                // Returning coach — go straight to dashboard
+                return NextResponse.redirect(`${origin}/coach/dashboard`)
+            }
+
+            // New OAuth user without coaches record — go to onboarding/complete
             return NextResponse.redirect(`${origin}${next}`)
         }
     }
 
-    // Auth code exchange failed
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
 }

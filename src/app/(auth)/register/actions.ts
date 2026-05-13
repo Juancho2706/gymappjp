@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
@@ -18,6 +19,7 @@ import {
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
 import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
+import { clientIpFromRequest } from '@/lib/rate-limit'
 
 export type RegisterState = {
     error?: string
@@ -51,6 +53,23 @@ export async function registerAction(
     const honeypot = formData.get('website') as string
     if (honeypot) {
         return { error: 'Algo salió mal. Intentá de nuevo en unos minutos.' }
+    }
+
+    // Cloudflare Turnstile verification (only if secret key is configured)
+    if (process.env.TURNSTILE_SECRET_KEY) {
+        const turnstileToken = formData.get('cf-turnstile-response') as string
+        if (!turnstileToken) {
+            return { error: 'Verificación de seguridad requerida. Recargá la página e intentá de nuevo.' }
+        }
+        const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ secret: process.env.TURNSTILE_SECRET_KEY, response: turnstileToken }),
+        })
+        const verifyData = await verifyRes.json() as { success: boolean }
+        if (!verifyData.success) {
+            return { error: 'Verificación de seguridad fallida. Intentá de nuevo.' }
+        }
     }
 
     const isTierValid = VALID_TIERS.includes(selectedTier)
@@ -95,6 +114,24 @@ export async function registerAction(
 
     const adminDb = createServiceRoleClient()
 
+    // IP-based abuse prevention: max 3 free accounts per IP per 7 days
+    if (isFreeTier) {
+        const reqHeaders = await headers()
+        const ip = clientIpFromRequest({ headers: reqHeaders } as any)
+        if (ip && ip !== 'unknown') {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+            const { count } = await adminDb
+                .from('coaches')
+                .select('id', { count: 'exact', head: true })
+                .eq('registration_ip', ip)
+                .eq('subscription_tier', 'free')
+                .gte('created_at', sevenDaysAgo)
+            if ((count ?? 0) >= 3) {
+                return { error: 'No se pudo completar el registro. Si creés que es un error, contacta soporte.' }
+            }
+        }
+    }
+
     let slug = baseSlug
     for (let attempt = 0; attempt < 8; attempt++) {
         const { data: existingCoach } = await adminDb.from('coaches').select('id').eq('slug', slug).maybeSingle()
@@ -111,11 +148,11 @@ export async function registerAction(
         return { error: availability.error }
     }
 
-    // Create auth user
+    // Free tier requires email verification; paid tiers are auto-confirmed (payment = identity proof)
     const { data: authData, error: authError } = await adminDb.auth.admin.createUser({
         email: emailNorm,
         password,
-        email_confirm: true,
+        email_confirm: !isFreeTier,
     })
 
     if (authError || !authData.user) {
@@ -123,6 +160,14 @@ export async function registerAction(
             return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
         }
         return { error: authError?.message || 'Error al crear la cuenta' }
+    }
+
+    // Capture registration IP for free tier abuse detection
+    let registrationIp: string | null = null
+    if (isFreeTier) {
+        const reqHeaders = await headers()
+        const ip = clientIpFromRequest({ headers: reqHeaders } as any)
+        registrationIp = ip !== 'unknown' ? ip : null
     }
 
     // Create coaches row
@@ -134,7 +179,7 @@ export async function registerAction(
             brand_name: brandName,
             slug,
             primary_color: '#10B981',
-            subscription_status: isFreeTier ? 'active' : 'pending_payment',
+            subscription_status: isFreeTier ? 'pending_email' : 'pending_payment',
             subscription_tier: selectedTier,
             billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
             payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
@@ -142,6 +187,7 @@ export async function registerAction(
             health_data_consent_at: new Date().toISOString(),
             marketing_consent: acceptMarketing,
             ...(isFreeTier && { trial_used_email: emailNorm }),
+            ...(registrationIp && { registration_ip: registrationIp }),
         })
 
     if (coachError) {
@@ -150,25 +196,15 @@ export async function registerAction(
         return { error: coachError.message || 'Error al configurar el perfil de coach' }
     }
 
-    // Sign in the user
+    if (isFreeTier) {
+        // Free tier: email unconfirmed — do NOT sign in yet; Supabase sends confirmation email.
+        // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
+        redirect(`/verify-email?email=${encodeURIComponent(emailNorm)}`)
+    }
+
+    // Paid tier: email auto-confirmed; sign in immediately and proceed to payment
     const supabase = await createClient()
     await supabase.auth.signInWithPassword({ email: emailNorm, password })
-
-    if (isFreeTier) {
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-        const { subject, html } = buildFreeCoachWelcomeEmail({
-            coachName: fullName,
-            brandName,
-            dashboardUrl: `${appUrl}/coach/dashboard`,
-            clientsUrl: `${appUrl}/coach/clients`,
-            subscriptionUrl: `${appUrl}/coach/subscription`,
-        })
-        // Both calls are best-effort — failures never block registration redirect
-        sendTransactionalEmail({ to: emailNorm, subject, html }).catch(() => null)
-        scheduleFreeCoachDripSequence({ email: emailNorm, coachName: fullName, brandName }).catch(() => null)
-
-        redirect('/coach/dashboard?welcome=free')
-    }
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(

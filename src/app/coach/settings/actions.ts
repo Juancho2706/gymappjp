@@ -261,7 +261,9 @@ export async function deleteCoachAccountAction(
         .eq('coach_id', coachId)
 
     // 4. Delete health data logs (sensitive data — must be erased)
-    await adminDb.from('workout_logs').delete().eq('coach_id', coachId)
+    if (clientIds.length > 0) {
+        await adminDb.from('workout_logs').delete().in('client_id', clientIds)
+    }
     if (clientIds.length > 0) {
         const { data: dailyLogs } = await adminDb
             .from('daily_nutrition_logs')

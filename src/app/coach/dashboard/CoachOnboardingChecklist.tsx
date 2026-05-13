@@ -7,16 +7,6 @@ import { CheckCircle2, Circle, Copy, ExternalLink, Monitor, Smartphone, Sparkles
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import confetti from 'canvas-confetti'
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -130,7 +120,7 @@ export function CoachOnboardingChecklist({
     const [dismissed, setDismissed] = useState(false)
     const [manualCompleted, setManualCompleted] = useState<Partial<Record<StepKey, boolean>>>({})
     const [brandTourSeen, setBrandTourSeen] = useState(false)
-    const [dismissConfirmOpen, setDismissConfirmOpen] = useState(false)
+    const isFree = subscriptionTier === 'free'
     const previousStateRef = useRef<Partial<Record<StepKey, boolean>>>({})
     const ahaRef = useRef(false)
     const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -325,7 +315,7 @@ export function CoachOnboardingChecklist({
             all_done: allDone,
         })
         setDismissed(true)
-        setDismissConfirmOpen(false)
+        toast('Guía ocultada. Podés retomarla desde el dashboard.', { duration: 3000 })
     }
 
     function resumeGuide() {
@@ -392,14 +382,30 @@ export function CoachOnboardingChecklist({
                     </div>
                     <button
                         type="button"
-                        onClick={() => setDismissConfirmOpen(true)}
-                        className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground min-h-11 min-w-11 inline-flex items-center justify-center touch-manipulation"
-                        aria-label="Ocultar guía de inicio"
+                        onClick={dismiss}
+                        className="rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground min-h-11 inline-flex items-center gap-1.5 touch-manipulation"
+                        aria-label="Saltar guía de inicio"
                     >
-                        <X className="h-4 w-4" />
+                        <X className="h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">Saltar guía</span>
                     </button>
                 </div>
             </div>
+
+            {isFree && (
+                <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3.5 text-sm">
+                    <p className="font-semibold text-foreground mb-2">Plan Free — lo que tenés incluido:</p>
+                    <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />3 alumnos activos</div>
+                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />Entrenos ilimitados</div>
+                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />App para tus alumnos</div>
+                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />Check-ins</div>
+                        <div className="flex items-center gap-1.5 text-muted-foreground/60"><span className="w-3.5 h-3.5 shrink-0 text-center leading-none">✗</span>Marca personalizada (Starter+)</div>
+                        <div className="flex items-center gap-1.5 text-muted-foreground/60"><span className="w-3.5 h-3.5 shrink-0 text-center leading-none">✗</span>Nutrición (Pro+)</div>
+                    </div>
+                    <Link href="/coach/subscription" className="mt-2 text-xs text-primary hover:opacity-80 font-medium inline-block">Ver planes →</Link>
+                </div>
+            )}
 
             {!allDone ? (
                 <>
@@ -462,32 +468,62 @@ export function CoachOnboardingChecklist({
                 <OnboardingStepBlock
                     anchorId="coach-onboarding-step-1"
                     title="1. Tu marca en la app del alumno"
-                    description="Logo, color y mensajes: lo que ves en Mi Marca es lo que ellos ven al instalar tu espacio."
+                    description={
+                        isFree
+                            ? 'Disponible desde Starter. Podés marcarlo como visto o hacer upgrade para personalizar logo, color y mensajes.'
+                            : 'Logo, color y mensajes: lo que ves en Mi Marca es lo que ellos ven al instalar tu espacio.'
+                    }
                     done={completed.profile_branding}
                     actions={
-                        <>
-                            <Link
-                                href="/coach/settings?tour=1"
-                                className={cn(
-                                    buttonVariants({ variant: 'default' }),
-                                    'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center'
-                                )}
-                            >
-                                Ir a Mi Marca y guía
-                            </Link>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                className="h-11 min-h-11 touch-manipulation text-muted-foreground"
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    toggleProfileStep()
-                                }}
-                            >
-                                {completed.profile_branding ? 'Desmarcar paso' : 'Ya lo dejé listo'}
-                            </Button>
-                        </>
+                        isFree ? (
+                            <>
+                                <Link
+                                    href="/coach/subscription"
+                                    className={cn(
+                                        buttonVariants({ variant: 'default' }),
+                                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center'
+                                    )}
+                                >
+                                    Desbloquear con Starter ↑
+                                </Link>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-11 min-h-11 touch-manipulation text-muted-foreground"
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        toggleProfileStep()
+                                    }}
+                                >
+                                    {completed.profile_branding ? 'Desmarcar paso' : 'Marcar como visto'}
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <Link
+                                    href="/coach/settings?tour=1"
+                                    className={cn(
+                                        buttonVariants({ variant: 'default' }),
+                                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center'
+                                    )}
+                                >
+                                    Ir a Mi Marca y guía
+                                </Link>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-11 min-h-11 touch-manipulation text-muted-foreground"
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        toggleProfileStep()
+                                    }}
+                                >
+                                    {completed.profile_branding ? 'Desmarcar paso' : 'Ya lo dejé listo'}
+                                </Button>
+                            </>
+                        )
                     }
                 />
 
@@ -575,33 +611,6 @@ export function CoachOnboardingChecklist({
             ) : null}
         </GlassCard>
 
-        <AlertDialog open={dismissConfirmOpen} onOpenChange={setDismissConfirmOpen}>
-            <AlertDialogContent className="rounded-2xl border-border bg-card text-foreground sm:max-w-md">
-                <AlertDialogHeader>
-                    <AlertDialogTitle>¿Ocultar la guía de inicio?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Podés volver con el botón “Continuar guía” si todavía tenés pasos pendientes. La guía no se
-                        borra: solo se minimiza en el dashboard.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter className="gap-2 sm:gap-0">
-                    <AlertDialogCancel className="h-11 min-h-11 touch-manipulation rounded-xl">
-                        Seguir viendo
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                        type="button"
-                        className="h-11 min-h-11 touch-manipulation rounded-xl bg-[color:var(--theme-primary)] text-primary-foreground hover:opacity-95"
-                        onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            dismiss()
-                        }}
-                    >
-                        Ocultar
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
         </>
     )
 }
@@ -660,6 +669,7 @@ function OnboardingGemelliStudentCard({ studentAppPath }: { studentAppPath: stri
 
 function NutritionTierBlock({ subscriptionTier }: { subscriptionTier: SubscriptionTier }) {
     const { canUseNutrition } = getTierCapabilities(subscriptionTier)
+    const isFree = subscriptionTier === 'free'
 
     if (!canUseNutrition) {
         return (
@@ -669,8 +679,10 @@ function NutritionTierBlock({ subscriptionTier }: { subscriptionTier: Subscripti
                     Planes de nutrición en Pro o superior
                 </h4>
                 <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                    Tu plan Starter incluye entrenos y marca. Cuando subas de plan, desbloqueás plantillas, catálogo de
-                    alimentos y asignación de planes nutricionales a tus alumnos.
+                    {isFree
+                        ? 'Tu plan Free incluye entrenos y check-ins. La nutrición está disponible desde Pro: plantillas, catálogo de alimentos y asignación de planes nutricionales.'
+                        : 'Tu plan Starter incluye entrenos y marca. Cuando subas de plan, desbloqueás plantillas, catálogo de alimentos y asignación de planes nutricionales a tus alumnos.'
+                    }
                 </p>
                 <Link
                     href="/coach/subscription"

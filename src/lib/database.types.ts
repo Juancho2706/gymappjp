@@ -270,10 +270,8 @@ export type Database = {
           goal_weight_kg: number | null
           id: string
           is_active: boolean | null
-          notes: string | null
           onboarding_completed: boolean
           phone: string | null
-          profile_photo_url: string | null
           subscription_start_date: string | null
           updated_at: string
           use_coach_brand_colors: boolean | null
@@ -287,10 +285,8 @@ export type Database = {
           goal_weight_kg?: number | null
           id: string
           is_active?: boolean | null
-          notes?: string | null
           onboarding_completed?: boolean
           phone?: string | null
-          profile_photo_url?: string | null
           subscription_start_date?: string | null
           updated_at?: string
           use_coach_brand_colors?: boolean | null
@@ -304,10 +300,8 @@ export type Database = {
           goal_weight_kg?: number | null
           id?: string
           is_active?: boolean | null
-          notes?: string | null
           onboarding_completed?: boolean
           phone?: string | null
-          profile_photo_url?: string | null
           subscription_start_date?: string | null
           updated_at?: string
           use_coach_brand_colors?: boolean | null
@@ -422,6 +416,7 @@ export type Database = {
           payment_provider: string
           previous_slugs: string[] | null
           primary_color: string
+          registration_ip: string | null
           slug: string
           slug_changed_at: string | null
           subscription_mp_id: string | null
@@ -460,6 +455,7 @@ export type Database = {
           payment_provider?: string
           previous_slugs?: string[] | null
           primary_color?: string
+          registration_ip?: string | null
           slug: string
           slug_changed_at?: string | null
           subscription_mp_id?: string | null
@@ -498,6 +494,7 @@ export type Database = {
           payment_provider?: string
           previous_slugs?: string[] | null
           primary_color?: string
+          registration_ip?: string | null
           slug?: string
           slug_changed_at?: string | null
           subscription_mp_id?: string | null
@@ -1789,7 +1786,6 @@ export type Database = {
         Row: {
           block_id: string
           client_id: string
-          coach_id: string | null
           exercise_name_at_log: string | null
           id: string
           logged_at: string
@@ -1805,7 +1801,6 @@ export type Database = {
         Insert: {
           block_id: string
           client_id: string
-          coach_id?: string | null
           exercise_name_at_log?: string | null
           id?: string
           logged_at?: string
@@ -1821,7 +1816,6 @@ export type Database = {
         Update: {
           block_id?: string
           client_id?: string
-          coach_id?: string | null
           exercise_name_at_log?: string | null
           id?: string
           logged_at?: string
@@ -2115,6 +2109,7 @@ export type Database = {
           billing_cycle: string
           brand_name: string
           client_count: number
+          coach_last_login_at: string
           created_at: string
           current_period_end: string
           days_until_expiry: number
@@ -2267,6 +2262,12 @@ export type Database = {
           serving_size: number
           serving_unit: string | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "foods"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       unaccent: { Args: { "": string }; Returns: string }
     }
