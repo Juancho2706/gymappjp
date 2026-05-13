@@ -28,7 +28,7 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
     return (
         <main
             className={cn(
-                'relative flex min-h-0 min-w-0 flex-1 flex-col [overflow-x:clip] overflow-y-auto overscroll-y-contain md:overscroll-auto pb-[var(--mobile-content-bottom-offset)] md:pb-0',
+                'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[var(--mobile-content-bottom-offset)] md:pb-0',
                 COACH_MOBILE_TOP_CHROME_PT,
                 'md:pt-0'
             )}
