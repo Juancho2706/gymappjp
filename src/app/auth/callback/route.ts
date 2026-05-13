@@ -8,27 +8,41 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code')
     const next = searchParams.get('next') ?? '/coach/dashboard'
 
+    console.log('[auth/callback] hit', { hasCode: !!code, next, origin })
+
     if (code) {
         const supabase = await createClient()
         const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+        console.log('[auth/callback] exchangeCodeForSession', {
+            userId: data?.user?.id ?? null,
+            email: data?.user?.email ?? null,
+            error: error?.message ?? null,
+        })
+
         if (!error && data.user) {
-            // Check if this user already has a coaches record
             const adminDb = createServiceRoleClient()
-            const { data: coach } = await adminDb
+            const { data: coach, error: coachError } = await adminDb
                 .from('coaches')
                 .select('id')
                 .eq('id', data.user.id)
                 .maybeSingle()
 
+            console.log('[auth/callback] coaches lookup', {
+                found: !!coach,
+                coachError: coachError?.message ?? null,
+            })
+
             if (coach) {
-                // Returning coach — go straight to dashboard
+                console.log('[auth/callback] returning coach → /coach/dashboard')
                 return NextResponse.redirect(`${origin}/coach/dashboard`)
             }
 
-            // New OAuth user without coaches record — always go to onboarding
+            console.log('[auth/callback] new OAuth user → /coach/onboarding/complete')
             return NextResponse.redirect(`${origin}/coach/onboarding/complete`)
         }
     }
 
+    console.log('[auth/callback] fallback → login?error=auth_callback_failed')
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
 }
