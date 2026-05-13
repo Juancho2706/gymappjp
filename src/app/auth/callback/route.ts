@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
                 return NextResponse.redirect(`${origin}/coach/dashboard`)
             }
 
-            // New OAuth user without coaches record — go to onboarding/complete
-            return NextResponse.redirect(`${origin}${next}`)
+            // New OAuth user without coaches record — always go to onboarding
+            return NextResponse.redirect(`${origin}/coach/onboarding/complete`)
         }
     }
 
