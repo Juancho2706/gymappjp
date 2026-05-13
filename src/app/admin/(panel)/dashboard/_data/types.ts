@@ -55,6 +55,7 @@ export interface CoachListItem {
     days_until_expiry: number | null
     utilization_pct: number
     last_activity_at: string | null
+    coach_last_login_at: string | null
 }
 
 export interface ClientListItem {

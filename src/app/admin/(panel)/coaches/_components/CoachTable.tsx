@@ -16,13 +16,22 @@ import { CoachCreateSheet } from './CoachCreateSheet'
 import type { CoachListItem } from '../../dashboard/_data/types'
 
 function computeHealthScore(c: CoachListItem): number {
-    let s = ({ active: 40, trialing: 30, past_due: 10, canceled: 5 } as Record<string, number>)[c.subscription_status ?? ''] ?? 0
+    const isFree = c.subscription_tier === 'free'
+    // free tier: max 80 (no expiry component — always null, penalizaría injustamente)
+    let s = ({ active: isFree ? 30 : 40, trialing: 30, past_due: 10, canceled: 5 } as Record<string, number>)[c.subscription_status ?? ''] ?? 0
     const u = c.utilization_pct ?? 0
     s += u >= 80 ? 30 : u >= 50 ? 20 : u >= 20 ? 10 : 0
-    const d = c.days_until_expiry
-    if (d !== null && d !== undefined) s += d > 30 ? 20 : d > 15 ? 10 : d > 7 ? 5 : 0
+    if (!isFree) {
+        const d = c.days_until_expiry
+        if (d !== null && d !== undefined) s += d > 30 ? 20 : d > 15 ? 10 : d > 7 ? 5 : 0
+    }
     if (c.last_activity_at) s += 10
     return s
+}
+
+function healthColor(score: number, isFree: boolean): string {
+    if (isFree) return score >= 60 ? 'bg-[--admin-green]' : score >= 30 ? 'bg-[--admin-amber]' : 'bg-[--admin-red]'
+    return score >= 70 ? 'bg-[--admin-green]' : score >= 40 ? 'bg-[--admin-amber]' : 'bg-[--admin-red]'
 }
 
 function LastActivityDays({ iso }: { iso: string }) {
@@ -35,8 +44,8 @@ function LastActivityDays({ iso }: { iso: string }) {
     return <span className="text-xs text-[--admin-text-3]">hace {d}d</span>
 }
 
-function HealthBar({ score }: { score: number }) {
-    const color = score >= 70 ? 'bg-[--admin-green]' : score >= 40 ? 'bg-[--admin-amber]' : 'bg-[--admin-red]'
+function HealthBar({ score, isFree }: { score: number; isFree: boolean }) {
+    const color = healthColor(score, isFree)
     return (
         <div className="flex items-center gap-1.5">
             <div className="h-1.5 w-16 rounded-full bg-[--admin-border] overflow-hidden">
@@ -177,13 +186,13 @@ export function CoachTable({ coaches, total }: Props) {
                                 <th className="px-3 py-2 text-left">
                                     <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">
                                         Health
-                                        <InfoTooltip content="Puntuación 0-100: estado de suscripción (40pts) + % uso alumnos (30pts) + días hasta vencimiento (20pts) + actividad reciente (10pts). Verde >70, ámbar 40-70, rojo <40." />
+                                        <InfoTooltip content="Puntuación 0-100: estado de suscripción + uso de alumnos (30pts) + días hasta vencimiento (20pts, solo pagantes) + actividad reciente (10pts). Free: escala 0-80." />
                                     </span>
                                 </th>
                                 <th className="px-3 py-2 text-left">
                                     <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">
                                         Provider
-                                        <InfoTooltip content="Origen del pago. 'beta' = acceso de prueba sin pago. 'mercadopago' = suscripción activa pagando. 'stripe' = integración futura." />
+                                        <InfoTooltip content="Origen del pago. 'free/admin' = cuenta gratuita. 'beta' = acceso prueba sin pago. 'MP' = suscripción activa pagando. 'internal' = cuenta interna." />
                                     </span>
                                 </th>
                                 <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Tier</th>
@@ -193,18 +202,12 @@ export function CoachTable({ coaches, total }: Props) {
                                         <InfoTooltip content="active=pagando, trialing=en prueba, expired=debe reactivar, past_due=cobro fallido, paused=suspendido por admin, canceled=canceló pero acceso hasta vencimiento." />
                                     </span>
                                 </th>
-                                <th className="px-3 py-2 text-left">
-                                    <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">
-                                        Util.
-                                        <InfoTooltip content="Alumnos activos vs el máximo permitido por su plan. Al llegar al 100% el coach no puede agregar más alumnos. Pro=30, Elite=60, Scale=500." />
-                                    </span>
-                                </th>
                                 <AdminSortHeader label="Vence" sortKey="expiry" />
                                 <AdminSortHeader label="Alumnos" sortKey="clients" />
                                 <th className="px-3 py-2 text-left">
                                     <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">
-                                        Actividad
-                                        <InfoTooltip content="Última vez que algún alumno de este coach registró una sesión de entrenamiento. Indica si la plataforma se está usando activamente." />
+                                        Último login
+                                        <InfoTooltip content="Última vez que el coach inició sesión en la plataforma." />
                                     </span>
                                 </th>
                                 <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Registrado</th>
@@ -220,6 +223,7 @@ export function CoachTable({ coaches, total }: Props) {
                                 </tr>
                             )}
                             {coaches.map(c => {
+                                const isFree = c.subscription_tier === 'free'
                                 const score = computeHealthScore(c)
                                 const isSelected = selected.has(c.id)
                                 return (
@@ -243,7 +247,7 @@ export function CoachTable({ coaches, total }: Props) {
                                                 <p className="font-mono text-[10px] text-[--admin-text-3]">/c/{c.slug}</p>
                                             </button>
                                         </td>
-                                        <td className="px-3 py-2.5"><HealthBar score={score} /></td>
+                                        <td className="px-3 py-2.5"><HealthBar score={score} isFree={isFree} /></td>
                                         <td className="px-3 py-2.5">
                                             <AdminStatusBadge value={c.payment_provider ?? ''} type="provider" />
                                         </td>
@@ -251,32 +255,23 @@ export function CoachTable({ coaches, total }: Props) {
                                             <AdminStatusBadge value={c.subscription_tier ?? ''} type="tier" />
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            <AdminStatusBadge value={c.subscription_status ?? ''} />
-                                        </td>
-                                        <td className="px-3 py-2.5">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="h-1.5 w-12 rounded-full bg-[--admin-border] overflow-hidden">
-                                                    <div
-                                                        className={`h-full rounded-full ${(c.utilization_pct ?? 0) >= 90 ? 'bg-[--admin-red]' : (c.utilization_pct ?? 0) >= 70 ? 'bg-[--admin-amber]' : 'bg-[--admin-accent]'}`}
-                                                        style={{ width: `${Math.min(c.utilization_pct ?? 0, 100)}%` }}
-                                                    />
-                                                </div>
-                                                <span className="font-mono text-[11px] tabular-nums text-[--admin-text-3]">{c.utilization_pct ?? 0}%</span>
-                                            </div>
+                                            <AdminStatusBadge
+                                                value={isFree && c.subscription_status === 'active' ? 'free_active' : (c.subscription_status ?? '')}
+                                            />
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <ExpiryCell days={c.days_until_expiry} />
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <span className="font-mono text-xs tabular-nums text-[--admin-text-2]">
-                                                {c.active_client_count}/{c.client_count}
+                                                {c.active_client_count}/{c.max_clients ?? '?'}
                                             </span>
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            {c.last_activity_at ? (
-                                                <LastActivityDays iso={c.last_activity_at} />
+                                            {c.coach_last_login_at ? (
+                                                <LastActivityDays iso={c.coach_last_login_at} />
                                             ) : (
-                                                <span className="text-xs text-[--admin-text-3]">sin act.</span>
+                                                <span className="text-xs text-[--admin-text-3]">nunca</span>
                                             )}
                                         </td>
                                         <td className="px-3 py-2.5">

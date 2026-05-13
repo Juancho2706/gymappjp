@@ -51,6 +51,40 @@ export const PLATFORM_EMAIL_TAKEN_ES =
 
 const BLOCKED_EMAIL_DOMAINS = ['eva-app.cl']
 
+// Top disposable/temporary email domains. Full list: github.com/disposable-email-domains/disposable-email-domains
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+    '0815.ru','10minutemail.com','10minutemail.net','10minutemail.org','10minutemail.de',
+    '10minutemail.co.uk','10minutemail.eu','10minutemail.info','10minutemail.ru','10minutemail.us',
+    '10minutemail.be','10minutemail.cf','10minutemail.ga','10minutemail.gq','10minutemail.ml',
+    '20minutemail.com','20minutemail.it',
+    'binkmail.com','bob.email','cfl.cool',
+    'damnthespam.com','discard.email','discardmail.com','dispostable.com',
+    'fakeinbox.com','filzmail.com',
+    'getonemail.com','grr.la',
+    'guerrillamail.biz','guerrillamail.com','guerrillamail.de','guerrillamail.info',
+    'guerrillamail.net','guerrillamail.org','guerrillamailblock.com',
+    'humaility.com',
+    'incognitomail.com',
+    'junk.to',
+    'mailbait.info','mailbucket.org','maildrop.cc','mailexpire.com','mailfreeonline.com',
+    'mailinator.com','mailme.lv','mailnesia.com','mailnull.com','malinator.com',
+    'mt2015.com','mytrashmail.com','mzico.com',
+    'odnorazovoe.ru','one-time.email',
+    'randommail.me',
+    'sharklasers.com','spam.la','spam4.me','spambog.com','spambox.us',
+    'spamboy.com','spamgourmet.com','spamgourmet.net','spamgourmet.org',
+    'spamhereplease.com','spamscrap.com','spamspot.com',
+    'tempail.com','temp-mail.org','tempinbox.com','tempmail.com','tempmail.net',
+    'throwam.com','trashcanmail.com','trash-mail.at','trashmail.at','trashmail.com',
+    'trashmail.io','trashmail.me','trashmail.net','trashmail.org','trashmailer.com',
+    'trbvm.com','yepmail.net','yopmail.com','yopmail.fr',
+])
+
+export function isDisposableEmail(email: string): boolean {
+    const domain = email.trim().toLowerCase().split('@')[1] ?? ''
+    return DISPOSABLE_EMAIL_DOMAINS.has(domain)
+}
+
 /**
  * Server-only: requires service_role (or a role granted EXECUTE on the RPC).
  */
@@ -66,6 +100,9 @@ export async function assertPlatformEmailAvailable(
     const domain = normalized.split('@')[1] ?? ''
     if (BLOCKED_EMAIL_DOMAINS.includes(domain)) {
         return { ok: false, error: 'Este dominio de correo no está permitido para registro.' }
+    }
+    if (isDisposableEmail(normalized)) {
+        return { ok: false, error: 'Los correos temporales o desechables no están permitidos. Usa tu correo personal o profesional.' }
     }
 
     const { data, error } = await admin.rpc('check_platform_email_availability', {

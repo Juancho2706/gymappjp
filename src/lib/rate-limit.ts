@@ -79,6 +79,9 @@ function getRecipesRatelimit(): Ratelimit | null {
 }
 
 export function clientIpFromRequest(request: NextRequest | Request): string {
+    // CF-Connecting-IP is the real client IP when Cloudflare is proxying
+    const cfIp = request.headers.get('cf-connecting-ip')
+    if (cfIp) return cfIp.trim()
     const xf = request.headers.get('x-forwarded-for')
     if (xf) return xf.split(',')[0]!.trim()
     const realIp = request.headers.get('x-real-ip')
