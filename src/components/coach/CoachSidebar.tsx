@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -86,13 +86,12 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
-    const [isCollapsed, setIsCollapsed] = useState(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('sidebar-collapsed')
-            return saved === 'true'
-        }
-        return false
-    })
+    const [isCollapsed, setIsCollapsed] = useState(false)
+
+    useEffect(() => {
+        const saved = localStorage.getItem('sidebar-collapsed')
+        if (saved === 'true') setIsCollapsed(true)
+    }, [])
 
     const activeColorStyle = primaryColor ? { color: primaryColor } : undefined
     const activeBgStyle = primaryColor ? { 

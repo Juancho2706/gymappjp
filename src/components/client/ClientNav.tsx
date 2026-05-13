@@ -108,7 +108,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
         <>
             {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
             <aside className={cn(
-                "client-nav-desktop fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-dvh bg-background/80 backdrop-blur-xl md:bg-card border-t border-border/10 md:border-t-0 md:border-r flex flex-col transition-all duration-300 pl-safe pr-safe md:pl-0 md:pr-0",
+                "client-nav-desktop fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-dvh bg-background/80 backdrop-blur-xl md:bg-card border-t border-border/10 md:border-t-0 md:border-r flex flex-col transition-all duration-300 pl-safe pr-safe pb-safe md:pl-0 md:pr-0 md:pb-0",
                 isCollapsed ? "md:w-20" : "md:w-64",
                 isWorkout && "hidden md:flex"
             )}>
@@ -222,9 +222,6 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                         </span>
                     </button>
                 </nav>
-
-                {/* iOS safe-area spacer: extends nav background under home indicator, no content */}
-                <div aria-hidden className="h-[var(--pwa-sab,env(safe-area-inset-bottom,0px))] flex-none md:hidden" />
 
                 {/* Bottom area (Desktop only) */}
                     <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 items-center" : "px-3 py-4 space-y-2")}>
