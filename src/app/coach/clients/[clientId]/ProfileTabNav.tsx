@@ -68,7 +68,7 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
             className={cn(
                 'sticky z-20 mx-0 mb-2 w-full max-w-full min-w-0 border-b border-border/50 px-0 dark:border-white/10',
                 'bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75',
-                'top-[3.5rem] md:top-0 print:static print:border-0 print:bg-transparent'
+                'top-[var(--coach-mobile-content-top-offset)] md:top-0 print:static print:border-0 print:bg-transparent'
             )}
         >
             <div className="relative min-w-0">

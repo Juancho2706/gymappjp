@@ -4,6 +4,7 @@ import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
 import { NewsFeedProvider } from '@/components/coach/NewsFeedProvider'
 import { getCoach } from '@/lib/coach/get-coach'
+import { PwaRegister } from '@/components/PwaRegister'
 import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
@@ -104,6 +105,7 @@ export default async function CoachLayout({
                 <CoachSuccessAnimationLazy />
             </NewsFeedProvider>
         </div>
+        <PwaRegister />
         </>
     )
 }
