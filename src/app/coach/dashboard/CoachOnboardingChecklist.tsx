@@ -7,6 +7,7 @@ import { CheckCircle2, Circle, Copy, ExternalLink, Monitor, Smartphone, Sparkles
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import confetti from 'canvas-confetti'
+import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -380,15 +381,19 @@ export function CoachOnboardingChecklist({
                             Completado
                         </p>
                     </div>
-                    <button
+                    <motion.button
                         type="button"
                         onClick={dismiss}
-                        className="rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground min-h-11 inline-flex items-center gap-1.5 touch-manipulation"
                         aria-label="Saltar guía de inicio"
+                        animate={{ scale: [1, 1.04, 1] }}
+                        transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 3, ease: 'easeInOut' }}
+                        whileHover={{ scale: 1.07 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs font-semibold text-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-primary min-h-11 touch-manipulation"
                     >
-                        <X className="h-4 w-4 shrink-0" />
-                        <span className="hidden sm:inline">Saltar guía</span>
-                    </button>
+                        <X className="h-3.5 w-3.5 shrink-0" />
+                        <span>Saltar guía</span>
+                    </motion.button>
                 </div>
             </div>
 

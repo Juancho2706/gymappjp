@@ -109,7 +109,7 @@ export function FreeWelcomeModal() {
                     <button
                         type="button"
                         onClick={dismiss}
-                        className="w-full h-11 rounded-xl bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
+                        className="w-full h-11 rounded-xl bg-primary text-sm font-bold text-white hover:bg-primary/90 transition-colors"
                     >
                         Empezar ahora →
                     </button>
