@@ -48,8 +48,8 @@ function ExchangeInner() {
                 console.log('[exchange] login intent + no coach → /login?error=no_google_account')
                 router.replace('/login?error=no_google_account')
             } else {
-                console.log('[exchange] register intent + no coach → /coach/onboarding/complete')
-                window.location.replace('/coach/onboarding/complete')
+                console.log('[exchange] register intent + no coach → /register?from=google')
+                window.location.replace('/register?from=google')
             }
         })
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Script from 'next/script'
 import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles } from 'lucide-react'
 import { registerAction, type RegisterState } from './actions'
+import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coach/onboarding/complete/_actions/complete.actions'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -23,6 +24,7 @@ import {
 } from '@/lib/constants'
 
 const initialState: RegisterState = {}
+const googleInitialState: CompleteOnboardingState = {}
 const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
@@ -67,12 +69,14 @@ async function handleGoogleOAuth() {
 
 export default function RegisterPage() {
     const [state, formAction] = useActionState(registerAction, initialState)
+    const [googleState, googleFormAction] = useActionState(completeOAuthOnboarding, googleInitialState)
     const [step, setStep] = useState<1 | 2 | 3>(1)
     const [fullName, setFullName] = useState('')
     const [brandName, setBrandName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [clientError, setClientError] = useState<string | null>(null)
+    const [fromGoogle, setFromGoogle] = useState(false)
     const [tier, setTier] = useState<SubscriptionTier>('starter')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
@@ -86,9 +90,24 @@ export default function RegisterPage() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
+
+        if (params.get('from') === 'google') {
+            setFromGoogle(true)
+            const supabase = createClient()
+            supabase.auth.getUser().then(({ data }) => {
+                if (data.user) {
+                    const name =
+                        (data.user.user_metadata?.full_name as string | undefined) ??
+                        (data.user.user_metadata?.name as string | undefined) ??
+                        ''
+                    setFullName(name)
+                    setEmail(data.user.email ?? '')
+                }
+            })
+        }
+
         const rawTier = params.get('tier')
-        const normalizedTier =
-            rawTier === 'starter_lite' ? 'starter' : rawTier
+        const normalizedTier = rawTier === 'starter_lite' ? 'starter' : rawTier
         const queryCycle = params.get('cycle')
         const nextTier =
             normalizedTier && normalizedTier in TIER_CONFIG
@@ -115,9 +134,16 @@ export default function RegisterPage() {
 
     function nextStep() {
         if (step === 1) {
-            if (!fullName || !brandName || !email || password.length < 8) {
-                setClientError('Completa tus datos antes de continuar al paso de plan y pago.')
-                return
+            if (fromGoogle) {
+                if (!fullName || !brandName) {
+                    setClientError('Completá tu nombre y nombre de marca antes de continuar.')
+                    return
+                }
+            } else {
+                if (!fullName || !brandName || !email || password.length < 8) {
+                    setClientError('Completa tus datos antes de continuar al paso de plan y pago.')
+                    return
+                }
             }
         }
         setClientError(null)
@@ -140,15 +166,17 @@ export default function RegisterPage() {
                     Crea tu cuenta
                 </h1>
                 <p className="mt-2 text-muted-foreground text-sm">
-                    {isFreeTier
-                        ? `Paso ${step} de 3 — Regístrate y accedé gratis`
-                        : `Paso ${step} de 3 — Regístrate, elige plan y activa tu suscripción`}
+                    {fromGoogle && step === 1
+                        ? 'Paso 1 de 3 — Un solo dato más y listo'
+                        : isFreeTier
+                            ? `Paso ${step} de 3 — Regístrate y accedé gratis`
+                            : `Paso ${step} de 3 — Regístrate, elige plan y activa tu suscripción`}
                 </p>
             </div>
 
             {/* Card */}
             <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
-                <form action={formAction} className="space-y-4">
+                <form action={fromGoogle ? googleFormAction : formAction} className="space-y-4">
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
                     {/* Honeypot — bots fill this, humans don't */}
@@ -164,10 +192,17 @@ export default function RegisterPage() {
                         <>
                             <input type="hidden" name="full_name" value={fullName} />
                             <input type="hidden" name="brand_name" value={brandName} />
-                            <input type="hidden" name="email" value={email} />
-                            <input type="hidden" name="password" value={password} />
+                            {!fromGoogle && <input type="hidden" name="email" value={email} />}
+                            {!fromGoogle && <input type="hidden" name="password" value={password} />}
                         </>
                     ) : null}
+                    {/* When in Google mode and on step 1, pass name+brand as hidden so action reads them */}
+                    {fromGoogle && step === 1 && (
+                        <>
+                            <input type="hidden" name="full_name" value={fullName} />
+                            <input type="hidden" name="brand_name" value={brandName} />
+                        </>
+                    )}
 
                     <div className="mb-2 flex items-center gap-2">
                         {[1, 2, 3].map((s) => (
@@ -183,6 +218,18 @@ export default function RegisterPage() {
 
                     {step === 1 ? (
                         <>
+                    {fromGoogle && email && (
+                        <div className="flex items-center gap-2 rounded-xl bg-secondary/60 border border-border px-3 py-2 text-xs text-muted-foreground">
+                            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                            </svg>
+                            <span>Cuenta Google: <strong className="text-foreground">{email}</strong></span>
+                        </div>
+                    )}
+
                     {/* Full Name */}
                     <div className="space-y-1.5">
                         <label htmlFor="full_name" className="text-foreground text-sm font-medium">
@@ -192,7 +239,7 @@ export default function RegisterPage() {
                             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                             <input
                                 id="full_name"
-                                name="full_name"
+                                name={fromGoogle ? undefined : 'full_name'}
                                 type="text"
                                 placeholder="Juan Pérez"
                                 required
@@ -212,7 +259,7 @@ export default function RegisterPage() {
                             <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                             <input
                                 id="brand_name"
-                                name="brand_name"
+                                name={fromGoogle ? undefined : 'brand_name'}
                                 type="text"
                                 placeholder="Ej: JotaP Fitness"
                                 required
@@ -226,48 +273,50 @@ export default function RegisterPage() {
                         </p>
                     </div>
 
-                    {/* Email */}
-                    <div className="space-y-1.5">
-                        <label htmlFor="email" className="text-foreground text-sm font-medium">
-                            Email
-                        </label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                            <input
-                                id="email"
-                                name="email"
-                                type="email"
-                                placeholder="coach@ejemplo.com"
-                                autoComplete="email"
-                                required
-                                value={email}
-                                onChange={(event) => setEmail(event.target.value)}
-                                className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                            />
+                    {/* Email + Password — hidden for Google OAuth */}
+                    {!fromGoogle && (
+                        <>
+                        <div className="space-y-1.5">
+                            <label htmlFor="email" className="text-foreground text-sm font-medium">
+                                Email
+                            </label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                <input
+                                    id="email"
+                                    name="email"
+                                    type="email"
+                                    placeholder="coach@ejemplo.com"
+                                    autoComplete="email"
+                                    required
+                                    value={email}
+                                    onChange={(event) => setEmail(event.target.value)}
+                                    className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                />
+                            </div>
                         </div>
-                    </div>
-
-                    {/* Password */}
-                    <div className="space-y-1.5">
-                        <label htmlFor="password" className="text-foreground text-sm font-medium">
-                            Contraseña
-                        </label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                            <input
-                                id="password"
-                                name="password"
-                                type="password"
-                                placeholder="Mínimo 8 caracteres"
-                                autoComplete="new-password"
-                                required
-                                minLength={8}
-                                value={password}
-                                onChange={(event) => setPassword(event.target.value)}
-                                className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                            />
+                        <div className="space-y-1.5">
+                            <label htmlFor="password" className="text-foreground text-sm font-medium">
+                                Contraseña
+                            </label>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    placeholder="Mínimo 8 caracteres"
+                                    autoComplete="new-password"
+                                    required
+                                    minLength={8}
+                                    value={password}
+                                    onChange={(event) => setPassword(event.target.value)}
+                                    className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                />
+                            </div>
                         </div>
-                    </div>
+                        </>
+                    )}
                         </>
                     ) : null}
 
@@ -424,9 +473,9 @@ export default function RegisterPage() {
                     )}
 
                     {/* Error */}
-                    {(clientError || state?.error) && (
+                    {(clientError || state?.error || googleState?.error) && (
                         <div className="animate-fade-in rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                            {state.error ?? clientError}
+                            {clientError ?? (fromGoogle ? googleState?.error : state?.error)}
                         </div>
                     )}
 
@@ -507,26 +556,29 @@ export default function RegisterPage() {
                     </div>
                 </form>
 
-                {/* Google OAuth */}
-                <div className="mt-6 flex items-center gap-3">
-                    <div className="flex-1 h-px bg-border" />
-                    <span className="text-xs text-muted-foreground">o registrate con</span>
-                    <div className="flex-1 h-px bg-border" />
-                </div>
-
-                <button
-                    type="button"
-                    onClick={handleGoogleOAuth}
-                    className="mt-4 w-full h-11 flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-colors text-sm font-medium text-foreground"
-                >
-                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                    </svg>
-                    Continuar con Google
-                </button>
+                {/* Google OAuth — hide when already in Google flow */}
+                {!fromGoogle && (
+                    <>
+                        <div className="mt-6 flex items-center gap-3">
+                            <div className="flex-1 h-px bg-border" />
+                            <span className="text-xs text-muted-foreground">o registrate con</span>
+                            <div className="flex-1 h-px bg-border" />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleGoogleOAuth}
+                            className="mt-4 w-full h-11 flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-colors text-sm font-medium text-foreground"
+                        >
+                            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                            </svg>
+                            Registrarse con Google
+                        </button>
+                    </>
+                )}
 
                 {/* Divider */}
                 <div className="mt-6 flex items-center gap-3">
