@@ -37,13 +37,14 @@ function ExchangeInner() {
 
             if (coach) {
                 // Existing coach — go to dashboard regardless of intent
-                router.replace('/coach/dashboard')
+                // Use window.location for a full reload so server reads the fresh session cookie
+                window.location.replace('/coach/dashboard')
             } else if (isLoginIntent) {
                 // Tried to LOGIN but has no account — show friendly error
                 router.replace('/login?error=no_google_account')
             } else {
-                // Tried to REGISTER — go to onboarding to complete profile + pick plan
-                router.replace('/coach/onboarding/complete')
+                // Tried to REGISTER — full reload so server-side getUser() sees the new session
+                window.location.replace('/coach/onboarding/complete')
             }
         })
     // eslint-disable-next-line react-hooks/exhaustive-deps
