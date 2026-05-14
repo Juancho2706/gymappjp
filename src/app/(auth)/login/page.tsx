@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, Suspense } from 'react'
 import { useFormStatus } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -63,11 +63,20 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
     confirmation_expired: 'El enlace de confirmación expiró. Solicitá uno nuevo.',
 }
 
-export default function CoachLoginPage() {
-    const [state, formAction] = useActionState(loginAction, initialState)
+function UrlErrorBanner() {
     const searchParams = useSearchParams()
     const urlError = searchParams.get('error')
-    const urlErrorMessage = urlError ? (AUTH_ERROR_MESSAGES[urlError] ?? 'Ocurrió un error. Intentá de nuevo.') : null
+    if (!urlError) return null
+    const msg = AUTH_ERROR_MESSAGES[urlError] ?? 'Ocurrió un error. Intentá de nuevo.'
+    return (
+        <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+            {msg}
+        </div>
+    )
+}
+
+export default function CoachLoginPage() {
+    const [state, formAction] = useActionState(loginAction, initialState)
 
     return (
         <div className="w-full flex flex-col lg:flex-row">
@@ -201,9 +210,12 @@ export default function CoachLoginPage() {
                             </div>
                         </div>
 
-                        {(state?.error || urlErrorMessage) && (
+                        <Suspense>
+                            <UrlErrorBanner />
+                        </Suspense>
+                        {state?.error && (
                             <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                                {state?.error ?? urlErrorMessage}
+                                {state.error}
                             </div>
                         )}
 
