@@ -40,7 +40,13 @@ function LastActivityDays({ iso }: { iso: string }) {
         setNowMs(Date.now())
     }, [])
     if (nowMs === null) return <span className="text-[--admin-text-3]">…</span>
-    const d = Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)))
+    const diffMs = nowMs - new Date(iso).getTime()
+    const d = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
+    if (d === 0) {
+        const h = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)))
+        if (h === 0) return <span className="text-xs text-emerald-500 font-medium">hace &lt;1h</span>
+        return <span className="text-xs text-emerald-500 font-medium">hace {h}h</span>
+    }
     return <span className="text-xs text-[--admin-text-3]">hace {d}d</span>
 }
 
