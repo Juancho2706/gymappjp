@@ -269,7 +269,7 @@ export default function RegisterPage() {
                             />
                         </div>
                         <p className="text-xs text-muted-foreground pl-1">
-                            Se generará tu URL automáticamente: omnicoach.app/<strong>tu-marca</strong>
+                            Se generará tu URL automáticamente: eva-app.cl/c/<strong>tu-marca</strong>
                         </p>
                     </div>
 
