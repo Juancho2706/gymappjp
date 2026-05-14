@@ -14,7 +14,10 @@ function ExchangeInner() {
         const intent = searchParams.get('intent') ?? 'login'
         const isLoginIntent = intent !== 'register'
 
+        console.log('[exchange] params:', { code: code ? code.slice(0, 8) + '…' : null, intent, isLoginIntent })
+
         if (!code) {
+            console.warn('[exchange] no oauth_code in URL — full params:', searchParams.toString())
             router.replace('/login?error=auth_callback_failed')
             return
         }
@@ -23,27 +26,29 @@ function ExchangeInner() {
 
         supabase.auth.exchangeCodeForSession(code).then(async ({ data, error }) => {
             if (error || !data.user) {
-                console.error('[auth/exchange] exchange failed:', error?.message)
+                console.error('[exchange] exchangeCodeForSession failed:', error?.message, error)
                 router.replace('/login?error=auth_callback_failed')
                 return
             }
 
-            // Check if this Google account already has a coaches record
-            const { data: coach } = await supabase
+            console.log('[exchange] session ok, user:', data.user.id, data.user.email)
+
+            const { data: coach, error: coachErr } = await supabase
                 .from('coaches')
                 .select('id')
                 .eq('id', data.user.id)
                 .maybeSingle()
 
+            console.log('[exchange] coach check:', { coach, coachErr })
+
             if (coach) {
-                // Existing coach — go to dashboard regardless of intent
-                // Use window.location for a full reload so server reads the fresh session cookie
+                console.log('[exchange] existing coach → /coach/dashboard')
                 window.location.replace('/coach/dashboard')
             } else if (isLoginIntent) {
-                // Tried to LOGIN but has no account — show friendly error
+                console.log('[exchange] login intent + no coach → /login?error=no_google_account')
                 router.replace('/login?error=no_google_account')
             } else {
-                // Tried to REGISTER — full reload so server-side getUser() sees the new session
+                console.log('[exchange] register intent + no coach → /coach/onboarding/complete')
                 window.location.replace('/coach/onboarding/complete')
             }
         })
