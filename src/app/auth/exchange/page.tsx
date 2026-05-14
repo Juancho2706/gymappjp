@@ -10,7 +10,7 @@ function ExchangeInner() {
     const searchParams = useSearchParams()
 
     useEffect(() => {
-        const code = searchParams.get('code')
+        const code = searchParams.get('oauth_code')
         const next = searchParams.get('next') ?? '/coach/dashboard'
 
         if (!code) {
