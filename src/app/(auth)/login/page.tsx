@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, Lock, Mail, BarChart2, Users, Dumbbell, Sparkles, ArrowRight } from 'lucide-react'
 import { loginAction, type LoginState } from './actions'
@@ -57,8 +58,16 @@ function SubmitButton() {
     )
 }
 
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+    auth_callback_failed: 'No se pudo completar el inicio de sesión con Google. Intentá de nuevo.',
+    confirmation_expired: 'El enlace de confirmación expiró. Solicitá uno nuevo.',
+}
+
 export default function CoachLoginPage() {
     const [state, formAction] = useActionState(loginAction, initialState)
+    const searchParams = useSearchParams()
+    const urlError = searchParams.get('error')
+    const urlErrorMessage = urlError ? (AUTH_ERROR_MESSAGES[urlError] ?? 'Ocurrió un error. Intentá de nuevo.') : null
 
     return (
         <div className="w-full flex flex-col lg:flex-row">
@@ -192,9 +201,9 @@ export default function CoachLoginPage() {
                             </div>
                         </div>
 
-                        {state?.error && (
+                        {(state?.error || urlErrorMessage) && (
                             <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                                {state.error}
+                                {state?.error ?? urlErrorMessage}
                             </div>
                         )}
 
