@@ -61,7 +61,7 @@ async function handleGoogleOAuth() {
     const origin = window.location.origin
     await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${origin}/auth/callback?next=/coach/onboarding/complete` },
+        options: { redirectTo: `${origin}/auth/register-callback` },
     })
 }
 

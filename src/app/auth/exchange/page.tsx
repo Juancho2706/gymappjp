@@ -11,8 +11,8 @@ function ExchangeInner() {
 
     useEffect(() => {
         const code = searchParams.get('oauth_code')
-        const next = searchParams.get('next') ?? '/coach/dashboard'
-        const isLoginIntent = next === '/coach/dashboard'
+        const intent = searchParams.get('intent') ?? 'login'
+        const isLoginIntent = intent !== 'register'
 
         if (!code) {
             router.replace('/login?error=auth_callback_failed')

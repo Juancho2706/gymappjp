@@ -7,11 +7,10 @@ export async function GET(request: NextRequest) {
 
     if (code) {
         const exchangeUrl = new URL(`${origin}/auth/exchange`)
-        // Use 'oauth_code' not 'code' — Supabase's detectSessionInUrl auto-fires on ?code=
         exchangeUrl.searchParams.set('oauth_code', code)
-        exchangeUrl.searchParams.set('intent', 'login')
+        exchangeUrl.searchParams.set('intent', 'register')
         return NextResponse.redirect(exchangeUrl.toString())
     }
 
-    return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
+    return NextResponse.redirect(`${origin}/register?error=auth_callback_failed`)
 }
