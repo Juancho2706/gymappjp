@@ -12,6 +12,7 @@ function ExchangeInner() {
     useEffect(() => {
         const code = searchParams.get('oauth_code')
         const next = searchParams.get('next') ?? '/coach/dashboard'
+        const isLoginIntent = next === '/coach/dashboard'
 
         if (!code) {
             router.replace('/login?error=auth_callback_failed')
@@ -20,15 +21,30 @@ function ExchangeInner() {
 
         const supabase = createClient()
 
-        supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        supabase.auth.exchangeCodeForSession(code).then(async ({ data, error }) => {
             if (error || !data.user) {
                 console.error('[auth/exchange] exchange failed:', error?.message)
                 router.replace('/login?error=auth_callback_failed')
                 return
             }
-            // Session is now stored in browser cookies by the Supabase client.
-            // Navigate to dashboard — middleware redirects to /coach/onboarding/complete if no coaches record.
-            router.replace('/coach/dashboard')
+
+            // Check if this Google account already has a coaches record
+            const { data: coach } = await supabase
+                .from('coaches')
+                .select('id')
+                .eq('id', data.user.id)
+                .maybeSingle()
+
+            if (coach) {
+                // Existing coach — go to dashboard regardless of intent
+                router.replace('/coach/dashboard')
+            } else if (isLoginIntent) {
+                // Tried to LOGIN but has no account — show friendly error
+                router.replace('/login?error=no_google_account')
+            } else {
+                // Tried to REGISTER — go to onboarding to complete profile + pick plan
+                router.replace('/coach/onboarding/complete')
+            }
         })
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])

@@ -61,6 +61,7 @@ function SubmitButton() {
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
     auth_callback_failed: 'No se pudo completar el inicio de sesión con Google. Intentá de nuevo.',
     confirmation_expired: 'El enlace de confirmación expiró. Solicitá uno nuevo.',
+    no_google_account: 'No encontramos una cuenta con ese correo de Google.',
 }
 
 function UrlErrorBanner() {
@@ -69,8 +70,15 @@ function UrlErrorBanner() {
     if (!urlError) return null
     const msg = AUTH_ERROR_MESSAGES[urlError] ?? 'Ocurrió un error. Intentá de nuevo.'
     return (
-        <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-            {msg}
+        <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive space-y-1">
+            <p>{msg}</p>
+            {urlError === 'no_google_account' && (
+                <p>
+                    <Link href="/register?tier=free" className="underline font-medium">
+                        Crear cuenta gratis →
+                    </Link>
+                </p>
+            )}
         </div>
     )
 }
