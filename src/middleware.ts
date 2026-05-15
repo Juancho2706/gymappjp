@@ -196,8 +196,8 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
-        // Fire-and-forget: update coach activity timestamp (debounced 5min in DB)
-        supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+        // Debounced in DB (no-op if <5min since last update), so await is safe
+        await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
 
         return supabaseResponse
     }
