@@ -59,6 +59,7 @@ export default async function AdminDashboardPage() {
                 signups={data.recentCoachSignups}
                 auditEvents={data.recentAuditEvents}
                 expiringSoon={data.expiringSoon}
+                pendingPayment={data.pendingPaymentCoaches}
             />
         </div>
     )

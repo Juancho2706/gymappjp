@@ -35,7 +35,24 @@ export interface PlatformOverview {
     tierMonthlySeries: { ym: string; tier: string; coach_count: number }[]
     workoutSessionsSeries: { day: string; sessions: number }[]
     betaInvitesCount: number
+    pendingPaymentCoaches: {
+        id: string
+        full_name: string | null
+        brand_name: string | null
+        created_at: string
+        subscription_tier: string | null
+    }[]
+    trialConversion: { converted: number; total_trials: number; pct: number | null }
 }
+
+export type LifecycleStage =
+    | 'new_trial'
+    | 'active_healthy'
+    | 'active_atRisk'
+    | 'expiring_soon'
+    | 'expired'
+    | 'churned'
+    | 'pending'
 
 export interface CoachListItem {
     id: string
@@ -56,6 +73,9 @@ export interface CoachListItem {
     utilization_pct: number
     last_activity_at: string | null
     coach_last_login_at: string | null
+    auth_email: string | null
+    monthly_revenue: number
+    lifecycle_stage: LifecycleStage
 }
 
 export interface ClientListItem {
@@ -65,6 +85,7 @@ export interface ClientListItem {
     coach_id: string
     coach_name: string | null
     is_active: boolean | null
+    is_archived: boolean
     created_at: string
     onboarding_completed: boolean
 }

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import { formatDistanceToNow, format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Clock } from 'lucide-react'
 
 interface Signup {
     id: string
@@ -33,10 +33,19 @@ interface ExpiringSoon {
     subscription_status: string | null
 }
 
+interface PendingPayment {
+    id: string
+    full_name: string | null
+    brand_name: string | null
+    created_at: string
+    subscription_tier: string | null
+}
+
 interface Props {
     signups: Signup[]
     auditEvents: AuditEvent[]
     expiringSoon: ExpiringSoon[]
+    pendingPayment: PendingPayment[]
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -54,22 +63,24 @@ const ACTION_LABELS: Record<string, string> = {
     'client.delete':        'Eliminó alumno',
 }
 
-const TABS = ['signups', 'expiring', 'audit'] as const
+const TABS = ['signups', 'expiring', 'pending', 'audit'] as const
 type Tab = typeof TABS[number]
 
 const TAB_LABELS: Record<Tab, string> = {
     signups: 'Signups',
     expiring: 'Vencimientos',
+    pending: 'Pago pendiente',
     audit: 'Auditoría',
 }
 
 const TAB_LINKS: Record<Tab, string> = {
     signups: '/admin/coaches',
     expiring: '/admin/coaches?sort=expiry&dir=asc',
+    pending: '/admin/coaches?status=pending_payment',
     audit: '/admin/auditoria',
 }
 
-export function RecentActivity({ signups, auditEvents, expiringSoon }: Props) {
+export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPayment }: Props) {
     const [tab, setTab] = useState<Tab>('signups')
 
     return (
@@ -91,6 +102,11 @@ export function RecentActivity({ signups, auditEvents, expiringSoon }: Props) {
                             {t === 'expiring' && expiringSoon.length > 0 && (
                                 <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[--admin-amber] px-1 text-[9px] font-bold text-black">
                                     {expiringSoon.length}
+                                </span>
+                            )}
+                            {t === 'pending' && pendingPayment.length > 0 && (
+                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[--admin-red] px-1 text-[9px] font-bold text-white">
+                                    {pendingPayment.length}
                                 </span>
                             )}
                         </button>
@@ -170,6 +186,29 @@ export function RecentActivity({ signups, auditEvents, expiringSoon }: Props) {
                     )
                 })}
 
+                {tab === 'pending' && pendingPayment.map(coach => (
+                    <Link
+                        key={coach.id}
+                        href={`/admin/coaches?q=${encodeURIComponent(coach.brand_name || coach.full_name || '')}`}
+                        className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                    >
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Clock className="h-3.5 w-3.5 shrink-0 text-[--admin-red]" />
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-[--admin-text-1]">
+                                    {coach.brand_name || coach.full_name || 'Sin nombre'}
+                                </p>
+                                <p className="text-[11px] text-[--admin-text-3]">
+                                    Registrado {formatDistanceToNow(new Date(coach.created_at), { addSuffix: true, locale: es })}
+                                </p>
+                            </div>
+                        </div>
+                        {coach.subscription_tier && (
+                            <AdminStatusBadge value={coach.subscription_tier} type="tier" />
+                        )}
+                    </Link>
+                ))}
+
                 {tab === 'audit' && auditEvents.map(ev => (
                     <div key={ev.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[--admin-bg-elevated] transition-colors">
                         <div className="min-w-0">
@@ -192,6 +231,11 @@ export function RecentActivity({ signups, auditEvents, expiringSoon }: Props) {
                 {tab === 'expiring' && expiringSoon.length === 0 && (
                     <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">
                         Ningún coach vence en los próximos 7 días ✓
+                    </p>
+                )}
+                {tab === 'pending' && pendingPayment.length === 0 && (
+                    <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">
+                        Sin coaches en pago pendiente ✓
                     </p>
                 )}
                 {tab === 'audit' && auditEvents.length === 0 && (

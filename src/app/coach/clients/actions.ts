@@ -7,7 +7,12 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { buildClientWelcomeEmail, buildUpgradeRequiredEmail } from '@/lib/email/transactional-templates'
+import {
+    buildClientWelcomeEmail,
+    buildUpgradeRequiredEmail,
+    buildClientArchivedEmail,
+    buildClientUnarchivedEmail,
+} from '@/lib/email/transactional-templates'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
@@ -78,6 +83,7 @@ export async function createClientAction(
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coach.id)
+        .eq('is_archived', false)
 
     if (countError) {
         return { error: 'No pudimos validar el límite de alumnos de tu plan.' }
@@ -386,6 +392,120 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
     return { tempPassword }
 }
 
+
+// ────────────────────────────────────────────────────────────────
+// Archive / Unarchive Client Actions
+// ────────────────────────────────────────────────────────────────
+
+export async function archiveClientAction(clientId: string): Promise<{ error?: string }> {
+    const supabase = await createClient()
+    const { data: { user: coachUser } } = await supabase.auth.getUser()
+    if (!coachUser) return { error: 'No autenticado.' }
+
+    const { data: client } = await supabase
+        .from('clients')
+        .select('id, full_name, email, coach_id')
+        .eq('id', clientId)
+        .eq('coach_id', coachUser.id)
+        .maybeSingle()
+
+    if (!client) return { error: 'Alumno no encontrado.' }
+
+    const admin = await createRawAdminClient()
+    const { error } = await admin
+        .from('clients')
+        .update({ is_archived: true })
+        .eq('id', clientId)
+        .eq('coach_id', coachUser.id)
+
+    if (error) return { error: error.message }
+
+    // Notify client — best-effort
+    if (client.email) {
+        const { data: coach } = await supabase
+            .from('coaches')
+            .select('full_name, brand_name, slug')
+            .eq('id', coachUser.id)
+            .maybeSingle()
+
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+        const { subject, html } = buildClientArchivedEmail({
+            clientName: client.full_name,
+            coachBrandName: coach?.brand_name ?? coach?.full_name ?? 'EVA',
+            coachName: coach?.full_name ?? 'Tu entrenador',
+            coachEmail: coachUser.email ?? null,
+            coachPublicUrl: `${appUrl}/c/${coach?.slug ?? ''}`,
+        })
+        sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
+    }
+
+    revalidatePath('/coach/clients')
+    return {}
+}
+
+export async function unarchiveClientAction(clientId: string): Promise<{ error?: string }> {
+    const supabase = await createClient()
+    const { data: { user: coachUser } } = await supabase.auth.getUser()
+    if (!coachUser) return { error: 'No autenticado.' }
+
+    const { data: client } = await supabase
+        .from('clients')
+        .select('id, full_name, email, coach_id')
+        .eq('id', clientId)
+        .eq('coach_id', coachUser.id)
+        .maybeSingle()
+
+    if (!client) return { error: 'Alumno no encontrado.' }
+
+    const { data: coach } = await supabase
+        .from('coaches')
+        .select('id, max_clients, subscription_tier')
+        .eq('id', coachUser.id)
+        .maybeSingle()
+
+    if (!coach) return { error: 'Coach no encontrado.' }
+
+    const maxClients = coach.max_clients ?? getTierMaxClients((coach.subscription_tier ?? 'starter') as SubscriptionTier)
+    const { count: activeCount } = await supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', coachUser.id)
+        .eq('is_archived', false)
+
+    if ((activeCount ?? 0) >= maxClients) {
+        return { error: `Alcanzaste el límite de ${maxClients} alumnos activos. Archiva otro alumno antes de reactivar este.` }
+    }
+
+    const admin = await createRawAdminClient()
+    const { error } = await admin
+        .from('clients')
+        .update({ is_archived: false })
+        .eq('id', clientId)
+        .eq('coach_id', coachUser.id)
+
+    if (error) return { error: error.message }
+
+    // Notify client — best-effort
+    if (client.email) {
+        const { data: coachInfo } = await supabase
+            .from('coaches')
+            .select('full_name, brand_name, slug')
+            .eq('id', coachUser.id)
+            .maybeSingle()
+
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+        const { subject, html } = buildClientUnarchivedEmail({
+            clientName: client.full_name,
+            coachBrandName: coachInfo?.brand_name ?? coachInfo?.full_name ?? 'EVA',
+            coachName: coachInfo?.full_name ?? 'Tu entrenador',
+            loginUrl: `${appUrl}/c/${coachInfo?.slug ?? ''}/login`,
+        })
+        sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
+    }
+
+    revalidatePath('/coach/clients')
+    return {}
+}
 
 export async function toggleClientStatusAction(clientId: string, isActive: boolean): Promise<{ error?: string }> {
     const supabase = await createClient()

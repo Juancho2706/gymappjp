@@ -241,6 +241,11 @@ export function getTierNutritionSummary(tier: SubscriptionTier): string {
         : 'Sin módulo de nutrición'
 }
 
+export function getRecommendedTier(clientCount: number): SubscriptionTier {
+    const ordered: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+    return ordered.find(t => TIER_CONFIG[t].maxClients >= clientCount) ?? 'scale'
+}
+
 // Note: 'canceled' is NOT in this list. A canceled coach still has access until
 // current_period_end. The gate in coach-subscription-gate.ts handles that date check.
 export const SUBSCRIPTION_BLOCKED_STATUSES = [

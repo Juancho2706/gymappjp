@@ -3,7 +3,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
     Database, Users, UserCheck, AlertTriangle,
-    CheckCircle, XCircle, Clock, Shield
+    CheckCircle, XCircle, Clock, Shield, Timer
 } from 'lucide-react'
 import { PageInfoButton } from '../_components/PageInfoButton'
 
@@ -135,6 +135,56 @@ export default async function AdminSistemaPage() {
                 <div className="flex items-center justify-between">
                     <span className="text-sm text-[--admin-text-2]">Acciones de auditoría (últimas 24h)</span>
                     <span className="font-mono text-lg font-bold tabular-nums text-[--admin-text-1]">{d.recentAuditCount}</span>
+                </div>
+            </div>
+
+            {/* Cron monitoring */}
+            <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface]">
+                <div className="border-b border-[--admin-border] px-4 py-3">
+                    <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-[--admin-text-3]">
+                        <Timer className="h-3.5 w-3.5" />
+                        Estado de crons
+                    </h3>
+                </div>
+                <div className="divide-y divide-[--admin-border]">
+                    {d.cronStatuses.map(cron => {
+                        const lastRun = cron.lastRunAt ? new Date(cron.lastRunAt) : null
+                        const hoursAgo = lastRun ? (Date.now() - lastRun.getTime()) / 3_600_000 : null
+                        const isStale = hoursAgo !== null && hoursAgo > 26
+                        const neverRan = lastRun === null
+                        const statusOk = !neverRan && !isStale
+
+                        return (
+                            <div key={cron.action} className="flex items-center justify-between px-4 py-2.5">
+                                <div className="flex items-center gap-2">
+                                    {neverRan
+                                        ? <Clock className="h-3.5 w-3.5 text-[--admin-text-3]" />
+                                        : isStale
+                                            ? <XCircle className="h-3.5 w-3.5 text-[--admin-amber]" />
+                                            : <CheckCircle className="h-3.5 w-3.5 text-[--admin-green]" />
+                                    }
+                                    <span className="text-sm text-[--admin-text-1]">{cron.label}</span>
+                                    <span className="font-mono text-[10px] text-[--admin-text-3]">{cron.action}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {cron.lastResult && (
+                                        <span className="font-mono text-[10px] text-[--admin-text-3] max-w-[200px] truncate">{cron.lastResult}</span>
+                                    )}
+                                    <span className={`text-xs font-medium ${neverRan ? 'text-[--admin-text-3]' : isStale ? 'text-[--admin-amber]' : 'text-[--admin-green]'}`}>
+                                        {neverRan
+                                            ? 'Nunca ejecutado'
+                                            : isStale
+                                                ? `Hace ${Math.floor(hoursAgo!)}h — ¡atrasado!`
+                                                : formatDistanceToNow(lastRun!, { addSuffix: true, locale: es })
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+                        )
+                    })}
+                    {d.cronStatuses.length === 0 && (
+                        <p className="px-4 py-6 text-center text-xs text-[--admin-text-3]">Sin datos de crons</p>
+                    )}
                 </div>
             </div>
         </div>

@@ -270,6 +270,7 @@ export type Database = {
           goal_weight_kg: number | null
           id: string
           is_active: boolean | null
+          is_archived: boolean
           onboarding_completed: boolean
           phone: string | null
           subscription_start_date: string | null
@@ -285,6 +286,7 @@ export type Database = {
           goal_weight_kg?: number | null
           id: string
           is_active?: boolean | null
+          is_archived?: boolean
           onboarding_completed?: boolean
           phone?: string | null
           subscription_start_date?: string | null
@@ -300,6 +302,7 @@ export type Database = {
           goal_weight_kg?: number | null
           id?: string
           is_active?: boolean | null
+          is_archived?: boolean
           onboarding_completed?: boolean
           phone?: string | null
           subscription_start_date?: string | null
@@ -425,6 +428,7 @@ export type Database = {
           superseded_mp_preapproval_id: string | null
           trial_ends_at: string | null
           trial_used_email: string | null
+          trial_warning_days_sent: number[]
           updated_at: string
           use_brand_colors_coach: boolean | null
           use_custom_loader: boolean
@@ -464,6 +468,7 @@ export type Database = {
           superseded_mp_preapproval_id?: string | null
           trial_ends_at?: string | null
           trial_used_email?: string | null
+          trial_warning_days_sent?: number[]
           updated_at?: string
           use_brand_colors_coach?: boolean | null
           use_custom_loader?: boolean
@@ -503,6 +508,7 @@ export type Database = {
           superseded_mp_preapproval_id?: string | null
           trial_ends_at?: string | null
           trial_used_email?: string | null
+          trial_warning_days_sent?: number[]
           updated_at?: string
           use_brand_colors_coach?: boolean | null
           use_custom_loader?: boolean
@@ -2106,6 +2112,7 @@ export type Database = {
         }
         Returns: {
           active_client_count: number
+          auth_email: string
           billing_cycle: string
           brand_name: string
           client_count: number

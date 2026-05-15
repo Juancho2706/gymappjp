@@ -92,6 +92,7 @@ export function DashboardShell({
                         subscriptionStatus={data.subscriptionStatus}
                         currentPeriodEnd={data.currentPeriodEnd}
                         trialEndsAt={data.trialEndsAt}
+                        activeClientCount={data.kpi.totalClients}
                     />
                     {subscriptionTier === 'free' && (
                         <FreeTierBanner totalClients={data.kpi.totalClients} />

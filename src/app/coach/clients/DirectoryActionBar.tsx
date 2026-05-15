@@ -57,6 +57,7 @@ interface DirectoryActionBarProps {
     onProgramFilterChange: (v: ProgramDirectoryFilter) => void
     riskFilter: DirectoryRiskFilter
     onRiskFilterChange: (v: DirectoryRiskFilter) => void
+    archivedCount?: number
 }
 
 export function DirectoryActionBar({
@@ -73,6 +74,7 @@ export function DirectoryActionBar({
     onProgramFilterChange,
     riskFilter,
     onRiskFilterChange,
+    archivedCount = 0,
 }: DirectoryActionBarProps) {
     const inputRef = useRef<HTMLInputElement>(null)
 
@@ -143,6 +145,12 @@ export function DirectoryActionBar({
         chips.push({
             key: 'st-sync',
             label: 'Pendiente sync',
+            onRemove: () => onStatusFilterChange('any'),
+        })
+    } else if (statusFilter === 'archived') {
+        chips.push({
+            key: 'st-archived',
+            label: 'Archivados',
             onRemove: () => onStatusFilterChange('any'),
         })
     }
@@ -219,6 +227,14 @@ export function DirectoryActionBar({
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => onStatusFilterChange('pending_sync')}>
                                     Pendiente Sync
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onStatusFilterChange('archived')}>
+                                    Archivados
+                                    {archivedCount > 0 && (
+                                        <span className="ml-auto rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                                            {archivedCount}
+                                        </span>
+                                    )}
                                 </DropdownMenuItem>
                             </DropdownMenuGroup>
                             <DropdownMenuSeparator />

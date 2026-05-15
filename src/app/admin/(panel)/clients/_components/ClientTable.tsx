@@ -118,12 +118,20 @@ export function ClientTable({ clients, total, coaches }: Props) {
                                     </td>
                                     <td className="px-4 py-3 text-neutral-400">{client.coach_name ?? '—'}</td>
                                     <td className="px-4 py-3">
-                                        <Badge
-                                            variant="outline"
-                                            className={`text-xs ${client.is_active !== false ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}
-                                        >
-                                            {client.is_active !== false ? 'Activo' : 'Inactivo'}
-                                        </Badge>
+                                        <div className="flex flex-wrap gap-1">
+                                            {client.is_archived ? (
+                                                <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-400 border-amber-500/30">
+                                                    Archivado
+                                                </Badge>
+                                            ) : (
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`text-xs ${client.is_active !== false ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}
+                                                >
+                                                    {client.is_active !== false ? 'Activo' : 'Inactivo'}
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-3">
                                         <Badge

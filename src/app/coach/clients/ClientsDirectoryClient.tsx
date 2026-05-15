@@ -59,6 +59,9 @@ function matchesStatusFilter(
     client: any,
     filter: StatusDirectoryFilter
 ): boolean {
+    if (filter === 'archived') return client.is_archived === true
+    // Default views exclude archived
+    if (client.is_archived === true) return false
     if (filter === 'any') return true
     if (filter === 'active') {
         return client.is_active !== false && !client.force_password_change
@@ -168,7 +171,13 @@ export function ClientsDirectoryClient({
         [sortedClients, gridVisibleCount]
     )
 
-    if (clients.length === 0) {
+    const archivedCount = useMemo(
+        () => clients.filter((c) => c.is_archived === true).length,
+        [clients]
+    )
+
+    const nonArchivedCount = clients.length - archivedCount
+    if (nonArchivedCount === 0 && archivedCount === 0) {
         return <ClientsDirectoryEmpty />
     }
 
@@ -187,6 +196,7 @@ export function ClientsDirectoryClient({
                 onProgramFilterChange={setProgramFilter}
                 riskFilter={riskFilter}
                 onRiskFilterChange={onRiskFilterChange}
+                archivedCount={archivedCount}
             />
 
             {sortedClients.length === 0 ?

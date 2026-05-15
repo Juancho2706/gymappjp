@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users, Plus } from 'lucide-react'
+import { Trash2, AlertTriangle, ChevronDown, ChevronUp, Users, Plus, StickyNote } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
@@ -11,9 +11,27 @@ import { AdminEmptyState } from '../../_components/AdminEmptyState'
 import { AdminBulkBar } from '../../_components/AdminBulkBar'
 import { CoachCommandPanel } from './CoachCommandPanel'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
-import { bulkCoachStatusAction, deleteCoachAction } from '../_actions/coach-actions'
+import { bulkCoachStatusAction, deleteCoachAction, getCoachNotesAction, saveCoachNotesAction } from '../_actions/coach-actions'
 import { CoachCreateSheet } from './CoachCreateSheet'
-import type { CoachListItem } from '../../dashboard/_data/types'
+import type { CoachListItem, LifecycleStage } from '../../dashboard/_data/types'
+
+function LifecycleBadge({ stage }: { stage: LifecycleStage }) {
+    const map: Record<LifecycleStage, { label: string; cls: string }> = {
+        new_trial:      { label: 'Trial',        cls: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },
+        active_healthy: { label: 'Activo',       cls: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
+        active_atRisk:  { label: 'En riesgo',    cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+        expiring_soon:  { label: 'Vence pronto', cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+        expired:        { label: 'Expirado',     cls: 'bg-zinc-500/15 text-zinc-500' },
+        churned:        { label: 'Perdido',      cls: 'bg-rose-500/15 text-rose-500' },
+        pending:        { label: 'Pago pend.',   cls: 'bg-purple-500/15 text-purple-500' },
+    }
+    const { label, cls } = map[stage] ?? map.active_healthy
+    return (
+        <span className={`rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${cls}`}>
+            {label}
+        </span>
+    )
+}
 
 function computeHealthScore(c: CoachListItem): number {
     const isFree = c.subscription_tier === 'free'
@@ -62,6 +80,66 @@ function HealthBar({ score, isFree }: { score: number; isFree: boolean }) {
     )
 }
 
+function NotesPopover({ coachId, onClose }: { coachId: string; onClose: () => void }) {
+    const [notes, setNotes] = useState<string>('')
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+    const ref = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        getCoachNotesAction(coachId).then(n => { setNotes(n); setLoading(false) })
+    }, [coachId])
+
+    useEffect(() => {
+        function handler(e: MouseEvent) {
+            if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [onClose])
+
+    async function save() {
+        setSaving(true)
+        await saveCoachNotesAction(coachId, notes)
+        setSaving(false)
+        onClose()
+    }
+
+    return (
+        <div
+            ref={ref}
+            className="absolute right-8 top-0 z-50 w-64 rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] shadow-xl p-3 space-y-2"
+            onClick={e => e.stopPropagation()}
+        >
+            <p className="text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Nota interna</p>
+            {loading ? (
+                <div className="h-20 animate-pulse rounded bg-[--admin-bg-elevated]" />
+            ) : (
+                <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    rows={4}
+                    className="w-full resize-none rounded border border-[--admin-border] bg-[--admin-bg-elevated] p-2 text-xs text-[--admin-text-1] placeholder:text-[--admin-text-3] focus:outline-none focus:border-[--admin-accent]"
+                    placeholder="Notas visibles solo para admins..."
+                    autoFocus
+                />
+            )}
+            <div className="flex justify-end gap-2">
+                <button onClick={onClose} className="text-xs text-[--admin-text-3] hover:text-[--admin-text-2]">
+                    Cancelar
+                </button>
+                <button
+                    onClick={save}
+                    disabled={saving || loading}
+                    className="rounded bg-[--admin-accent] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+                >
+                    {saving ? 'Guardando...' : 'Guardar'}
+                </button>
+            </div>
+        </div>
+    )
+}
+
 function ExpiryCell({ days }: { days: number | null | undefined }) {
     if (days === null || days === undefined) return <span className="text-[--admin-text-3]">—</span>
     if (days < 0) return <span className="font-mono text-xs text-[--admin-text-3]">vencido</span>
@@ -87,6 +165,7 @@ export function CoachTable({ coaches, total }: Props) {
     const [deleting, setDeleting] = useState<string | null>(null)
     const [riskOpen, setRiskOpen] = useState(true)
     const [createOpen, setCreateOpen] = useState(false)
+    const [notesOpen, setNotesOpen] = useState<string | null>(null)
 
     const atRisk = coaches.filter(isAtRisk)
 
@@ -208,6 +287,8 @@ export function CoachTable({ coaches, total }: Props) {
                                         <InfoTooltip content="active=pagando, trialing=en prueba, expired=debe reactivar, past_due=cobro fallido, paused=suspendido por admin, canceled=canceló pero acceso hasta vencimiento." />
                                     </span>
                                 </th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Ciclo</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">MRR</th>
                                 <AdminSortHeader label="Vence" sortKey="expiry" />
                                 <AdminSortHeader label="Alumnos" sortKey="clients" />
                                 <th className="px-3 py-2 text-left">
@@ -251,6 +332,9 @@ export function CoachTable({ coaches, total }: Props) {
                                                     {c.brand_name || c.full_name || '—'}
                                                 </p>
                                                 <p className="font-mono text-[10px] text-[--admin-text-3]">/c/{c.slug}</p>
+                                                {c.auth_email && (
+                                                    <p className="text-[10px] text-[--admin-text-3] truncate max-w-[180px]">{c.auth_email}</p>
+                                                )}
                                             </button>
                                         </td>
                                         <td className="px-3 py-2.5"><HealthBar score={score} isFree={isFree} /></td>
@@ -264,6 +348,18 @@ export function CoachTable({ coaches, total }: Props) {
                                             <AdminStatusBadge
                                                 value={isFree && c.subscription_status === 'active' ? 'free_active' : (c.subscription_status ?? '')}
                                             />
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <LifecycleBadge stage={c.lifecycle_stage} />
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            {c.monthly_revenue > 0 ? (
+                                                <span className="font-mono text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
+                                                    ${c.monthly_revenue.toLocaleString('es-CL')}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] text-[--admin-text-3]">—</span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <ExpiryCell days={c.days_until_expiry} />
@@ -285,14 +381,26 @@ export function CoachTable({ coaches, total }: Props) {
                                                 {format(new Date(c.created_at), 'dd/MM/yy', { locale: es })}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-2.5 text-right">
-                                            <button
-                                                onClick={() => handleDelete(c.id)}
-                                                disabled={deleting === c.id}
-                                                className="rounded p-1 text-[--admin-text-3] hover:text-[--admin-red] transition-colors disabled:opacity-30"
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </button>
+                                        <td className="relative px-3 py-2.5 text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); setNotesOpen(notesOpen === c.id ? null : c.id) }}
+                                                    className="rounded p-1 text-[--admin-text-3] hover:text-[--admin-accent] transition-colors"
+                                                    title="Nota interna"
+                                                >
+                                                    <StickyNote className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(c.id)}
+                                                    disabled={deleting === c.id}
+                                                    className="rounded p-1 text-[--admin-text-3] hover:text-[--admin-red] transition-colors disabled:opacity-30"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                            {notesOpen === c.id && (
+                                                <NotesPopover coachId={c.id} onClose={() => setNotesOpen(null)} />
+                                            )}
                                         </td>
                                     </tr>
                                 )

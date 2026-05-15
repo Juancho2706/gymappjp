@@ -1,7 +1,32 @@
 import { unstable_cache, unstable_noStore as noStore } from 'next/cache'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { TIER_CONFIG } from '@/lib/constants'
-import type { PlatformOverview, CoachListItem, ClientListItem } from './types'
+import type { PlatformOverview, CoachListItem, ClientListItem, LifecycleStage } from './types'
+
+function computeMonthlyRevenue(tier: string | null, cycle: string | null, provider: string | null): number {
+    if (!tier || ['beta', 'internal', 'admin'].includes(provider ?? '') || tier === 'free') return 0
+    const config = TIER_CONFIG[tier as keyof typeof TIER_CONFIG]
+    if (!config) return 0
+    if (cycle === 'annual' && 'annualPriceClp' in config && config.annualPriceClp) {
+        return Math.round((config.annualPriceClp as number) / 12)
+    }
+    return config.monthlyPriceClp
+}
+
+function computeLifecycleStage(status: string | null, daysLeft: number | null | undefined): LifecycleStage {
+    if (status === 'pending_payment') return 'pending'
+    if (status === 'trialing') return 'new_trial'
+    if (status === 'expired') return 'expired'
+    if (status === 'canceled') {
+        if (daysLeft !== null && daysLeft !== undefined && daysLeft > 0) return 'expiring_soon'
+        return 'churned'
+    }
+    if (status === 'active') {
+        if (daysLeft !== null && daysLeft !== undefined && daysLeft <= 14) return 'active_atRisk'
+        return 'active_healthy'
+    }
+    return 'active_healthy'
+}
 
 export const getPlatformOverview = unstable_cache(
     async (): Promise<PlatformOverview> => {
@@ -20,6 +45,7 @@ export const getPlatformOverview = unstable_cache(
             churnRes,
             checkinsRes,
             betaInvitesRes,
+            trialConversionRes,
         ] = await Promise.all([
             admin.rpc('get_platform_coaches_count'),
             admin.rpc('get_platform_clients_count'),
@@ -48,6 +74,7 @@ export const getPlatformOverview = unstable_cache(
                 .select('*', { count: 'exact', head: true })
                 .eq('payment_provider', 'beta')
                 .in('subscription_status', ['active', 'trialing']),
+            (admin.rpc as any)('get_platform_trial_conversion_rate'),
         ])
 
         const totalCoaches = coachesCountRes.data ?? 0
@@ -81,14 +108,20 @@ export const getPlatformOverview = unstable_cache(
             ? parseFloat(((mrrEstimate - prevMrr) / prevMrr * 100).toFixed(1))
             : null
 
-        const expiringSoonRes = await admin
-            .from('coaches')
-            .select('id, full_name, brand_name, current_period_end, subscription_status')
-            .in('subscription_status', ['active', 'trialing'])
-            .lt('current_period_end', new Date(Date.now() + 7 * 86_400_000).toISOString())
-            .gt('current_period_end', new Date().toISOString())
-            .order('current_period_end')
-            .limit(10)
+        const [expiringSoonRes, pendingPaymentRes] = await Promise.all([
+            admin.from('coaches')
+                .select('id, full_name, brand_name, current_period_end, subscription_status')
+                .in('subscription_status', ['active', 'trialing'])
+                .lt('current_period_end', new Date(Date.now() + 7 * 86_400_000).toISOString())
+                .gt('current_period_end', new Date().toISOString())
+                .order('current_period_end')
+                .limit(10),
+            admin.from('coaches')
+                .select('id, full_name, brand_name, created_at, subscription_tier')
+                .eq('subscription_status', 'pending_payment')
+                .order('created_at', { ascending: true })
+                .limit(20),
+        ])
 
         return {
             totalCoaches,
@@ -107,6 +140,14 @@ export const getPlatformOverview = unstable_cache(
             workoutSessionsSeries: workoutSessionsRes.data ?? [],
             betaInvitesCount: betaInvitesRes.count ?? 0,
             expiringSoon: (expiringSoonRes.data ?? []) as PlatformOverview['expiringSoon'],
+            pendingPaymentCoaches: (pendingPaymentRes.data ?? []) as PlatformOverview['pendingPaymentCoaches'],
+            trialConversion: (() => {
+                const row = (trialConversionRes.data as any[])?.[0]
+                const converted = Number(row?.converted ?? 0)
+                const total_trials = Number(row?.total_trials ?? 0)
+                const pct = total_trials > 0 ? Math.round(converted / total_trials * 100) : null
+                return { converted, total_trials, pct }
+            })(),
         }
     },
     ['admin-platform-overview'],
@@ -118,6 +159,8 @@ export async function getAllCoachesPaginated(params: {
     status?: string
     tier?: string
     beta?: boolean
+    stage?: string
+    atRisk?: boolean
     sort?: string
     dir?: string
     page?: number
@@ -159,6 +202,9 @@ export async function getAllCoachesPaginated(params: {
                 ? Math.floor((new Date(r.current_period_end).getTime() - Date.now()) / 86400000)
                 : null,
             utilization_pct: 0, last_activity_at: null, coach_last_login_at: null,
+            auth_email: null,
+            monthly_revenue: computeMonthlyRevenue(r.subscription_tier, r.billing_cycle, r.payment_provider),
+            lifecycle_stage: computeLifecycleStage(r.subscription_status, null),
         }))
         return { coaches, total: coaches.length }
     }
@@ -184,9 +230,20 @@ export async function getAllCoachesPaginated(params: {
         utilization_pct: Number(r.utilization_pct),
         last_activity_at: r.last_activity_at,
         coach_last_login_at: r.coach_last_login_at ?? null,
+        auth_email: r.auth_email ?? null,
+        monthly_revenue: computeMonthlyRevenue(r.subscription_tier, r.billing_cycle, r.payment_provider),
+        lifecycle_stage: computeLifecycleStage(r.subscription_status, r.days_until_expiry),
     }))
 
-    return { coaches, total }
+    const AT_RISK_STAGES = new Set(['active_atRisk', 'expiring_soon', 'pending'])
+    const filtered = params.atRisk
+        ? coaches.filter(c => AT_RISK_STAGES.has(c.lifecycle_stage))
+        : params.stage
+            ? coaches.filter(c => c.lifecycle_stage === params.stage)
+            : coaches
+
+    const isClientFiltered = params.atRisk || !!params.stage
+    return { coaches: filtered, total: isClientFiltered ? filtered.length : total }
 }
 
 // Keep old getAllCoaches for backward compat (clients page still uses it)
@@ -217,7 +274,7 @@ export async function getAllClients(
 
     let query = admin
         .from('clients')
-        .select('id, full_name, email, coach_id, is_active, created_at, onboarding_completed, coaches(full_name)', { count: 'exact' })
+        .select('id, full_name, email, coach_id, is_active, is_archived, created_at, onboarding_completed, coaches(full_name)', { count: 'exact' })
         .order('created_at', { ascending: false })
 
     if (search) {
@@ -237,6 +294,7 @@ export async function getAllClients(
         coach_id: c.coach_id,
         coach_name: c.coaches?.full_name ?? null,
         is_active: c.is_active,
+        is_archived: c.is_archived ?? false,
         created_at: c.created_at,
         onboarding_completed: c.onboarding_completed,
     }))

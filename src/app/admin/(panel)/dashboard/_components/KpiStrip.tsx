@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { AdminKpiCard } from '../../_components/AdminKpiCard'
 import type { PlatformOverview } from '../_data/types'
 
@@ -28,19 +29,6 @@ export function KpiStrip({ data }: { data: PlatformOverview }) {
                 sub="proyección anual"
                 tooltip="Ingresos anuales proyectados si el MRR actual se mantiene (MRR × 12)."
             />
-            <AdminKpiCard
-                label="MRR Delta"
-                value={data.mrrDeltaPct !== null ? `${data.mrrDeltaPct > 0 ? '+' : ''}${data.mrrDeltaPct}%` : '—'}
-                sub="vs mes anterior"
-                tooltip="Cambio porcentual del MRR vs el mismo período del mes anterior."
-            />
-            <AdminKpiCard
-                label="Churn 30d"
-                value={data.churnLast30d}
-                sub="coaches cancelados/expirados"
-                tooltip="Coaches que pasaron a cancelado o expirado en los últimos 30 días. Alta tasa indica problema de retención."
-            />
-
             {/* Row 2 — Operational */}
             <AdminKpiCard
                 label="Coaches activos"
@@ -65,6 +53,38 @@ export function KpiStrip({ data }: { data: PlatformOverview }) {
                 value={data.checkinsLast7d}
                 sub="registros de peso y fotos"
                 tooltip="Registros de peso y fotos de alumnos en los últimos 7 días. Indica engagement con seguimiento."
+            />
+
+            {/* Row 3 — Lifecycle */}
+            <AdminKpiCard
+                label="Beta activos"
+                value={data.betaInvitesCount}
+                sub="coaches sin pago"
+                tooltip="Coaches con payment_provider=beta y status active/trialing. No generan MRR."
+            />
+            <div className="col-span-1">
+                <Link href="/admin/coaches?status=pending_payment" className="block h-full">
+                    <AdminKpiCard
+                        label="Pago pendiente"
+                        value={data.pendingPaymentCoaches.length}
+                        sub={data.pendingPaymentCoaches.length > 0 ? 'requieren atención' : 'sin bloqueos'}
+                        tooltip="Coaches atascados en pending_payment — eligieron un plan pero no completaron el pago. Requieren intervención manual o seguimiento."
+                    />
+                </Link>
+            </div>
+            <AdminKpiCard
+                label="Churn 30d"
+                value={data.churnLast30d}
+                sub="coaches cancelados/expirados"
+                tooltip="Coaches que pasaron a cancelado o expirado en los últimos 30 días. Alta tasa indica problema de retención."
+            />
+            <AdminKpiCard
+                label="Conversión trial (90d)"
+                value={data.trialConversion.pct !== null
+                    ? `${data.trialConversion.pct}%`
+                    : '—'}
+                sub={`${data.trialConversion.converted} / ${data.trialConversion.total_trials} coaches`}
+                tooltip="Porcentaje de coaches registrados en los últimos 90 días que convirtieron de trial a plan pago. Excluye beta/internal."
             />
         </div>
     )

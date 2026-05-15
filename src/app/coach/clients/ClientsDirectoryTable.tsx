@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { differenceInDays } from 'date-fns'
 import { EditClientDataModal } from './EditClientDataModal'
 import { DeleteClientButton } from './DeleteClientButton'
+import { ArchiveClientButton } from './ArchiveClientButton'
 
 type ColId =
     | 'name'
@@ -43,6 +44,13 @@ interface ClientsDirectoryTableProps {
 }
 
 function StatusCell({ client }: { client: any }) {
+    if (client.is_archived === true) {
+        return (
+            <span className="rounded-md border border-zinc-500/20 bg-zinc-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-500">
+                Archivado
+            </span>
+        )
+    }
     if (client.is_active === false) {
         return (
             <span className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-rose-500">
@@ -285,6 +293,11 @@ export function ClientsDirectoryTable({
                     >
                         <Pencil className="h-4 w-4" />
                     </button>
+                    <ArchiveClientButton
+                        clientId={client.id}
+                        clientName={client.full_name}
+                        isArchived={client.is_archived === true}
+                    />
                     <DeleteClientButton
                         clientId={client.id}
                         clientName={client.full_name}

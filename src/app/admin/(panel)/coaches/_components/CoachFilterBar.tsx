@@ -28,6 +28,16 @@ const PROVIDER_OPTIONS = [
     { value: 'stripe',       label: 'Stripe' },
 ]
 
+const STAGE_OPTIONS = [
+    { value: 'new_trial',       label: 'Trial nuevo' },
+    { value: 'active_healthy',  label: 'Activo sano' },
+    { value: 'active_atRisk',   label: 'En riesgo' },
+    { value: 'expiring_soon',   label: 'Vence pronto' },
+    { value: 'expired',         label: 'Expirado' },
+    { value: 'churned',         label: 'Perdido' },
+    { value: 'pending',         label: 'Pago pendiente' },
+]
+
 export function CoachFilterBar() {
     const router = useRouter()
     const pathname = usePathname()
@@ -48,7 +58,7 @@ export function CoachFilterBar() {
         startTransition(() => router.push(pathname))
     }
 
-    const hasFilters = sp.has('q') || sp.has('status') || sp.has('tier') || sp.has('provider') || sp.has('beta')
+    const hasFilters = sp.has('q') || sp.has('status') || sp.has('tier') || sp.has('provider') || sp.has('beta') || sp.has('stage') || sp.has('atRisk')
 
     const selectClass = "rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-2 py-1.5 text-xs text-[--admin-text-2] focus:outline-none focus:border-[--admin-accent] transition-colors"
 
@@ -108,6 +118,30 @@ export function CoachFilterBar() {
                     <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
             </select>
+
+            {/* Lifecycle stage */}
+            <select
+                value={sp.get('stage') ?? ''}
+                onChange={e => push('stage', e.target.value)}
+                style={{ colorScheme: 'dark' }}
+                className={selectClass}
+            >
+                <option value="">Ciclo de vida</option>
+                {STAGE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+            </select>
+
+            {/* At-risk quick toggle */}
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[--admin-amber] hover:text-[--admin-text-1] transition-colors select-none">
+                <input
+                    type="checkbox"
+                    checked={sp.get('atRisk') === 'true'}
+                    onChange={e => push('atRisk', e.target.checked ? 'true' : '')}
+                    className="rounded border-[--admin-border] accent-[--admin-amber]"
+                />
+                Solo en riesgo
+            </label>
 
             {/* Beta only toggle */}
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[--admin-text-3] hover:text-[--admin-text-2] transition-colors select-none">

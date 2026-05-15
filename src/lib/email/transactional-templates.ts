@@ -1,4 +1,4 @@
-import { wrapEmailLayout, ctaButton, divider, featureRow, badge } from './base-layout'
+import { wrapEmailLayout, ctaButton, ghostButton, divider, featureRow, badge } from './base-layout'
 
 // ── Client Welcome ──────────────────────────────────────────────────────────
 
@@ -287,6 +287,241 @@ ${divider()}
     const html = wrapEmailLayout(body, {
         previewText: `Billing anual (−20%), plan Growth y plan Free permanente ya están disponibles en EVA.`,
         headerTitle: 'Novedades — EVA',
+    })
+
+    return { subject, html }
+}
+
+// ── Trial Expiry Warning ──────────────────────────────────────────────────────
+
+type TrialExpiryWarningContext = {
+    coachName: string
+    brandName: string
+    daysLeft: number
+    activeClientCount: number
+    recommendedTierLabel: string
+    recommendedTierSlug: string
+    recommendedMaxClients: number
+    recommendedPriceClp: number
+    reactivateUrl: string
+}
+
+export function buildTrialExpiryWarningEmail(ctx: TrialExpiryWarningContext) {
+    const plural = ctx.daysLeft === 1 ? 'día' : 'días'
+    const subject = `Tu período de prueba vence en ${ctx.daysLeft} ${plural} — EVA`
+
+    const body = `
+${badge('PERÍODO DE PRUEBA', '#F59E0B')}
+<h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+  Te quedan ${ctx.daysLeft} ${plural} de prueba
+</h1>
+<p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+  Hola <strong>${ctx.coachName}</strong>, llevas un buen tiempo construyendo <strong>${ctx.brandName}</strong>. Cuando termine el período de prueba perderás acceso al dashboard y tus alumnos no podrán ingresar — pero activando tu plan todo sigue exactamente donde lo dejaste.
+</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;background-color:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#92400e;letter-spacing:0.8px;text-transform:uppercase;">Tu plan recomendado</p>
+      <p style="margin:0 0 4px;font-size:16px;font-weight:800;color:#111827;">Plan ${ctx.recommendedTierLabel}</p>
+      <p style="margin:0 0 8px;font-size:13px;color:#374151;">Hasta ${ctx.recommendedMaxClients} alumnos · $${ctx.recommendedPriceClp.toLocaleString('es-CL')}/mes</p>
+      <p style="margin:0;font-size:13px;color:#92400e;">
+        Con tus <strong>${ctx.activeClientCount} ${ctx.activeClientCount === 1 ? 'alumno' : 'alumnos'} activos</strong>, este es el plan mínimo que los cubre a todos.
+      </p>
+    </td>
+  </tr>
+</table>
+
+<div style="margin-bottom:12px;">
+  ${ctaButton(`Activar Plan ${ctx.recommendedTierLabel} →`, ctx.reactivateUrl)}
+</div>
+<div style="margin-bottom:24px;">
+  ${ghostButton('Ver todos los planes', ctx.reactivateUrl)}
+</div>
+
+${divider()}
+
+${featureRow('💪', 'Seguimiento de entrenamientos', 'Historial completo de sesiones de tus alumnos')}
+${featureRow('📊', 'Panel de alumnos', 'Cada alumno con su progreso, fotos y check-ins')}
+${featureRow('🥗', 'Planes de nutrición', 'Diseñá y asigná planes alimentarios (Pro y superiores)')}
+
+<p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
+  Estás recibiendo este correo porque tenés un período de prueba activo en EVA.
+</p>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: `Te quedan ${ctx.daysLeft} ${plural} de prueba — con ${ctx.activeClientCount} alumnos, ${ctx.recommendedTierLabel} es tu plan.`,
+        headerTitle: 'Período de prueba — EVA',
+    })
+
+    return { subject, html }
+}
+
+// ── Trial Expired ─────────────────────────────────────────────────────────────
+
+type TrialExpiredContext = {
+    coachName: string
+    brandName: string
+    activeClientCount: number
+    recommendedTierLabel: string
+    recommendedTierSlug: string
+    recommendedMaxClients: number
+    recommendedPriceClp: number
+    reactivateUrl: string
+}
+
+export function buildTrialExpiredEmail(ctx: TrialExpiredContext) {
+    const subject = `Tu período de prueba en EVA ha terminado`
+
+    const body = `
+${badge('PERÍODO FINALIZADO', '#6b7280')}
+<h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+  Tu período de prueba ha terminado
+</h1>
+<p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+  Hola <strong>${ctx.coachName}</strong>, todos tus datos y los de tus <strong>${ctx.activeClientCount} ${ctx.activeClientCount === 1 ? 'alumno' : 'alumnos'}</strong> están seguros y esperándote en <strong>${ctx.brandName}</strong>.
+</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#065f46;">Tus datos están seguros</p>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
+        Reactiva en cualquier momento y continuás exactamente donde lo dejaste. Nada se pierde.
+      </p>
+    </td>
+  </tr>
+</table>
+
+<div style="margin-bottom:12px;">
+  ${ctaButton('Reactivar mi cuenta →', ctx.reactivateUrl)}
+</div>
+
+${divider()}
+
+<p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#111827;">¿Qué plan necesito?</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="padding:4px 0;font-size:13px;color:#6b7280;width:100px;">Plan</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:700;color:#111827;">Plan ${ctx.recommendedTierLabel}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:13px;color:#6b7280;">Capacidad</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:600;color:#111827;">Hasta ${ctx.recommendedMaxClients} alumnos</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:13px;color:#6b7280;">Precio</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:600;color:#111827;">$${ctx.recommendedPriceClp.toLocaleString('es-CL')}/mes</td>
+        </tr>
+      </table>
+      <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Con tus ${ctx.activeClientCount} ${ctx.activeClientCount === 1 ? 'alumno' : 'alumnos'}, este es el plan mínimo recomendado.</p>
+    </td>
+  </tr>
+</table>
+
+<div style="margin-bottom:0;">
+  ${ghostButton('Ver todos los planes', ctx.reactivateUrl)}
+</div>
+
+<p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
+  Estás recibiendo este correo porque tu período de prueba en EVA finalizó.
+</p>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: `Tu período de prueba terminó. Tus datos están seguros — reactiva cuando quieras.`,
+        headerTitle: 'Tu cuenta — EVA',
+    })
+
+    return { subject, html }
+}
+
+// ── Client Archived ───────────────────────────────────────────────────────────
+
+type ClientArchivedContext = {
+    clientName: string
+    coachBrandName: string
+    coachName: string
+    coachEmail?: string | null
+    coachPublicUrl: string
+}
+
+export function buildClientArchivedEmail(ctx: ClientArchivedContext) {
+    const subject = `Tu acceso a ${ctx.coachBrandName} ha sido suspendido temporalmente`
+
+    const contactCta = ctx.coachEmail
+        ? ctaButton(`Contactar a ${ctx.coachName}`, `mailto:${ctx.coachEmail}`)
+        : ghostButton(`Ver perfil de ${ctx.coachName}`, ctx.coachPublicUrl)
+
+    const body = `
+${badge('AVISO IMPORTANTE', '#F59E0B')}
+<h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+  Tu acceso está temporalmente suspendido
+</h1>
+<p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+  Hola <strong>${ctx.clientName}</strong>, tu entrenador en <strong>${ctx.coachBrandName}</strong> actualizó su plan y temporalmente suspendió tu acceso. Tus datos de entrenamiento están completamente seguros.
+</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;background-color:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;">
+  <tr>
+    <td>
+      <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
+        Si tenés dudas o querés saber cuándo se reactiva tu acceso, contactá a tu entrenador directamente.
+      </p>
+    </td>
+  </tr>
+</table>
+
+<div style="margin-bottom:0;">
+  ${contactCta}
+</div>
+
+<p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
+  Estás recibiendo este correo porque sos alumno registrado en ${ctx.coachBrandName}.
+</p>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: `Tu acceso a ${ctx.coachBrandName} ha sido suspendido temporalmente por tu entrenador.`,
+        headerTitle: ctx.coachBrandName,
+    })
+
+    return { subject, html }
+}
+
+// ── Client Unarchived (access restored) ──────────────────────────────────────
+
+type ClientUnarchivedContext = {
+    clientName: string
+    coachBrandName: string
+    coachName: string
+    loginUrl: string
+}
+
+export function buildClientUnarchivedEmail(ctx: ClientUnarchivedContext) {
+    const subject = `Tu acceso a ${ctx.coachBrandName} fue restaurado`
+
+    const body = `
+${badge('ACCESO RESTAURADO', '#10B981')}
+<h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+  ¡Tu acceso fue restaurado!
+</h1>
+<p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">
+  Hola <strong>${ctx.clientName}</strong>, tu entrenador en <strong>${ctx.coachBrandName}</strong> reactivó tu acceso. Ya podés ingresar y retomar tus entrenamientos exactamente donde los dejaste.
+</p>
+
+<div style="margin-bottom:0;">
+  ${ctaButton('Entrar a mi cuenta →', ctx.loginUrl)}
+</div>
+
+<p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
+  Estás recibiendo este correo porque tu entrenador ${ctx.coachName} restauró tu acceso en ${ctx.coachBrandName}.
+</p>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: `Tu acceso a ${ctx.coachBrandName} fue restaurado. Ya podés entrar.`,
+        headerTitle: ctx.coachBrandName,
     })
 
     return { subject, html }

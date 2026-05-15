@@ -15,10 +15,13 @@ import {
     expireCoachAction,
     reactivateCoachAdminAction,
     updateCoachAction,
+    sendIndividualCoachEmailAction,
+    getCoachSubscriptionEvents,
+    type SubscriptionEventRow,
 } from '../_actions/coach-actions'
 import {
     ExternalLink, Copy, CheckCircle, AlertTriangle, Clock,
-    RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity
+    RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail
 } from 'lucide-react'
 import type { CoachListItem } from '../../dashboard/_data/types'
 import { format } from 'date-fns'
@@ -83,10 +86,34 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     const [editError, setEditError] = useState('')
     const [copied, setCopied] = useState(false)
     const [confirm, setConfirm] = useState<string | null>(null)
+    const [events, setEvents] = useState<SubscriptionEventRow[] | null>(null)
+    const [loadingEvents, setLoadingEvents] = useState(false)
+    const [emailResult, setEmailResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
     function refresh() {
         router.refresh()
         onClose()
+    }
+
+    async function loadEvents() {
+        if (events !== null) return
+        setLoadingEvents(true)
+        const data = await getCoachSubscriptionEvents(coach.id)
+        setEvents(data)
+        setLoadingEvents(false)
+    }
+
+    function handleTabChange(t: Tab) {
+        setTab(t)
+        if (t === 'info') void loadEvents()
+    }
+
+    async function sendEmail(templateType: 'trial_warning' | 'trial_expired') {
+        setLoadingAction(`email-${templateType}`)
+        setEmailResult(null)
+        const res = await sendIndividualCoachEmailAction(coach.id, templateType)
+        setLoadingAction(null)
+        setEmailResult(res.success ? { ok: true, msg: 'Email enviado.' } : { ok: false, msg: res.error ?? 'Error' })
     }
 
     function copyMpId() {
@@ -155,7 +182,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                     {tabs.map(t => (
                         <button
                             key={t.key}
-                            onClick={() => setTab(t.key)}
+                            onClick={() => handleTabChange(t.key)}
                             className={`flex items-center gap-1.5 rounded-t px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
                                 tab === t.key
                                     ? 'border-[--admin-accent] text-[--admin-accent]'
@@ -178,6 +205,26 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                 <SectionLabel>Identificación</SectionLabel>
                                 <InfoRow label="Slug" value={`/c/${coach.slug}`} mono />
                                 <InfoRow label="ID" value={<span className="font-mono text-[10px]">{coach.id}</span>} />
+                                <InfoRow
+                                    label="Email"
+                                    value={
+                                        coach.auth_email ? (
+                                            <span className="flex items-center gap-1">
+                                                <span className="font-mono text-[11px]">{coach.auth_email}</span>
+                                                <button
+                                                    onClick={() => { navigator.clipboard.writeText(coach.auth_email ?? '') }}
+                                                    className="rounded p-0.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                                                    title="Copiar email"
+                                                >
+                                                    <Copy className="h-3 w-3 text-[--admin-text-3]" />
+                                                </button>
+                                            </span>
+                                        ) : '—'
+                                    }
+                                />
+                                {coach.monthly_revenue > 0 && (
+                                    <InfoRow label="MRR contrib." value={<span className="font-mono text-xs text-emerald-500">${coach.monthly_revenue.toLocaleString('es-CL')}/mes</span>} />
+                                )}
                             </div>
                             <div>
                                 <SectionLabel>Suscripción</SectionLabel>
@@ -257,6 +304,32 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     </div>
                                 </div>
                             )}
+                            <div>
+                                <SectionLabel>Historial de suscripción</SectionLabel>
+                                {loadingEvents && <p className="text-xs text-[--admin-text-3]">Cargando...</p>}
+                                {events !== null && events.length === 0 && (
+                                    <p className="text-xs text-[--admin-text-3]">Sin eventos registrados.</p>
+                                )}
+                                {events !== null && events.length > 0 && (
+                                    <div className="space-y-2">
+                                        {events.map((ev) => (
+                                            <div key={ev.id} className="flex items-start gap-2 rounded border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-mono text-[10px] text-[--admin-text-2]">
+                                                        {ev.provider_status ?? '—'}
+                                                    </p>
+                                                    <p className="truncate font-mono text-[9px] text-[--admin-text-3]" title={ev.provider_event_id ?? ''}>
+                                                        {ev.provider_event_id ?? '—'}
+                                                    </p>
+                                                </div>
+                                                <span className="shrink-0 font-mono text-[9px] text-[--admin-text-3]">
+                                                    {format(new Date(ev.created_at), 'dd/MM HH:mm', { locale: es })}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -407,6 +480,31 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         loading={loadingAction === 'expire'}
                                         onClick={() => setConfirm('expire')}
                                     />
+                                </div>
+                            </div>
+
+                            <div>
+                                <SectionLabel>Comunicaciones</SectionLabel>
+                                <div className="space-y-2">
+                                    <ActionButton
+                                        label="Enviar aviso de vencimiento (trial)"
+                                        tooltip="Envía el email de advertencia de trial a este coach con los días restantes y plan recomendado."
+                                        icon={Mail}
+                                        loading={loadingAction === 'email-trial_warning'}
+                                        onClick={() => void sendEmail('trial_warning')}
+                                    />
+                                    <ActionButton
+                                        label="Enviar recordatorio expirado"
+                                        tooltip="Envía el email de trial expirado con invitación a reactivar."
+                                        icon={Mail}
+                                        loading={loadingAction === 'email-trial_expired'}
+                                        onClick={() => void sendEmail('trial_expired')}
+                                    />
+                                    {emailResult && (
+                                        <p className={`text-xs ${emailResult.ok ? 'text-[--admin-green]' : 'text-[--admin-red]'}`}>
+                                            {emailResult.msg}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 

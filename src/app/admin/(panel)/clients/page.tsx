@@ -10,7 +10,7 @@ const CLIENTS_INFO = [
     },
     {
         heading: 'Columnas',
-        body: 'Nombre — nombre completo del alumno.\nEmail — dirección de email con la que se registró.\nCoach — coach al que está asignado el alumno.\nEstado — activo (usa la app) o inactivo.\nOnboarding — si completó el proceso de configuración inicial.\nRegistrado — fecha de creación de la cuenta.',
+        body: 'Nombre — nombre completo del alumno.\nEmail — dirección de email con la que se registró.\nCoach — coach al que está asignado el alumno.\nEstado — activo (usa la app), inactivo, o archivado (acceso suspendido por el coach, datos preservados).\nOnboarding — si completó el proceso de configuración inicial.\nRegistrado — fecha de creación de la cuenta.',
     },
     {
         heading: 'Búsqueda y filtros',

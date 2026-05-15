@@ -15,7 +15,7 @@ export type DirectorySortKey =
     | 'weight_delta'
     | 'plan_days'
 
-export type StatusDirectoryFilter = 'any' | 'active' | 'paused' | 'pending_sync'
+export type StatusDirectoryFilter = 'any' | 'active' | 'paused' | 'pending_sync' | 'archived'
 
 export type ProgramDirectoryFilter = 'any' | 'with_program' | 'no_program' | 'expired'
 

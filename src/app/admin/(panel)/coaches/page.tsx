@@ -4,6 +4,7 @@ import { CoachTable } from './_components/CoachTable'
 import { CoachFilterBar } from './_components/CoachFilterBar'
 import { PageInfoButton } from '../_components/PageInfoButton'
 import { AnnouncementEmailButton } from './_components/AnnouncementEmailButton'
+import { CoachExportButton } from './_components/CoachExportButton'
 
 export const metadata = { title: 'Coaches' }
 
@@ -41,6 +42,8 @@ interface Props {
         tier?: string
         provider?: string
         beta?: string
+        stage?: string
+        atRisk?: string
         sort?: string
         dir?: string
         page?: string
@@ -56,6 +59,8 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
         status:   sp.status,
         tier:     sp.tier,
         beta:     sp.beta === 'true' ? true : sp.provider === 'beta' ? true : undefined,
+        stage:    sp.stage,
+        atRisk:   sp.atRisk === 'true' ? true : undefined,
         sort:     sp.sort,
         dir:      sp.dir,
         page,
@@ -72,6 +77,7 @@ export default async function AdminCoachesPage({ searchParams }: Props) {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <CoachExportButton params={{ search: sp.q, status: sp.status, tier: sp.tier, beta: sp.beta === 'true' || sp.provider === 'beta' ? true : undefined, stage: sp.stage, atRisk: sp.atRisk === 'true' ? true : undefined, sort: sp.sort, dir: sp.dir }} />
                     <AnnouncementEmailButton />
                     <PageInfoButton title="Coaches — Guía completa" sections={COACHES_INFO} />
                 </div>

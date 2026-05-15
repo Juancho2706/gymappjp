@@ -288,7 +288,7 @@ export async function middleware(request: NextRequest) {
             // Verify the user is a client belonging to this coach
             const { data: clientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, force_password_change, onboarding_completed, is_active, use_coach_brand_colors')
+                .select('id, coach_id, force_password_change, onboarding_completed, is_active, is_archived, use_coach_brand_colors')
                 .eq('id', user.id)
                 .eq('coach_id', coach.id)
                 .maybeSingle()
@@ -310,22 +310,23 @@ export async function middleware(request: NextRequest) {
                 response.headers.set('x-coach-primary-color', SYSTEM_PRIMARY_COLOR)
             }
 
-            // Suspend access if inactive
-            if (client.is_active === false && !pathname.includes('/suspended')) {
+            // Suspend access if archived or inactive
+            const isBlocked = client.is_archived === true || client.is_active === false
+            if (isBlocked && !pathname.includes('/suspended')) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/suspended`
                 return NextResponse.redirect(redirectUrl)
             }
 
             // Force password change flow
-            if (client.is_active !== false && client.force_password_change && !pathname.includes('/change-password')) {
+            if (!isBlocked && client.force_password_change && !pathname.includes('/change-password')) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/change-password`
                 return NextResponse.redirect(redirectUrl)
             }
 
             // Force intake/onboarding flow right after password change
-            if (client.is_active !== false && !client.force_password_change && !client.onboarding_completed && !pathname.includes('/onboarding')) {
+            if (!isBlocked && !client.force_password_change && !client.onboarding_completed && !pathname.includes('/onboarding')) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/onboarding`
                 return NextResponse.redirect(redirectUrl)

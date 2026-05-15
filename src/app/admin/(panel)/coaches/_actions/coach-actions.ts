@@ -4,10 +4,15 @@ import { z } from 'zod'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { normalizePlatformEmail, assertPlatformEmailAvailable } from '@/lib/auth/platform-email'
-import { getTierMaxClients } from '@/lib/constants'
+import { getRecommendedTier, getTierMaxClients, TIER_CONFIG } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { buildExistingCoachAnnouncementEmail } from '@/lib/email/transactional-templates'
+import {
+    buildExistingCoachAnnouncementEmail,
+    buildTrialExpiryWarningEmail,
+    buildTrialExpiredEmail,
+} from '@/lib/email/transactional-templates'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -346,4 +351,107 @@ export async function sendAnnouncementEmailAction(): Promise<
 
     await logAdminAction(adminClient, 'coach.announcement_email', 'coaches', 'bulk', { sent, failed })
     return { success: true, sent, failed }
+}
+
+// ── Individual Coach Email ────────────────────────────────────────
+
+export async function sendIndividualCoachEmailAction(
+    coachId: string,
+    templateType: 'trial_warning' | 'trial_expired'
+): Promise<{ success?: boolean; error?: string }> {
+    const { adminClient } = await assertAdmin()
+
+    const [coachRes, authUserRes] = await Promise.all([
+        adminClient
+            .from('coaches')
+            .select('full_name, trial_ends_at, subscription_tier')
+            .eq('id', coachId)
+            .maybeSingle(),
+        adminClient.auth.admin.getUserById(coachId),
+    ])
+
+    const coach = coachRes.data
+    const email = authUserRes.data?.user?.email
+    if (!coach || !email) return { error: 'Coach no encontrado o sin email.' }
+
+    const { count: clientCount } = await adminClient
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', coachId)
+        .eq('is_archived', false)
+
+    const activeCount = clientCount ?? 0
+    const recTier = getRecommendedTier(activeCount)
+    const recConfig = TIER_CONFIG[recTier]
+    const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+    const reactivateUrl = `${appUrl}/coach/reactivate?tier=${recTier}`
+    const coachName = coach.full_name ?? 'Coach'
+    const brandName = coachName
+
+    let subject: string
+    let html: string
+
+    if (templateType === 'trial_warning') {
+        const msLeft = coach.trial_ends_at ? new Date(coach.trial_ends_at).getTime() - Date.now() : 0
+        const daysLeft = Math.max(1, Math.ceil(msLeft / (1000 * 60 * 60 * 24)))
+        ;({ subject, html } = buildTrialExpiryWarningEmail({
+            coachName, brandName, daysLeft, activeClientCount: activeCount,
+            recommendedTierLabel: recConfig.label, recommendedTierSlug: recTier,
+            recommendedMaxClients: recConfig.maxClients, recommendedPriceClp: recConfig.monthlyPriceClp,
+            reactivateUrl,
+        }))
+    } else {
+        ;({ subject, html } = buildTrialExpiredEmail({
+            coachName, brandName, activeClientCount: activeCount,
+            recommendedTierLabel: recConfig.label, recommendedTierSlug: recTier,
+            recommendedMaxClients: recConfig.maxClients, recommendedPriceClp: recConfig.monthlyPriceClp,
+            reactivateUrl,
+        }))
+    }
+
+    const result = await sendTransactionalEmail({ to: email, subject, html })
+    if (!result.ok) return { error: result.error }
+
+    await logAdminAction(adminClient, 'coach.manual_email_sent', 'coaches', coachId, { templateType, email })
+    return { success: true }
+}
+
+// ── Subscription Event Timeline ───────────────────────────────────
+
+export type SubscriptionEventRow = {
+    id: string
+    created_at: string
+    provider: string | null
+    provider_status: string | null
+    provider_event_id: string | null
+    provider_checkout_id: string | null
+}
+
+export async function getCoachSubscriptionEvents(coachId: string): Promise<SubscriptionEventRow[]> {
+    const admin = createServiceRoleClient()
+    const { data } = await admin
+        .from('subscription_events')
+        .select('id, created_at, provider, provider_status, provider_event_id, provider_checkout_id')
+        .eq('coach_id', coachId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+    return (data ?? []) as SubscriptionEventRow[]
+}
+
+export async function getCoachNotesAction(coachId: string): Promise<string> {
+    await assertAdmin()
+    const admin = createServiceRoleClient()
+    const { data } = await admin
+        .from('coaches')
+        .select('admin_notes')
+        .eq('id', coachId)
+        .maybeSingle()
+    return (data as any)?.admin_notes ?? ''
+}
+
+export async function saveCoachNotesAction(coachId: string, notes: string): Promise<void> {
+    const { adminClient, user } = await assertAdmin()
+    await adminClient.from('coaches').update({ admin_notes: notes }).eq('id', coachId)
+    await logAdminAction(adminClient, user.email ?? 'admin', 'coach.update', 'coaches', coachId)
+    revalidateAdmin()
 }
