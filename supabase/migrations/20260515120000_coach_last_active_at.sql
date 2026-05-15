@@ -79,8 +79,8 @@ AS $$
             c.current_period_end,
             c.trial_ends_at,
             c.created_at,
-            COUNT(cl.id)::bigint                                        AS client_count,
-            COUNT(cl.id) FILTER (WHERE cl.is_active = true)::bigint     AS active_client_count,
+            COUNT(DISTINCT cl.id)::bigint                                                 AS client_count,
+            COUNT(DISTINCT cl.id) FILTER (WHERE cl.is_active = true)::bigint             AS active_client_count,
             CASE
                 WHEN c.current_period_end IS NOT NULL
                     THEN EXTRACT(day FROM c.current_period_end - now())::integer
@@ -90,7 +90,7 @@ AS $$
             END AS days_until_expiry,
             CASE
                 WHEN c.max_clients > 0
-                    THEN ROUND((COUNT(cl.id)::numeric / c.max_clients) * 100, 1)
+                    THEN ROUND((COUNT(DISTINCT cl.id)::numeric / c.max_clients) * 100, 1)
                 ELSE 0
             END AS utilization_pct,
             MAX(wl.logged_at)                                           AS last_activity_at,

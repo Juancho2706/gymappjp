@@ -124,3 +124,6 @@ scripts/seed-welcome-news.sql
 EVA_VIDEO_PLAN.md
 supabase/migrations/20260510163503_add_free_growth_subscription_tiers.sql
 supabase/migrations/20260510171453_add_free_growth_tier_indexes.sql
+docs/ARQUITECTURA.md
+supabase/migrations/20260515120000_coach_last_active_at.sql
+supabase/migrations/20260515120000_coach_last_active_at.sql
