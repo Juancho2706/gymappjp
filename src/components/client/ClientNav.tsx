@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -8,6 +8,7 @@ import {
     Home,
     Apple,
     Settings,
+    ChevronLeft,
     ChevronRight,
     LogOut,
     CheckCircle,
@@ -15,6 +16,7 @@ import {
     PanelLeftClose,
     PanelLeft
 } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -40,6 +42,29 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
     const [isNavigating, setIsNavigating] = useState<string | null>(null)
     const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
     const [isTogglingColors, setIsTogglingColors] = useState(false)
+    const navRef = useRef<HTMLElement>(null)
+    const [canScrollLeft, setCanScrollLeft] = useState(false)
+    const [canScrollRight, setCanScrollRight] = useState(false)
+
+    const updateScrollIndicators = useCallback(() => {
+        const el = navRef.current
+        if (!el) return
+        setCanScrollLeft(el.scrollLeft > 4)
+        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+    }, [])
+
+    useEffect(() => {
+        const el = navRef.current
+        if (!el) return
+        updateScrollIndicators()
+        el.addEventListener('scroll', updateScrollIndicators, { passive: true })
+        const ro = new ResizeObserver(updateScrollIndicators)
+        ro.observe(el)
+        return () => {
+            el.removeEventListener('scroll', updateScrollIndicators)
+            ro.disconnect()
+        }
+    }, [updateScrollIndicators])
 
     // Reset navigating state when pathname changes
     useEffect(() => {
@@ -155,7 +180,30 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                 </div>
 
                 {/* Navigation Links */}
-                <nav className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 pt-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar">
+                <div className="relative flex-1 flex md:flex-col md:flex-none overflow-hidden md:overflow-visible">
+                {canScrollLeft && (
+                    <div className="md:hidden pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-background/90 to-transparent w-10">
+                        <motion.div
+                            animate={{ x: [0, -4, 0] }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                            className="ml-0.5"
+                        >
+                            <ChevronLeft className="w-4 h-4 text-foreground/50" />
+                        </motion.div>
+                    </div>
+                )}
+                {canScrollRight && (
+                    <div className="md:hidden pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l from-background/90 to-transparent w-10">
+                        <motion.div
+                            animate={{ x: [0, 4, 0] }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                            className="mr-0.5 ml-auto"
+                        >
+                            <ChevronRight className="w-4 h-4 text-foreground/50" />
+                        </motion.div>
+                    </div>
+                )}
+                <nav ref={navRef} className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 pt-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar">
                     {navItems.map((item) => {
                         const isActive =
                             pathname === item.href ||
@@ -222,6 +270,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                         </span>
                     </button>
                 </nav>
+                </div>
 
                 {/* Bottom area (Desktop only) */}
                     <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 items-center" : "px-3 py-4 space-y-2")}>

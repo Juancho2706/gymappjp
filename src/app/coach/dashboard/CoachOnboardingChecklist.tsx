@@ -19,7 +19,6 @@ import { persistOnboardingGuideAction } from './_actions/onboarding-guide.action
 import { OnboardingCompactLoopStrip } from './_components/onboarding/OnboardingCompactLoopStrip'
 import { OnboardingStepsJumpNav } from './_components/onboarding/OnboardingStepsJumpNav'
 import { OnboardingStepsVignetteCarousel } from './_components/onboarding/OnboardingStepsVignetteCarousel'
-import { OnboardingThreeSlot } from './_components/onboarding/OnboardingThreeSlot'
 import { postGuideEngagement } from './_lib/onboarding-telemetry.client'
 
 type StepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_checkin'
@@ -409,12 +408,7 @@ export function CoachOnboardingChecklist({
                 </div>
             )}
 
-            {!allDone ? (
-                <>
-                    <OnboardingThreeSlot />
-                    <OnboardingCompactLoopStrip />
-                </>
-            ) : null}
+            {!allDone ? <OnboardingCompactLoopStrip /> : null}
 
             {/* V3 gemelo: tabs en móvil, grid desde md (plan §5.2) */}
             <div className="mt-5 md:hidden">
@@ -481,7 +475,7 @@ export function CoachOnboardingChecklist({
                                     href="/coach/subscription"
                                     className={cn(
                                         buttonVariants({ variant: 'default' }),
-                                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center'
+                                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center text-white'
                                     )}
                                 >
                                     Desbloquear con Starter ↑
@@ -583,7 +577,7 @@ export function CoachOnboardingChecklist({
                         <Link
                             href="/coach/clients"
                             className={cn(
-                                buttonVariants({ variant: 'outline' }),
+                                buttonVariants({ variant: 'secondary' }),
                                 'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
                             )}
                         >
