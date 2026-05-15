@@ -126,6 +126,8 @@ const UpdateCoachSchema = z.object({
     current_period_end: z.string().datetime().optional(),
     trial_ends_at: z.string().datetime().optional(),
     admin_notes: z.string().max(2000).optional(),
+    payment_provider: z.enum(['beta', 'internal', 'admin', 'mercadopago', 'stripe']).optional(),
+    primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 })
 
 export async function updateCoachAction(_prev: unknown, formData: FormData) {
@@ -138,7 +140,7 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
     }
 
     const updateData: Record<string, unknown> = {}
-    const fields = ['full_name', 'brand_name', 'subscription_tier', 'subscription_status', 'billing_cycle', 'current_period_end', 'trial_ends_at', 'admin_notes'] as const
+    const fields = ['full_name', 'brand_name', 'subscription_tier', 'subscription_status', 'billing_cycle', 'current_period_end', 'trial_ends_at', 'admin_notes', 'payment_provider', 'primary_color'] as const
     for (const f of fields) {
         if (raw[f]) updateData[f] = raw[f] as string
     }

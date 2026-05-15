@@ -4,6 +4,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
     buildTrialExpiryWarningEmail,
     buildTrialExpiredEmail,
+    buildBetaTrialEndedFreeEmail,
 } from '@/lib/email/transactional-templates'
 import { getRecommendedTier, getTierMaxClients, TIER_CONFIG } from '@/lib/constants'
 import type { TablesInsert } from '@/lib/database.types'
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
     // ── Block 1: expire overdue trials ────────────────────────────────────────
     const { data: overdueTrials, error: overdueErr } = await admin
         .from('coaches')
-        .select('id, full_name, trial_warning_days_sent, subscription_tier')
+        .select('id, full_name, trial_warning_days_sent, subscription_tier, payment_provider')
         .eq('subscription_status', 'trialing')
         .or(
             'current_period_end.lt.now(),and(current_period_end.is.null,trial_ends_at.lt.now())'
@@ -46,10 +47,26 @@ export async function GET(req: Request) {
 
     for (const coach of overdueTrials ?? []) {
         try {
-            await admin
-                .from('coaches')
-                .update({ subscription_status: 'expired', current_period_end: null })
-                .eq('id', coach.id)
+            const isBeta = coach.payment_provider === 'beta'
+
+            if (isBeta) {
+                // Beta coaches were invited without choosing a plan — drop to Free, not blocked
+                await admin
+                    .from('coaches')
+                    .update({
+                        subscription_status: 'active',
+                        subscription_tier: 'free',
+                        max_clients: 3,
+                        current_period_end: null,
+                        trial_ends_at: null,
+                    })
+                    .eq('id', coach.id)
+            } else {
+                await admin
+                    .from('coaches')
+                    .update({ subscription_status: 'expired', current_period_end: null })
+                    .eq('id', coach.id)
+            }
 
             // Fetch email from auth.users via RPC — use service role direct query
             const { data: authUser } = await admin.auth.admin.getUserById(coach.id)
@@ -57,37 +74,42 @@ export async function GET(req: Request) {
             const coachName = coach.full_name ?? 'Coach'
 
             if (email) {
-                // Count active clients
-                const { count: clientCount } = await admin
-                    .from('clients')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('coach_id', coach.id)
-                    .eq('is_archived', false)
+                if (isBeta) {
+                    const { subject, html } = buildBetaTrialEndedFreeEmail({ coachName, appUrl })
+                    await sendTransactionalEmail({ to: email, subject, html })
+                } else {
+                    // Count active clients
+                    const { count: clientCount } = await admin
+                        .from('clients')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('coach_id', coach.id)
+                        .eq('is_archived', false)
 
-                const activeCount = clientCount ?? 0
-                const recTier = getRecommendedTier(activeCount)
-                const recConfig = TIER_CONFIG[recTier]
+                    const activeCount = clientCount ?? 0
+                    const recTier = getRecommendedTier(activeCount)
+                    const recConfig = TIER_CONFIG[recTier]
 
-                const { subject, html } = buildTrialExpiredEmail({
-                    coachName,
-                    brandName: coachName,
-                    activeClientCount: activeCount,
-                    recommendedTierLabel: recConfig.label,
-                    recommendedTierSlug: recTier,
-                    recommendedMaxClients: getTierMaxClients(recTier),
-                    recommendedPriceClp: recConfig.monthlyPriceClp,
-                    reactivateUrl: `${reactivateBase}?tier=${recTier}`,
-                })
+                    const { subject, html } = buildTrialExpiredEmail({
+                        coachName,
+                        brandName: coachName,
+                        activeClientCount: activeCount,
+                        recommendedTierLabel: recConfig.label,
+                        recommendedTierSlug: recTier,
+                        recommendedMaxClients: getTierMaxClients(recTier),
+                        recommendedPriceClp: recConfig.monthlyPriceClp,
+                        reactivateUrl: `${reactivateBase}?tier=${recTier}`,
+                    })
 
-                await sendTransactionalEmail({ to: email, subject, html })
+                    await sendTransactionalEmail({ to: email, subject, html })
+                }
             }
 
             const auditRow: TablesInsert<'admin_audit_logs'> = {
                 admin_email: 'cron',
-                action: 'coach.trial_expired_auto',
+                action: isBeta ? 'coach.beta_trial_downgraded_to_free' : 'coach.trial_expired_auto',
                 target_table: 'coaches',
                 target_id: coach.id,
-                payload: { previous_status: 'trialing', triggered_by: 'cron/trial-expiry' },
+                payload: { previous_status: 'trialing', triggered_by: 'cron/trial-expiry', payment_provider: coach.payment_provider },
             }
             await admin.from('admin_audit_logs').insert(auditRow)
 

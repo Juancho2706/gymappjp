@@ -526,3 +526,38 @@ ${badge('ACCESO RESTAURADO', '#10B981')}
 
     return { subject, html }
 }
+
+// ── Beta Trial Ended → Free ──────────────────────────────────────────────────
+
+export function buildBetaTrialEndedFreeEmail(ctx: { coachName: string; appUrl: string }) {
+    const subject = 'Tu período de prueba EVA terminó — ahora estás en el plan gratuito'
+
+    const body = `
+${badge('PLAN GRATUITO ACTIVADO', '#6B7280')}
+<h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+  Tu prueba terminó, pero seguís con EVA
+</h1>
+<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7;">
+  Hola <strong>${ctx.coachName}</strong>, tu período de acceso Beta finalizó. Tu cuenta fue movida automáticamente al <strong>Plan Gratuito</strong>.
+</p>
+<p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">
+  Con el plan gratuito podés gestionar hasta <strong>3 alumnos activos</strong>. Cuando estés listo para crecer, podés activar un plan pago desde el dashboard.
+</p>
+
+<div style="margin-bottom:24px;">
+  ${ctaButton('Ir a mi dashboard →', `${ctx.appUrl}/coach`)}
+</div>
+
+${divider()}
+
+<p style="margin:16px 0 0;font-size:13px;color:#6B7280;line-height:1.6;">
+  ¿Tenés preguntas? Respondé este email y te ayudamos.
+</p>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: 'Tu período beta terminó — tu cuenta pasó al plan gratuito. Seguís teniendo acceso.',
+        headerTitle: 'EVA — Plataforma para Coaches',
+    })
+
+    return { subject, html }
+}

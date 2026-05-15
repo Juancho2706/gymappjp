@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
@@ -21,9 +21,10 @@ import {
 } from '../_actions/coach-actions'
 import {
     ExternalLink, Copy, CheckCircle, AlertTriangle, Clock,
-    RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail
+    RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail, Palette
 } from 'lucide-react'
 import type { CoachListItem } from '../../dashboard/_data/types'
+import { TIER_CONFIG } from '@/lib/constants'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -89,6 +90,15 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     const [events, setEvents] = useState<SubscriptionEventRow[] | null>(null)
     const [loadingEvents, setLoadingEvents] = useState(false)
     const [emailResult, setEmailResult] = useState<{ ok: boolean; msg: string } | null>(null)
+    const [editTier, setEditTier] = useState(coach.subscription_tier ?? 'starter')
+    const [editMaxClients, setEditMaxClients] = useState(coach.max_clients ?? 10)
+    const [editColorHex, setEditColorHex] = useState((coach as any).primary_color ?? '#10B981')
+
+    useEffect(() => {
+        setEditTier(coach.subscription_tier ?? 'starter')
+        setEditMaxClients(coach.max_clients ?? 10)
+        setEditColorHex((coach as any).primary_color ?? '#10B981')
+    }, [coach.id])
 
     function refresh() {
         router.refresh()
@@ -336,6 +346,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                     {/* ── Tab Editar ── */}
                     {tab === 'edit' && (
                         <form onSubmit={handleEdit} className="space-y-4">
+                            {/* Identidad */}
                             <div>
                                 <Label className="text-xs text-[--admin-text-2]">Nombre completo</Label>
                                 <Input name="full_name" defaultValue={coach.full_name ?? ''} className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]" />
@@ -344,17 +355,50 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                 <Label className="text-xs text-[--admin-text-2]">Marca</Label>
                                 <Input name="brand_name" defaultValue={coach.brand_name ?? ''} className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]" />
                             </div>
+
+                            {/* Slug — read only */}
+                            <div>
+                                <Label className="text-xs text-[--admin-text-2]">Slug (URL)</Label>
+                                <div className="mt-1 flex items-center gap-2 rounded-md border border-[--admin-border] bg-[--admin-bg] px-3 py-2">
+                                    <span className="flex-1 font-mono text-xs text-[--admin-text-3]">/c/{coach.slug}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => navigator.clipboard.writeText(coach.slug)}
+                                        className="rounded p-0.5 hover:bg-[--admin-bg-elevated] transition-colors"
+                                        title="Copiar slug"
+                                    >
+                                        <Copy className="h-3 w-3 text-[--admin-text-3]" />
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-[--admin-text-3] mt-0.5">Inmutable — cambiarlo rompe acceso de alumnos</p>
+                            </div>
+
+                            {/* Tier + Status */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <Label className="text-xs text-[--admin-text-2]">Tier</Label>
-                                    <Select name="subscription_tier" defaultValue={coach.subscription_tier ?? undefined}>
+                                    <Select
+                                        name="subscription_tier"
+                                        value={editTier}
+                                        onValueChange={v => {
+                                            if (!v) return
+                                            setEditTier(v)
+                                            const cfg = TIER_CONFIG[v as keyof typeof TIER_CONFIG]
+                                            if (cfg) setEditMaxClients(cfg.maxClients)
+                                        }}
+                                    >
                                         <SelectTrigger className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
-                                            {['free', 'starter', 'pro', 'elite', 'growth', 'scale'].map(v => (
-                                                <SelectItem key={v} value={v}>{v}</SelectItem>
-                                            ))}
+                                            {(['free', 'starter', 'pro', 'elite', 'growth', 'scale'] as const).map(v => {
+                                                const cfg = TIER_CONFIG[v]
+                                                return (
+                                                    <SelectItem key={v} value={v}>
+                                                        {v} <span className="text-[--admin-text-3]">({cfg.maxClients} alumnos)</span>
+                                                    </SelectItem>
+                                                )
+                                            })}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -372,10 +416,24 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     </Select>
                                 </div>
                             </div>
+
+                            {/* Max alumnos + Ciclo */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">Max alumnos</Label>
-                                    <Input name="max_clients" type="number" defaultValue={coach.max_clients ?? 10} className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]" />
+                                    <Label className="text-xs text-[--admin-text-2]">
+                                        Max alumnos
+                                        <span className="ml-1.5 font-normal text-[--admin-text-3]">({coach.active_client_count} activos)</span>
+                                    </Label>
+                                    <Input
+                                        name="max_clients"
+                                        type="number"
+                                        value={editMaxClients}
+                                        onChange={e => setEditMaxClients(Number(e.target.value))}
+                                        className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]"
+                                    />
+                                    {editMaxClients < coach.active_client_count && (
+                                        <p className="text-[10px] text-[--admin-amber] mt-0.5">⚠ Límite menor que alumnos activos</p>
+                                    )}
                                 </div>
                                 <div>
                                     <Label className="text-xs text-[--admin-text-2]">Ciclo de facturación</Label>
@@ -391,6 +449,25 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     </Select>
                                 </div>
                             </div>
+
+                            {/* Provider */}
+                            <div>
+                                <Label className="text-xs text-[--admin-text-2]">Provider de pago</Label>
+                                <Select name="payment_provider" defaultValue={coach.payment_provider ?? undefined}>
+                                    <SelectTrigger className="mt-1 border-[--admin-border] bg-[--admin-bg-elevated] text-[--admin-text-1]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
+                                        <SelectItem value="beta">Beta (prueba sin pago)</SelectItem>
+                                        <SelectItem value="internal">Internal</SelectItem>
+                                        <SelectItem value="admin">Admin</SelectItem>
+                                        <SelectItem value="mercadopago">MercadoPago</SelectItem>
+                                        <SelectItem value="stripe">Stripe</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Fechas */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <Label className="text-xs text-[--admin-text-2]">Vencimiento período</Label>
@@ -404,7 +481,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-[--admin-text-2]">Trial ends at</Label>
+                                    <Label className="text-xs text-[--admin-text-2]">Fin del trial</Label>
                                     <Input
                                         name="trial_ends_at"
                                         type="datetime-local"
@@ -415,6 +492,26 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     />
                                 </div>
                             </div>
+
+                            {/* Color de marca */}
+                            <div>
+                                <Label className="text-xs text-[--admin-text-2] flex items-center gap-1.5">
+                                    <Palette className="h-3 w-3" />
+                                    Color de marca
+                                </Label>
+                                <div className="mt-1 flex items-center gap-3">
+                                    <input
+                                        type="color"
+                                        name="primary_color"
+                                        value={editColorHex}
+                                        onChange={e => setEditColorHex(e.target.value)}
+                                        className="h-8 w-8 cursor-pointer rounded border border-[--admin-border] bg-transparent p-0.5"
+                                    />
+                                    <span className="font-mono text-xs text-[--admin-text-2]">{editColorHex}</span>
+                                </div>
+                            </div>
+
+                            {/* Notas */}
                             <div>
                                 <Label className="text-xs text-[--admin-text-2]">Notas internas (admin)</Label>
                                 <textarea
@@ -425,6 +522,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     className="mt-1 w-full rounded-md border border-[--admin-border] bg-[--admin-bg-elevated] px-3 py-2 text-xs text-[--admin-text-1] placeholder:text-[--admin-text-3] focus:outline-none focus:border-[--admin-accent] resize-none"
                                 />
                             </div>
+
                             {editError && <p className="text-xs text-[--admin-red]">{editError}</p>}
                             <Button type="submit" className="w-full bg-[--admin-accent] text-white hover:bg-[--admin-accent-dim]">
                                 Guardar cambios
