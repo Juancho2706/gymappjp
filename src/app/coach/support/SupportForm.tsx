@@ -159,7 +159,7 @@ export function SupportForm() {
                     className={cn(
                       'shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors border',
                       field.value === t
-                        ? 'bg-primary text-primary-foreground border-primary'
+                        ? 'bg-primary text-white border-primary'
                         : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80'
                     )}
                   >

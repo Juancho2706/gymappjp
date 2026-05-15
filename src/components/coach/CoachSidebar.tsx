@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -16,7 +16,10 @@ import {
     CreditCard,
     HelpCircle,
     LifeBuoy,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -87,6 +90,29 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     const router = useRouter()
     const supabase = createClient()
     const [isCollapsed, setIsCollapsed] = useState(false)
+    const navRef = useRef<HTMLElement>(null)
+    const [canScrollLeft, setCanScrollLeft] = useState(false)
+    const [canScrollRight, setCanScrollRight] = useState(false)
+
+    const updateScrollIndicators = useCallback(() => {
+        const el = navRef.current
+        if (!el) return
+        setCanScrollLeft(el.scrollLeft > 4)
+        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+    }, [])
+
+    useEffect(() => {
+        const el = navRef.current
+        if (!el) return
+        updateScrollIndicators()
+        el.addEventListener('scroll', updateScrollIndicators, { passive: true })
+        const ro = new ResizeObserver(updateScrollIndicators)
+        ro.observe(el)
+        return () => {
+            el.removeEventListener('scroll', updateScrollIndicators)
+            ro.disconnect()
+        }
+    }, [updateScrollIndicators])
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed')
@@ -207,7 +233,30 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 )}
 
                 {/* Navigation Links */}
-                <nav className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
+                <div className="relative flex-none overflow-hidden md:flex-1 md:overflow-visible">
+                {canScrollLeft && (
+                    <div className="md:hidden pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-sidebar/90 to-transparent w-10">
+                        <motion.div
+                            animate={{ x: [0, -4, 0] }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                            className="ml-0.5"
+                        >
+                            <ChevronLeft className="w-4 h-4 text-sidebar-foreground/50" />
+                        </motion.div>
+                    </div>
+                )}
+                {canScrollRight && (
+                    <div className="md:hidden pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l from-sidebar/90 to-transparent w-10">
+                        <motion.div
+                            animate={{ x: [0, 4, 0] }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                            className="ml-auto mr-0.5"
+                        >
+                            <ChevronRight className="w-4 h-4 text-sidebar-foreground/50" />
+                        </motion.div>
+                    </div>
+                )}
+                <nav ref={navRef} className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
                     {visibleNavItems.map((item) => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                         const Icon = item.icon
@@ -247,6 +296,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         )
                     })}
                 </nav>
+                </div>
 
                 {/* Bottom area (Desktop only) */}
                 <div className={cn("hidden md:flex flex-col border-t border-sidebar-border bg-sidebar-accent/50 dark:bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-6 space-y-4")}>
