@@ -72,7 +72,7 @@ export interface CoachListItem {
     days_until_expiry: number | null
     utilization_pct: number
     last_activity_at: string | null
-    coach_last_login_at: string | null
+    coach_last_active_at: string | null
     auth_email: string | null
     monthly_revenue: number
     lifecycle_stage: LifecycleStage

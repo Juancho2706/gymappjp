@@ -9,7 +9,7 @@ function toCsv(coaches: CoachListItem[]): string {
     const headers = [
         'full_name', 'brand_name', 'slug', 'email', 'tier', 'status', 'lifecycle',
         'billing_cycle', 'provider', 'max_clients', 'active_clients', 'total_clients',
-        'days_until_expiry', 'mrr_clp', 'last_login', 'registered_at',
+        'days_until_expiry', 'mrr_clp', 'last_active', 'registered_at',
     ]
     const rows = coaches.map(c => [
         c.full_name ?? '',
@@ -26,7 +26,7 @@ function toCsv(coaches: CoachListItem[]): string {
         String(c.client_count),
         c.days_until_expiry !== null ? String(c.days_until_expiry) : '',
         String(c.monthly_revenue),
-        c.coach_last_login_at ?? '',
+        c.coach_last_active_at ?? '',
         c.created_at,
     ].map(v => `"${v.replace(/"/g, '""')}"`).join(','))
     return [headers.join(','), ...rows].join('\n')

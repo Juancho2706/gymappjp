@@ -293,8 +293,8 @@ export function CoachTable({ coaches, total }: Props) {
                                 <AdminSortHeader label="Alumnos" sortKey="clients" />
                                 <th className="px-3 py-2 text-left">
                                     <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">
-                                        Último login
-                                        <InfoTooltip content="Última vez que el coach inició sesión en la plataforma." />
+                                        Última actividad
+                                        <InfoTooltip content="Última vez que el coach realizó una acción en la plataforma (guardar plan, agregar ejercicio, etc.)." />
                                     </span>
                                 </th>
                                 <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-[--admin-text-3]">Registrado</th>
@@ -370,8 +370,8 @@ export function CoachTable({ coaches, total }: Props) {
                                             </span>
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            {c.coach_last_login_at ? (
-                                                <LastActivityDays iso={c.coach_last_login_at} />
+                                            {c.coach_last_active_at ? (
+                                                <LastActivityDays iso={c.coach_last_active_at} />
                                             ) : (
                                                 <span className="text-xs text-[--admin-text-3]">nunca</span>
                                             )}

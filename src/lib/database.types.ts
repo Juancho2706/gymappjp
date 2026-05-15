@@ -2116,7 +2116,7 @@ export type Database = {
           billing_cycle: string
           brand_name: string
           client_count: number
-          coach_last_login_at: string
+          coach_last_active_at: string
           created_at: string
           current_period_end: string
           days_until_expiry: number
@@ -2276,6 +2276,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      touch_coach_activity: { Args: { p_coach_id: string }; Returns: undefined }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {

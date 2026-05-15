@@ -201,7 +201,7 @@ export async function getAllCoachesPaginated(params: {
             days_until_expiry: r.current_period_end
                 ? Math.floor((new Date(r.current_period_end).getTime() - Date.now()) / 86400000)
                 : null,
-            utilization_pct: 0, last_activity_at: null, coach_last_login_at: null,
+            utilization_pct: 0, last_activity_at: null, coach_last_active_at: null,
             auth_email: null,
             monthly_revenue: computeMonthlyRevenue(r.subscription_tier, r.billing_cycle, r.payment_provider),
             lifecycle_stage: computeLifecycleStage(r.subscription_status, null),
@@ -229,7 +229,7 @@ export async function getAllCoachesPaginated(params: {
         days_until_expiry: r.days_until_expiry,
         utilization_pct: Number(r.utilization_pct),
         last_activity_at: r.last_activity_at,
-        coach_last_login_at: r.coach_last_login_at ?? null,
+        coach_last_active_at: r.coach_last_active_at ?? null,
         auth_email: r.auth_email ?? null,
         monthly_revenue: computeMonthlyRevenue(r.subscription_tier, r.billing_cycle, r.payment_provider),
         lifecycle_stage: computeLifecycleStage(r.subscription_status, r.days_until_expiry),

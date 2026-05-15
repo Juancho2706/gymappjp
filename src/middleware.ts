@@ -196,6 +196,9 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
+        // Fire-and-forget: update coach activity timestamp (debounced 5min in DB)
+        supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+
         return supabaseResponse
     }
 
