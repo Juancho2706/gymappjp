@@ -3,8 +3,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Circle, Copy, ExternalLink, Monitor, Smartphone, Sparkles, X } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
+import { CheckCircle2, Circle, ExternalLink, Monitor, Smartphone, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import confetti from 'canvas-confetti'
 import { motion } from 'framer-motion'
@@ -99,7 +98,6 @@ async function emitOnboardingEvent(
 export function CoachOnboardingChecklist({
     coachId,
     coachSlug,
-    absoluteStudentAppUrl,
     initialOnboardingGuide,
     totalClients,
     activePlans,
@@ -109,7 +107,6 @@ export function CoachOnboardingChecklist({
 }: {
     coachId: string
     coachSlug: string
-    absoluteStudentAppUrl: string
     initialOnboardingGuide: Json
     totalClients: number
     activePlans: number
@@ -346,7 +343,7 @@ export function CoachOnboardingChecklist({
                     <Button
                         type="button"
                         variant="default"
-                        className="h-11 min-h-11 shrink-0 touch-manipulation sm:w-auto w-full"
+                        className="h-11 min-h-11 shrink-0 touch-manipulation sm:w-auto w-full text-white"
                         onClick={resumeGuide}
                     >
                         Continuar guía
@@ -385,11 +382,11 @@ export function CoachOnboardingChecklist({
                         type="button"
                         onClick={dismiss}
                         aria-label="Saltar guía de inicio"
-                        animate={{ scale: [1, 1.04, 1] }}
-                        transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 3, ease: 'easeInOut' }}
-                        whileHover={{ scale: 1.07 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs font-semibold text-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-primary min-h-11 touch-manipulation"
+                        animate={{ scale: [1, 1.06, 1], boxShadow: ['0 0 0px 0px rgba(251,146,60,0)', '0 0 12px 4px rgba(251,146,60,0.45)', '0 0 0px 0px rgba(251,146,60,0)'] }}
+                        transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 2.5, ease: 'easeInOut' }}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.93 }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 px-3 py-2 text-xs font-bold text-white shadow-md min-h-11 touch-manipulation border-0"
                     >
                         <X className="h-3.5 w-3.5 shrink-0" />
                         <span>Saltar guía</span>
@@ -450,8 +447,6 @@ export function CoachOnboardingChecklist({
                 <OnboardingGemelliCoachCard />
                 <OnboardingGemelliStudentCard studentAppPath={studentAppPath} />
             </div>
-
-            <ShareAppBlock absoluteUrl={absoluteStudentAppUrl} />
 
             <div className="mt-5 h-2 overflow-hidden rounded-full bg-muted">
                 <div
@@ -754,60 +749,6 @@ function NutritionTierBlock({ subscriptionTier }: { subscriptionTier: Subscripti
     )
 }
 
-function ShareAppBlock({ absoluteUrl }: { absoluteUrl: string }) {
-    async function copyLink() {
-        try {
-            await navigator.clipboard.writeText(absoluteUrl)
-            toast.success('Enlace copiado al portapapeles')
-        } catch {
-            toast.error('No se pudo copiar. Copiá el enlace manualmente.')
-        }
-    }
-
-    return (
-        <div className="mt-5 rounded-2xl border border-dashed border-border/90 bg-muted/15 p-4 sm:p-5">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Compartir app</p>
-            <h4 className="mt-1 text-sm font-black tracking-tight text-foreground sm:text-base">
-                Enviá tu enlace o mostrá el QR
-            </h4>
-            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                Tus alumnos entran a tu espacio con tu marca. Copiá el enlace para WhatsApp o usá el QR en el gym; en Mi
-                Marca tenés opciones extra (tamaños y descarga).
-            </p>
-            <p className="mt-3 break-all rounded-lg border border-border/60 bg-background/80 px-3 py-2 font-mono text-[11px] leading-relaxed text-foreground/90 sm:text-xs">
-                {absoluteUrl}
-            </p>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <Button
-                    type="button"
-                    variant="default"
-                    className="h-11 min-h-11 touch-manipulation gap-2"
-                    onClick={() => void copyLink()}
-                >
-                    <Copy className="h-4 w-4 shrink-0" aria-hidden />
-                    Copiar enlace
-                </Button>
-                <Link
-                    href="/coach/settings"
-                    className={cn(
-                        buttonVariants({ variant: 'outline' }),
-                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center gap-2 px-4'
-                    )}
-                >
-                    Mi Marca (link y QR)
-                </Link>
-            </div>
-            <div className="mt-4 flex justify-center">
-                <div
-                    className="rounded-xl bg-white p-3 shadow-sm dark:bg-zinc-100"
-                    aria-label="Código QR del enlace de tu app"
-                >
-                    <QRCodeSVG value={absoluteUrl} size={120} level="M" />
-                </div>
-            </div>
-        </div>
-    )
-}
 
 function OnboardingStepBlock({
     anchorId,
