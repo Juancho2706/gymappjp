@@ -48,10 +48,9 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
         }
     }
 
-    // Sandbox if token starts with TEST- OR if MERCADOPAGO_TEST_PAYER_EMAIL is set.
-    // MP test accounts issue APP_USR- tokens (production credentials of a test account)
-    // which still require @testuser.com payer emails — same sandbox rules apply.
-    const isSandbox = accessToken.startsWith('TEST-') || !!normalizedConfigured
+    // Sandbox only when token starts with TEST-.
+    // MERCADOPAGO_TEST_PAYER_EMAIL is used ONLY in sandbox to override the payer email.
+    const isSandbox = accessToken.startsWith('TEST-')
 
     if (isSandbox) {
         const payerEmail = normalizedConfigured || coachEmail
