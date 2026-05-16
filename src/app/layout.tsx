@@ -112,8 +112,8 @@ export default function RootLayout({
               <InstallPrompt brandName="EVA" />
               {children}
               <Toaster richColors position="bottom-center" />
-              <Analytics />
-              <SpeedInsights />
+              <Analytics debug={false} />
+              <SpeedInsights debug={false} />
             </LanguageProvider>
           </ThemeProvider>
         </PostHogProvider>

@@ -58,6 +58,7 @@ export function LandingStickyBrandingCard() {
                                             src={coach.logo}
                                             alt={coach.name}
                                             fill
+                                            sizes="48px"
                                             className="object-contain p-1"
                                         />
                                     </div>
