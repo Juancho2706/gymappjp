@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/login?error=confirmation_expired`)
     }
 
-    // Activate free tier coach whose registration was pending email confirmation
+    // Free tier coaches are inserted as active because the production DB CHECK constraint
+    // does not allow a pending_email status. Auth still blocks login until this email
+    // confirmation callback succeeds.
     const adminDb = createServiceRoleClient()
     const { data: coach } = await adminDb
         .from('coaches')
@@ -29,12 +31,7 @@ export async function GET(request: NextRequest) {
         .eq('id', data.user.id)
         .maybeSingle()
 
-    if (coach && coach.subscription_status === 'pending_email' && coach.subscription_tier === 'free') {
-        await adminDb
-            .from('coaches')
-            .update({ subscription_status: 'active' })
-            .eq('id', coach.id)
-
+    if (coach && coach.subscription_status === 'active' && coach.subscription_tier === 'free') {
         // Fire welcome + drip emails now that email is confirmed
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? origin
         const { subject, html } = buildFreeCoachWelcomeEmail({
