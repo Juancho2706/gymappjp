@@ -8,8 +8,8 @@ export const metadata: Metadata = {
     description: 'Política de privacidad de EVA conforme a la Ley 21.719 de Chile.',
 }
 
-const LAST_UPDATED = '10 de mayo de 2026'
-const CONTACT_EMAIL = 'contacto@eva-app.cl'
+const LAST_UPDATED = '17 de mayo de 2026'
+const CONTACT_EMAIL = 'privacidad@eva-app.cl'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
@@ -61,12 +61,12 @@ export default function PrivacidadPage() {
 
                             <Section title="1. Responsable del tratamiento">
                                 <p>
-                                    <strong className="text-foreground">Antigravity SpA</strong>, con domicilio en Santiago, Chile,
+                                    <strong className="text-foreground">Juan Villegas</strong>, persona natural con domicilio en Chile,
                                     es el responsable del tratamiento de los datos personales recopilados a través de{' '}
-                                    <strong className="text-foreground">eva-app.cl</strong>.
+                                    <strong className="text-foreground">EVA</strong> (eva-app.cl).
                                 </p>
                                 <p>
-                                    Consultas y ejercicio de derechos:{' '}
+                                    Consultas y ejercicio de derechos ARCO:{' '}
                                     <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a>
                                 </p>
                             </Section>
@@ -136,7 +136,7 @@ export default function PrivacidadPage() {
                                 </ul>
                                 <p>
                                     Ejercicio de derechos:{' '}
-                                    <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a>.
+                                    <a href="mailto:privacidad@eva-app.cl" className="text-cyan-400 hover:underline">privacidad@eva-app.cl</a>.
                                     Respondemos en máximo 30 días hábiles.
                                 </p>
                                 <p>
@@ -167,7 +167,38 @@ export default function PrivacidadPage() {
                                 </p>
                             </Section>
 
-                            <Section title="10. Cambios a esta política">
+                            <Section title="10. Menores de edad">
+                                <p>
+                                    EVA no está destinado a usuarios menores de 14 años. Al registrar un alumno menor de 14 años,
+                                    el coach confirma explícitamente que cuenta con el consentimiento de su tutor legal,
+                                    conforme al artículo correspondiente de la <strong className="text-foreground">Ley 21.719</strong>.
+                                    EVA registra esta confirmación con marca de tiempo (<code>age_confirmed_at</code>).
+                                </p>
+                                <p>
+                                    Si detectamos datos de menores ingresados sin consentimiento, los eliminaremos de inmediato.
+                                    Notificar a <a href="mailto:privacidad@eva-app.cl" className="text-cyan-400 hover:underline">privacidad@eva-app.cl</a>.
+                                </p>
+                            </Section>
+
+                            <Section title="11. Plan Enterprise y organizaciones">
+                                <p>
+                                    Las organizaciones (gyms, academias) que contratan el plan Enterprise actúan como{' '}
+                                    <strong className="text-foreground">responsables del tratamiento</strong> de los datos personales
+                                    de sus alumnos y coaches. EVA actúa como <strong className="text-foreground">encargado del tratamiento</strong>,
+                                    procesando datos únicamente por instrucción de la organización.
+                                </p>
+                                <p>
+                                    Cada organización accede exclusivamente a sus propios datos — el aislamiento se implementa
+                                    mediante Row-Level Security en base de datos y controles en JWT. Ninguna organización
+                                    puede ver datos de otra.
+                                </p>
+                                <p>
+                                    El contrato enterprise firmado con cada organización incluye un Acuerdo de Procesamiento
+                                    de Datos (DPA) que formaliza estos roles y obligaciones.
+                                </p>
+                            </Section>
+
+                            <Section title="12. Cambios a esta política">
                                 <p>
                                     Notificaremos cambios materiales por correo electrónico con al menos 15 días de anticipación.
                                     El uso continuado del servicio tras la notificación implica aceptación de los cambios.

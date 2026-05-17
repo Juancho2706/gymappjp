@@ -10,6 +10,7 @@ export function hasEffectiveAccess(
     subscriptionStatus: string | null | undefined,
     currentPeriodEnd: string | null | undefined
 ): boolean {
+    if (subscriptionStatus === 'org_managed') return true
     const status = subscriptionStatus ?? ''
     const blocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES as readonly string[])
 
@@ -32,6 +33,9 @@ export function resolveCoachSubscriptionRedirect(
     subscriptionStatus: string | null | undefined,
     currentPeriodEnd?: string | null
 ): CoachSubscriptionRedirect {
+    // Gap 3: org_managed coaches always have access — plan managed by org
+    if (!subscriptionStatus || subscriptionStatus === 'org_managed') return null
+
     const isReactivatePage = pathname.startsWith('/coach/reactivate')
     const isSubscriptionProcessingPage = pathname.startsWith('/coach/subscription/processing')
     const isSubscriptionGatePage = isReactivatePage || isSubscriptionProcessingPage

@@ -12,11 +12,14 @@ export async function GET(
 
   const supabase = createClient();
 
-  const { data: coach } = await ((await supabase) as any)
-    .from('coaches')
-    .select('brand_name, logo_url, primary_color')
-    .eq('slug', slug)
-    .single();
+  // Gap 7: support invite_code (5 uppercase chars) in addition to slug
+  const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
+  const coachQuery = (await supabase as any).from('coaches').select('brand_name, logo_url, primary_color')
+  const { data: coach } = await (
+    INVITE_CODE_RE.test(slug)
+      ? coachQuery.eq('invite_code', slug).maybeSingle()
+      : coachQuery.eq('slug', slug).maybeSingle()
+  )
 
   const manifest = {
     name: coach?.brand_name || "EVA",

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, CheckCircle } from 'lucide-react'
 import {
@@ -317,7 +318,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                             <p className="font-semibold text-red-800 dark:text-red-200">Plan insuficiente</p>
                             <p className="mt-0.5 text-red-700 dark:text-red-300">
                                 Debes archivar {activeClientCount - getTierMaxClients(tier)} alumno{activeClientCount - getTierMaxClients(tier) !== 1 ? 's' : ''} antes de continuar con Plan {selectedTier.label}.{' '}
-                                <a href="/coach/clients" className="underline font-medium">Ir a mis alumnos →</a>
+                                <Link href="/coach/clients" className="underline font-medium">Ir a mis alumnos →</Link>
                             </p>
                         </div>
                     </div>

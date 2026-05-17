@@ -265,6 +265,22 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                         )}
                     </div>
 
+                    {/* Age confirmation — Ley 21.719 */}
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                            name="age_confirmed"
+                            type="checkbox"
+                            required
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-emerald-500"
+                        />
+                        <span className="text-xs text-muted-foreground leading-snug">
+                            Confirmo que el alumno tiene 14 años o más, o que cuento con el consentimiento de su tutor legal (Ley 21.719).
+                        </span>
+                    </label>
+                    {state.fieldErrors?.age_confirmed && (
+                        <p className="text-xs text-destructive">{state.fieldErrors.age_confirmed[0]}</p>
+                    )}
+
                     {state.error && (
                         <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
                             {state.error}

@@ -246,8 +246,20 @@ export function getRecommendedTier(clientCount: number): SubscriptionTier {
     return ordered.find(t => TIER_CONFIG[t].maxClients >= clientCount) ?? 'scale'
 }
 
+export type SubscriptionStatus =
+    | 'active'
+    | 'trialing'
+    | 'canceled'
+    | 'past_due'
+    | 'expired'
+    | 'paused'
+    | 'pending_payment'
+    | 'pending_email'
+    | 'org_managed'
+
 // Note: 'canceled' is NOT in this list. A canceled coach still has access until
 // current_period_end. The gate in coach-subscription-gate.ts handles that date check.
+// 'org_managed' is NOT in this list — org coaches always have access (plan managed by org).
 export const SUBSCRIPTION_BLOCKED_STATUSES = [
     'pending_payment',
     'expired',

@@ -6,6 +6,46 @@
 > 2. **React Native iOS/Android** — apps nativas compartiendo backend.
 > Estado contexto: validado contra fuentes web May 2026 (ver sección final).
 
+---
+
+## UPDATE 2026-05-16 — Contexto nuevo, cómo usar este documento
+
+**Este documento ya NO es el paso 1.** Con 2 clientes enterprise esperando, el plan de ejecución está en **`EXECUTION_PLAN.md`**.
+
+**Rol de este documento ahora:** checklist de auditoría profunda por rol, a ejecutar **antes del launch enterprise** (semana 4-5 del EXECUTION_PLAN). Usar los prompts de cada rol para detectar lo que el plan de ejecución podría haber pasado por alto.
+
+**Roles prioritarios antes de launch (en orden):**
+1. Security (#2) — cross-org isolation, RLS, invite tokens
+2. Backend (#11) — performance RLS nuevo, N+1, índices
+3. Frontend (#10) — boundaries RSC, Server Actions enterprise
+4. Legal (#6) — contrato, DPA, Ley 21.719 antes de firmar con clientes
+5. QA (#12) — cobertura enterprise flows + regression /coach/*
+
+El resto de roles (GTM, Data, SRE, FinOps) ejecutar en semanas posteriores a estabilizar enterprise.
+
+### Decisiones nuevas que actualizan este documento
+
+| Decisión | Antes | Ahora |
+|---|---|---|
+| Infraestructura | No definida | Mismo Supabase + mismo Vercel (no proyectos nuevos) |
+| Arquitectura | Next.js monolítico | Monorepo: `apps/web` + `apps/mobile` + `packages/` |
+| Modelo enterprise | Multi-coach abstracto | `organizations` → pool coaches + pool clientes → `coach_client_assignments` |
+| Apps RN | 1 aggregator app decidida | Customer APP (coach+alumno, flujo por rol) + Enterprise admin en web |
+| Restricción crítica | No definida | `/coach/*` y clientes standalone no se tocan en ninguna fase |
+| Billing enterprise | No definido | Manual MVP: link MP / transferencia, factura SII manual |
+
+### Modelo enterprise clarificado
+
+El modelo enterprise es **diferente al modelo standalone**:
+- Standalone: `coach → sus propios clientes` (coach crea cliente, le pertenece)
+- Enterprise: `org → pool de clientes` asignados a coaches por el admin de la org
+- `clients.org_id IS NULL` = comportamiento actual intacto
+- `clients.org_id NOT NULL` = cliente pertenece al pool de la org
+
+Los **prompts de auditoría** en las secciones siguientes siguen siendo válidos — solo interpretar "enterprise" con este modelo concreto, no el abstracto original.
+
+---
+
 ## Implicaciones arquitectónicas de los 2 cambios
 
 **React Native — decisiones YA TOMADAS (no reabrir):**

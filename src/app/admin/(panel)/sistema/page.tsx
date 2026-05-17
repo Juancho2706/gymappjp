@@ -71,6 +71,7 @@ function StatCard({ label, value, icon: Icon, warn }: { label: string; value: nu
 
 export default async function AdminSistemaPage() {
     const d = await getSistemaData()
+    const checkedAtMs = new Date(d.checkedAt).getTime()
 
     return (
         <div className="space-y-6">
@@ -149,10 +150,9 @@ export default async function AdminSistemaPage() {
                 <div className="divide-y divide-[--admin-border]">
                     {d.cronStatuses.map(cron => {
                         const lastRun = cron.lastRunAt ? new Date(cron.lastRunAt) : null
-                        const hoursAgo = lastRun ? (Date.now() - lastRun.getTime()) / 3_600_000 : null
+                        const hoursAgo = lastRun ? (checkedAtMs - lastRun.getTime()) / 3_600_000 : null
                         const isStale = hoursAgo !== null && hoursAgo > 26
                         const neverRan = lastRun === null
-                        const statusOk = !neverRan && !isStale
 
                         return (
                             <div key={cron.action} className="flex items-center justify-between px-4 py-2.5">

@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -44,6 +64,30 @@ export type Database = {
           payload?: Json | null
           target_id?: string | null
           target_table?: string
+        }
+        Relationships: []
+      }
+      audit_log_checksums: {
+        Row: {
+          checksum: string
+          generated_at: string | null
+          id: string
+          row_count: number
+          week_start: string
+        }
+        Insert: {
+          checksum: string
+          generated_at?: string | null
+          id?: string
+          row_count: number
+          week_start: string
+        }
+        Update: {
+          checksum?: string
+          generated_at?: string | null
+          id?: string
+          row_count?: number
+          week_start?: string
         }
         Relationships: []
       }
@@ -262,6 +306,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          age_confirmed_at: string | null
           coach_id: string
           created_at: string
           email: string
@@ -272,12 +317,14 @@ export type Database = {
           is_active: boolean | null
           is_archived: boolean
           onboarding_completed: boolean
+          org_id: string | null
           phone: string | null
           subscription_start_date: string | null
           updated_at: string
           use_coach_brand_colors: boolean | null
         }
         Insert: {
+          age_confirmed_at?: string | null
           coach_id: string
           created_at?: string
           email: string
@@ -288,12 +335,14 @@ export type Database = {
           is_active?: boolean | null
           is_archived?: boolean
           onboarding_completed?: boolean
+          org_id?: string | null
           phone?: string | null
           subscription_start_date?: string | null
           updated_at?: string
           use_coach_brand_colors?: boolean | null
         }
         Update: {
+          age_confirmed_at?: string | null
           coach_id?: string
           created_at?: string
           email?: string
@@ -304,6 +353,7 @@ export type Database = {
           is_active?: boolean | null
           is_archived?: boolean
           onboarding_completed?: boolean
+          org_id?: string | null
           phone?: string | null
           subscription_start_date?: string | null
           updated_at?: string
@@ -315,6 +365,65 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_client_assignments: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          client_id: string
+          coach_id: string
+          deleted_at: string | null
+          id: string
+          org_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          client_id: string
+          coach_id: string
+          deleted_at?: string | null
+          id?: string
+          org_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          client_id?: string
+          coach_id?: string
+          deleted_at?: string | null
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_client_assignments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_client_assignments_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_client_assignments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -400,6 +509,7 @@ export type Database = {
       }
       coaches: {
         Row: {
+          active_org_id: string | null
           admin_notes: string | null
           billing_cycle: string
           brand_name: string
@@ -408,6 +518,8 @@ export type Database = {
           full_name: string
           health_data_consent_at: string | null
           id: string
+          invite_code: string
+          last_active_at: string | null
           loader_icon_mode: string
           loader_show_icon: boolean
           loader_text: string | null
@@ -440,6 +552,7 @@ export type Database = {
           welcome_modal_version: number
         }
         Insert: {
+          active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
           brand_name: string
@@ -448,6 +561,8 @@ export type Database = {
           full_name: string
           health_data_consent_at?: string | null
           id: string
+          invite_code?: string
+          last_active_at?: string | null
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
@@ -480,6 +595,7 @@ export type Database = {
           welcome_modal_version?: number
         }
         Update: {
+          active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
           brand_name?: string
@@ -488,6 +604,8 @@ export type Database = {
           full_name?: string
           health_data_consent_at?: string | null
           id?: string
+          invite_code?: string
+          last_active_at?: string | null
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
@@ -519,7 +637,15 @@ export type Database = {
           welcome_modal_updated_at?: string | null
           welcome_modal_version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "coaches_active_org_id_fkey"
+            columns: ["active_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       daily_habits: {
         Row: {
@@ -1358,6 +1484,299 @@ export type Database = {
           },
         ]
       }
+      org_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          org_id: string
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          org_id: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          org_id?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_audit_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_invoices: {
+        Row: {
+          amount_clp: number
+          created_at: string | null
+          expected_amount_clp: number | null
+          id: string
+          notes: string | null
+          org_id: string
+          paid_at: string | null
+          payment_ref: string | null
+          period_end: string
+          period_start: string
+          status: string
+        }
+        Insert: {
+          amount_clp: number
+          created_at?: string | null
+          expected_amount_clp?: number | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          paid_at?: string | null
+          payment_ref?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+        }
+        Update: {
+          amount_clp?: number
+          created_at?: string | null
+          expected_amount_clp?: number | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          paid_at?: string | null
+          payment_ref?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_invoices_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_invites: {
+        Row: {
+          created_by: string
+          deleted_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          org_id: string
+          role: string
+          token_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_by: string
+          deleted_at?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          org_id: string
+          role: string
+          token_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_by?: string
+          deleted_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          role?: string
+          token_hash?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_members: {
+        Row: {
+          coach_id: string
+          deleted_at: string | null
+          id: string
+          invited_at: string | null
+          joined_at: string | null
+          org_id: string
+          role: string
+          status: string
+        }
+        Insert: {
+          coach_id: string
+          deleted_at?: string | null
+          id?: string
+          invited_at?: string | null
+          joined_at?: string | null
+          org_id: string
+          role: string
+          status?: string
+        }
+        Update: {
+          coach_id?: string
+          deleted_at?: string | null
+          id?: string
+          invited_at?: string | null
+          joined_at?: string | null
+          org_id?: string
+          role?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          billing_cycle: string | null
+          billing_start_date: string | null
+          client_limit: number
+          created_at: string | null
+          currency: string
+          deleted_at: string | null
+          id: string
+          last_health_score: number | null
+          last_health_score_at: string | null
+          logo_url: string | null
+          name: string
+          onboarding_step: number | null
+          owner_user_id: string
+          plan: string
+          primary_color: string | null
+          purge_scheduled_at: string | null
+          seats_included: number
+          slug: string
+          status: string
+          trial_ends_at: string | null
+        }
+        Insert: {
+          billing_cycle?: string | null
+          billing_start_date?: string | null
+          client_limit?: number
+          created_at?: string | null
+          currency?: string
+          deleted_at?: string | null
+          id?: string
+          last_health_score?: number | null
+          last_health_score_at?: string | null
+          logo_url?: string | null
+          name: string
+          onboarding_step?: number | null
+          owner_user_id: string
+          plan?: string
+          primary_color?: string | null
+          purge_scheduled_at?: string | null
+          seats_included?: number
+          slug: string
+          status?: string
+          trial_ends_at?: string | null
+        }
+        Update: {
+          billing_cycle?: string | null
+          billing_start_date?: string | null
+          client_limit?: number
+          created_at?: string | null
+          currency?: string
+          deleted_at?: string | null
+          id?: string
+          last_health_score?: number | null
+          last_health_score_at?: string | null
+          logo_url?: string | null
+          name?: string
+          onboarding_step?: number | null
+          owner_user_id?: string
+          plan?: string
+          primary_color?: string | null
+          purge_scheduled_at?: string | null
+          seats_included?: number
+          slug?: string
+          status?: string
+          trial_ends_at?: string | null
+        }
+        Relationships: []
+      }
+      payment_exceptions: {
+        Row: {
+          amount_clp: number
+          approved_at: string | null
+          approved_by: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          reason: string
+          resend_message_id: string | null
+        }
+        Insert: {
+          amount_clp: number
+          approved_at?: string | null
+          approved_by?: string | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          reason: string
+          resend_message_id?: string | null
+        }
+        Update: {
+          amount_clp?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          reason?: string
+          resend_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_exceptions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       personal_gastos: {
         Row: {
           cantidad: number
@@ -1382,6 +1801,33 @@ export type Database = {
           id?: string
           nombre?: string
           pagador?: string
+        }
+        Relationships: []
+      }
+      purge_audit: {
+        Row: {
+          id: string
+          initiated_by: string | null
+          org_id: string
+          org_slug: string
+          purged_at: string | null
+          rows_deleted: Json | null
+        }
+        Insert: {
+          id?: string
+          initiated_by?: string | null
+          org_id: string
+          org_slug: string
+          purged_at?: string | null
+          rows_deleted?: Json | null
+        }
+        Update: {
+          id?: string
+          initiated_by?: string | null
+          org_id?: string
+          org_slug?: string
+          purged_at?: string | null
+          rows_deleted?: Json | null
         }
         Relationships: []
       }
@@ -1603,6 +2049,7 @@ export type Database = {
           coach_id: string
           created_at: string
           id: string
+          org_id: string | null
           payload: Json | null
           provider: string
           provider_checkout_id: string | null
@@ -1613,6 +2060,7 @@ export type Database = {
           coach_id: string
           created_at?: string
           id?: string
+          org_id?: string | null
           payload?: Json | null
           provider: string
           provider_checkout_id?: string | null
@@ -1623,6 +2071,7 @@ export type Database = {
           coach_id?: string
           created_at?: string
           id?: string
+          org_id?: string | null
           payload?: Json | null
           provider?: string
           provider_checkout_id?: string | null
@@ -1635,6 +2084,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1921,6 +2377,7 @@ export type Database = {
           client_id: string | null
           coach_id: string
           created_at: string
+          created_by_coach_id: string | null
           cycle_length: number | null
           duration_days: number | null
           duration_type: string | null
@@ -1928,6 +2385,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          org_id: string | null
           program_notes: string | null
           program_phases: Json
           program_structure_type: string | null
@@ -1942,6 +2400,7 @@ export type Database = {
           client_id?: string | null
           coach_id: string
           created_at?: string
+          created_by_coach_id?: string | null
           cycle_length?: number | null
           duration_days?: number | null
           duration_type?: string | null
@@ -1949,6 +2408,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          org_id?: string | null
           program_notes?: string | null
           program_phases?: Json
           program_structure_type?: string | null
@@ -1963,6 +2423,7 @@ export type Database = {
           client_id?: string | null
           coach_id?: string
           created_at?: string
+          created_by_coach_id?: string | null
           cycle_length?: number | null
           duration_days?: number | null
           duration_type?: string | null
@@ -1970,6 +2431,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          org_id?: string | null
           program_notes?: string | null
           program_phases?: Json
           program_structure_type?: string | null
@@ -1992,6 +2454,20 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_programs_created_by_coach_id_fkey"
+            columns: ["created_by_coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_programs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -2078,6 +2554,7 @@ export type Database = {
         Args: { p_email: string }
         Returns: Json
       }
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       get_admin_audit_logs_paginated: {
         Args: {
           p_action?: string
@@ -2237,6 +2714,13 @@ export type Database = {
           ym: string
         }[]
       }
+      get_platform_trial_conversion_rate: {
+        Args: never
+        Returns: {
+          converted: number
+          total_trials: number
+        }[]
+      }
       get_platform_workout_sessions_30d: {
         Args: never
         Returns: {
@@ -2276,6 +2760,8 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       touch_coach_activity: { Args: { p_coach_id: string }; Returns: undefined }
       unaccent: { Args: { "": string }; Returns: string }
     }
@@ -2406,7 +2892,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+

@@ -865,16 +865,21 @@ export function LandingPricingPreview() {
                     <PlanCardCompact plan={planById('scale')} billingCycle={billingCycle} />
                 </div>
 
-                {/* Enterprise */}
-                <p className="mt-8 text-center text-xs text-muted-foreground">
-                    {t('landing.pricing.enterprise')}{' '}
+                {/* Enterprise callout */}
+                <div className="mt-8 flex items-center justify-between gap-4 rounded-2xl border border-amber-500/20 border-t-[3px] border-t-amber-400/70 bg-card/80 p-5 shadow-sm">
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold text-foreground">¿Gym o academia con múltiples coaches?</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                            Panel centralizado · Pool de alumnos · Branding unificado · Desde $49.990/mes
+                        </p>
+                    </div>
                     <a
-                        href="mailto:contacto@eva-app.cl"
-                        className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+                        href="#enterprise"
+                        className="shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                     >
-                        contacto@eva-app.cl
+                        Ver planes →
                     </a>
-                </p>
+                </div>
             </div>
         </section>
     )

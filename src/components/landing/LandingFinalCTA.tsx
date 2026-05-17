@@ -40,6 +40,12 @@ export function LandingFinalCTA() {
                     {t('landing.final.cta')}
                     <ArrowRight className="w-5 h-5" aria-hidden />
                 </Link>
+                <p className="mt-6 text-xs text-muted-foreground">
+                    ¿Gestionas un gym o academia?{' '}
+                    <a href="#enterprise" className="font-medium text-foreground underline underline-offset-2 hover:text-primary">
+                        Ver planes enterprise →
+                    </a>
+                </p>
             </motion.div>
         </section>
     )

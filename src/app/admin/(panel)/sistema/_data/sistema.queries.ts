@@ -9,6 +9,7 @@ export interface CronStatus {
 }
 
 export interface SistemaData {
+    checkedAt: string
     dbConnected: boolean
     totalCoaches: number
     totalClients: number
@@ -26,6 +27,7 @@ export interface SistemaData {
 export async function getSistemaData(): Promise<SistemaData> {
     noStore()
     const admin = createServiceRoleClient()
+    const checkedAt = new Date()
 
     const CRON_ACTIONS = [
         { action: 'cron.trial_expiry_ran',     label: 'Trial expiry' },
@@ -57,13 +59,13 @@ export async function getSistemaData(): Promise<SistemaData> {
             admin.from('coaches').select('*', { count: 'exact', head: true })
                 .in('subscription_status', ['past_due', 'pending_payment']),
             admin.from('admin_audit_logs').select('*', { count: 'exact', head: true })
-                .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+                .gte('created_at', new Date(checkedAt.getTime() - 24 * 60 * 60 * 1000).toISOString()),
             admin.from('admin_audit_logs').select('created_at').order('created_at', { ascending: false }).limit(1),
             // Coaches with current_period_end expired but still active (legacy bug)
             admin.from('coaches').select('*', { count: 'exact', head: true })
                 .eq('subscription_status', 'active')
                 .eq('payment_provider', 'beta')
-                .lt('current_period_end', new Date().toISOString()),
+                .lt('current_period_end', checkedAt.toISOString()),
             ...CRON_ACTIONS.map(({ action }) =>
                 admin.from('admin_audit_logs')
                     .select('created_at, target_id')
@@ -84,6 +86,7 @@ export async function getSistemaData(): Promise<SistemaData> {
         })
 
         return {
+            checkedAt: checkedAt.toISOString(),
             dbConnected: true,
             totalCoaches: coachesRes.count ?? 0,
             totalClients: clientsRes.count ?? 0,
@@ -99,6 +102,7 @@ export async function getSistemaData(): Promise<SistemaData> {
         }
     } catch {
         return {
+            checkedAt: checkedAt.toISOString(),
             dbConnected: false,
             totalCoaches: 0,
             totalClients: 0,

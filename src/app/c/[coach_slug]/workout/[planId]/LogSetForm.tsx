@@ -1,13 +1,16 @@
 'use client'
 
 import { useActionState, useRef, useOptimistic, useState, startTransition } from 'react'
+import { useParams } from 'next/navigation'
 import { Check, Loader2 } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { toast } from 'sonner'
 import { logSetAction, type LogState } from './actions'
 import { useWorkoutTimer } from './WorkoutTimerProvider'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
+import { enqueueWorkoutLog } from '@/lib/workout-offline-queue'
 
 const initialState: LogState = {}
 
@@ -36,6 +39,7 @@ export function LogSetForm({
     onLogged,
 }: Props) {
     const { t } = useTranslation()
+    const params = useParams<{ coach_slug: string; planId: string }>()
     const [state, formAction] = useActionState(logSetAction, initialState)
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
@@ -54,6 +58,28 @@ export function LogSetForm({
     const [rirDraft, setRirDraft] = useState(2)
 
     const handleSubmit = (formData: FormData) => {
+        // Offline guard: enqueue and show optimistic state without hitting server
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            const wRaw = formData.get('weight_kg')
+            const rRaw = formData.get('reps_done')
+            const rpeRaw = formData.get('rpe')
+            const rirRaw = formData.get('rir')
+            enqueueWorkoutLog({
+                blockId,
+                setNumber,
+                weightKg: wRaw === null || wRaw === '' ? null : Number(String(wRaw).replace(',', '.')),
+                repsDone: rRaw === null || rRaw === '' ? null : Number(rRaw),
+                rpe: rpeRaw === null || rpeRaw === '' ? null : Number(rpeRaw),
+                rir: rirRaw === null || rirRaw === '' ? null : Number(rirRaw),
+                planId: params.planId,
+                coachSlug: params.coach_slug,
+                timestamp: Date.now(),
+            })
+            addOptimisticLogged(true)
+            toast.info('Sin conexión — el log se guardará al reconectar')
+            return
+        }
+
         addOptimisticLogged(true)
 
         if (autoTimerEnabled && !isLogged) {

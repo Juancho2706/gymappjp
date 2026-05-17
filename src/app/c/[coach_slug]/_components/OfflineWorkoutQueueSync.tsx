@@ -1,0 +1,57 @@
+'use client'
+
+import { useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/actions'
+import {
+    readWorkoutOfflineQueue,
+    writeWorkoutOfflineQueue,
+} from '@/lib/workout-offline-queue'
+
+export function OfflineWorkoutQueueSync() {
+    const router = useRouter()
+    const flushing = useRef(false)
+
+    useEffect(() => {
+        async function flushQueue() {
+            if (flushing.current) return
+            const q = readWorkoutOfflineQueue()
+            if (q.length === 0) return
+            flushing.current = true
+            const remaining: typeof q = []
+            let flushed = 0
+            try {
+                for (const item of q) {
+                    try {
+                        const fd = new FormData()
+                        fd.set('block_id', item.blockId)
+                        fd.set('set_number', String(item.setNumber))
+                        if (item.weightKg != null) fd.set('weight_kg', String(item.weightKg))
+                        if (item.repsDone != null) fd.set('reps_done', String(item.repsDone))
+                        if (item.rpe != null) fd.set('rpe', String(item.rpe))
+                        if (item.rir != null) fd.set('rir', String(item.rir))
+                        const res = await logSetAction({}, fd)
+                        if (res.success) flushed++
+                        else remaining.push(item)
+                    } catch {
+                        remaining.push(item)
+                    }
+                }
+                writeWorkoutOfflineQueue(remaining)
+                if (flushed > 0) {
+                    toast.success(`${flushed} set${flushed !== 1 ? 's' : ''} sincronizado${flushed !== 1 ? 's' : ''}`)
+                    router.refresh()
+                }
+            } finally {
+                flushing.current = false
+            }
+        }
+
+        void flushQueue()
+        window.addEventListener('online', flushQueue)
+        return () => window.removeEventListener('online', flushQueue)
+    }, [router])
+
+    return null
+}

@@ -12,8 +12,10 @@ import {
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { AppDownloadBanner } from '@/components/AppDownloadBanner'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
+import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
 
 interface Props {
@@ -158,6 +160,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
             >
                 <NetworkProvider brandName={brandName} logoUrl={logoUrl} primaryColor={primaryColor}>
                     <OfflineNutritionQueueSync />
+                    <OfflineWorkoutQueueSync />
                     <ClientNav
                         coachSlug={coach_slug}
                         coachBrand={brandName}
@@ -165,6 +168,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         initialUseBrandColors={initialUseBrandColors}
                     />
                     <InstallPrompt brandName={brandName} logoUrl={logoUrl} coachInitial={brandName.charAt(0)} primaryColor={primaryColor} />
+                    <AppDownloadBanner brandName={brandName} primaryColor={primaryColor} />
 
                     <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
                         {children}
@@ -178,6 +182,14 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                                 Potenciado por EVA
                             </a>
                         )}
+                        <div className="py-1.5 text-center">
+                            <a
+                                href="mailto:privacidad@eva-app.cl"
+                                className="text-[10px] text-muted-foreground/30 hover:text-muted-foreground/50 transition-colors"
+                            >
+                                Privacidad · ARCO
+                            </a>
+                        </div>
                     </main>
                 </NetworkProvider>
             </div>

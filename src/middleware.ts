@@ -23,6 +23,15 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next({ request })
     }
 
+    // B-6: Enterprise subdomain rewrite — enterprise.eva-app.cl → /org/*
+    if (request.headers.get('host') === 'enterprise.eva-app.cl') {
+        const url = request.nextUrl.clone()
+        if (!url.pathname.startsWith('/invite') && !url.pathname.startsWith('/login')) {
+            url.pathname = '/org' + url.pathname
+        }
+        return NextResponse.rewrite(url)
+    }
+
     // Edge Config kill switch — disable free tier registration without a deploy.
     // Set free_tier_kill_switch=true in Vercel Edge Config to block /register and /pricing.
     if (pathname === '/register' || pathname === '/registro-beta') {
@@ -100,12 +109,19 @@ export async function middleware(request: NextRequest) {
 
     // For /c/ routes, coach fetch is independent of auth — start both in parallel to save ~100-200ms TTFB
     const cRouteSlug = pathname.startsWith('/c/') ? pathname.split('/')[2] ?? null : null
+
+    // Gap 1: bifurcar por formato — invite_code (5 chars, sin O/0/I/1) vs slug
+    const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
+    const SLUG_RE = /^[a-z0-9-]{3,50}$/
     const coachBrandingPromise = cRouteSlug
-        ? supabase
-              .from('coaches')
-              .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier')
-              .eq('slug', cRouteSlug)
-              .maybeSingle()
+        ? (() => {
+              const base = supabase
+                  .from('coaches')
+                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier')
+              if (INVITE_CODE_RE.test(cRouteSlug)) return base.eq('invite_code', cRouteSlug).maybeSingle()
+              if (SLUG_RE.test(cRouteSlug)) return base.eq('slug', cRouteSlug).maybeSingle()
+              return null
+          })()
         : null
 
     // On /c/[slug]/login with no session cookie, skip the Supabase auth round-trip — the user
@@ -262,15 +278,28 @@ export async function middleware(request: NextRequest) {
         const isLoginPage = pathname.endsWith('/login')
 
         if (isLoginPage && user) {
-            // If already logged in, check if it's a client of this coach and redirect to dashboard
+            // If already logged in, check if it's a client of this coach (direct or via org) and redirect to dashboard
             const { data: clientData } = await supabase
                 .from('clients')
-                .select('id, coach_id')
+                .select('id, coach_id, org_id')
                 .eq('id', user.id)
-                .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            if (clientData) {
+            const isDirectClient = clientData?.coach_id === coach.id
+            let isOrgClient = false
+            if (!isDirectClient && clientData?.org_id) {
+                const { data: orgMember } = await supabase
+                    .from('organization_members')
+                    .select('id')
+                    .eq('org_id', clientData.org_id)
+                    .eq('coach_id', coach.id)
+                    .eq('status', 'active')
+                    .is('deleted_at', null)
+                    .maybeSingle()
+                isOrgClient = !!orgMember
+            }
+
+            if (isDirectClient || isOrgClient) {
                 const dashboardUrl = request.nextUrl.clone()
                 dashboardUrl.pathname = `/c/${coachSlug}/dashboard`
                 return NextResponse.redirect(dashboardUrl)
@@ -288,18 +317,33 @@ export async function middleware(request: NextRequest) {
                 return redirect
             }
 
-            // Verify the user is a client belonging to this coach
-            const { data: clientData } = await supabase
+            // Verify the user is a client belonging to this coach (direct or via org membership)
+            const { data: rawClientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, force_password_change, onboarding_completed, is_active, is_archived, use_coach_brand_colors')
+                .select('id, coach_id, org_id, force_password_change, onboarding_completed, is_active, is_archived, use_coach_brand_colors')
                 .eq('id', user.id)
-                .eq('coach_id', coach.id)
                 .maybeSingle()
 
-            const client = clientData as (Client & { use_coach_brand_colors?: boolean }) | null
+            type ClientWithBrand = Client & { use_coach_brand_colors?: boolean }
+            let client: ClientWithBrand | null = null
+            if (rawClientData) {
+                if (rawClientData.coach_id === coach.id) {
+                    client = rawClientData as unknown as ClientWithBrand
+                } else if (rawClientData.org_id) {
+                    const { data: orgMember } = await supabase
+                        .from('organization_members')
+                        .select('id')
+                        .eq('org_id', rawClientData.org_id)
+                        .eq('coach_id', coach.id)
+                        .eq('status', 'active')
+                        .is('deleted_at', null)
+                        .maybeSingle()
+                    if (orgMember) client = rawClientData as unknown as ClientWithBrand
+                }
+            }
 
             if (!client) {
-                // Logged in user is NOT a client of this coach
+                // Logged in user is NOT a client of this coach or org
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/login`
                 return NextResponse.redirect(redirectUrl)

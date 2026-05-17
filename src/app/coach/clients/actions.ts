@@ -32,6 +32,7 @@ const createClientSchema = z.object({
     temp_password: z
         .string()
         .min(8, 'La contraseña temporal debe tener al menos 8 caracteres'),
+    age_confirmed: z.literal('on', { message: 'Debes confirmar que el alumno tiene 14 años o más, o que cuentas con el consentimiento de su tutor legal.' }),
 })
 
 export type CreateClientState = {
@@ -55,6 +56,7 @@ export async function createClientAction(
         phone: formData.get('phone') as string,
         subscription_start_date: formData.get('subscription_start_date') as string,
         temp_password: formData.get('temp_password') as string,
+        age_confirmed: formData.get('age_confirmed') as string,
     }
 
     const parsed = createClientSchema.safeParse(raw)
@@ -69,11 +71,11 @@ export async function createClientAction(
 
     const { data: rawCoachData } = await supabase
         .from('coaches')
-        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients')
+        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id')
         .eq('id', coachUser.id)
         .maybeSingle()
 
-    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients'> | null
+    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients'> & { active_org_id?: string | null } | null
 
     if (!coach) return { error: 'Coach no encontrado.' }
 
@@ -136,6 +138,8 @@ export async function createClientAction(
         phone: parsed.data.phone || null,
         subscription_start_date: parsed.data.subscription_start_date || null,
         force_password_change: true,
+        age_confirmed_at: new Date().toISOString(),
+        ...(coach.active_org_id ? { org_id: coach.active_org_id } : {}),
     })
 
     if (dbError) {
@@ -146,6 +150,19 @@ export async function createClientAction(
             return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
         }
         return { error: 'Error al guardar el alumno en la base de datos.' }
+    }
+
+    // B-3: If coach belongs to an org, register the coach→client assignment in the pool
+    if (coach.active_org_id) {
+        const { error: assignErr } = await admin.from('coach_client_assignments').insert({
+            org_id: coach.active_org_id,
+            coach_id: coach.id,
+            client_id: newAuthUser.user.id,
+            assigned_by: coachUser.id,
+        })
+        if (assignErr) {
+            console.error('Failed to create coach_client_assignment (non-fatal):', assignErr)
+        }
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL

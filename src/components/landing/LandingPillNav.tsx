@@ -44,6 +44,7 @@ export function LandingPillNav() {
                 {[
                     { key: 'landing.nav.panelCoach', id: 'panel-coach' },
                     { key: 'landing.nav.pricing', id: 'precios' },
+                    { key: '', id: 'enterprise', label: 'Para Gyms' },
                     { key: 'landing.nav.contact', id: 'contacto' }
                 ].map(item => (
                     <a
@@ -51,7 +52,7 @@ export function LandingPillNav() {
                         href={`#${item.id}`}
                         className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors whitespace-nowrap"
                     >
-                        {t(item.key)}
+                        {'label' in item ? item.label : t(item.key)}
                     </a>
                 ))}
             </div>
@@ -87,6 +88,7 @@ export function LandingPillNav() {
                             {[
                                 { key: 'landing.nav.panelCoach', id: 'panel-coach' },
                                 { key: 'landing.nav.pricing', id: 'precios' },
+                                { key: '', id: 'enterprise', label: 'Para Gyms' },
                                 { key: 'landing.nav.contact', id: 'contacto' },
                             ].map(item => (
                                 <a
@@ -94,7 +96,7 @@ export function LandingPillNav() {
                                     href={`#${item.id}`}
                                     className="text-base font-semibold text-foreground/90 hover:text-primary transition-colors py-3 border-b border-border/40"
                                 >
-                                    {t(item.key)}
+                                    {'label' in item ? item.label : t(item.key)}
                                 </a>
                             ))}
                         </div>

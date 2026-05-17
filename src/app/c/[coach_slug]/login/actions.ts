@@ -55,12 +55,14 @@ export async function clientLoginAction(
     // Use admin client for the initial check to bypass RLS if it's restrictive
     const rawAdmin = await createRawAdminClient()
 
-    // Verify the logged-in user is a client of this coach
-    const { data: coachData, error: coachError } = await rawAdmin
-        .from('coaches')
-        .select('id')
-        .eq('slug', coach_slug)
-        .maybeSingle()
+    // Gap 6: support invite_code (5 uppercase chars) in addition to slug
+    const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
+    const coachQuery = rawAdmin.from('coaches').select('id')
+    const { data: coachData, error: coachError } = await (
+        INVITE_CODE_RE.test(coach_slug)
+            ? coachQuery.eq('invite_code', coach_slug).maybeSingle()
+            : coachQuery.eq('slug', coach_slug).maybeSingle()
+    )
 
     if (coachError) {
         console.error('[LoginAction] Error fetching coach (admin):', coachError)
@@ -76,16 +78,36 @@ export async function clientLoginAction(
 
     const { data: clientData, error: clientError } = await rawAdmin
         .from('clients')
-        .select('id, force_password_change, is_active')
+        .select('id, force_password_change, is_active, coach_id, org_id')
         .eq('id', user.id)
-        .eq('coach_id', coach.id)
         .maybeSingle()
-    
+
     if (clientError) {
         console.error('[LoginAction] Error fetching client (admin):', clientError)
     }
 
-    const client = clientData as Pick<Client, 'id' | 'force_password_change' | 'is_active'> | null
+    type ClientRow = Pick<Client, 'id' | 'force_password_change' | 'is_active'> & { coach_id?: string | null; org_id?: string | null }
+    const rawClient = clientData as ClientRow | null
+
+    let client: Pick<Client, 'id' | 'force_password_change' | 'is_active'> | null = null
+
+    if (rawClient) {
+        if (rawClient.coach_id === coach.id) {
+            // Direct client of this coach
+            client = rawClient
+        } else if (rawClient.org_id) {
+            // Enterprise client — verify coach belongs to same org
+            const { data: orgMember } = await rawAdmin
+                .from('organization_members')
+                .select('id')
+                .eq('org_id', rawClient.org_id)
+                .eq('coach_id', coach.id)
+                .eq('status', 'active')
+                .is('deleted_at', null)
+                .maybeSingle()
+            if (orgMember) client = rawClient
+        }
+    }
 
     if (!client) {
         console.warn('[LoginAction] User is not a client of this coach (admin):', { userId: user.id, coachId: coach.id })

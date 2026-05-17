@@ -8,11 +8,13 @@ import { LandingPricingPreview } from '@/components/landing/LandingPricingPrevie
 import { LandingStudentTabs } from '@/components/landing/LandingStudentTabs'
 import { LandingFinalCTA } from '@/components/landing/LandingFinalCTA'
 import { LandingContactFooter } from '@/components/landing/LandingContactFooter'
+import { LandingEnterpriseSection } from '@/components/landing/LandingEnterpriseSection'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
 export const metadata: Metadata = {
-    title: 'EVA | Plataforma para Personal Trainers y Coaches de Fitness',
-    description: 'EVA es la plataforma SaaS para Personal Trainers y Coaches. Crea rutinas profesionales, planes de nutrición, gestiona alumnos y ten tu propia app móvil white-label. Empieza gratis hoy.',
+    title: 'EVA | Software para Coaches, Personal Trainers y Gyms en Chile',
+    description: 'EVA: plataforma SaaS para coaches individuales y gyms. Panel centralizado por organización, rutinas, nutrición y app white-label. Desde gratis hasta planes enterprise.',
+    keywords: ['software gym chile', 'software academia deportiva', 'app personal trainer', 'gestión coaches'],
     alternates: {
         canonical: '/',
     },
@@ -68,6 +70,7 @@ export default async function LandingPage() {
                 <LandingExerciseCatalogShowcase exerciseCount={exerciseCount} />
                 <LandingPricingPreview />
                 <LandingStudentTabs />
+                <LandingEnterpriseSection />
                 <LandingFinalCTA />
                 <LandingContactFooter />
             </main>

@@ -12,6 +12,7 @@ import { InstallPrompt } from '@/components/InstallPrompt'
 import { BRAND_APP_ICON, BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { PostHogProvider } from '@/lib/posthog/provider'
+import { CookieConsent } from '@/components/CookieConsent'
 
 const metadataBase = resolveMetadataBase()
 /** Crawlers (WhatsApp, X) suelen exigir URL absoluta y sin caracteres problemáticos en la ruta. */
@@ -111,6 +112,7 @@ export default function RootLayout({
               <ScrollRestoration />
               <InstallPrompt brandName="EVA" />
               {children}
+              <CookieConsent />
               <Toaster richColors position="bottom-center" />
               <Analytics debug={false} />
               <SpeedInsights debug={false} />

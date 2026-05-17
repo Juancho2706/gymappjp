@@ -1,8 +1,14 @@
-'use client'
-
 import Link from 'next/link'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import { ArrowLeft } from 'lucide-react'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+    title: 'Aviso Legal | EVA',
+    description: 'Términos y condiciones de uso de EVA, plataforma para coaches, entrenadores personales y organizaciones.',
+}
+
+const LAST_UPDATED = '17 de mayo de 2026'
 
 export default function AvisoLegalPage() {
   return (
@@ -44,7 +50,7 @@ export default function AvisoLegalPage() {
                 Términos
               </span>
               <h1 className="text-4xl md:text-5xl font-black font-display tracking-tight text-foreground mb-4">Aviso Legal</h1>
-              <p className="text-muted-foreground">Última actualización: {new Date().toLocaleDateString()}</p>
+              <p className="text-muted-foreground">Última actualización: {LAST_UPDATED}</p>
             </div>
 
             <div className="space-y-8 bg-card border border-border backdrop-blur-xl rounded-[2rem] p-8 md:p-12 text-muted-foreground">
@@ -54,11 +60,13 @@ export default function AvisoLegalPage() {
                   {`En cumplimiento con el deber de información dispuesto en la normativa vigente, se hace constar que esta aplicación web (en adelante, "la Plataforma") está diseñada para ser utilizada por entrenadores personales y sus clientes. `}
                   Los datos identificativos del responsable de la plataforma son:
                   <br /><br />
-                  <strong>Nombre de la empresa / Titular:</strong> EVA
+                  <strong>Responsable:</strong> Juan Villegas (persona natural)
+                  <br />
+                  <strong>Plataforma:</strong> EVA (eva-app.cl)
                   <br />
                   <strong>Correo electrónico de contacto:</strong> contacto@eva-app.cl
                   <br />
-                  <strong>País/Jurisdicción:</strong> CHILE
+                  <strong>País/Jurisdicción:</strong> Chile
                 </p>
               </section>
 
@@ -88,6 +96,34 @@ export default function AvisoLegalPage() {
                 <p className="leading-relaxed text-sm md:text-base">
                   El titular de la Plataforma no se hace responsable, en ningún caso, de los daños y perjuicios de cualquier naturaleza que pudieran ocasionar errores u omisiones en los contenidos, falta de disponibilidad de la plataforma o la transmisión de virus o programas maliciosos, a pesar de haber adoptado todas las medidas tecnológicas necesarias para evitarlo. 
                   La información nutricional y de entrenamiento proporcionada a través de la plataforma tiene fines informativos y de gestión, y no debe sustituir el consejo de profesionales de la salud.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-foreground">5.1 Plan Enterprise (Organizaciones)</h2>
+                <p className="leading-relaxed text-sm md:text-base">
+                  EVA ofrece un plan Enterprise para gyms, academias y organizaciones con múltiples coaches.
+                  Este plan incluye panel centralizado de administración, pool de alumnos compartido entre coaches,
+                  y datos completamente aislados por organización.
+                </p>
+                <p className="leading-relaxed text-sm md:text-base">
+                  <strong>Precio base:</strong> $49.990 CLP/mes. Cada coach adicional sobre la cuota incluida: $9.990 CLP/mes.
+                  Incluye 30 días de prueba gratuita. Los precios no incluyen IVA cuando corresponda.
+                </p>
+                <p className="leading-relaxed text-sm md:text-base">
+                  Las organizaciones Enterprise firman un Contrato de Servicios adicional que complementa este Aviso Legal
+                  e incluye SLA específico, acuerdo de procesamiento de datos (DPA) y condiciones de terminación.
+                  En caso de conflicto, prevalece el Contrato Enterprise.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h2 className="text-2xl font-bold text-foreground">5.2 Menores de edad</h2>
+                <p className="leading-relaxed text-sm md:text-base">
+                  EVA no está destinado a menores de 14 años. Los coaches que registren alumnos menores de 14 años
+                  deben contar con el consentimiento de su tutor legal, conforme a la{' '}
+                  <strong>Ley 21.719</strong> de Protección de Datos Personales de Chile.
+                  EVA registra la confirmación de este consentimiento al momento del registro del alumno.
                 </p>
               </section>
 

@@ -55,6 +55,19 @@ async function handleWebhook(request: Request, rawBody: string) {
     const admin = createServiceRoleClient()
     const traceId = request.headers.get('x-request-id') ?? crypto.randomUUID()
 
+    // Idempotency: skip if we already processed this exact notification
+    if (notificationId) {
+        const { data: alreadyProcessed } = await admin
+            .from('subscription_events')
+            .select('id')
+            .eq('provider_event_id', notificationId)
+            .maybeSingle()
+        if (alreadyProcessed) {
+            console.info('[payments.webhook] duplicate notification, skipping', { traceId, notificationId })
+            return NextResponse.json({ ok: true })
+        }
+    }
+
     const payload = buildPayload(request, parsed)
     console.info('[payments.webhook] received', { traceId, provider: provider.name, payload })
 

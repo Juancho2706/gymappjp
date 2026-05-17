@@ -219,6 +219,65 @@ export async function rateLimitSupport(
     return { ok: false, retryAfter }
 }
 
+let inviteAcceptRatelimit: Ratelimit | null | undefined
+let orgCreationRatelimit: Ratelimit | null | undefined
+
+function getInviteAcceptRatelimit(): Ratelimit | null {
+    if (inviteAcceptRatelimit !== undefined) return inviteAcceptRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { inviteAcceptRatelimit = null; return null }
+    inviteAcceptRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, '1 h'),
+        prefix: 'ratelimit:invite-accept',
+    })
+    return inviteAcceptRatelimit
+}
+
+function getOrgCreationRatelimit(): Ratelimit | null {
+    if (orgCreationRatelimit !== undefined) return orgCreationRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { orgCreationRatelimit = null; return null }
+    orgCreationRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(3, '1 d'),
+        prefix: 'ratelimit:org-creation',
+    })
+    return orgCreationRatelimit
+}
+
+/** fail-CLOSED: bloquea si Redis no responde (endpoint sensible a abuso) */
+export async function rateLimitInviteAccept(
+    identifier: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getInviteAcceptRatelimit()
+    if (!limiter) return { ok: false, retryAfter: 3600 }
+    try {
+        const res = await limiter.limit(`invite-accept:${identifier}`)
+        await res.pending.catch(() => undefined)
+        if (res.success) return { ok: true }
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: false, retryAfter: 3600 }
+    }
+}
+
+/** fail-OPEN: permite si Redis no responde (bloquear creación org por caída Redis es peor) */
+export async function rateLimitOrgCreation(
+    identifier: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getOrgCreationRatelimit()
+    if (!limiter) return { ok: true }
+    try {
+        const res = await limiter.limit(`org-creation:${identifier}`)
+        await res.pending.catch(() => undefined)
+        if (res.success) return { ok: true }
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: true }
+    }
+}
+
 export function jsonRateLimited(retryAfter: number) {
     return NextResponse.json(
         { error: 'Too many requests', code: 'RATE_LIMIT' },

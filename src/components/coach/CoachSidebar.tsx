@@ -324,6 +324,14 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         <LogOut className="w-4 h-4 flex-shrink-0 transition-transform group-hover:-translate-x-1" />
                         {!isCollapsed && <span>Desconectar</span>}
                     </button>
+                    {!isCollapsed && (
+                        <a
+                            href="mailto:privacidad@eva-app.cl"
+                            className="block text-center text-[9px] text-muted-foreground/30 hover:text-muted-foreground/50 transition-colors py-1"
+                        >
+                            Privacidad · ARCO
+                        </a>
+                    )}
                 </div>
             </aside>
         </>

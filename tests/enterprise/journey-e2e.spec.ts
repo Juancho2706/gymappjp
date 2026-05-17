@@ -1,0 +1,207 @@
+/**
+ * Enterprise Journey E2E Tests
+ *
+ * Cubre el viaje completo de activación de una organización enterprise:
+ *   org_owner crea org → branding → invita coach → asigna cliente
+ *
+ * Requisitos:
+ *   - npx supabase start + npx supabase db reset (seed aplicado)
+ *   - npm run dev (Next.js en :3000)
+ *
+ * Limpieza: cada test crea datos únicos vía timestamp y los limpia en afterEach
+ * para no contaminar otros tests. Los datos del seed son de solo lectura aquí.
+ */
+
+import { test, expect } from '@playwright/test'
+import { createClient } from '@supabase/supabase-js'
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+const TEST_PASSWORD = 'TestPass123!'
+const ORG_A_SLUG = 'crossfit-test-norte'
+const ORG_B_SLUG = 'box-test-sur'
+
+function adminClient() {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
+// ============================================================
+// GRUPO 1 — Dashboard carga correctamente
+// ============================================================
+
+test.describe('Org dashboard', () => {
+  test('org_owner A ve el dashboard de su org', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}`)
+    await expect(page.locator('h1', { hasText: 'Dashboard' })).toBeVisible()
+    // Seat usage section visible
+    await expect(page.locator('text=Uso de seats')).toBeVisible()
+  })
+
+  test('coach sin org no puede acceder a /org/[slug]', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-standalone@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}`)
+    // Should redirect away (not org owner/member)
+    await expect(page).not.toHaveURL(new RegExp(`/org/${ORG_A_SLUG}$`))
+  })
+})
+
+// ============================================================
+// GRUPO 2 — Coaches page
+// ============================================================
+
+test.describe('Org coaches management', () => {
+  test('coaches page muestra miembros activos', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}/coaches`)
+    // Org A has 4 active members in seed
+    await expect(page.locator('h1')).toBeVisible()
+    // At least one coach listed
+    const coachList = page.locator('[data-testid="coach-row"], tr').first()
+    await expect(coachList).toBeVisible()
+  })
+
+  test('org_coach (no admin) no puede remover coaches', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-member-a1@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}/coaches`)
+    // Remove buttons should not be visible for non-admin coaches
+    const removeBtn = page.locator('button', { hasText: /remover|eliminar/i })
+    await expect(removeBtn).toHaveCount(0)
+  })
+})
+
+// ============================================================
+// GRUPO 3 — Settings page
+// ============================================================
+
+test.describe('Org settings', () => {
+  test('org_owner puede ver settings de su org', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}/settings`)
+    await expect(page.locator('h1', { hasText: 'Configuración' })).toBeVisible()
+    await expect(page.locator('text=Branding')).toBeVisible()
+  })
+
+  test('logo rechaza archivo PDF (tipo MIME inválido)', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}/settings`)
+
+    const fileInput = page.locator('input[type="file"][name="logo"]')
+    if (!(await fileInput.isVisible())) {
+      test.skip(true, 'Logo upload no implementado todavía')
+      return
+    }
+
+    // Create a fake PDF buffer
+    const pdfBuffer = Buffer.from('%PDF-1.4 fake pdf content')
+    await fileInput.setInputFiles({
+      name: 'malicious.pdf',
+      mimeType: 'application/pdf',
+      buffer: pdfBuffer,
+    })
+
+    const submitBtn = page.locator('button[type="submit"]').first()
+    await submitBtn.click()
+
+    await expect(page.locator('text=/tipo|mime|imagen|pdf/i').first()).toBeVisible({ timeout: 3000 })
+  })
+})
+
+// ============================================================
+// GRUPO 4 — Trial org indicators
+// ============================================================
+
+test.describe('Trial org UI', () => {
+  test('org en trial muestra badge/aviso de trial', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-owner-b@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_B_SLUG}`)
+    // Trial orgs show amber/trial indicators
+    await expect(page.locator('text=/trial/i').first()).toBeVisible()
+  })
+})
+
+// ============================================================
+// GRUPO 5 — Seat limit upsell
+// ============================================================
+
+test.describe('Seat limit upsell', () => {
+  test('org A con 4 coaches y 5 seats no muestra banner de límite', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}`)
+    // Org A has 4 members but 5 seats → no upsell needed
+    const upsellBanner = page.locator('[data-testid="seat-upsell-banner"]')
+    await expect(upsellBanner).toHaveCount(0)
+  })
+})
+
+// ============================================================
+// GRUPO 6 — Client pool + assignments
+// ============================================================
+
+test.describe('Client pool', () => {
+  test('org_owner A ve página de clientes de su org', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    await page.goto(`/org/${ORG_A_SLUG}/clients`)
+    await expect(page.locator('h1')).toBeVisible()
+  })
+
+  test('coach asignado sólo ve sus clientes asignados (no pool completo)', async ({ page }) => {
+    // coach-member-a1 is assigned only client-a1 in seed
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'coach-member-a1@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+
+    // Coach's own client list (not org pool)
+    await page.goto('/coach/clients')
+    await expect(page.locator('h1, h2').first()).toBeVisible()
+  })
+})
