@@ -94,6 +94,7 @@ vertex.json
 /playwright/.cache/
 /playwright/.auth/
 scripts/rls-policies.sql
+supabase/.branches/
 lint_errors_utf8.txt
 lint_errors.txt
 lint_results_utf8.txt
