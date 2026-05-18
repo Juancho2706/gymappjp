@@ -3142,7 +3142,11 @@ export async function syncPushToken(userId: string, supabase: SupabaseClient) {
 // Llamar syncPushToken en cada app launch — upsert es idempotente
 ```
 
-**GitHub Actions para EAS Build:**
+**GitHub Actions para builds (estrategia 2026-05-18):**
+
+Android: usar `eas build --local` en runner Ubuntu → gratis, sin consumir créditos EAS.
+iOS: usar EAS cloud (15 builds/mes gratis suficiente para etapa inicial).
+
 ```yaml
 # .github/workflows/mobile-build.yml
 name: Mobile Build
@@ -3152,7 +3156,7 @@ on:
     paths: ['apps/mobile/**']
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -3160,14 +3164,40 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
       - run: npm ci
       - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-      - run: eas build --platform android --profile staging --non-interactive
+      # --local = corre en el runner, NO consume créditos EAS
+      - run: eas build --platform android --profile staging --local --non-interactive
+        working-directory: apps/mobile
+        env:
+          EXPO_ROUTER_APP_ROOT: apps/mobile/app
+
+  build-ios:
+    runs-on: ubuntu-latest  # EAS cloud compila iOS remotamente
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: 'npm' }
+      - run: npm ci
+      - uses: expo/expo-github-action@v8
+        with: { eas-version: latest, token: '${{ secrets.EXPO_TOKEN }}' }
+      - run: eas build --platform ios --profile staging --non-interactive
         working-directory: apps/mobile
 ```
+
+**Monorepo fix — EXPO_ROUTER_APP_ROOT (2026-05-18):**
+`_ctx.android.js` usa `require.context(process.env.EXPO_ROUTER_APP_ROOT)`. Metro no inyecta este env var automáticamente en monorepos. Solución: `apps/mobile/babel.config.js` setea el var en el worker process:
+```js
+process.env.EXPO_ROUTER_APP_ROOT = process.env.EXPO_ROUTER_APP_ROOT || path.resolve(__dirname, 'app')
+```
+También: `apps/mobile/metro.config.js` extiende watchFolders con monorepoRoot y configura `nodeModulesPaths` para evitar react duplicado.
 
 **Maestro — mobile E2E testing (install local, gratis):**
 ```bash

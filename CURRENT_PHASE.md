@@ -242,7 +242,7 @@
 - [x] Sentry — **descartado** (trial 2 semanas, sin presupuesto para plan paid)
 
 **Prerequisitos MT pendientes (no bloquean desarrollo, sí bloquean build/submission):**
-- [ ] MT-11: Apple Team ID de Guimel → reemplazar PLACEHOLDER_APPLE_TEAM_ID en eas.json + AASA
+- [x] MT-11: Apple Team ID `5GKWMMZ46Q` (Guimel) → eas.json + AASA actualizados ✅
 - [ ] MT-12: Bundle ID `cl.evaapp.eva` registrado en App Store Connect
 - [ ] MT-13: Google Play account ($25 USD) — **solo para submission, NO para APK de prueba**
 - [x] MT-14: Cuenta Expo EAS creada ✅ (EAS Project ID: a5f4f7c0)
