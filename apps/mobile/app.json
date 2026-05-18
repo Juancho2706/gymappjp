@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "EVA",
-    "slug": "eva-fitness",
+    "slug": "eva",
     "scheme": "eva",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,7 +22,10 @@
         "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
         "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento"
       },
-      "associatedDomains": ["applinks:eva-app.cl", "webcredentials:eva-app.cl"]
+      "associatedDomains": [
+        "applinks:eva-app.cl",
+        "webcredentials:eva-app.cl"
+      ]
     },
     "android": {
       "package": "cl.evaapp.eva",
@@ -43,14 +46,32 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "eva-app.cl", "pathPrefix": "/c/" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https",
+              "host": "eva-app.cl",
+              "pathPrefix": "/c/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "eva-app.cl", "pathPrefix": "/invite/" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https",
+              "host": "eva-app.cl",
+              "pathPrefix": "/invite/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -84,6 +105,7 @@
       "eas": {
         "projectId": "a5f4f7c0-861c-48b1-9ed6-fc46e7843844"
       }
-    }
+    },
+    "owner": "juandeveva"
   }
 }
