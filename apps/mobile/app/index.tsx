@@ -14,7 +14,7 @@ export default function RoleSelector() {
       <View style={styles.buttons}>
         <TouchableOpacity
           style={[styles.btn, styles.btnCoach]}
-          onPress={() => router.push('/coach/login')}
+          onPress={() => router.push('/(auth)/login?role=coach')}
           activeOpacity={0.85}
         >
           <Text style={styles.btnIcon}>🏋️</Text>
@@ -24,7 +24,7 @@ export default function RoleSelector() {
 
         <TouchableOpacity
           style={[styles.btn, styles.btnAlumno]}
-          onPress={() => router.push('/alumno/login')}
+          onPress={() => router.push('/alumno/codigo')}
           activeOpacity={0.85}
         >
           <Text style={styles.btnIcon}>💪</Text>
