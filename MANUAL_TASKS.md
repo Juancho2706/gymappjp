@@ -221,32 +221,14 @@
 
 ---
 
-### MT-14 — Crear cuenta Expo (EAS) para builds mobile · 1️⃣ Solo una vez
-**Requerido por:** Compilar la app RN con EAS Build (Fase 6B)
-
-**Pasos:**
-1. Ir a [expo.dev](https://expo.dev) → Sign Up
-2. Usar email: `jvillegas.dev@gmail.com`
-3. Crear organización: "EVA" o "Antigravity"
-4. Plan Free es suficiente para comenzar (30 builds/mes gratis)
-5. Generar token EAS: [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens)
-6. Guardar el token → se usará en `EXPO_TOKEN` (GitHub Secret)
+### MT-14 — Crear cuenta Expo (EAS) para builds mobile · ✅ HECHO (2026-05-18)
+**Cuenta:** `juandeveva` en expo.dev · Proyecto: `eva` · EAS Project ID: `a5f4f7c0-861c-48b1-9ed6-fc46e7843844`
+**Pendiente:** Generar EXPO_TOKEN en expo.dev/settings/access-tokens → guardar como GitHub Secret `EXPO_TOKEN` para CI (`.github/workflows/mobile-build.yml`)
 
 ---
 
-### MT-15 — Crear cuenta Sentry (crash reporting mobile) · 1️⃣ Solo una vez
-**Requerido por:** Detectar crashes en producción de la app React Native
-
-**Pasos:**
-1. Ir a [sentry.io](https://sentry.io) → Sign Up gratis
-2. Crear organización: `eva-fitness`
-3. Crear proyecto:
-   - Platform: React Native
-   - Project name: `eva-rn`
-4. Copiar el **DSN** del proyecto (aparece en Settings → Client Keys)
-5. Avísame el DSN → lo agrego a `app.json` y `apps/mobile/lib/sentry.ts`
-
-**Free tier:** 5.000 errores/mes — suficiente para el lanzamiento.
+### MT-15 — Crear cuenta Sentry (crash reporting mobile) · ❌ DESCARTADO
+**Decisión 2026-05-18:** Sentry tiene trial 2 semanas, luego es de pago. Sin presupuesto por ahora. Plugin de Sentry removido de `app.json`. Revisitar en v1.1 cuando haya revenue.
 
 ---
 
@@ -586,11 +568,11 @@ Estas vars controlan features en UI. Si no están seteadas, valor por defecto es
 | MT-8 | ToS + Privacy Policy | ✅ Redactados — `docs/legal/tos.md` + `docs/legal/privacy-policy.md` |
 | MT-9 | Google Sheets Pipeline | ✅ Hecho |
 | MT-10 | UptimeRobot | ✅ Hecho |
-| MT-11 | Guimel App Manager | ⏳ Pendiente (Fase 6) |
-| MT-12 | Bundle IDs App Store | ⏳ Pendiente (Fase 6) |
-| MT-13 | Google Play ($25) | ⏸ EN ESPERA de dinero (próxima semana) |
-| MT-14 | Cuenta Expo EAS | ⏳ Pendiente (Fase 6) |
-| MT-15 | Cuenta Sentry | ⏳ Pendiente (Fase 6) |
+| MT-11 | Guimel Team ID | ⏳ Esperando respuesta de Guimel — placeholder en eas.json + AASA |
+| MT-12 | Bundle IDs App Store | ⏳ Depende de MT-11 |
+| MT-13 | Google Play ($25) | ⏸ EN ESPERA — pagar próxima semana |
+| MT-14 | Cuenta Expo EAS | ✅ Hecho — juandeveva, proyecto eva, EAS ID configurado |
+| MT-15 | Cuenta Sentry | ❌ Descartado por ahora (revisar en v1.1) |
 | MT-16 | One-pager PDF | ✅ Hecho por KimiCode — `scripts/output/EVA-Enterprise-One-Pager.pdf` |
 | MT-17 | FirmaFácil | ⏳ Pendiente |
 | MT-18 | DNS enterprise.eva-app.cl | ⏳ Pendiente (Fase 6) |

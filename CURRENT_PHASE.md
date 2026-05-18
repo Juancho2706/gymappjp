@@ -248,7 +248,7 @@
 - [x] MT-14: Cuenta Expo EAS creada ✅ (EAS Project ID: a5f4f7c0)
 - [ ] MT-15: Sentry — descartado
 
-### 6B Sem 1-2 ← EN CURSO
+### 6B Sem 1-2 ← COMPLETO
 - [x] Supabase client mobile (`apps/mobile/lib/supabase.ts`) — detectSessionInUrl: false
 - [x] Branding por invite_code (`apps/mobile/lib/branding.ts`) — AsyncStorage persistence
 - [x] ThemeContext (`apps/mobile/context/ThemeContext.tsx`) — light/dark + coach primary color
@@ -298,23 +298,27 @@
   - coach/perfil.tsx: muestra sección org (si org_managed) u oculta billing (standalone)
   - (auth)/reset-password.tsx: pantalla cambio password post deep link
   - _layout.tsx: Linking listener — parsea hash #access_token → setSession → tipo recovery → /reset-password
-- Sem 9: In-app messaging coach ↔ alumno (tabla `messages` + Supabase Realtime)
-- Sem 10: HealthKit/Health Connect + pedómetro + background timer (v1.1)
-- Sem 11: NFC check-in + video form review setup (v1.1)
-- Sem 12: Leaderboards básicos + streaks (v1.1 engagement)
-- Sem 13: Auditoría Guimel + App Privacy Labels + screenshots + polish final
+- **[POSTERGADO → v1.1]** Sem 9: In-app messaging — coaches ya usan WhatsApp; feature compleja (historial paginado, unread badges, Realtime reconnect). Schema `messages` ya documentado en EXECUTION_PLAN.md §6B.
+- **[v1.1]** Sem 10: HealthKit/Health Connect + pedómetro + background timer
+- **[v1.1]** Sem 11: NFC check-in + video form review setup
+- **[v1.1]** Sem 12: Leaderboards básicos + streaks de workout
+- **[PRÓXIMO]** Sem 13: Auditoría Guimel + App Privacy Labels + screenshots + polish final
 
 **DB migrations necesarias antes de Sem 1:**
 - [x] `push_tokens` table ✅ (20260518000000, aplicada local)
 - [ ] `attendance_logs` table (Sem 5+, NFC)
 - [ ] `form_reviews` table (v1.1, puede esperar)
 
-**Antes de App Store submission:**
-- [ ] App Privacy Labels (fitness, nutrition, health, user content, messages)
+**Stubs restantes (todos completados 2026-05-18, commit 853fa90):**
+- [x] `coach/(tabs)/nutricion.tsx` — chip picker clientes + lista planes con macros (activo badge, meal count)
+- [x] `alumno/(tabs)/perfil.tsx` — nombre, email, coach branding, peso objetivo, miembro desde, logout
+
+**Antes de App Store submission (Sem 13):**
+- [ ] App Privacy Labels (fitness, nutrition, health, user content)
 - [ ] Data Safety Form Google Play
 - [ ] Screenshots iPhone 16 Pro Max: coach mode (3+) y alumno mode (3+)
 - [ ] App Review Notes con credenciales demo por rol
-- [ ] `EVANative` en userAgent
+- [ ] Verificar `EVANative` en userAgent (expo-constants)
 
 ### 6C — EVA Enterprise App React Native (8 semanas, paralelo a 6B sem 5-12)
 - Bundle ID: `cl.evaapp.eva-enterprise`

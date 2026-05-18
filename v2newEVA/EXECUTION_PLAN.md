@@ -3362,23 +3362,30 @@ CREATE TABLE IF NOT EXISTS form_reviews (
 );
 ```
 
-**Roadmap 6B (13 semanas):**
+**Roadmap 6B — estado al 2026-05-18:**
 ```
-Sem 1-2:  Setup + auth + selector rol + ThemeContext + branding por invite_code
-          (6B.0 ya hecho — no repetir setup aquí)
-Sem 3-4:  Módulo alumno completo (workout, nutrición, check-in, offline)
-Sem 5:    Push notifications (expo-notifications) + EAS dev build en dispositivo físico
-Sem 6-7:  Módulo coach (lista clientes, builder simplificado, ver check-ins)
-Sem 8:    Coach enterprise: ocultar billing/branding si org_managed
-          Deep linking (.well-known/ ya live desde 6B.0 — solo testar)
-Sem 9:    In-app messaging coach ↔ alumno (NUEVO — ver tabla messages más abajo)
-          Razón: TrueCoach y Trainerize tienen esto como feature core.
-          Sin mensajería, coaches siguen usando WhatsApp y la retención de la app cae.
-Sem 10:   Pedómetro + HealthKit/Health Connect + background timer (v1.1 features)
-Sem 11:   NFC check-in + video form review setup (v1.1)
-Sem 12:   Leaderboards básicos + streaks de workout (v1.1 — engagement +28% Day 7)
-Sem 13:   Auditoría Guimel + App Privacy Labels + screenshots + polish final
+[✅] Sem 1-2:  Auth + selector rol + ThemeContext + branding por invite_code + push_tokens migration
+[✅] Sem 3-4:  Módulo alumno completo (workout/[planId], nutricion, check-in, offline cache)
+[✅] Sem 5:    Push notifications — configurePushHandler, Android channel, syncPushToken,
+               web/lib/push.ts fanout VAPID+Expo, app.json expo-image-picker plugin
+[✅] Sem 6-7:  Módulo coach — clientes (búsqueda), check-ins (barra energía), builder (chip picker),
+               coach/cliente/[clientId].tsx, lib/coach.ts
+[✅] Sem 8:    Coach enterprise — lib/org.ts (JWT org_id/org_role), perfil.tsx org-aware,
+               (auth)/reset-password.tsx, _layout.tsx Linking deep link handler
+[✅] Stubs:    coach/nutricion.tsx (planes por cliente + macros), alumno/perfil.tsx (info + branding)
+[⏸ v1.1] Sem 9:  In-app messaging — postergado. Coaches usan WhatsApp hoy.
+               Schema messages documentado abajo (implementar cuando haya demanda real).
+[⏸ v1.1] Sem 10: HealthKit/Health Connect + pedómetro + background timer
+[⏸ v1.1] Sem 11: NFC check-in + video form review
+[⏸ v1.1] Sem 12: Leaderboards + streaks de workout
+[🎯 PRÓXIMO] Sem 13: Auditoría Guimel + App Privacy Labels + screenshots + polish final
 ```
+
+**Stack real (difiere del plan original):**
+- Expo SDK 54 (no 53) + Expo Router v6 (no v4) + React Native 0.81.5
+- NativeWind descartado — StyleSheet nativo
+- Sentry descartado (costo; revisar en v1.1)
+- EAS: cuenta `juandeveva`, proyecto `eva`, ID `a5f4f7c0-861c-48b1-9ed6-fc46e7843844`
 
 **Schema para in-app messaging (agregar en migración antes de Sem 9):**
 ```sql
