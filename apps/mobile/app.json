@@ -1,34 +1,89 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "EVA",
+    "slug": "eva-fitness",
+    "scheme": "eva",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "cl.evaapp.eva",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Para enviar fotos de progreso a tu coach",
+        "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
+        "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento"
+      },
+      "associatedDomains": ["applinks:eva-app.cl", "webcredentials:eva-app.cl"]
     },
     "android": {
+      "package": "cl.evaapp.eva",
+      "versionCode": 1,
+      "targetSdkVersion": 35,
+      "minSdkVersion": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "eva-app.cl", "pathPrefix": "/c/" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "eva-app.cl", "pathPrefix": "/invite/" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "plugins": [
-      "@sentry/react-native",
-      "expo-router"
-    ]
+      "expo-router",
+      "expo-updates",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#007AFF",
+          "sounds": []
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "eva-fitness",
+          "project": "eva-rn"
+        }
+      ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/PLACEHOLDER_EAS_PROJECT_ID",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "PLACEHOLDER_EAS_PROJECT_ID"
+      }
+    }
   }
 }
