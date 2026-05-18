@@ -265,6 +265,14 @@
 - [ ] `apps/mobile/.env` apuntando a Supabase local (crear en cada máquina, no se commitea)
 - [ ] Probar flujo completo en Expo Go / simulador
 
+**Sem 3-4 — COMPLETO (commit 5a3ea80, 2026-05-18):**
+- [x] `alumno/(tabs)/workout.tsx` — planes del programa activo por day_of_week, hoy destacado, sync button offline logs
+- [x] `alumno/workout/[planId].tsx` — BlockCard por ejercicio, log sets, rest timer, fallback offline
+- [x] `alumno/(tabs)/nutricion.tsx` — plan activo + macros, comidas del día filtradas por day_of_week (DB 1=Lun…7=Dom), toggle completado via daily_nutrition_logs + nutrition_meal_logs
+- [x] `alumno/(tabs)/check-in.tsx` — image picker, upload a bucket `checkins`, peso/energía/notas
+- [x] `lib/client.ts` — getClientProfile (clients.id = auth.uid())
+- [x] `lib/offline-cache.ts` — cachePlan, getCachedPlan, enqueueLog, flushLogQueue, getPendingLogCount
+
 **Estrategia de testing mobile (decisiones 2026-05-18):**
 - **Supabase remoto desde celular fuera de red:** ngrok (`ngrok http 54321`) → URL temporal → cambiar `EXPO_PUBLIC_SUPABASE_URL` en `.env` — ver MT-27
 - **Android test build (sin Google Play):** EAS build → APK → instalar directo en celular Juan — ver MT-28. Google Play ($25) solo necesario para submisión pública.
@@ -273,7 +281,7 @@
 ### 6B — EVA App React Native (12 semanas)
 **Roadmap por semanas:**
 - Sem 1-2: Auth + selector rol (SOY COACH / SOY ALUMNO) + ThemeContext + branding por invite_code
-- Sem 3-4: Módulo alumno completo (workout, nutrición, check-in, offline cache)
+- **[COMPLETO]** Sem 3-4: Módulo alumno completo (workout, nutrición, check-in, offline cache)
 - Sem 5: Push notifications (expo-notifications) + EAS dev build en dispositivo físico
 - Sem 6-7: Módulo coach (lista clientes, builder simplificado, ver check-ins)
 - Sem 8: Coach enterprise (ocultar billing/branding si org_managed) + deep linking
