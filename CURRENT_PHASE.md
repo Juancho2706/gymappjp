@@ -293,7 +293,11 @@
   - builder.tsx: chip picker de clientes + vista planes (read-only; edición en web)
   - coach/cliente/[clientId].tsx: detalle cliente — info, último check-in, programa activo
   - lib/coach.ts: getCoachProfile
-- Sem 8: Coach enterprise (ocultar billing/branding si org_managed) + deep linking
+- **[COMPLETO]** Sem 8: Coach enterprise + deep linking — commit f6fb827 (2026-05-18)
+  - lib/org.ts: getCoachOrgContext() — org_id/org_role desde JWT, fetch org name
+  - coach/perfil.tsx: muestra sección org (si org_managed) u oculta billing (standalone)
+  - (auth)/reset-password.tsx: pantalla cambio password post deep link
+  - _layout.tsx: Linking listener — parsea hash #access_token → setSession → tipo recovery → /reset-password
 - Sem 9: In-app messaging coach ↔ alumno (tabla `messages` + Supabase Realtime)
 - Sem 10: HealthKit/Health Connect + pedómetro + background timer (v1.1)
 - Sem 11: NFC check-in + video form review setup (v1.1)
