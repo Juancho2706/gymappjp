@@ -45,6 +45,9 @@ Fuente de verdad para versiones: `package.json`.
 ### Bug crítico resuelto (impactaría producción)
 Migration `supabase/migrations/20260517150000_fix_rls_recursion.sql` — `org_members_see_peers` tenía recursión infinita en PostgreSQL. Fix: función SECURITY DEFINER `is_active_org_member()`.
 
+### Registro free coach v2
+Migration `supabase/migrations/20260517160000_allow_pending_email_subscription_status.sql` permite `pending_email` en `coaches_subscription_status_check`. Flujo: registro free crea Auth user con `email_confirm: false` + coach `pending_email`; `/auth/confirm` verifica link Supabase y actualiza a `active`.
+
 ### Gaps documentados (no bloquean Fase 6)
 - Crons 3/4/5: `payment-reminder`, `audit-checksum`, `mp-reconcile` — no implementados
 - Cron `purge-data`: parcial (purga directa, necesita 2-step con email previo)

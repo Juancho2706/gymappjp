@@ -24,6 +24,10 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }))
 
+vi.mock('next/headers', () => ({
+  headers: vi.fn(async () => new Headers({ 'x-forwarded-for': '203.0.113.10' })),
+}))
+
 import { registerAction } from './actions'
 
 function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
@@ -45,6 +49,7 @@ function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
   formData.set('subscription_tier', base.subscription_tier)
   formData.set('billing_cycle', base.billing_cycle)
   formData.set('accept_legal', 'on')
+  formData.set('accept_health_data', 'on')
   return formData
 }
 
@@ -123,7 +128,7 @@ describe('registerAction', () => {
     const formData = buildRegisterFormData()
     formData.delete('accept_legal')
     const result = await registerAction({}, formData)
-    expect(result).toEqual({ error: 'Debes aceptar los términos para crear tu cuenta.' })
+    expect(result.error).toMatch(/servicio/)
   })
 
   it('rejects invalid tier or billing cycle', async () => {
@@ -243,5 +248,70 @@ describe('registerAction', () => {
       p_email: 'coach@example.com',
     })
     expect(redirectMock).toHaveBeenCalledWith('/coach/subscription/processing?from=register&tier=starter&cycle=monthly&plan=mensual')
+  })
+
+  it('creates free account pending email confirmation', async () => {
+    const ipLimitQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockResolvedValue({ count: 0 }),
+    }
+    const slugQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
+    const insertQuery = {
+      insert: vi.fn().mockResolvedValue({ error: null }),
+    }
+
+    let coachesCallCount = 0
+    const fromMock = vi.fn((table: string) => {
+      if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
+      coachesCallCount += 1
+      if (coachesCallCount === 1) return ipLimitQuery
+      if (coachesCallCount === 2) return slugQuery
+      return insertQuery
+    })
+
+    const adminDb = {
+      from: fromMock,
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          exists_in_auth: false,
+          is_coach: false,
+          is_client: false,
+          orphan_client_email: false,
+        },
+        error: null,
+      }),
+      auth: {
+        admin: {
+          createUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-free' } }, error: null }),
+          deleteUser: vi.fn(),
+        },
+      },
+    }
+
+    createRawAdminClientMock.mockReturnValue(adminDb)
+
+    await expect(
+      registerAction({}, buildRegisterFormData({ subscription_tier: 'free', billing_cycle: 'monthly' }))
+    ).rejects.toThrow('REDIRECT:/verify-email?email=coach%40example.com')
+
+    expect(adminDb.auth.admin.createUser).toHaveBeenCalledWith({
+      email: 'coach@example.com',
+      password: 'super-secret-123',
+      email_confirm: false,
+    })
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'u-free',
+      subscription_tier: 'free',
+      subscription_status: 'pending_email',
+      payment_provider: 'admin',
+      max_clients: 3,
+    }))
+    expect(createClientMock).not.toHaveBeenCalled()
+    expect(redirectMock).toHaveBeenCalledWith('/verify-email?email=coach%40example.com')
   })
 })

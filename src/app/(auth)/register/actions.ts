@@ -179,9 +179,7 @@ export async function registerAction(
             brand_name: brandName,
             slug,
             primary_color: '#10B981',
-            // Keep free inside the existing DB CHECK constraint. Auth remains unconfirmed
-            // until the email link is used, so this does not grant an active session early.
-            subscription_status: isFreeTier ? 'active' : 'pending_payment',
+            subscription_status: isFreeTier ? 'pending_email' : 'pending_payment',
             subscription_tier: selectedTier,
             billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
             payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),

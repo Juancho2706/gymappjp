@@ -80,6 +80,7 @@
 - [x] 1.7.1 — Offline workout queue (`src/lib/workout-offline-queue.ts` + `OfflineWorkoutQueueSync`)
 - [x] 1.7.2 — Push notifications (`src/lib/push.ts` + `web-push`)
 - [x] Storage bucket `org-assets` creado — ✅ confirmado por usuario (MT-2 hecho)
+- [x] Registro free coach con confirmación de email — `pending_email` permitido en DB, `/auth/confirm` activa a `active`
 
 ### Columnas faltantes en DB
 - [x] `subscription_events.org_id` — migration `20260517140001`
@@ -276,6 +277,7 @@
 - Flujo: `CURRENT_PHASE.md` como tracker liviano, `EXECUTION_PLAN.md` como referencia completa
 - No staging (free tier ocupado) — local → prod directo al final
 - **Bug crítico resuelto 2026-05-17:** `org_members_see_peers` tenía recursión infinita en PostgreSQL RLS. Migration `20260517150000_fix_rls_recursion.sql` resuelve con función SECURITY DEFINER `is_active_org_member()`. Este bug hubiera afectado producción.
+- **Registro free coach v2:** Supabase Auth confirma email con link; DB usa `subscription_status='pending_email'` hasta `/auth/confirm`, luego `active`. Migration `20260517160000_allow_pending_email_subscription_status.sql`.
 - **MCP Supabase apunta a PROD** — nunca ejecutar SQLs de desarrollo via MCP. Solo Bash local.
 - **Mobile env vars:** .ipa/.apk conecta directamente a Supabase (no pasa por Vercel). Vars van en `apps/mobile/.env` con prefijo `EXPO_PUBLIC_*` y se hornean en el build via EAS.
 - **"Clean Architecture / Design System / SDD"** no está como fase en EXECUTION_PLAN.md. El plan ya usa Feature First (module pattern) como arquitectura. No se agrega.

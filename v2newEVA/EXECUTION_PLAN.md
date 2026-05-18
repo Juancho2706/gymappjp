@@ -227,6 +227,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 | Coach en org (EVA App) | Mismo dashboard que standalone, pero sin tab Billing ni Branding (org lo gestiona). `subscription_status = 'org_managed'` oculta esas tabs |
 | Arquitectura web | **Un solo Next.js app.** `/coach/*` + `/c/[slug]/*` + `enterprise.eva-app.cl` → `/org/*`. Paridad total con las 3 apps nativas |
 | Auth | Supabase Auth en todas las superficies (web + ambas apps RN) |
+| Registro free coach | Supabase email confirmation link obligatorio. `coaches.subscription_status = 'pending_email'` hasta `/auth/confirm`; luego pasa a `active`. No usar código numérico custom en MVP. |
 | JWT claims | Supabase Auth Hook (free) → `org_id` + `org_role` en JWT al login |
 | Pagos coaches | MercadoPago pre-approvals (ya implementado, HMAC verificado) |
 | Pagos enterprise | Manual: link MP o transferencia bancaria → activación manual |
