@@ -74,7 +74,7 @@
       ]
     ],
     "updates": {
-      "url": "https://u.expo.dev/PLACEHOLDER_EAS_PROJECT_ID",
+      "url": "https://u.expo.dev/a5f4f7c0-861c-48b1-9ed6-fc46e7843844",
       "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": {
@@ -82,7 +82,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "PLACEHOLDER_EAS_PROJECT_ID"
+        "projectId": "a5f4f7c0-861c-48b1-9ed6-fc46e7843844"
       }
     }
   }
