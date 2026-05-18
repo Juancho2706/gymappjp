@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# EAS local credentials (contains p12 password)
+credentials.json
+
 # typescript
 *.tsbuildinfo
 
