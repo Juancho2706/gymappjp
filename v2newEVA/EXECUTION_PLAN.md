@@ -3208,8 +3208,14 @@ appId: cl.evaapp.eva
 
 **Bundle ID:** `cl.evaapp.eva`  
 **Stores:** App Store + Google Play  
-**Cuentas:** Guimel (Apple, $0) + Google Play ($25 USD, pagar antes de empezar)  
+**Cuentas:** Guimel (Apple, $0) + Google Play ($25 USD, pagar antes de *publicar* — no antes de empezar)  
 **Timeline:** 12 semanas dev + 2-3 semanas review = **14-15 semanas hasta live**
+
+**Estrategia de builds y testing (decisión 2026-05-18):**
+- **Android sin Google Play:** EAS genera APK → instalar directo en celular Juan (ADB o link de descarga). Google Play ($25) solo necesario al momento de submisión pública.
+- **iOS test externo:** Registrar UDID de dispositivo con `eas device:create` → build ad-hoc → link de descarga. TestFlight disponible cuando exista listing en App Store Connect (Sem 13).
+- **Supabase local remoto:** ngrok (`ngrok http 54321`) expone Supabase al exterior para testeo desde celulares fuera de la red local. Ver MT-27.
+- **Sentry:** descartado por costo (trial 2 semanas, sin plan gratuito viable).
 
 **Implicaciones cuenta Guimel:**
 - App aparece bajo nombre/empresa de Guimel — coordinar nombre neutral o usar nombre de EVA

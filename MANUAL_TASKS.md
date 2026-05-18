@@ -636,3 +636,96 @@ Cuando llegue el momento de `npx supabase db push` + merge a master, hacer esto 
 5. Redeploy solo cuando estemos listos para probar/deployar v2.
 
 **Verificación esperada:** Vercel ejecuta `npm run build` desde el monorepo y construye `@eva/web` correctamente.
+
+---
+
+## MT-27 — ngrok para testeo remoto de Supabase local · 🔁 Cada sesión de testeo remoto
+
+**Requerido por:** Testear app mobile desde celular fuera de la red local.
+
+**Instalar una vez:**
+```powershell
+npm install -g ngrok
+# Crear cuenta gratis en ngrok.com → copiar authtoken
+ngrok config add-authtoken TU_TOKEN
+```
+
+**Cada sesión de testeo:**
+```powershell
+# 1. Asegurarse que Supabase local esté corriendo
+npx supabase status
+
+# 2. Exponer el puerto
+ngrok http 54321
+# Te da URL tipo: https://abc123.ngrok-free.app
+```
+
+**Cambiar en `apps/mobile/.env`:**
+```
+EXPO_PUBLIC_SUPABASE_URL=https://abc123.ngrok-free.app
+```
+
+**Al terminar:** volver a `http://127.0.0.1:54321` en el `.env`.
+
+**Limitaciones plan free ngrok:** URL cambia cada sesión. Plan free = 1 agente activo.
+
+---
+
+## MT-28 — Build Android de prueba (APK sin Google Play) · ⏳ Cuando Apple Team ID esté listo
+
+**Contexto:** Google Play ($25) solo se necesita para publicar en la tienda. Para instalar en tu celular Android directamente, EAS genera un APK gratis.
+
+**Prerequisitos:**
+- `eas login` hecho (Juandeveva en expo.dev) ✅
+- `EXPO_TOKEN` en GitHub Secrets ✅
+
+**Pasos:**
+```powershell
+cd apps/mobile
+
+# Build development (debug, con dev menu)
+eas build --platform android --profile development --non-interactive
+
+# O build staging (release, sin dev menu, más parecido a producción)
+eas build --platform android --profile staging --non-interactive
+```
+
+**Instalar en el celular:**
+1. Build tarda ~10-15 min en servidores de EAS
+2. Cuando termine → EAS te manda email con link de descarga
+3. También en [expo.dev](https://expo.dev) → Juandeveva → proyecto eva-fitness → Builds
+4. Abrir el link en el celular Android → descargar APK → instalar
+5. Android pedirá habilitar "instalar de fuentes desconocidas" — aceptar solo para esta app
+
+**Nota:** El `.env` determina a qué Supabase apunta el build. Para testeo local remoto: usar ngrok URL antes de correr `eas build`.
+
+---
+
+## MT-29 — iOS testeo en dispositivo de amigo (ad-hoc via EAS) · ⏳ Cuando Apple Team ID esté listo
+
+**Contexto:** Para que alguien con iPhone pruebe la app sin App Store, se registra su dispositivo en Apple Developer y se hace un build especial.
+
+**Prerequisitos:**
+- Apple Team ID de Guimel configurado en `eas.json` (MT-11 pendiente)
+- Bundle ID `cl.evaapp.eva` registrado (MT-12 pendiente)
+
+**Pasos:**
+
+1. **Registrar el dispositivo del amigo:**
+```powershell
+cd apps/mobile
+eas device:create
+# Te da un link — amigo lo abre en su iPhone → instala perfil → registra UDID automáticamente
+```
+
+2. **Build ad-hoc:**
+```powershell
+eas build --platform ios --profile development --non-interactive
+```
+EAS genera un `.ipa` con provisioning ad-hoc que incluye el UDID del amigo.
+
+3. **Instalar:** EAS envía email con link → amigo lo abre en su iPhone → instala directo.
+
+**Futuro (cuando haya listing en App Store Connect):** usar TestFlight — más limpio, hasta 10.000 testers, sin límite de dispositivos. Ese paso viene en Sem 13 (auditoría + polish).
+
+**Importante:** máx. 100 dispositivos registrados en plan de Guimel (Apple Developer). Más que suficiente para pruebas.

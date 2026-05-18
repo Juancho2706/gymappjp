@@ -20,10 +20,10 @@
 
 ---
 
-## Fase Actual: FASE 6B.0 — Pre-flight Mobile
+## Fase Actual: FASE 6B Sem 1-2 — Auth + navegación por rol
 
 **Rama git:** `v2/enterprise`
-**Última actualización:** 2026-05-17 (Fase 6A monorepo completada localmente)
+**Última actualización:** 2026-05-18 (6B.0 completa, Sem 1-2 auth + ThemeContext + tabs commiteados)
 
 ---
 
@@ -227,28 +227,48 @@
 - [x] `npx vitest run "apps/web/src/app/(auth)/register/actions.test.ts"`
 - [x] `npx playwright test tests/enterprise/rls-isolation.spec.ts --workers=1`
 
-### 6B.0 — Pre-flight Mobile (antes de escribir cualquier feature)
-- [ ] `npm install -g eas-cli` + `eas login`
-- [ ] `apps/mobile/` creado con `npx create-expo-app`
-- [ ] `eas.json` con perfiles development/staging/production
-- [ ] `expo-updates` configurado (OTA hotfixes)
-- [ ] `@sentry/react-native` instalado (MT-15)
-- [ ] `app.json` completo (bundleId `cl.evaapp.eva`, targetSdkVersion 35, permisos)
-- [ ] `PrivacyInfo.xcprivacy` en repo
-- [ ] ThemeContext (`apps/mobile/lib/theme.ts`) definido
-- [ ] Push token sync handler (`apps/mobile/lib/push.ts`)
-- [ ] `.well-known/apple-app-site-association` live en eva-app.cl
-- [ ] `.well-known/assetlinks.json` live en eva-app.cl
-- [ ] GitHub Actions para EAS Build (`.github/workflows/mobile-build.yml`)
-- [ ] Maestro instalado + primer test en simulador
-- [ ] Age rating 13+ declarado en App Store Connect
+### 6B.0 — Pre-flight Mobile ✅ COMPLETA (2026-05-18)
+- [x] `npm install -g eas-cli` + `eas login` (jvillegas.dev@gmail.com → cuenta Juandeveva)
+- [x] `apps/mobile/` scaffold Expo SDK 54 + Expo Router v6
+- [x] `eas.json` con perfiles development/staging/production
+- [x] `expo-updates` configurado (OTA, runtimeVersion: appVersion)
+- [x] `app.json` completo (bundleId `cl.evaapp.eva`, targetSdkVersion 35, permisos, EAS Project ID: `a5f4f7c0-861c-48b1-9ed6-fc46e7843844`)
+- [x] `PrivacyInfo.xcprivacy` en repo
+- [x] ThemeContext + `lib/theme.ts` + `lib/push.ts`
+- [x] `.well-known/apple-app-site-association` en repo (PLACEHOLDER_APPLE_TEAM_ID pendiente)
+- [x] `.well-known/assetlinks.json` en repo (PLACEHOLDER_SHA256 pendiente — requiere primer build Android)
+- [x] GitHub Actions EAS Build (`.github/workflows/mobile-build.yml`)
+- [x] `.maestro/alumno-login.yaml` creado (stub)
+- [x] Sentry — **descartado** (trial 2 semanas, sin presupuesto para plan paid)
 
-**Prerequisitos MT antes de 6B.0:**
-- [ ] MT-11: Guimel agrega Apple ID como App Manager (Team ID para eas.json)
+**Prerequisitos MT pendientes (no bloquean desarrollo, sí bloquean build/submission):**
+- [ ] MT-11: Apple Team ID de Guimel → reemplazar PLACEHOLDER_APPLE_TEAM_ID en eas.json + AASA
 - [ ] MT-12: Bundle ID `cl.evaapp.eva` registrado en App Store Connect
-- [ ] MT-13: Google Play account ($25 USD)
-- [ ] MT-14: Cuenta Expo EAS creada
-- [ ] MT-15: Sentry proyecto `eva-rn` creado (DSN)
+- [ ] MT-13: Google Play account ($25 USD) — **solo para submission, NO para APK de prueba**
+- [x] MT-14: Cuenta Expo EAS creada ✅ (EAS Project ID: a5f4f7c0)
+- [ ] MT-15: Sentry — descartado
+
+### 6B Sem 1-2 ← EN CURSO
+- [x] Supabase client mobile (`apps/mobile/lib/supabase.ts`) — detectSessionInUrl: false
+- [x] Branding por invite_code (`apps/mobile/lib/branding.ts`) — AsyncStorage persistence
+- [x] ThemeContext (`apps/mobile/context/ThemeContext.tsx`) — light/dark + coach primary color
+- [x] Auth guard en root layout — redirect a / si pierde sesión
+- [x] `(auth)/login.tsx` — login compartido coach y alumno con role param
+- [x] `(auth)/forgot-password.tsx`
+- [x] `alumno/codigo.tsx` — ingreso invite_code 5 chars + carga branding
+- [x] Coach tabs (5): clientes, builder, nutricion, check-ins, perfil (stubs)
+- [x] Alumno tabs (4): workout, nutricion, check-in, perfil (stubs, logout en perfil)
+- [x] Migration `push_tokens` (20260518000000) — aplicada localmente
+- [ ] Aplicar migration localmente con `npx supabase db reset` — ✅ YA hecho (2026-05-18)
+
+**Pendiente Sem 1-2:**
+- [ ] `apps/mobile/.env` apuntando a Supabase local (crear en cada máquina, no se commitea)
+- [ ] Probar flujo completo en Expo Go / simulador
+
+**Estrategia de testing mobile (decisiones 2026-05-18):**
+- **Supabase remoto desde celular fuera de red:** ngrok (`ngrok http 54321`) → URL temporal → cambiar `EXPO_PUBLIC_SUPABASE_URL` en `.env` — ver MT-27
+- **Android test build (sin Google Play):** EAS build → APK → instalar directo en celular Juan — ver MT-28. Google Play ($25) solo necesario para submisión pública.
+- **iOS test en celular de amigo:** Registrar UDID dispositivo → EAS build ad-hoc → link de descarga — ver MT-29. TestFlight disponible cuando app tenga listing en App Store Connect.
 
 ### 6B — EVA App React Native (12 semanas)
 **Roadmap por semanas:**
@@ -264,8 +284,8 @@
 - Sem 13: Auditoría Guimel + App Privacy Labels + screenshots + polish final
 
 **DB migrations necesarias antes de Sem 1:**
-- [ ] `push_tokens` table
-- [ ] `attendance_logs` table
+- [x] `push_tokens` table ✅ (20260518000000, aplicada local)
+- [ ] `attendance_logs` table (Sem 5+, NFC)
 - [ ] `form_reviews` table (v1.1, puede esperar)
 
 **Antes de App Store submission:**
