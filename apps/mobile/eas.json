@@ -23,10 +23,15 @@
     },
     "production": {
       "autoIncrement": true,
-      "credentialsSource": "local",
       "env": {
         "APP_ENV": "production",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app"
+      },
+      "android": {
+        "credentialsSource": "remote"
+      },
+      "ios": {
+        "credentialsSource": "local"
       }
     }
   },
