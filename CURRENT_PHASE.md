@@ -282,7 +282,11 @@
 **Roadmap por semanas:**
 - Sem 1-2: Auth + selector rol (SOY COACH / SOY ALUMNO) + ThemeContext + branding por invite_code
 - **[COMPLETO]** Sem 3-4: Módulo alumno completo (workout, nutrición, check-in, offline cache)
-- Sem 5: Push notifications (expo-notifications) + EAS dev build en dispositivo físico
+- **[COMPLETO]** Sem 5: Push notifications (expo-notifications) — commit 740a8f8 (2026-05-18)
+  - configurePushHandler + Android channel en _layout.tsx
+  - syncPushToken on session login, tap handler → router.push
+  - web/lib/push.ts extendido: VAPID (PWA) + Expo push API (mobile) en paralelo
+  - app.json: expo-image-picker plugin + iOS photos permission
 - Sem 6-7: Módulo coach (lista clientes, builder simplificado, ver check-ins)
 - Sem 8: Coach enterprise (ocultar billing/branding si org_managed) + deep linking
 - Sem 9: In-app messaging coach ↔ alumno (tabla `messages` + Supabase Realtime)
