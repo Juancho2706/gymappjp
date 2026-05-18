@@ -1,0 +1,12 @@
+appId: cl.evaapp.eva
+---
+- launchApp
+- assertVisible: "SOY ALUMNO"
+- tapOn: "SOY ALUMNO"
+- assertVisible: "Correo electrónico"
+- tapOn: "Correo electrónico"
+- inputText: "test@eva-app.cl"
+- tapOn: "Contraseña"
+- inputText: "testpassword123"
+- tapOn: "Iniciar sesión"
+- assertVisible: "Mi entrenamiento"

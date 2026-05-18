@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "PLACEHOLDER_APPLE_TEAM_ID.cl.evaapp.eva",
+        "paths": [
+          "/c/*",
+          "/invite/*",
+          "/org/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "PLACEHOLDER_APPLE_TEAM_ID.cl.evaapp.eva"
+    ]
+  }
+}
