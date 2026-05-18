@@ -287,7 +287,12 @@
   - syncPushToken on session login, tap handler → router.push
   - web/lib/push.ts extendido: VAPID (PWA) + Expo push API (mobile) en paralelo
   - app.json: expo-image-picker plugin + iOS photos permission
-- Sem 6-7: Módulo coach (lista clientes, builder simplificado, ver check-ins)
+- **[COMPLETO]** Sem 6-7: Módulo coach — commit c34c21a (2026-05-18)
+  - clientes.tsx: lista con búsqueda, badge activo/inactivo, tap → detalle
+  - check-ins.tsx: check-ins recientes de todos los clientes, barra energía (rojo/amber/verde)
+  - builder.tsx: chip picker de clientes + vista planes (read-only; edición en web)
+  - coach/cliente/[clientId].tsx: detalle cliente — info, último check-in, programa activo
+  - lib/coach.ts: getCoachProfile
 - Sem 8: Coach enterprise (ocultar billing/branding si org_managed) + deep linking
 - Sem 9: In-app messaging coach ↔ alumno (tabla `messages` + Supabase Realtime)
 - Sem 10: HealthKit/Health Connect + pedómetro + background timer (v1.1)
