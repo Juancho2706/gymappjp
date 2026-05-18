@@ -60,7 +60,7 @@ function collectFilesRecursively(rootDir, extensions) {
 }
 
 function listCodeDependencies(workspaceRoot) {
-  const targets = [join(workspaceRoot, 'src')]
+  const targets = [join(workspaceRoot, 'apps', 'web', 'src')]
   const files = targets
     .filter((p) => {
       try {
@@ -93,10 +93,10 @@ async function main() {
   md += `Generado: ${now}\n\n`
   md += `## Resultado\n\n`
   md += `- Filas en \`meal_completions\`: **${rowsCount}**\n`
-  md += `- Referencias en \`src/\` (runtime): **${codeDeps.length}**\n`
+  md += `- Referencias en \`apps/web/src/\` (runtime): **${codeDeps.length}**\n`
   md += `- Estado DROP: **${safeToDrop ? 'SEGURO' : 'NO SEGURO'}**\n\n`
 
-  md += `## Referencias encontradas en src/\n\n`
+  md += `## Referencias encontradas en apps/web/src/\n\n`
   if (codeDeps.length === 0) md += `- Ninguna\n`
   else codeDeps.forEach((p) => { md += `- ${p}\n` })
 

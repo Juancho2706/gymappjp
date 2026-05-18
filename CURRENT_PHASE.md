@@ -211,11 +211,11 @@
 > **Decisión 2026-05-17:** Skip condición de entrada — proceder ahora para tener apps listas para vender.
 
 ### 6A — Mover web a apps/web/ (1 semana)
-- [ ] `mkdir apps/web` + mover src/ public/ next.config.ts tsconfig.json
-- [ ] Actualizar Vercel root directory → apps/web
-- [ ] Actualizar tsconfig paths relativos
-- [ ] Verificar `npm run typecheck && npm run build`
-- [ ] Deprecar `/api/manifest/[coach_slug]/route.ts` (PWA por-coach → app aggregator)
+- [x] `mkdir apps/web` + mover src/ public/ next.config.ts tsconfig.json
+- [ ] Actualizar Vercel root directory → apps/web (manual, cuando corresponda deploy)
+- [x] Actualizar tsconfig paths relativos
+- [x] Verificar `npm run typecheck && npm run build`
+- [x] Deprecar `/api/manifest/[coach_slug]/route.ts` (documentado; endpoint se conserva por compatibilidad web)
 - [ ] Feature branch → PR → CI verde → merge
 
 ### 6B.0 — Pre-flight Mobile (antes de escribir cualquier feature)

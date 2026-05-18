@@ -94,6 +94,14 @@ mkdir -p apps/web packages/types packages/schemas
 - Vercel despliega desde `apps/web/`
 - Feature branch → PR → CI verde → merge
 
+### Estado 2026-05-17
+- Hecho local: `src/`, `public/`, `next.config.ts`, `tsconfig.json`, `components.json`, `postcss.config.mjs`, `vercel.json` movidos a `apps/web/`.
+- Hecho local: npm workspaces raíz (`apps/*`, `packages/*`) + `apps/web/package.json`.
+- Hecho local: `packages/types` y `packages/schemas` creados.
+- Hecho local: `vitest.config.ts`, ESLint y script `check-meal-completions-deprecation` apuntan a `apps/web/src`.
+- Verificado: `npm run typecheck`, `npm run lint`, `npm run build`, `npx vitest run "apps/web/src/app/(auth)/register/actions.test.ts"`, `npx playwright test tests/enterprise/rls-isolation.spec.ts --workers=1`.
+- Pendiente manual futuro: Vercel Settings → General → Root Directory → `apps/web`.
+
 ---
 
 ## Decisiones clave (no reabrir)

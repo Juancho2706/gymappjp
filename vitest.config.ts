@@ -6,12 +6,12 @@ export default defineConfig({
   plugins: [react()],
   test: {
     // Playwright specs live under tests/*.spec.ts — exclude them from Vitest.
-    include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
+    include: ['apps/web/src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(__dirname, './apps/web/src'),
     },
     coverage: {
       provider: 'v8',

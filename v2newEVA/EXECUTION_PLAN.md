@@ -1008,8 +1008,8 @@ packages/
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"],
-      "@eva/types": ["./packages/types/index.ts"],
-      "@eva/schemas": ["./packages/schemas/index.ts"]
+      "@eva/types": ["../../packages/types/index.ts"],
+      "@eva/schemas": ["../../packages/schemas/index.ts"]
     }
   }
 }
