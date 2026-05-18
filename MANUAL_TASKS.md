@@ -601,6 +601,7 @@ Estas vars controlan features en UI. Si no están seteadas, valor por defecto es
 | MT-23 | Playbook onboarding primer cliente enterprise | ⏳ Al tener primer cliente |
 | MT-24 | Calcular health score D14 (por cliente) | ⏳ 14 días post-onboarding |
 | MT-25 | Configurar TODAS las env vars en Vercel/GitHub/EAS | ⏳ Al deployar — ver sección completa arriba |
+| MT-26 | Cambiar Vercel Root Directory a `apps/web` | ⏳ Al deployar / antes de preview v2 |
 
 ---
 
@@ -613,4 +614,25 @@ Cuando llegue el momento de `npx supabase db push` + merge a master, hacer esto 
 - [ ] **MT-3** — Env vars en Vercel: agregar `ENTERPRISE_DOMAIN` y `ADMIN_EMAILS`, borrar vars muertas
 - [ ] **MT-18** — DNS CNAME `enterprise` → Vercel + agregar dominio en Vercel dashboard
 - [ ] **MT-25** — Configurar TODAS las env vars (Vercel + GitHub Secrets + EAS). Ver checklist en MT-25 arriba
+- [ ] **MT-26** — Vercel Root Directory → `apps/web`
 - [ ] Verificar UptimeRobot (MT-10) monitoreando los 3 endpoints después del deploy
+
+---
+
+## MT-26 — Cambiar Root Directory en Vercel a `apps/web` · ⏳ Al deployar / antes de preview v2
+
+**Requerido por:** Fase 6A monorepo. La app Next.js ahora vive en `apps/web`.
+
+**No hacer en producción todavía** si no vamos a deployar v2. Este cambio afecta cómo Vercel construye el proyecto.
+
+**Pasos:**
+1. Ir a [vercel.com/dashboard](https://vercel.com/dashboard) → proyecto EVA.
+2. Settings → General → Root Directory.
+3. Cambiar de raíz del repo a:
+   ```text
+   apps/web
+   ```
+4. Guardar.
+5. Redeploy solo cuando estemos listos para probar/deployar v2.
+
+**Verificación esperada:** Vercel ejecuta `npm run build` desde el monorepo y construye `@eva/web` correctamente.

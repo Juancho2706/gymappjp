@@ -20,10 +20,10 @@
 
 ---
 
-## Fase Actual: FASE 6A — Monorepo (mover web a apps/web/)
+## Fase Actual: FASE 6B.0 — Pre-flight Mobile
 
 **Rama git:** `v2/enterprise`
-**Última actualización:** 2026-05-17 (Fase 4 QA completa incluyendo bug crítico de RLS)
+**Última actualización:** 2026-05-17 (Fase 6A monorepo completada localmente)
 
 ---
 
@@ -34,7 +34,7 @@
 - [x] DPA Supabase firmado (Dashboard → Settings → Legal) — ✅ Hecho por KimiCode
 - [ ] Bundle IDs registrados en App Store Connect (`cl.evaapp.eva` y `cl.evaapp.eva-enterprise`) — ver MT-12
 - [ ] Google Play Developer account creada ($25 USD) — ver MT-13, en espera de dinero
-- [ ] One-pager PDF creado (Google Slides) — ✅ Hecho por KimiCode
+- [x] One-pager PDF creado (Google Slides) — ✅ Hecho por KimiCode
 - [x] Calendly link configurado (`https://calendly.com/contacto-eva-app/eva-enterprise`) — en `LandingEnterpriseSection`
 - [x] Cuenta UptimeRobot creada + monitores configurados ✅
 - [x] Decisión IAP documentada ✓ (Web-Only Billing — en EXECUTION_PLAN.md)
@@ -96,7 +96,7 @@
 - [ ] `/api/health` endpoint NO existe — UptimeRobot lo monitorea pero el endpoint no está creado
 - [ ] Dependabot `.github/dependabot.yml` — NO creado (plan §0.6 lo pide, no bloquea nada)
 - [ ] `npm audit` en CI — NO configurado en `.github/workflows/ci.yml`
-- [ ] `packages/` monorepo base (`@eva/types`, `@eva/schemas`) — NO creado; diferido a Fase 6A junto con `apps/web/`
+- [x] `packages/` monorepo base (`@eva/types`, `@eva/schemas`) — creado en Fase 6A
 
 ---
 
@@ -205,18 +205,27 @@
 
 ---
 
-## FASE 6 — Monorepo + React Native ← SIGUIENTE
+## FASE 6 — Monorepo + React Native ← EN CURSO
 
 > **Condición original del plan:** ambos clientes enterprise estables 2+ semanas.
 > **Decisión 2026-05-17:** Skip condición de entrada — proceder ahora para tener apps listas para vender.
 
 ### 6A — Mover web a apps/web/ (1 semana)
 - [x] `mkdir apps/web` + mover src/ public/ next.config.ts tsconfig.json
-- [ ] Actualizar Vercel root directory → apps/web (manual, cuando corresponda deploy)
+- [ ] Actualizar Vercel root directory → apps/web (manual MT-26, cuando corresponda deploy)
 - [x] Actualizar tsconfig paths relativos
 - [x] Verificar `npm run typecheck && npm run build`
 - [x] Deprecar `/api/manifest/[coach_slug]/route.ts` (documentado; endpoint se conserva por compatibilidad web)
 - [ ] Feature branch → PR → CI verde → merge
+
+**Estado 6A:** código completado localmente y commiteado (`d73e47a chore: move web app into workspace`). No push. No prod.
+
+**Validación 6A:**
+- [x] `npm run typecheck`
+- [x] `npm run lint`
+- [x] `npm run build`
+- [x] `npx vitest run "apps/web/src/app/(auth)/register/actions.test.ts"`
+- [x] `npx playwright test tests/enterprise/rls-isolation.spec.ts --workers=1`
 
 ### 6B.0 — Pre-flight Mobile (antes de escribir cualquier feature)
 - [ ] `npm install -g eas-cli` + `eas login`
