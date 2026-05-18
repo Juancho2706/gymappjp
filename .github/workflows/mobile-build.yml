@@ -1,0 +1,124 @@
+name: Mobile Build (Local — no EAS credits)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App to build'
+        required: true
+        default: 'mobile'
+        type: choice
+        options:
+          - mobile
+          - enterprise
+      platform:
+        description: 'Platform'
+        required: true
+        default: 'android'
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  build-android:
+    if: ${{ inputs.platform == 'android' || inputs.platform == 'all' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android (${{ inputs.profile }})
+        working-directory: apps/${{ inputs.app }}
+        env:
+          EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
+        run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output ./build.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.app }}-android-${{ inputs.profile }}-${{ github.run_number }}
+          path: apps/${{ inputs.app }}/build.apk
+          retention-days: 14
+
+  build-ios:
+    if: ${{ inputs.platform == 'ios' || inputs.platform == 'all' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Prepare iOS credentials
+        env:
+          IOS_DIST_CERT_BASE64: ${{ secrets.IOS_DIST_CERT_BASE64 }}
+          IOS_PROV_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+        run: |
+          echo "$IOS_DIST_CERT_BASE64" | base64 --decode > /tmp/dist.p12
+          echo "$IOS_PROV_PROFILE_BASE64" | base64 --decode > /tmp/app.mobileprovision
+          python3 - <<'PYEOF'
+          import json, os
+          creds = {
+            "ios": {
+              "distributionCertificate": {
+                "path": "/tmp/dist.p12",
+                "password": os.environ["IOS_DIST_CERT_PASSWORD"]
+              },
+              "provisioningProfilePath": "/tmp/app.mobileprovision"
+            }
+          }
+          app = "${{ inputs.app }}"
+          with open(f"apps/{app}/credentials.json", "w") as f:
+              json.dump(creds, f, indent=2)
+          PYEOF
+
+      - name: Build iOS (${{ inputs.profile }})
+        working-directory: apps/${{ inputs.app }}
+        env:
+          EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
+        run: eas build --platform ios --profile ${{ inputs.profile }} --local --non-interactive --output ./build.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.app }}-ios-${{ inputs.profile }}-${{ github.run_number }}
+          path: apps/${{ inputs.app }}/build.ipa
+          retention-days: 14
