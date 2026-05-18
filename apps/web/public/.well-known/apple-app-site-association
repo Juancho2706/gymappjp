@@ -3,7 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appID": "PLACEHOLDER_APPLE_TEAM_ID.cl.evaapp.eva",
+        "appID": "5GKWMMZ46Q.cl.evaapp.eva",
         "paths": [
           "/c/*",
           "/invite/*",
@@ -14,7 +14,7 @@
   },
   "webcredentials": {
     "apps": [
-      "PLACEHOLDER_APPLE_TEAM_ID.cl.evaapp.eva"
+      "5GKWMMZ46Q.cl.evaapp.eva"
     ]
   }
 }
