@@ -7,6 +7,7 @@ export interface CoachProfile {
   slug: string
   primaryColor: string
   subscriptionStatus: string
+  maxClients: number
 }
 
 export async function getCoachProfile(): Promise<CoachProfile | null> {
@@ -15,7 +16,7 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
 
   const { data } = await supabase
     .from('coaches')
-    .select('id, full_name, brand_name, slug, primary_color, subscription_status')
+    .select('id, full_name, brand_name, slug, primary_color, subscription_status, max_clients')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -27,5 +28,6 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
     slug: data.slug,
     primaryColor: data.primary_color,
     subscriptionStatus: data.subscription_status,
+    maxClients: data.max_clients,
   }
 }

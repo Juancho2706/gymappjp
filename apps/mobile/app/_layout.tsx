@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import * as Linking from 'expo-linking'
 import * as Notifications from 'expo-notifications'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
@@ -16,17 +17,39 @@ function RootLayoutNav() {
   const syncedUserId = useRef<string | null>(null)
   const responseListener = useRef<Notifications.EventSubscription | null>(null)
 
+  // Process deep link URL: parse auth hash tokens for password recovery
+  function processDeepLink(url: string) {
+    const hash = url.split('#')[1]
+    if (!hash) return
+    const params = new URLSearchParams(hash)
+    const accessToken = params.get('access_token')
+    const refreshToken = params.get('refresh_token')
+    const type = params.get('type')
+    if (accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(() => {
+        if (type === 'recovery') router.replace('/(auth)/reset-password')
+      })
+    }
+  }
+
   useEffect(() => {
     setupAndroidChannel()
 
-    // Navigate to screen embedded in notification data on tap
+    // Notification tap handler
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string> | undefined
       if (data?.screen) router.push(data.screen as any)
     })
 
+    // Deep link: app opened from cold start via URL
+    Linking.getInitialURL().then((url) => { if (url) processDeepLink(url) })
+
+    // Deep link: app already running, receives URL
+    const linkSub = Linking.addEventListener('url', ({ url }) => processDeepLink(url))
+
     return () => {
       responseListener.current?.remove()
+      linkSub.remove()
     }
   }, [])
 
