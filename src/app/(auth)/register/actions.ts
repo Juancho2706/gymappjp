@@ -16,9 +16,7 @@ import {
     isAuthDuplicateEmailMessage,
     normalizePlatformEmail,
 } from '@/lib/auth/platform-email'
-import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
-import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
+import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
 import { clientIpFromRequest } from '@/lib/rate-limit'
 
 export type RegisterState = {
@@ -199,7 +197,19 @@ export async function registerAction(
     }
 
     if (isFreeTier) {
-        // Free tier: email unconfirmed — do NOT sign in yet; Supabase sends confirmation email.
+        const emailSent = await sendCoachSignupConfirmationEmail({
+            email: emailNorm,
+            password,
+            coachName: fullName,
+        })
+        if (!emailSent.ok) {
+            await adminDb.from('coaches').delete().eq('id', authData.user.id)
+            await adminDb.auth.admin.deleteUser(authData.user.id)
+            return {
+                error:
+                    'No pudimos enviar el correo de confirmación. Revisá el email e intentá de nuevo.',
+            }
+        }
         // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
         redirect(`/verify-email?email=${encodeURIComponent(emailNorm)}`)
     }

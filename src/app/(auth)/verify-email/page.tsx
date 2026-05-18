@@ -1,13 +1,38 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { Suspense, useActionState } from 'react'
 import Link from 'next/link'
-import { Mail, CheckCircle2 } from 'lucide-react'
+import { useFormStatus } from 'react-dom'
+import { Mail, CheckCircle2, Loader2 } from 'lucide-react'
+import { resendConfirmationEmailAction, type ResendConfirmationState } from './actions'
+
+const initialResendState: ResendConfirmationState = {}
+
+function ResendButton() {
+    const { pending } = useFormStatus()
+    return (
+        <button
+            type="submit"
+            disabled={pending}
+            className="text-primary font-medium hover:opacity-80 disabled:opacity-50"
+        >
+            {pending ? (
+                <span className="inline-flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Enviando…
+                </span>
+            ) : (
+                'Reenviar correo'
+            )}
+        </button>
+    )
+}
 
 function VerifyEmailContent() {
     const params = useSearchParams()
     const email = params.get('email') ?? ''
+    const [resendState, resendAction] = useActionState(resendConfirmationEmailAction, initialResendState)
 
     return (
         <div className="w-full max-w-md mx-auto animate-slide-up">
@@ -45,8 +70,28 @@ function VerifyEmailContent() {
                     ))}
                 </div>
 
+                {resendState.error && (
+                    <p className="text-xs text-destructive">{resendState.error}</p>
+                )}
+                {resendState.success && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        Te reenviamos el correo. Revisá también spam.
+                    </p>
+                )}
+
                 <p className="text-xs text-muted-foreground pt-2">
-                    ¿No llegó el email? Revisá tu carpeta de spam.{' '}
+                    ¿No llegó el email? Revisá spam
+                    {email ? (
+                        <>
+                            {' '}
+                            o{' '}
+                            <form action={resendAction} className="inline">
+                                <input type="hidden" name="email" value={email} />
+                                <ResendButton />
+                            </form>
+                        </>
+                    ) : null}
+                    .{' '}
                     <Link href="/login" className="text-primary hover:opacity-80">
                         Volver al login
                     </Link>

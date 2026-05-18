@@ -8,7 +8,7 @@ import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const token_hash = searchParams.get('token_hash')
-    const type = searchParams.get('type') as 'email' | 'recovery' | null
+    const type = searchParams.get('type') as 'email' | 'recovery' | 'invite' | null
 
     if (!token_hash || !type) {
         return NextResponse.redirect(`${origin}/login?error=invalid_confirmation_link`)
