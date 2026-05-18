@@ -18,7 +18,8 @@
         "buildConfiguration": "Release"
       },
       "env": {
-        "APP_ENV": "staging"
+        "APP_ENV": "staging",
+        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app"
       }
     },
     "production": {
