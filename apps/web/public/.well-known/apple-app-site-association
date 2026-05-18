@@ -7,6 +7,12 @@
         "paths": [
           "/c/*",
           "/invite/*",
+          "/reset-password"
+        ]
+      },
+      {
+        "appID": "5GKWMMZ46Q.cl.evaapp.eva-enterprise",
+        "paths": [
           "/org/*"
         ]
       }
@@ -14,7 +20,8 @@
   },
   "webcredentials": {
     "apps": [
-      "5GKWMMZ46Q.cl.evaapp.eva"
+      "5GKWMMZ46Q.cl.evaapp.eva",
+      "5GKWMMZ46Q.cl.evaapp.eva-enterprise"
     ]
   }
 }

@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "EVA Enterprise",
+    "slug": "eva-enterprise",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "eva-enterprise",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#007AFF"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "cl.evaapp.eva-enterprise",
+      "associatedDomains": [
+        "applinks:enterprise.eva-app.cl",
+        "webcredentials:enterprise.eva-app.cl"
+      ]
+    },
+    "android": {
+      "package": "cl.evaapp.enterprise",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#007AFF"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#007AFF"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "PLACEHOLDER_ENTERPRISE_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
