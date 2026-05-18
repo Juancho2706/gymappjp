@@ -14,14 +14,33 @@ export type PushPayload = {
     icon?: string
 }
 
+async function sendExpoTokens(
+    tokens: string[],
+    payload: PushPayload,
+): Promise<void> {
+    if (!tokens.length) return
+    const messages = tokens.map((to) => ({
+        to,
+        title: payload.title,
+        body: payload.body,
+        data: { screen: payload.url },
+        sound: 'default',
+        channelId: 'default',
+    }))
+    await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(messages),
+    })
+}
+
 export async function sendPushToClient(clientId: string, payload: PushPayload): Promise<void> {
     const admin = createServiceRoleClient()
-    const { data: subs } = await admin
-        .from('push_subscriptions')
-        .select('endpoint, p256dh, auth')
-        .eq('client_id', clientId)
 
-    if (!subs?.length) return
+    const [{ data: subs }, { data: mobileSubs }] = await Promise.all([
+        admin.from('push_subscriptions').select('endpoint, p256dh, auth').eq('client_id', clientId),
+        admin.from('push_tokens').select('token').eq('user_id', clientId),
+    ])
 
     const json = JSON.stringify({
         ...payload,
@@ -29,8 +48,9 @@ export async function sendPushToClient(clientId: string, payload: PushPayload): 
         badge: '/icons/icon-72x72.png',
     })
 
-    await Promise.allSettled(
-        subs.map(async (sub) => {
+    await Promise.allSettled([
+        // Web push (PWA)
+        ...(subs ?? []).map(async (sub) => {
             try {
                 await webpush.sendNotification(
                     { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -43,8 +63,10 @@ export async function sendPushToClient(clientId: string, payload: PushPayload): 
                     await admin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
                 }
             }
-        })
-    )
+        }),
+        // Mobile push (Expo)
+        sendExpoTokens((mobileSubs ?? []).map((r) => r.token), payload),
+    ])
 }
 
 export async function sendPushToCoachClients(coachId: string, payload: PushPayload): Promise<void> {

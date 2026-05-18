@@ -3,17 +3,15 @@ import * as Device from 'expo-device'
 import { Platform } from 'react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-// Requires push_tokens table — migration pending (6B Sem 1)
-// CREATE TABLE push_tokens (
-//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-//   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-//   device_id text NOT NULL,
-//   token text NOT NULL,
-//   platform text NOT NULL CHECK (platform IN ('ios', 'android')),
-//   created_at timestamptz DEFAULT now(),
-//   updated_at timestamptz DEFAULT now(),
-//   UNIQUE (user_id, device_id)
-// );
+export async function setupAndroidChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'EVA',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#007AFF',
+  })
+}
 
 export async function syncPushToken(userId: string, supabase: SupabaseClient): Promise<void> {
   if (!Device.isDevice) return // simulators don't support push tokens

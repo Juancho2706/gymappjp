@@ -86,6 +86,12 @@
           "sounds": []
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EVA necesita acceso a tu galería para el check-in semanal."
+        }
+      ],
     ],
     "updates": {
       "url": "https://u.expo.dev/a5f4f7c0-861c-48b1-9ed6-fc46e7843844",
