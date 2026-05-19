@@ -68,36 +68,62 @@ export default function AlumnoPerfilScreen() {
     router.replace('/')
   }
 
+  const hasExtras =
+    detail?.phone || detail?.goalWeightKg != null || detail?.subscriptionStartDate
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.pageTitle, { color: theme.text }]}>Mi perfil</Text>
+          <Text
+            style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+          >
+            Mi perfil
+          </Text>
 
-          {/* Avatar + name */}
-          <View style={[styles.heroCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={[styles.avatar, { backgroundColor: theme.primary + '22' }]}>
-              <Text style={[styles.avatarText, { color: theme.primary }]}>
+          <View
+            style={[
+              styles.heroCard,
+              { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+            ]}
+          >
+            <View
+              style={[
+                styles.avatar,
+                {
+                  backgroundColor: theme.primary + '1A',
+                  borderColor: theme.primary + '33',
+                  borderRadius: theme.radius['2xl'],
+                },
+              ]}
+            >
+              <Text
+                style={[styles.avatarText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}
+              >
                 {detail?.fullName.charAt(0).toUpperCase() ?? '?'}
               </Text>
             </View>
-            <Text style={[styles.heroName, { color: theme.text }]}>{detail?.fullName ?? '—'}</Text>
-            <Text style={[styles.heroEmail, { color: theme.muted }]}>{detail?.email ?? ''}</Text>
+            <Text
+              style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+            >
+              {detail?.fullName ?? '—'}
+            </Text>
+            <Text
+              style={[styles.heroEmail, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+            >
+              {detail?.email ?? ''}
+            </Text>
           </View>
 
-          {/* Coach branding */}
           {branding && (
-            <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.sectionTitle, { color: theme.muted }]}>Mi coach</Text>
+            <Section title="Mi coach" theme={theme}>
               <InfoRow label="Coach" value={branding.displayName} theme={theme} last />
-            </View>
+            </Section>
           )}
 
-          {/* Personal info */}
-          <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.sectionTitle, { color: theme.muted }]}>Información</Text>
+          <Section title="Información" theme={theme}>
             {detail?.phone && <InfoRow label="Teléfono" value={detail.phone} theme={theme} />}
             {detail?.goalWeightKg != null && (
               <InfoRow label="Peso objetivo" value={`${detail.goalWeightKg} kg`} theme={theme} />
@@ -110,20 +136,34 @@ export default function AlumnoPerfilScreen() {
                 last
               />
             )}
-            {!detail?.phone && detail?.goalWeightKg == null && !detail?.subscriptionStartDate && (
+            {!hasExtras && (
               <View style={styles.emptySection}>
-                <Text style={[styles.emptySectionText, { color: theme.muted }]}>
+                <Text
+                  style={[styles.emptySectionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+                >
                   Sin datos adicionales
                 </Text>
               </View>
             )}
-          </View>
+          </Section>
 
           <TouchableOpacity
-            style={[styles.logoutBtn, { borderColor: theme.destructive }]}
+            style={[
+              styles.logoutBtn,
+              {
+                borderColor: theme.destructive,
+                backgroundColor: theme.destructive + '0D',
+                borderRadius: theme.radius.lg,
+              },
+            ]}
             onPress={handleLogout}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.logoutText, { color: theme.destructive }]}>Cerrar sesión</Text>
+            <Text
+              style={[styles.logoutText, { color: theme.destructive, fontFamily: 'Montserrat_700Bold' }]}
+            >
+              Cerrar sesión
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -131,31 +171,85 @@ export default function AlumnoPerfilScreen() {
   )
 }
 
-function InfoRow({ label, value, theme, last }: { label: string; value: string; theme: any; last?: boolean }) {
+function Section({ title, theme, children }: { title: string; theme: any; children: React.ReactNode }) {
   return (
-    <View style={[styles.infoRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }]}>
-      <Text style={[styles.infoLabel, { color: theme.muted }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: theme.text }]}>{value}</Text>
+    <View
+      style={[
+        styles.section,
+        { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+      ]}
+    >
+      <Text
+        style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}
+      >
+        {title}
+      </Text>
+      {children}
+    </View>
+  )
+}
+
+function InfoRow({
+  label, value, theme, last,
+}: { label: string; value: string; theme: any; last?: boolean }) {
+  return (
+    <View
+      style={[
+        styles.infoRow,
+        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+      ]}
+    >
+      <Text style={[styles.infoLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        {label}
+      </Text>
+      <Text style={[styles.infoValue, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+        {value}
+      </Text>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40, gap: 16 },
-  pageTitle: { fontSize: 24, fontWeight: '700', paddingHorizontal: 4 },
-  heroCard: { borderRadius: 16, padding: 20, borderWidth: 1, alignItems: 'center', gap: 6 },
-  avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 28, fontWeight: '700' },
-  heroName: { fontSize: 18, fontWeight: '700' },
+  scroll: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 40, gap: 16 },
+  pageTitle: { fontSize: 28, letterSpacing: -0.5, paddingHorizontal: 4, marginBottom: 4 },
+  heroCard: { padding: 24, borderWidth: 1, alignItems: 'center', gap: 8 },
+  avatar: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  avatarText: { fontSize: 30 },
+  heroName: { fontSize: 19, letterSpacing: -0.3, marginTop: 4 },
   heroEmail: { fontSize: 13 },
-  section: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
-  sectionTitle: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13 },
+  section: { borderWidth: 1, overflow: 'hidden' },
+  sectionTitle: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 6,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
   infoLabel: { fontSize: 14 },
-  infoValue: { fontSize: 14, fontWeight: '500' },
-  emptySection: { paddingHorizontal: 16, paddingVertical: 13 },
+  infoValue: { fontSize: 14, fontWeight: '500', textAlign: 'right', flexShrink: 1 },
+  emptySection: { paddingHorizontal: 16, paddingVertical: 14 },
   emptySectionText: { fontSize: 14 },
-  logoutBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1.5, marginTop: 8 },
-  logoutText: { fontSize: 15, fontWeight: '600' },
+  logoutBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  logoutText: { fontSize: 14, letterSpacing: 0.3 },
 })

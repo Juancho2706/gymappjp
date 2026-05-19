@@ -57,7 +57,6 @@ export default function CoachPerfilScreen() {
     setOrg(orgData)
 
     if (coachData && !orgData.isOrgManaged) {
-      // Only fetch billing details if not org-managed
       const { data } = await supabase
         .from('coaches')
         .select('subscription_tier, current_period_end, trial_ends_at')
@@ -91,33 +90,56 @@ export default function CoachPerfilScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: theme.text }]}>Perfil</Text>
+        <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          Perfil
+        </Text>
 
-        {/* Coach hero */}
-        <View style={[styles.heroCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.primary + '22' }]}>
-            <Text style={[styles.avatarText, { color: theme.primary }]}>
+        <View
+          style={[
+            styles.heroCard,
+            { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+          ]}
+        >
+          <View
+            style={[
+              styles.avatar,
+              {
+                backgroundColor: theme.primary + '1A',
+                borderColor: theme.primary + '33',
+                borderRadius: theme.radius['2xl'],
+              },
+            ]}
+          >
+            <Text
+              style={[styles.avatarText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}
+            >
               {coach?.fullName.charAt(0).toUpperCase() ?? '?'}
             </Text>
           </View>
-          <Text style={[styles.heroName, { color: theme.text }]}>{coach?.fullName ?? '—'}</Text>
-          <Text style={[styles.heroBrand, { color: theme.muted }]}>{coach?.brandName ?? ''}</Text>
-          <Text style={[styles.heroSlug, { color: theme.muted }]}>@{coach?.slug ?? ''}</Text>
+          <Text
+            style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+          >
+            {coach?.fullName ?? '—'}
+          </Text>
+          {coach?.brandName && (
+            <Text style={[styles.heroBrand, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              {coach.brandName}
+            </Text>
+          )}
+          <Text style={[styles.heroSlug, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            @{coach?.slug ?? ''}
+          </Text>
         </View>
 
-        {/* Org section (org-managed coaches) */}
         {org?.isOrgManaged && (
-          <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.sectionTitle, { color: theme.muted }]}>Organización</Text>
+          <Section title="Organización" theme={theme}>
             <InfoRow label="Nombre" value={org.orgName ?? '—'} theme={theme} />
             <InfoRow label="Rol" value={orgRoleLabel(org.orgRole)} theme={theme} last />
-          </View>
+          </Section>
         )}
 
-        {/* Subscription (standalone coaches only) */}
         {!org?.isOrgManaged && coach && (
-          <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.sectionTitle, { color: theme.muted }]}>Suscripción</Text>
+          <Section title="Suscripción" theme={theme}>
             <InfoRow
               label="Estado"
               value={STATUS_LABELS[coach.subscriptionStatus] ?? coach.subscriptionStatus}
@@ -147,30 +169,64 @@ export default function CoachPerfilScreen() {
             )}
             <TouchableOpacity
               style={[styles.webLink, { borderTopColor: theme.border }]}
-              onPress={() => { /* open eva-app.cl/coach/settings in browser */ }}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.webLinkText, { color: theme.primary }]}>
+              <Text
+                style={[styles.webLinkText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}
+              >
                 Gestionar suscripción →
               </Text>
-              <Text style={[styles.webLinkHint, { color: theme.muted }]}>eva-app.cl</Text>
+              <Text
+                style={[styles.webLinkHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+              >
+                eva-app.cl
+              </Text>
             </TouchableOpacity>
-          </View>
+          </Section>
         )}
 
-        {/* Account */}
-        <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.muted }]}>Cuenta</Text>
-          <InfoRow label="Clientes máx." value={`${coach?.maxClients ?? '—'}`} theme={theme} last />
-        </View>
+        <Section title="Cuenta" theme={theme}>
+          <InfoRow label="Alumnos máx." value={`${coach?.maxClients ?? '—'}`} theme={theme} last />
+        </Section>
 
         <TouchableOpacity
-          style={[styles.logoutBtn, { borderColor: theme.destructive }]}
+          style={[
+            styles.logoutBtn,
+            {
+              borderColor: theme.destructive,
+              backgroundColor: theme.destructive + '0D',
+              borderRadius: theme.radius.lg,
+            },
+          ]}
           onPress={handleLogout}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.logoutText, { color: theme.destructive }]}>Cerrar sesión</Text>
+          <Text
+            style={[styles.logoutText, { color: theme.destructive, fontFamily: 'Montserrat_700Bold' }]}
+          >
+            Cerrar sesión
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+  )
+}
+
+function Section({ title, theme, children }: { title: string; theme: any; children: React.ReactNode }) {
+  return (
+    <View
+      style={[
+        styles.section,
+        { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+      ]}
+    >
+      <Text
+        style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}
+      >
+        {title}
+      </Text>
+      {children}
+    </View>
   )
 }
 
@@ -184,31 +240,77 @@ function InfoRow({
   last?: boolean
 }) {
   return (
-    <View style={[styles.infoRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }]}>
-      <Text style={[styles.infoLabel, { color: theme.muted }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: valueColor ?? theme.text }]}>{value}</Text>
+    <View
+      style={[
+        styles.infoRow,
+        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+      ]}
+    >
+      <Text style={[styles.infoLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.infoValue,
+          { color: valueColor ?? theme.foreground, fontFamily: theme.fontSans },
+        ]}
+      >
+        {value}
+      </Text>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40, gap: 16 },
-  pageTitle: { fontSize: 24, fontWeight: '700', paddingHorizontal: 4 },
-  heroCard: { borderRadius: 16, padding: 20, borderWidth: 1, alignItems: 'center', gap: 6 },
-  avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 28, fontWeight: '700' },
-  heroName: { fontSize: 18, fontWeight: '700' },
+  scroll: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 40, gap: 16 },
+  pageTitle: { fontSize: 28, letterSpacing: -0.5, paddingHorizontal: 4, marginBottom: 4 },
+  heroCard: { padding: 24, borderWidth: 1, alignItems: 'center', gap: 6 },
+  avatar: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  avatarText: { fontSize: 30 },
+  heroName: { fontSize: 19, letterSpacing: -0.3, marginTop: 4 },
   heroBrand: { fontSize: 14 },
   heroSlug: { fontSize: 12 },
-  section: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
-  sectionTitle: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13 },
+  section: { borderWidth: 1, overflow: 'hidden' },
+  sectionTitle: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 6,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
   infoLabel: { fontSize: 14 },
-  infoValue: { fontSize: 14, fontWeight: '500' },
-  webLink: { paddingHorizontal: 16, paddingVertical: 13, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  webLinkText: { fontSize: 14, fontWeight: '500' },
+  infoValue: { fontSize: 14, fontWeight: '500', textAlign: 'right', flexShrink: 1 },
+  webLink: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  webLinkText: { fontSize: 13, letterSpacing: 0.3 },
   webLinkHint: { fontSize: 12 },
-  logoutBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1.5, marginTop: 8 },
-  logoutText: { fontSize: 15, fontWeight: '600' },
+  logoutBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  logoutText: { fontSize: 14, letterSpacing: 0.3 },
 })
