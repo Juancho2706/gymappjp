@@ -15,7 +15,9 @@
     "staging": {
       "distribution": "internal",
       "ios": {
-        "buildConfiguration": "Release"
+        "buildConfiguration": "Release",
+        "distribution": "store",
+        "credentialsSource": "local"
       },
       "env": {
         "APP_ENV": "staging",
