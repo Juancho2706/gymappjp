@@ -30,7 +30,6 @@ interface Meal {
   day_of_week: number | null
 }
 
-// nutrition_meals.day_of_week: 1=Mon … 7=Sun; JS getDay(): 0=Sun … 6=Sat
 function jsDayToDbDay(jsDay: number): number {
   return jsDay === 0 ? 7 : jsDay
 }
@@ -56,7 +55,6 @@ export default function AlumnoNutricionScreen() {
     const client = await getClientProfile()
     if (!client) { setLoading(false); return }
 
-    // Fetch active plan
     const { data: planData } = await supabase
       .from('nutrition_plans')
       .select('id, name, daily_calories, protein_g, carbs_g, fats_g, instructions')
@@ -67,7 +65,6 @@ export default function AlumnoNutricionScreen() {
     if (!planData) { setLoading(false); return }
     setPlan(planData)
 
-    // Fetch today's meals (day_of_week = today OR null = every day)
     const { data: mealsData } = await supabase
       .from('nutrition_meals')
       .select('id, name, description, order_index, day_of_week')
@@ -78,7 +75,6 @@ export default function AlumnoNutricionScreen() {
     const todayMeals = mealsData ?? []
     setMeals(todayMeals)
 
-    // Get or create daily_nutrition_log
     const { data: existingLog } = await supabase
       .from('daily_nutrition_logs')
       .select('id')
@@ -150,28 +146,44 @@ export default function AlumnoNutricionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>Nutrición</Text>
-        {plan && (
-          <Text style={[styles.subtitle, { color: theme.muted }]}>
-            {completedCount}/{totalCount} comidas
+        <View style={styles.headerTextWrap}>
+          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Nutrición
           </Text>
-        )}
+          <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            {plan
+              ? `${completedCount} de ${totalCount} comidas hoy`
+              : 'Tu plan personalizado'}
+          </Text>
+        </View>
       </View>
 
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : !plan ? (
         <View style={styles.empty}>
-          <Text style={[styles.emptyText, { color: theme.muted }]}>
-            Tu coach aún no ha asignado un plan de nutrición
+          <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Sin plan activo
+          </Text>
+          <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Tu coach aún no te asignó un plan de nutrición.
           </Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Macros summary */}
           {(plan.daily_calories || plan.protein_g || plan.carbs_g || plan.fats_g) ? (
-            <View style={[styles.macrosCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.planName, { color: theme.text }]}>{plan.name}</Text>
+            <View
+              style={[
+                styles.macrosCard,
+                { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+              ]}
+            >
+              <Text
+                style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+                numberOfLines={2}
+              >
+                {plan.name}
+              </Text>
               <View style={styles.macrosRow}>
                 {plan.daily_calories != null && (
                   <MacroPill label="kcal" value={plan.daily_calories} color={theme.primary} theme={theme} />
@@ -187,14 +199,15 @@ export default function AlumnoNutricionScreen() {
                 )}
               </View>
               {plan.instructions ? (
-                <Text style={[styles.instructions, { color: theme.muted }]}>{plan.instructions}</Text>
+                <Text style={[styles.instructions, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  {plan.instructions}
+                </Text>
               ) : null}
             </View>
           ) : null}
 
-          {/* Progress bar */}
           {totalCount > 0 && (
-            <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
+            <View style={[styles.progressBar, { backgroundColor: theme.muted }]}>
               <View
                 style={[
                   styles.progressFill,
@@ -204,11 +217,12 @@ export default function AlumnoNutricionScreen() {
             </View>
           )}
 
-          {/* Meals list */}
           {meals.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.muted, textAlign: 'center', marginTop: 32 }]}>
-              Sin comidas para hoy
-            </Text>
+            <View style={styles.emptyDay}>
+              <Text style={[styles.emptyDayText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Sin comidas para hoy
+              </Text>
+            </View>
           ) : (
             meals.map((meal) => {
               const done = completedMealIds.has(meal.id)
@@ -222,18 +236,33 @@ export default function AlumnoNutricionScreen() {
                       backgroundColor: theme.card,
                       borderColor: done ? theme.success : theme.border,
                       borderWidth: done ? 2 : 1,
+                      borderRadius: theme.radius.xl,
                     },
                   ]}
                   onPress={() => toggleMeal(meal.id)}
-                  activeOpacity={0.7}
+                  activeOpacity={0.75}
                   disabled={!!toggling}
                 >
                   <View style={styles.mealLeft}>
-                    <Text style={[styles.mealName, { color: done ? theme.success : theme.text }]}>
+                    <Text
+                      style={[
+                        styles.mealName,
+                        {
+                          color: done ? theme.success : theme.foreground,
+                          fontFamily: 'Montserrat_600SemiBold',
+                        },
+                      ]}
+                      numberOfLines={2}
+                    >
                       {meal.name}
                     </Text>
                     {meal.description ? (
-                      <Text style={[styles.mealDesc, { color: theme.muted }]}>{meal.description}</Text>
+                      <Text
+                        style={[styles.mealDesc, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+                        numberOfLines={2}
+                      >
+                        {meal.description}
+                      </Text>
                     ) : null}
                   </View>
                   {isToggling ? (
@@ -242,11 +271,16 @@ export default function AlumnoNutricionScreen() {
                     <View
                       style={[
                         styles.checkCircle,
-                        { borderColor: done ? theme.success : theme.border },
-                        done && { backgroundColor: theme.success },
+                        {
+                          borderColor: done ? theme.success : theme.border,
+                          backgroundColor: done ? theme.success : 'transparent',
+                          borderRadius: theme.radius.lg,
+                        },
                       ]}
                     >
-                      {done && <Text style={styles.checkMark}>✓</Text>}
+                      {done && (
+                        <Text style={[styles.checkMark, { color: theme.primaryForeground }]}>✓</Text>
+                      )}
                     </View>
                   )}
                 </TouchableOpacity>
@@ -261,34 +295,76 @@ export default function AlumnoNutricionScreen() {
 
 function MacroPill({ label, value, color, theme }: { label: string; value: number; color: string; theme: any }) {
   return (
-    <View style={[styles.macroPill, { borderColor: color }]}>
-      <Text style={[styles.macroValue, { color }]}>{value}</Text>
-      <Text style={[styles.macroLabel, { color: theme.muted }]}>{label}</Text>
+    <View
+      style={[
+        styles.macroPill,
+        { backgroundColor: color + '15', borderColor: color + '40', borderRadius: theme.radius.md },
+      ]}
+    >
+      <Text style={[styles.macroValue, { color, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
+      <Text style={[styles.macroLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        {label}
+      </Text>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
-  title: { fontSize: 24, fontWeight: '700' },
-  subtitle: { fontSize: 13 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  headerTextWrap: { flex: 1, minWidth: 0 },
+  title: { fontSize: 28, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, marginTop: 4 },
   scroll: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  macrosCard: { borderRadius: 16, padding: 16, borderWidth: 1, gap: 10 },
-  planName: { fontSize: 15, fontWeight: '700' },
+  macrosCard: { padding: 18, borderWidth: 1, gap: 12 },
+  planName: { fontSize: 16, letterSpacing: -0.2 },
   macrosRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  macroPill: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, alignItems: 'center', minWidth: 56 },
-  macroValue: { fontSize: 16, fontWeight: '700' },
-  macroLabel: { fontSize: 11, fontWeight: '500' },
-  instructions: { fontSize: 13, lineHeight: 18 },
+  macroPill: {
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    minWidth: 60,
+    gap: 2,
+  },
+  macroValue: { fontSize: 16 },
+  macroLabel: { fontSize: 10, letterSpacing: 0.3 },
+  instructions: { fontSize: 13, lineHeight: 19 },
   progressBar: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: 6, borderRadius: 3 },
-  mealCard: { borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  mealLeft: { flex: 1, gap: 4, marginRight: 12 },
-  mealName: { fontSize: 15, fontWeight: '600' },
-  mealDesc: { fontSize: 13 },
-  checkCircle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  checkMark: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  emptyText: { fontSize: 15, lineHeight: 22 },
+  mealCard: {
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mealLeft: { flex: 1, gap: 4 },
+  mealName: { fontSize: 15, letterSpacing: -0.1 },
+  mealDesc: { fontSize: 13, lineHeight: 18 },
+  checkCircle: {
+    width: 30,
+    height: 30,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkMark: { fontSize: 14, fontWeight: '700' },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyTitle: { fontSize: 17, marginBottom: 8 },
+  emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  emptyDay: { paddingVertical: 32, alignItems: 'center' },
+  emptyDayText: { fontSize: 13 },
 })
