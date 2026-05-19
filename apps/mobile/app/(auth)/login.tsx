@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -37,10 +38,11 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { backgroundColor: theme.background }]}
-    >
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.container}
+      >
       <View style={styles.inner}>
         <Text style={[styles.title, { color: theme.text }]}>
           {role === 'alumno' ? 'Accede como alumno' : 'Accede como coach'}
@@ -90,11 +92,13 @@ export default function LoginScreen() {
           <Text style={[styles.linkText, { color: theme.muted }]}>← Volver</Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
+  safe: { flex: 1 },
   container: { flex: 1 },
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 12 },
   title: { fontSize: 26, fontWeight: '700', marginBottom: 8 },

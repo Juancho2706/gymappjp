@@ -55,14 +55,19 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Inject prod env vars for prodpreview
+        if: ${{ inputs.profile == 'prodpreview' }}
+        working-directory: apps/${{ inputs.app }}
+        run: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL_PROD }}" > .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY_PROD }}" >> .env
+
       - name: Build Android (${{ inputs.profile }})
         working-directory: apps/${{ inputs.app }}
         env:
           EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
           GRADLE_OPTS: "-Xmx5g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dkotlin.daemon.jvm.options=-Xmx2g,-XX:MaxMetaspaceSize=1g"
           JAVA_TOOL_OPTIONS: "-Xmx5g -XX:MaxMetaspaceSize=2g"
-          EXPO_PUBLIC_SUPABASE_URL: ${{ inputs.profile == 'prodpreview' && secrets.EXPO_PUBLIC_SUPABASE_URL_PROD || '' }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ inputs.profile == 'prodpreview' && secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY_PROD || '' }}
         run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output ./build.apk
 
       - name: Upload APK
