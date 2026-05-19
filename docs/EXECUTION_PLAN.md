@@ -3583,7 +3583,7 @@ Sem 8:    Push notifications + polish + screenshots
 
 ## Riesgos
 
-> **Incidente en producción →** ver `v2newEVA/RUNBOOK.md` para protocolo de respuesta P0/P1/P2.
+> **Incidente en producción →** ver `docs/RUNBOOK.md` para protocolo de respuesta P0/P1/P2.
 
 | Riesgo | P | Impacto | Mitigación |
 |---|---|---|---|
@@ -3800,7 +3800,7 @@ Semana 27-28:  Live en stores
 - [ ] Cron MP reconciliación viernes 10am implementado
 - [ ] Onboarding wizard recovery: `onboarding_step` persiste y redirige al paso correcto al volver
 - [ ] Botón "Reenviar invitación" en admin panel para org_owner que no activó en 24h
-- [ ] RUNBOOK.md creado en v2newEVA/ (P0 + P1 + comunicación SLA)
+- [ ] RUNBOOK.md creado en docs/ (P0 + P1 + comunicación SLA)
 - [ ] Proceso offboarding coach (sale de org) documentado y testado
 - [ ] Demo org "EVA Demo Gym" en staging lista para ventas
 

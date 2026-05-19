@@ -5,7 +5,7 @@
 
 > ⚠️ **NOTA INTERNA (no publicar):** Redactado bajo Juan Villegas como persona natural / freelancer.  
 > Actualizar razón social, RUT empresa y representante legal al constituir la sociedad con tu socio.  
-> Ver `MANUAL_TASKS.md` → MT-19.
+> Ver `../MANUAL_TASKS.md` → MT-19.
 
 ---
 

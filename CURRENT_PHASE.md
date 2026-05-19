@@ -1,7 +1,7 @@
 # EVA v2 — Estado Actual de Ejecución
 
 > Actualizar este archivo al terminar cada tarea o sesión.
-> Plan completo: `v2newEVA/EXECUTION_PLAN.md`
+> Plan completo: `docs/EXECUTION_PLAN.md`
 
 ---
 
@@ -12,18 +12,70 @@
 - **NO pushear a prod** (ni `git push` a master ni `npx supabase db push`) hasta terminar el plan completo
 - **Migrations:** nuevas van en `supabase/migrations/` con timestamp ISO. Aplicar localmente con `npx supabase db reset`
 - **Ritmo:** un ítem del plan a la vez. Marcar `[x]` aquí al terminar cada uno
-- **Plan completo:** leer solo la sección necesaria de `v2newEVA/EXECUTION_PLAN.md` con offset/limit (3964 líneas, no leer entero)
+- **Plan completo:** leer solo la sección necesaria de `docs/EXECUTION_PLAN.md` con offset/limit (3964 líneas, no leer entero)
 - **Sin staging:** free tier de Supabase ocupado. Flujo: local → v2/enterprise branch → cuando plan completo → db push + deploy
 - **Security migration ya aplicada:** `20260517120000_security_fixes.sql` — fixes de RLS y search_path pre-existentes. Pushear a prod junto con las migrations de v2
-- **Tareas manuales:** `MANUAL_TASKS.md` — todo lo que requiere acción tuya (dashboards, pagos, firmas). Sincronizado con este archivo.
+- **Tareas manuales:** `docs/MANUAL_TASKS.md` — todo lo que requiere acción tuya (dashboards, pagos, firmas). Sincronizado con este archivo.
 - **MCP Supabase apunta a PROD** (`jikjeokundmaafuytdcx.supabase.co`) — NUNCA usarlo en dev. Solo Bash local.
+
+### Modo de compilar Mobile: GitHub Actions FREE (NO EAS credits)
+- **Workflow:** `.github/workflows/mobile-build.yml` — manual trigger desde Actions tab
+- **Estrategia:** `eas build --local` en runners de GitHub. Android → `ubuntu-latest` (free Linux minutes), iOS → `macos-latest` (free macOS minutes, 10x billing rate pero **repo público = ilimitado**)
+- **EAS credits gastados:** 0 (EAS solo se usa para auth + remote keystore Android, no para compilación)
+- **Apple credentials:** vía secrets en GitHub (`IOS_DIST_CERT_BASE64`, password, provisioning profile base64) — escritos a `credentials.json` en runtime con Python heredoc
+- **Workflow file debe existir en master** para mostrar "Run workflow" UI (limitación GitHub Actions) — ya copiado a master
+- **EAS solo si gastamos todo:** si runners GitHub se acaban, fallback a EAS 15 builds/mes free tier
+- **Workflow_dispatch ejecuta el archivo del branch seleccionado:** al lanzar build, elegir `v2/enterprise` para que use el código v2
 
 ---
 
 ## Fase Actual: FASE 6B Sem 1-2 — Auth + navegación por rol
 
 **Rama git:** `v2/enterprise`
-**Última actualización:** 2026-05-18 (6B.0 completa, Sem 1-2 auth + ThemeContext + tabs commiteados)
+**Última actualización:** 2026-05-18 (sesión tarde: GitHub Actions local builds + Web APIs §2.8 + infra hardening — sin commit)
+
+---
+
+## Sesión 2026-05-18 (tarde) — Trabajo SIN COMMITEAR todavía
+
+### Mobile build infra (GitHub Actions, sin gastar EAS credits)
+- [x] Workflow `.github/workflows/mobile-build.yml` reescrito — `eas build --local` Android (ubuntu-latest) + iOS (macos-latest). Manual trigger (workflow_dispatch). Soporta apps `mobile` y `enterprise`, perfiles `staging`/`production`.
+- [x] Workflow copiado a `master` (`workflow_dispatch` requiere file en default branch para mostrar UI button) — commit `e805cf9` en master
+- [x] Secrets configurados en GitHub: `EXPO_TOKEN`, `IOS_DIST_CERT_BASE64`, `IOS_DIST_CERT_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64`
+- [x] `apps/mobile/babel.config.js` — set EXPO_ROUTER_APP_ROOT en Babel worker process (fix monorepo Expo Router) — **insuficiente para EAS, ver siguiente fix**
+- [x] `apps/mobile/index.js` — custom entry con `require.context('./app')` hardcoded, bypasea `_ctx.android.js` (env vars no resuelven en compile-time de Babel)
+- [x] `apps/mobile/package.json` — `main: ./index.js` (era `expo-router/entry`)
+- [x] `apps/mobile/assets/notification-icon.png` — placeholder (faltaba para `expo-notifications` prebuild)
+- [x] `apps/mobile/eas.json` — `credentialsSource` per-platform (Android remote, iOS local) + `EXPO_ROUTER_APP_ROOT` en staging env
+- [x] Workflow env: `GRADLE_OPTS` con 5g heap + 2g Metaspace (fix OutOfMemoryError en `:expo-updates:kspReleaseKotlin` en ubuntu-latest 7GB)
+- [x] React deps dedupe via overrides en root `package.json` (fix expo-doctor duplicate react warning)
+- [x] Apple Team ID `5GKWMMZ46Q` verificado y aplicado en `eas.json` + `apple-app-site-association`
+
+### Infra hardening (sin commit)
+- [x] `apps/web/src/app/api/health/route.ts` — health check endpoint para UptimeRobot (DB ping a `coaches`, devuelve `status/db/latencyMs/timestamp`, 200 OK ó 503)
+- [x] `.github/dependabot.yml` — npm weekly (root, apps/mobile, apps/enterprise) + github-actions weekly. Target branch `v2/enterprise`. Grouped updates (types, eslint, next, supabase, testing). Ignores react/expo/react-native (manual).
+- [x] `.github/workflows/ci.yml` — agregado step `npm audit --audit-level=high --omit=dev` con `continue-on-error: true` (warning, no bloquea)
+- [x] `apps/enterprise/assets/` — placeholders copiados de mobile (icon, adaptive-icon, splash-icon, favicon, notification-icon) — destrabea futuro EAS build de enterprise
+
+### Web APIs §2.8 — utility libs (sin commit, sin wirear UI todavía)
+- [x] **§2.8.5 Badge API** → `apps/web/src/lib/badge-api.ts` — `setBadge`, `clearBadge`, `isBadgeSupported`. Silent fail si no soportado.
+- [x] **§2.8.4 Speech synthesis** → `apps/web/src/lib/speech-synthesis.ts` — `speak`, toggle persistido en localStorage (`eva.speech.enabled`), `es-CL` voice preferida, cancel previo antes de hablar
+- [x] **§2.8.2 Web Share + PR Card** → `apps/web/src/lib/web-share.ts` + `apps/web/src/lib/pr-card-canvas.ts` — Canvas 1080x1080 con título/stat/coach name, exporta `Blob` o `File`, integra con `navigator.share({files})` via `canShareFiles` check
+- [x] **§2.8.1 Media Session** → `apps/web/src/lib/media-session.ts` — `setMediaMetadata`, `setMediaPlaybackState`, `setMediaHandlers` (play/pause/next/prev/stop/seek), `clearMediaSession`
+- [x] **§2.8.3 Fullscreen + Orientation** → `apps/web/src/lib/fullscreen.ts` — `enter/exitFullscreen` + `lockOrientation` con fallbacks webkit (Safari iOS)
+
+### PENDIENTE (Web APIs §2.8)
+Wirear libs a componentes. Sin esto, las libs están listas pero no se usan:
+- [ ] Badge API → hookear a count de push notifications no leídas (¿en `coach/layout.tsx`? necesita endpoint de unread count)
+- [ ] Speech synthesis → toggle en `/c/[coach_slug]/workout/[planId]` settings + call en transición de ejercicio (WorkoutExecutionClient)
+- [ ] Web Share → botón en pantalla de workout completado (después de log final) + en PR achievement modal
+- [ ] Media Session → wirear en WorkoutExecutionClient para meta de ejercicio actual + handlers play/pause sincronizados con RestTimer
+- [ ] Fullscreen + Orientation → toggle en WorkoutExecutionClient + auto-enter al iniciar workout (opcional)
+
+### Bloqueo conocido (PRE-EXISTENTE, no de esta sesión)
+- `npm run typecheck` falla en `src/lib/push.ts` por tabla `push_tokens` no en `database.types.ts` regenerado (Sem 1-2 mobile creó la tabla, types no fueron regenerados). Fix: `npx supabase gen types typescript --local > apps/web/src/lib/database.types.ts` después de `npx supabase db reset`. Mis 7 archivos nuevos compilan limpio.
+
+---
 
 ---
 
@@ -198,7 +250,7 @@
 
 ### Pendientes operacionales (requieren acción tuya)
 - [ ] Primer cliente enterprise firmado y en producción
-- [ ] Playbook D-7 a D+30 ejecutado (ver `v2newEVA/EXECUTION_PLAN.md` §5)
+- [ ] Playbook D-7 a D+30 ejecutado (ver `docs/EXECUTION_PLAN.md` §5)
 - [ ] Health score D14 calculado (MT-24)
 - [ ] Google Sheets pipeline (MT-9) ✅ Hecho
 - [ ] Demo org "EVA Demo Gym" creada en staging para ventas

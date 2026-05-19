@@ -1,6 +1,5 @@
 /**
  * Client-safe feature flags (`NEXT_PUBLIC_*` inlined at build).
- * @see docs/ANALISIS-MODULO-NUTRICION.md §12.2
  */
 
 function envIsTrue(key: string): boolean {

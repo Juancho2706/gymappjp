@@ -1,6 +1,6 @@
 # MANUAL_TASKS.md — Tareas que requieren acción tuya
 
-> Sincronizado con `CURRENT_PHASE.md` y `v2newEVA/EXECUTION_PLAN.md`  
+> Sincronizado con `CURRENT_PHASE.md` y `docs/EXECUTION_PLAN.md`  
 > Actualizar `[ ]` → `[x]` cuando completes cada ítem.  
 > Claude no puede hacer estas acciones: requieren credenciales, pagos, firmas o acceso a dashboards externos.
 
@@ -355,7 +355,7 @@ Al inicio de cada sesión de desarrollo verificar:
 - D0 AM: Crear org en PROD (`/admin/orgs` → crear) + branding + invitar coaches
 - D0 PM: Importar CSV + asignar alumnos + training 60 min
 - D14: Calcular health score → actualizar `organizations.last_health_score`
-- D30: Mini QBR (ver plantilla en `v2newEVA/EXECUTION_PLAN.md` §5)
+- D30: Mini QBR (ver plantilla en `docs/EXECUTION_PLAN.md` §5)
 
 ---
 
@@ -377,7 +377,7 @@ UPDATE organizations SET
 WHERE slug = 'tu-org-slug';
 ```
 
-Fórmula completa en `v2newEVA/EXECUTION_PLAN.md` §3.4.
+Fórmula completa en `docs/EXECUTION_PLAN.md` §3.4.
 
 ---
 

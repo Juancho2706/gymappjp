@@ -19,6 +19,9 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npx vitest run
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high --omit=dev
+        continue-on-error: true
 
   e2e:
     needs: quality

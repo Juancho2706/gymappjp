@@ -3,25 +3,14 @@
 # ── Docs internos / AI instructions (no van al repo público) ──
 AGENTS.md
 CLAUDE.md
-README-APP.md
-ANALISIS_PRECIOS.md
-COACH_ONBOARDING_PREMIUM_PLAN.md
-DECISIONES_B2B.md
-ENTERPRISE_B2B_KIMIEDITION.md
-ENTERPRISE_B2B_PACKS_PLAN.md
-EVA_EMPRESAS_MASTER.md
-EXPLICACIONENTERPRISE.md
-PLAN-MI-MARCA.md
-PLAN-SOPORTE-NOVEDADES.md
 nuevabibliadelaapp/
-docs/ANALISIS-MODULO-NUTRICION.md
+docs/ANALISIS_PRECIOS.md
 docs/BRANDING-IMAGENES-IA.md
-docs/CAPACITOR-WHITELABEL-ROADMAP.md
+docs/COACH_ONBOARDING_PREMIUM_PLAN.md
 docs/WHITE-LABEL-ROADMAP.md
 
 # ── AI tool configs ──
 .claude/
-.roo/
 
 # ── Script outputs ──
 build-output.txt
@@ -87,8 +76,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-scripts/enrich-exercises.mjs
-vertex.json
 
 # Playwright
 /test-results/
@@ -96,39 +83,11 @@ vertex.json
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
-scripts/rls-policies.sql
+
+# Supabase local
 supabase/.branches/
-lint_errors_utf8.txt
-lint_errors.txt
-lint_results_utf8.txt
-lint_results.txt
-tsc_errors_utf8.txt
-tsc_errors.txt
-tsc_results_utf8.txt
-tsc_results.txt
-.roorules
-.roo/rules-code/rules.md
-.roo/rules-code/rules.md
-.roo/rules-code/rules.md
-docs/food_nutrition_list.md
-docs/CATALOGO_EJERCICIOS_COMPLETO.md
-docs/EJERCICIOS_SIN_VIDEO.md
-plans/EXERCISE_ANIMATION_RESEARCH.md
-plans/EXERCISE_MAPPING_STRATEGY.md
-plans/EXERCISE_MASS_REWORK_PLAN.md
-plans/cleanup_exercises_plan.md
-public/BASEEXCERSISES.md
-public/EXERCISE_INSTRUCTIONS.md
-public/MISSING_GROUPS_INSTRUCTIONS.md
-apps/web/public/MISSING_GROUPS_INSTRUCTIONS.md
-public/EXERCISE_INSTRUCTIONS.md
-EJERCICIOS_ACTUALES.md
-PLAN-REDISENO-UI-TOTAL.md
+
+# Untracked script outputs / personal notes
 scripts/WELCOME-NEWS-ITEM.md
 scripts/seed-welcome-news.sql
-EVA_VIDEO_PLAN.md
-supabase/migrations/20260510163503_add_free_growth_subscription_tiers.sql
-supabase/migrations/20260510171453_add_free_growth_tier_indexes.sql
-docs/ARQUITECTURA.md
-supabase/migrations/20260515120000_coach_last_active_at.sql
-supabase/migrations/20260515120000_coach_last_active_at.sql
+apps/web/public/MISSING_GROUPS_INSTRUCTIONS.md

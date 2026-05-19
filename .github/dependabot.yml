@@ -1,0 +1,89 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Santiago
+    open-pull-requests-limit: 5
+    target-branch: v2/enterprise
+    labels:
+      - dependencies
+      - root
+    groups:
+      types:
+        patterns:
+          - "@types/*"
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@typescript-eslint/*"
+      next:
+        patterns:
+          - "next"
+          - "@next/*"
+      supabase:
+        patterns:
+          - "@supabase/*"
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "@playwright/*"
+          - "playwright"
+    ignore:
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Santiago
+    open-pull-requests-limit: 3
+    target-branch: v2/enterprise
+    labels:
+      - dependencies
+      - mobile
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "react"
+      - dependency-name: "react-native"
+      - dependency-name: "expo-router"
+      - dependency-name: "expo-*"
+
+  - package-ecosystem: npm
+    directory: /apps/enterprise
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Santiago
+    open-pull-requests-limit: 3
+    target-branch: v2/enterprise
+    labels:
+      - dependencies
+      - enterprise
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "react"
+      - dependency-name: "react-native"
+      - dependency-name: "expo-router"
+      - dependency-name: "expo-*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Santiago
+    open-pull-requests-limit: 3
+    target-branch: v2/enterprise
+    labels:
+      - dependencies
+      - github-actions
