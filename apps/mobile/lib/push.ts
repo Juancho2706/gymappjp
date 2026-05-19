@@ -14,8 +14,6 @@ export async function setupAndroidChannel(): Promise<void> {
 }
 
 export async function syncPushToken(userId: string, supabase: SupabaseClient): Promise<void> {
-  // Current iOS provisioning profile does not include Push Notifications entitlement.
-  if (Platform.OS === 'ios') return
   if (!Device.isDevice) return // simulators don't support push tokens
 
   const { status: existing } = await Notifications.getPermissionsAsync()

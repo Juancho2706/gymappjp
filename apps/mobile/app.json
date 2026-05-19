@@ -84,7 +84,6 @@
         }
       ],
       "./plugins/with-android-cleartext",
-      "./plugins/with-ios-profile-compatible-entitlements",
       "./plugins/with-gradle-jvmargs"
     ],
     "updates": {
