@@ -73,6 +73,31 @@
 ### Infra local
 - [x] Removido `apps/` de `.git/info/exclude` (ya no contamina source control en v2)
 
+### iOS prodpreview + TestFlight submit (sesión tarde 2026-05-19)
+- [x] [apps/mobile/eas.json](apps/mobile/eas.json) — `prodpreview` profile ahora tiene bloque iOS (`buildConfiguration: Release`, `credentialsSource: local`). Antes solo Android APK. Commit `e61a0bb`
+- [x] [.github/workflows/mobile-build.yml](.github/workflows/mobile-build.yml) — build-ios ahora inyecta prod Supabase env igual que build-android (mismo patrón Node script)
+- [x] **ASC App ID real `6770426633`** en eas.json submit config (era PLACEHOLDER). Commit `a85c135`
+- [x] Workflow input nuevo `submit_ios` (boolean) — si true, después de build iOS corre `eas submit` con ASC API key
+- [x] GH secrets ASC API Key configurados via `gh secret set`: `ASC_API_KEY_ID=5JDAXB868Z`, `ASC_API_ISSUER_ID=69a6de8c-...`, `ASC_API_KEY_P8` (contenido `.p8` de Guimel)
+- [x] **CRÍTICO fix:** workflow leía secrets `EXPO_PUBLIC_SUPABASE_URL_PROD` / `EXPO_PUBLIC_SUPABASE_ANON_KEY_PROD` que NO EXISTEN. Inyectaba strings vacíos al APK → todo login fallaba con "invalid credentials". Cambiado a `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (los reales). Commit `f4cae71`
+- [x] gh CLI instalado via winget (v2.92.0). Auth via web browser. Lectura `.p8` con `gh secret set ... < file`
+
+### Commits sesión 2026-05-19 (todos en `v2/enterprise`)
+- `49d8bb0` fix(auth): preserve dots and aliases in stored email addresses
+- `fc3df32` merge: integrate mobile-prod-preview build infra
+- `75be42f` fix(mobile): resolve login race condition + update phase doc
+- `e61a0bb` feat(mobile): add iOS support to prodpreview profile
+- `a85c135` feat(mobile): add eas submit ios job for TestFlight upload
+- `f4cae71` fix(mobile): use correct GH secret names for prod Supabase injection
+
+Master:
+- `4c1e637` fix(auth): preserve dots and aliases in stored email addresses
+
+### Branches finales
+- `master` (deployable, Vercel auto-deploy)
+- `v2/enterprise` (current)
+- `origin/claude/review-v2-enterprise-sT2ju` (review branch, no acción)
+
 ---
 
 ## Sesión 2026-05-18 (tarde) — Trabajo SIN COMMITEAR todavía
