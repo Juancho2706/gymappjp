@@ -11,7 +11,11 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.47.0",
+    "@expo-google-fonts/inter": "^0.2.3",
+    "@expo-google-fonts/montserrat": "^0.2.3",
     "expo": "~54.0.33",
+    "expo-font": "~13.3.1",
+    "expo-splash-screen": "~0.29.22",
     "expo-build-properties": "~1.0.10",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.9",
