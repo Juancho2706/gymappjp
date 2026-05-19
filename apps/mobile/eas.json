@@ -12,6 +12,16 @@
         "simulator": true
       }
     },
+    "prodpreview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "production",
+        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app"
+      }
+    },
     "staging": {
       "distribution": "internal",
       "ios": {

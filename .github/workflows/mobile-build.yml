@@ -27,6 +27,7 @@ on:
         type: choice
         options:
           - staging
+          - prodpreview
           - production
 
 jobs:
@@ -60,6 +61,8 @@ jobs:
           EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
           GRADLE_OPTS: "-Xmx5g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dkotlin.daemon.jvm.options=-Xmx2g,-XX:MaxMetaspaceSize=1g"
           JAVA_TOOL_OPTIONS: "-Xmx5g -XX:MaxMetaspaceSize=2g"
+          EXPO_PUBLIC_SUPABASE_URL: ${{ inputs.profile == 'prodpreview' && secrets.EXPO_PUBLIC_SUPABASE_URL_PROD || '' }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ inputs.profile == 'prodpreview' && secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY_PROD || '' }}
         run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output ./build.apk
 
       - name: Upload APK
