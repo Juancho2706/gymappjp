@@ -31,6 +31,7 @@
     "android": {
       "package": "cl.evaapp.eva",
       "versionCode": 1,
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
