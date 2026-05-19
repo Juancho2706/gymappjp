@@ -66,7 +66,7 @@ export async function sendPushToClient(clientId: string, payload: PushPayload): 
             }
         }),
         // Mobile push (Expo)
-        sendExpoTokens((mobileSubs ?? []).map((r) => r.token), payload),
+        sendExpoTokens((mobileSubs ?? []).map((r: { token: string }) => r.token), payload),
     ])
 }
 
