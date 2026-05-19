@@ -9,43 +9,73 @@ export default function RoleSelector() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <Text style={[styles.brand, { color: theme.foreground, fontFamily: theme.fontDisplay }]}>
+        <Text
+          style={[styles.brand, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}
+        >
           EVA
         </Text>
-        <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        <Text
+          style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+        >
           Entrenamiento personalizado
         </Text>
       </View>
 
       <View style={styles.buttons}>
         <TouchableOpacity
-          style={[styles.btn, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
+          style={[
+            styles.btn,
+            { backgroundColor: theme.primary, borderRadius: theme.radius['2xl'] },
+            theme.shadowGlowBlue,
+          ]}
           onPress={() => router.push('/(auth)/login?role=coach')}
           activeOpacity={0.85}
         >
           <Text style={styles.btnIcon}>🏋️</Text>
-          <Text style={[styles.btnTitle, { fontFamily: 'Montserrat_700Bold' }]}>SOY COACH</Text>
+          <Text style={[styles.btnTitle, { fontFamily: 'Montserrat_800ExtraBold' }]}>
+            SOY COACH
+          </Text>
           <Text style={[styles.btnDesc, { fontFamily: theme.fontSans }]}>
-            Gestiona tus alumnos y programas
+            Gestiona alumnos y programas
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.btn, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}
+          style={[
+            styles.btn,
+            {
+              backgroundColor: theme.card,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: theme.radius['2xl'],
+            },
+          ]}
           onPress={() => router.push('/alumno/codigo')}
           activeOpacity={0.85}
         >
           <Text style={styles.btnIcon}>💪</Text>
-          <Text style={[styles.btnTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text
+            style={[
+              styles.btnTitle,
+              { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' },
+            ]}
+          >
             SOY ALUMNO
           </Text>
-          <Text style={[styles.btnDesc, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text
+            style={[
+              styles.btnDesc,
+              { color: theme.mutedForeground, fontFamily: theme.fontSans },
+            ]}
+          >
             Accede a tu entrenamiento
           </Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={[styles.footer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+      <Text
+        style={[styles.footer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+      >
         eva-app.cl
       </Text>
     </SafeAreaView>
@@ -56,48 +86,47 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingVertical: 48,
+    paddingVertical: 56,
     paddingHorizontal: 24,
   },
   header: {
     alignItems: 'center',
-    paddingTop: 32,
+    paddingTop: 40,
   },
   brand: {
-    fontSize: 56,
-    fontWeight: '800',
-    letterSpacing: -2,
+    fontSize: 64,
+    letterSpacing: -3,
+    lineHeight: 64,
   },
   subtitle: {
     fontSize: 14,
-    marginTop: 4,
-    letterSpacing: 0.5,
+    marginTop: 8,
+    letterSpacing: 0.4,
   },
   buttons: {
     gap: 16,
   },
   btn: {
-    borderRadius: 20,
     padding: 28,
     alignItems: 'center',
     gap: 6,
   },
   btnIcon: {
-    fontSize: 36,
+    fontSize: 38,
     marginBottom: 4,
   },
   btnTitle: {
     fontSize: 20,
-    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   btnDesc: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.78)',
   },
   footer: {
     textAlign: 'center',
     fontSize: 12,
+    letterSpacing: 0.3,
   },
 })
