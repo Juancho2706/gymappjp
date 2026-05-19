@@ -58,7 +58,6 @@ export default function BuilderScreen() {
     setPlans([])
     setLoadingPlans(true)
 
-    // Try active program first
     const { data: program } = await supabase
       .from('workout_programs')
       .select('id, name, workout_plans ( id, title, day_of_week, assigned_date, workout_blocks ( id ) )')
@@ -100,15 +99,22 @@ export default function BuilderScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>Programas</Text>
-        <Text style={[styles.subtitle, { color: theme.muted }]}>Selecciona un cliente</Text>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          Programas
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          {clients.length === 0
+            ? 'Sin alumnos activos'
+            : selectedClient
+            ? `Planes de ${selectedClient.full_name}`
+            : 'Selecciona un alumno'}
+        </Text>
       </View>
 
       {loadingClients ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Client picker */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -121,11 +127,25 @@ export default function BuilderScreen() {
                   key={c.id}
                   style={[
                     styles.clientChip,
-                    { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary : theme.card },
+                    {
+                      borderColor: active ? theme.primary : theme.border,
+                      backgroundColor: active ? theme.primary : theme.secondary,
+                      borderRadius: theme.radius.lg,
+                    },
                   ]}
                   onPress={() => selectClient(c)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, { color: active ? '#fff' : theme.text }]} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      {
+                        color: active ? theme.primaryForeground : theme.foreground,
+                        fontFamily: 'Montserrat_700Bold',
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {c.full_name}
                   </Text>
                 </TouchableOpacity>
@@ -133,20 +153,24 @@ export default function BuilderScreen() {
             })}
           </ScrollView>
 
-          {/* Plans list */}
           {!selectedClient ? (
             <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: theme.muted }]}>
-                Elige un cliente para ver sus planes
+              <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                Elige un alumno
+              </Text>
+              <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Tocá un nombre arriba para ver sus planes de entrenamiento.
               </Text>
             </View>
           ) : loadingPlans ? (
             <ActivityIndicator style={{ marginTop: 32 }} color={theme.primary} />
           ) : plans.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: theme.muted }]}>Sin planes asignados</Text>
-              <Text style={[styles.webHint, { color: theme.muted }]}>
-                Crea planes desde la app web
+              <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                Sin planes asignados
+              </Text>
+              <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Crea planes desde la app web en eva-app.cl
               </Text>
             </View>
           ) : (
@@ -154,15 +178,29 @@ export default function BuilderScreen() {
               data={plans}
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => (
-                <View style={[styles.planCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View
+                  style={[
+                    styles.planCard,
+                    { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+                  ]}
+                >
                   <View style={styles.planLeft}>
                     {item.day_of_week != null && (
-                      <Text style={[styles.dow, { color: theme.primary }]}>
+                      <Text
+                        style={[styles.dow, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}
+                      >
                         {DAY_NAMES[item.day_of_week]}
                       </Text>
                     )}
-                    <Text style={[styles.planTitle, { color: theme.text }]}>{item.title}</Text>
-                    <Text style={[styles.planSub, { color: theme.muted }]}>
+                    <Text
+                      style={[styles.planTitle, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]}
+                      numberOfLines={2}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+                    >
                       {item.blockCount} ejercicio{item.blockCount !== 1 ? 's' : ''}
                     </Text>
                   </View>
@@ -180,19 +218,29 @@ export default function BuilderScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: '700' },
-  subtitle: { fontSize: 13, marginTop: 2 },
+  header: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12 },
+  title: { fontSize: 28, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, marginTop: 4 },
   pickerRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  clientChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, maxWidth: 160 },
-  chipText: { fontSize: 14, fontWeight: '600' },
-  planList: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
-  planCard: { borderRadius: 14, padding: 16, borderWidth: 1 },
-  planLeft: { gap: 4 },
-  dow: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  planTitle: { fontSize: 15, fontWeight: '600' },
+  clientChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderWidth: 1,
+    maxWidth: 180,
+  },
+  chipText: { fontSize: 13, letterSpacing: 0.3 },
+  planList: { paddingHorizontal: 16, paddingBottom: 32, gap: 10 },
+  planCard: { padding: 16, borderWidth: 1 },
+  planLeft: { gap: 6 },
+  dow: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
+  planTitle: { fontSize: 16, letterSpacing: -0.2 },
   planSub: { fontSize: 13 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 },
-  emptyText: { fontSize: 15, textAlign: 'center' },
-  webHint: { fontSize: 13, textAlign: 'center' },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyTitle: { fontSize: 17, marginBottom: 8 },
+  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
 })
