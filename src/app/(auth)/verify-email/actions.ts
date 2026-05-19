@@ -47,7 +47,7 @@ export async function resendConfirmationEmailAction(
     }
 
     const sent = await resendCoachSignupConfirmationEmail({
-        email: emailNorm,
+        email: authUser.user.email ?? parsed.data.email,
         coachName: coach.full_name ?? 'Coach',
     })
 
