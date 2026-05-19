@@ -15,6 +15,7 @@ import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
     normalizePlatformEmail,
+    sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
@@ -142,6 +143,7 @@ export async function registerAction(
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
+    const emailSan = sanitizePlatformEmail(email)
     const emailNorm = normalizePlatformEmail(email)
     const availability = await assertPlatformEmailAvailable(adminDb, email)
     if (!availability.ok) {
@@ -150,7 +152,7 @@ export async function registerAction(
 
     // Free tier requires email verification; paid tiers are auto-confirmed (payment = identity proof)
     const { data: authData, error: authError } = await adminDb.auth.admin.createUser({
-        email: emailNorm,
+        email: emailSan,
         password,
         email_confirm: !isFreeTier,
     })
@@ -199,12 +201,12 @@ export async function registerAction(
     if (isFreeTier) {
         // Free tier: email unconfirmed — do NOT sign in yet; Supabase sends confirmation email.
         // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
-        redirect(`/verify-email?email=${encodeURIComponent(emailNorm)}`)
+        redirect(`/verify-email?email=${encodeURIComponent(emailSan)}`)
     }
 
     // Paid tier: email auto-confirmed; sign in immediately and proceed to payment
     const supabase = await createClient()
-    await supabase.auth.signInWithPassword({ email: emailNorm, password })
+    await supabase.auth.signInWithPassword({ email: emailSan, password })
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(

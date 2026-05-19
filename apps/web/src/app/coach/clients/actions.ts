@@ -16,7 +16,7 @@ import {
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
-    normalizePlatformEmail,
+    sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
 
 // ────────────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ export async function createClientAction(
     }
 
     const admin = await createRawAdminClient()
-    const emailNorm = normalizePlatformEmail(parsed.data.email)
+    const emailSan = sanitizePlatformEmail(parsed.data.email)
     const availability = await assertPlatformEmailAvailable(admin, parsed.data.email)
     if (!availability.ok) {
         return { error: availability.error }
@@ -116,7 +116,7 @@ export async function createClientAction(
 
     // Create the auth user with Admin API (does NOT sign out the coach)
     const { data: newAuthUser, error: authError } = await admin.auth.admin.createUser({
-        email: emailNorm,
+        email: emailSan,
         password: parsed.data.temp_password,
         email_confirm: true, // auto-confirm so client can log in immediately
     })
@@ -134,7 +134,7 @@ export async function createClientAction(
         id: newAuthUser.user.id,
         coach_id: coach.id,
         full_name: parsed.data.full_name,
-        email: emailNorm,
+        email: emailSan,
         phone: parsed.data.phone || null,
         subscription_start_date: parsed.data.subscription_start_date || null,
         force_password_change: true,
@@ -176,7 +176,7 @@ export async function createClientAction(
         welcomeMessage: coach.welcome_message,
     })
     const emailResult = await sendTransactionalEmail({
-        to: emailNorm,
+        to: emailSan,
         subject: welcomeEmail.subject,
         html: welcomeEmail.html,
     })

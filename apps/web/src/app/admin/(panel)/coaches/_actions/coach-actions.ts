@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
-import { normalizePlatformEmail, assertPlatformEmailAvailable } from '@/lib/auth/platform-email'
+import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 import { getRecommendedTier, getTierMaxClients, TIER_CONFIG } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
@@ -66,12 +66,12 @@ export async function createCoachAction(
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
-    const emailNorm = normalizePlatformEmail(email)
+    const emailSan = sanitizePlatformEmail(email)
     const availability = await assertPlatformEmailAvailable(adminClient, email)
     if (!availability.ok) return { error: availability.error }
 
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-        email: emailNorm,
+        email: emailSan,
         password: temp_password,
         email_confirm: true,
     })
@@ -112,7 +112,7 @@ export async function createCoachAction(
     })
     revalidateAdmin()
 
-    return { success: true, coachId: authData.user.id, slug, email: emailNorm, tempPassword: temp_password }
+    return { success: true, coachId: authData.user.id, slug, email: emailSan, tempPassword: temp_password }
 }
 
 const UpdateCoachSchema = z.object({

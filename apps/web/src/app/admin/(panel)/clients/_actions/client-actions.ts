@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
-import { normalizePlatformEmail, assertPlatformEmailAvailable } from '@/lib/auth/platform-email'
+import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 
 const UpdateClientSchema = z.object({
     clientId: z.string().uuid(),
@@ -87,12 +87,12 @@ export async function createClientAction(
         return { error: `El coach alcanzó su límite de ${coach.max_clients} alumnos` }
     }
 
-    const emailNorm = normalizePlatformEmail(email)
+    const emailSan = sanitizePlatformEmail(email)
     const availability = await assertPlatformEmailAvailable(adminClient, email)
     if (!availability.ok) return { error: availability.error }
 
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-        email: emailNorm,
+        email: emailSan,
         password: temp_password,
         email_confirm: true,
     })
@@ -104,7 +104,7 @@ export async function createClientAction(
         id: authData.user.id,
         coach_id,
         full_name,
-        email: emailNorm,
+        email: emailSan,
         phone: phone || null,
         force_password_change: true,
         onboarding_completed: false,
@@ -124,7 +124,7 @@ export async function createClientAction(
     return {
         success: true,
         clientId: authData.user.id,
-        email: emailNorm,
+        email: emailSan,
         tempPassword: temp_password,
         loginUrl: `/c/${coach.slug}/login`,
     }

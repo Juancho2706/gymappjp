@@ -9,6 +9,7 @@ import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
     normalizePlatformEmail,
+    sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
 
 export type BetaRegisterState = {
@@ -72,6 +73,7 @@ export async function betaRegisterAction(
         return { error: 'Esta invitación ya fue usada desde tu red.' }
     }
 
+    const emailSan = sanitizePlatformEmail(email)
     const emailNorm = normalizePlatformEmail(email)
     const availability = await assertPlatformEmailAvailable(adminDb, email)
     if (!availability.ok) {
@@ -101,14 +103,14 @@ export async function betaRegisterAction(
     }
 
     // Special friend: 1 year + 5 students. Everyone else: 20 days + 30 students (pro default)
-    const isFriend = emailNorm === SPECIAL_EMAIL
+    const isFriend = emailNorm === normalizePlatformEmail(SPECIAL_EMAIL)
     const maxClients = isFriend ? 5 : 30
     const periodEnd = isFriend
         ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
         : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString()
 
     const { data: authData, error: authError } = await adminDb.auth.admin.createUser({
-        email: emailNorm,
+        email: emailSan,
         password,
         email_confirm: true,
     })
@@ -143,7 +145,7 @@ export async function betaRegisterAction(
     // Record IP usage — unique index acts as race condition guard
     const { error: ipError } = await adminDb.from('beta_invite_registrations').insert({
         ip_address: ip,
-        email: emailNorm,
+        email: emailSan,
         coach_id: authData.user.id,
     })
 
@@ -153,7 +155,7 @@ export async function betaRegisterAction(
     }
 
     const supabase = await createClient()
-    await supabase.auth.signInWithPassword({ email: emailNorm, password })
+    await supabase.auth.signInWithPassword({ email: emailSan, password })
 
     redirect('/coach/dashboard')
 }

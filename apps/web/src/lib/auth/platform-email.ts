@@ -4,6 +4,15 @@ import type { Database, Json } from '@/lib/database.types'
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
 const PLUS_ALIAS_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com'])
 
+/**
+ * Canonical storage form: trim + lowercase only. Preserves dots and +aliases.
+ * Use for `auth.users.email`, `clients.email`, transactional sends, sign-in.
+ * NEVER use `normalizePlatformEmail` for these — that is dedup-only.
+ */
+export function sanitizePlatformEmail(email: string): string {
+    return email.trim().toLowerCase()
+}
+
 export function normalizePlatformEmail(email: string): string {
     const trimmed = email.trim().toLowerCase()
     const atIdx = trimmed.lastIndexOf('@')
