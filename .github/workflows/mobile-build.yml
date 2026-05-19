@@ -58,6 +58,8 @@ jobs:
         working-directory: apps/${{ inputs.app }}
         env:
           EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
+          GRADLE_OPTS: "-Xmx5g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dkotlin.daemon.jvm.options=-Xmx2g,-XX:MaxMetaspaceSize=1g"
+          JAVA_TOOL_OPTIONS: "-Xmx5g -XX:MaxMetaspaceSize=2g"
         run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output ./build.apk
 
       - name: Upload APK
