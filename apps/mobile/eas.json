@@ -19,7 +19,8 @@
       },
       "ios": {
         "buildConfiguration": "Release",
-        "credentialsSource": "local"
+        "credentialsSource": "local",
+        "distribution": "store"
       },
       "env": {
         "APP_ENV": "production",
