@@ -81,7 +81,13 @@ function RootLayoutNav() {
     const isProtected =
       section === 'coach' ||
       (section === 'alumno' && subroute !== 'codigo')
-    if (!session && isProtected) router.replace('/')
+    if (!session && isProtected) {
+      // Race-safe: signInWithPassword may have stored the session in supabase
+      // before our onAuthStateChange listener updated React state.
+      supabase.auth.getSession().then(({ data }) => {
+        if (!data.session) router.replace('/')
+      })
+    }
   }, [session, segments])
 
   // Sync push token once per session

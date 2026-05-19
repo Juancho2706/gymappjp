@@ -32,7 +32,46 @@
 ## Fase Actual: FASE 6B Sem 1-2 — Auth + navegación por rol
 
 **Rama git:** `v2/enterprise`
-**Última actualización:** 2026-05-18 (sesión tarde: GitHub Actions local builds + Web APIs §2.8 + infra hardening — sin commit)
+**Última actualización:** 2026-05-19 (hotfix email + cleanup branches + merge mobile-prod-preview + fix mobile login race)
+
+---
+
+## Sesión 2026-05-19 — Hotfix email mutilation + cleanup branches
+
+### Bug crítico email mutilation (introducido commit `d29fc9d` 2026-04-22)
+- [x] **Causa raíz:** `normalizePlatformEmail()` strip dots de Gmail (línea 20 [src/lib/auth/platform-email.ts](src/lib/auth/platform-email.ts#L20)). Diseñada para dedup, pero se usó como valor canónico en `auth.admin.createUser` + `clients.email` + `sendTransactionalEmail`. Mutilaba `jvillegas.dev@gmail.com` → `jvillegasdev@gmail.com`
+- [x] **Fix master:** commit `4c1e637` — agregado `sanitizePlatformEmail()` (trim+lowercase, dots preservados). 7 archivos modificados + regression tests (7/7 passing). Pushed a `origin/master`. Vercel deploy OK.
+- [x] **Fix v2/enterprise:** commit `49d8bb0` — re-aplicado a paths monorepo (`apps/web/src/...`). Pushed. `verify-email/actions.ts` no existe en v2, skip.
+- [x] **Identificación cuentas afectadas (prod, via MCP supabase):** 32 cuentas Gmail post-bug. Sospechosas (sin dots, ≥8 chars local): 7 coaches + 10 clients + 6 orphans. Usuario decidió **NO hacer backfill** — borró cuentas de afectados directos y les dijo esperar.
+
+### Files cambiados (master + v2 equivalentes):
+- `[apps/web/]src/lib/auth/platform-email.ts` — agregado `sanitizePlatformEmail`
+- `[apps/web/]src/lib/auth/platform-email.test.ts` — nuevo, 7 tests
+- `[apps/web/]src/app/(auth)/register/actions.ts` — createUser/sendEmail/redirect/signIn → `emailSan`
+- `[apps/web/]src/app/coach/clients/actions.ts` — createUser, `clients.email`, sendEmail → `emailSan`
+- `[apps/web/]src/app/(auth)/registro-beta/actions.ts` — `emailSan` + `isFriend` compara con `normalizePlatformEmail(SPECIAL_EMAIL)`
+- `[apps/web/]src/app/admin/(panel)/coaches/_actions/coach-actions.ts` — createUser + return
+- `[apps/web/]src/app/admin/(panel)/clients/_actions/client-actions.ts` — createUser + insert + return
+- `src/app/(auth)/verify-email/actions.ts` (solo master) — resend usa `authUser.user.email`
+
+**Regla guardada en memoria:** `normalizePlatformEmail` SOLO para dedup/`trial_used_email`. `sanitizePlatformEmail` para storage/auth/sends.
+
+### Cleanup branches
+- [x] Borradas 15 locales + 17 remotas (incluyendo experimentos `feature/redesign-concept-*`, `prueba-design-osaka`, `pruebaaurora`, branches mergeadas viejas, branches ahead `pricingoverhaul`/`EstiloDos` — autorizado borrar)
+- [x] Worktree `claude/intelligent-swartz-5abdcc` removido
+- [x] **Branches finales:** `master`, `v2/enterprise`, `origin/claude/review-v2-enterprise-sT2ju`
+
+### Merge `mobile-prod-preview` → `v2/enterprise`
+- [x] Branch tenía 3 commits build-infra (EAS `prodpreview` profile + prod env injection + eas.json creds via GH Actions secrets)
+- [x] Branch venía de `v2/enterprise` — merge limpio (commit `fc3df32`)
+- [x] `mobile-prod-preview` borrado remoto
+
+### Bug mobile login (race condition) — fix aplicado
+- [x] **Diagnóstico:** después de `signInWithPassword` OK, `router.replace('/coach/clientes')` corría ANTES que `onAuthStateChange` updateara `session` en React state. Effect en [_layout.tsx](apps/mobile/app/_layout.tsx) veía `session=null && isProtected` → bounce a `/`.
+- [x] **Fix:** [apps/mobile/app/_layout.tsx](apps/mobile/app/_layout.tsx#L77-L92) — double-check con `supabase.auth.getSession()` antes de redirect. Sin commit aún.
+
+### Infra local
+- [x] Removido `apps/` de `.git/info/exclude` (ya no contamina source control en v2)
 
 ---
 
