@@ -21,17 +21,15 @@
         "NSCameraUsageDescription": "Para enviar fotos de progreso a tu coach",
         "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
         "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento",
-        "ITSAppUsesNonExemptEncryption": false
-      },
-      "associatedDomains": [
-        "applinks:eva-app.cl",
-        "webcredentials:eva-app.cl"
-      ]
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "package": "cl.evaapp.eva",
       "versionCode": 1,
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -80,19 +78,13 @@
       "expo-router",
       "expo-updates",
       [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#007AFF",
-          "sounds": []
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "EVA necesita acceso a tu galería para el check-in semanal."
         }
       ],
+      "./plugins/with-android-cleartext",
+      "./plugins/with-ios-profile-compatible-entitlements",
       "./plugins/with-gradle-jvmargs"
     ],
     "updates": {
