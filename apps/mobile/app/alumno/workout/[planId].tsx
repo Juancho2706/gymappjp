@@ -47,7 +47,7 @@ export default function WorkoutExecutionScreen() {
   const [planTitle, setPlanTitle] = useState('')
   const [loading, setLoading] = useState(true)
   const [clientId, setClientId] = useState<string | null>(null)
-  const [logs, setLogs] = useState<Record<string, LogEntry[]>>({}) // blockId → entries
+  const [logs, setLogs] = useState<Record<string, LogEntry[]>>({})
   const [restSeconds, setRestSeconds] = useState<number | null>(null)
   const restInterval = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -61,7 +61,6 @@ export default function WorkoutExecutionScreen() {
     const client = await getClientProfile()
     if (client) setClientId(client.id)
 
-    // Try cache first
     const cached = await getCachedPlan<{ title: string; blocks: Block[] }>(planId)
     if (cached) {
       setPlanTitle(cached.title)
@@ -69,7 +68,6 @@ export default function WorkoutExecutionScreen() {
       setLoading(false)
     }
 
-    // Fetch from Supabase
     const { data } = await supabase
       .from('workout_plans')
       .select(`
@@ -111,7 +109,6 @@ export default function WorkoutExecutionScreen() {
     if (!clientId) return
     const entry: LogEntry = { setNumber, weightKg: weight, repsDone: reps }
 
-    // Update local state
     setLogs((prev) => ({
       ...prev,
       [block.id]: [...(prev[block.id] ?? []), entry],
@@ -135,7 +132,6 @@ export default function WorkoutExecutionScreen() {
       await enqueueLog(logData)
     }
 
-    // Start rest timer
     if (block.rest_time) {
       const secs = parseRestTime(block.rest_time)
       if (secs > 0) startRest(secs)
@@ -151,7 +147,9 @@ export default function WorkoutExecutionScreen() {
     return (
       <View key={section ?? 'main'} style={styles.section}>
         {section && section !== 'main' && (
-          <Text style={[styles.sectionLabel, { color: theme.muted }]}>
+          <Text
+            style={[styles.sectionLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}
+          >
             {SECTION_LABELS[section] ?? section}
           </Text>
         )}
@@ -169,23 +167,41 @@ export default function WorkoutExecutionScreen() {
   }
 
   const sections = groupBySection(blocks)
+  const allBlockIds = blocks.map((b) => b.id)
+  const allDone =
+    allBlockIds.length > 0 &&
+    allBlockIds.every((id) => (logs[id]?.length ?? 0) >= (blocks.find((b) => b.id === id)?.sets ?? 999))
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {restSeconds != null && (
         <TouchableOpacity
-          style={[styles.restBanner, { backgroundColor: theme.primary }]}
+          style={[styles.restBanner, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
           onPress={() => { clearInterval(restInterval.current!); setRestSeconds(null) }}
+          activeOpacity={0.85}
         >
-          <Text style={styles.restText}>Descanso: {restSeconds}s — Toca para saltar</Text>
+          <Text
+            style={[styles.restText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
+          >
+            Descanso · {restSeconds}s  ·  toca para saltar
+          </Text>
         </TouchableOpacity>
       )}
 
-      <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.back, { color: theme.primary }]}>← Volver</Text>
+      <View style={[styles.navBar, { borderBottomColor: theme.border }]}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <Text
+            style={[styles.back, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}
+          >
+            ← Volver
+          </Text>
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: theme.text }]} numberOfLines={1}>{planTitle}</Text>
+        <Text
+          style={[styles.navTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+          numberOfLines={1}
+        >
+          {planTitle}
+        </Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -193,13 +209,35 @@ export default function WorkoutExecutionScreen() {
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {Object.entries(sections).map(([sec, blks]) => renderSection(sec, blks))}
             <TouchableOpacity
-              style={[styles.finishBtn, { backgroundColor: theme.success }]}
-              onPress={() => { Alert.alert('¡Entrenamiento completado!', '', [{ text: 'OK', onPress: () => router.back() }]) }}
+              style={[
+                styles.finishBtn,
+                {
+                  backgroundColor: allDone ? theme.success : theme.primary,
+                  borderRadius: theme.radius.lg,
+                  opacity: blocks.length === 0 ? 0.5 : 1,
+                },
+                theme.shadowGlowBlue,
+              ]}
+              onPress={() => {
+                Alert.alert('¡Entrenamiento completado!', '', [
+                  { text: 'OK', onPress: () => router.back() },
+                ])
+              }}
+              disabled={blocks.length === 0}
+              activeOpacity={0.85}
             >
-              <Text style={styles.finishText}>Finalizar entrenamiento</Text>
+              <Text
+                style={[styles.finishText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
+              >
+                {allDone ? '✓ Finalizar entrenamiento' : 'Finalizar entrenamiento →'}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -233,6 +271,8 @@ function BlockCard({ block, theme, logged, onLogSet }: {
   const [reps, setReps] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const done = nextSet > block.sets
+
   async function handleLog() {
     if (nextSet > block.sets) return
     setSaving(true)
@@ -243,57 +283,128 @@ function BlockCard({ block, theme, logged, onLogSet }: {
   }
 
   return (
-    <View style={[styles.blockCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <Text style={[styles.exerciseName, { color: theme.text }]}>
-        {block.exercises?.name ?? 'Ejercicio'}
-      </Text>
-      <Text style={[styles.targetText, { color: theme.muted }]}>
+    <View
+      style={[
+        styles.blockCard,
+        {
+          backgroundColor: theme.card,
+          borderColor: done ? theme.success : theme.border,
+          borderWidth: done ? 2 : 1,
+          borderRadius: theme.radius.xl,
+        },
+      ]}
+    >
+      <View style={styles.blockHeader}>
+        <Text
+          style={[styles.exerciseName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+          numberOfLines={2}
+        >
+          {block.exercises?.name ?? 'Ejercicio'}
+        </Text>
+        {done && (
+          <View
+            style={[
+              styles.doneBadge,
+              { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm },
+            ]}
+          >
+            <Text style={[styles.doneBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
+              ✓
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <Text style={[styles.targetText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
         {block.sets} × {block.reps}
         {block.target_weight_kg ? ` · ${block.target_weight_kg}kg` : ''}
         {block.rest_time ? ` · ${block.rest_time} descanso` : ''}
       </Text>
-      {block.notes ? <Text style={[styles.notes, { color: theme.muted }]}>{block.notes}</Text> : null}
 
-      {/* Logged sets */}
-      {logged.map((l) => (
-        <View key={l.setNumber} style={[styles.loggedRow, { borderColor: theme.border }]}>
-          <Text style={[styles.loggedText, { color: theme.success }]}>
-            Serie {l.setNumber}: {l.repsDone || '—'} reps {l.weightKg ? `· ${l.weightKg}kg` : ''}
-          </Text>
-        </View>
-      ))}
+      {block.notes ? (
+        <Text style={[styles.notes, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          {block.notes}
+        </Text>
+      ) : null}
 
-      {/* Log next set */}
-      {nextSet <= block.sets && (
-        <View style={styles.logRow}>
-          <Text style={[styles.setLabel, { color: theme.textSecondary }]}>Serie {nextSet}</Text>
-          <TextInput
-            style={[styles.logInput, { borderColor: theme.border, color: theme.text, backgroundColor: theme.background }]}
-            placeholder="kg"
-            placeholderTextColor={theme.muted}
-            value={weight}
-            onChangeText={setWeight}
-            keyboardType="decimal-pad"
-          />
-          <TextInput
-            style={[styles.logInput, { borderColor: theme.border, color: theme.text, backgroundColor: theme.background }]}
-            placeholder="reps"
-            placeholderTextColor={theme.muted}
-            value={reps}
-            onChangeText={setReps}
-            keyboardType="number-pad"
-          />
-          <TouchableOpacity
-            style={[styles.logBtn, { backgroundColor: theme.primary }]}
-            onPress={handleLog}
-            disabled={saving}
-          >
-            {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.logBtnText}>✓</Text>}
-          </TouchableOpacity>
+      {logged.length > 0 && (
+        <View style={[styles.loggedWrap, { borderTopColor: theme.border }]}>
+          {logged.map((l) => (
+            <View key={l.setNumber} style={styles.loggedRow}>
+              <Text
+                style={[styles.loggedLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+              >
+                Serie {l.setNumber}
+              </Text>
+              <Text
+                style={[styles.loggedValue, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}
+              >
+                {l.repsDone || '—'} reps{l.weightKg ? ` · ${l.weightKg}kg` : ''}
+              </Text>
+            </View>
+          ))}
         </View>
       )}
-      {nextSet > block.sets && (
-        <Text style={[styles.doneText, { color: theme.success }]}>✓ Completado</Text>
+
+      {!done && (
+        <View style={[styles.logSection, { borderTopColor: theme.border }]}>
+          <Text style={[styles.setLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Serie {nextSet}
+          </Text>
+          <View style={styles.logRow}>
+            <TextInput
+              style={[
+                styles.logInput,
+                {
+                  borderColor: theme.border,
+                  color: theme.foreground,
+                  backgroundColor: theme.secondary,
+                  borderRadius: theme.radius.md,
+                  fontFamily: theme.fontSans,
+                },
+              ]}
+              placeholder="kg"
+              placeholderTextColor={theme.mutedForeground}
+              value={weight}
+              onChangeText={setWeight}
+              keyboardType="decimal-pad"
+            />
+            <TextInput
+              style={[
+                styles.logInput,
+                {
+                  borderColor: theme.border,
+                  color: theme.foreground,
+                  backgroundColor: theme.secondary,
+                  borderRadius: theme.radius.md,
+                  fontFamily: theme.fontSans,
+                },
+              ]}
+              placeholder="reps"
+              placeholderTextColor={theme.mutedForeground}
+              value={reps}
+              onChangeText={setReps}
+              keyboardType="number-pad"
+            />
+            <TouchableOpacity
+              style={[
+                styles.logBtn,
+                { backgroundColor: theme.primary, borderRadius: theme.radius.md },
+              ]}
+              onPress={handleLog}
+              disabled={saving}
+              activeOpacity={0.85}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={theme.primaryForeground} />
+              ) : (
+                <Text style={[styles.logBtnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
+                  ✓
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </View>
   )
@@ -301,26 +412,65 @@ function BlockCard({ block, theme, logged, onLogSet }: {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  restBanner: { paddingVertical: 10, alignItems: 'center' },
-  restText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  navBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  back: { fontSize: 15, fontWeight: '600', width: 60 },
-  navTitle: { fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
-  scroll: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
+  restBanner: { paddingVertical: 12, alignItems: 'center' },
+  restText: { fontSize: 14, letterSpacing: 0.3 },
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  back: { fontSize: 14, width: 60, letterSpacing: 0.3 },
+  navTitle: { fontSize: 15, flex: 1, textAlign: 'center', letterSpacing: -0.2 },
+  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 40, gap: 12 },
   section: { gap: 8 },
-  sectionLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginTop: 8 },
-  blockCard: { borderRadius: 14, padding: 16, borderWidth: 1, gap: 6 },
-  exerciseName: { fontSize: 16, fontWeight: '700' },
+  sectionLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  blockCard: { padding: 16, gap: 8 },
+  blockHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  exerciseName: { fontSize: 16, letterSpacing: -0.2, flex: 1 },
+  doneBadge: { paddingHorizontal: 8, paddingVertical: 3 },
+  doneBadgeText: { fontSize: 12 },
   targetText: { fontSize: 13 },
-  notes: { fontSize: 12, fontStyle: 'italic' },
-  loggedRow: { borderTopWidth: 1, paddingTop: 6, marginTop: 4 },
-  loggedText: { fontSize: 13, fontWeight: '500' },
-  logRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  setLabel: { fontSize: 13, width: 50 },
-  logInput: { flex: 1, height: 40, borderWidth: 1, borderRadius: 8, textAlign: 'center', fontSize: 15 },
-  logBtn: { width: 40, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  logBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  doneText: { fontSize: 13, fontWeight: '600', marginTop: 4 },
-  finishBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 16 },
-  finishText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  notes: { fontSize: 12, fontStyle: 'italic', lineHeight: 17 },
+  loggedWrap: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, gap: 4 },
+  loggedRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  loggedLabel: { fontSize: 12 },
+  loggedValue: { fontSize: 13, letterSpacing: 0.2 },
+  logSection: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 8 },
+  setLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
+  logRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  logBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logBtnText: { fontSize: 18 },
+  finishBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  finishText: { fontSize: 15, letterSpacing: 0.3 },
 })
