@@ -39,7 +39,8 @@ export async function sendPushToClient(clientId: string, payload: PushPayload): 
 
     const [{ data: subs }, { data: mobileSubs }] = await Promise.all([
         admin.from('push_subscriptions').select('endpoint, p256dh, auth').eq('client_id', clientId),
-        admin.from('push_tokens').select('token').eq('user_id', clientId),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (admin as any).from('push_tokens').select('token').eq('user_id', clientId),
     ])
 
     const json = JSON.stringify({
