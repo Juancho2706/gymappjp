@@ -104,6 +104,21 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Inject prod env vars into eas.json for prodpreview
+        if: ${{ inputs.profile == 'prodpreview' }}
+        working-directory: apps/${{ inputs.app }}
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL_PROD }}
+          SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY_PROD }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
+            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
+          "
+
       - name: Prepare iOS credentials
         env:
           IOS_DIST_CERT_BASE64: ${{ secrets.IOS_DIST_CERT_BASE64 }}

@@ -17,6 +17,10 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "buildConfiguration": "Release",
+        "credentialsSource": "local"
+      },
       "env": {
         "APP_ENV": "production",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app"
