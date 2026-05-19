@@ -58,12 +58,19 @@
     "production": {
       "ios": {
         "appleId": "jvillegas.dev@gmail.com",
-        "ascAppId": "PLACEHOLDER_ASC_APP_ID",
+        "ascAppId": "6770426633",
         "appleTeamId": "5GKWMMZ46Q"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
         "track": "internal"
+      }
+    },
+    "prodpreview": {
+      "ios": {
+        "appleId": "jvillegas.dev@gmail.com",
+        "ascAppId": "6770426633",
+        "appleTeamId": "5GKWMMZ46Q"
       }
     }
   }

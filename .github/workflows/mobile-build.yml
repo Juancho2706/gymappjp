@@ -29,6 +29,11 @@ on:
           - staging
           - prodpreview
           - production
+      submit_ios:
+        description: 'Auto-submit iOS IPA to TestFlight after build'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-android:
@@ -155,3 +160,15 @@ jobs:
           name: ${{ inputs.app }}-ios-${{ inputs.profile }}-${{ github.run_number }}
           path: apps/${{ inputs.app }}/build.ipa
           retention-days: 14
+
+      - name: Submit IPA to TestFlight (App Store Connect)
+        if: ${{ inputs.submit_ios == true }}
+        working-directory: apps/${{ inputs.app }}
+        env:
+          EXPO_ASC_API_KEY_PATH: /tmp/asc-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          printf '%s' "$ASC_API_KEY_P8" > /tmp/asc-api-key.p8
+          eas submit --platform ios --profile ${{ inputs.profile }} --path ./build.ipa --non-interactive
