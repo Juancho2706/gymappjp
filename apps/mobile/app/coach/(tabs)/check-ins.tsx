@@ -66,7 +66,11 @@ export default function CheckInsScreen() {
       .order('date', { ascending: false })
       .limit(40)
 
-    setCheckIns((data ?? []) as CheckIn[])
+    const rows = (data ?? []).map((row) => ({
+      ...row,
+      clients: Array.isArray(row.clients) ? row.clients[0] ?? null : row.clients,
+    }))
+    setCheckIns(rows as CheckIn[])
     setLoading(false)
   }
 

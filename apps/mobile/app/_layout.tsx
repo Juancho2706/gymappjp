@@ -61,7 +61,11 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (session === undefined) return
-    const isProtected = segments[0] === 'coach' || segments[0] === 'alumno'
+    const section = segments[0]
+    const subroute = (segments as string[])[1]
+    const isProtected =
+      section === 'coach' ||
+      (section === 'alumno' && subroute !== 'codigo')
     if (!session && isProtected) router.replace('/')
   }, [session, segments])
 

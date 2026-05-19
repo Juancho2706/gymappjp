@@ -74,17 +74,17 @@ BEGIN
   -- ============================================================
   -- 2. Coaches
   -- ============================================================
-  -- invite_code=NULL so the BEFORE INSERT trigger fires (DEFAULT '' would skip it)
+  -- Stable invite codes for mobile/manual QA.
   INSERT INTO coaches (id, slug, full_name, brand_name, subscription_status, max_clients, invite_code)
   VALUES
-    (owner_a,    'owner-a-test',    'Owner A',       'Owner A Fitness',  'org_managed', 100, NULL),
-    (coach_a1,   'coach-a1-test',   'Coach A1',      'A1 Fitness',       'org_managed', 100, NULL),
-    (coach_a2,   'coach-a2-test',   'Coach A2',      'A2 Fitness',       'org_managed', 100, NULL),
-    (owner_b,    'owner-b-test',    'Owner B',       'Owner B Fitness',  'org_managed', 100, NULL),
-    (coach_b1,   'coach-b1-test',   'Coach B1',      'B1 Fitness',       'org_managed', 100, NULL),
-    (coach_both, 'coach-both-test', 'Coach Both',    'Both Fitness',     'org_managed', 100, NULL),
-    (coach_solo, 'coach-solo-test', 'Coach Solo',    'Solo Fitness',     'active',      10,  NULL),
-    (coach_inv,  'coach-inv-test',  'Coach Invited', 'Invited Fitness',  'active',      10,  NULL)
+    (owner_a,    'owner-a-test',    'Owner A',       'Owner A Fitness',  'org_managed', 100, 'OWNA1'),
+    (coach_a1,   'coach-a1-test',   'Coach A1',      'A1 Fitness',       'org_managed', 100, 'A1FIT'),
+    (coach_a2,   'coach-a2-test',   'Coach A2',      'A2 Fitness',       'org_managed', 100, 'A2FIT'),
+    (owner_b,    'owner-b-test',    'Owner B',       'Owner B Fitness',  'org_managed', 100, 'OWNB1'),
+    (coach_b1,   'coach-b1-test',   'Coach B1',      'B1 Fitness',       'org_managed', 100, 'B1FIT'),
+    (coach_both, 'coach-both-test', 'Coach Both',    'Both Fitness',     'org_managed', 100, 'BOTH1'),
+    (coach_solo, 'coach-solo-test', 'Coach Solo',    'Solo Fitness',     'active',      10,  'SOLO1'),
+    (coach_inv,  'coach-inv-test',  'Coach Invited', 'Invited Fitness',  'active',      10,  'INVIT')
   ON CONFLICT (id) DO NOTHING;
 
   -- ============================================================
