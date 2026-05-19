@@ -100,90 +100,155 @@ export default function CheckInScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={[styles.title, { color: theme.text }]}>Check-in semanal</Text>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+              Check-in semanal
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Registra tu peso, energía y foto del progreso
+            </Text>
+          </View>
 
           {done && (
-            <View style={[styles.successBanner, { backgroundColor: theme.success }]}>
-              <Text style={styles.successText}>¡Check-in registrado!</Text>
+            <View
+              style={[
+                styles.successBanner,
+                {
+                  backgroundColor: theme.success + '1A',
+                  borderColor: theme.success + '40',
+                  borderRadius: theme.radius.lg,
+                },
+              ]}
+            >
+              <Text style={[styles.successText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
+                ✓ Check-in registrado
+              </Text>
             </View>
           )}
 
-          {/* Photo */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.muted }]}>Foto frontal</Text>
+          <Field label="Foto frontal" theme={theme}>
             <TouchableOpacity
               style={[
                 styles.photoBtn,
-                { borderColor: photoUri ? theme.success : theme.border, backgroundColor: theme.card },
+                {
+                  borderColor: photoUri ? theme.success : theme.border,
+                  backgroundColor: photoUri ? theme.success + '0D' : theme.secondary,
+                  borderRadius: theme.radius.lg,
+                },
               ]}
               onPress={pickPhoto}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
-              <Text style={[styles.photoBtnText, { color: photoUri ? theme.success : theme.muted }]}>
-                {photoUri ? '✓ Foto seleccionada' : '+ Seleccionar foto'}
+              <Text
+                style={[
+                  styles.photoBtnText,
+                  {
+                    color: photoUri ? theme.success : theme.mutedForeground,
+                    fontFamily: 'Montserrat_700Bold',
+                  },
+                ]}
+              >
+                {photoUri ? '✓ Foto seleccionada · cambiar' : '+ Seleccionar foto'}
               </Text>
             </TouchableOpacity>
-          </View>
+          </Field>
 
-          {/* Weight */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.muted }]}>Peso (kg)</Text>
+          <Field label="Peso (kg)" theme={theme}>
             <TextInput
-              style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.card }]}
-              placeholder="ej. 75.5"
-              placeholderTextColor={theme.muted}
+              style={[
+                styles.input,
+                {
+                  borderColor: theme.border,
+                  color: theme.foreground,
+                  backgroundColor: theme.secondary,
+                  borderRadius: theme.radius.lg,
+                  fontFamily: theme.fontSans,
+                },
+              ]}
+              placeholder="75.5"
+              placeholderTextColor={theme.mutedForeground}
               value={weight}
               onChangeText={setWeight}
               keyboardType="decimal-pad"
             />
-          </View>
+          </Field>
 
-          {/* Energy level */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.muted }]}>Nivel de energía (1–10)</Text>
+          <Field label="Nivel de energía (1–10)" theme={theme}>
             <View style={styles.energyRow}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                <TouchableOpacity
-                  key={n}
-                  style={[
-                    styles.energyBtn,
-                    { borderColor: energyLevel === n ? theme.primary : theme.border, backgroundColor: energyLevel === n ? theme.primary : theme.card },
-                  ]}
-                  onPress={() => setEnergyLevel(energyLevel === n ? null : n)}
-                >
-                  <Text style={[styles.energyBtnText, { color: energyLevel === n ? '#fff' : theme.text }]}>
-                    {n}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
+                const selected = energyLevel === n
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    style={[
+                      styles.energyBtn,
+                      {
+                        borderColor: selected ? theme.primary : theme.border,
+                        backgroundColor: selected ? theme.primary : theme.secondary,
+                        borderRadius: theme.radius.md,
+                      },
+                    ]}
+                    onPress={() => setEnergyLevel(selected ? null : n)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.energyBtnText,
+                        {
+                          color: selected ? theme.primaryForeground : theme.foreground,
+                          fontFamily: 'Montserrat_700Bold',
+                        },
+                      ]}
+                    >
+                      {n}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
             </View>
-          </View>
+          </Field>
 
-          {/* Notes */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.muted }]}>Notas (opcional)</Text>
+          <Field label="Notas (opcional)" theme={theme}>
             <TextInput
-              style={[styles.notesInput, { borderColor: theme.border, color: theme.text, backgroundColor: theme.card }]}
+              style={[
+                styles.notesInput,
+                {
+                  borderColor: theme.border,
+                  color: theme.foreground,
+                  backgroundColor: theme.secondary,
+                  borderRadius: theme.radius.lg,
+                  fontFamily: theme.fontSans,
+                },
+              ]}
               placeholder="¿Cómo te sentiste esta semana?"
-              placeholderTextColor={theme.muted}
+              placeholderTextColor={theme.mutedForeground}
               value={notes}
               onChangeText={setNotes}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
             />
-          </View>
+          </Field>
 
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: theme.primary, opacity: submitting ? 0.7 : 1 }]}
+            style={[
+              styles.submitBtn,
+              { backgroundColor: theme.primary, opacity: submitting ? 0.7 : 1, borderRadius: theme.radius.lg },
+              !submitting && theme.shadowGlowBlue,
+            ]}
             onPress={submit}
             disabled={submitting}
+            activeOpacity={0.85}
           >
             {submitting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={theme.primaryForeground} />
             ) : (
-              <Text style={styles.submitText}>Enviar check-in</Text>
+              <Text
+                style={[styles.submitText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
+              >
+                Enviar check-in →
+              </Text>
             )}
           </TouchableOpacity>
         </ScrollView>
@@ -192,21 +257,61 @@ export default function CheckInScreen() {
   )
 }
 
+function Field({ label, theme, children }: { label: string; theme: any; children: React.ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>{label}</Text>
+      {children}
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 20 },
-  title: { fontSize: 24, fontWeight: '700' },
-  successBanner: { borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  successText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  section: { gap: 8 },
-  label: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  photoBtn: { borderWidth: 1.5, borderRadius: 12, borderStyle: 'dashed', paddingVertical: 20, alignItems: 'center' },
-  photoBtnText: { fontSize: 15, fontWeight: '500' },
-  input: { borderWidth: 1, borderRadius: 10, height: 48, paddingHorizontal: 14, fontSize: 16 },
+  scroll: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40, gap: 20 },
+  header: { gap: 4 },
+  title: { fontSize: 28, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, lineHeight: 19 },
+  successBanner: {
+    borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  successText: { fontSize: 14, letterSpacing: 0.3 },
+  field: { gap: 8 },
+  label: { fontSize: 14, fontWeight: '500' },
+  photoBtn: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  photoBtnText: { fontSize: 14, letterSpacing: 0.3 },
+  input: {
+    borderWidth: 1,
+    height: 48,
+    paddingHorizontal: 16,
+    fontSize: 15,
+  },
   energyRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  energyBtn: { width: 40, height: 40, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  energyBtnText: { fontSize: 14, fontWeight: '600' },
-  notesInput: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15, minHeight: 96 },
-  submitBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  energyBtn: {
+    width: 42,
+    height: 42,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  energyBtnText: { fontSize: 14 },
+  notesInput: {
+    borderWidth: 1,
+    padding: 14,
+    fontSize: 14,
+    minHeight: 110,
+  },
+  submitBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  submitText: { fontSize: 15, letterSpacing: 0.3 },
 })

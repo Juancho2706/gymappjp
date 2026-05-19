@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -38,60 +40,133 @@ export default function CodigoScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.inner}>
-        <Text style={[styles.title, { color: theme.text }]}>Ingresa tu código</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          Tu coach te dio un código de 5 letras para unirte
-        </Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.kav}
+      >
+        <View style={styles.topBar}>
+          <Text style={[styles.brandMark, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            EVA
+          </Text>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Text style={[styles.backLink, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              ← Volver
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-        <TextInput
-          style={[styles.input, { borderColor: theme.primary, color: theme.text, backgroundColor: theme.card }]}
-          placeholder="Ej: 4XK7M"
-          placeholderTextColor={theme.muted}
-          value={code}
-          onChangeText={(t) => setCode(t.toUpperCase())}
-          autoCapitalize="characters"
-          maxLength={5}
-          autoFocus
-        />
+        <View style={styles.inner}>
+          <View style={styles.heading}>
+            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+              Ingresa tu código
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Tu coach te dio un código de 5 caracteres para unirte
+            </Text>
+          </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+          <TextInput
+            style={[
+              styles.input,
+              {
+                borderColor: error ? theme.destructive : theme.primary,
+                color: theme.foreground,
+                backgroundColor: theme.secondary,
+                borderRadius: theme.radius.xl,
+                fontFamily: 'Montserrat_800ExtraBold',
+              },
+            ]}
+            placeholder="XXXXX"
+            placeholderTextColor={theme.mutedForeground}
+            value={code}
+            onChangeText={(t) => {
+              setCode(t.toUpperCase())
+              if (error) setError(null)
+            }}
+            autoCapitalize="characters"
+            maxLength={5}
+            autoFocus
+          />
 
-        <TouchableOpacity
-          style={[styles.btn, { backgroundColor: theme.primary, opacity: code.length !== 5 ? 0.5 : 1 }]}
-          onPress={handleSubmit}
-          disabled={loading || code.length !== 5}
-          activeOpacity={0.85}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Continuar</Text>}
-        </TouchableOpacity>
+          {error ? (
+            <View
+              style={[
+                styles.errorBanner,
+                {
+                  backgroundColor: theme.destructive + '1A',
+                  borderColor: theme.destructive + '33',
+                  borderRadius: theme.radius.lg,
+                },
+              ]}
+            >
+              <Text style={[styles.errorText, { color: theme.destructive, fontFamily: theme.fontSans }]}>
+                {error}
+              </Text>
+            </View>
+          ) : null}
 
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={[styles.backText, { color: theme.muted }]}>← Volver</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[
+              styles.btn,
+              {
+                backgroundColor: theme.primary,
+                opacity: code.length !== 5 ? 0.5 : 1,
+                borderRadius: theme.radius.lg,
+              },
+              code.length === 5 && theme.shadowGlowBlue,
+            ]}
+            onPress={handleSubmit}
+            disabled={loading || code.length !== 5}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color={theme.primaryForeground} />
+            ) : (
+              <Text style={[styles.btnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
+                Continuar →
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 16 },
-  title: { fontSize: 28, fontWeight: '700' },
-  subtitle: { fontSize: 15, lineHeight: 22 },
+  kav: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  brandMark: { fontSize: 32, letterSpacing: -1 },
+  backLink: { fontSize: 14 },
+  inner: { flex: 1, justifyContent: 'center', gap: 16 },
+  heading: { gap: 8, marginBottom: 8 },
+  title: { fontSize: 28, letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, lineHeight: 20 },
   input: {
-    height: 64,
+    height: 72,
     borderWidth: 2,
-    borderRadius: 16,
     paddingHorizontal: 24,
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: 8,
+    fontSize: 36,
+    letterSpacing: 10,
     textAlign: 'center',
   },
-  error: { color: '#FF453A', fontSize: 13 },
-  btn: { height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  back: { alignItems: 'center' },
-  backText: { fontSize: 14 },
+  errorBanner: {
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  errorText: { fontSize: 13, lineHeight: 18 },
+  btn: {
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  btnText: { fontSize: 15, letterSpacing: 0.3 },
 })
