@@ -11,6 +11,7 @@ import {
     normalizePlatformEmail,
     sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
+import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 
 export type BetaRegisterState = {
     error?: string
@@ -101,6 +102,7 @@ export async function betaRegisterAction(
         }
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
+    const inviteCode = await generateUniqueInviteCode(adminDb)
 
     // Special friend: 1 year + 5 students. Everyone else: 20 days + 30 students (pro default)
     const isFriend = emailNorm === normalizePlatformEmail(SPECIAL_EMAIL)
@@ -127,6 +129,7 @@ export async function betaRegisterAction(
         full_name: fullName,
         brand_name: brandName,
         slug,
+        invite_code: inviteCode,
         primary_color: '#10B981',
         subscription_status: 'trialing',
         subscription_tier: 'pro',

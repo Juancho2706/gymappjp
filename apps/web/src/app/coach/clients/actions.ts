@@ -18,6 +18,7 @@ import {
     isAuthDuplicateEmailMessage,
     sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
+import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 
 // ────────────────────────────────────────────────────────────────
 // Create Client Action
@@ -71,11 +72,11 @@ export async function createClientAction(
 
     const { data: rawCoachData } = await supabase
         .from('coaches')
-        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id')
+        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id')
         .eq('id', coachUser.id)
         .maybeSingle()
 
-    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients'> & { active_org_id?: string | null } | null
+    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients'> & { active_org_id?: string | null } | null
 
     if (!coach) return { error: 'Coach no encontrado.' }
 
@@ -166,7 +167,8 @@ export async function createClientAction(
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
-    const loginUrl = appUrl ? `${appUrl}/c/${coach.slug}/login` : `https://app.tu-dominio.com/c/${coach.slug}/login`
+    const publicIdentifier = getCoachPublicIdentifier(coach)
+    const loginUrl = appUrl ? `${appUrl}/c/${publicIdentifier}/login` : `https://app.tu-dominio.com/c/${publicIdentifier}/login`
     const welcomeEmail = buildClientWelcomeEmail({
         brandName: coach.brand_name,
         coachName: coach.full_name,

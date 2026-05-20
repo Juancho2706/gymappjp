@@ -21,6 +21,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
 import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
 import { clientIpFromRequest } from '@/lib/rate-limit'
+import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 
 export type RegisterState = {
     error?: string
@@ -142,6 +143,7 @@ export async function registerAction(
         }
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
+    const inviteCode = await generateUniqueInviteCode(adminDb)
 
     const emailSan = sanitizePlatformEmail(email)
     const emailNorm = normalizePlatformEmail(email)
@@ -180,6 +182,7 @@ export async function registerAction(
             full_name: fullName,
             brand_name: brandName,
             slug,
+            invite_code: inviteCode,
             primary_color: '#10B981',
             subscription_status: isFreeTier ? 'pending_email' : 'pending_payment',
             subscription_tier: selectedTier,

@@ -16,10 +16,12 @@ import type {
 } from './directory-types'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { defaultSortDir, sortClientsByKey } from './clientsDirectorySort'
+import type { CoachPublicIdentifierSource } from '@/lib/coach/public-identifier'
 
 interface ClientsDirectoryClientProps {
     clients: any[]
-    coach: { slug: string } | null
+    coach: CoachPublicIdentifierSource | null
+    publicIdentifier: string
     appUrl: string
     riskFilter: DirectoryRiskFilter
     onRiskFilterChange: (f: DirectoryRiskFilter) => void
@@ -106,6 +108,7 @@ function useGridVariants(reduceMotion: boolean | null) {
 export function ClientsDirectoryClient({
     clients,
     coach,
+    publicIdentifier,
     appUrl,
     riskFilter,
     onRiskFilterChange,
@@ -223,7 +226,7 @@ export function ClientsDirectoryClient({
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSortChange={handleSortFromTable}
-                    coachSlug={coach?.slug}
+                    coachSlug={publicIdentifier}
                     appUrl={appUrl}
                 />
             :   <div className="space-y-4">
@@ -247,7 +250,7 @@ export function ClientsDirectoryClient({
                         }
 
                         const loginUrl =
-                            coach && appUrl ? `${appUrl}/c/${coach.slug}/login` : ''
+                            coach && appUrl ? `${appUrl}/c/${publicIdentifier}/login` : ''
                         const whatsappLink =
                             client.phone ?
                                 `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}, aquí tienes tu link de acceso a la app: ${loginUrl}`)}`

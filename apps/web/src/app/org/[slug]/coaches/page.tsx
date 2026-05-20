@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { getOrgBySlug, getOrgMembers } from '../_data/org.queries'
+import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { InviteCoachForm } from './_components/InviteCoachForm'
 import { RemoveCoachButton } from './_components/RemoveCoachButton'
-import { UserCheck, Clock, Crown, Shield, User } from 'lucide-react'
+import { CreateEnterpriseCoachForm } from './_components/CreateEnterpriseCoachForm'
+import { CoachEnterpriseActions } from './_components/CoachEnterpriseActions'
+import { UserCheck, Clock, Crown, Shield, User, Link2, Users } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Coaches' }
 
@@ -29,12 +31,20 @@ export default async function OrgCoachesPage({ params }: Props) {
     if (!org) redirect('/coach/dashboard')
 
     const isAdmin = org.myRole === 'org_owner' || org.myRole === 'org_admin'
-    const members = await getOrgMembers(org.id)
+    const [members, clients] = await Promise.all([
+        getOrgMembers(org.id),
+        getOrgClients(org.id),
+    ])
     const active = members.filter(m => m.status === 'active')
     const invited = members.filter(m => m.status === 'invited')
+    const clientCountByCoach = clients.reduce<Record<string, number>>((acc, client) => {
+        if (!client.coach_id) return acc
+        acc[client.coach_id] = (acc[client.coach_id] ?? 0) + 1
+        return acc
+    }, {})
 
     return (
-        <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
+        <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-xl font-bold">Coaches</h1>
@@ -44,15 +54,35 @@ export default async function OrgCoachesPage({ params }: Props) {
                 </div>
             </div>
 
-            {/* Invite form — admins only */}
             {isAdmin && (
-                <div className="rounded-xl border border-border bg-card p-4">
-                    <h2 className="text-sm font-semibold mb-3">Invitar coach</h2>
-                    <InviteCoachForm orgSlug={slug} />
+                <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                    <div>
+                        <h2 className="text-sm font-semibold">Crear coach enterprise</h2>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Crea una cuenta nueva del staff. No pasa por registro standalone ni billing propio.
+                        </p>
+                    </div>
+                    <CreateEnterpriseCoachForm orgSlug={slug} />
                 </div>
             )}
 
-            {/* Active members */}
+            {isAdmin && (
+                <div className="rounded-xl border border-dashed border-border bg-card/60 p-4">
+                    <details>
+                        <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                            <Link2 className="h-4 w-4 text-muted-foreground" />
+                            Vincular coach existente
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                                Flujo secundario para migrar un coach que ya tiene cuenta EVA.
+                            </p>
+                            <InviteCoachForm orgSlug={slug} />
+                        </div>
+                    </details>
+                </div>
+            )}
+
             {active.length > 0 && (
                 <div className="rounded-xl border border-border bg-card divide-y divide-border">
                     <div className="px-4 py-3">
@@ -69,10 +99,14 @@ export default async function OrgCoachesPage({ params }: Props) {
                                     {member.coach?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium truncate">{member.coach?.full_name ?? '—'}</p>
+                                    <p className="text-sm font-medium truncate">{member.coach?.full_name ?? '-'}</p>
                                     <p className="text-[11px] text-muted-foreground">{member.coach?.slug ?? ''}</p>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="hidden items-center gap-1 text-[11px] text-muted-foreground md:flex">
+                                    <Users className="h-3 w-3" />
+                                    {clientCountByCoach[member.coach_id] ?? 0} alumnos
+                                </div>
+                                <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                                     <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                                         <RoleIcon className="w-3 h-3" />
                                         {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] ?? member.role}
@@ -81,6 +115,15 @@ export default async function OrgCoachesPage({ params }: Props) {
                                         <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
                                             {member.coach.invite_code}
                                         </span>
+                                    )}
+                                    {isAdmin && member.role !== 'org_owner' && member.status === 'active' && (
+                                        <CoachEnterpriseActions
+                                            orgSlug={slug}
+                                            memberId={member.id}
+                                            coachId={member.coach_id}
+                                            role={member.role}
+                                            canManageRole={org.myRole === 'org_owner'}
+                                        />
                                     )}
                                     {isAdmin && member.role !== 'org_owner' && (
                                         <RemoveCoachButton orgSlug={slug} memberId={member.id} />
@@ -92,7 +135,6 @@ export default async function OrgCoachesPage({ params }: Props) {
                 </div>
             )}
 
-            {/* Pending invites */}
             {invited.length > 0 && (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 divide-y divide-border">
                     <div className="px-4 py-3">
@@ -107,7 +149,7 @@ export default async function OrgCoachesPage({ params }: Props) {
                                 {member.coach?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate">{member.coach?.full_name ?? '—'}</p>
+                                <p className="text-sm font-medium truncate">{member.coach?.full_name ?? '-'}</p>
                                 <p className="text-[11px] text-muted-foreground">
                                     Invitado {member.invited_at ? new Date(member.invited_at).toLocaleDateString('es-CL') : ''}
                                 </p>
@@ -122,7 +164,7 @@ export default async function OrgCoachesPage({ params }: Props) {
 
             {active.length === 0 && invited.length === 0 && (
                 <p className="text-center text-sm text-muted-foreground py-8">
-                    Sin coaches. Invita al primero arriba.
+                    Sin coaches. Crea el primero arriba.
                 </p>
             )}
         </div>

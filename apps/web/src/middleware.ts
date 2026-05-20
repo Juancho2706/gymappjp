@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
+import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
 import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import {
     clientIpFromRequest,
@@ -202,6 +203,25 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
+        if (pathname === '/coach/dashboard') {
+            const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
+            if (redirectPath.startsWith('/org/')) {
+                const redirectUrl = request.nextUrl.clone()
+                redirectUrl.pathname = redirectPath
+                return NextResponse.redirect(redirectUrl)
+            }
+        }
+
+        if (
+            coach.subscription_status === 'org_managed' &&
+            (pathname.startsWith('/coach/subscription') || pathname.startsWith('/coach/settings'))
+        ) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/coach/dashboard'
+            redirectUrl.searchParams.set('managed_by', 'org')
+            return NextResponse.redirect(redirectUrl)
+        }
+
         const redirectPath = resolveCoachSubscriptionRedirect(pathname, coach.subscription_status, coach.current_period_end)
         if (redirectPath) {
             const redirectUrl = request.nextUrl.clone()
@@ -387,21 +407,10 @@ export async function middleware(request: NextRequest) {
     // 3. AUTO-REDIRECT authenticated users away from root /
     // ============================================================
     if (pathname === '/' && user) {
-        const [{ data: coachData }, { data: clientData }] = await Promise.all([
-            supabase.from('coaches').select('id').eq('id', user.id).maybeSingle(),
-            supabase.from('clients').select('id, coach_id, coaches(slug)').eq('id', user.id).maybeSingle(),
-        ])
-
-        if (coachData) {
+        const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
+        if (redirectPath !== '/login') {
             const redirectUrl = request.nextUrl.clone()
-            redirectUrl.pathname = '/coach/dashboard'
-            return NextResponse.redirect(redirectUrl)
-        }
-
-        if (clientData?.coaches) {
-            const coach = clientData.coaches as unknown as Pick<Coach, 'slug'>
-            const redirectUrl = request.nextUrl.clone()
-            redirectUrl.pathname = `/c/${coach.slug}/dashboard`
+            redirectUrl.pathname = redirectPath
             return NextResponse.redirect(redirectUrl)
         }
     }
@@ -421,8 +430,9 @@ export async function middleware(request: NextRequest) {
         const coach = coachData as Pick<Coach, 'id'> | null
 
         if (coach) {
+            const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
             const redirectUrl = request.nextUrl.clone()
-            redirectUrl.pathname = '/coach/dashboard'
+            redirectUrl.pathname = redirectPath
             return NextResponse.redirect(redirectUrl)
         }
     }

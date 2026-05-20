@@ -5,6 +5,7 @@ import type { Tables } from '@/lib/database.types'
 export type CoachSession = Pick<
     Tables<'coaches'>,
     | 'id'
+    | 'active_org_id'
     | 'full_name'
     | 'brand_name'
     | 'subscription_status'
@@ -38,7 +39,7 @@ export const getCoach = cache(async (): Promise<CoachSession | null> => {
     const { data: coachData } = (await supabase
         .from('coaches')
         .select(
-            'id, full_name, brand_name, subscription_status, subscription_tier, primary_color, use_brand_colors_coach, slug, invite_code, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, logo_url, onboarding_guide'
+            'id, active_org_id, full_name, brand_name, subscription_status, subscription_tier, primary_color, use_brand_colors_coach, slug, invite_code, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, logo_url, onboarding_guide'
         )
         .eq('id', user.id)
         .maybeSingle()) as {

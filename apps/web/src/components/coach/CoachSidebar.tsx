@@ -16,6 +16,7 @@ import {
     CreditCard,
     HelpCircle,
     LifeBuoy,
+    Building2,
     ChevronLeft,
     ChevronRight,
 } from 'lucide-react'
@@ -83,9 +84,14 @@ interface CoachSidebarProps {
     coachBrand: string
     primaryColor?: string
     subscriptionStatus?: string | null
+    enterpriseContext?: {
+        orgSlug: string
+        orgName: string
+        orgRole: string
+    } | null
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -139,6 +145,8 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
 
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
     const isSubscriptionBlocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has(subscriptionStatus ?? '')
+    const isOrgManaged = subscriptionStatus === 'org_managed'
+    const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
     const visibleNavItems = isSubscriptionBlocked
         ? [
             {
@@ -148,7 +156,10 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 icon: LayoutDashboard,
             },
         ]
-        : navItems
+        : navItems.filter((item) => {
+            if (!isOrgManaged) return true
+            return item.href !== '/coach/settings' && item.href !== '/coach/subscription'
+        })
 
     return (
         <>
@@ -206,6 +217,11 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                                 <p className="text-sm font-bold text-sidebar-foreground truncate uppercase tracking-tight font-display">
                                     {coachBrand || coachName}
                                 </p>
+                                {enterpriseContext && (
+                                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Gestionado por {enterpriseContext.orgName}
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>
@@ -257,6 +273,23 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     </div>
                 )}
                 <nav ref={navRef} className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
+                    {enterpriseContext && isOrgAdmin && (
+                        <Link
+                            href={`/org/${enterpriseContext.orgSlug}`}
+                            title="Panel empresa"
+                            className={cn(
+                                'hidden shrink-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-sidebar-foreground transition-all duration-300 hover:bg-primary/15 md:flex',
+                                isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start'
+                            )}
+                            style={activeBgStyle}
+                        >
+                            <Building2
+                                className="h-5 w-5 flex-shrink-0 text-primary"
+                                style={activeColorStyle}
+                            />
+                            <span className={cn('truncate text-left', isCollapsed && 'md:hidden')}>Panel empresa</span>
+                        </Link>
+                    )}
                     {visibleNavItems.map((item) => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                         const Icon = item.icon

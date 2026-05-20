@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
 
 const loginSchema = z.object({
     email: z.string().email('Email inválido'),
@@ -59,6 +60,8 @@ export async function loginAction(
         return { error: 'Esta cuenta no tiene acceso al panel de Coach.' }
     }
 
-    revalidatePath('/coach/dashboard')
-    redirect('/coach/dashboard')
+    const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
+
+    revalidatePath(redirectPath)
+    redirect(redirectPath)
 }

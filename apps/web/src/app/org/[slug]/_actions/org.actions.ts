@@ -5,6 +5,9 @@ import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitOrgCreation } from '@/lib/rate-limit'
+import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
+import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
 
 const ALLOWED_LOGO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_LOGO_BYTES = 2 * 1024 * 1024 // 2 MB
@@ -128,6 +131,165 @@ const InviteCoachSchema = z.object({
     role: z.enum(['org_admin', 'coach']),
 })
 
+const CreateEnterpriseCoachSchema = z.object({
+    full_name: z.string().min(2).max(120),
+    email: z.email(),
+    role: z.enum(['org_admin', 'coach']),
+    temp_password: z.string().min(8).max(72).optional().or(z.literal('')),
+})
+
+function slugify(value: string) {
+    return value
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 46)
+}
+
+function generateTempPassword() {
+    return `Eva${Math.random().toString(36).slice(2, 8)}${Math.floor(1000 + Math.random() * 9000)}!`
+}
+
+async function generateUniqueCoachSlug(admin: ReturnType<typeof createServiceRoleClient>, base: string) {
+    const cleanBase = slugify(base) || 'coach'
+    for (let attempt = 0; attempt < 12; attempt++) {
+        const slug = attempt === 0 ? cleanBase : `${cleanBase}-${Math.random().toString(36).slice(2, 6)}`
+        const { data } = await admin.from('coaches').select('id').eq('slug', slug).maybeSingle()
+        if (!data) return slug
+    }
+    return `${cleanBase}-${Date.now().toString(36)}`
+}
+
+async function getOrgAdminContext(orgSlug: string, allowedRoles: string[] = ['org_owner', 'org_admin']) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado' as const }
+
+    const { data: org } = await supabase
+        .from('organizations')
+        .select('id, name, slug, seats_included, primary_color, logo_url')
+        .eq('slug', orgSlug)
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!org) return { error: 'Organización no encontrada' as const }
+
+    const { data: membership } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('org_id', org.id)
+        .eq('coach_id', user.id)
+        .in('role', allowedRoles)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!membership) return { error: 'Sin permisos de administrador' as const }
+
+    return { supabase, user, org, membership }
+}
+
+export async function createEnterpriseCoachAction(orgSlug: string, formData: FormData) {
+    const parsed = CreateEnterpriseCoachSchema.safeParse({
+        full_name: formData.get('full_name'),
+        email: formData.get('email'),
+        role: formData.get('role') ?? 'coach',
+        temp_password: formData.get('temp_password') || undefined,
+    })
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
+
+    const context = await getOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { count } = await admin
+        .from('organization_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', org.id)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+    if ((count ?? 0) >= org.seats_included) return { error: `Límite de ${org.seats_included} coaches alcanzado` }
+
+    const email = sanitizePlatformEmail(parsed.data.email)
+    const availability = await assertPlatformEmailAvailable(admin, email)
+    if (!availability.ok) return { error: availability.error }
+
+    const tempPassword = parsed.data.temp_password || generateTempPassword()
+    const [slug, inviteCode] = await Promise.all([
+        generateUniqueCoachSlug(admin, `${org.slug}-${parsed.data.full_name}`),
+        generateUniqueInviteCode(admin),
+    ])
+
+    const { data: authData, error: authError } = await admin.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { full_name: parsed.data.full_name, org_id: org.id, org_role: parsed.data.role },
+    })
+    if (authError || !authData.user) return { error: authError?.message ?? 'No se pudo crear el usuario' }
+
+    const { error: coachError } = await admin.from('coaches').insert({
+        id: authData.user.id,
+        full_name: parsed.data.full_name,
+        brand_name: org.name,
+        slug,
+        invite_code: inviteCode,
+        primary_color: org.primary_color ?? '#10B981',
+        logo_url: org.logo_url,
+        subscription_status: 'org_managed',
+        subscription_tier: 'scale',
+        billing_cycle: 'monthly',
+        payment_provider: 'admin',
+        max_clients: 500,
+        active_org_id: org.id,
+        onboarding_guide: { invite_code_confirmed: false },
+    })
+    if (coachError) {
+        await admin.auth.admin.deleteUser(authData.user.id)
+        return { error: coachError.message }
+    }
+
+    const { error: memberError } = await admin.from('organization_members').insert({
+        org_id: org.id,
+        coach_id: authData.user.id,
+        role: parsed.data.role,
+        status: 'active',
+        joined_at: new Date().toISOString(),
+    })
+    if (memberError) {
+        await admin.auth.admin.deleteUser(authData.user.id)
+        return { error: memberError.message }
+    }
+
+    await admin.from('org_audit_logs').insert({
+        org_id: org.id,
+        actor_id: user.id,
+        action: 'create_enterprise_coach',
+        target_type: 'coach',
+        target_id: authData.user.id,
+        metadata: { email, role: parsed.data.role, invite_code: inviteCode },
+    })
+
+    const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    sendTransactionalEmail({
+        to: email,
+        subject: `Tu cuenta de coach en ${org.name}`,
+        html: `
+            <p>Hola ${parsed.data.full_name},</p>
+            <p>${org.name} creó tu cuenta de coach enterprise en EVA.</p>
+            <p><strong>Login:</strong> ${appUrl}/login</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Contraseña temporal:</strong> ${tempPassword}</p>
+            <p><strong>Código de alumnos:</strong> ${inviteCode}</p>
+        `,
+    }).catch(() => null)
+
+    revalidatePath(`/org/${orgSlug}/coaches`)
+    return { success: true, email, tempPassword, inviteCode }
+}
+
 export async function inviteCoachAction(orgSlug: string, formData: FormData) {
     const supabase = await createClient()
     const admin = createServiceRoleClient()
@@ -195,7 +357,8 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
             org_id: org.id,
             coach_id: targetCoach.id,
             role: parsed.data.role,
-            status: 'invited',
+            status: 'active',
+            joined_at: new Date().toISOString(),
         })
     if (insertError) return { error: insertError.message }
 
@@ -203,7 +366,7 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
     await admin.from('org_audit_logs').insert({
         org_id: org.id,
         actor_id: user.id,
-        action: 'invite_coach',
+        action: 'link_existing_coach',
         target_type: 'coach',
         target_id: targetCoach.id,
         metadata: { email: parsed.data.email, role: parsed.data.role },
@@ -260,6 +423,75 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
         target_type: 'coach',
         target_id: target.coach_id,
         metadata: {},
+    })
+
+    revalidatePath(`/org/${orgSlug}/coaches`)
+    return { success: true }
+}
+
+export async function resetEnterpriseCoachPasswordAction(orgSlug: string, coachId: string) {
+    const context = await getOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: membership } = await admin
+        .from('organization_members')
+        .select('id, role')
+        .eq('org_id', org.id)
+        .eq('coach_id', coachId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!membership) return { error: 'Coach no pertenece a esta organización' }
+
+    const tempPassword = generateTempPassword()
+    const { error } = await admin.auth.admin.updateUserById(coachId, { password: tempPassword })
+    if (error) return { error: error.message }
+
+    await admin.from('org_audit_logs').insert({
+        org_id: org.id,
+        actor_id: user.id,
+        action: 'reset_enterprise_coach_password',
+        target_type: 'coach',
+        target_id: coachId,
+        metadata: {},
+    })
+
+    return { success: true, tempPassword }
+}
+
+export async function updateEnterpriseCoachRoleAction(orgSlug: string, memberId: string, role: 'org_admin' | 'coach') {
+    const context = await getOrgAdminContext(orgSlug, ['org_owner'])
+    if ('error' in context) return { error: context.error }
+
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: target } = await admin
+        .from('organization_members')
+        .select('id, coach_id, role')
+        .eq('id', memberId)
+        .eq('org_id', org.id)
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!target) return { error: 'Miembro no encontrado' }
+    if (target.role === 'org_owner') return { error: 'No se puede cambiar el rol del propietario' }
+
+    const { error } = await admin
+        .from('organization_members')
+        .update({ role })
+        .eq('id', memberId)
+    if (error) return { error: error.message }
+
+    await admin.from('org_audit_logs').insert({
+        org_id: org.id,
+        actor_id: user.id,
+        action: 'update_enterprise_coach_role',
+        target_type: 'coach',
+        target_id: target.coach_id,
+        metadata: { role },
     })
 
     revalidatePath(`/org/${orgSlug}/coaches`)

@@ -56,7 +56,7 @@ export const getOrgBySlug = cache(async (slug: string): Promise<OrgWithMembershi
         .from('organizations')
         .select('id, slug, name, logo_url, primary_color, plan, status, seats_included, trial_ends_at, billing_cycle, currency, created_at, onboarding_step, last_health_score')
         .eq('slug', slug)
-        .eq('deleted_at', null as unknown as string)
+        .is('deleted_at', null)
         .maybeSingle()
 
     if (!org) return null

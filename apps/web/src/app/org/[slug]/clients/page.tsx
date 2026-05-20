@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { AddClientForm } from './_components/AddClientForm'
@@ -9,12 +10,12 @@ export const metadata: Metadata = { title: 'Clientes' }
 
 interface Props {
     params: Promise<{ slug: string }>
-    searchParams: Promise<{ q?: string }>
+    searchParams: Promise<{ q?: string; view?: string }>
 }
 
 export default async function OrgClientsPage({ params, searchParams }: Props) {
     const { slug } = await params
-    const { q } = await searchParams
+    const { q, view = 'all' } = await searchParams
 
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
@@ -29,6 +30,16 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
     const activeCoaches = members
         .filter(m => m.status === 'active' && m.coach)
         .map(m => ({ id: m.coach!.id, full_name: m.coach!.full_name, slug: m.coach!.slug }))
+    const filteredClients = clients.filter(client => {
+        if (view === 'unassigned') return !client.coach_id
+        if (view === 'inactive') return client.is_active === false
+        return true
+    })
+    const tabs = [
+        { id: 'all', label: 'Todos', count: clients.length },
+        { id: 'unassigned', label: 'Sin asignar', count: clients.filter(c => !c.coach_id).length },
+        { id: 'inactive', label: 'Inactivos', count: clients.filter(c => c.is_active === false).length },
+    ]
 
     return (
         <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
@@ -47,8 +58,25 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
                 </div>
             )}
 
+            <div className="flex flex-wrap gap-2">
+                {tabs.map(tab => (
+                    <Link
+                        key={tab.id}
+                        href={`/org/${slug}/clients?view=${tab.id}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                            view === tab.id
+                                ? 'border-violet-500 bg-violet-500/10 text-violet-600 dark:text-violet-300'
+                                : 'border-border text-muted-foreground hover:bg-muted'
+                        }`}
+                    >
+                        {tab.label} · {tab.count}
+                    </Link>
+                ))}
+            </div>
+
             {/* Search */}
             <form method="GET" className="flex gap-2">
+                <input type="hidden" name="view" value={view} />
                 <input
                     name="q"
                     defaultValue={q ?? ''}
@@ -64,9 +92,9 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
             </form>
 
             {/* Client list */}
-            {clients.length > 0 ? (
+            {filteredClients.length > 0 ? (
                 <div className="rounded-xl border border-border bg-card divide-y divide-border">
-                    {clients.map(client => (
+                    {filteredClients.map(client => (
                         <div key={client.id} className="flex items-center gap-3 px-4 py-3">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${client.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
                                 {client.full_name?.charAt(0)?.toUpperCase() ?? '?'}
