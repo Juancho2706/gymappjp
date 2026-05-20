@@ -1,9 +1,29 @@
+import { useEffect, useRef } from 'react'
+import { AppState } from 'react-native'
 import { Tabs } from 'expo-router'
 import { Apple, BookOpen, CheckCircle, History, Home, User } from 'lucide-react-native'
+import { supabase } from '../../../lib/supabase'
+import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
 
 export default function AlumnoTabsLayout() {
   const { theme } = useTheme()
+  const appState = useRef(AppState.currentState)
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        const [pendingNutrition, pendingWorkout] = await Promise.all([
+          getPendingNutritionCount(),
+          getPendingLogCount(),
+        ])
+        if (pendingNutrition > 0) flushNutritionQueue(supabase)
+        if (pendingWorkout > 0) flushLogQueue(supabase)
+      }
+      appState.current = nextState
+    })
+    return () => sub.remove()
+  }, [])
   return (
     <Tabs
       screenOptions={{

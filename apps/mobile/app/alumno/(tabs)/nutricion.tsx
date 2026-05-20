@@ -5,6 +5,7 @@ import {
   AppState,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   Share,
@@ -144,6 +145,7 @@ export default function AlumnoNutricionScreen() {
   const { iso: todayIso } = getTodayInSantiago()
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   const [plan, setPlan] = useState<NutritionPlan | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
@@ -208,6 +210,12 @@ export default function AlumnoNutricionScreen() {
     }
 
     setLoading(false)
+    setRefreshing(false)
+  }
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await load()
   }
 
   const fetchLogForDate = useCallback(async (date: string) => {
@@ -375,6 +383,7 @@ export default function AlumnoNutricionScreen() {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         >
           {!isOnline && <OfflineBanner visible />}
 

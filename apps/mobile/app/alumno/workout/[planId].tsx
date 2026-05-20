@@ -22,7 +22,7 @@ import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, NativeDialog, ProgressBar, TopBar } from '../../../components'
+import { Button, NativeDialog, OfflineBanner, ProgressBar, TopBar } from '../../../components'
 
 interface Exercise {
   id: string
@@ -95,12 +95,14 @@ export default function WorkoutExecutionScreen() {
   const [restSeconds, setRestSeconds] = useState<number | null>(null)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [techniqueExercise, setTechniqueExercise] = useState<Exercise | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
   const restInterval = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     loadPlan()
     return () => { if (restInterval.current) clearInterval(restInterval.current) }
   }, [planId])
+
 
   async function loadPlan() {
     setLoading(true)
@@ -241,7 +243,12 @@ export default function WorkoutExecutionScreen() {
       logged_at: new Date().toISOString(),
     })
 
-    if (error) await enqueueLog(logData)
+    if (error) {
+      setIsOnline(false)
+      await enqueueLog(logData)
+    } else {
+      setIsOnline(true)
+    }
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     if (block.rest_time) {
@@ -338,6 +345,7 @@ export default function WorkoutExecutionScreen() {
         </MotiView>
       )}
 
+      <OfflineBanner visible={!isOnline} />
       <TopBar back title={planTitle || 'Workout'} onBack={() => router.back()} />
 
       {loading ? (

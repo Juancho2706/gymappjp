@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,7 +10,7 @@ import {
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Apple, CalendarDays, ChevronRight, Dumbbell, Scale, TrendingDown, TrendingUp } from 'lucide-react-native'
+import { Apple, CalendarDays, ChevronRight, Droplets, Dumbbell, Footprints, Scale, TrendingDown, TrendingUp } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile, type ClientProfile } from '../../../lib/client'
@@ -23,8 +24,10 @@ import {
   ScreenHeader,
   Sparkline,
   StreakWidget,
+  WelcomeModal,
 } from '../../../components'
 import { getTodayInSantiago, timeGreeting, formatLongDate } from '../../../lib/date-utils'
+import { getDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 const MS_DAY = 24 * 60 * 60 * 1000
@@ -54,6 +57,14 @@ interface CheckInPoint {
   weight: number | null
 }
 
+interface WelcomeModalConfig {
+  enabled: boolean
+  content: string
+  type: 'text' | 'video'
+  version: number
+  brandName?: string
+}
+
 interface HomeData {
   client: ClientProfile | null
   program: Program | null
@@ -61,6 +72,8 @@ interface HomeData {
   workoutDates: Set<string>
   nutritionDates: Set<string>
   checkIns: CheckInPoint[]
+  habitsToday: HabitsData | null
+  welcomeModal: WelcomeModalConfig | null
 }
 
 function isoDate(date: Date): string {
@@ -87,6 +100,7 @@ export default function AlumnoHomeScreen() {
   const router = useRouter()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     load()
@@ -102,7 +116,7 @@ export default function AlumnoHomeScreen() {
     const todayIso = isoDate(today)
     const since30Iso = isoDate(since30)
 
-    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }] =
+    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData] =
       await Promise.all([
         supabase
           .from('workout_programs')
@@ -130,6 +144,12 @@ export default function AlumnoHomeScreen() {
           .gte('date', since30Iso)
           .lte('date', todayIso)
           .order('date', { ascending: true }),
+        supabase
+          .from('coaches')
+          .select('brand_name, welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version')
+          .eq('id', client.coachId)
+          .maybeSingle(),
+        getDailyHabits(client.id, todayIso),
       ])
 
     const program = programData
@@ -148,6 +168,16 @@ export default function AlumnoHomeScreen() {
         }
       : null
 
+    const welcomeModal: WelcomeModalConfig | null = coachData?.welcome_modal_enabled
+      ? {
+          enabled: true,
+          content: coachData.welcome_modal_content ?? '',
+          type: (coachData.welcome_modal_type as 'text' | 'video') ?? 'text',
+          version: coachData.welcome_modal_version ?? 1,
+          brandName: coachData.brand_name ?? undefined,
+        }
+      : null
+
     setData({
       client,
       program,
@@ -155,8 +185,16 @@ export default function AlumnoHomeScreen() {
       workoutDates: new Set((workoutRows ?? []).map((row) => isoDate(new Date(row.logged_at)))),
       nutritionDates: new Set((nutritionRows ?? []).map((row) => row.log_date)),
       checkIns: (checkInRows ?? []) as CheckInPoint[],
+      habitsToday: habitsData,
+      welcomeModal,
     })
     setLoading(false)
+    setRefreshing(false)
+  }
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await load()
   }
 
   const derived = useMemo(() => {
@@ -210,7 +248,11 @@ export default function AlumnoHomeScreen() {
         trailing={<StreakWidget streak={derived.streak} />}
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+      >
         <WeekCalendar workoutDates={data?.workoutDates ?? new Set<string>()} />
 
         {!hasCheckInThisMonth(data?.checkIns ?? []) ? (
@@ -275,7 +317,20 @@ export default function AlumnoHomeScreen() {
         {data?.client && (
           <NutritionDailySummaryWidget clientId={data.client.id} />
         )}
+        {data?.habitsToday && (data.habitsToday.water_ml != null || data.habitsToday.steps != null) && (
+          <HabitsMiniRow habits={data.habitsToday} theme={theme} />
+        )}
       </ScrollView>
+
+      {data?.welcomeModal && (
+        <WelcomeModal
+          brandName={data.welcomeModal.brandName}
+          enabled={data.welcomeModal.enabled}
+          content={data.welcomeModal.content}
+          type={data.welcomeModal.type}
+          version={data.welcomeModal.version}
+        />
+      )}
     </SafeAreaView>
   )
 }
@@ -537,4 +592,36 @@ const styles = StyleSheet.create({
   weightValue: { fontSize: 24, letterSpacing: -0.6 },
   trendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   trendText: { fontSize: 13 },
+  habitsRow: { flexDirection: 'row', gap: 8 },
+  habitChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  habitText: { fontSize: 13 },
 })
+
+function HabitsMiniRow({ habits, theme }: { habits: HabitsData; theme: any }) {
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 10 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 350 }}
+    >
+      <View style={styles.habitsRow}>
+        {habits.water_ml != null && (
+          <View style={[styles.habitChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
+            <Droplets size={14} color="#3b82f6" strokeWidth={2} />
+            <Text style={[styles.habitText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              {habits.water_ml >= 1000 ? `${(habits.water_ml / 1000).toFixed(1)}L` : `${habits.water_ml}ml`}
+            </Text>
+          </View>
+        )}
+        {habits.steps != null && (
+          <View style={[styles.habitChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
+            <Footprints size={14} color="#10B981" strokeWidth={2} />
+            <Text style={[styles.habitText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              {habits.steps.toLocaleString('es-CL')} pasos
+            </Text>
+          </View>
+        )}
+      </View>
+    </MotiView>
+  )
+}
