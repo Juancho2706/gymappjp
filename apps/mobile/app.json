@@ -15,7 +15,7 @@
     },
     "ios": {
       "bundleIdentifier": "cl.evaapp.eva",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "Para enviar fotos de progreso a tu coach",

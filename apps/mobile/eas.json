@@ -20,7 +20,8 @@
       "ios": {
         "buildConfiguration": "Release",
         "credentialsSource": "local",
-        "distribution": "store"
+        "distribution": "store",
+        "image": "macos-sequoia-15.6-xcode-26.0"
       },
       "env": {
         "APP_ENV": "production",
@@ -51,7 +52,8 @@
         "credentialsSource": "remote"
       },
       "ios": {
-        "credentialsSource": "local"
+        "credentialsSource": "local",
+        "image": "macos-sequoia-15.6-xcode-26.0"
       }
     }
   },
