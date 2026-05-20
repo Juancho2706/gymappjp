@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { LogOut, User, UserCog } from 'lucide-react-native'
+import { ExternalLink, KeyRound, LogOut, User, UserCog } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
@@ -16,6 +16,7 @@ interface AlumnoDetail {
   phone: string | null
   goalWeightKg: number | null
   subscriptionStartDate: string | null
+  coachTier: string | null
 }
 
 function formatDate(iso: string | null): string | null {
@@ -28,6 +29,9 @@ export default function AlumnoPerfilScreen() {
   const router = useRouter()
   const [detail, setDetail] = useState<AlumnoDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
 
   useEffect(() => {
     load()
@@ -38,12 +42,11 @@ export default function AlumnoPerfilScreen() {
     const client = await getClientProfile()
     if (!client) { setLoading(false); return }
 
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data } = await supabase
-      .from('clients')
-      .select('full_name, phone, goal_weight_kg, subscription_start_date')
-      .eq('id', client.id)
-      .maybeSingle()
+    const [{ data: { user } }, { data }, { data: coachData }] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.from('clients').select('full_name, phone, goal_weight_kg, subscription_start_date').eq('id', client.id).maybeSingle(),
+      supabase.from('coaches').select('subscription_tier').eq('id', client.coachId).maybeSingle(),
+    ])
 
     setDetail({
       fullName: data?.full_name ?? client.fullName,
@@ -51,8 +54,26 @@ export default function AlumnoPerfilScreen() {
       phone: data?.phone ?? null,
       goalWeightKg: data?.goal_weight_kg ?? null,
       subscriptionStartDate: data?.subscription_start_date ?? null,
+      coachTier: (coachData as any)?.subscription_tier ?? null,
     })
     setLoading(false)
+  }
+
+  async function handleChangePassword() {
+    if (newPassword.length < 8) {
+      Alert.alert('Contraseña muy corta', 'Debe tener al menos 8 caracteres.')
+      return
+    }
+    setChangingPassword(true)
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    setChangingPassword(false)
+    if (error) {
+      Alert.alert('Error', 'No se pudo cambiar la contraseña. Intenta de nuevo.')
+    } else {
+      Alert.alert('Listo', 'Contraseña actualizada correctamente.')
+      setShowPasswordModal(false)
+      setNewPassword('')
+    }
   }
 
   async function handleLogout() {
@@ -130,6 +151,29 @@ export default function AlumnoPerfilScreen() {
             ) : null}
           </Section>
 
+          <Section title="Cuenta">
+            <TouchableOpacity
+              style={[styles.actionRow, { borderBottomColor: theme.border }]}
+              onPress={() => setShowPasswordModal(true)}
+              activeOpacity={0.75}
+            >
+              <KeyRound size={16} color={theme.primary} strokeWidth={2} />
+              <Text style={[styles.actionLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                Cambiar contraseña
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => Linking.openURL('https://eva-app.cl/privacidad')}
+              activeOpacity={0.75}
+            >
+              <ExternalLink size={16} color={theme.mutedForeground} strokeWidth={2} />
+              <Text style={[styles.actionLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Privacidad · Derechos ARCO
+              </Text>
+            </TouchableOpacity>
+          </Section>
+
           <Button
             label="Cerrar sesion"
             variant="destructive"
@@ -138,7 +182,41 @@ export default function AlumnoPerfilScreen() {
             full
             style={{ marginTop: 8 }}
           />
+
+          {detail?.coachTier === 'free' && (
+            <Text style={[styles.evaFooter, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Potenciado por EVA
+            </Text>
+          )}
         </ScrollView>
+      )}
+
+      {showPasswordModal && (
+        <View style={[StyleSheet.absoluteFill, styles.modalOverlay]}>
+          <MotiView
+            from={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', damping: 16 }}
+            style={[styles.modalCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}
+          >
+            <Text style={[styles.modalTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+              Cambiar contraseña
+            </Text>
+            <TextInput
+              style={[styles.modalInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, borderRadius: theme.radius.lg, fontFamily: theme.fontSans }]}
+              placeholder="Nueva contraseña (mín. 8 caracteres)"
+              placeholderTextColor={theme.mutedForeground}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <Button label="Cancelar" variant="secondary" onPress={() => { setShowPasswordModal(false); setNewPassword('') }} style={{ flex: 1 }} />
+              <Button label="Guardar" onPress={handleChangePassword} loading={changingPassword} style={{ flex: 1 }} />
+            </View>
+          </MotiView>
+        </View>
       )}
     </SafeAreaView>
   )
@@ -161,4 +239,16 @@ const styles = StyleSheet.create({
   coachRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16 },
   emptySection: { paddingHorizontal: 16, paddingVertical: 14 },
   emptySectionText: { fontSize: 14 },
+  actionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  actionLabel: { fontSize: 15 },
+  evaFooter: { fontSize: 11, textAlign: 'center', letterSpacing: 1.2, paddingVertical: 8 },
+  modalOverlay: { backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100 },
+  modalCard: { width: '100%', maxWidth: 400, borderWidth: 1, padding: 24, gap: 16 },
+  modalTitle: { fontSize: 17 },
+  modalInput: { borderWidth: 1, height: 48, paddingHorizontal: 16, fontSize: 15 },
+  modalButtons: { flexDirection: 'row', gap: 10 },
 })

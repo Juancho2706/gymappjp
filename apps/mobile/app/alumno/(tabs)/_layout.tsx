@@ -1,9 +1,29 @@
+import { useEffect, useRef } from 'react'
+import { AppState } from 'react-native'
 import { Tabs } from 'expo-router'
-import { Apple, CheckCircle, Dumbbell, Home, User } from 'lucide-react-native'
+import { Apple, BookOpen, CheckCircle, History, Home, User } from 'lucide-react-native'
+import { supabase } from '../../../lib/supabase'
+import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
 
 export default function AlumnoTabsLayout() {
   const { theme } = useTheme()
+  const appState = useRef(AppState.currentState)
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        const [pendingNutrition, pendingWorkout] = await Promise.all([
+          getPendingNutritionCount(),
+          getPendingLogCount(),
+        ])
+        if (pendingNutrition > 0) flushNutritionQueue(supabase)
+        if (pendingWorkout > 0) flushLogQueue(supabase)
+      }
+      appState.current = nextState
+    })
+    return () => sub.remove()
+  }, [])
   return (
     <Tabs
       screenOptions={{
@@ -27,22 +47,22 @@ export default function AlumnoTabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Home',
+          title: 'Inicio',
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} strokeWidth={2} />,
-        }}
-      />
-      <Tabs.Screen
-        name="workout"
-        options={{
-          title: 'Rutina',
-          tabBarIcon: ({ color, size }) => <Dumbbell size={size} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
         name="nutricion"
         options={{
-          title: 'Nutricion',
+          title: 'Nutrición',
           tabBarIcon: ({ color, size }) => <Apple size={size} color={color} strokeWidth={2} />,
+        }}
+      />
+      <Tabs.Screen
+        name="exercises"
+        options={{
+          title: 'Aprender',
+          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
@@ -53,11 +73,23 @@ export default function AlumnoTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="history"
+        options={{
+          title: 'Historial',
+          tabBarIcon: ({ color, size }) => <History size={size} color={color} strokeWidth={2} />,
+        }}
+      />
+      <Tabs.Screen
         name="perfil"
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={2} />,
         }}
+      />
+      {/* Workout se accede desde hero card del Home, no como tab directo */}
+      <Tabs.Screen
+        name="workout"
+        options={{ href: null }}
       />
     </Tabs>
   )

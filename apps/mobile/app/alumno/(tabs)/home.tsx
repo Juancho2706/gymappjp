@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,12 +10,24 @@ import {
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Apple, CalendarDays, ChevronRight, Dumbbell, Scale, TrendingDown, TrendingUp } from 'lucide-react-native'
+import { Apple, CalendarDays, ChevronRight, Droplets, Dumbbell, Footprints, Scale, TrendingDown, TrendingUp } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile, type ClientProfile } from '../../../lib/client'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, Card, ComplianceRing, ScreenHeader, Sparkline, StreakCounter } from '../../../components'
+import {
+  Button,
+  Card,
+  ComplianceRing,
+  NutritionDailySummaryWidget,
+  PersonalRecordsBanner,
+  ScreenHeader,
+  Sparkline,
+  StreakWidget,
+  WelcomeModal,
+} from '../../../components'
+import { getTodayInSantiago, timeGreeting, formatLongDate } from '../../../lib/date-utils'
+import { getDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 const MS_DAY = 24 * 60 * 60 * 1000
@@ -44,6 +57,14 @@ interface CheckInPoint {
   weight: number | null
 }
 
+interface WelcomeModalConfig {
+  enabled: boolean
+  content: string
+  type: 'text' | 'video'
+  version: number
+  brandName?: string
+}
+
 interface HomeData {
   client: ClientProfile | null
   program: Program | null
@@ -51,6 +72,8 @@ interface HomeData {
   workoutDates: Set<string>
   nutritionDates: Set<string>
   checkIns: CheckInPoint[]
+  habitsToday: HabitsData | null
+  welcomeModal: WelcomeModalConfig | null
 }
 
 function isoDate(date: Date): string {
@@ -71,18 +94,13 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
 }
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 12) return 'Buenos dias'
-  if (h < 20) return 'Buenas tardes'
-  return 'Buenas noches'
-}
 
 export default function AlumnoHomeScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     load()
@@ -98,7 +116,7 @@ export default function AlumnoHomeScreen() {
     const todayIso = isoDate(today)
     const since30Iso = isoDate(since30)
 
-    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }] =
+    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData] =
       await Promise.all([
         supabase
           .from('workout_programs')
@@ -126,6 +144,12 @@ export default function AlumnoHomeScreen() {
           .gte('date', since30Iso)
           .lte('date', todayIso)
           .order('date', { ascending: true }),
+        supabase
+          .from('coaches')
+          .select('brand_name, welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version')
+          .eq('id', client.coachId)
+          .maybeSingle(),
+        getDailyHabits(client.id, todayIso),
       ])
 
     const program = programData
@@ -144,6 +168,16 @@ export default function AlumnoHomeScreen() {
         }
       : null
 
+    const welcomeModal: WelcomeModalConfig | null = coachData?.welcome_modal_enabled
+      ? {
+          enabled: true,
+          content: coachData.welcome_modal_content ?? '',
+          type: (coachData.welcome_modal_type as 'text' | 'video') ?? 'text',
+          version: coachData.welcome_modal_version ?? 1,
+          brandName: coachData.brand_name ?? undefined,
+        }
+      : null
+
     setData({
       client,
       program,
@@ -151,8 +185,16 @@ export default function AlumnoHomeScreen() {
       workoutDates: new Set((workoutRows ?? []).map((row) => isoDate(new Date(row.logged_at)))),
       nutritionDates: new Set((nutritionRows ?? []).map((row) => row.log_date)),
       checkIns: (checkInRows ?? []) as CheckInPoint[],
+      habitsToday: habitsData,
+      welcomeModal,
     })
     setLoading(false)
+    setRefreshing(false)
+  }
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await load()
   }
 
   const derived = useMemo(() => {
@@ -176,6 +218,19 @@ export default function AlumnoHomeScreen() {
     const weightDelta = currentWeight != null && firstWeight != null ? currentWeight - firstWeight : null
     const streak = calculateStreak(data?.workoutDates ?? new Set<string>())
 
+    // Build a set of ISO dates in the 7-day window that have planned workouts
+    const plannedDays = new Set<string>()
+    if (plans.length > 0) {
+      for (let i = -3; i <= 3; i++) {
+        const d = new Date(today.getTime() + i * MS_DAY)
+        const dIso = isoDate(d)
+        const dbDay = jsDayToDbDay(d.getDay())
+        if (plans.some((p) => p.day_of_week === dbDay || p.assigned_date === dIso)) {
+          plannedDays.add(dIso)
+        }
+      }
+    }
+
     return {
       todayPlan,
       nextPlan,
@@ -187,6 +242,7 @@ export default function AlumnoHomeScreen() {
       currentWeight,
       weightDelta,
       streak,
+      plannedDays,
     }
   }, [data])
 
@@ -201,13 +257,17 @@ export default function AlumnoHomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
-        title={`${greeting()}, ${data?.client?.fullName?.split(' ')[0] ?? ''}`.trim()}
-        subtitle="Tu progreso de hoy"
-        trailing={<StreakCounter days={derived.streak} />}
+        title={`${timeGreeting()}, ${data?.client?.fullName?.split(' ')[0] ?? ''}`.trim()}
+        subtitle={formatLongDate()}
+        trailing={<StreakWidget streak={derived.streak} />}
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <WeekCalendar workoutDates={data?.workoutDates ?? new Set<string>()} />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+      >
+        <WeekCalendar workoutDates={data?.workoutDates ?? new Set<string>()} plannedDays={derived.plannedDays} />
 
         {!hasCheckInThisMonth(data?.checkIns ?? []) ? (
           <MotiView
@@ -265,12 +325,31 @@ export default function AlumnoHomeScreen() {
         <ActiveProgramSection program={data?.program ?? null} />
         <RecentWorkouts workouts={derived.recentUnique} />
         <WeightSparkline weights={derived.weights} currentWeight={derived.currentWeight} delta={derived.weightDelta} />
+        {data?.client && (
+          <PersonalRecordsBanner clientId={data.client.id} />
+        )}
+        {data?.client && (
+          <NutritionDailySummaryWidget clientId={data.client.id} />
+        )}
+        {data?.habitsToday && (data.habitsToday.water_ml != null || data.habitsToday.steps != null) && (
+          <HabitsMiniRow habits={data.habitsToday} theme={theme} />
+        )}
       </ScrollView>
+
+      {data?.welcomeModal && (
+        <WelcomeModal
+          brandName={data.welcomeModal.brandName}
+          enabled={data.welcomeModal.enabled}
+          content={data.welcomeModal.content}
+          type={data.welcomeModal.type}
+          version={data.welcomeModal.version}
+        />
+      )}
     </SafeAreaView>
   )
 }
 
-function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
+function WeekCalendar({ workoutDates, plannedDays }: { workoutDates: Set<string>; plannedDays: Set<string> }) {
   const { theme } = useTheme()
   const today = startOfToday()
   const days = Array.from({ length: 7 }, (_, i) => new Date(today.getTime() + (i - 3) * MS_DAY))
@@ -287,6 +366,17 @@ function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
         const dIso = isoDate(day)
         const active = dIso === todayIso
         const done = workoutDates.has(dIso)
+        const planned = plannedDays.has(dIso)
+        const isPast = dIso < todayIso
+        // dot color: done=green, planned+past+not done=amber, planned+future=muted, active=white
+        const dotColor = done
+          ? (active ? theme.primaryForeground : '#10B981')
+          : planned && isPast
+          ? '#F59E0B'
+          : planned
+          ? (active ? theme.primaryForeground + '80' : theme.border)
+          : 'transparent'
+
         return (
           <View
             key={dIso}
@@ -294,7 +384,7 @@ function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
               styles.dayPill,
               {
                 backgroundColor: active ? theme.primary : theme.card,
-                borderColor: active ? theme.primary : theme.border,
+                borderColor: active ? theme.primary : done ? '#10B981' + '50' : theme.border,
                 borderRadius: theme.radius.xl,
               },
             ]}
@@ -305,7 +395,7 @@ function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
             <Text style={[styles.dayNum, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
               {day.getDate()}
             </Text>
-            <View style={[styles.dayDot, { backgroundColor: done ? (active ? theme.primaryForeground : theme.primary) : 'transparent' }]} />
+            <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
           </View>
         )
       })}
@@ -527,4 +617,36 @@ const styles = StyleSheet.create({
   weightValue: { fontSize: 24, letterSpacing: -0.6 },
   trendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   trendText: { fontSize: 13 },
+  habitsRow: { flexDirection: 'row', gap: 8 },
+  habitChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  habitText: { fontSize: 13 },
 })
+
+function HabitsMiniRow({ habits, theme }: { habits: HabitsData; theme: any }) {
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 10 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 350 }}
+    >
+      <View style={styles.habitsRow}>
+        {habits.water_ml != null && (
+          <View style={[styles.habitChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
+            <Droplets size={14} color="#3b82f6" strokeWidth={2} />
+            <Text style={[styles.habitText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              {habits.water_ml >= 1000 ? `${(habits.water_ml / 1000).toFixed(1)}L` : `${habits.water_ml}ml`}
+            </Text>
+          </View>
+        )}
+        {habits.steps != null && (
+          <View style={[styles.habitChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
+            <Footprints size={14} color="#10B981" strokeWidth={2} />
+            <Text style={[styles.habitText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              {habits.steps.toLocaleString('es-CL')} pasos
+            </Text>
+          </View>
+        )}
+      </View>
+    </MotiView>
+  )
+}
