@@ -14,7 +14,17 @@ import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile, type ClientProfile } from '../../../lib/client'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, Card, ComplianceRing, ScreenHeader, Sparkline, StreakCounter } from '../../../components'
+import {
+  Button,
+  Card,
+  ComplianceRing,
+  NutritionDailySummaryWidget,
+  PersonalRecordsBanner,
+  ScreenHeader,
+  Sparkline,
+  StreakWidget,
+} from '../../../components'
+import { getTodayInSantiago, timeGreeting, formatLongDate } from '../../../lib/date-utils'
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 const MS_DAY = 24 * 60 * 60 * 1000
@@ -71,12 +81,6 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
 }
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 12) return 'Buenos dias'
-  if (h < 20) return 'Buenas tardes'
-  return 'Buenas noches'
-}
 
 export default function AlumnoHomeScreen() {
   const { theme } = useTheme()
@@ -201,9 +205,9 @@ export default function AlumnoHomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
-        title={`${greeting()}, ${data?.client?.fullName?.split(' ')[0] ?? ''}`.trim()}
-        subtitle="Tu progreso de hoy"
-        trailing={<StreakCounter days={derived.streak} />}
+        title={`${timeGreeting()}, ${data?.client?.fullName?.split(' ')[0] ?? ''}`.trim()}
+        subtitle={formatLongDate()}
+        trailing={<StreakWidget streak={derived.streak} />}
       />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -265,6 +269,12 @@ export default function AlumnoHomeScreen() {
         <ActiveProgramSection program={data?.program ?? null} />
         <RecentWorkouts workouts={derived.recentUnique} />
         <WeightSparkline weights={derived.weights} currentWeight={derived.currentWeight} delta={derived.weightDelta} />
+        {data?.client && (
+          <PersonalRecordsBanner clientId={data.client.id} />
+        )}
+        {data?.client && (
+          <NutritionDailySummaryWidget clientId={data.client.id} />
+        )}
       </ScrollView>
     </SafeAreaView>
   )
