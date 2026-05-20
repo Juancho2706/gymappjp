@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router'
-import { Apple, CheckCircle, Dumbbell, Home, User } from 'lucide-react-native'
+import { Apple, BookOpen, CheckCircle, History, Home, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 
 export default function AlumnoTabsLayout() {
@@ -27,22 +27,22 @@ export default function AlumnoTabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Home',
+          title: 'Inicio',
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} strokeWidth={2} />,
-        }}
-      />
-      <Tabs.Screen
-        name="workout"
-        options={{
-          title: 'Rutina',
-          tabBarIcon: ({ color, size }) => <Dumbbell size={size} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
         name="nutricion"
         options={{
-          title: 'Nutricion',
+          title: 'Nutrición',
           tabBarIcon: ({ color, size }) => <Apple size={size} color={color} strokeWidth={2} />,
+        }}
+      />
+      <Tabs.Screen
+        name="exercises"
+        options={{
+          title: 'Aprender',
+          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
@@ -53,11 +53,23 @@ export default function AlumnoTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="history"
+        options={{
+          title: 'Historial',
+          tabBarIcon: ({ color, size }) => <History size={size} color={color} strokeWidth={2} />,
+        }}
+      />
+      <Tabs.Screen
         name="perfil"
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={2} />,
         }}
+      />
+      {/* Workout se accede desde hero card del Home, no como tab directo */}
+      <Tabs.Screen
+        name="workout"
+        options={{ href: null }}
       />
     </Tabs>
   )

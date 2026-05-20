@@ -37,8 +37,10 @@ import {
 } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
 import {
+  AdherenceStrip,
   DayNavigator,
   EmptyState,
+  HabitsTracker,
   MacroRingSummary,
   MealCardExpandable,
   OfflineBanner,
@@ -46,6 +48,8 @@ import {
   ScreenHeader,
   WorkoutContextBanner,
 } from '../../../components'
+import { getDailyHabits } from '../../../lib/habits.queries'
+import type { HabitsData } from '../../../lib/habits.queries'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +153,7 @@ export default function AlumnoNutricionScreen() {
   const [isDateLoading, setIsDateLoading] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [hasTodayWorkout, setHasTodayWorkout] = useState(false)
+  const [habits, setHabits] = useState<HabitsData | null>(null)
 
   const appStateRef = useRef(AppState.currentState)
 
@@ -180,9 +185,10 @@ export default function AlumnoNutricionScreen() {
     setPlan(planData as unknown as NutritionPlan)
 
     const since30 = isoDateAddDays(todayIso, -30)
-    const [logResult, adherenceResult, workoutResult] = await Promise.all([
+    const [logResult, adherenceResult, habitsResult, workoutResult] = await Promise.all([
       getNutritionLogForDate(client.id, planData.id, todayIso),
       getNutritionAdherence30d(client.id, planData.id, since30),
+      getDailyHabits(client.id, todayIso),
       supabase
         .from('workout_programs')
         .select('id, workout_plans ( id, day_of_week, assigned_date )')
@@ -193,6 +199,7 @@ export default function AlumnoNutricionScreen() {
 
     setCurrentLog(logResult.data as unknown as DailyLog | null)
     setAdherence((adherenceResult.data ?? []) as unknown as AdherenceDay[])
+    setHabits(habitsResult)
 
     if (workoutResult.data?.workout_plans) {
       const today = new Date().getDay() === 0 ? 7 : new Date().getDay()
@@ -369,7 +376,7 @@ export default function AlumnoNutricionScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {!isOnline && <OfflineBanner />}
+          {!isOnline && <OfflineBanner visible />}
 
           <WorkoutContextBanner visible={hasTodayWorkout && isToday} />
 
@@ -435,6 +442,20 @@ export default function AlumnoNutricionScreen() {
               )
             })
           )}
+
+          {clientId && (
+            <HabitsTracker
+              clientId={clientId}
+              logDate={selectedDate}
+              isToday={isToday}
+              initialData={habits}
+            />
+          )}
+
+          <AdherenceStrip
+            adherence={adherence}
+            planMeals={plan.nutrition_meals.map((m) => ({ id: m.id, day_of_week: m.day_of_week }))}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
