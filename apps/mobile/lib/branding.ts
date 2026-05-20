@@ -10,13 +10,36 @@ export interface CoachBranding {
 }
 
 const BRANDING_KEY = 'eva_coach_branding'
+const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
+const SLUG_RE = /^[a-z0-9-]{3,50}$/
 
-export async function fetchBrandingByInviteCode(inviteCode: string): Promise<CoachBranding | null> {
-  const { data, error } = await supabase
+export function normalizeCoachIdentifier(input: string): string {
+  const trimmed = input.trim()
+  const fromUrl = trimmed.match(/\/c\/([^/?#]+)/i)?.[1]
+  const raw = decodeURIComponent(fromUrl ?? trimmed)
+    .replace(/^https?:\/\//i, '')
+    .replace(/^eva-app\.cl\/c\//i, '')
+    .replace(/\/(login|dashboard|nutrition|check-in|workout.*)?$/i, '')
+    .trim()
+
+  return INVITE_CODE_RE.test(raw.toUpperCase())
+    ? raw.toUpperCase()
+    : raw.toLowerCase().replace(/[^a-z0-9-]/g, '')
+}
+
+export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
+  const identifier = normalizeCoachIdentifier(identifierInput)
+  const query = supabase
     .from('coaches')
     .select('id, slug, primary_color, display_name, invite_code')
-    .eq('invite_code', inviteCode.toUpperCase())
-    .single()
+
+  const { data, error } = await (
+    INVITE_CODE_RE.test(identifier)
+      ? query.eq('invite_code', identifier).maybeSingle()
+      : SLUG_RE.test(identifier)
+        ? query.eq('slug', identifier).maybeSingle()
+        : query.eq('invite_code', '__invalid__').maybeSingle()
+  )
 
   if (error || !data) return null
 
@@ -30,6 +53,10 @@ export async function fetchBrandingByInviteCode(inviteCode: string): Promise<Coa
 
   await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(branding))
   return branding
+}
+
+export async function fetchBrandingByInviteCode(inviteCode: string): Promise<CoachBranding | null> {
+  return fetchBrandingByCoachIdentifier(inviteCode)
 }
 
 export async function loadStoredBranding(): Promise<CoachBranding | null> {

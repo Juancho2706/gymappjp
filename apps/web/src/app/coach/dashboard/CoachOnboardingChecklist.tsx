@@ -20,6 +20,7 @@ import { OnboardingCompactLoopStrip } from './_components/onboarding/OnboardingC
 import { OnboardingStepsJumpNav } from './_components/onboarding/OnboardingStepsJumpNav'
 import { OnboardingStepsVignetteCarousel } from './_components/onboarding/OnboardingStepsVignetteCarousel'
 import { postGuideEngagement } from './_lib/onboarding-telemetry.client'
+import { buildCoachStudentPath } from '@/lib/coach/public-identifier'
 
 type StepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_checkin'
 
@@ -97,6 +98,7 @@ async function emitOnboardingEvent(
 export function CoachOnboardingChecklist({
     coachId,
     coachSlug,
+    coachInviteCode,
     initialOnboardingGuide,
     totalClients,
     activePlans,
@@ -106,6 +108,7 @@ export function CoachOnboardingChecklist({
 }: {
     coachId: string
     coachSlug: string
+    coachInviteCode?: string | null
     initialOnboardingGuide: Json
     totalClients: number
     activePlans: number
@@ -352,7 +355,7 @@ export function CoachOnboardingChecklist({
         )
     }
 
-    const studentAppPath = `/c/${encodeURIComponent(coachSlug)}`
+    const studentAppPath = buildCoachStudentPath({ slug: coachSlug, invite_code: coachInviteCode })
 
     return (
         <>

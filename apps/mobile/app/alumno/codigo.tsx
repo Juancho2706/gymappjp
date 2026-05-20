@@ -11,7 +11,7 @@ import {
 import { useRouter } from 'expo-router'
 import { ArrowRight, Hash } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import { fetchBrandingByInviteCode } from '../../lib/branding'
+import { fetchBrandingByCoachIdentifier, normalizeCoachIdentifier } from '../../lib/branding'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, TopBar } from '../../components'
 
@@ -23,15 +23,16 @@ export default function CodigoScreen() {
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit() {
-    if (code.length !== 5) {
-      setError('El código tiene 5 caracteres')
+    const identifier = normalizeCoachIdentifier(code)
+    if (!identifier) {
+      setError('Ingresa el código o link de tu coach')
       return
     }
     setLoading(true)
     setError(null)
-    const branding = await fetchBrandingByInviteCode(code)
+    const branding = await fetchBrandingByCoachIdentifier(identifier)
     if (!branding) {
-      setError('Código inválido. Pídelo a tu coach.')
+      setError('No encontramos ese coach. Revisa el código o link.')
       setLoading(false)
       return
     }
@@ -67,10 +68,10 @@ export default function CodigoScreen() {
           </View>
 
           <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Ingresá tu código
+            Ingresa tu código
           </Text>
           <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Tu coach te dio un código de 5 caracteres para unirte
+            Usa el código corto de tu coach. También aceptamos links antiguos /c/slug.
           </Text>
 
           <TextInput
@@ -84,15 +85,15 @@ export default function CodigoScreen() {
                 fontFamily: 'Montserrat_800ExtraBold',
               },
             ]}
-            placeholder="XXXXX"
+            placeholder="ABCDE o eva-app.cl/c/coach"
             placeholderTextColor={theme.mutedForeground}
             value={code}
             onChangeText={(t) => {
-              setCode(t.toUpperCase())
+              setCode(t.trim())
               if (error) setError(null)
             }}
-            autoCapitalize="characters"
-            maxLength={5}
+            autoCapitalize="none"
+            autoCorrect={false}
             autoFocus
           />
 
@@ -118,7 +119,7 @@ export default function CodigoScreen() {
             rightIcon={ArrowRight}
             onPress={handleSubmit}
             loading={loading}
-            disabled={code.length !== 5}
+            disabled={!normalizeCoachIdentifier(code)}
             full
             size="lg"
             style={{ marginTop: 8 }}
@@ -147,9 +148,9 @@ const styles = StyleSheet.create({
   input: {
     height: 72,
     borderWidth: 2,
-    paddingHorizontal: 24,
-    fontSize: 36,
-    letterSpacing: 10,
+    paddingHorizontal: 18,
+    fontSize: 20,
+    letterSpacing: 0,
     textAlign: 'center',
     marginTop: 8,
   },

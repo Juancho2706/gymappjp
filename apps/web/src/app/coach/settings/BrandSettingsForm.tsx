@@ -13,6 +13,7 @@ import type { Tables } from '@/lib/database.types'
 import { generateBrandPalette, getContrastInfo, hexToRgb } from '@/lib/color-utils'
 import { BrandThemePreview } from './_components/BrandThemePreview'
 import { QRCodeSVG } from 'qrcode.react'
+import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 
 type Coach = Tables<'coaches'>
 
@@ -61,7 +62,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [slugLockNowMs, setSlugLockNowMs] = useState<number | null>(null)
 
     const palette = generateBrandPalette(selectedColor ?? '#007AFF')
-    const studentUrl = `https://eva-app.cl/c/${slugInput}/login`
+    const publicStudentIdentifier = getCoachPublicIdentifier(coach)
+    const studentUrl = `https://eva-app.cl/c/${publicStudentIdentifier}/login`
+    const legacyStudentUrl = `https://eva-app.cl/c/${slugInput}/login`
 
     const contrast = useMemo(() => getContrastInfo(selectedColor ?? '#007AFF'), [selectedColor])
 
@@ -241,7 +244,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
                 <div className="space-y-1.5">
                     <Label htmlFor="slug" className="text-sm text-foreground font-semibold">
-                        URL de tu app
+                        URL legacy de tu app
                     </Label>
                     <div className="flex items-center gap-0">
                         <div className="h-10 px-3 flex items-center bg-muted border border-r-0 border-border rounded-l-xl text-sm text-muted-foreground whitespace-nowrap">
@@ -263,7 +266,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         <ExternalLink className="w-3 h-3 shrink-0" />
                         <span className="truncate sm:hidden">eva-app.cl/c/{slugInput}</span>
-                        <span className="truncate hidden sm:inline">{studentUrl}</span>
+                        <span className="truncate hidden sm:inline">{legacyStudentUrl}</span>
                     </div>
 
                     {/* Slug change warning */}
@@ -292,7 +295,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         </div>
                     )}
                     <p className="text-[10px] text-muted-foreground">
-                        Link único que compartes con tus alumnos. Solo letras minúsculas, números y guiones.
+                        Alias web antiguo. Los links nuevos usan el código corto y este slug sigue funcionando para alumnos actuales.
                     </p>
                     {state.fieldErrors?.slug && (
                         <p className="text-xs text-destructive">{state.fieldErrors.slug[0]}</p>
@@ -703,7 +706,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     <h2 className="text-base font-bold text-foreground">Compartir con alumnos</h2>
                 </div>
                 <p className="text-xs text-muted-foreground -mt-3">
-                    Tus alumnos instalan tu app desde este link. Al instalarla, verán tu marca en vez de EVA.
+                    Tus alumnos entran con tu código corto. Los slugs antiguos siguen funcionando como alias.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
@@ -712,7 +715,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     </div>
                     <div className="flex-1 min-w-0 space-y-3 w-full">
                         <div className="space-y-1">
-                            <Label className="text-sm font-semibold">Link para tus alumnos</Label>
+                            <Label className="text-sm font-semibold">Link principal para tus alumnos</Label>
+                            {coach.invite_code ? (
+                                <div className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 font-mono text-sm font-black tracking-[0.22em] text-primary">
+                                    {coach.invite_code}
+                                </div>
+                            ) : null}
                             <div className="flex items-center gap-2">
                                 <Input
                                     readOnly
@@ -734,7 +742,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             </div>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Comparte este link por WhatsApp, Instagram o muestra el QR en tu gym. Tus alumnos abren el link, instalan la app y ven tu marca.
+                            Comparte este link por WhatsApp, Instagram o muestra el QR en tu gym. Si un alumno tiene un link antiguo con tu slug, también seguirá funcionando.
                         </p>
                     </div>
                 </div>

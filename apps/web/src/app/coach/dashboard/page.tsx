@@ -30,6 +30,7 @@ export default async function CoachDashboardPage() {
                 userId={coach.id}
                 coachName={coach.full_name ?? coach.brand_name ?? 'Coach'}
                 coachSlug={coach.slug}
+                coachInviteCode={coach.invite_code}
                 initialOnboardingGuide={coach.onboarding_guide ?? DEFAULT_COACH_ONBOARDING_GUIDE}
                 subscriptionTier={subscriptionTier}
                 hasCoachLogo={Boolean(coach.logo_url?.trim())}

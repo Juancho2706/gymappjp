@@ -52,6 +52,7 @@ interface Props {
     coachId: string
     coachName: string
     coachSlug: string
+    coachInviteCode?: string | null
     initialOnboardingGuide: Json
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean
@@ -62,6 +63,7 @@ export function DashboardShell({
     coachId,
     coachName,
     coachSlug,
+    coachInviteCode,
     initialOnboardingGuide,
     subscriptionTier,
     hasCoachLogo,
@@ -112,6 +114,7 @@ export function DashboardShell({
                     <CoachOnboardingChecklist
                         coachId={coachId}
                         coachSlug={coachSlug}
+                        coachInviteCode={coachInviteCode}
                         initialOnboardingGuide={initialOnboardingGuide}
                         totalClients={data.kpi.totalClients}
                         activePlans={data.activePlans}

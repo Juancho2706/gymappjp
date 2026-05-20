@@ -7,6 +7,7 @@ export async function DashboardContent({
     userId,
     coachName,
     coachSlug,
+    coachInviteCode,
     initialOnboardingGuide,
     subscriptionTier,
     hasCoachLogo,
@@ -14,6 +15,7 @@ export async function DashboardContent({
     userId: string
     coachName: string
     coachSlug: string
+    coachInviteCode?: string | null
     initialOnboardingGuide: Json
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean
@@ -25,6 +27,7 @@ export async function DashboardContent({
             coachId={userId}
             coachName={coachName}
             coachSlug={coachSlug}
+            coachInviteCode={coachInviteCode}
             initialOnboardingGuide={initialOnboardingGuide}
             subscriptionTier={subscriptionTier}
             hasCoachLogo={hasCoachLogo}

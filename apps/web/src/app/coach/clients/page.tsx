@@ -36,7 +36,7 @@ export default async function CoachClientsPage() {
         getCachedDirectoryPulse(coachSession.id),
     ])
 
-    const coach = { slug: coachSession.slug }
+    const coach = { slug: coachSession.slug, invite_code: coachSession.invite_code }
     const clients = (clientsResponse.data ?? []) as ClientWithProgram[]
 
     const host = headersList.get('host') || 'localhost:3000'
