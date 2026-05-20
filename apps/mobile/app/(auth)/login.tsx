@@ -37,7 +37,7 @@ export default function LoginScreen() {
       return
     }
     await AsyncStorage.setItem('eva_user_role', role ?? 'coach')
-    router.replace(role === 'alumno' ? '/alumno/workout' : '/coach/clientes')
+    router.replace(role === 'alumno' ? '/alumno/home' : '/coach/home')
   }
 
   return (
@@ -141,6 +141,14 @@ export default function LoginScreen() {
             transition={{ type: 'timing', duration: 600, delay: 360 }}
             style={styles.footer}
           >
+            {isCoach ? (
+              <Text
+                onPress={() => router.push('/(auth)/register')}
+                style={[styles.createLink, { color: theme.primary, fontFamily: theme.fontSans }]}
+              >
+                Crear cuenta nueva
+              </Text>
+            ) : null}
             <Text style={[styles.footerText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               eva-app.cl
             </Text>
@@ -179,6 +187,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, lineHeight: 20 },
   form: { gap: 16 },
   forgotLink: { fontSize: 12, fontWeight: '500' },
-  footer: { marginTop: 36, alignItems: 'center' },
+  footer: { marginTop: 36, alignItems: 'center', gap: 10 },
+  createLink: { fontSize: 13, fontWeight: '600' },
   footerText: { fontSize: 12, letterSpacing: 0.3 },
 })

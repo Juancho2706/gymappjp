@@ -47,7 +47,7 @@ export default function ResetPasswordScreen() {
 
   async function handleContinue() {
     const role = await AsyncStorage.getItem('eva_user_role')
-    router.replace(role === 'coach' ? '/coach/clientes' : '/alumno/workout')
+    router.replace(role === 'coach' ? '/coach/home' : '/alumno/home')
   }
 
   return (
