@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Linking,
   Platform,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -96,7 +97,11 @@ export default function WorkoutExecutionScreen() {
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [techniqueExercise, setTechniqueExercise] = useState<Exercise | null>(null)
   const [isOnline, setIsOnline] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const restInterval = useRef<ReturnType<typeof setInterval> | null>(null)
+  const scrollRef = useRef<ScrollView>(null)
+  const sectionY = useRef<Record<string, number>>({})
+  const blockY = useRef<Record<string, number>>({})
 
   useEffect(() => {
     loadPlan()
@@ -149,6 +154,26 @@ export default function WorkoutExecutionScreen() {
     }
 
     setLoading(false)
+    setRefreshing(false)
+  }
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await loadPlan()
+  }
+
+  function scrollToNextBlock(doneBlockId: string) {
+    const currentIndex = blocks.findIndex((b) => b.id === doneBlockId)
+    for (let i = currentIndex + 1; i < blocks.length; i++) {
+      const b = blocks[i]
+      if ((logs[b.id]?.length ?? 0) < b.sets) {
+        const sec = b.section ?? 'main'
+        const sy = sectionY.current[sec] ?? 0
+        const by = blockY.current[b.id] ?? 0
+        scrollRef.current?.scrollTo({ y: sy + by - 20, animated: true })
+        return
+      }
+    }
   }
 
   async function loadTodayLogs(blockIds: string[]) {
@@ -222,10 +247,18 @@ export default function WorkoutExecutionScreen() {
     if (!clientId) return
     const entry: LogEntry = { blockId: block.id, setNumber, weightKg: weight, repsDone: reps, rpe, rir }
 
+    const existingFiltered = (logs[block.id] ?? []).filter((l) => l.setNumber !== setNumber)
+    const newBlockLogs = [...existingFiltered, entry]
+    const willBeDone = newBlockLogs.length >= block.sets
+
     setLogs((prev) => ({
       ...prev,
-      [block.id]: [...(prev[block.id] ?? []).filter((l) => l.setNumber !== setNumber), entry].sort((a, b) => a.setNumber - b.setNumber),
+      [block.id]: newBlockLogs.sort((a, b) => a.setNumber - b.setNumber),
     }))
+
+    if (willBeDone) {
+      setTimeout(() => scrollToNextBlock(block.id), 400)
+    }
 
     const logData = {
       block_id: block.id,
@@ -266,7 +299,7 @@ export default function WorkoutExecutionScreen() {
 
   function renderSection(section: string, sectionBlocks: Block[]) {
     return (
-      <View key={section} style={styles.section}>
+      <View key={section} style={styles.section} onLayout={(e) => { sectionY.current[section] = e.nativeEvent.layout.y }}>
         <View style={styles.sectionHeader}>
           <View style={[styles.sectionRail, { backgroundColor: section === 'main' ? theme.primary : theme.primary + '55' }]} />
           <View style={styles.sectionCopy}>
@@ -306,6 +339,7 @@ export default function WorkoutExecutionScreen() {
                 from={{ opacity: 0, translateY: 12 }}
                 animate={{ opacity: 1, translateY: 0 }}
                 transition={{ type: 'timing', duration: 350, delay: Math.min((groupIndex + index) * 50, 400) }}
+                onLayout={(e) => { blockY.current[block.id] = e.nativeEvent.layout.y }}
               >
                 <BlockCard
                   block={block}
@@ -369,7 +403,31 @@ export default function WorkoutExecutionScreen() {
             ) : null}
           </View>
 
-          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+          >
+            {allDone && (
+              <MotiView
+                from={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', damping: 14 }}
+                style={[styles.doneBanner, { backgroundColor: theme.success + '18', borderColor: theme.success + '40', borderRadius: theme.radius.xl }]}
+              >
+                <Trophy size={18} color={theme.success} strokeWidth={2} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.doneBannerTitle, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
+                    ¡Entrenamiento completado!
+                  </Text>
+                  <Text style={[styles.doneBannerSub, { color: theme.success, fontFamily: theme.fontSans, opacity: 0.8 }]}>
+                    Todas las series registradas. El detalle queda sincronizado con tu coach.
+                  </Text>
+                </View>
+              </MotiView>
+            )}
             {Object.entries(sections).map(([sec, blks]) => renderSection(sec, blks))}
             <Button
               label="Finalizar entrenamiento"
@@ -663,6 +721,9 @@ const styles = StyleSheet.create({
   progressPct: { fontSize: 13 },
   variantText: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 40, gap: 14 },
+  doneBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, padding: 16 },
+  doneBannerTitle: { fontSize: 15 },
+  doneBannerSub: { fontSize: 12, lineHeight: 17, marginTop: 2 },
   section: { gap: 10 },
   sectionHeader: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   sectionRail: { width: 4, minHeight: 34, borderRadius: 2 },

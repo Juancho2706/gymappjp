@@ -218,6 +218,19 @@ export default function AlumnoHomeScreen() {
     const weightDelta = currentWeight != null && firstWeight != null ? currentWeight - firstWeight : null
     const streak = calculateStreak(data?.workoutDates ?? new Set<string>())
 
+    // Build a set of ISO dates in the 7-day window that have planned workouts
+    const plannedDays = new Set<string>()
+    if (plans.length > 0) {
+      for (let i = -3; i <= 3; i++) {
+        const d = new Date(today.getTime() + i * MS_DAY)
+        const dIso = isoDate(d)
+        const dbDay = jsDayToDbDay(d.getDay())
+        if (plans.some((p) => p.day_of_week === dbDay || p.assigned_date === dIso)) {
+          plannedDays.add(dIso)
+        }
+      }
+    }
+
     return {
       todayPlan,
       nextPlan,
@@ -229,6 +242,7 @@ export default function AlumnoHomeScreen() {
       currentWeight,
       weightDelta,
       streak,
+      plannedDays,
     }
   }, [data])
 
@@ -253,7 +267,7 @@ export default function AlumnoHomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
       >
-        <WeekCalendar workoutDates={data?.workoutDates ?? new Set<string>()} />
+        <WeekCalendar workoutDates={data?.workoutDates ?? new Set<string>()} plannedDays={derived.plannedDays} />
 
         {!hasCheckInThisMonth(data?.checkIns ?? []) ? (
           <MotiView
@@ -335,7 +349,7 @@ export default function AlumnoHomeScreen() {
   )
 }
 
-function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
+function WeekCalendar({ workoutDates, plannedDays }: { workoutDates: Set<string>; plannedDays: Set<string> }) {
   const { theme } = useTheme()
   const today = startOfToday()
   const days = Array.from({ length: 7 }, (_, i) => new Date(today.getTime() + (i - 3) * MS_DAY))
@@ -352,6 +366,17 @@ function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
         const dIso = isoDate(day)
         const active = dIso === todayIso
         const done = workoutDates.has(dIso)
+        const planned = plannedDays.has(dIso)
+        const isPast = dIso < todayIso
+        // dot color: done=green, planned+past+not done=amber, planned+future=muted, active=white
+        const dotColor = done
+          ? (active ? theme.primaryForeground : '#10B981')
+          : planned && isPast
+          ? '#F59E0B'
+          : planned
+          ? (active ? theme.primaryForeground + '80' : theme.border)
+          : 'transparent'
+
         return (
           <View
             key={dIso}
@@ -359,7 +384,7 @@ function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
               styles.dayPill,
               {
                 backgroundColor: active ? theme.primary : theme.card,
-                borderColor: active ? theme.primary : theme.border,
+                borderColor: active ? theme.primary : done ? '#10B981' + '50' : theme.border,
                 borderRadius: theme.radius.xl,
               },
             ]}
@@ -370,7 +395,7 @@ function WeekCalendar({ workoutDates }: { workoutDates: Set<string> }) {
             <Text style={[styles.dayNum, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
               {day.getDate()}
             </Text>
-            <View style={[styles.dayDot, { backgroundColor: done ? (active ? theme.primaryForeground : theme.primary) : 'transparent' }]} />
+            <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
           </View>
         )
       })}

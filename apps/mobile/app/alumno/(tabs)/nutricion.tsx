@@ -51,6 +51,7 @@ import {
 } from '../../../components'
 import { getDailyHabits } from '../../../lib/habits.queries'
 import type { HabitsData } from '../../../lib/habits.queries'
+import { readNutritionCache, writeNutritionCache } from '../../../lib/nutrition-offline-cache'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -183,7 +184,21 @@ export default function AlumnoNutricionScreen() {
     setClientId(client.id)
 
     const { data: planData } = await getActiveNutritionPlanFull(client.id)
-    if (!planData) { setLoading(false); return }
+
+    if (!planData) {
+      // Try reading from cache when offline
+      const cached = await readNutritionCache('active')
+      if (cached?.plan) {
+        setPlan(cached.plan as unknown as NutritionPlan)
+        setCurrentLog(cached.dailyLog as unknown as DailyLog | null)
+        setAdherence((cached.adherence as unknown as AdherenceDay[]) ?? [])
+        setIsOnline(false)
+      }
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
+
     setPlan(planData as unknown as NutritionPlan)
 
     const since30 = isoDateAddDays(todayIso, -30)
@@ -208,6 +223,15 @@ export default function AlumnoNutricionScreen() {
       const plans = workoutResult.data.workout_plans as any[]
       setHasTodayWorkout(plans.some((p) => p.day_of_week === today || p.assigned_date === todayIso))
     }
+
+    // Write fresh data to cache for offline use
+    writeNutritionCache('active', {
+      today: todayIso,
+      plan: planData,
+      adherence: adherenceResult.data ?? [],
+      dailyLog: logResult.data ?? null,
+      clientUserId: client.userId,
+    })
 
     setLoading(false)
     setRefreshing(false)

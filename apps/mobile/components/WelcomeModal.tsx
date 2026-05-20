@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { WebView } from 'react-native-webview'
 import { X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../context/ThemeContext'
@@ -86,11 +87,23 @@ export function WelcomeModal({ brandName, enabled, content, type, version }: Pro
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.content, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-              {content}
-            </Text>
-          </ScrollView>
+          {type === 'video' ? (
+            <View style={styles.videoWrap}>
+              <WebView
+                source={{ uri: content }}
+                style={styles.video}
+                allowsInlineMediaPlayback
+                mediaPlaybackRequiresUserAction={false}
+                javaScriptEnabled
+              />
+            </View>
+          ) : (
+            <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.content, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                {content}
+              </Text>
+            </ScrollView>
+          )}
 
           <View style={styles.footer}>
             <TouchableOpacity
@@ -157,6 +170,8 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 8, marginTop: 2 },
   body: { maxHeight: 280, paddingHorizontal: 20, paddingBottom: 4 },
   content: { fontSize: 14, lineHeight: 22 },
+  videoWrap: { height: 200, marginHorizontal: 20, borderRadius: 12, overflow: 'hidden' },
+  video: { flex: 1 },
   footer: {
     padding: 20,
     paddingTop: 16,
