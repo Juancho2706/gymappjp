@@ -13,10 +13,13 @@ import {
   View,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Check, Timer, Trophy } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
+import { TopBar } from '../../../components'
 
 interface Exercise { id: string; name: string }
 interface Block {
@@ -153,14 +156,20 @@ export default function WorkoutExecutionScreen() {
             {SECTION_LABELS[section] ?? section}
           </Text>
         )}
-        {sectionBlocks.map((block) => (
-          <BlockCard
+        {sectionBlocks.map((block, index) => (
+          <MotiView
             key={block.id}
-            block={block}
-            theme={theme}
-            logged={logs[block.id] ?? []}
-            onLogSet={logSet}
-          />
+            from={{ opacity: 0, translateY: 12 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 350, delay: Math.min(index * 50, 400) }}
+          >
+            <BlockCard
+              block={block}
+              theme={theme}
+              logged={logs[block.id] ?? []}
+              onLogSet={logSet}
+            />
+          </MotiView>
         ))}
       </View>
     )
@@ -175,35 +184,25 @@ export default function WorkoutExecutionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {restSeconds != null && (
-        <TouchableOpacity
-          style={[styles.restBanner, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
-          onPress={() => { clearInterval(restInterval.current!); setRestSeconds(null) }}
-          activeOpacity={0.85}
+        <MotiView
+          from={{ opacity: 0, translateY: -16 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'spring', damping: 14 }}
         >
-          <Text
-            style={[styles.restText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
+          <TouchableOpacity
+            style={[styles.restBanner, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
+            onPress={() => { clearInterval(restInterval.current!); setRestSeconds(null) }}
+            activeOpacity={0.85}
           >
-            Descanso · {restSeconds}s  ·  toca para saltar
-          </Text>
-        </TouchableOpacity>
+            <Timer size={16} color={theme.primaryForeground} />
+            <Text style={[styles.restText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
+              Descanso · {restSeconds}s · toca para saltar
+            </Text>
+          </TouchableOpacity>
+        </MotiView>
       )}
 
-      <View style={[styles.navBar, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text
-            style={[styles.back, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}
-          >
-            ← Volver
-          </Text>
-        </TouchableOpacity>
-        <Text
-          style={[styles.navTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
-          numberOfLines={1}
-        >
-          {planTitle}
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
+      <TopBar back title={planTitle || 'Workout'} onBack={() => router.back()} />
 
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
@@ -236,7 +235,7 @@ export default function WorkoutExecutionScreen() {
               <Text
                 style={[styles.finishText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
               >
-                {allDone ? '✓ Finalizar entrenamiento' : 'Finalizar entrenamiento →'}
+                Finalizar entrenamiento
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -308,9 +307,7 @@ function BlockCard({ block, theme, logged, onLogSet }: {
               { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm },
             ]}
           >
-            <Text style={[styles.doneBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
-              ✓
-            </Text>
+            <Trophy size={13} color={theme.success} />
           </View>
         )}
       </View>
@@ -339,7 +336,7 @@ function BlockCard({ block, theme, logged, onLogSet }: {
               <Text
                 style={[styles.loggedValue, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}
               >
-                {l.repsDone || '—'} reps{l.weightKg ? ` · ${l.weightKg}kg` : ''}
+                {l.repsDone || '-'} reps{l.weightKg ? ` · ${l.weightKg}kg` : ''}
               </Text>
             </View>
           ))}
@@ -398,9 +395,7 @@ function BlockCard({ block, theme, logged, onLogSet }: {
               {saving ? (
                 <ActivityIndicator size="small" color={theme.primaryForeground} />
               ) : (
-                <Text style={[styles.logBtnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-                  ✓
-                </Text>
+                <Check size={18} color={theme.primaryForeground} strokeWidth={2.5} />
               )}
             </TouchableOpacity>
           </View>
@@ -412,7 +407,13 @@ function BlockCard({ block, theme, logged, onLogSet }: {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  restBanner: { paddingVertical: 12, alignItems: 'center' },
+  restBanner: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
   restText: { fontSize: 14, letterSpacing: 0.3 },
   navBar: {
     flexDirection: 'row',

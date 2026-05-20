@@ -9,9 +9,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { Apple, BadgeCheck, UtensilsCrossed } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
+import { EmptyState, MacroPill, ScreenHeader } from '../../../components'
 
 interface Client { id: string; full_name: string }
 interface NutritionPlan {
@@ -83,24 +86,16 @@ export default function CoachNutricionScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          Nutrición
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          {selectedClient ? `Planes de ${selectedClient.full_name}` : 'Selecciona un alumno'}
-        </Text>
-      </View>
+      <ScreenHeader
+        title="Nutricion"
+        subtitle={selectedClient ? `Planes de ${selectedClient.full_name}` : 'Selecciona un alumno'}
+      />
 
       {loadingClients ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : (
         <View style={{ flex: 1 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pickerRow}
-          >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
             {clients.map((c) => {
               const active = selectedClient?.id === c.id
               return (
@@ -135,83 +130,72 @@ export default function CoachNutricionScreen() {
           </ScrollView>
 
           {!selectedClient ? (
-            <View style={styles.empty}>
-              <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                Elige un alumno
-              </Text>
-              <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Tocá un nombre arriba para ver sus planes de nutrición.
-              </Text>
-            </View>
+            <EmptyState
+              icon={UtensilsCrossed}
+              title="Elige un alumno"
+              subtitle="Toca un nombre arriba para ver sus planes de nutricion."
+            />
           ) : loadingPlans ? (
             <ActivityIndicator style={{ marginTop: 32 }} color={theme.primary} />
           ) : plans.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                Sin planes de nutrición
-              </Text>
-              <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Crea planes desde la app web en eva-app.cl
-              </Text>
-            </View>
+            <EmptyState
+              icon={Apple}
+              title="Sin planes de nutricion"
+              subtitle="Crea planes desde la app web en eva-app.cl."
+            />
           ) : (
             <FlatList
               data={plans}
               keyExtractor={(p) => p.id}
-              renderItem={({ item }) => (
-                <View
-                  style={[
-                    styles.planCard,
-                    {
-                      backgroundColor: theme.card,
-                      borderColor: item.is_active ? theme.success : theme.border,
-                      borderWidth: item.is_active ? 2 : 1,
-                      borderRadius: theme.radius.xl,
-                    },
-                  ]}
+              renderItem={({ item, index }) => (
+                <MotiView
+                  from={{ opacity: 0, translateY: 12 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 350, delay: Math.min(index * 50, 400) }}
                 >
-                  <View style={styles.planTop}>
-                    <Text
-                      style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]}
-                      numberOfLines={2}
-                    >
-                      {item.name}
-                    </Text>
-                    {item.is_active && (
-                      <View
-                        style={[
-                          styles.activeBadge,
-                          { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm },
-                        ]}
-                      >
+                  <View
+                    style={[
+                      styles.planCard,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: item.is_active ? theme.success : theme.border,
+                        borderWidth: item.is_active ? 2 : 1,
+                        borderRadius: theme.radius.xl,
+                      },
+                    ]}
+                  >
+                    <View style={styles.planTop}>
+                      <View style={styles.titleRow}>
+                        <Apple size={18} color={theme.primary} strokeWidth={1.75} />
                         <Text
-                          style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}
+                          style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]}
+                          numberOfLines={2}
                         >
-                          Activo
+                          {item.name}
                         </Text>
                       </View>
-                    )}
-                  </View>
-                  <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                    {item.mealCount} comida{item.mealCount !== 1 ? 's' : ''}
-                  </Text>
-                  {(item.daily_calories || item.protein_g || item.carbs_g || item.fats_g) ? (
-                    <View style={styles.macrosRow}>
-                      {item.daily_calories != null && (
-                        <MacroChip label="kcal" value={item.daily_calories} color={theme.primary} theme={theme} />
-                      )}
-                      {item.protein_g != null && (
-                        <MacroChip label="P" value={item.protein_g} color="#EF4444" theme={theme} />
-                      )}
-                      {item.carbs_g != null && (
-                        <MacroChip label="C" value={item.carbs_g} color="#F59E0B" theme={theme} />
-                      )}
-                      {item.fats_g != null && (
-                        <MacroChip label="G" value={item.fats_g} color="#8B5CF6" theme={theme} />
-                      )}
+                      {item.is_active ? (
+                        <View style={[styles.activeBadge, { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm }]}>
+                          <BadgeCheck size={12} color={theme.success} />
+                          <Text style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
+                            Activo
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
-                  ) : null}
-                </View>
+                    <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                      {item.mealCount} comida{item.mealCount !== 1 ? 's' : ''}
+                    </Text>
+                    {(item.daily_calories || item.protein_g || item.carbs_g || item.fats_g) ? (
+                      <View style={styles.macrosRow}>
+                        {item.daily_calories != null && <MacroPill label="kcal" value={item.daily_calories} color={theme.primary} />}
+                        {item.protein_g != null && <MacroPill label="P" value={item.protein_g} color="#EF4444" />}
+                        {item.carbs_g != null && <MacroPill label="C" value={item.carbs_g} color="#F59E0B" />}
+                        {item.fats_g != null && <MacroPill label="G" value={item.fats_g} color="#8B5CF6" />}
+                      </View>
+                    ) : null}
+                  </View>
+                </MotiView>
               )}
               contentContainerStyle={styles.planList}
               showsVerticalScrollIndicator={false}
@@ -223,20 +207,8 @@ export default function CoachNutricionScreen() {
   )
 }
 
-function MacroChip({ label, value, color, theme }: { label: string; value: number; color: string; theme: any }) {
-  return (
-    <View style={[styles.macroChip, { backgroundColor: color + '15', borderColor: color + '40', borderRadius: theme.radius.md }]}>
-      <Text style={[styles.macroValue, { color, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
-      <Text style={[styles.macroLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12 },
-  title: { fontSize: 28, letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, marginTop: 4 },
   pickerRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   clientChip: {
     paddingHorizontal: 14,
@@ -253,27 +225,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
   planName: { fontSize: 16, letterSpacing: -0.2, flex: 1 },
-  activeBadge: { paddingHorizontal: 8, paddingVertical: 3 },
+  activeBadge: { paddingHorizontal: 8, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 4 },
   activeBadgeText: { fontSize: 11, letterSpacing: 0.3 },
   planSub: { fontSize: 13 },
   macrosRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
-  macroChip: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    alignItems: 'center',
-    minWidth: 50,
-    gap: 2,
-  },
-  macroValue: { fontSize: 13 },
-  macroLabel: { fontSize: 10 },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyTitle: { fontSize: 17, marginBottom: 8 },
-  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
 })

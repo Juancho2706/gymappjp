@@ -9,11 +9,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { Calendar, Dumbbell } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
+import { EmptyState, ScreenHeader } from '../../../components'
 
-const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 
 interface Client { id: string; full_name: string }
 interface Plan {
@@ -98,28 +101,22 @@ export default function BuilderScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          Programas
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          {clients.length === 0
+      <ScreenHeader
+        title="Programas"
+        subtitle={
+          clients.length === 0
             ? 'Sin alumnos activos'
             : selectedClient
             ? `Planes de ${selectedClient.full_name}`
-            : 'Selecciona un alumno'}
-        </Text>
-      </View>
+            : 'Selecciona un alumno'
+        }
+      />
 
       {loadingClients ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : (
         <View style={{ flex: 1 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pickerRow}
-          >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
             {clients.map((c) => {
               const active = selectedClient?.id === c.id
               return (
@@ -154,57 +151,68 @@ export default function BuilderScreen() {
           </ScrollView>
 
           {!selectedClient ? (
-            <View style={styles.empty}>
-              <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                Elige un alumno
-              </Text>
-              <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Tocá un nombre arriba para ver sus planes de entrenamiento.
-              </Text>
-            </View>
+            <EmptyState
+              icon={Dumbbell}
+              title="Elige un alumno"
+              subtitle="Toca un nombre arriba para ver sus planes de entrenamiento."
+            />
           ) : loadingPlans ? (
             <ActivityIndicator style={{ marginTop: 32 }} color={theme.primary} />
           ) : plans.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                Sin planes asignados
-              </Text>
-              <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Crea planes desde la app web en eva-app.cl
-              </Text>
-            </View>
+            <EmptyState
+              icon={Dumbbell}
+              title="Sin planes asignados"
+              subtitle="Crea planes desde la app web en eva-app.cl."
+            />
           ) : (
             <FlatList
               data={plans}
               keyExtractor={(p) => p.id}
-              renderItem={({ item }) => (
-                <View
-                  style={[
-                    styles.planCard,
-                    { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
-                  ]}
+              renderItem={({ item, index }) => (
+                <MotiView
+                  from={{ opacity: 0, translateY: 12 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 350, delay: Math.min(index * 50, 400) }}
                 >
-                  <View style={styles.planLeft}>
-                    {item.day_of_week != null && (
+                  <View
+                    style={[
+                      styles.planCard,
+                      { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.planIcon,
+                        {
+                          backgroundColor: theme.primary + '1A',
+                          borderColor: theme.primary + '33',
+                          borderRadius: theme.radius.lg,
+                        },
+                      ]}
+                    >
+                      <Dumbbell size={20} color={theme.primary} strokeWidth={1.75} />
+                    </View>
+                    <View style={styles.planLeft}>
+                      {item.day_of_week != null && (
+                        <View style={styles.dowRow}>
+                          <Calendar size={12} color={theme.primary} />
+                          <Text style={[styles.dow, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+                            {DAY_NAMES[item.day_of_week]}
+                          </Text>
+                        </View>
+                      )}
                       <Text
-                        style={[styles.dow, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}
+                        style={[styles.planTitle, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]}
+                        numberOfLines={2}
                       >
-                        {DAY_NAMES[item.day_of_week]}
+                        {item.title}
                       </Text>
-                    )}
-                    <Text
-                      style={[styles.planTitle, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]}
-                      numberOfLines={2}
-                    >
-                      {item.title}
-                    </Text>
-                    <Text
-                      style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
-                    >
-                      {item.blockCount} ejercicio{item.blockCount !== 1 ? 's' : ''}
-                    </Text>
+                      <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                        {item.blockCount} ejercicio{item.blockCount !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                </MotiView>
               )}
               contentContainerStyle={styles.planList}
               showsVerticalScrollIndicator={false}
@@ -218,9 +226,6 @@ export default function BuilderScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12 },
-  title: { fontSize: 28, letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, marginTop: 4 },
   pickerRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   clientChip: {
     paddingHorizontal: 14,
@@ -230,17 +235,11 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 13, letterSpacing: 0.3 },
   planList: { paddingHorizontal: 16, paddingBottom: 32, gap: 10 },
-  planCard: { padding: 16, borderWidth: 1 },
-  planLeft: { gap: 6 },
+  planCard: { padding: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  planIcon: { width: 42, height: 42, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  planLeft: { gap: 6, flex: 1, minWidth: 0 },
+  dowRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dow: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
   planTitle: { fontSize: 16, letterSpacing: -0.2 },
   planSub: { fontSize: 13 },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyTitle: { fontSize: 17, marginBottom: 8 },
-  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
 })

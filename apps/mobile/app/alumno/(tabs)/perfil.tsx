@@ -1,19 +1,14 @@
 import { useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { LogOut, User, UserCog } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { clearBranding } from '../../../lib/branding'
 import { useTheme } from '../../../context/ThemeContext'
+import { Button, InfoRow, Section } from '../../../components'
 
 interface AlumnoDetail {
   fullName: string
@@ -68,8 +63,7 @@ export default function AlumnoPerfilScreen() {
     router.replace('/')
   }
 
-  const hasExtras =
-    detail?.phone || detail?.goalWeightKg != null || detail?.subscriptionStartDate
+  const hasExtras = detail?.phone || detail?.goalWeightKg != null || detail?.subscriptionStartDate
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -77,13 +71,14 @@ export default function AlumnoPerfilScreen() {
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text
-            style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
-          >
+          <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
             Mi perfil
           </Text>
 
-          <View
+          <MotiView
+            from={{ opacity: 0, translateY: 16 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 450 }}
             style={[
               styles.heroCard,
               { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
@@ -99,113 +94,53 @@ export default function AlumnoPerfilScreen() {
                 },
               ]}
             >
-              <Text
-                style={[styles.avatarText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}
-              >
-                {detail?.fullName.charAt(0).toUpperCase() ?? '?'}
-              </Text>
+              <User size={30} color={theme.primary} strokeWidth={1.75} />
             </View>
-            <Text
-              style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
-            >
-              {detail?.fullName ?? '—'}
+            <Text style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+              {detail?.fullName ?? '-'}
             </Text>
-            <Text
-              style={[styles.heroEmail, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
-            >
+            <Text style={[styles.heroEmail, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               {detail?.email ?? ''}
             </Text>
-          </View>
+          </MotiView>
 
-          {branding && (
-            <Section title="Mi coach" theme={theme}>
-              <InfoRow label="Coach" value={branding.displayName} theme={theme} last />
+          {branding ? (
+            <Section title="Mi coach">
+              <View style={styles.coachRow}>
+                <UserCog size={16} color={theme.primary} />
+                <InfoRow label="Coach" value={branding.displayName} last />
+              </View>
             </Section>
-          )}
+          ) : null}
 
-          <Section title="Información" theme={theme}>
-            {detail?.phone && <InfoRow label="Teléfono" value={detail.phone} theme={theme} />}
-            {detail?.goalWeightKg != null && (
-              <InfoRow label="Peso objetivo" value={`${detail.goalWeightKg} kg`} theme={theme} />
-            )}
-            {detail?.subscriptionStartDate && (
-              <InfoRow
-                label="Miembro desde"
-                value={formatDate(detail.subscriptionStartDate) ?? '—'}
-                theme={theme}
-                last
-              />
-            )}
-            {!hasExtras && (
+          <Section title="Informacion">
+            {detail?.phone ? <InfoRow label="Telefono" value={detail.phone} /> : null}
+            {detail?.goalWeightKg != null ? (
+              <InfoRow label="Peso objetivo" value={`${detail.goalWeightKg} kg`} />
+            ) : null}
+            {detail?.subscriptionStartDate ? (
+              <InfoRow label="Miembro desde" value={formatDate(detail.subscriptionStartDate) ?? '-'} last />
+            ) : null}
+            {!hasExtras ? (
               <View style={styles.emptySection}>
-                <Text
-                  style={[styles.emptySectionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
-                >
+                <Text style={[styles.emptySectionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                   Sin datos adicionales
                 </Text>
               </View>
-            )}
+            ) : null}
           </Section>
 
-          <TouchableOpacity
-            style={[
-              styles.logoutBtn,
-              {
-                borderColor: theme.destructive,
-                backgroundColor: theme.destructive + '0D',
-                borderRadius: theme.radius.lg,
-              },
-            ]}
+          <Button
+            label="Cerrar sesion"
+            variant="destructive"
+            leftIcon={LogOut}
             onPress={handleLogout}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[styles.logoutText, { color: theme.destructive, fontFamily: 'Montserrat_700Bold' }]}
-            >
-              Cerrar sesión
-            </Text>
-          </TouchableOpacity>
+            full
+            style={{ marginTop: 8 }}
+          />
         </ScrollView>
       )}
     </SafeAreaView>
-  )
-}
-
-function Section({ title, theme, children }: { title: string; theme: any; children: React.ReactNode }) {
-  return (
-    <View
-      style={[
-        styles.section,
-        { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
-      ]}
-    >
-      <Text
-        style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}
-      >
-        {title}
-      </Text>
-      {children}
-    </View>
-  )
-}
-
-function InfoRow({
-  label, value, theme, last,
-}: { label: string; value: string; theme: any; last?: boolean }) {
-  return (
-    <View
-      style={[
-        styles.infoRow,
-        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-      ]}
-    >
-      <Text style={[styles.infoLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {label}
-      </Text>
-      <Text style={[styles.infoValue, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-        {value}
-      </Text>
-    </View>
   )
 }
 
@@ -221,35 +156,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
-  avatarText: { fontSize: 30 },
   heroName: { fontSize: 19, letterSpacing: -0.3, marginTop: 4 },
   heroEmail: { fontSize: 13 },
-  section: { borderWidth: 1, overflow: 'hidden' },
-  sectionTitle: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  infoLabel: { fontSize: 14 },
-  infoValue: { fontSize: 14, fontWeight: '500', textAlign: 'right', flexShrink: 1 },
+  coachRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16 },
   emptySection: { paddingHorizontal: 16, paddingVertical: 14 },
   emptySectionText: { fontSize: 14 },
-  logoutBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    marginTop: 8,
-  },
-  logoutText: { fontSize: 14, letterSpacing: 0.3 },
 })

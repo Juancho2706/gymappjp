@@ -8,9 +8,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { Apple, Check, UtensilsCrossed } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { useTheme } from '../../../context/ThemeContext'
+import { EmptyState, MacroPill, ScreenHeader } from '../../../components'
 
 interface NutritionPlan {
   id: string
@@ -145,68 +148,52 @@ export default function AlumnoNutricionScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <View style={styles.headerTextWrap}>
-          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Nutrición
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            {plan
-              ? `${completedCount} de ${totalCount} comidas hoy`
-              : 'Tu plan personalizado'}
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Nutricion"
+        subtitle={plan ? `${completedCount} de ${totalCount} comidas hoy` : 'Tu plan personalizado'}
+      />
 
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : !plan ? (
-        <View style={styles.empty}>
-          <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Sin plan activo
-          </Text>
-          <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Tu coach aún no te asignó un plan de nutrición.
-          </Text>
-        </View>
+        <EmptyState
+          icon={Apple}
+          title="Sin plan activo"
+          subtitle="Tu coach aun no te asigno un plan de nutricion."
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {(plan.daily_calories || plan.protein_g || plan.carbs_g || plan.fats_g) ? (
-            <View
+            <MotiView
+              from={{ opacity: 0, translateY: 16 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 450 }}
               style={[
                 styles.macrosCard,
                 { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
               ]}
             >
-              <Text
-                style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
-                numberOfLines={2}
-              >
-                {plan.name}
-              </Text>
+              <View style={styles.planTitleRow}>
+                <UtensilsCrossed size={18} color={theme.primary} strokeWidth={1.75} />
+                <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>
+                  {plan.name}
+                </Text>
+              </View>
               <View style={styles.macrosRow}>
-                {plan.daily_calories != null && (
-                  <MacroPill label="kcal" value={plan.daily_calories} color={theme.primary} theme={theme} />
-                )}
-                {plan.protein_g != null && (
-                  <MacroPill label="P" value={plan.protein_g} color="#EF4444" theme={theme} />
-                )}
-                {plan.carbs_g != null && (
-                  <MacroPill label="C" value={plan.carbs_g} color="#F59E0B" theme={theme} />
-                )}
-                {plan.fats_g != null && (
-                  <MacroPill label="G" value={plan.fats_g} color="#8B5CF6" theme={theme} />
-                )}
+                {plan.daily_calories != null ? <MacroPill label="kcal" value={plan.daily_calories} color={theme.primary} /> : null}
+                {plan.protein_g != null ? <MacroPill label="P" value={plan.protein_g} color="#EF4444" /> : null}
+                {plan.carbs_g != null ? <MacroPill label="C" value={plan.carbs_g} color="#F59E0B" /> : null}
+                {plan.fats_g != null ? <MacroPill label="G" value={plan.fats_g} color="#8B5CF6" /> : null}
               </View>
               {plan.instructions ? (
                 <Text style={[styles.instructions, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                   {plan.instructions}
                 </Text>
               ) : null}
-            </View>
+            </MotiView>
           ) : null}
 
-          {totalCount > 0 && (
+          {totalCount > 0 ? (
             <View style={[styles.progressBar, { backgroundColor: theme.muted }]}>
               <View
                 style={[
@@ -215,75 +202,77 @@ export default function AlumnoNutricionScreen() {
                 ]}
               />
             </View>
-          )}
+          ) : null}
 
           {meals.length === 0 ? (
             <View style={styles.emptyDay}>
+              <Apple size={22} color={theme.mutedForeground} />
               <Text style={[styles.emptyDayText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                 Sin comidas para hoy
               </Text>
             </View>
           ) : (
-            meals.map((meal) => {
+            meals.map((meal, index) => {
               const done = completedMealIds.has(meal.id)
               const isToggling = toggling === meal.id
               return (
-                <TouchableOpacity
+                <MotiView
                   key={meal.id}
-                  style={[
-                    styles.mealCard,
-                    {
-                      backgroundColor: theme.card,
-                      borderColor: done ? theme.success : theme.border,
-                      borderWidth: done ? 2 : 1,
-                      borderRadius: theme.radius.xl,
-                    },
-                  ]}
-                  onPress={() => toggleMeal(meal.id)}
-                  activeOpacity={0.75}
-                  disabled={!!toggling}
+                  from={{ opacity: 0, translateY: 12 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 350, delay: Math.min(index * 50, 400) }}
                 >
-                  <View style={styles.mealLeft}>
-                    <Text
-                      style={[
-                        styles.mealName,
-                        {
-                          color: done ? theme.success : theme.foreground,
-                          fontFamily: 'Montserrat_600SemiBold',
-                        },
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {meal.name}
-                    </Text>
-                    {meal.description ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.mealCard,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: done ? theme.success : theme.border,
+                        borderWidth: done ? 2 : 1,
+                        borderRadius: theme.radius.xl,
+                      },
+                    ]}
+                    onPress={() => toggleMeal(meal.id)}
+                    activeOpacity={0.75}
+                    disabled={!!toggling}
+                  >
+                    <View style={styles.mealLeft}>
                       <Text
-                        style={[styles.mealDesc, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+                        style={[
+                          styles.mealName,
+                          {
+                            color: done ? theme.success : theme.foreground,
+                            fontFamily: 'Montserrat_600SemiBold',
+                          },
+                        ]}
                         numberOfLines={2}
                       >
-                        {meal.description}
+                        {meal.name}
                       </Text>
-                    ) : null}
-                  </View>
-                  {isToggling ? (
-                    <ActivityIndicator size="small" color={theme.primary} />
-                  ) : (
-                    <View
-                      style={[
-                        styles.checkCircle,
-                        {
-                          borderColor: done ? theme.success : theme.border,
-                          backgroundColor: done ? theme.success : 'transparent',
-                          borderRadius: theme.radius.lg,
-                        },
-                      ]}
-                    >
-                      {done && (
-                        <Text style={[styles.checkMark, { color: theme.primaryForeground }]}>✓</Text>
-                      )}
+                      {meal.description ? (
+                        <Text style={[styles.mealDesc, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>
+                          {meal.description}
+                        </Text>
+                      ) : null}
                     </View>
-                  )}
-                </TouchableOpacity>
+                    {isToggling ? (
+                      <ActivityIndicator size="small" color={theme.primary} />
+                    ) : (
+                      <View
+                        style={[
+                          styles.checkCircle,
+                          {
+                            borderColor: done ? theme.success : theme.border,
+                            backgroundColor: done ? theme.success : 'transparent',
+                            borderRadius: theme.radius.lg,
+                          },
+                        ]}
+                      >
+                        {done ? <Check size={16} color={theme.primaryForeground} strokeWidth={2.5} /> : null}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </MotiView>
               )
             })
           )}
@@ -293,49 +282,13 @@ export default function AlumnoNutricionScreen() {
   )
 }
 
-function MacroPill({ label, value, color, theme }: { label: string; value: number; color: string; theme: any }) {
-  return (
-    <View
-      style={[
-        styles.macroPill,
-        { backgroundColor: color + '15', borderColor: color + '40', borderRadius: theme.radius.md },
-      ]}
-    >
-      <Text style={[styles.macroValue, { color, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
-      <Text style={[styles.macroLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {label}
-      </Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
-  },
-  headerTextWrap: { flex: 1, minWidth: 0 },
-  title: { fontSize: 28, letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, marginTop: 4 },
   scroll: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   macrosCard: { padding: 18, borderWidth: 1, gap: 12 },
-  planName: { fontSize: 16, letterSpacing: -0.2 },
+  planTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  planName: { fontSize: 16, letterSpacing: -0.2, flex: 1 },
   macrosRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  macroPill: {
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-    minWidth: 60,
-    gap: 2,
-  },
-  macroValue: { fontSize: 16 },
-  macroLabel: { fontSize: 10, letterSpacing: 0.3 },
   instructions: { fontSize: 13, lineHeight: 19 },
   progressBar: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: 6, borderRadius: 3 },
@@ -356,15 +309,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkMark: { fontSize: 14, fontWeight: '700' },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyTitle: { fontSize: 17, marginBottom: 8 },
-  emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
-  emptyDay: { paddingVertical: 32, alignItems: 'center' },
+  emptyDay: { paddingVertical: 32, alignItems: 'center', gap: 8 },
   emptyDayText: { fontSize: 13 },
 })

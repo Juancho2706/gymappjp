@@ -1,17 +1,11 @@
 import { useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  Alert,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Activity, Bell, Calendar, Dumbbell, Phone, Target, User } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { useTheme } from '../../../context/ThemeContext'
+import { Badge, Button, EmptyState, InfoRow, Section, TopBar } from '../../../components'
 
 interface ClientDetail {
   id: string
@@ -90,7 +84,7 @@ export default function ClientDetailScreen() {
   function sendReminder() {
     Alert.alert(
       'Recordatorio',
-      `Para enviar notificaciones a ${client?.full_name ?? 'este alumno'}, usá la app web desde eva-app.cl.`,
+      `Para enviar notificaciones a ${client?.full_name ?? 'este alumno'}, usa la app web desde eva-app.cl.`,
       [{ text: 'OK' }]
     )
   }
@@ -106,41 +100,21 @@ export default function ClientDetailScreen() {
   if (!client) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.navBar, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Text style={[styles.back, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-              ← Volver
-            </Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.empty}>
-          <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Alumno no encontrado
-          </Text>
-        </View>
+        <TopBar back title="Alumno" onBack={() => router.back()} />
+        <EmptyState icon={User} title="Alumno no encontrado" subtitle="Vuelve a la lista de alumnos." />
       </SafeAreaView>
     )
   }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.navBar, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-            ← Volver
-          </Text>
-        </TouchableOpacity>
-        <Text
-          style={[styles.navTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
-          numberOfLines={1}
-        >
-          {client.full_name}
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
+      <TopBar back title={client.full_name} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View
+        <MotiView
+          from={{ opacity: 0, translateY: 16 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 450 }}
           style={[
             styles.heroCard,
             { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
@@ -156,11 +130,7 @@ export default function ClientDetailScreen() {
               },
             ]}
           >
-            <Text
-              style={[styles.heroAvatarText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}
-            >
-              {client.full_name.charAt(0).toUpperCase()}
-            </Text>
+            <User size={30} color={theme.primary} strokeWidth={1.75} />
           </View>
           <Text style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
             {client.full_name}
@@ -168,153 +138,91 @@ export default function ClientDetailScreen() {
           <Text style={[styles.heroEmail, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
             {client.email}
           </Text>
-          <View
-            style={[
-              styles.heroBadge,
-              {
-                backgroundColor: client.is_active ? theme.success + '22' : theme.muted + '88',
-                borderRadius: theme.radius.sm,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.heroBadgeText,
-                {
-                  color: client.is_active ? theme.success : theme.mutedForeground,
-                  fontFamily: 'Montserrat_700Bold',
-                },
-              ]}
-            >
-              {client.is_active ? 'Activo' : 'Inactivo'}
-            </Text>
-          </View>
-        </View>
+          <Badge label={client.is_active ? 'Activo' : 'Inactivo'} tone={client.is_active ? 'success' : 'muted'} />
+        </MotiView>
 
-        {(client.phone || client.goal_weight_kg != null || client.subscription_start_date) && (
-          <View
-            style={[
-              styles.infoCard,
-              { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
-            ]}
-          >
-            {client.phone && <InfoRow label="Teléfono" value={client.phone} theme={theme} />}
-            {client.goal_weight_kg != null && (
-              <InfoRow label="Peso objetivo" value={`${client.goal_weight_kg} kg`} theme={theme} />
-            )}
-            {client.subscription_start_date && (
-              <InfoRow
-                label="Alumno desde"
-                value={formatDate(client.subscription_start_date)}
-                theme={theme}
-                last
-              />
-            )}
-          </View>
-        )}
+        {(client.phone || client.goal_weight_kg != null || client.subscription_start_date) ? (
+          <Section title="Informacion">
+            {client.phone ? <InfoRow label="Telefono" value={client.phone} /> : null}
+            {client.goal_weight_kg != null ? (
+              <InfoRow label="Peso objetivo" value={`${client.goal_weight_kg} kg`} />
+            ) : null}
+            {client.subscription_start_date ? (
+              <InfoRow label="Alumno desde" value={formatDate(client.subscription_start_date)} last />
+            ) : null}
+          </Section>
+        ) : null}
 
-        {lastCheckIn && (
-          <View
+        {lastCheckIn ? (
+          <MotiView
+            from={{ opacity: 0, translateY: 12 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 350, delay: 80 }}
             style={[
               styles.statCard,
               { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
             ]}
           >
-            <Text
-              style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}
-            >
-              Último check-in
-            </Text>
-            <Text style={[styles.statDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-              {formatDate(lastCheckIn.date)}
-            </Text>
+            <View style={styles.statTitleRow}>
+              <Activity size={15} color={theme.primary} />
+              <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+                Ultimo check-in
+              </Text>
+            </View>
+            <View style={styles.statMeta}>
+              <Calendar size={14} color={theme.mutedForeground} />
+              <Text style={[styles.statDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                {formatDate(lastCheckIn.date)}
+              </Text>
+            </View>
             <View style={styles.statRow}>
-              {lastCheckIn.weight != null && (
+              {lastCheckIn.weight != null ? (
                 <Text style={[styles.statValue, { color: theme.foreground, fontFamily: theme.fontSans }]}>
                   {lastCheckIn.weight} kg
                 </Text>
-              )}
-              {lastCheckIn.energy_level != null && (
+              ) : null}
+              {lastCheckIn.energy_level != null ? (
                 <Text style={[styles.statValue, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                  Energía {lastCheckIn.energy_level}/10
+                  Energia {lastCheckIn.energy_level}/10
                 </Text>
-              )}
+              ) : null}
             </View>
-          </View>
-        )}
+          </MotiView>
+        ) : null}
 
-        {activeProgram && (
-          <View
+        {activeProgram ? (
+          <MotiView
+            from={{ opacity: 0, translateY: 12 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 350, delay: 120 }}
             style={[
               styles.statCard,
               { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
             ]}
           >
-            <Text
-              style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}
-            >
-              Programa activo
-            </Text>
+            <View style={styles.statTitleRow}>
+              <Dumbbell size={15} color={theme.primary} />
+              <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+                Programa activo
+              </Text>
+            </View>
             <Text style={[styles.statDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
               {activeProgram.name}
             </Text>
             <Text style={[styles.statValue, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               {activeProgram.planCount} plan{activeProgram.planCount !== 1 ? 'es' : ''}
             </Text>
-          </View>
-        )}
+          </MotiView>
+        ) : null}
 
-        <TouchableOpacity
-          style={[
-            styles.reminderBtn,
-            {
-              borderColor: theme.primary + '40',
-              backgroundColor: theme.primary + '0D',
-              borderRadius: theme.radius.lg,
-            },
-          ]}
-          onPress={sendReminder}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.reminderText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-            Enviar recordatorio
-          </Text>
-        </TouchableOpacity>
+        <Button label="Enviar recordatorio" variant="outline" leftIcon={Bell} onPress={sendReminder} full />
       </ScrollView>
     </SafeAreaView>
   )
 }
 
-function InfoRow({ label, value, theme, last }: { label: string; value: string; theme: any; last?: boolean }) {
-  return (
-    <View
-      style={[
-        styles.infoRow,
-        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-      ]}
-    >
-      <Text style={[styles.infoLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {label}
-      </Text>
-      <Text style={[styles.infoValue, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-        {value}
-      </Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  navBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  back: { fontSize: 14, width: 60, letterSpacing: 0.3 },
-  navTitle: { fontSize: 15, flex: 1, textAlign: 'center', letterSpacing: -0.2 },
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 40, gap: 12 },
   heroCard: { padding: 24, borderWidth: 1, alignItems: 'center', gap: 8 },
   heroAvatar: {
@@ -324,33 +232,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
-  heroAvatarText: { fontSize: 30 },
   heroName: { fontSize: 19, letterSpacing: -0.3, marginTop: 4 },
   heroEmail: { fontSize: 13 },
-  heroBadge: { paddingHorizontal: 10, paddingVertical: 4, marginTop: 6 },
-  heroBadgeText: { fontSize: 11, letterSpacing: 0.3 },
-  infoCard: { borderWidth: 1, overflow: 'hidden' },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  infoLabel: { fontSize: 14 },
-  infoValue: { fontSize: 14, fontWeight: '500', textAlign: 'right', flexShrink: 1 },
-  statCard: { padding: 18, borderWidth: 1, gap: 4 },
-  statTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  statCard: { padding: 18, borderWidth: 1, gap: 6 },
+  statTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
+  statMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statDate: { fontSize: 16, letterSpacing: -0.2 },
   statRow: { flexDirection: 'row', gap: 16, marginTop: 4 },
   statValue: { fontSize: 14 },
-  reminderBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  reminderText: { fontSize: 14, letterSpacing: 0.3 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 17 },
 })

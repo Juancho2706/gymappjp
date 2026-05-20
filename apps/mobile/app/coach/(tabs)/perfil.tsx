@@ -1,23 +1,18 @@
 import { useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
 import { useTheme } from '../../../context/ThemeContext'
+import { Button, InfoRow, Section } from '../../../components'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
-  trial: 'Período de prueba',
+  trial: 'Periodo de prueba',
   past_due: 'Pago pendiente',
   canceled: 'Cancelado',
   inactive: 'Inactivo',
@@ -94,7 +89,10 @@ export default function CoachPerfilScreen() {
           Perfil
         </Text>
 
-        <View
+        <MotiView
+          from={{ opacity: 0, translateY: 16 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 450 }}
           style={[
             styles.heroCard,
             { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
@@ -110,154 +108,70 @@ export default function CoachPerfilScreen() {
               },
             ]}
           >
-            <Text
-              style={[styles.avatarText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}
-            >
-              {coach?.fullName.charAt(0).toUpperCase() ?? '?'}
-            </Text>
+            <User size={30} color={theme.primary} strokeWidth={1.75} />
           </View>
-          <Text
-            style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
-          >
-            {coach?.fullName ?? '—'}
+          <Text style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            {coach?.fullName ?? '-'}
           </Text>
-          {coach?.brandName && (
+          {coach?.brandName ? (
             <Text style={[styles.heroBrand, { color: theme.foreground, fontFamily: theme.fontSans }]}>
               {coach.brandName}
             </Text>
-          )}
+          ) : null}
           <Text style={[styles.heroSlug, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
             @{coach?.slug ?? ''}
           </Text>
-        </View>
+        </MotiView>
 
-        {org?.isOrgManaged && (
-          <Section title="Organización" theme={theme}>
-            <InfoRow label="Nombre" value={org.orgName ?? '—'} theme={theme} />
-            <InfoRow label="Rol" value={orgRoleLabel(org.orgRole)} theme={theme} last />
+        {org?.isOrgManaged ? (
+          <Section title="Organizacion">
+            <InfoRow label="Nombre" value={org.orgName ?? '-'} />
+            <InfoRow label="Rol" value={orgRoleLabel(org.orgRole)} last />
           </Section>
-        )}
+        ) : null}
 
-        {!org?.isOrgManaged && coach && (
-          <Section title="Suscripción" theme={theme}>
+        {!org?.isOrgManaged && coach ? (
+          <Section title="Suscripcion">
             <InfoRow
               label="Estado"
               value={STATUS_LABELS[coach.subscriptionStatus] ?? coach.subscriptionStatus}
               valueColor={coach.subscriptionStatus === 'active' ? theme.success : undefined}
-              theme={theme}
             />
-            {subscriptionDetails?.tier && (
-              <InfoRow
-                label="Plan"
-                value={TIER_LABELS[subscriptionDetails.tier] ?? subscriptionDetails.tier}
-                theme={theme}
-              />
-            )}
-            {subscriptionDetails?.trialEndsAt && (
-              <InfoRow
-                label="Prueba hasta"
-                value={formatDate(subscriptionDetails.trialEndsAt) ?? '—'}
-                theme={theme}
-              />
-            )}
-            {subscriptionDetails?.currentPeriodEnd && (
-              <InfoRow
-                label="Próxima renovación"
-                value={formatDate(subscriptionDetails.currentPeriodEnd) ?? '—'}
-                theme={theme}
-              />
-            )}
-            <TouchableOpacity
-              style={[styles.webLink, { borderTopColor: theme.border }]}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[styles.webLinkText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}
-              >
-                Gestionar suscripción →
-              </Text>
-              <Text
-                style={[styles.webLinkHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
-              >
-                eva-app.cl
-              </Text>
-            </TouchableOpacity>
+            {subscriptionDetails?.tier ? (
+              <InfoRow label="Plan" value={TIER_LABELS[subscriptionDetails.tier] ?? subscriptionDetails.tier} />
+            ) : null}
+            {subscriptionDetails?.trialEndsAt ? (
+              <InfoRow label="Prueba hasta" value={formatDate(subscriptionDetails.trialEndsAt) ?? '-'} />
+            ) : null}
+            {subscriptionDetails?.currentPeriodEnd ? (
+              <InfoRow label="Proxima renovacion" value={formatDate(subscriptionDetails.currentPeriodEnd) ?? '-'} />
+            ) : null}
+            <View style={[styles.webLink, { borderTopColor: theme.border }]}>
+              <View style={styles.webLinkLeft}>
+                <CreditCard size={16} color={theme.primary} />
+                <Text style={[styles.webLinkText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+                  Gestionar suscripcion
+                </Text>
+              </View>
+              <ExternalLink size={16} color={theme.mutedForeground} />
+            </View>
           </Section>
-        )}
+        ) : null}
 
-        <Section title="Cuenta" theme={theme}>
-          <InfoRow label="Alumnos máx." value={`${coach?.maxClients ?? '—'}`} theme={theme} last />
+        <Section title="Cuenta">
+          <InfoRow label="Alumnos max." value={`${coach?.maxClients ?? '-'}`} last />
         </Section>
 
-        <TouchableOpacity
-          style={[
-            styles.logoutBtn,
-            {
-              borderColor: theme.destructive,
-              backgroundColor: theme.destructive + '0D',
-              borderRadius: theme.radius.lg,
-            },
-          ]}
+        <Button
+          label="Cerrar sesion"
+          variant="destructive"
+          leftIcon={LogOut}
           onPress={handleLogout}
-          activeOpacity={0.8}
-        >
-          <Text
-            style={[styles.logoutText, { color: theme.destructive, fontFamily: 'Montserrat_700Bold' }]}
-          >
-            Cerrar sesión
-          </Text>
-        </TouchableOpacity>
+          full
+          style={{ marginTop: 8 }}
+        />
       </ScrollView>
     </SafeAreaView>
-  )
-}
-
-function Section({ title, theme, children }: { title: string; theme: any; children: React.ReactNode }) {
-  return (
-    <View
-      style={[
-        styles.section,
-        { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
-      ]}
-    >
-      <Text
-        style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}
-      >
-        {title}
-      </Text>
-      {children}
-    </View>
-  )
-}
-
-function InfoRow({
-  label, value, valueColor, theme, last,
-}: {
-  label: string
-  value: string
-  valueColor?: string
-  theme: any
-  last?: boolean
-}) {
-  return (
-    <View
-      style={[
-        styles.infoRow,
-        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-      ]}
-    >
-      <Text style={[styles.infoLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {label}
-      </Text>
-      <Text
-        style={[
-          styles.infoValue,
-          { color: valueColor ?? theme.foreground, fontFamily: theme.fontSans },
-        ]}
-      >
-        {value}
-      </Text>
-    </View>
   )
 }
 
@@ -273,29 +187,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
-  avatarText: { fontSize: 30 },
   heroName: { fontSize: 19, letterSpacing: -0.3, marginTop: 4 },
   heroBrand: { fontSize: 14 },
   heroSlug: { fontSize: 12 },
-  section: { borderWidth: 1, overflow: 'hidden' },
-  sectionTitle: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  infoLabel: { fontSize: 14 },
-  infoValue: { fontSize: 14, fontWeight: '500', textAlign: 'right', flexShrink: 1 },
   webLink: {
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -304,13 +198,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  webLinkLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   webLinkText: { fontSize: 13, letterSpacing: 0.3 },
-  webLinkHint: { fontSize: 12 },
-  logoutBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    marginTop: 8,
-  },
-  logoutText: { fontSize: 14, letterSpacing: 0.3 },
 })
