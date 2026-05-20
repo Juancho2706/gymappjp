@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -14,7 +15,6 @@ import {
 import * as FileSystem from 'expo-file-system'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { Image } from 'expo-image'
 import { ArrowLeft, ArrowRight, Camera, Check, Scale, Zap } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
@@ -423,7 +423,7 @@ function PhotoPickerSlot({
       <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>{label}</Text>
       {uri ? (
         <View style={[styles.photoPreviewWrap, { borderRadius: theme.radius.lg, borderColor: theme.border }]}>
-          <Image source={{ uri }} style={styles.photoPreview} contentFit="cover" />
+          <Image source={{ uri }} style={styles.photoPreview} resizeMode="cover" />
           <TouchableOpacity
             style={[styles.clearBtn, { backgroundColor: theme.destructive }]}
             onPress={onClear}
