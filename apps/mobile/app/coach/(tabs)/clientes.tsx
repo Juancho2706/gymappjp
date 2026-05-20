@@ -10,9 +10,12 @@ import {
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { ChevronRight, Search, Users } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
+import { Badge, EmptyState, ScreenHeader } from '../../../components'
 
 interface Client {
   id: string
@@ -59,77 +62,66 @@ export default function ClientesScreen() {
     setLoading(false)
   }
 
-  function renderClient({ item }: { item: Client }) {
+  function renderClient({ item, index }: { item: Client; index: number }) {
     return (
-      <TouchableOpacity
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.border,
-            borderRadius: theme.radius.xl,
-          },
-        ]}
-        onPress={() => router.push(`/coach/cliente/${item.id}`)}
-        activeOpacity={0.75}
+      <MotiView
+        from={{ opacity: 0, translateY: 12 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'timing', duration: 350, delay: Math.min(index * 50, 400) }}
       >
-        <View style={styles.cardLeft}>
-          <View
-            style={[
-              styles.avatar,
-              {
-                backgroundColor: theme.primary + '1A',
-                borderColor: theme.primary + '33',
-                borderRadius: theme.radius.lg,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.avatarText,
-                { color: theme.primary, fontFamily: 'Montserrat_700Bold' },
-              ]}
-            >
-              {item.full_name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.cardInfo}>
-            <Text
-              style={[styles.name, { color: theme.foreground, fontFamily: theme.fontSans }]}
-              numberOfLines={1}
-            >
-              {item.full_name}
-            </Text>
-            <Text
-              style={[styles.email, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
-              numberOfLines={1}
-            >
-              {item.email}
-            </Text>
-          </View>
-        </View>
-        <View
+        <TouchableOpacity
           style={[
-            styles.badge,
+            styles.card,
             {
-              backgroundColor: item.is_active ? theme.success + '22' : theme.muted + '88',
-              borderRadius: theme.radius.sm,
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+              borderRadius: theme.radius.xl,
             },
           ]}
+          onPress={() => router.push(`/coach/cliente/${item.id}`)}
+          activeOpacity={0.75}
         >
-          <Text
-            style={[
-              styles.badgeText,
-              {
-                color: item.is_active ? theme.success : theme.mutedForeground,
-                fontFamily: theme.fontSans,
-              },
-            ]}
-          >
-            {item.is_active ? 'Activo' : 'Inactivo'}
-          </Text>
-        </View>
-      </TouchableOpacity>
+          <View style={styles.cardLeft}>
+            <View
+              style={[
+                styles.avatar,
+                {
+                  backgroundColor: theme.primary + '1A',
+                  borderColor: theme.primary + '33',
+                  borderRadius: theme.radius.lg,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.avatarText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}
+              >
+                {item.full_name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.cardInfo}>
+              <Text
+                style={[styles.name, { color: theme.foreground, fontFamily: theme.fontSans }]}
+                numberOfLines={1}
+              >
+                {item.full_name}
+              </Text>
+              <Text
+                style={[styles.email, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}
+                numberOfLines={1}
+              >
+                {item.email}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.cardRight}>
+            <Badge
+              label={item.is_active ? 'Activo' : 'Inactivo'}
+              tone={item.is_active ? 'success' : 'muted'}
+            />
+            <ChevronRight size={18} color={theme.mutedForeground} />
+          </View>
+        </TouchableOpacity>
+      </MotiView>
     )
   }
 
@@ -137,14 +129,10 @@ export default function ClientesScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          Alumnos
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          {activeCount} activo{activeCount !== 1 ? 's' : ''} · {clients.length} total
-        </Text>
-      </View>
+      <ScreenHeader
+        title="Alumnos"
+        subtitle={`${activeCount} activo${activeCount !== 1 ? 's' : ''} · ${clients.length} total`}
+      />
 
       <View
         style={[
@@ -156,6 +144,7 @@ export default function ClientesScreen() {
           },
         ]}
       >
+        <Search size={16} color={theme.mutedForeground} />
         <TextInput
           style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
           placeholder="Buscar alumno..."
@@ -169,14 +158,15 @@ export default function ClientesScreen() {
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            {search ? 'Sin resultados' : 'Sin alumnos aún'}
-          </Text>
-          <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            {search ? 'Probá con otro término.' : 'Los alumnos que crees en el panel web aparecerán aquí.'}
-          </Text>
-        </View>
+        <EmptyState
+          icon={Users}
+          title={search ? 'Sin resultados' : 'Sin alumnos aún'}
+          subtitle={
+            search
+              ? 'Probá con otro término de búsqueda.'
+              : 'Los alumnos que crees en el panel web aparecerán acá.'
+          }
+        />
       ) : (
         <FlatList
           data={filtered}
@@ -192,34 +182,17 @@ export default function ClientesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 28,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 4,
-  },
   searchWrap: {
     marginHorizontal: 16,
     marginBottom: 12,
     borderWidth: 1,
     paddingHorizontal: 14,
-  },
-  searchInput: {
-    height: 44,
-    fontSize: 15,
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
+  searchInput: { flex: 1, height: 44, fontSize: 15 },
+  list: { paddingHorizontal: 16, paddingBottom: 32, gap: 10 },
   card: {
     padding: 14,
     borderWidth: 1,
@@ -241,42 +214,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
-  avatarText: {
-    fontSize: 17,
-  },
-  cardInfo: {
-    flex: 1,
-    gap: 2,
-    minWidth: 0,
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  email: {
-    fontSize: 12,
-  },
-  badge: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    marginBottom: 6,
-  },
-  emptySub: {
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
+  avatarText: { fontSize: 17 },
+  cardInfo: { flex: 1, gap: 2, minWidth: 0 },
+  name: { fontSize: 15, fontWeight: '600' },
+  email: { fontSize: 12 },
+  cardRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 })

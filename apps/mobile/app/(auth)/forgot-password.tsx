@@ -1,18 +1,18 @@
 import { useState } from 'react'
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { ArrowRight, KeyRound, Mail } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
+import { Button, Input, TopBar } from '../../components'
 
 export default function ForgotPasswordScreen() {
   const router = useRouter()
@@ -31,76 +31,78 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kav}
       >
-        <View style={styles.topBar}>
-          <Text style={[styles.brandMark, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-            EVA
-          </Text>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Text style={[styles.backLink, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              ← Volver
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <TopBar showBrand back />
 
         {sent ? (
-          <View style={styles.inner}>
-            <View style={styles.heading}>
-              <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                Revisa tu correo
-              </Text>
-              <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Si existe una cuenta con ese email, recibirás un enlace para restablecer tu contraseña.
-              </Text>
-            </View>
-            <TouchableOpacity
+          <MotiView
+            from={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', damping: 14 }}
+            style={styles.inner}
+          >
+            <View
               style={[
-                styles.btn,
-                { backgroundColor: theme.primary, borderRadius: theme.radius.lg },
-                theme.shadowGlowBlue,
+                styles.successIcon,
+                {
+                  backgroundColor: theme.success + '1A',
+                  borderColor: theme.success + '33',
+                  borderRadius: theme.radius['2xl'],
+                },
               ]}
-              onPress={() => router.back()}
-              activeOpacity={0.85}
             >
-              <Text
-                style={[styles.btnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
-              >
-                Volver al login
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.inner}>
-            <View style={styles.heading}>
-              <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                Restablecer contraseña
-              </Text>
-              <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Ingresá tu email y te enviaremos un enlace para crear una nueva contraseña.
-              </Text>
+              <Mail size={28} color={theme.success} strokeWidth={1.75} />
             </View>
+            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+              Revisa tu correo
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Si existe una cuenta con ese email, recibirás un enlace para restablecer tu contraseña.
+            </Text>
+            <Button
+              label="Volver al login"
+              rightIcon={ArrowRight}
+              onPress={() => router.back()}
+              full
+              size="lg"
+              style={{ marginTop: 20 }}
+            />
+          </MotiView>
+        ) : (
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 500 }}
+            style={styles.inner}
+          >
+            <View
+              style={[
+                styles.heroIcon,
+                {
+                  backgroundColor: theme.primary + '1A',
+                  borderColor: theme.primary + '33',
+                  borderRadius: theme.radius['2xl'],
+                },
+              ]}
+            >
+              <KeyRound size={26} color={theme.primary} strokeWidth={1.75} />
+            </View>
+            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+              Restablecer contraseña
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Ingresá tu email y te enviaremos un enlace para crear una nueva contraseña.
+            </Text>
 
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-                Email
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.secondary,
-                    borderColor: theme.border,
-                    color: theme.foreground,
-                    borderRadius: theme.radius.lg,
-                    fontFamily: theme.fontSans,
-                  },
-                ]}
+            <View style={styles.form}>
+              <Input
+                label="Email"
+                leftIcon={Mail}
                 placeholder="tu@email.com"
-                placeholderTextColor={theme.mutedForeground}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -108,33 +110,17 @@ export default function ForgotPasswordScreen() {
                 autoComplete="email"
                 editable={!loading}
               />
+              <Button
+                label="Enviar enlace"
+                rightIcon={ArrowRight}
+                onPress={handleReset}
+                loading={loading}
+                disabled={!email}
+                full
+                size="lg"
+              />
             </View>
-
-            <TouchableOpacity
-              style={[
-                styles.btn,
-                {
-                  backgroundColor: theme.primary,
-                  borderRadius: theme.radius.lg,
-                  opacity: loading || !email ? 0.5 : 1,
-                },
-                !loading && email && theme.shadowGlowBlue,
-              ]}
-              onPress={handleReset}
-              disabled={loading || !email}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator color={theme.primaryForeground} />
-              ) : (
-                <Text
-                  style={[styles.btnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
-                >
-                  Enviar enlace →
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          </MotiView>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -142,28 +128,27 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  kav: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  safe: { flex: 1 },
+  kav: { flex: 1, paddingHorizontal: 24, paddingBottom: 24 },
+  inner: { flex: 1, justifyContent: 'center', gap: 12 },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderWidth: 1,
     alignItems: 'center',
-    marginBottom: 48,
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  brandMark: { fontSize: 32, letterSpacing: -1 },
-  backLink: { fontSize: 14 },
-  inner: { flex: 1, justifyContent: 'center', gap: 24 },
-  heading: { gap: 8 },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
   title: { fontSize: 26, letterSpacing: -0.5 },
   subtitle: { fontSize: 14, lineHeight: 20 },
-  field: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '500' },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    fontSize: 15,
-  },
-  btn: { height: 48, alignItems: 'center', justifyContent: 'center' },
-  btnText: { fontSize: 15, letterSpacing: 0.3 },
+  form: { gap: 16, marginTop: 16 },
 })

@@ -1,20 +1,20 @@
 import { useState } from 'react'
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { ArrowRight, Lock, Mail, Sparkles } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
+import { Button, Input, TopBar } from '../../components'
 
 export default function LoginScreen() {
   const { role } = useLocalSearchParams<{ role: 'coach' | 'alumno' }>()
@@ -44,147 +44,107 @@ export default function LoginScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.container}
+        style={styles.kav}
       >
+        <TopBar showBrand back />
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Brand mark + back */}
-          <View style={styles.topBar}>
-            <Text style={[styles.brandMark, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-              EVA
-            </Text>
-            <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-              <Text style={[styles.backLink, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                ← Volver
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 500 }}
+            style={styles.heading}
+          >
+            <View
+              style={[
+                styles.brandPill,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                  borderRadius: theme.radius['3xl'],
+                },
+              ]}
+            >
+              <Sparkles size={12} color={theme.primary} strokeWidth={2.25} />
+              <Text style={[styles.brandPillText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                {isCoach ? 'Panel del coach' : 'Tu entrenamiento'}
               </Text>
-            </TouchableOpacity>
-          </View>
+            </View>
 
-          {/* Heading */}
-          <View style={styles.heading}>
             <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
               Bienvenido de vuelta
             </Text>
             <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               {isCoach
-                ? 'Ingresa tus credenciales para acceder al panel'
-                : 'Accede a tu entrenamiento'}
+                ? 'Ingresá tus credenciales para acceder al panel'
+                : 'Accedé a tu entrenamiento personalizado'}
             </Text>
-          </View>
+          </MotiView>
 
-          {/* Form */}
-          <View style={styles.form}>
-            {/* Email */}
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-                Email
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.secondary,
-                    borderColor: theme.border,
-                    color: theme.foreground,
-                    borderRadius: theme.radius.lg,
-                    fontFamily: theme.fontSans,
-                  },
-                ]}
-                placeholder="coach@ejemplo.com"
-                placeholderTextColor={theme.mutedForeground}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                editable={!loading}
-              />
-            </View>
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 500, delay: 120 }}
+            style={styles.form}
+          >
+            <Input
+              label="Email"
+              leftIcon={Mail}
+              placeholder="coach@ejemplo.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!loading}
+            />
 
-            {/* Password */}
-            <View style={styles.field}>
-              <View style={styles.labelRow}>
-                <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-                  Contraseña
+            <Input
+              label="Contraseña"
+              leftIcon={Lock}
+              placeholder="••••••••"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="password"
+              editable={!loading}
+              error={error}
+              trailingLabel={
+                <Text
+                  onPress={() => router.push('/(auth)/forgot-password')}
+                  style={[styles.forgotLink, { color: theme.primary, fontFamily: theme.fontSans }]}
+                >
+                  ¿Olvidaste tu contraseña?
                 </Text>
-                <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} hitSlop={8}>
-                  <Text style={[styles.forgotLink, { color: theme.primary, fontFamily: theme.fontSans }]}>
-                    ¿Olvidaste tu contraseña?
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.secondary,
-                    borderColor: theme.border,
-                    color: theme.foreground,
-                    borderRadius: theme.radius.lg,
-                    fontFamily: theme.fontSans,
-                  },
-                ]}
-                placeholder="••••••••"
-                placeholderTextColor={theme.mutedForeground}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoComplete="password"
-                editable={!loading}
-              />
-            </View>
+              }
+            />
 
-            {/* Error banner */}
-            {error ? (
-              <View
-                style={[
-                  styles.errorBanner,
-                  {
-                    backgroundColor: theme.destructive + '1A',
-                    borderColor: theme.destructive + '33',
-                    borderRadius: theme.radius.lg,
-                  },
-                ]}
-              >
-                <Text style={[styles.errorText, { color: theme.destructive, fontFamily: theme.fontSans }]}>
-                  {error}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Submit */}
-            <TouchableOpacity
-              style={[
-                styles.submitBtn,
-                {
-                  backgroundColor: theme.primary,
-                  borderRadius: theme.radius.lg,
-                },
-                theme.shadowGlowBlue,
-              ]}
+            <Button
+              label={isCoach ? 'Ingresar al panel' : 'Iniciar sesión'}
+              rightIcon={ArrowRight}
               onPress={handleLogin}
-              disabled={loading || !email || !password}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator color={theme.primaryForeground} />
-              ) : (
-                <Text style={[styles.submitText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-                  {isCoach ? 'Ingresar al Panel' : 'Iniciar sesión'} →
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              loading={loading}
+              disabled={!email || !password}
+              full
+              size="lg"
+              style={{ marginTop: 8 }}
+            />
+          </MotiView>
 
-          {/* Footer */}
-          <View style={styles.footer}>
+          <MotiView
+            from={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ type: 'timing', duration: 600, delay: 360 }}
+            style={styles.footer}
+          >
             <Text style={[styles.footerText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               eva-app.cl
             </Text>
-          </View>
+          </MotiView>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -193,87 +153,32 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  container: { flex: 1 },
+  kav: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 32,
   },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  brandMark: {
-    fontSize: 32,
-    letterSpacing: -1,
-  },
-  backLink: {
-    fontSize: 14,
-  },
   heading: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 26,
-    letterSpacing: -0.5,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  form: {
-    gap: 20,
-  },
-  field: {
+    marginBottom: 28,
     gap: 8,
   },
-  labelRow: {
+  brandPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  forgotLink: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  input: {
-    height: 48,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    fontSize: 15,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
-  errorBanner: {
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  errorText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  submitBtn: {
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitText: {
-    fontSize: 15,
-    letterSpacing: 0.3,
-  },
-  footer: {
-    marginTop: 48,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-  },
+  brandPillText: { fontSize: 11, letterSpacing: 0.3 },
+  title: { fontSize: 28, letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, lineHeight: 20 },
+  form: { gap: 16 },
+  forgotLink: { fontSize: 12, fontWeight: '500' },
+  footer: { marginTop: 36, alignItems: 'center' },
+  footerText: { fontSize: 12, letterSpacing: 0.3 },
 })

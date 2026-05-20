@@ -1,18 +1,19 @@
 import { useState } from 'react'
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { ArrowRight, Hash } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { fetchBrandingByInviteCode } from '../../lib/branding'
 import { useTheme } from '../../context/ThemeContext'
+import { Button, TopBar } from '../../components'
 
 export default function CodigoScreen() {
   const router = useRouter()
@@ -39,31 +40,38 @@ export default function CodigoScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kav}
       >
-        <View style={styles.topBar}>
-          <Text style={[styles.brandMark, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-            EVA
-          </Text>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Text style={[styles.backLink, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              ← Volver
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <TopBar showBrand back />
 
-        <View style={styles.inner}>
-          <View style={styles.heading}>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-              Ingresa tu código
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Tu coach te dio un código de 5 caracteres para unirte
-            </Text>
+        <MotiView
+          from={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 500 }}
+          style={styles.inner}
+        >
+          <View
+            style={[
+              styles.heroIcon,
+              {
+                backgroundColor: theme.primary + '1A',
+                borderColor: theme.primary + '33',
+                borderRadius: theme.radius['2xl'],
+              },
+            ]}
+          >
+            <Hash size={26} color={theme.primary} strokeWidth={1.75} />
           </View>
+
+          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Ingresá tu código
+          </Text>
+          <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Tu coach te dio un código de 5 caracteres para unirte
+          </Text>
 
           <TextInput
             style={[
@@ -105,49 +113,37 @@ export default function CodigoScreen() {
             </View>
           ) : null}
 
-          <TouchableOpacity
-            style={[
-              styles.btn,
-              {
-                backgroundColor: theme.primary,
-                opacity: code.length !== 5 ? 0.5 : 1,
-                borderRadius: theme.radius.lg,
-              },
-              code.length === 5 && theme.shadowGlowBlue,
-            ]}
+          <Button
+            label="Continuar"
+            rightIcon={ArrowRight}
             onPress={handleSubmit}
-            disabled={loading || code.length !== 5}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color={theme.primaryForeground} />
-            ) : (
-              <Text style={[styles.btnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-                Continuar →
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            loading={loading}
+            disabled={code.length !== 5}
+            full
+            size="lg"
+            style={{ marginTop: 8 }}
+          />
+        </MotiView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  kav: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  safe: { flex: 1 },
+  kav: { flex: 1, paddingHorizontal: 24, paddingBottom: 24 },
+  inner: { flex: 1, justifyContent: 'center', gap: 12 },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderWidth: 1,
     alignItems: 'center',
-    marginBottom: 32,
+    justifyContent: 'center',
+    marginBottom: 4,
+    alignSelf: 'flex-start',
   },
-  brandMark: { fontSize: 32, letterSpacing: -1 },
-  backLink: { fontSize: 14 },
-  inner: { flex: 1, justifyContent: 'center', gap: 16 },
-  heading: { gap: 8, marginBottom: 8 },
   title: { fontSize: 28, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, lineHeight: 20 },
+  subtitle: { fontSize: 14, lineHeight: 20, marginBottom: 4 },
   input: {
     height: 72,
     borderWidth: 2,
@@ -155,18 +151,8 @@ const styles = StyleSheet.create({
     fontSize: 36,
     letterSpacing: 10,
     textAlign: 'center',
-  },
-  errorBanner: {
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  errorText: { fontSize: 13, lineHeight: 18 },
-  btn: {
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 8,
   },
-  btnText: { fontSize: 15, letterSpacing: 0.3 },
+  errorBanner: { borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
+  errorText: { fontSize: 13, lineHeight: 18 },
 })

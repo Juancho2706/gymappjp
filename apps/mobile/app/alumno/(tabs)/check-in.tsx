@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -13,9 +12,12 @@ import {
   View,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
+import { ArrowRight, Camera, Check, Image as ImageIcon, Scale, Zap } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { useTheme } from '../../../context/ThemeContext'
+import { Button, ScreenHeader } from '../../../components'
 
 export default function CheckInScreen() {
   const { theme } = useTheme()
@@ -100,18 +102,16 @@ export default function CheckInScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScreenHeader
+          title="Check-in"
+          subtitle="Registrá tu progreso semanal"
+        />
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-              Check-in semanal
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Registra tu peso, energía y foto del progreso
-            </Text>
-          </View>
-
           {done && (
-            <View
+            <MotiView
+              from={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', damping: 14 }}
               style={[
                 styles.successBanner,
                 {
@@ -121,13 +121,14 @@ export default function CheckInScreen() {
                 },
               ]}
             >
+              <Check size={16} color={theme.success} strokeWidth={2.5} />
               <Text style={[styles.successText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
-                ✓ Check-in registrado
+                Check-in registrado
               </Text>
-            </View>
+            </MotiView>
           )}
 
-          <Field label="Foto frontal" theme={theme}>
+          <Field label="Foto frontal" icon={Camera} theme={theme}>
             <TouchableOpacity
               style={[
                 styles.photoBtn,
@@ -140,6 +141,11 @@ export default function CheckInScreen() {
               onPress={pickPhoto}
               activeOpacity={0.75}
             >
+              {photoUri ? (
+                <Check size={18} color={theme.success} strokeWidth={2.25} />
+              ) : (
+                <ImageIcon size={18} color={theme.mutedForeground} strokeWidth={2} />
+              )}
               <Text
                 style={[
                   styles.photoBtnText,
@@ -149,12 +155,12 @@ export default function CheckInScreen() {
                   },
                 ]}
               >
-                {photoUri ? '✓ Foto seleccionada · cambiar' : '+ Seleccionar foto'}
+                {photoUri ? 'Foto seleccionada · cambiar' : 'Seleccionar foto'}
               </Text>
             </TouchableOpacity>
           </Field>
 
-          <Field label="Peso (kg)" theme={theme}>
+          <Field label="Peso (kg)" icon={Scale} theme={theme}>
             <TextInput
               style={[
                 styles.input,
@@ -174,7 +180,7 @@ export default function CheckInScreen() {
             />
           </Field>
 
-          <Field label="Nivel de energía (1–10)" theme={theme}>
+          <Field label="Nivel de energía (1–10)" icon={Zap} theme={theme}>
             <View style={styles.energyRow}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
                 const selected = energyLevel === n
@@ -231,36 +237,40 @@ export default function CheckInScreen() {
             />
           </Field>
 
-          <TouchableOpacity
-            style={[
-              styles.submitBtn,
-              { backgroundColor: theme.primary, opacity: submitting ? 0.7 : 1, borderRadius: theme.radius.lg },
-              !submitting && theme.shadowGlowBlue,
-            ]}
+          <Button
+            label="Enviar check-in"
+            rightIcon={ArrowRight}
             onPress={submit}
-            disabled={submitting}
-            activeOpacity={0.85}
-          >
-            {submitting ? (
-              <ActivityIndicator color={theme.primaryForeground} />
-            ) : (
-              <Text
-                style={[styles.submitText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}
-              >
-                Enviar check-in →
-              </Text>
-            )}
-          </TouchableOpacity>
+            loading={submitting}
+            full
+            size="lg"
+            style={{ marginTop: 8 }}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
 
-function Field({ label, theme, children }: { label: string; theme: any; children: React.ReactNode }) {
+function Field({
+  label,
+  icon: Icon,
+  theme,
+  children,
+}: {
+  label: string
+  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
+  theme: any
+  children: React.ReactNode
+}) {
   return (
     <View style={styles.field}>
-      <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <View style={styles.labelRow}>
+        {Icon ? <Icon size={14} color={theme.mutedForeground} strokeWidth={2} /> : null}
+        <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+          {label}
+        </Text>
+      </View>
       {children}
     </View>
   )
@@ -268,25 +278,30 @@ function Field({ label, theme, children }: { label: string; theme: any; children
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40, gap: 20 },
-  header: { gap: 4 },
-  title: { fontSize: 28, letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, lineHeight: 19 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 40, gap: 20 },
   successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderWidth: 1,
     paddingVertical: 14,
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    justifyContent: 'center',
   },
   successText: { fontSize: 14, letterSpacing: 0.3 },
   field: { gap: 8 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   label: { fontSize: 14, fontWeight: '500' },
   photoBtn: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    paddingVertical: 24,
+    paddingVertical: 22,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
-  photoBtnText: { fontSize: 14, letterSpacing: 0.3 },
+  photoBtnText: { fontSize: 13, letterSpacing: 0.3 },
   input: {
     borderWidth: 1,
     height: 48,
@@ -308,10 +323,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     minHeight: 110,
   },
-  submitBtn: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  submitText: { fontSize: 15, letterSpacing: 0.3 },
 })
