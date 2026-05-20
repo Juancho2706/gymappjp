@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router'
-import { Apple, CheckCircle, Dumbbell, User } from 'lucide-react-native'
+import { Apple, CheckCircle, Dumbbell, Home, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 
 export default function AlumnoTabsLayout() {
@@ -25,16 +25,23 @@ export default function AlumnoTabsLayout() {
       }}
     >
       <Tabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => <Home size={size} color={color} strokeWidth={2} />,
+        }}
+      />
+      <Tabs.Screen
         name="workout"
         options={{
-          title: 'Workout',
+          title: 'Rutina',
           tabBarIcon: ({ color, size }) => <Dumbbell size={size} color={color} strokeWidth={2} />,
         }}
       />
       <Tabs.Screen
         name="nutricion"
         options={{
-          title: 'Nutrición',
+          title: 'Nutricion',
           tabBarIcon: ({ color, size }) => <Apple size={size} color={color} strokeWidth={2} />,
         }}
       />
