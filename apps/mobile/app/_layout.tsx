@@ -17,6 +17,7 @@ import {
   Montserrat_800ExtraBold,
 } from '@expo-google-fonts/montserrat'
 import type { Session } from '@supabase/supabase-js'
+import { MotiView } from 'moti'
 import { supabase } from '../lib/supabase'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
@@ -121,7 +122,14 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <StatusBar style="auto" />
-      <RootLayoutNav />
+      <MotiView
+        from={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ type: 'timing', duration: 260 }}
+        style={{ flex: 1 }}
+      >
+        <RootLayoutNav />
+      </MotiView>
     </ThemeProvider>
   )
 }
