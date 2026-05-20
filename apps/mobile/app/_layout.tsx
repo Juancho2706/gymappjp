@@ -1,4 +1,7 @@
+import 'react-native-gesture-handler'
 import { useEffect, useRef, useState } from 'react'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Linking from 'expo-linking'
@@ -120,16 +123,20 @@ export default function RootLayout() {
   if (!fontsLoaded) return null
 
   return (
-    <ThemeProvider>
-      <StatusBar style="auto" />
-      <MotiView
-        from={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ type: 'timing', duration: 260 }}
-        style={{ flex: 1 }}
-      >
-        <RootLayoutNav />
-      </MotiView>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <BottomSheetModalProvider>
+        <ThemeProvider>
+          <StatusBar style="auto" />
+          <MotiView
+            from={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ type: 'timing', duration: 260 }}
+            style={{ flex: 1 }}
+          >
+            <RootLayoutNav />
+          </MotiView>
+        </ThemeProvider>
+      </BottomSheetModalProvider>
+    </GestureHandlerRootView>
   )
 }

@@ -1,12 +1,13 @@
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import type { TouchableOpacityProps, ViewStyle, TextStyle } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import type { PressableProps, ViewStyle, TextStyle } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
+import { HapticPressable } from './HapticPressable'
 
 type Variant = 'primary' | 'electric' | 'outline' | 'ghost' | 'destructive' | 'glass' | 'secondary'
 type Size = 'sm' | 'md' | 'lg'
 
-interface ButtonProps extends Omit<TouchableOpacityProps, 'style'> {
+interface ButtonProps extends Omit<PressableProps, 'style'> {
   label: string
   variant?: Variant
   size?: Size
@@ -44,8 +45,8 @@ export function Button({
   const dimAlpha = disabled || loading ? 0.5 : 1
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
+    <HapticPressable
+      haptic={variant === 'destructive' ? 'medium' : 'light'}
       disabled={disabled || loading}
       style={[
         styles.base,
@@ -57,7 +58,7 @@ export function Button({
           width: full ? '100%' : undefined,
         },
         containerStyle,
-        shadow ?? null,
+        shadow ?? undefined,
         style,
       ]}
       {...rest}
@@ -82,7 +83,7 @@ export function Button({
           {RightIcon ? <RightIcon size={sz.iconSize} color={textColor} /> : null}
         </View>
       )}
-    </TouchableOpacity>
+    </HapticPressable>
   )
 }
 
