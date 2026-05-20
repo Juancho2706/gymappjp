@@ -10,6 +10,8 @@ interface PendingLog {
   set_number: number
   weight_kg: number | null
   reps_done: number | null
+  rpe?: number | null
+  rir?: number | null
   exercise_name_at_log: string | null
   queued_at: string
 }
