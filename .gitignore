@@ -87,6 +87,7 @@ test-results*/
 
 # Supabase local
 supabase/.branches/
+supabase/.temp/
 
 # Untracked script outputs / personal notes
 scripts/WELCOME-NEWS-ITEM.md

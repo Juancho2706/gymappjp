@@ -3583,7 +3583,7 @@ Sem 8:    Push notifications + polish + screenshots
 
 ## Riesgos
 
-> **Incidente en producción →** ver `docs/RUNBOOK.md` para protocolo de respuesta P0/P1/P2.
+> **Incidente en producción →** ver `docs/operations/RUNBOOK.md` para protocolo de respuesta P0/P1/P2.
 
 | Riesgo | P | Impacto | Mitigación |
 |---|---|---|---|

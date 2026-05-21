@@ -1,7 +1,7 @@
 # EVA v2 — Estado Actual de Ejecución
 
 > Actualizar este archivo al terminar cada tarea o sesión.
-> Plan completo: `docs/EXECUTION_PLAN.md`
+> Plan completo: `docs/plans/EXECUTION_PLAN.md`
 
 ---
 
@@ -12,10 +12,10 @@
 - **NO pushear a prod** (ni `git push` a master ni `npx supabase db push`) hasta terminar el plan completo
 - **Migrations:** nuevas van en `supabase/migrations/` con timestamp ISO. Aplicar localmente con `npx supabase db reset`
 - **Ritmo:** un ítem del plan a la vez. Marcar `[x]` aquí al terminar cada uno
-- **Plan completo:** leer solo la sección necesaria de `docs/EXECUTION_PLAN.md` con offset/limit (3964 líneas, no leer entero)
+- **Plan completo:** leer solo la sección necesaria de `docs/plans/EXECUTION_PLAN.md` con offset/limit (3964 líneas, no leer entero)
 - **Sin staging:** free tier de Supabase ocupado. Flujo: local → v2/enterprise branch → cuando plan completo → db push + deploy
 - **Security migration ya aplicada:** `20260517120000_security_fixes.sql` — fixes de RLS y search_path pre-existentes. Pushear a prod junto con las migrations de v2
-- **Tareas manuales:** `docs/MANUAL_TASKS.md` — todo lo que requiere acción tuya (dashboards, pagos, firmas). Sincronizado con este archivo.
+- **Tareas manuales:** `docs/operations/MANUAL_TASKS.md` — todo lo que requiere acción tuya (dashboards, pagos, firmas). Sincronizado con este archivo.
 - **MCP Supabase apunta a PROD** (`jikjeokundmaafuytdcx.supabase.co`) — NUNCA usarlo en dev. Solo Bash local.
 
 ### Modo de compilar Mobile: GitHub Actions FREE (NO EAS credits)
@@ -314,7 +314,7 @@ Wirear libs a componentes. Sin esto, las libs están listas pero no se usan:
 
 ### Pendientes operacionales (requieren acción tuya)
 - [ ] Primer cliente enterprise firmado y en producción
-- [ ] Playbook D-7 a D+30 ejecutado (ver `docs/EXECUTION_PLAN.md` §5)
+- [ ] Playbook D-7 a D+30 ejecutado (ver `docs/plans/EXECUTION_PLAN.md` §5)
 - [ ] Health score D14 calculado (MT-24)
 - [ ] Google Sheets pipeline (MT-9) ✅ Hecho
 - [ ] Demo org "EVA Demo Gym" creada en staging para ventas
@@ -444,7 +444,7 @@ Wirear libs a componentes. Sin esto, las libs están listas pero no se usan:
 
 ## Notas / Decisiones tomadas
 
-- Flujo: `CURRENT_PHASE.md` como tracker liviano, `EXECUTION_PLAN.md` como referencia completa
+- Flujo: `docs/status/CURRENT_PHASE.md` como tracker liviano, `docs/plans/EXECUTION_PLAN.md` como referencia completa
 - No staging (free tier ocupado) — local → prod directo al final
 - **Bug crítico resuelto 2026-05-17:** `org_members_see_peers` tenía recursión infinita en PostgreSQL RLS. Migration `20260517150000_fix_rls_recursion.sql` resuelve con función SECURITY DEFINER `is_active_org_member()`. Este bug hubiera afectado producción.
 - **Registro free coach v2:** Supabase Auth confirma email con link; DB usa `subscription_status='pending_email'` hasta `/auth/confirm`, luego `active`. Migration `20260517160000_allow_pending_email_subscription_status.sql`.

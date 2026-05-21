@@ -1,7 +1,7 @@
 # Enterprise Plan Verification
 
 **Ultima modificacion:** 2026-05-21 17:20:28 -04:00  
-**Plan fuente:** `ENTERPRISE_PLAN.md`  
+**Plan fuente:** `docs/plans/ENTERPRISE_PLAN.md`
 **Scope:** ejecucion y validacion de Parte A pendiente + Fases B-1 a B-6 del refactor Enterprise.
 
 ## Estado Ejecutivo
@@ -71,4 +71,4 @@ Estado de pruebas al cierre: verde en typecheck, unit, build y bloque E2E Enterp
 
 ## Conclusion
 
-`ENTERPRISE_PLAN.md` queda implementado y validado para su scope funcional critico. El bloque E2E Enterprise/alumno esta verde con 40/40, unit/typecheck/build estan verdes. Lo que queda ya no bloquea Enterprise core; pertenece a hardening global del frontend y corrida Playwright completa del repo.
+`docs/plans/ENTERPRISE_PLAN.md` queda implementado y validado para su scope funcional critico. El bloque E2E Enterprise/alumno esta verde con 40/40, unit/typecheck/build estan verdes. Lo que queda ya no bloquea Enterprise core; pertenece a hardening global del frontend y corrida Playwright completa del repo.
