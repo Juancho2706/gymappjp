@@ -3,17 +3,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { redirect } from 'next/navigation'
-import { z } from 'zod'
+import { ClientLoginSchema, ChangePasswordSchema } from '@eva/schemas'
 import type { Tables } from '@/lib/database.types'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
-
-const clientLoginSchema = z.object({
-    email: z.string().email('Email inválido'),
-    password: z.string().min(1, 'La contraseña es requerida'),
-    coach_slug: z.string(),
-})
 
 export type ClientLoginState = {
     error?: string
@@ -31,7 +25,7 @@ export async function clientLoginAction(
         coach_slug: formData.get('coach_slug') as string,
     }
 
-    const parsed = clientLoginSchema.safeParse(raw)
+    const parsed = ClientLoginSchema.safeParse(raw)
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
     }
@@ -130,14 +124,6 @@ export async function clientLoginAction(
 // ----------------------------------------------------------------
 // Change password action (for first login)
 // ----------------------------------------------------------------
-const changePasswordSchema = z.object({
-    password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
-    confirm_password: z.string(),
-    coach_slug: z.string(),
-}).refine((d) => d.password === d.confirm_password, {
-    message: 'Las contraseñas no coinciden',
-    path: ['confirm_password'],
-})
 
 export type ChangePasswordState = {
     error?: string
@@ -154,7 +140,7 @@ export async function changePasswordAction(
         coach_slug: formData.get('coach_slug') as string,
     }
 
-    const parsed = changePasswordSchema.safeParse(raw)
+    const parsed = ChangePasswordSchema.safeParse(raw)
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
     }

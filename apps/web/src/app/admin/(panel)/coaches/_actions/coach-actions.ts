@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import { AdminCreateCoachSchema } from '@eva/schemas'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
@@ -22,15 +23,6 @@ function revalidateAdmin() {
 
 // ── Create Coach ─────────────────────────────────────────────────
 
-const CreateCoachSchema = z.object({
-    full_name: z.string().min(2).max(100),
-    email: z.string().email(),
-    temp_password: z.string().min(8),
-    brand_name: z.string().min(2).max(80),
-    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']),
-    billing_cycle: z.enum(['monthly', 'quarterly', 'annual']),
-    trial_days: z.coerce.number().int().min(0).max(3650),
-})
 
 export type CreateCoachResult =
     | { success: true; coachId: string; slug: string; email: string; tempPassword: string }
@@ -43,7 +35,7 @@ export async function createCoachAction(
     const { adminClient } = await assertAdmin()
 
     const raw = Object.fromEntries(formData)
-    const parsed = CreateCoachSchema.safeParse(raw)
+    const parsed = AdminCreateCoachSchema.safeParse(raw)
     if (!parsed.success) {
         return { error: parsed.error.issues.map(i => i.message).join(', ') }
     }

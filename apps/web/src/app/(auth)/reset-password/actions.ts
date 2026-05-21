@@ -2,15 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { z } from 'zod'
-
-const schema = z.object({
-    password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
-    confirm_password: z.string(),
-}).refine((d) => d.password === d.confirm_password, {
-    message: 'Las contraseñas no coinciden',
-    path: ['confirm_password'],
-})
+import { ResetPasswordSchema } from '@eva/schemas'
 
 export type ResetPasswordState = {
     error?: string
@@ -26,7 +18,7 @@ export async function resetPasswordAction(
         coach_slug: formData.get('coach_slug') as string | null
     }
 
-    const parsed = schema.safeParse(raw)
+    const parsed = ResetPasswordSchema.safeParse(raw)
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
     }

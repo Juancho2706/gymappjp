@@ -3,12 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { isAdminEmail } from '@/lib/admin/admin-gate'
 import { redirect } from 'next/navigation'
-import { z } from 'zod'
-
-const loginSchema = z.object({
-    email: z.string().email('Email inválido'),
-    password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
-})
+import { LoginSchema } from '@eva/schemas'
 
 export type AdminLoginState = {
     error?: string
@@ -24,7 +19,7 @@ export async function adminLoginAction(
         password: formData.get('password') as string,
     }
 
-    const parsed = loginSchema.safeParse(raw)
+    const parsed = LoginSchema.safeParse(raw)
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
     }

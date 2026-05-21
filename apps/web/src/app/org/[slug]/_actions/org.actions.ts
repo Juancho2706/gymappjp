@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { z } from 'zod/v4'
+import { UpdateOrgSchema, InviteCoachSchema, CreateEnterpriseCoachSchema } from '@eva/schemas'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitOrgCreation } from '@/lib/rate-limit'
@@ -78,11 +78,6 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
     return { success: true, logoUrl: publicUrl }
 }
 
-const UpdateOrgSchema = z.object({
-    name: z.string().min(2).max(80),
-    primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().or(z.literal('')),
-})
-
 export async function updateOrgAction(orgSlug: string, formData: FormData) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -125,18 +120,6 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
     revalidatePath(`/org/${orgSlug}`)
     return { success: true }
 }
-
-const InviteCoachSchema = z.object({
-    email: z.email(),
-    role: z.enum(['org_admin', 'coach']),
-})
-
-const CreateEnterpriseCoachSchema = z.object({
-    full_name: z.string().min(2).max(120),
-    email: z.email(),
-    role: z.enum(['org_admin', 'coach']),
-    temp_password: z.string().min(8).max(72).optional().or(z.literal('')),
-})
 
 function slugify(value: string) {
     return value

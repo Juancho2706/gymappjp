@@ -3,7 +3,9 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@eva/schemas": ["../../packages/schemas/index.ts"],
+      "@eva/types": ["../../packages/types/index.ts"]
     }
   }
 }

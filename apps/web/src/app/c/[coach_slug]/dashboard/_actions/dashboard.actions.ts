@@ -3,19 +3,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { revalidatePath } from 'next/cache'
-import { z } from 'zod'
+import { QuickWeightSchema } from '@eva/schemas'
 import { getTodayInSantiago } from '@/lib/date-utils'
-
-const quickWeightSchema = z.object({
-    weight: z.coerce.number().min(20).max(400),
-    coach_slug: z.string().min(1),
-})
 
 export type QuickWeightState = { error?: string; success?: boolean }
 
 /** §9 — log rápido de peso (solo peso; energía null). */
 export async function quickLogWeightAction(_prev: QuickWeightState, formData: FormData): Promise<QuickWeightState> {
-    const parsed = quickWeightSchema.safeParse({
+    const parsed = QuickWeightSchema.safeParse({
         weight: formData.get('weight'),
         coach_slug: formData.get('coach_slug'),
     })

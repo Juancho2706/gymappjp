@@ -3,13 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { z } from 'zod'
+import { LoginSchema } from '@eva/schemas'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
-
-const loginSchema = z.object({
-    email: z.string().email('Email inválido'),
-    password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
-})
 
 export type LoginState = {
     error?: string
@@ -25,7 +20,7 @@ export async function loginAction(
         password: formData.get('password') as string,
     }
 
-    const parsed = loginSchema.safeParse(raw)
+    const parsed = LoginSchema.safeParse(raw)
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
     }

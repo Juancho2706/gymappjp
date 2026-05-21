@@ -3,30 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { revalidatePath } from 'next/cache'
-import { z } from 'zod'
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-
-const fileField = z
-    .any()
-    .refine(
-        (file) => !file || file.size === 0 || file.size <= MAX_FILE_SIZE,
-        `El tamaño máximo de imagen es 5MB.`
-    )
-    .refine(
-        (file) => !file || file.size === 0 || ACCEPTED_IMAGE_TYPES.includes(file.type),
-        'Solo se aceptan formatos .jpg, .jpeg, .png y .webp.'
-    )
-    .optional()
-
-const checkinSchema = z.object({
-    weight: z.coerce.number().min(20).max(400),
-    energy_level: z.coerce.number().min(1).max(10),
-    notes: z.string().max(1000).optional(),
-    photo: fileField,
-    back_photo: fileField,
-})
+import { CheckInSchema } from '@eva/schemas'
 
 export type CheckinState = {
     error?: string
@@ -74,7 +51,7 @@ export async function submitCheckinAction(
         back_photo: formData.get('back_photo'),
     }
 
-    const parsed = checkinSchema.safeParse(raw)
+    const parsed = CheckInSchema.safeParse(raw)
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
     }

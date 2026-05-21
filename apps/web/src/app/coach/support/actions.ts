@@ -1,20 +1,10 @@
 'use server'
 
-import { z } from 'zod'
+import { SupportMessageSchema } from '@eva/schemas'
 import { createClient } from '@/lib/supabase/server'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildSupportEmail } from '@/lib/email/support-templates'
 import { rateLimitSupport } from '@/lib/rate-limit'
-
-const supportSchema = z.object({
-  type: z.enum(['help', 'bug', 'idea']),
-  subject: z.string().min(3, 'El asunto es requerido').max(200),
-  description: z.string().min(10, 'Describe tu consulta con al menos 10 caracteres').max(5000),
-  priority: z.enum(['low', 'medium', 'high']).optional(),
-  attachmentUrl: z.string().optional(),
-  metadataUrl: z.string().max(1000).optional(),
-  metadataUserAgent: z.string().max(1000).optional(),
-})
 
 export type SupportMessageState =
   | { success: true }
@@ -47,7 +37,7 @@ export async function sendSupportMessage(
     metadataUserAgent: (formData.get('metadataUserAgent') as string) || undefined,
   }
 
-  const parsed = supportSchema.safeParse(raw)
+  const parsed = SupportMessageSchema.safeParse(raw)
   if (!parsed.success) {
     return {
       success: false,

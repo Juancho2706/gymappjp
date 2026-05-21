@@ -1,12 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { z } from 'zod'
+import { ForgotPasswordSchema } from '@eva/schemas'
 import { headers } from 'next/headers'
-
-const schema = z.object({
-    email: z.string().email('Email inválido'),
-})
 
 export type ForgotPasswordState = {
     error?: string
@@ -21,7 +17,7 @@ export async function forgotPasswordAction(
         email: formData.get('email') as string,
         coach_slug: formData.get('coach_slug') as string | null
     }
-    const parsed = schema.safeParse(raw)
+    const parsed = ForgotPasswordSchema.safeParse(raw)
 
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
