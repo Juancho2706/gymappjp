@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, Plus, Loader2, Clock, Flame } from 'lucide-react'
-import { saveRecipe } from './actions'
+import { saveRecipe } from './_actions/recipes.actions'
 import { toast } from 'sonner'
 import Image from 'next/image'
 

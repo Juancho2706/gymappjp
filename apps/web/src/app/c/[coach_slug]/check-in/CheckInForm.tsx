@@ -1,13 +1,13 @@
 'use client'
 
-import { useActionState, useEffect, useRef, useState } from 'react'
+import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
-import { submitCheckinAction, type CheckinState } from './actions'
+import { submitCheckinAction, type CheckinState } from './_actions/check-in.actions'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 
@@ -139,7 +139,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                 })
                 formData.set('back_photo', compressed, backFile.name)
             }
-            formAction(formData)
+            startTransition(() => formAction(formData))
         } catch {
             setIsSubmitting(false)
         }

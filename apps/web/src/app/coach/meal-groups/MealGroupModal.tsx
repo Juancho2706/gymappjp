@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Trash2, Plus, Search, Scale, Zap, Dumbbell, PieChart, Apple } from 'lucide-react'
 import { FoodSearch } from '../foods/FoodSearch'
-import { saveMealGroup } from './actions'
+import { saveMealGroup } from './_actions/meal-groups.actions'
 import { toast } from 'sonner'
 
 interface Item {

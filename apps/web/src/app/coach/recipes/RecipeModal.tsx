@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Loader2, Save } from 'lucide-react'
-import { saveRecipe } from './actions'
+import { saveRecipe } from './_actions/recipes.actions'
 import { toast } from 'sonner'
 
 const recipeSchema = z.object({

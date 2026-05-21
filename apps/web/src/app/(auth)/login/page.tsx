@@ -10,18 +10,9 @@ import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { createClient } from '@/lib/supabase/client'
+import { startCoachGoogleLogin } from '@/lib/auth/client-oauth'
 
 const initialState: LoginState = {}
-
-async function handleGoogleLogin() {
-    const supabase = createClient()
-    const origin = window.location.origin
-    await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${origin}/auth/callback?next=/coach/dashboard` },
-    })
-}
 
 const FEATURES = [
     { icon: Users, label: 'Gestión de alumnos', desc: 'Directorio completo con métricas de adherencia' },
@@ -240,7 +231,7 @@ export default function CoachLoginPage() {
 
                     <button
                         type="button"
-                        onClick={handleGoogleLogin}
+                        onClick={startCoachGoogleLogin}
                         className="mt-4 w-full h-11 flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-colors text-sm font-medium text-foreground"
                     >
                         <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock } from 'lucide-react'
 import Link from 'next/link'
-import { createClientAction, type CreateClientState } from './actions'
+import { createClientAction, type CreateClientState } from './_actions/clients.actions'
 import { cn } from '@/lib/utils'
 
 const initialState: CreateClientState = {}

@@ -13,7 +13,7 @@ import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './actions'
+import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './_actions/builder.actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
 const TemplatePickerDialog = dynamic(

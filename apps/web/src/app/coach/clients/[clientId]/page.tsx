@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { getClientProfileData } from './actions'
+import { getClientProfileData } from './_actions/client-detail.actions'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'

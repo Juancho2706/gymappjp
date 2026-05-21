@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 import { Trophy, AlertTriangle, BarChart3, Target, Calendar, Clock, Dumbbell } from 'lucide-react'
 import type { MuscleVolumeRow } from './profileDataHelpers'
 import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
-import { getClientWorkoutForDate, getClientWorkoutActivityDates } from './actions'
+import { getClientWorkoutForDate, getClientWorkoutActivityDates } from './_actions/client-detail.actions'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import {
     findWeeklyWeightPRs,

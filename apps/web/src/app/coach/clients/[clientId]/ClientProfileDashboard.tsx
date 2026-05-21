@@ -31,7 +31,7 @@ import {
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
-import { updateClientGoalWeight } from './actions'
+import { updateClientGoalWeight } from './_actions/client-detail.actions'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions

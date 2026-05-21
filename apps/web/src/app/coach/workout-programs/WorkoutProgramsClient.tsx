@@ -47,7 +47,7 @@ import {
     deleteWorkoutProgramAction,
     duplicateWorkoutProgramAction,
     syncProgramFromTemplateAction,
-} from '../builder/[clientId]/actions'
+} from '../builder/[clientId]/_actions/builder.actions'
 import { motion, useReducedMotion } from 'framer-motion'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { LibraryHeader } from './components/LibraryHeader'

@@ -20,7 +20,7 @@ vi.mock('@/lib/date-utils', async (importOriginal) => {
   }
 })
 
-import { getWeeklyCompliance } from './[clientId]/actions'
+import { getWeeklyCompliance } from './[clientId]/_actions/client-detail.actions'
 
 describe('getWeeklyCompliance', () => {
   beforeEach(() => {

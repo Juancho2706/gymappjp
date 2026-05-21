@@ -3,7 +3,7 @@
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Lock, Loader2, ShieldCheck } from 'lucide-react'
-import { changePasswordAction, type ChangePasswordState } from '../login/actions'
+import { changePasswordAction, type ChangePasswordState } from '../login/_actions/login.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/actions'
+import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/_actions/workout-log.actions'
 import {
     readWorkoutOfflineQueue,
     writeWorkoutOfflineQueue,

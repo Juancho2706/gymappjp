@@ -13,7 +13,7 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { archiveClientAction, unarchiveClientAction } from './actions'
+import { archiveClientAction, unarchiveClientAction } from './_actions/clients.actions'
 
 interface ArchiveClientButtonProps {
     clientId: string

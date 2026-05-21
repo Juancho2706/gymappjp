@@ -18,7 +18,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: revalidatePathMock,
 }))
 
-import { createClientAction } from './actions'
+import { createClientAction } from './_actions/clients.actions'
 
 function buildFormData() {
   const form = new FormData()

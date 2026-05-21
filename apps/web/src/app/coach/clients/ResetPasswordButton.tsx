@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { KeyRound, Copy, Check } from 'lucide-react'
-import { resetClientPasswordAction } from './actions'
+import { resetClientPasswordAction } from './_actions/clients.actions'
 import {
     AlertDialog,
     AlertDialogAction,

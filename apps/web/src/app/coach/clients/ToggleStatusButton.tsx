@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { PlayCircle, PauseCircle } from 'lucide-react'
-import { toggleClientStatusAction } from './actions'
+import { toggleClientStatusAction } from './_actions/clients.actions'
 import {
     AlertDialog,
     AlertDialogAction,

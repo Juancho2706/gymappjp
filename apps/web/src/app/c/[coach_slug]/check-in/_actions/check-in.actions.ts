@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
 import { CheckInSchema } from '@eva/schemas'
 
@@ -11,7 +11,7 @@ export type CheckinState = {
 }
 
 async function uploadToCheckinsBucket(
-    adminDb: Awaited<ReturnType<typeof createRawAdminClient>>,
+    adminDb: ReturnType<typeof createServiceRoleClient>,
     userId: string,
     file: File,
     variant: 'front' | 'back'
@@ -61,7 +61,7 @@ export async function submitCheckinAction(
     } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
-    const adminDb = await createRawAdminClient()
+    const adminDb = createServiceRoleClient()
 
     let photoUrl: string | null = null
     let backPhotoUrl: string | null = null

@@ -15,7 +15,7 @@ import { Settings, Moon, Sun, Palette, Volume2 } from 'lucide-react'
 import { SettingsModalTrigger } from '@/components/client/SettingsModalTrigger'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useTheme } from 'next-themes'
-import { toggleClientBrandColors } from '@/app/c/[coach_slug]/actions'
+import { toggleClientBrandColors } from '@/app/c/[coach_slug]/_actions/client-root.actions'
 import { toast } from 'sonner'
 import { playTimerSound, TimerSound } from '@/lib/audioUtils'
 

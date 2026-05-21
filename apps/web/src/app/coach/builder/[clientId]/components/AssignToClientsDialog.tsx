@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loader2, Users, Check } from 'lucide-react'
-import { getCoachClientsAction, assignProgramToClientsAction } from '../actions'
+import { getCoachClientsAction, assignProgramToClientsAction } from '../_actions/builder.actions'
 import { toast } from 'sonner'
 
 interface Client {

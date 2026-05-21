@@ -15,7 +15,7 @@ export const getCoachEnterpriseContext = cache(async (coach: {
         .from('organization_members')
         .select('role, organizations(slug, name)')
         .eq('org_id', coach.active_org_id)
-        .eq('coach_id', coach.id)
+        .eq('user_id', coach.id)
         .eq('status', 'active')
         .is('deleted_at', null)
         .maybeSingle()

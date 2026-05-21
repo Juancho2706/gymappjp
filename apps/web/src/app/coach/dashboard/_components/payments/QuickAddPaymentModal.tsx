@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { addPayment } from '@/app/coach/clients/[clientId]/actions'
+import { addPayment } from '@/app/coach/clients/[clientId]/_actions/client-detail.actions'
 import type { ClientListItem } from '../../_data/types'
 
 interface Props {

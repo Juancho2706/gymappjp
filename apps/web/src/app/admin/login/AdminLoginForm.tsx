@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
-import { adminLoginAction } from './actions'
+import { adminLoginAction } from './_actions/login.actions'
 
 export function AdminLoginForm() {
     const [showPassword, setShowPassword] = useState(false)

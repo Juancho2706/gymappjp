@@ -13,7 +13,7 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { deleteClientAction } from './actions'
+import { deleteClientAction } from './_actions/clients.actions'
 
 interface DeleteClientButtonProps {
     clientId: string

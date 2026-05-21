@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ResetPasswordButton } from '@/app/coach/clients/ResetPasswordButton'
 import { ToggleStatusButton } from '@/app/coach/clients/ToggleStatusButton'
-import { deleteClientAction } from '@/app/coach/clients/actions'
+import { deleteClientAction } from '@/app/coach/clients/_actions/clients.actions'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { cn } from '@/lib/utils'
 

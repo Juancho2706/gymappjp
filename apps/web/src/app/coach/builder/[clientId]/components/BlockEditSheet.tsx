@@ -6,7 +6,7 @@ import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Input } from '@/components/ui/input'
 import { ClampedIntInput } from '@/components/ui/clamped-int-input'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
-import { getExerciseHistoryAction } from '../actions'
+import { getExerciseHistoryAction } from '../_actions/builder.actions'
 import type { BuilderBlock } from '../types'
 
 interface ExerciseHistory {

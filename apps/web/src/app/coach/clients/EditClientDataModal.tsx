@@ -16,7 +16,7 @@ import {
     updateClientDataAction,
     type UpdateClientDataState,
     type ClientIntakeData,
-} from './actions'
+} from './_actions/clients.actions'
 
 const initialState: UpdateClientDataState = {}
 

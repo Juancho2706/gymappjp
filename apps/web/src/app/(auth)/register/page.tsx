@@ -8,7 +8,7 @@ import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles } from 'lucide
 import { registerAction, type RegisterState } from './_actions/register.actions'
 import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coach/onboarding/complete/_actions/complete.actions'
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
+import { getCurrentOAuthUserProfile, startCoachGoogleRegistration } from '@/lib/auth/client-oauth'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -58,15 +58,6 @@ function SubmitButton({ isFreeTier }: { isFreeTier: boolean }) {
     )
 }
 
-async function handleGoogleOAuth() {
-    const supabase = createClient()
-    const origin = window.location.origin
-    await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${origin}/auth/register-callback` },
-    })
-}
-
 export default function RegisterPage() {
     const [state, formAction] = useActionState(registerAction, initialState)
     const [googleState, googleFormAction] = useActionState(completeOAuthOnboarding, googleInitialState)
@@ -93,15 +84,10 @@ export default function RegisterPage() {
 
         if (params.get('from') === 'google') {
             setFromGoogle(true)
-            const supabase = createClient()
-            supabase.auth.getUser().then(({ data }) => {
-                if (data.user) {
-                    const name =
-                        (data.user.user_metadata?.full_name as string | undefined) ??
-                        (data.user.user_metadata?.name as string | undefined) ??
-                        ''
-                    setFullName(name)
-                    setEmail(data.user.email ?? '')
+            getCurrentOAuthUserProfile().then((profile) => {
+                if (profile) {
+                    setFullName(profile.fullName)
+                    setEmail(profile.email)
                 }
             })
         }
@@ -566,7 +552,7 @@ export default function RegisterPage() {
                         </div>
                         <button
                             type="button"
-                            onClick={handleGoogleOAuth}
+                            onClick={startCoachGoogleRegistration}
                             className="mt-4 w-full h-11 flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-colors text-sm font-medium text-foreground"
                         >
                             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

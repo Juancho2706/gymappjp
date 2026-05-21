@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { addPayment, deletePayment } from './actions'
+import { addPayment, deletePayment } from './_actions/client-detail.actions'
 
 function formatMoney(amount: number) {
     return new Intl.NumberFormat('es-CL', {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { MealGroupModal } from './MealGroupModal'
-import { deleteMealGroup } from './actions'
+import { deleteMealGroup } from './_actions/meal-groups.actions'
 import { toast } from 'sonner'
 
 export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGroups: any[], coachId: string }) {

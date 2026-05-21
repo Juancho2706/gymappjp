@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Plus } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/actions'
+import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/_actions/workout-log.actions'
 import { springs } from '@/lib/animation-presets'
 import type { HeroBlock } from './WorkoutHeroCard'
 

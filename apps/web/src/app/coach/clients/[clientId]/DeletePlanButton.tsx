@@ -8,7 +8,7 @@ import {
     AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { deletePlanAction } from '@/app/coach/builder/[clientId]/actions'
+import { deletePlanAction } from '@/app/coach/builder/[clientId]/_actions/builder.actions'
 
 export function DeletePlanButton({ planId, clientId, planTitle }: {
     planId: string

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Loader2, FileText, ChevronRight, AlertTriangle } from 'lucide-react'
-import { getTemplatesForBuilderAction, loadTemplateForBuilderAction } from '../actions'
+import { getTemplatesForBuilderAction, loadTemplateForBuilderAction } from '../_actions/builder.actions'
 import type { DayState, ProgramPhase } from '../types'
 import { DAYS_OF_WEEK } from '../hooks/usePlanBuilder'
 

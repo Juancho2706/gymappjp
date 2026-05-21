@@ -24,6 +24,8 @@ export function ProgressBar({ value, color, height = 6 }: ProgressBarProps) {
   )
 }
 
+export { ProgressBar as Progress }
+
 const styles = StyleSheet.create({
   track: { overflow: 'hidden', width: '100%' },
   fill: {},

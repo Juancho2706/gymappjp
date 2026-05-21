@@ -19,6 +19,8 @@ export default async function CoachSettingsPage() {
     const { user, coach } = await getCoachSettingsForUser()
     if (!user) redirect('/login')
     if (!coach) redirect('/login')
+    if (coach.subscription_status === 'org_managed') redirect('/coach/dashboard')
+
     const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const capabilities = getTierCapabilities(tier)
 

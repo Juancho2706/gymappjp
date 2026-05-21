@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -71,6 +72,7 @@ const tierOptions = (Object.keys(TIER_CONFIG) as SubscriptionTier[]).filter((t) 
 const cycleOptions = Object.keys(BILLING_CYCLE_CONFIG) as BillingCycle[]
 
 export default function CoachSubscriptionPage() {
+    const router = useRouter()
     const [coach, setCoach] = useState<CoachSubscription | null>(null)
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -91,6 +93,10 @@ export default function CoachSubscriptionPage() {
                 const payload = await response.json()
                 if (!response.ok) throw new Error(payload.error ?? 'No se pudo cargar la suscripción')
                 if (!isMounted) return
+                if (payload.coach?.subscription_status === 'org_managed') {
+                    router.replace('/coach/dashboard')
+                    return
+                }
                 setCoach(payload.coach)
                 setEvents(Array.isArray(payload.events) ? payload.events : [])
                 const tier = payload.coach.subscription_tier as SubscriptionTier
@@ -112,7 +118,7 @@ export default function CoachSubscriptionPage() {
         return () => {
             isMounted = false
         }
-    }, [])
+    }, [router])
 
     const allowedCycles = getTierAllowedBillingCycles(selectedTier)
     const allowedCycleOptions = cycleOptions.filter((cycle) => allowedCycles.includes(cycle))
