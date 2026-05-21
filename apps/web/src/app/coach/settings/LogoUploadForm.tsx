@@ -6,7 +6,7 @@ import { useFormStatus } from 'react-dom'
 import Image from 'next/image'
 import { Upload, Loader2, ImagePlus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { updateLogoAction, type BrandSettingsState } from './actions'
+import { updateLogoAction, type BrandSettingsState } from './_actions/settings.actions'
 import { BRAND_LOGO_WEB } from '@/lib/brand-assets'
 import { cn } from '@/lib/utils'
 

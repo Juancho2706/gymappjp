@@ -20,7 +20,7 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }))
 
-import { loginAction } from './actions'
+import { loginAction } from './_actions/login.actions'
 
 function buildFormData(email: string, password: string) {
   const formData = new FormData()

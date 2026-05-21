@@ -28,7 +28,7 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers({ 'x-forwarded-for': '203.0.113.10' })),
 }))
 
-import { registerAction } from './actions'
+import { registerAction } from './_actions/register.actions'
 
 function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
   const base = {

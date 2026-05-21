@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { sendSupportMessage } from './actions'
+import { sendSupportMessage } from './_actions/support.actions'
 import { toast } from 'sonner'
 import { Loader2, Send, Paperclip, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'

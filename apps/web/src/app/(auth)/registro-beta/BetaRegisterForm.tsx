@@ -4,7 +4,7 @@ import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { Loader2, User, Mail, Lock, Store, Sparkles } from 'lucide-react'
-import { betaRegisterAction, type BetaRegisterState } from './actions'
+import { betaRegisterAction, type BetaRegisterState } from './_actions/registro-beta.actions'
 import { cn } from '@/lib/utils'
 
 const initialState: BetaRegisterState = {}

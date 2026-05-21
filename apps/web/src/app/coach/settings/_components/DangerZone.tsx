@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { Trash2, AlertTriangle, Loader2 } from 'lucide-react'
-import { deleteCoachAccountAction } from '../actions'
+import { deleteCoachAccountAction } from '../_actions/settings.actions'
 
 export function DangerZone() {
     const [open, setOpen] = useState(false)
