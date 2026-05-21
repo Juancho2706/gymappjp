@@ -1,0 +1,13 @@
+// Atomic UI primitives — stateless, only props + CVA variants, no domain types
+export { Button } from '@/components/ui/button'
+export { Input } from '@/components/ui/input'
+export { Label } from '@/components/ui/label'
+export { Badge } from '@/components/ui/badge'
+export { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+export { Switch } from '@/components/ui/switch'
+export { Progress } from '@/components/ui/progress'
+export { Separator } from '@/components/ui/separator'
+export { Skeleton } from '@/components/ui/skeleton'
+export { Textarea } from '@/components/ui/textarea'
+export { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
