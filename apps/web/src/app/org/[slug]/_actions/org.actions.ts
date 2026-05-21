@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { UpdateOrgSchema, InviteCoachSchema, CreateEnterpriseCoachSchema } from '@eva/schemas'
@@ -6,8 +6,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitOrgCreation } from '@/lib/rate-limit'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
-import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
+import { generateUniqueInviteCode } from '@/services/coach/coach.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { generateTempPassword, generateUniqueCoachSlug, getOrgAdminContext } from '@/services/org/org.service'
 
 const ALLOWED_LOGO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_LOGO_BYTES = 2 * 1024 * 1024 // 2 MB
@@ -121,55 +122,11 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
     return { success: true }
 }
 
-function slugify(value: string) {
-    return value
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 46)
-}
-
-function generateTempPassword() {
-    return `Eva${Math.random().toString(36).slice(2, 8)}${Math.floor(1000 + Math.random() * 9000)}!`
-}
-
-async function generateUniqueCoachSlug(admin: ReturnType<typeof createServiceRoleClient>, base: string) {
-    const cleanBase = slugify(base) || 'coach'
-    for (let attempt = 0; attempt < 12; attempt++) {
-        const slug = attempt === 0 ? cleanBase : `${cleanBase}-${Math.random().toString(36).slice(2, 6)}`
-        const { data } = await admin.from('coaches').select('id').eq('slug', slug).maybeSingle()
-        if (!data) return slug
-    }
-    return `${cleanBase}-${Date.now().toString(36)}`
-}
-
-async function getOrgAdminContext(orgSlug: string, allowedRoles: string[] = ['org_owner', 'org_admin']) {
+async function resolveOrgAdminContext(orgSlug: string, allowedRoles: string[] = ['org_owner', 'org_admin']) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado' as const }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id, name, slug, seats_included, primary_color, logo_url')
-        .eq('slug', orgSlug)
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' as const }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('coach_id', user.id)
-        .in('role', allowedRoles)
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos de administrador' as const }
-
-    return { supabase, user, org, membership }
+    return getOrgAdminContext(supabase, user.id, orgSlug, allowedRoles)
 }
 
 export async function createEnterpriseCoachAction(orgSlug: string, formData: FormData) {
@@ -181,7 +138,7 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
     })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
 
-    const context = await getOrgAdminContext(orgSlug)
+    const context = await resolveOrgAdminContext(orgSlug)
     if ('error' in context) return { error: context.error }
 
     const admin = createServiceRoleClient()
@@ -413,7 +370,7 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
 }
 
 export async function resetEnterpriseCoachPasswordAction(orgSlug: string, coachId: string) {
-    const context = await getOrgAdminContext(orgSlug)
+    const context = await resolveOrgAdminContext(orgSlug)
     if ('error' in context) return { error: context.error }
 
     const admin = createServiceRoleClient()
@@ -446,7 +403,7 @@ export async function resetEnterpriseCoachPasswordAction(orgSlug: string, coachI
 }
 
 export async function updateEnterpriseCoachRoleAction(orgSlug: string, memberId: string, role: 'org_admin' | 'coach') {
-    const context = await getOrgAdminContext(orgSlug, ['org_owner'])
+    const context = await resolveOrgAdminContext(orgSlug, ['org_owner'])
     if ('error' in context) return { error: context.error }
 
     const admin = createServiceRoleClient()
