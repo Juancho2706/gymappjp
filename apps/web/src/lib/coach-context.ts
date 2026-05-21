@@ -1,13 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
-
-export type CoachOrgContext = {
-    coachId: string
-    orgId: string | null
-    orgRole: 'org_owner' | 'org_admin' | 'coach' | null
-    isOrgMember: boolean
-    isOrgAdmin: boolean
-}
+import type { CoachOrgContext } from '@/domain/coach/types'
+export type { CoachOrgContext } from '@/domain/coach/types'
 
 /**
  * Extracts org context from the JWT custom claims injected by the auth hook.

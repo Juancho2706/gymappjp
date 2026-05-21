@@ -1,11 +1,5 @@
-export type OrgRole = 'org_owner' | 'org_admin' | 'coach' | string
-
-export type PostLoginProfile = {
-    isCoach: boolean
-    activeOrgSlug?: string | null
-    activeOrgRole?: OrgRole | null
-    clientCoachSlug?: string | null
-}
+export type { OrgRole, PostLoginProfile } from '@/domain/auth/types'
+import type { PostLoginProfile } from '@/domain/auth/types'
 
 export function getPostLoginRedirect(profile: PostLoginProfile): string {
     const isOrgAdmin = profile.activeOrgRole === 'org_owner' || profile.activeOrgRole === 'org_admin'

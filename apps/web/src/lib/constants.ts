@@ -40,18 +40,8 @@ export const MUSCLE_MAPPING: Record<string, string[]> = {
     'trapecios': ['traps', 'trapecios', 'trapecio']
 };
 
-export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
-export type PaymentProvider = 'mercadopago' | 'stripe' | 'admin'
-export type SubscriptionTier = 'free' | 'starter' | 'pro' | 'elite' | 'growth' | 'scale'
-
-export type TierConfig = {
-    label: string
-    maxClients: number
-    monthlyPriceClp: number
-    annualPriceClp?: number
-    features: string[]
-    isMostAffordable?: boolean
-}
+export type { BillingCycle, PaymentProvider, SubscriptionTier, TierConfig, TierCapabilities, SubscriptionStatus } from '@/domain/coach/types'
+import type { SubscriptionTier, TierConfig, TierCapabilities, BillingCycle } from '@/domain/coach/types'
 
 const QUARTERLY_DISCOUNT = 0.1
 const ANNUAL_DISCOUNT = 0.2
@@ -126,11 +116,6 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
  * free/starter: no nutrition (upgrade driver). free: no branding (upgrade driver).
  * canUseAdvancedReports reserved for future implementation — gate not active yet.
  */
-export type TierCapabilities = {
-    canUseNutrition: boolean
-    canUseBranding: boolean
-    canUseAdvancedReports: boolean
-}
 
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     free: {
@@ -246,16 +231,6 @@ export function getRecommendedTier(clientCount: number): SubscriptionTier {
     return ordered.find(t => TIER_CONFIG[t].maxClients >= clientCount) ?? 'scale'
 }
 
-export type SubscriptionStatus =
-    | 'active'
-    | 'trialing'
-    | 'canceled'
-    | 'past_due'
-    | 'expired'
-    | 'paused'
-    | 'pending_payment'
-    | 'pending_email'
-    | 'org_managed'
 
 // Note: 'canceled' is NOT in this list. A canceled coach still has access until
 // current_period_end. The gate in coach-subscription-gate.ts handles that date check.
