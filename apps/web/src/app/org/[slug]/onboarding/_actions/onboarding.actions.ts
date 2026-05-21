@@ -21,7 +21,7 @@ async function getOrgAndVerifyAdmin(orgSlug: string) {
         .from('organization_members')
         .select('role')
         .eq('org_id', org.id)
-        .eq('coach_id', user.id)
+        .eq('user_id', user.id)
         .in('role', ['org_owner', 'org_admin'])
         .eq('status', 'active')
         .is('deleted_at', null)

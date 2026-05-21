@@ -29,9 +29,10 @@ export type TierCapabilities = {
 }
 
 export type CoachOrgContext = {
-    coachId: string
+    coachId: string | null
     orgId: string | null
     orgRole: 'org_owner' | 'org_admin' | 'coach' | null
     isOrgMember: boolean
     isOrgAdmin: boolean
+    isOrgUser: boolean
 }

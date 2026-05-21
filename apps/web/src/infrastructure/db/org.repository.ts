@@ -23,7 +23,8 @@ export type OrgWithMembership = {
 
 export type OrgMember = {
     id: string
-    coach_id: string
+    user_id: string
+    coach_id: string | null
     role: 'org_owner' | 'org_admin' | 'coach'
     status: string
     invited_at: string | null
@@ -67,7 +68,7 @@ export async function findOrgBySlug(
         .from('organization_members')
         .select('role')
         .eq('org_id', org.id)
-        .eq('coach_id', userId)
+        .eq('user_id', userId)
         .eq('status', 'active')
         .is('deleted_at', null)
         .maybeSingle()
@@ -81,7 +82,7 @@ export async function findOrgMembers(db: DB, orgId: string): Promise<OrgMember[]
     const { data } = await db
         .from('organization_members')
         .select(`
-            id, coach_id, role, status, invited_at, joined_at,
+            id, user_id, coach_id, role, status, invited_at, joined_at,
             coach:coaches(id, full_name, slug, logo_url, subscription_status, invite_code)
         `)
         .eq('org_id', orgId)

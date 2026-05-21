@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -1621,7 +1621,7 @@ export type Database = {
       }
       organization_members: {
         Row: {
-          coach_id: string
+          coach_id: string | null
           deleted_at: string | null
           id: string
           invited_at: string | null
@@ -1629,9 +1629,10 @@ export type Database = {
           org_id: string
           role: string
           status: string
+          user_id: string
         }
         Insert: {
-          coach_id: string
+          coach_id?: string | null
           deleted_at?: string | null
           id?: string
           invited_at?: string | null
@@ -1639,9 +1640,10 @@ export type Database = {
           org_id: string
           role: string
           status?: string
+          user_id: string
         }
         Update: {
-          coach_id?: string
+          coach_id?: string | null
           deleted_at?: string | null
           id?: string
           invited_at?: string | null
@@ -1649,6 +1651,7 @@ export type Database = {
           org_id?: string
           role?: string
           status?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -1868,6 +1871,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      push_tokens: {
+        Row: {
+          created_at: string | null
+          device_id: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          device_id: string
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       recipe_ingredients: {
         Row: {
@@ -2736,6 +2769,7 @@ export type Database = {
         }[]
       }
       immutable_unaccent: { Args: { "": string }; Returns: string }
+      is_active_org_member: { Args: { p_org_id: string }; Returns: boolean }
       search_foods: {
         Args: { search_term: string }
         Returns: {

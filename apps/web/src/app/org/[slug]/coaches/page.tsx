@@ -93,18 +93,20 @@ export default async function OrgCoachesPage({ params }: Props) {
                     </div>
                     {active.map(member => {
                         const RoleIcon = ROLE_ICONS[member.role as keyof typeof ROLE_ICONS] ?? User
+                        const displayName = member.coach?.full_name ?? 'Administrador empresa'
+                        const displayMeta = member.coach?.slug ?? 'Cuenta enterprise'
                         return (
                             <div key={member.id} className="flex items-center gap-3 px-4 py-3">
                                 <div className="w-9 h-9 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-500 font-bold text-sm shrink-0">
-                                    {member.coach?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
+                                    {displayName.charAt(0).toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium truncate">{member.coach?.full_name ?? '-'}</p>
-                                    <p className="text-[11px] text-muted-foreground">{member.coach?.slug ?? ''}</p>
+                                    <p className="text-sm font-medium truncate">{displayName}</p>
+                                    <p className="text-[11px] text-muted-foreground">{displayMeta}</p>
                                 </div>
                                 <div className="hidden items-center gap-1 text-[11px] text-muted-foreground md:flex">
                                     <Users className="h-3 w-3" />
-                                    {clientCountByCoach[member.coach_id] ?? 0} alumnos
+                                    {member.coach_id ? (clientCountByCoach[member.coach_id] ?? 0) : 0} alumnos
                                 </div>
                                 <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                                     <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -116,7 +118,7 @@ export default async function OrgCoachesPage({ params }: Props) {
                                             {member.coach.invite_code}
                                         </span>
                                     )}
-                                    {isAdmin && member.role !== 'org_owner' && member.status === 'active' && (
+                                    {isAdmin && member.role !== 'org_owner' && member.status === 'active' && member.coach_id && (
                                         <CoachEnterpriseActions
                                             orgSlug={slug}
                                             memberId={member.id}

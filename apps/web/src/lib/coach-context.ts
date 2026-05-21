@@ -16,6 +16,19 @@ export const getCoachOrgContext = cache(async (): Promise<CoachOrgContext | null
         coach_id?: string
         org_id?: string
         org_role?: string
+        is_org_user?: boolean
+    }
+
+    if (claims.is_org_user && claims.org_id) {
+        const orgRole = (claims.org_role ?? null) as CoachOrgContext['orgRole']
+        return {
+            coachId: null,
+            orgId: claims.org_id,
+            orgRole,
+            isOrgMember: true,
+            isOrgAdmin: orgRole === 'org_owner' || orgRole === 'org_admin',
+            isOrgUser: true,
+        }
     }
 
     if (claims.coach_id) {
@@ -27,6 +40,7 @@ export const getCoachOrgContext = cache(async (): Promise<CoachOrgContext | null
             orgRole,
             isOrgMember: !!orgId,
             isOrgAdmin: orgRole === 'org_owner' || orgRole === 'org_admin',
+            isOrgUser: false,
         }
     }
 
@@ -45,7 +59,7 @@ export const getCoachOrgContext = cache(async (): Promise<CoachOrgContext | null
             .from('organization_members')
             .select('role')
             .eq('org_id', coach.active_org_id)
-            .eq('coach_id', coach.id)
+            .eq('user_id', coach.id)
             .eq('status', 'active')
             .is('deleted_at', null)
             .maybeSingle()
@@ -58,5 +72,6 @@ export const getCoachOrgContext = cache(async (): Promise<CoachOrgContext | null
         orgRole,
         isOrgMember: !!coach.active_org_id,
         isOrgAdmin: orgRole === 'org_owner' || orgRole === 'org_admin',
+        isOrgUser: false,
     }
 })

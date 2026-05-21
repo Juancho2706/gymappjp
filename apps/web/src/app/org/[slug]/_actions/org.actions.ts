@@ -52,7 +52,7 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
         .from('organization_members')
         .select('role')
         .eq('org_id', org.id)
-        .eq('coach_id', user.id)
+        .eq('user_id', user.id)
         .in('role', ['org_owner', 'org_admin'])
         .eq('status', 'active')
         .is('deleted_at', null)
@@ -101,7 +101,7 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
         .from('organization_members')
         .select('role')
         .eq('org_id', org.id)
-        .eq('coach_id', user.id)
+        .eq('user_id', user.id)
         .in('role', ['org_owner', 'org_admin'])
         .eq('status', 'active')
         .is('deleted_at', null)
@@ -193,6 +193,7 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
 
     const { error: memberError } = await admin.from('organization_members').insert({
         org_id: org.id,
+        user_id: authData.user.id,
         coach_id: authData.user.id,
         role: parsed.data.role,
         status: 'active',
@@ -253,7 +254,7 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
         .from('organization_members')
         .select('role')
         .eq('org_id', org.id)
-        .eq('coach_id', user.id)
+        .eq('user_id', user.id)
         .in('role', ['org_owner', 'org_admin'])
         .eq('status', 'active')
         .is('deleted_at', null)
@@ -295,6 +296,7 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
         .from('organization_members')
         .insert({
             org_id: org.id,
+            user_id: targetCoach.id,
             coach_id: targetCoach.id,
             role: parsed.data.role,
             status: 'active',
@@ -316,6 +318,10 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
     return { success: true }
 }
 
+export async function inviteCoachFormAction(orgSlug: string, _prevState: unknown, formData: FormData) {
+    return inviteCoachAction(orgSlug, formData)
+}
+
 export async function removeCoachAction(orgSlug: string, memberId: string) {
     const supabase = await createClient()
     const admin = createServiceRoleClient()
@@ -333,7 +339,7 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
         .from('organization_members')
         .select('role')
         .eq('org_id', org.id)
-        .eq('coach_id', user.id)
+        .eq('user_id', user.id)
         .in('role', ['org_owner', 'org_admin'])
         .eq('status', 'active')
         .is('deleted_at', null)
@@ -467,6 +473,7 @@ export async function createOrgAction(formData: FormData) {
     // Add creator as org_owner
     await admin.from('organization_members').insert({
         org_id: org.id,
+        user_id: user.id,
         coach_id: user.id,
         role: 'org_owner',
         status: 'active',

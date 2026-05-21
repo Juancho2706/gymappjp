@@ -15,6 +15,7 @@ DECLARE
   coach_both uuid := '00000000-0000-0000-0001-000000000006';
   coach_solo uuid := '00000000-0000-0000-0001-000000000007';
   coach_inv  uuid := '00000000-0000-0000-0001-000000000008';
+  org_owner_nocoach uuid := '00000000-0000-0000-0001-000000000009';
   -- Org IDs
   org_a uuid := '00000000-0000-0000-0002-000000000001';
   org_b uuid := '00000000-0000-0000-0002-000000000002';
@@ -56,6 +57,7 @@ BEGIN
     (coach_both,'coach-both@eva-test.cl',        pw, now(), '{"full_name":"Coach Both"}'::jsonb,    '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (coach_solo,'coach-solo@eva-test.cl',        pw, now(), '{"full_name":"Coach Solo"}'::jsonb,    '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (coach_inv, 'coach-invited@eva-test.cl',     pw, now(), '{"full_name":"Coach Invited"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
+    (org_owner_nocoach, 'org-owner-nocoach@eva-test.cl', pw, now(), '{"full_name":"Org Owner No Coach"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (ca1, 'client-a1@eva-test.cl', pw, now(), '{"full_name":"Client A1"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (ca2, 'client-a2@eva-test.cl', pw, now(), '{"full_name":"Client A2"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (ca3, 'client-a3@eva-test.cl', pw, now(), '{"full_name":"Client A3"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
@@ -92,7 +94,7 @@ BEGIN
   -- ============================================================
   INSERT INTO organizations (id, slug, name, owner_user_id, status, seats_included, plan, billing_cycle, onboarding_step)
   VALUES
-    (org_a, 'crossfit-test-norte', 'CrossFit Test Norte', owner_a, 'active', 5, 'enterprise', 'monthly', 5),
+    (org_a, 'crossfit-test-norte', 'CrossFit Test Norte', owner_a, 'active', 6, 'enterprise', 'monthly', 5),
     (org_b, 'box-test-sur',        'Box Test Sur',        owner_b, 'trial',  3, 'enterprise', 'monthly', 5)
   ON CONFLICT (id) DO NOTHING;
 
@@ -102,16 +104,17 @@ BEGIN
   -- ============================================================
   -- 4. Organization members
   -- ============================================================
-  INSERT INTO organization_members (org_id, coach_id, role, status, joined_at)
+  INSERT INTO organization_members (org_id, user_id, coach_id, role, status, joined_at)
   VALUES
-    (org_a, owner_a,    'org_owner', 'active',  now()),
-    (org_a, coach_a1,   'coach',     'active',  now()),
-    (org_a, coach_a2,   'coach',     'active',  now()),
-    (org_a, coach_both, 'coach',     'active',  now()),
-    (org_b, owner_b,    'org_owner', 'active',  now()),
-    (org_b, coach_b1,   'coach',     'active',  now()),
-    (org_b, coach_both, 'coach',     'active',  now()),
-    (org_b, coach_inv,  'coach',     'invited', now())
+    (org_a, owner_a,           owner_a,    'org_owner', 'active',  now()),
+    (org_a, coach_a1,          coach_a1,   'coach',     'active',  now()),
+    (org_a, coach_a2,          coach_a2,   'coach',     'active',  now()),
+    (org_a, coach_both,        coach_both, 'coach',     'active',  now()),
+    (org_a, org_owner_nocoach, NULL,       'org_admin', 'active',  now()),
+    (org_b, owner_b,           owner_b,    'org_owner', 'active',  now()),
+    (org_b, coach_b1,          coach_b1,   'coach',     'active',  now()),
+    (org_b, coach_both,        coach_both, 'coach',     'active',  now()),
+    (org_b, coach_inv,         coach_inv,  'coach',     'invited', now())
   ON CONFLICT DO NOTHING;
 
   -- ============================================================
@@ -178,7 +181,91 @@ BEGIN
   ON CONFLICT DO NOTHING;
 
   -- ============================================================
-  -- 8. Auth identities (required for signInWithPassword)
+  -- 8. Nutrition plan for client-a1 (E2E fixtures)
+  -- ============================================================
+  INSERT INTO nutrition_plans (id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g, is_active)
+  VALUES (
+    '00000000-0000-0000-0006-000000000001',
+    ca1, coach_a1,
+    'Plan Base E2E',
+    2000, 150, 200, 65,
+    true
+  )
+  ON CONFLICT DO NOTHING;
+
+  -- ============================================================
+  -- 9. Workout plan for client-a1 (E2E fixtures)
+  -- ============================================================
+  INSERT INTO exercises (
+    id, name, muscle_group, coach_id, instructions, equipment, body_part, difficulty, gender_focus
+  )
+  VALUES (
+    '00000000-0000-0000-0007-000000000001',
+    'Sentadilla Goblet E2E',
+    'Piernas',
+    coach_a1,
+    ARRAY['Sostén la carga frente al pecho.', 'Baja controlado.', 'Sube empujando el piso.'],
+    'Mancuerna',
+    'Piernas',
+    'Principiante',
+    'Neutro'
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO workout_programs (
+    id, client_id, coach_id, org_id, created_by_coach_id, name, weeks_to_repeat, start_date, is_active,
+    duration_type, program_structure_type, start_date_flexible, ab_mode
+  )
+  VALUES (
+    '00000000-0000-0000-0008-000000000001',
+    ca1, coach_a1, org_a, coach_a1,
+    'Programa Base E2E',
+    4,
+    current_date,
+    true,
+    'weeks',
+    'weekly',
+    true,
+    false
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO workout_plans (
+    id, client_id, coach_id, title, assigned_date, group_name, program_id, day_of_week, week_variant
+  )
+  VALUES (
+    '00000000-0000-0000-0009-000000000001',
+    ca1, coach_a1,
+    'Rutina Base E2E',
+    current_date,
+    'Día 1',
+    '00000000-0000-0000-0008-000000000001',
+    extract(isodow from current_date)::int,
+    'A'
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO workout_blocks (
+    id, plan_id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, section
+  )
+  VALUES (
+    '00000000-0000-0000-0010-000000000001',
+    '00000000-0000-0000-0009-000000000001',
+    '00000000-0000-0000-0007-000000000001',
+    0,
+    1,
+    '8',
+    '2',
+    '60s',
+    'Fixture E2E',
+    40,
+    '2-0-2',
+    'main'
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  -- ============================================================
+  -- 10. Auth identities (required for signInWithPassword)
   -- ============================================================
   INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
   SELECT

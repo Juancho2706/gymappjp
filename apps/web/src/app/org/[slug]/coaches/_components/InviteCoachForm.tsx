@@ -3,7 +3,7 @@
 import { useActionState } from 'react'
 import { Loader2, UserPlus } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
-import { inviteCoachAction } from '../../_actions/org.actions'
+import { inviteCoachFormAction } from '../../_actions/org.actions'
 
 interface Props {
     orgSlug: string
@@ -24,10 +24,7 @@ function SubmitButton() {
 }
 
 export function InviteCoachForm({ orgSlug }: Props) {
-    const [state, action] = useActionState(
-        async (_: unknown, formData: FormData) => inviteCoachAction(orgSlug, formData),
-        null
-    )
+    const [state, action] = useActionState(inviteCoachFormAction.bind(null, orgSlug), null)
 
     return (
         <form action={action} className="space-y-3">

@@ -52,7 +52,7 @@ export async function getOrgAdminContext(
         .from('organization_members')
         .select('role')
         .eq('org_id', org.id)
-        .eq('coach_id', userId)
+        .eq('user_id', userId)
         .in('role', allowedRoles)
         .eq('status', 'active')
         .is('deleted_at', null)

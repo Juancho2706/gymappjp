@@ -18,13 +18,14 @@ export async function resolvePostLoginRedirect(supabase: SupabaseClient<Database
 
     let activeOrgSlug: string | null = null
     let activeOrgRole: string | null = null
+    let isOrgUser = false
 
     if (coach?.active_org_id) {
         const { data: membership } = await supabase
             .from('organization_members')
             .select('role, org_id')
             .eq('org_id', coach.active_org_id)
-            .eq('coach_id', userId)
+            .eq('user_id', userId)
             .eq('status', 'active')
             .is('deleted_at', null)
             .maybeSingle()
@@ -46,7 +47,7 @@ export async function resolvePostLoginRedirect(supabase: SupabaseClient<Database
         const { data: membership } = await supabase
             .from('organization_members')
             .select('role, org_id')
-            .eq('coach_id', userId)
+            .eq('user_id', userId)
             .eq('status', 'active')
             .in('role', ['org_owner', 'org_admin'])
             .is('deleted_at', null)
@@ -65,10 +66,36 @@ export async function resolvePostLoginRedirect(supabase: SupabaseClient<Database
         }
     }
 
+    if (!coach) {
+        const { data: membership } = await supabase
+            .from('organization_members')
+            .select('role, org_id')
+            .eq('user_id', userId)
+            .is('coach_id', null)
+            .eq('status', 'active')
+            .in('role', ['org_owner', 'org_admin'])
+            .is('deleted_at', null)
+            .limit(1)
+            .maybeSingle()
+
+        if (membership?.org_id) {
+            const { data: organization } = await supabase
+                .from('organizations')
+                .select('slug')
+                .eq('id', membership.org_id)
+                .maybeSingle()
+
+            isOrgUser = true
+            activeOrgSlug = organization?.slug ?? null
+            activeOrgRole = membership.role ?? null
+        }
+    }
+
     const clientCoach = client?.coaches as { slug?: string | null } | null
 
     return getPostLoginRedirect({
         isCoach: !!coach,
+        isOrgUser,
         activeOrgSlug,
         activeOrgRole,
         clientCoachSlug: clientCoach?.slug ?? null,

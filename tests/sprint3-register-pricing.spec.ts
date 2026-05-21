@@ -10,10 +10,20 @@ test('register multi-step keeps selected plan from query', async ({ page }) => {
   await page.goto('/register?tier=elite&cycle=annual')
 
   await expect(page.getByText('Paso 1 de 3')).toBeVisible()
-  await page.getByLabel('Nombre completo').fill('Coach QA')
-  await page.getByLabel('Nombre de tu marca').fill('QA Fitness')
-  await page.locator('input[name="email"]').fill('qa-coach@example.com')
-  await page.getByLabel('Contraseña').fill('password-123')
+
+  // React controlled inputs: use native setter + input event to update React state
+  const reactFill = async (selector: string, value: string) => {
+    await page.locator(selector).evaluate((el: HTMLInputElement, val: string) => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(el, val)
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }, value)
+  }
+
+  await reactFill('input[id="full_name"]', 'Coach QA')
+  await reactFill('input[id="brand_name"]', 'QA Fitness')
+  await reactFill('input[name="email"]', 'qa-coach@example.com')
+  await reactFill('input[id="password"]', 'password-123')
   await page.getByRole('button', { name: 'Continuar' }).click()
 
   await expect(page.getByText('Elige tu plan')).toBeVisible()

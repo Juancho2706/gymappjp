@@ -7,6 +7,9 @@ import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv'
 import path from 'path'
 
+// .env.e2e.local forces local Supabase — loaded first with override so prod
+// values in .env.local never leak into E2E runs.
+dotenv.config({ path: path.resolve(__dirname, '.env.e2e.local'), override: true })
 dotenv.config({ path: path.resolve(__dirname, '.env.local') })
 dotenv.config({ path: path.resolve(__dirname, '.env') })
 
@@ -65,5 +68,13 @@ export default defineConfig({
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // Pass local Supabase vars explicitly so the dev server never uses prod DB
+    // regardless of what .env.local contains.
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://127.0.0.1:3000',
+    },
   },
 });

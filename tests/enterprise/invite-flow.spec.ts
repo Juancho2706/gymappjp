@@ -47,6 +47,7 @@ async function signIn(email: string) {
 
 test.describe('Invite coach via org panel', () => {
   test('owner A puede invitar a coach-invited a Org A via UI', async ({ page }) => {
+    test.setTimeout(90_000)
     // Login as owner A
     await page.goto('/login')
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
@@ -59,21 +60,20 @@ test.describe('Invite coach via org panel', () => {
     await expect(page.locator('h1')).toBeVisible()
 
     // Invite form: coach-invited already exists as a coach in seed
-    const emailInput = page.locator('input[name="email"]')
+    await page.locator('summary', { hasText: 'Vincular coach existente' }).click()
+    const emailInput = page.getByPlaceholder('coach existente@email.com')
     await emailInput.fill('coach-invited@eva-test.cl')
-    const submitBtn = page.locator('button[type="submit"]').first()
+    const submitBtn = page.locator('details').getByRole('button', { name: /vincular|invitar/i })
     await submitBtn.click()
-
-    // Should succeed or show "Ya tiene invitación pendiente" (if already invited)
-    await page.waitForTimeout(1000)
-    const errorMsg = page.locator('text=error').first()
-    const successIndicator = page.locator('text=invit').first()
-    // Either success or expected constraint error — both are valid
-    const visible = await Promise.race([
-      errorMsg.isVisible().catch(() => false),
-      successIndicator.isVisible().catch(() => false),
-    ])
-    expect(visible).toBeTruthy()
+    await expect.poll(async () => {
+      const admin = makeAdminClient()
+      const { data } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('org_id', '00000000-0000-0000-0002-000000000001')
+        .eq('coach_id', '00000000-0000-0000-0001-000000000008')
+      return data?.length ?? 0
+    }, { timeout: 10_000 }).toBeGreaterThan(0)
   })
 
   test('invite token expirado retorna error al intentar usar', async () => {
@@ -132,6 +132,7 @@ test.describe('Rate limiting', () => {
     const { data: membership } = await ownerSb
       .from('organization_members')
       .select('role')
+      .eq('user_id', user!.id)
       .eq('status', 'active')
       .in('role', ['org_owner', 'org_admin'])
       .maybeSingle()

@@ -17,26 +17,27 @@ test.describe('QA-015 student check-in flow', () => {
 
         await page.goto(`/c/${slug}/login`)
         await page.getByLabel('Email').fill(email!)
-        await page.getByLabel('Contraseña').fill(password!)
+        await page.getByLabel(/Contrase|Password/i).fill(password!)
         await page.getByRole('button', { name: 'Ingresar' }).click()
-        await page.waitForURL(new RegExp(`/c/${slug}/`), { timeout: 45_000 })
+        await page.waitForTimeout(1500)
 
         await page.goto(`/c/${slug}/check-in`)
         const weightInput = page.getByLabel('Peso actual (kg)')
-        if (!(await weightInput.isVisible({ timeout: 8_000 }).catch(() => false))) {
-            test.skip(true, 'E2E user cannot access check-in flow (likely onboarding/permissions state).')
-        }
+        await expect(weightInput).toBeVisible({ timeout: 30_000 })
 
-        await weightInput.fill('75.2')
+        await weightInput.click()
+        await weightInput.pressSequentially('75.2')
+        await expect(page.getByRole('button', { name: /Continuar/i })).toBeEnabled()
         await page.getByRole('button', { name: /Continuar/i }).click()
 
         const fileInputs = page.locator('input[type="file"]')
+        await expect(fileInputs).toHaveCount(2)
         await fileInputs.nth(0).setInputFiles(tinyPng)
         await fileInputs.nth(1).setInputFiles(tinyPng)
         await page.getByRole('button', { name: /Continuar/i }).click()
 
         await page.getByRole('button', { name: 'Enviar Check-in' }).click()
-        await expect(page.getByRole('heading', { name: '¡Check-in Enviado!' })).toBeVisible({
+        await expect(page.getByRole('heading', { name: /Check-in Enviado/i })).toBeVisible({
             timeout: 45_000,
         })
     })
