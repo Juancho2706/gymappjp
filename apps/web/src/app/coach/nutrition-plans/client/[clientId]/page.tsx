@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -6,6 +5,7 @@ import { PlanBuilder } from '../../_components/PlanBuilder'
 import { getClientNutritionPlan, getClientAdherence } from '../../_data/nutrition-coach.queries'
 import { mapClientPlanRowToInitialData } from '../../_data/plan-builder-mappers'
 import { AdherenceStrip } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
+import { getClientNutritionPlanPageAuthData } from './_data/client-plan-page.queries'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -13,16 +13,8 @@ interface Props {
 
 export default async function CoachClientNutritionPlanPage({ params }: Props) {
   const { clientId } = await params
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, client, intake } = await getClientNutritionPlanPageAuthData(clientId)
   if (!user) redirect('/login')
-
-  const [{ data: client }, { data: intake }] = await Promise.all([
-    supabase.from('clients').select('id, full_name, coach_id').eq('id', clientId).maybeSingle(),
-    supabase.from('client_intake').select('weight_kg, height_cm').eq('client_id', clientId).maybeSingle(),
-  ])
 
   if (!client || client.coach_id !== user.id) notFound()
 

@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'expo-router'
 import { ArrowRight, Check, Globe, Lock, Mail, Sparkles, Square, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { RegisterCoachFreeSchema } from '@eva/schemas'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Card, HapticPressable, Input, TopBar } from '../../components'
 import { ApiError, registerCoachFree } from '../../lib/api'
@@ -52,13 +53,24 @@ export default function RegisterScreen() {
       return
     }
 
+    const parsed = RegisterCoachFreeSchema.safeParse({
+      full_name: fullName.trim(),
+      brand_name: brandName.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+    })
+    if (!parsed.success) {
+      Alert.alert('Datos inválidos', parsed.error.issues[0]?.message ?? 'Revisa los campos')
+      return
+    }
+
     setLoading(true)
     try {
       await registerCoachFree({
-        fullName: fullName.trim(),
-        brandName: brandName.trim(),
-        email: email.trim().toLowerCase(),
-        password,
+        fullName: parsed.data.full_name,
+        brandName: parsed.data.brand_name,
+        email: parsed.data.email,
+        password: parsed.data.password,
         acceptLegal: true,
         acceptHealthData: true,
         acceptMarketing,

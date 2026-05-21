@@ -52,7 +52,7 @@ test.describe('Invite coach via org panel', () => {
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard')
+    await page.waitForURL(/\/(coach\/dashboard|org\/)/, { timeout: 10_000 })
 
     // Navigate to org coaches page
     await page.goto(`/org/${ORG_A_SLUG}/coaches`)
@@ -147,9 +147,10 @@ test.describe('Rate limiting', () => {
 
 test.describe('Inbucket email capture', () => {
   test('Inbucket está disponible', async ({ request }) => {
-    const res = await request.get(`${INBUCKET_URL}/api/v1/status`).catch(() => null)
+    // Mailpit (used by Supabase local) responds at /api/v1/messages — Inbucket used /api/v1/status
+    const res = await request.get(`${INBUCKET_URL}/api/v1/messages`).catch(() => null)
     if (!res) {
-      test.skip(true, 'Inbucket no disponible — skip')
+      test.skip(true, 'Mailpit/Inbucket no disponible — skip')
       return
     }
     expect(res.ok()).toBe(true)

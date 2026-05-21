@@ -1,3 +1,7 @@
+export * from './interfaces'
 export * from './coach.repository'
 export * from './client.repository'
 export * from './org.repository'
+export * from './workout.repository'
+export * from './nutrition.repository'
+export * from './admin.repository'

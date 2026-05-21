@@ -1,14 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { PlanBuilder } from '../_components/PlanBuilder'
+import { getNewNutritionTemplateUser } from './_data/new-template.queries'
 
 export default async function NewNutritionTemplatePage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getNewNutritionTemplateUser()
   if (!user) redirect('/login')
 
   return (

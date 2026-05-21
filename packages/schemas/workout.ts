@@ -108,6 +108,16 @@ export const WorkoutProgramSchema = z.object({
     days: z.array(WorkoutDaySchema).min(1, 'Agrega al menos un día de entrenamiento'),
 })
 
+export const WorkoutLogSetSchema = z.object({
+    block_id: z.string().uuid(),
+    set_number: z.coerce.number().int().min(1),
+    weight_kg: z.coerce.number().min(0).optional(),
+    reps_done: z.coerce.number().int().min(0).optional(),
+    rpe: z.coerce.number().min(1).max(10).optional(),
+    rir: z.coerce.number().int().min(0).max(10).optional(),
+})
+export type WorkoutLogSetInput = z.infer<typeof WorkoutLogSetSchema>
+
 export type WorkoutBlockInput = z.infer<typeof WorkoutBlockSchema>
 export type WorkoutDayInput = z.infer<typeof WorkoutDaySchema>
 export type WorkoutProgramInput = z.infer<typeof WorkoutProgramSchema>

@@ -21,6 +21,9 @@ const TEST_PASSWORD = 'TestPass123!'
 const ORG_A_SLUG = 'crossfit-test-norte'
 const ORG_B_SLUG = 'box-test-sur'
 
+// Enterprise owners/members redirect to /org/[slug] after login, not /coach/dashboard
+const POST_LOGIN_URL = /\/(coach\/dashboard|org\/)/
+
 function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -37,7 +40,7 @@ test.describe('Org dashboard', () => {
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}`)
     await expect(page.locator('h1', { hasText: 'Dashboard' })).toBeVisible()
@@ -47,7 +50,7 @@ test.describe('Org dashboard', () => {
 
   test('coach sin org no puede acceder a /org/[slug]', async ({ page }) => {
     await page.goto('/login')
-    await page.fill('input[name="email"]', 'coach-standalone@eva-test.cl')
+    await page.fill('input[name="email"]', 'coach-solo@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
     await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
@@ -68,7 +71,7 @@ test.describe('Org coaches management', () => {
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}/coaches`)
     // Org A has 4 active members in seed
@@ -83,7 +86,7 @@ test.describe('Org coaches management', () => {
     await page.fill('input[name="email"]', 'coach-member-a1@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}/coaches`)
     // Remove buttons should not be visible for non-admin coaches
@@ -102,7 +105,7 @@ test.describe('Org settings', () => {
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}/settings`)
     await expect(page.locator('h1', { hasText: 'Configuración' })).toBeVisible()
@@ -114,7 +117,7 @@ test.describe('Org settings', () => {
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}/settings`)
 
@@ -149,7 +152,7 @@ test.describe('Trial org UI', () => {
     await page.fill('input[name="email"]', 'coach-owner-b@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_B_SLUG}`)
     // Trial orgs show amber/trial indicators
@@ -167,7 +170,7 @@ test.describe('Seat limit upsell', () => {
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}`)
     // Org A has 4 members but 5 seats → no upsell needed
@@ -186,7 +189,7 @@ test.describe('Client pool', () => {
     await page.fill('input[name="email"]', 'coach-owner-a@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}/clients`)
     await expect(page.locator('h1')).toBeVisible()
@@ -198,7 +201,7 @@ test.describe('Client pool', () => {
     await page.fill('input[name="email"]', 'coach-member-a1@eva-test.cl')
     await page.fill('input[name="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/coach/dashboard', { timeout: 10_000 })
+    await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     // Coach's own client list (not org pool)
     await page.goto('/coach/clients')

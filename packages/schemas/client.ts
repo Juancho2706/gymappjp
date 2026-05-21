@@ -15,6 +15,30 @@ const fileField = z
     )
     .optional()
 
+export const CreateClientSchema = z.object({
+    full_name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
+    email: z.string().email('Email inválido'),
+    phone: z.string().optional(),
+    subscription_start_date: z.string().optional(),
+    temp_password: z.string().min(8, 'La contraseña temporal debe tener al menos 8 caracteres'),
+    age_confirmed: z.literal('on', { message: 'Debes confirmar que el alumno tiene 14 años o más, o que cuentas con el consentimiento de su tutor legal.' }),
+})
+export type CreateClientInput = z.infer<typeof CreateClientSchema>
+
+export const UpdateClientDataSchema = z.object({
+    client_id: z.string().uuid(),
+    full_name: z.string().min(2, 'Nombre muy corto').max(100),
+    phone: z.string().optional(),
+    weight_kg: z.coerce.number().positive().optional().or(z.literal('')),
+    height_cm: z.coerce.number().positive().optional().or(z.literal('')),
+    goals: z.string().optional(),
+    experience_level: z.string().optional(),
+    availability: z.string().optional(),
+    injuries: z.string().optional(),
+    medical_conditions: z.string().optional(),
+})
+export type UpdateClientDataInput = z.infer<typeof UpdateClientDataSchema>
+
 export const CheckInSchema = z.object({
     weight: z.coerce.number().min(20).max(400),
     energy_level: z.coerce.number().min(1).max(10),

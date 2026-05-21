@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowRight, Lock, Mail, Sparkles } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { LoginSchema } from '@eva/schemas'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, TopBar } from '../../components'
@@ -30,7 +31,13 @@ export default function LoginScreen() {
   async function handleLogin() {
     setLoading(true)
     setError(null)
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    const parsed = LoginSchema.safeParse({ email: email.trim(), password })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Datos inválidos')
+      setLoading(false)
+      return
+    }
+    const { error } = await supabase.auth.signInWithPassword(parsed.data)
     if (error) {
       setError(error.message)
       setLoading(false)

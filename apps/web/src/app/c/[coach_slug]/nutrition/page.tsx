@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -14,6 +13,7 @@ import { getHeroComplianceBundle } from '../dashboard/_data/heroComplianceBundle
 import { NutritionShell } from './_components/NutritionShell'
 import { NutritionNoPlanFromServer } from './_components/NutritionNoPlanFromServer'
 import { PushNotificationBanner } from './_components/PushNotificationBanner'
+import { getClientNutritionUser } from './_data/nutrition-auth.queries'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -23,15 +23,9 @@ interface Props {
 
 export default async function ClientNutritionPage({ params }: Props) {
   const { coach_slug } = await params
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, hasClientRow } = await getClientNutritionUser()
   if (!user) redirect(`/c/${coach_slug}/login`)
-
-  const { data: clientRow } = await supabase.from('clients').select('id').eq('id', user.id).maybeSingle()
-  if (!clientRow) redirect(`/c/${coach_slug}/login`)
+  if (!hasClientRow) redirect(`/c/${coach_slug}/login`)
 
   const plan = await getActiveNutritionPlan(user.id)
   if (!plan) {

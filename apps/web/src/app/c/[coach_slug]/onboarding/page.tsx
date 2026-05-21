@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { OnboardingForm } from './OnboardingForm'
+import { getClientOnboardingState } from './_data/onboarding.queries'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -8,19 +8,10 @@ interface Props {
 
 export default async function OnboardingPage({ params }: Props) {
     const { coach_slug } = await params
-    const supabase = await createClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, onboardingCompleted } = await getClientOnboardingState()
     if (!user) redirect(`/c/${coach_slug}/login`)
 
-    // Verify if onboarding is already completed
-    const { data: client } = await supabase
-        .from('clients')
-        .select('onboarding_completed')
-        .eq('id', user.id)
-        .single()
-
-    if (client?.onboarding_completed) {
+    if (onboardingCompleted) {
         redirect(`/c/${coach_slug}/dashboard`)
     }
 

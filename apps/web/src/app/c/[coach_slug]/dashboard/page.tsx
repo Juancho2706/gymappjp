@@ -1,5 +1,4 @@
 import { Suspense } from 'react'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
@@ -15,7 +14,7 @@ import { RecentWorkoutsSection } from './_components/history/RecentWorkoutsSecti
 import { WeightFullChartSection } from './_components/WeightFullChartSection'
 import { DashboardSidebarBlocks } from './_components/DashboardSidebarBlocks'
 import { WelcomeModal } from './_components/WelcomeModal'
-import { getClientProfile } from './_data/dashboard.queries'
+import { getClientDashboardUser, getClientProfile } from './_data/dashboard.queries'
 import {
     DashboardHeaderSkeleton,
     CalendarSkeleton,
@@ -34,10 +33,7 @@ interface Props {
 
 export default async function ClientDashboardPage({ params }: Props) {
     const { coach_slug } = await params
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    const user = await getClientDashboardUser()
     if (!user) redirect(`/c/${coach_slug}/login`)
 
     const { client } = await getClientProfile(user.id)

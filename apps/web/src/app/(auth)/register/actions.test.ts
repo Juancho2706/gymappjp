@@ -156,12 +156,19 @@ describe('registerAction', () => {
     const insertQuery = {
       insert: vi.fn().mockResolvedValue({ error: { message: 'insert failed' } }),
     }
+    const inviteCodeQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
 
     let coachesCallCount = 0
     const fromMock = vi.fn((table: string) => {
       if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
       coachesCallCount += 1
-      return coachesCallCount === 1 ? slugQuery : insertQuery
+      if (coachesCallCount === 1) return slugQuery
+      if (coachesCallCount === 2) return inviteCodeQuery
+      return insertQuery
     })
 
     const adminDb = {
@@ -200,12 +207,19 @@ describe('registerAction', () => {
     const insertQuery = {
       insert: vi.fn().mockResolvedValue({ error: null }),
     }
+    const inviteCodeQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
 
     let coachesCallCount = 0
     const fromMock = vi.fn((table: string) => {
       if (table !== 'coaches') throw new Error(`Unexpected table: ${table}`)
       coachesCallCount += 1
-      return coachesCallCount === 1 ? slugQuery : insertQuery
+      if (coachesCallCount === 1) return slugQuery
+      if (coachesCallCount === 2) return inviteCodeQuery
+      return insertQuery
     })
 
     const adminDb = {
@@ -264,6 +278,11 @@ describe('registerAction', () => {
     const insertQuery = {
       insert: vi.fn().mockResolvedValue({ error: null }),
     }
+    const inviteCodeQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
 
     let coachesCallCount = 0
     const fromMock = vi.fn((table: string) => {
@@ -271,6 +290,7 @@ describe('registerAction', () => {
       coachesCallCount += 1
       if (coachesCallCount === 1) return ipLimitQuery
       if (coachesCallCount === 2) return slugQuery
+      if (coachesCallCount === 3) return inviteCodeQuery
       return insertQuery
     })
 

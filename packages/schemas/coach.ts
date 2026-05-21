@@ -43,6 +43,27 @@ export const SupportMessageSchema = z.object({
 })
 export type SupportMessageInput = z.infer<typeof SupportMessageSchema>
 
+export const CloneExerciseSchema = z.object({
+    id: z.string(),
+    name: z.string().min(1),
+    muscle_group: z.string().min(1),
+    equipment: z.string().nullable(),
+    video_url: z.string().url().nullable().or(z.literal('')),
+    difficulty: z.string().nullable().optional(),
+    gender_focus: z.string().nullable().optional(),
+    instructions: z.array(z.string()).nullable().optional(),
+    secondary_muscles: z.array(z.string()).nullable().optional(),
+})
+export type CloneExerciseInput = z.infer<typeof CloneExerciseSchema>
+
+export const RegisterCoachFreeSchema = z.object({
+    full_name: z.string().min(2, 'Nombre requerido').max(100),
+    brand_name: z.string().min(2, 'Nombre de marca requerido').max(100),
+    email: z.string().email('Email inválido'),
+    password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+})
+export type RegisterCoachFreeInput = z.infer<typeof RegisterCoachFreeSchema>
+
 export const AdminCreateCoachSchema = z.object({
     full_name: z.string().min(2).max(100),
     email: z.string().email(),

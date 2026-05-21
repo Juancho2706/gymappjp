@@ -26,7 +26,8 @@ test.describe('navigation perf smoke', () => {
         await page.getByLabel('Contraseña').fill(password!)
         await page.getByRole('button', { name: /ingresar al panel/i }).click()
 
-        await expect(page).toHaveURL(/\/coach\/dashboard/, { timeout: 30_000 })
+        // Standalone coaches land on /coach/dashboard; enterprise coaches on /org/[slug]
+        await expect(page).toHaveURL(/\/(coach\/dashboard|org\/)/, { timeout: 30_000 })
 
         const routes = [
             '/coach/clients',

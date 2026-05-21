@@ -1,0 +1,114 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+export async function saveRecipe(recipeData: any, coachId: string) {
+    const supabase = await createClient()
+
+    try {
+        const recipePayload = {
+            coach_id: coachId,
+            name: recipeData.title || recipeData.name,
+            description: recipeData.description || (recipeData.sourceUrl ? `Fuente: ${recipeData.sourceUrl}` : null),
+            instructions: recipeData.instructions,
+            prep_time_minutes: recipeData.prepTime || recipeData.prep_time_minutes,
+            calories: recipeData.calories,
+            protein_g: recipeData.protein || recipeData.protein_g,
+            carbs_g: recipeData.carbs || recipeData.carbs_g,
+            fats_g: recipeData.fat || recipeData.fats_g,
+            category: recipeData.category,
+            source_api: recipeData.sourceUrl ? 'edamam' : (recipeData.id ? null : 'manual'),
+            source_api_id: recipeData.source_api_id || recipeData.id,
+            image_url: recipeData.image || recipeData.image_url
+        }
+
+        let result;
+        if (recipeData.id && !recipeData.sourceUrl) {
+            result = await supabase
+                .from('recipes')
+                .update(recipePayload)
+                .eq('id', recipeData.id)
+                .eq('coach_id', coachId)
+                .select()
+                .single()
+        } else {
+            result = await supabase
+                .from('recipes')
+                .insert(recipePayload)
+                .select()
+                .single()
+        }
+
+        const { data: newRecipe, error: recipeError } = result
+
+        if (recipeError) {
+            return { error: 'Error al guardar la receta principal.' }
+        }
+
+        if (recipeData.ingredients && recipeData.ingredients.length > 0) {
+            if (recipeData.id) {
+                await supabase.from('recipe_ingredients').delete().eq('recipe_id', newRecipe.id)
+            }
+
+            const ingredientsToInsert = recipeData.ingredients.map((ing: any) => ({
+                recipe_id: newRecipe.id,
+                name: ing.name || ing.text || ing.food,
+                quantity: ing.quantity || 1,
+                unit: ing.unit || 'unidad',
+                food_id: ing.food_id || null
+            }))
+
+            await supabase.from('recipe_ingredients').insert(ingredientsToInsert)
+        }
+
+        const foodPayload = {
+            coach_id: coachId,
+            name: `[Receta] ${recipeData.title || recipeData.name}`,
+            serving_size: 100,
+            serving_unit: "g",
+            calories: recipeData.calories,
+            protein_g: recipeData.protein || recipeData.protein_g,
+            carbs_g: recipeData.carbs || recipeData.carbs_g,
+            fats_g: recipeData.fat || recipeData.fats_g
+        }
+
+        const { data: existingFood } = await supabase
+            .from('foods')
+            .select('id')
+            .eq('coach_id', coachId)
+            .eq('name', `[Receta] ${recipeData.title || recipeData.name}`)
+            .single()
+
+        if (existingFood) {
+            await supabase.from('foods').update(foodPayload).eq('id', existingFood.id)
+        } else {
+            await supabase.from('foods').insert(foodPayload)
+        }
+
+        revalidatePath('/coach/recipes')
+        return { success: true, recipe: newRecipe }
+
+    } catch {
+        return { error: 'Error inesperado al guardar la receta.' }
+    }
+}
+
+export async function deleteRecipe(recipeId: string, coachId: string) {
+    const supabase = await createClient()
+
+    try {
+        const { error } = await supabase
+            .from('recipes')
+            .delete()
+            .eq('id', recipeId)
+            .eq('coach_id', coachId)
+
+        if (error) throw error
+
+        revalidatePath('/coach/recipes')
+        return { success: true }
+    } catch {
+        return { error: 'No se pudo eliminar la receta.' }
+    }
+}

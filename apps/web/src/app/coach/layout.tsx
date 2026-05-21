@@ -9,10 +9,10 @@ import { PwaRegister } from '@/components/PwaRegister'
 import { PublicCodeRequiredModal } from './_components/PublicCodeRequiredModal'
 import { ensureCoachPublicCode } from './_data/public-code.queries'
 import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
-import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
+import { getCoachEnterpriseContext } from './_data/layout.queries'
 
 export const metadata: Metadata = {
     title: {
@@ -43,32 +43,7 @@ export default async function CoachLayout({
         getPublishedNewsItems(),
     ])
 
-    let enterpriseContext: {
-        orgSlug: string
-        orgName: string
-        orgRole: string
-    } | null = null
-
-    if (coach.subscription_status === 'org_managed' && coach.active_org_id) {
-        const supabase = await createClient()
-        const { data: membership } = await supabase
-            .from('organization_members')
-            .select('role, organizations(slug, name)')
-            .eq('org_id', coach.active_org_id)
-            .eq('coach_id', coach.id)
-            .eq('status', 'active')
-            .is('deleted_at', null)
-            .maybeSingle()
-
-        const organization = membership?.organizations as unknown as { slug?: string | null; name?: string | null } | null
-        if (organization?.slug && organization.name) {
-            enterpriseContext = {
-                orgSlug: organization.slug,
-                orgName: organization.name,
-                orgRole: membership?.role ?? 'coach',
-            }
-        }
-    }
+    const enterpriseContext = await getCoachEnterpriseContext(coach)
 
     const primaryColor =
         coach.use_brand_colors_coach === false

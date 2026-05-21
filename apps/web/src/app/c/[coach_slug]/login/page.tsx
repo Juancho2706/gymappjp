@@ -1,14 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
 import { Dumbbell } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
-import type { Tables } from '@/lib/database.types'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
-
-type Coach = Tables<'coaches'>
+import { getClientLoginCoach, getClientLoginMetadataCoach } from './_data/login.queries'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -16,13 +13,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { coach_slug } = await params
-    const supabase = await createClient()
-    const { data } = await supabase
-        .from('coaches')
-        .select('brand_name, logo_url')
-        .eq('slug', coach_slug)
-        .maybeSingle()
-    const coach = data as Pick<Coach, 'brand_name' | 'logo_url'> | null
+    const coach = await getClientLoginMetadataCoach(coach_slug)
     const brandName = coach?.brand_name ?? 'Mi Coach'
 
     return {
@@ -49,15 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ClientLoginPage({ params }: Props) {
     const { coach_slug } = await params
-    const supabase = await createClient()
-
-    const { data } = await supabase
-        .from('coaches')
-        .select('brand_name, primary_color, logo_url, welcome_message')
-        .eq('slug', coach_slug)
-        .maybeSingle()
-
-    const coach = data as Pick<Coach, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message'> | null
+    const coach = await getClientLoginCoach(coach_slug)
 
     if (!coach) notFound()
 

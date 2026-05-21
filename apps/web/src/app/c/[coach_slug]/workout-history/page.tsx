@@ -1,11 +1,11 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { ArrowLeft, Dumbbell } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { buildWorkoutLogDaySummaries, getWorkoutHistoryLogsFull } from '@/app/c/[coach_slug]/dashboard/_data/dashboard.queries'
 import { WorkoutLogItems } from '@/app/c/[coach_slug]/dashboard/_components/history/WorkoutLogItem'
+import { getWorkoutHistoryUser } from './_data/workout-history.queries'
 
 export const metadata: Metadata = { title: 'Historial de entrenos' }
 
@@ -15,14 +15,9 @@ interface Props {
 
 export default async function ClientWorkoutHistoryPage({ params }: Props) {
     const { coach_slug } = await params
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    const { user, hasClientRow } = await getWorkoutHistoryUser()
     if (!user) redirect(`/c/${coach_slug}/login`)
-
-    const { data: client } = await supabase.from('clients').select('id').eq('id', user.id).maybeSingle()
-    if (!client) redirect(`/c/${coach_slug}/login`)
+    if (!hasClientRow) redirect(`/c/${coach_slug}/login`)
 
     const logs = await getWorkoutHistoryLogsFull(user.id)
     const items = buildWorkoutLogDaySummaries(logs)

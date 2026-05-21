@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AlertCircle, LogOut } from 'lucide-react'
+import { getSuspendedCoachData } from '../_data/client-root.queries'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -8,18 +8,8 @@ interface Props {
 
 export default async function SuspendedPage({ params }: Props) {
     const { coach_slug } = await params
-    const supabase = await createClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, coach: coachData } = await getSuspendedCoachData(coach_slug)
     if (!user) redirect(`/c/${coach_slug}/login`)
-
-    const { data: rawCoachData } = await supabase
-        .from('coaches')
-        .select('brand_name, whatsapp')
-        .eq('slug', coach_slug)
-        .maybeSingle()
-
-    const coachData = rawCoachData as { brand_name: string; whatsapp: string | null } | null
 
     const brandName = coachData?.brand_name || 'tu Coach'
 

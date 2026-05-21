@@ -27,6 +27,7 @@ function buildFormData() {
   form.set('phone', '+56912345678')
   form.set('temp_password', 'password-123')
   form.set('subscription_start_date', '2026-04-11')
+  form.set('age_confirmed', 'on')
   return form
 }
 
@@ -45,8 +46,11 @@ describe('createClientAction', () => {
     }
     const clientsCountQuery = {
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+      eq: vi.fn(),
     }
+    clientsCountQuery.eq
+      .mockReturnValueOnce(clientsCountQuery)
+      .mockResolvedValueOnce({ count: 1, error: null })
 
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },
@@ -77,8 +81,11 @@ describe('createClientAction', () => {
     }
     const clientsCountQuery = {
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
+      eq: vi.fn(),
     }
+    clientsCountQuery.eq
+      .mockReturnValueOnce(clientsCountQuery)
+      .mockResolvedValueOnce({ count: 2, error: null })
 
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },

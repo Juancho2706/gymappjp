@@ -1,16 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Apple } from 'lucide-react'
 import { getFoodLibrary } from '@/app/coach/nutrition-plans/_data/nutrition-coach.queries'
 import { FoodBrowser } from './_components/FoodBrowser'
 import { AddFoodSheet } from './_components/AddFoodSheet'
+import { getCoachFoodsUser } from './_data/foods.queries'
 
 export default async function CoachFoodsPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getCoachFoodsUser()
   if (!user) redirect('/login')
 
   const coachId = user.id

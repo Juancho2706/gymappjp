@@ -80,6 +80,19 @@ describe('loginAction', () => {
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'u1' } }),
     }
+    const clientQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
+    const membershipQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }
 
     const supabase = {
       auth: {
@@ -87,7 +100,12 @@ describe('loginAction', () => {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }),
         signOut: vi.fn().mockResolvedValue({ error: null }),
       },
-      from: vi.fn().mockReturnValue(coachQuery),
+      from: vi.fn((table: string) => {
+        if (table === 'coaches') return coachQuery
+        if (table === 'clients') return clientQuery
+        if (table === 'organization_members') return membershipQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
     }
 
     createClientMock.mockResolvedValue(supabase)

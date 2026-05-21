@@ -1,17 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BrandSettingsForm } from './BrandSettingsForm'
 import { LogoUploadForm } from './LogoUploadForm'
 import { WhatChangesList } from './_components/WhatChangesList'
 import { BrandSettingsTourClient } from './_components/BrandSettingsTourClient'
-import type { Tables } from '@/lib/database.types'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { Check, Palette } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
-
-type Coach = Tables<'coaches'>
+import { getCoachSettingsForUser } from './_data/settings.queries'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -19,19 +16,9 @@ export const metadata: Metadata = {
 }
 
 export default async function CoachSettingsPage() {
-    const supabase = await createClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, coach } = await getCoachSettingsForUser()
     if (!user) redirect('/login')
-
-    const { data: rawCoach } = await supabase
-        .from('coaches')
-        .select('id, full_name, brand_name, slug, invite_code, slug_changed_at, primary_color, logo_url, welcome_message, welcome_modal_content, welcome_modal_enabled, welcome_modal_type, welcome_modal_updated_at, welcome_modal_version, loader_text, loader_text_color, loader_icon_mode, loader_show_icon, use_custom_loader, onboarding_guide, subscription_tier, subscription_status, subscription_mp_id, superseded_mp_preapproval_id, billing_cycle, current_period_end, trial_ends_at, trial_used_email, payment_provider, max_clients, marketing_consent, previous_slugs, use_brand_colors_coach, admin_notes, health_data_consent_at, updated_at, created_at')
-        .eq('id', user.id)
-        .maybeSingle()
-
-    if (!rawCoach) redirect('/login')
-    const coach = rawCoach as Coach
+    if (!coach) redirect('/login')
     const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const capabilities = getTierCapabilities(tier)
 

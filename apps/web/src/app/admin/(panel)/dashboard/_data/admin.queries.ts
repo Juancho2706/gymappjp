@@ -1,6 +1,18 @@
 import { unstable_cache, unstable_noStore as noStore } from 'next/cache'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { TIER_CONFIG } from '@/lib/constants'
+import {
+    countActiveAdminCoaches,
+    countBetaAdminInvites,
+    findAdminAuditLogs,
+    findAdminBasicCoaches,
+    findAdminCoachesFallback,
+    findAdminClientsForDashboard,
+    findExpiringSoonAdminCoaches,
+    findPaidAdminCoachTiers,
+    findPendingPaymentAdminCoaches,
+    findRecentAdminCoachSignups,
+} from '@/infrastructure/db'
 import type { PlatformOverview, CoachListItem, ClientListItem, LifecycleStage } from './types'
 
 function computeMonthlyRevenue(tier: string | null, cycle: string | null, provider: string | null): number {
@@ -49,42 +61,27 @@ export const getPlatformOverview = unstable_cache(
         ] = await Promise.all([
             admin.rpc('get_platform_coaches_count'),
             admin.rpc('get_platform_clients_count'),
-            admin.from('coaches').select('*', { count: 'exact', head: true })
-                .in('subscription_status', ['active', 'trialing'])
-                .not('payment_provider', 'in', ['beta', 'internal']),
-            admin.from('coaches')
-                .select('subscription_tier')
-                .not('subscription_mp_id', 'is', null)
-                .eq('subscription_status', 'active')
-                .not('payment_provider', 'in', ['beta', 'internal']),
-            admin.from('coaches')
-                .select('id, full_name, brand_name, created_at, subscription_status, subscription_tier')
-                .order('created_at', { ascending: false })
-                .limit(10),
-            admin.from('admin_audit_logs')
-                .select('id, admin_email, action, target_table, target_id, created_at')
-                .order('created_at', { ascending: false })
-                .limit(10),
+            countActiveAdminCoaches(admin),
+            findPaidAdminCoachTiers(admin),
+            findRecentAdminCoachSignups(admin, 10),
+            findAdminAuditLogs(admin, 10),
             (admin.rpc as any)('get_platform_mrr_12_months'),
             (admin.rpc as any)('get_platform_coaches_by_tier_monthly'),
             (admin.rpc as any)('get_platform_workout_sessions_30d'),
             (admin.rpc as any)('get_platform_churn_last_30d'),
             (admin.rpc as any)('get_platform_checkins_7d'),
-            admin.from('coaches')
-                .select('*', { count: 'exact', head: true })
-                .eq('payment_provider', 'beta')
-                .in('subscription_status', ['active', 'trialing']),
+            countBetaAdminInvites(admin),
             (admin.rpc as any)('get_platform_trial_conversion_rate'),
         ])
 
         const totalCoaches = coachesCountRes.data ?? 0
         const totalClients = clientsCountRes.data ?? 0
-        const activeCoaches = activeCoachesRes.count ?? 0
+        const activeCoaches = activeCoachesRes
 
         // Build paid coaches by tier for backward compat
         const coachesByTier: Record<string, number> = {}
-        if (paidCoachesRes.data) {
-            for (const row of paidCoachesRes.data) {
+        if (paidCoachesRes) {
+            for (const row of paidCoachesRes) {
                 const tier = row.subscription_tier ?? 'unknown'
                 coachesByTier[tier] = (coachesByTier[tier] ?? 0) + 1
             }
@@ -109,18 +106,13 @@ export const getPlatformOverview = unstable_cache(
             : null
 
         const [expiringSoonRes, pendingPaymentRes] = await Promise.all([
-            admin.from('coaches')
-                .select('id, full_name, brand_name, current_period_end, subscription_status')
-                .in('subscription_status', ['active', 'trialing'])
-                .lt('current_period_end', new Date(Date.now() + 7 * 86_400_000).toISOString())
-                .gt('current_period_end', new Date().toISOString())
-                .order('current_period_end')
-                .limit(10),
-            admin.from('coaches')
-                .select('id, full_name, brand_name, created_at, subscription_tier')
-                .eq('subscription_status', 'pending_payment')
-                .order('created_at', { ascending: true })
-                .limit(20),
+            findExpiringSoonAdminCoaches(
+                admin,
+                new Date(Date.now() + 7 * 86_400_000).toISOString(),
+                new Date().toISOString(),
+                10
+            ),
+            findPendingPaymentAdminCoaches(admin, 20),
         ])
 
         return {
@@ -133,14 +125,14 @@ export const getPlatformOverview = unstable_cache(
             mrrDeltaPct,
             churnLast30d: ((churnRes.data ?? []) as unknown as unknown[]).length,
             checkinsLast7d: (checkinsRes.data as number) ?? 0,
-            recentCoachSignups: recentSignupsRes.data ?? [],
-            recentAuditEvents: (recentAuditRes.data ?? []) as PlatformOverview['recentAuditEvents'],
+            recentCoachSignups: recentSignupsRes,
+            recentAuditEvents: recentAuditRes as PlatformOverview['recentAuditEvents'],
             mrrSeries,
             tierMonthlySeries: (tierSeriesRes.data ?? []) as { ym: string; tier: string; coach_count: number }[],
             workoutSessionsSeries: workoutSessionsRes.data ?? [],
-            betaInvitesCount: betaInvitesRes.count ?? 0,
-            expiringSoon: (expiringSoonRes.data ?? []) as PlatformOverview['expiringSoon'],
-            pendingPaymentCoaches: (pendingPaymentRes.data ?? []) as PlatformOverview['pendingPaymentCoaches'],
+            betaInvitesCount: betaInvitesRes,
+            expiringSoon: expiringSoonRes as PlatformOverview['expiringSoon'],
+            pendingPaymentCoaches: pendingPaymentRes as PlatformOverview['pendingPaymentCoaches'],
             trialConversion: (() => {
                 const row = (trialConversionRes.data as any[])?.[0]
                 const converted = Number(row?.converted ?? 0)
@@ -185,11 +177,7 @@ export async function getAllCoachesPaginated(params: {
 
     if (error || !data) {
         // Fallback: direct coaches query if RPC is unavailable
-        const { data: fallback } = await admin
-            .from('coaches')
-            .select('id, full_name, brand_name, slug, subscription_tier, subscription_status, billing_cycle, payment_provider, max_clients, current_period_end, trial_ends_at, created_at')
-            .order('created_at', { ascending: false })
-            .limit(pageSize)
+        const fallback = await findAdminCoachesFallback(admin, pageSize)
         if (!fallback) return { coaches: [], total: 0 }
         const coaches: CoachListItem[] = (fallback as any[]).map(r => ({
             id: r.id, full_name: r.full_name, brand_name: r.brand_name, slug: r.slug,
@@ -255,11 +243,7 @@ export async function getAllCoaches(search?: string): Promise<CoachListItem[]> {
 export async function getAllCoachesBasic(): Promise<{ id: string; full_name: string | null; brand_name: string | null; slug: string }[]> {
     noStore()
     const admin = createServiceRoleClient()
-    const { data } = await admin
-        .from('coaches')
-        .select('id, full_name, brand_name, slug')
-        .order('full_name')
-    return (data ?? []) as { id: string; full_name: string | null; brand_name: string | null; slug: string }[]
+    return findAdminBasicCoaches(admin)
 }
 
 export async function getAllClients(
@@ -272,20 +256,12 @@ export async function getAllClients(
     const admin = createServiceRoleClient()
     const offset = (page - 1) * pageSize
 
-    let query = admin
-        .from('clients')
-        .select('id, full_name, email, coach_id, is_active, is_archived, created_at, onboarding_completed, coaches(full_name)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-
-    if (search) {
-        query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`)
-    }
-    if (coachId) {
-        query = query.eq('coach_id', coachId)
-    }
-
-    const { data, error, count } = await query.range(offset, offset + pageSize - 1)
-    if (error || !data) return { clients: [], total: 0 }
+    const { clients: data, total } = await findAdminClientsForDashboard(admin, {
+        search,
+        coachId,
+        pageSize,
+        offset,
+    })
 
     const clients = data.map((c: any) => ({
         id: c.id,
@@ -299,5 +275,5 @@ export async function getAllClients(
         onboarding_completed: c.onboarding_completed,
     }))
 
-    return { clients, total: count ?? 0 }
+    return { clients, total }
 }

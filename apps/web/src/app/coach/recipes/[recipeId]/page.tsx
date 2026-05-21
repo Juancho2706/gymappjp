@@ -1,26 +1,15 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ChefHat, Clock, Flame } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { getRecipeDetailPageData } from './_data/recipe-detail.queries'
 
 export default async function RecipeDetailPage({ params }: { params: Promise<{ recipeId: string }> }) {
     const { recipeId } = await params
-    const supabase = await createClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, recipe } = await getRecipeDetailPageData(recipeId)
     if (!user) redirect('/login')
-
-    const { data: recipe } = await supabase
-        .from('recipes')
-        .select(`
-            *,
-            recipe_ingredients (*)
-        `)
-        .eq('id', recipeId)
-        .single()
 
     if (!recipe) {
         return (

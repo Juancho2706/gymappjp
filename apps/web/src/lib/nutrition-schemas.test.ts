@@ -120,7 +120,7 @@ describe('nutrition-schemas', () => {
       carbs_g: 10,
       fats_g: 1,
       serving_size: 125,
-      serving_unit: 'ml',
+      serving_unit: 'oz',
       category: 'lacteo',
     })
 

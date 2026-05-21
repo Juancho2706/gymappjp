@@ -1,44 +1,25 @@
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CoachClientsShell } from './CoachClientsShell'
-import { getCachedDirectoryPulse } from '@/lib/coach/directory-pulse-cache'
-import type { Tables } from '@/lib/database.types'
 import type { Metadata } from 'next'
 import { getCoach } from '@/lib/coach/get-coach'
-
-type Client = Tables<'clients'>
-type WorkoutProgram = Tables<'workout_programs'>
-
-interface ClientWithProgram extends Client {
-    workout_programs: Pick<
-        WorkoutProgram,
-        'name' | 'start_date' | 'weeks_to_repeat' | 'is_active'
-    >[]
-}
+import { getCoachClientsWithPrograms, getCoachClientsPulse } from './_data/clients.queries'
 
 export const metadata: Metadata = {
     title: 'Alumnos | EVA',
 }
 
 export default async function CoachClientsPage() {
-    const supabase = await createClient()
     const coachSession = await getCoach()
     if (!coachSession) redirect('/login')
 
-    const [clientsResponse, headersList, pulse] = await Promise.all([
-        supabase
-            .from('clients')
-            .select('*, workout_programs(name, start_date, weeks_to_repeat, is_active)')
-            .eq('coach_id', coachSession.id)
-            .order('created_at', { ascending: false }),
+    const [clients, headersList, pulse] = await Promise.all([
+        getCoachClientsWithPrograms(coachSession.id),
         headers(),
-        getCachedDirectoryPulse(coachSession.id),
+        getCoachClientsPulse(coachSession.id),
     ])
 
     const coach = { slug: coachSession.slug, invite_code: coachSession.invite_code }
-    const clients = (clientsResponse.data ?? []) as ClientWithProgram[]
-
     const host = headersList.get('host') || 'localhost:3000'
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const appUrl = `${protocol}://${host}`

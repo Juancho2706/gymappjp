@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCachedDirectoryPulse } from '@/lib/coach/directory-pulse-cache'
 import { measureServer } from '@/lib/perf/measure-server'
+import { countCoachClients, findCoachById, findCoachClientSignupDates, findCoachRecentClients } from '@/infrastructure/db'
 import {
     type AttentionFlag,
     mapDirectoryPulseToAdherenceStats,
@@ -220,16 +221,11 @@ async function getCoachDashboardDataInner(userId: string) {
         recentWorkoutsRaw,
         clientPaymentsRaw,
         pulse,
-        coachSubscriptionRaw,
+        coachSubscription,
     ] = await Promise.all([
-        supabase.from('clients').select('*', { count: 'exact', head: true }).eq('coach_id', userId),
+        countCoachClients(supabase, userId),
         supabase.from('workout_plans').select('*', { count: 'exact', head: true }).eq('coach_id', userId),
-        supabase
-            .from('clients')
-            .select('id, full_name, email, created_at, onboarding_completed')
-            .eq('coach_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(5),
+        findCoachRecentClients(supabase, userId, 5),
         supabase
             .from('check_ins')
             .select('id, created_at, photos, clients!inner(id, full_name, coach_id)')
@@ -276,11 +272,7 @@ async function getCoachDashboardDataInner(userId: string) {
             .eq('coach_id', userId)
             .gte('payment_date', clientPaymentsLookbackStart),
         getCachedDirectoryPulse(userId),
-        supabase
-            .from('coaches')
-            .select('subscription_status, current_period_end, trial_ends_at')
-            .eq('id', userId)
-            .maybeSingle(),
+        findCoachById(supabase, userId),
     ])
 
     const adherenceStats = mapDirectoryPulseToAdherenceStats(pulse)
@@ -294,7 +286,7 @@ async function getCoachDashboardDataInner(userId: string) {
             ? Math.round(nutritionStats.reduce((acc, s) => acc + s.percentage, 0) / nutritionStats.length)
             : 0
 
-    const rawRecentClients = recentClientsRaw.data || []
+    const rawRecentClients = recentClientsRaw || []
     const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; photos: string[] | null; clients: { id: string; full_name: string } }[] | null) || []
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
     let signupsRows =
@@ -307,10 +299,7 @@ async function getCoachDashboardDataInner(userId: string) {
         if (signupsByMonthRaw.error) {
             console.error('[dashboard] RPC get_coach_client_signups_last_6_months failed:', signupsByMonthRaw.error)
         }
-        const { data: clientsFallback } = await supabase
-            .from('clients')
-            .select('created_at')
-            .eq('coach_id', userId)
+        const clientsFallback = await findCoachClientSignupDates(supabase, userId)
         if (clientsFallback && clientsFallback.length > 0) {
             const monthCounts = new Map<string, number>()
             for (const c of clientsFallback) {
@@ -495,7 +484,7 @@ async function getCoachDashboardDataInner(userId: string) {
     const barData = Object.entries(growthMap).map(([name, alumnos]) => ({ name, alumnos }))
 
     return {
-        totalClients: clientsCount.count ?? 0,
+        totalClients: clientsCount,
         activePlans: workoutPlansCount.count ?? 0,
         hasStudentSignal30d,
         avgAdherence,
@@ -509,9 +498,9 @@ async function getCoachDashboardDataInner(userId: string) {
         barData,
         mrrCurrentMonth,
         mrrPreviousMonth,
-        subscriptionStatus: coachSubscriptionRaw.data?.subscription_status ?? null,
-        currentPeriodEnd: coachSubscriptionRaw.data?.current_period_end ?? null,
-        trialEndsAt: coachSubscriptionRaw.data?.trial_ends_at ?? null,
+        subscriptionStatus: coachSubscription?.subscription_status ?? null,
+        currentPeriodEnd: coachSubscription?.current_period_end ?? null,
+        trialEndsAt: coachSubscription?.trial_ends_at ?? null,
         _rawClientPayments: clientPayments,
     }
 }

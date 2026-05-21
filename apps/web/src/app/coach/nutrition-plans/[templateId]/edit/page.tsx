@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { PlanBuilder } from '../../_components/PlanBuilder'
 import { getCoachTemplateById } from '../../_data/nutrition-coach.queries'
 import { mapTemplateRowToInitialData } from '../../_data/plan-builder-mappers'
+import { getEditNutritionTemplateUser } from './_data/edit-template.queries'
 
 interface Props {
   params: Promise<{ templateId: string }>
@@ -12,10 +12,7 @@ interface Props {
 
 export default async function EditNutritionTemplatePage({ params }: Props) {
   const { templateId } = await params
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getEditNutritionTemplateUser()
   if (!user) redirect('/login')
 
   const row = await getCoachTemplateById(user.id, templateId)

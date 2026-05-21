@@ -1,17 +1,16 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { isAdminEmail } from '@/lib/admin/admin-gate'
 import { AdminDarkWrapper } from './AdminDarkWrapper'
 import { AdminSidebar } from './AdminSidebar'
 import type { Metadata } from 'next'
+import { getAdminLayoutAuth } from './_data/layout.queries'
 
 export const metadata: Metadata = {
     title: { default: 'Panel CEO', template: '%s | CEO | EVA' },
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
+    const { user, error } = await getAdminLayoutAuth()
 
     if (error || !user?.email || !isAdminEmail(user.email)) {
         redirect('/admin/login')

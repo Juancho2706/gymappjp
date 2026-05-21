@@ -1,10 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CompleteOnboardingForm } from './_components/CompleteOnboardingForm'
+import { getCompleteOnboardingUser } from './_data/complete.queries'
 
 export default async function CompleteOnboardingPage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCompleteOnboardingUser()
 
     if (!user) {
         console.error('[onboarding/complete] no user in server session → redirecting to /login')

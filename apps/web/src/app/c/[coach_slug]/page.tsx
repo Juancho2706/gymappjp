@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getClientRootUser } from './_data/client-root.queries'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -7,8 +7,7 @@ interface Props {
 
 export default async function CoachRootPage({ params }: Props) {
     const { coach_slug } = await params
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getClientRootUser()
 
     if (user) {
         redirect(`/c/${coach_slug}/dashboard`)

@@ -119,24 +119,25 @@ BEGIN
   -- ============================================================
   -- coach_id = actual assigned coach (mirrors assignClientToCoach behavior)
   -- cb5 defaults to owner_b (unassigned pool client)
-  INSERT INTO clients (id, coach_id, org_id, email, full_name, is_active, force_password_change, age_confirmed_at)
+  -- onboarding_completed=true para todos los E2E: el middleware redirige a /onboarding si es false/null
+  INSERT INTO clients (id, coach_id, org_id, email, full_name, is_active, force_password_change, age_confirmed_at, onboarding_completed)
   VALUES
     -- Org A
-    (ca1, coach_a1,   org_a, 'client-a1@eva-test.cl', 'Client A1', true, false, now()),
-    (ca2, coach_a2,   org_a, 'client-a2@eva-test.cl', 'Client A2', true, false, now()),
-    (ca3, coach_a2,   org_a, 'client-a3@eva-test.cl', 'Client A3', true, false, now()),
-    (ca4, coach_both, org_a, 'client-a4@eva-test.cl', 'Client A4', true, false, now()),
-    (ca5, coach_both, org_a, 'client-a5@eva-test.cl', 'Client A5', true, false, now()),
+    (ca1, coach_a1,   org_a, 'client-a1@eva-test.cl', 'Client A1', true, false, now(), true),
+    (ca2, coach_a2,   org_a, 'client-a2@eva-test.cl', 'Client A2', true, false, now(), true),
+    (ca3, coach_a2,   org_a, 'client-a3@eva-test.cl', 'Client A3', true, false, now(), true),
+    (ca4, coach_both, org_a, 'client-a4@eva-test.cl', 'Client A4', true, false, now(), true),
+    (ca5, coach_both, org_a, 'client-a5@eva-test.cl', 'Client A5', true, false, now(), true),
     -- Org B (cb5 queda sin asignar a coach — pool del owner)
-    (cb1, coach_b1,   org_b, 'client-b1@eva-test.cl', 'Client B1', true, false, now()),
-    (cb2, coach_b1,   org_b, 'client-b2@eva-test.cl', 'Client B2', true, false, now()),
-    (cb3, coach_both, org_b, 'client-b3@eva-test.cl', 'Client B3', true, false, now()),
-    (cb4, coach_both, org_b, 'client-b4@eva-test.cl', 'Client B4', true, false, now()),
-    (cb5, owner_b,    org_b, 'client-b5@eva-test.cl', 'Client B5', true, false, now()),
+    (cb1, coach_b1,   org_b, 'client-b1@eva-test.cl', 'Client B1', true, false, now(), true),
+    (cb2, coach_b1,   org_b, 'client-b2@eva-test.cl', 'Client B2', true, false, now(), true),
+    (cb3, coach_both, org_b, 'client-b3@eva-test.cl', 'Client B3', true, false, now(), true),
+    (cb4, coach_both, org_b, 'client-b4@eva-test.cl', 'Client B4', true, false, now(), true),
+    (cb5, owner_b,    org_b, 'client-b5@eva-test.cl', 'Client B5', true, false, now(), true),
     -- Standalone
-    (cs1, coach_solo, NULL, 'client-solo1@eva-test.cl', 'Client Solo1', true, false, now()),
-    (cs2, coach_solo, NULL, 'client-solo2@eva-test.cl', 'Client Solo2', true, false, now()),
-    (cs3, coach_solo, NULL, 'client-solo3@eva-test.cl', 'Client Solo3', true, false, now())
+    (cs1, coach_solo, NULL, 'client-solo1@eva-test.cl', 'Client Solo1', true, false, now(), true),
+    (cs2, coach_solo, NULL, 'client-solo2@eva-test.cl', 'Client Solo2', true, false, now(), true),
+    (cs3, coach_solo, NULL, 'client-solo3@eva-test.cl', 'Client Solo3', true, false, now(), true)
   ON CONFLICT (id) DO NOTHING;
 
   -- ============================================================

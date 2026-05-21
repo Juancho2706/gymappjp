@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { NutritionHub } from './_components/NutritionHub'
 import {
@@ -10,24 +9,15 @@ import {
 import { getTierCapabilities, getTierPriceClp, type SubscriptionTier } from '@/lib/constants'
 import { Check, Salad } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
+import { getNutritionPlansPageCoach } from './_data/nutrition-page.queries'
 
 type NutritionPlanRow = { id: string; name: string; is_active: boolean | null }
 
 export default async function NutritionPlansPage() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, coach } = await getNutritionPlansPageCoach()
   if (!user) return null
 
   const coachId = user.id
-  const { data: coach } = await supabase
-    .from('coaches')
-    .select('subscription_tier')
-    .eq('id', coachId)
-    .maybeSingle()
-
   const tier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
   const capabilities = getTierCapabilities(tier)
   if (!capabilities.canUseNutrition) {

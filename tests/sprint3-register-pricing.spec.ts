@@ -12,7 +12,7 @@ test('register multi-step keeps selected plan from query', async ({ page }) => {
   await expect(page.getByText('Paso 1 de 3')).toBeVisible()
   await page.getByLabel('Nombre completo').fill('Coach QA')
   await page.getByLabel('Nombre de tu marca').fill('QA Fitness')
-  await page.getByLabel('Email').fill('qa-coach@example.com')
+  await page.locator('input[name="email"]').fill('qa-coach@example.com')
   await page.getByLabel('Contraseña').fill('password-123')
   await page.getByRole('button', { name: 'Continuar' }).click()
 

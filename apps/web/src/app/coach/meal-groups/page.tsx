@@ -1,31 +1,15 @@
-'use server'
-
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, LayoutGrid } from 'lucide-react'
 import { MealGroupLibraryClient } from './MealGroupLibraryClient'
+import { getCoach } from '@/lib/coach/get-coach'
+import { getMealGroups } from './_data/meal-groups.queries'
 
 export default async function CoachMealGroupsPage() {
-    const supabase = await createClient()
+    const coach = await getCoach()
+    if (!coach) redirect('/login')
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/login')
-
-    // Fetch existing meal groups with their items
-    const { data: mealGroups } = await supabase
-        .from('saved_meals')
-        .select(`
-            *,
-            items:saved_meal_items(
-                id,
-                quantity,
-                unit,
-                food:foods(*)
-            )
-        `)
-        .eq('coach_id', user.id)
-        .order('name')
+    const mealGroups = await getMealGroups(coach.id)
 
     return (
         <div className="max-w-4xl mx-auto animate-fade-in mb-24 md:mb-0">
@@ -43,7 +27,7 @@ export default async function CoachMealGroupsPage() {
                 </div>
             </div>
 
-            <MealGroupLibraryClient initialGroups={mealGroups || []} coachId={user.id} />
+            <MealGroupLibraryClient initialGroups={mealGroups} coachId={coach.id} />
         </div>
     )
 }

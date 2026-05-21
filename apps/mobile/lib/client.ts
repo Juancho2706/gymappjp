@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 
 export interface ClientProfile {
   id: string
+  userId: string
   fullName: string
   coachId: string
   orgId: string | null
@@ -20,6 +21,7 @@ export async function getClientProfile(): Promise<ClientProfile | null> {
   if (!data) return null
   return {
     id: data.id,
+    userId: user.id,
     fullName: data.full_name,
     coachId: data.coach_id,
     orgId: data.org_id ?? null,

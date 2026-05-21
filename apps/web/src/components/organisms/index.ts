@@ -1,2 +1,13 @@
-// Organisms — domain-aware components, accept domain types, cross-feature
+// Organisms - domain-aware components, accept domain types, cross-feature
 export { CoachSidebar } from '@/components/coach/CoachSidebar'
+export { ClientCardV2 } from '@/components/coach/ClientCardV2'
+export { NutritionPreviewModal } from '@/components/coach/NutritionPreviewModal'
+export { PhotoComparisonSlider } from '@/components/coach/PhotoComparisonSlider'
+export { ProgramPreviewModal } from '@/components/coach/ProgramPreviewModal'
+export { VisualEvolution } from '@/components/coach/VisualEvolution'
+export { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
+export { DashboardCharts } from '@/components/coach/dashboard/DashboardCharts'
+export { NewsFeedProvider } from '@/components/coach/NewsFeedProvider'
+export { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
+export { ClientNav } from '@/components/client/ClientNav'
+export { ClientSettingsModal } from '@/components/client/ClientSettingsModal'

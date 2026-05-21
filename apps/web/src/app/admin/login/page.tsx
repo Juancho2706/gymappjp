@@ -1,11 +1,10 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { isAdminEmail } from '@/lib/admin/admin-gate'
 import { AdminLoginForm } from './AdminLoginForm'
+import { getAdminLoginUser } from './_data/login.queries'
 
 export default async function AdminLoginPage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAdminLoginUser()
 
     // Already logged in and is admin → redirect to dashboard
     if (user?.email && isAdminEmail(user.email)) {

@@ -1,20 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { StudentDashboardPreview } from './StudentDashboardPreview'
 import type { Metadata } from 'next'
+import { getPreviewCoach } from './_data/preview.queries'
 
 export const metadata: Metadata = { title: 'Vista Previa Alumno | Mi Marca' }
 
 export default async function PreviewPage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, coach } = await getPreviewCoach()
     if (!user) redirect('/login')
-
-    const { data: coach } = await supabase
-        .from('coaches')
-        .select('brand_name, primary_color, logo_url, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode')
-        .eq('id', user.id)
-        .maybeSingle()
 
     if (!coach) redirect('/login')
 

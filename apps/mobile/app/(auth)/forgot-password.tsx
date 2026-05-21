@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'expo-router'
 import { ArrowRight, KeyRound, Mail } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { ForgotPasswordSchema } from '@eva/schemas'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, TopBar } from '../../components'
@@ -22,8 +23,10 @@ export default function ForgotPasswordScreen() {
   const [sent, setSent] = useState(false)
 
   async function handleReset() {
+    const parsed = ForgotPasswordSchema.safeParse({ email: email.trim() })
+    if (!parsed.success) return
     setLoading(true)
-    await supabase.auth.resetPasswordForEmail(email.trim(), {
+    await supabase.auth.resetPasswordForEmail(parsed.data.email, {
       redirectTo: 'eva://reset-password',
     })
     setSent(true)
