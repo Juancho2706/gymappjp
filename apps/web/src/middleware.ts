@@ -24,6 +24,11 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next({ request })
     }
 
+    // Demo route — skip all auth, rate-limiting, and Supabase calls.
+    if (pathname === '/movidatest' || pathname.startsWith('/movidatest/')) {
+        return NextResponse.next({ request })
+    }
+
     // B-6: Enterprise subdomain rewrite — enterprise.eva-app.cl → /org/*
     if (request.headers.get('host') === 'enterprise.eva-app.cl') {
         const url = request.nextUrl.clone()
