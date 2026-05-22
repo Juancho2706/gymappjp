@@ -8,6 +8,7 @@ import { RemoveCoachDialog } from './_components/RemoveCoachDialog'
 import { CreateEnterpriseCoachForm } from './_components/CreateEnterpriseCoachForm'
 import { CoachEnterpriseActions } from './_components/CoachEnterpriseActions'
 import { UserCheck, Clock, Crown, Shield, User, Link2, Users } from 'lucide-react'
+import { CoachQRButton } from './_components/CoachQRButton'
 
 export const metadata: Metadata = { title: 'Coaches' }
 
@@ -125,9 +126,16 @@ export default async function OrgCoachesPage({ params }: Props) {
                                         {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] ?? member.role}
                                     </span>
                                     {member.coach?.invite_code && (
-                                        <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
-                                            {member.coach.invite_code}
-                                        </span>
+                                        <>
+                                            <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+                                                {member.coach.invite_code}
+                                            </span>
+                                            <CoachQRButton
+                                                inviteCode={member.coach.invite_code}
+                                                coachName={member.coach.full_name ?? 'Coach'}
+                                                siteUrl={process.env.NEXT_PUBLIC_SITE_URL ?? ''}
+                                            />
+                                        </>
                                     )}
                                     {isAdmin && member.role !== 'org_owner' && member.status === 'active' && member.coach_id && (
                                         <CoachEnterpriseActions
