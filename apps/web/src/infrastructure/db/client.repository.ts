@@ -14,7 +14,7 @@ export type ClientRow = {
     created_at: string | null
 }
 
-export type DashboardClientRow = Pick<ClientRow, 'id' | 'full_name' | 'coach_id'> & {
+export type DashboardClientRow = Pick<ClientRow, 'id' | 'full_name' | 'coach_id' | 'org_id'> & {
     coaches: {
         brand_name: string
         primary_color: string
@@ -48,7 +48,7 @@ export async function findClientById(db: DB, clientId: string): Promise<ClientRo
 export async function findDashboardClientById(db: DB, clientId: string): Promise<DashboardClientRow | null> {
     const { data } = await db
         .from('clients')
-        .select('id, full_name, coach_id, coaches ( brand_name, primary_color, logo_url, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version )')
+        .select('id, full_name, coach_id, org_id, coaches ( brand_name, primary_color, logo_url, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version )')
         .eq('id', clientId)
         .maybeSingle()
     return data as DashboardClientRow | null

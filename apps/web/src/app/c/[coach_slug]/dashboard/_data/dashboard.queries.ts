@@ -8,7 +8,7 @@ import { findDashboardClientById } from '@/infrastructure/db'
 
 type CoachBrand = Pick<Tables<'coaches'>, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message' | 'welcome_modal_enabled' | 'welcome_modal_content' | 'welcome_modal_type' | 'welcome_modal_version'>
 
-export type DashboardClient = Pick<Tables<'clients'>, 'id' | 'full_name' | 'coach_id'> & {
+export type DashboardClient = Pick<Tables<'clients'>, 'id' | 'full_name' | 'coach_id' | 'org_id'> & {
     coaches: CoachBrand | CoachBrand[] | null
 }
 
@@ -322,6 +322,27 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
         prs.sort((a, b) => b.weightKg - a.weightKg)
         return prs.slice(0, 5)
     })
+})
+
+export type OrgAnnouncement = {
+    id: string
+    title: string
+    body: string
+    active_until: string | null
+    created_at: string
+}
+
+export const getActiveOrgAnnouncements = cache(async (orgId: string): Promise<OrgAnnouncement[]> => {
+    const supabase = await createClient()
+    const { data } = await supabase
+        .from('org_announcements')
+        .select('id, title, body, active_until, created_at')
+        .eq('org_id', orgId)
+        .eq('is_active', true)
+        .or('active_until.is.null,active_until.gt.' + new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(5)
+    return (data ?? []) as OrgAnnouncement[]
 })
 
 /** Días con al menos un daily_nutrition_log en los últimos 30 días (zona Santiago). */

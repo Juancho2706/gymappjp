@@ -14,7 +14,8 @@ import { RecentWorkoutsSection } from './_components/history/RecentWorkoutsSecti
 import { WeightFullChartSection } from './_components/WeightFullChartSection'
 import { DashboardSidebarBlocks } from './_components/DashboardSidebarBlocks'
 import { WelcomeModal } from './_components/WelcomeModal'
-import { getClientDashboardUser, getClientProfile } from './_data/dashboard.queries'
+import { getClientDashboardUser, getClientProfile, getActiveOrgAnnouncements } from './_data/dashboard.queries'
+import { OrgAnnouncementBanner } from './_components/OrgAnnouncementBanner'
 import {
     DashboardHeaderSkeleton,
     CalendarSkeleton,
@@ -42,6 +43,8 @@ export default async function ClientDashboardPage({ params }: Props) {
     const coachRow = client.coaches
     const coachBranding = Array.isArray(coachRow) ? coachRow[0] : coachRow
 
+    const announcements = client.org_id ? await getActiveOrgAnnouncements(client.org_id) : []
+
     const useBrandColorsStr = (await headers()).get('x-client-use-brand-colors')
     const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
 
@@ -50,6 +53,7 @@ export default async function ClientDashboardPage({ params }: Props) {
 
     const beforeSidebar = (
         <>
+            {announcements.length > 0 && <OrgAnnouncementBanner announcements={announcements} />}
             <Suspense fallback={<DashboardHeaderSkeleton />}>
                 <DashboardHeader
                     userId={user.id}

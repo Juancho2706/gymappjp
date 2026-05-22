@@ -1484,6 +1484,47 @@ export type Database = {
           },
         ]
       }
+      org_announcements: {
+        Row: {
+          active_until: string | null
+          body: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean
+          org_id: string
+          title: string
+        }
+        Insert: {
+          active_until?: string | null
+          body: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          org_id: string
+          title: string
+        }
+        Update: {
+          active_until?: string | null
+          body?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          org_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_announcements_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_audit_logs: {
         Row: {
           action: string
