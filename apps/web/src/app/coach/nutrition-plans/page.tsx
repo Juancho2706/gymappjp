@@ -9,7 +9,8 @@ import {
 import { getTierCapabilities, getTierPriceClp, type SubscriptionTier } from '@/lib/constants'
 import { Check, Salad } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
-import { getNutritionPlansPageCoach } from './_data/nutrition-page.queries'
+import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_data/nutrition-page.queries'
+import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
 
 type NutritionPlanRow = { id: string; name: string; is_active: boolean | null }
 
@@ -124,11 +125,13 @@ export default async function NutritionPlansPage() {
     )
   }
 
-  const [templates, activePlans, coachClientsRaw, foodLib] = await Promise.all([
+  const orgId = coach?.active_org_id ?? null
+  const [templates, activePlans, coachClientsRaw, foodLib, orgTemplates] = await Promise.all([
     getCoachTemplates(coachId),
     getActivePlansBoardData(coachId),
     getCoachClients(coachId),
     getFoodLibrary(coachId, { page: 0, pageSize: 120 }),
+    orgId ? getCoachOrgNutritionTemplates(orgId) : Promise.resolve([]),
   ])
 
   const assignClients = coachClientsRaw.map((c) => {
@@ -149,13 +152,20 @@ export default async function NutritionPlansPage() {
     .map((c) => ({ id: c.id, full_name: c.full_name }))
 
   return (
-    <NutritionHub
-      coachId={coachId}
-      templates={templates}
-      activePlans={activePlans}
-      assignClients={assignClients}
-      clientsWithoutPlan={clientsWithoutPlan}
-      foods={foodLib}
-    />
+    <div className="space-y-4">
+      {orgTemplates.length > 0 && (
+        <div className="max-w-6xl mx-auto px-4 pt-6">
+          <OrgTemplatesSection orgName="tu organización" templates={orgTemplates} />
+        </div>
+      )}
+      <NutritionHub
+        coachId={coachId}
+        templates={templates}
+        activePlans={activePlans}
+        assignClients={assignClients}
+        clientsWithoutPlan={clientsWithoutPlan}
+        foods={foodLib}
+      />
+    </div>
   )
 }

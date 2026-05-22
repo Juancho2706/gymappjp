@@ -1616,6 +1616,62 @@ export type Database = {
           },
         ]
       }
+      org_nutrition_templates: {
+        Row: {
+          carbs_g: number | null
+          created_at: string | null
+          created_by: string | null
+          daily_calories: number | null
+          description: string | null
+          fats_g: number | null
+          goal_type: string | null
+          id: string
+          instructions: string | null
+          meal_names: Json
+          name: string
+          org_id: string
+          protein_g: number | null
+        }
+        Insert: {
+          carbs_g?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          daily_calories?: number | null
+          description?: string | null
+          fats_g?: number | null
+          goal_type?: string | null
+          id?: string
+          instructions?: string | null
+          meal_names?: Json
+          name: string
+          org_id: string
+          protein_g?: number | null
+        }
+        Update: {
+          carbs_g?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          daily_calories?: number | null
+          description?: string | null
+          fats_g?: number | null
+          goal_type?: string | null
+          id?: string
+          instructions?: string | null
+          meal_names?: Json
+          name?: string
+          org_id?: string
+          protein_g?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_nutrition_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           coach_id: string | null

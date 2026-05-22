@@ -3,7 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getOrgBySlug } from './_data/org.queries'
 import { MfaBanner } from './_components/MfaBanner'
-import { Building2, Users, UserCheck, Settings, LayoutDashboard, ChevronLeft, Megaphone } from 'lucide-react'
+import { Building2, Users, UserCheck, Settings, LayoutDashboard, ChevronLeft, Megaphone, Salad } from 'lucide-react'
 
 interface Props {
     children: React.ReactNode
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
     { href: '/coaches', label: 'Coaches', icon: Users },
     { href: '/clients', label: 'Clientes', icon: UserCheck },
     { href: '/announcements', label: 'Novedades', icon: Megaphone },
+    { href: '/nutrition', label: 'Nutrición', icon: Salad },
     { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
