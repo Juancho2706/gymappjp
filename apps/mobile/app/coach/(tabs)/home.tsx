@@ -3,11 +3,14 @@ import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react
 import { CoachMainWrapper } from '../../../components/coach/CoachMainWrapper'
 import {
   MobileActivityFeed,
+  MobileBillingBanners,
   MobileExpiringPrograms,
   MobileFocusList,
   MobileGreetingHeader,
   MobileKpiStrip,
   MobileNextBestAction,
+  MobileQuickActionsBar,
+  MobileTierUsageBanners,
   MobileTodayAgenda,
 } from '../../../components/coach/CoachDashboardSections'
 import { useTheme } from '../../../context/ThemeContext'
@@ -65,6 +68,9 @@ export default function CoachHomeScreen() {
   }
 
   const pendingCount = data.agenda.length + data.topRiskClients.length
+  const showTierBanners =
+    data.coach.subscriptionTier === 'free' ||
+    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 48)
 
   return (
     <CoachMainWrapper
@@ -77,7 +83,12 @@ export default function CoachHomeScreen() {
         />
       }
     >
+      <MobileBillingBanners coach={data.coach} activeClientCount={data.kpi.totalClients} />
+      {showTierBanners ? (
+        <MobileTierUsageBanners coach={data.coach} totalClients={data.kpi.totalClients} />
+      ) : null}
       <MobileGreetingHeader coachName={data.coach.fullName || data.coach.brandName || 'Coach'} pendingCount={pendingCount} />
+      <MobileQuickActionsBar />
       <MobileKpiStrip kpi={data.kpi} />
       <MobileFocusList items={data.topRiskClients} />
       <MobileNextBestAction hasRisk={data.topRiskClients.length > 0} hasAgenda={data.agenda.length > 0} />

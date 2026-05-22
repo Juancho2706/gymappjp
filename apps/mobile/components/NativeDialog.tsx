@@ -10,9 +10,10 @@ interface NativeDialogProps {
   title?: string
   onClose: () => void
   children: ReactNode
+  maxWidth?: number
 }
 
-export function NativeDialog({ open, title, onClose, children }: NativeDialogProps) {
+export function NativeDialog({ open, title, onClose, children, maxWidth }: NativeDialogProps) {
   const { theme } = useTheme()
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
@@ -21,7 +22,7 @@ export function NativeDialog({ open, title, onClose, children }: NativeDialogPro
           from={{ opacity: 0, scale: 0.96, translateY: 12 }}
           animate={{ opacity: 1, scale: 1, translateY: 0 }}
           transition={{ type: 'spring', damping: 16 }}
-          style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}
+          style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'], maxWidth }]}
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>

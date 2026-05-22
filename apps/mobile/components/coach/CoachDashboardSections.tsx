@@ -10,10 +10,15 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  CreditCard,
+  Layers,
+  Receipt,
   Sparkles,
   TrendingUp,
   TriangleAlert,
+  UserPlus,
   Users,
+  Utensils,
   type LucideIcon,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
@@ -25,6 +30,11 @@ import type {
   MobileKpiSummary,
   MobileRiskAlertItem,
 } from '../../lib/coach-dashboard'
+import type { CoachProfile } from '../../lib/coach'
+import { getRecommendedTier, TIER_CONFIG } from '../../lib/coach-tiers'
+import { NativeDialog } from '../NativeDialog'
+import { Button } from '../Button'
+import { useState } from 'react'
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -43,6 +53,188 @@ function formatCurrency(n: number): string {
   }).format(n)
 }
 
+export function MobileBillingBanners({ coach, activeClientCount }: { coach: CoachProfile; activeClientCount: number }) {
+  const nowMs = Date.now()
+  const currentPeriodEndMs = coach.currentPeriodEnd ? new Date(coach.currentPeriodEnd).getTime() : null
+  const trialEndsAtMs = coach.trialEndsAt ? new Date(coach.trialEndsAt).getTime() : null
+  const canceledGrace =
+    coach.subscriptionStatus === 'canceled' &&
+    currentPeriodEndMs != null &&
+    currentPeriodEndMs > nowMs
+  const blocked =
+    coach.subscriptionStatus === 'canceled' &&
+    currentPeriodEndMs != null &&
+    currentPeriodEndMs <= nowMs
+  const trialActive = trialEndsAtMs != null && trialEndsAtMs > nowMs
+
+  if (blocked) {
+    return (
+      <MobileBanner tone="danger" icon={TriangleAlert}>
+        <Text>Tu suscripcion esta cancelada. Reactiva para recuperar acceso.</Text>
+      </MobileBanner>
+    )
+  }
+
+  if (canceledGrace) {
+    const days = Math.max(0, Math.ceil(((currentPeriodEndMs ?? nowMs) - nowMs) / 86400000))
+    const showRec = days <= 7 && activeClientCount > 0
+    const recTier = showRec ? getRecommendedTier(activeClientCount) : null
+    const recConfig = recTier ? TIER_CONFIG[recTier] : null
+    return (
+      <MobileBanner tone="warn" icon={Clock}>
+        <Text>
+          Cancelaste tu plan. Acceso hasta por {days} dia{days === 1 ? '' : 's'}.
+        </Text>
+        {showRec && recConfig ? (
+          <Text>
+            Con {activeClientCount} alumnos: Plan {recConfig.label} hasta {recConfig.maxClients}.
+          </Text>
+        ) : null}
+      </MobileBanner>
+    )
+  }
+
+  if (trialActive) {
+    const days = Math.max(0, Math.ceil(((trialEndsAtMs ?? nowMs) - nowMs) / 86400000))
+    const showRec = days <= 7 && activeClientCount > 0
+    const recTier = showRec ? getRecommendedTier(activeClientCount) : null
+    const recConfig = recTier ? TIER_CONFIG[recTier] : null
+    return (
+      <MobileBanner tone="info" icon={Clock}>
+        <Text>
+          Periodo de prueba - {days} dia{days === 1 ? '' : 's'} restantes.
+        </Text>
+        {showRec && recConfig ? (
+          <Text>
+            Con {activeClientCount} alumnos: Plan {recConfig.label} hasta {recConfig.maxClients}.
+          </Text>
+        ) : null}
+      </MobileBanner>
+    )
+  }
+
+  return null
+}
+
+export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachProfile; totalClients: number }) {
+  return (
+    <View style={styles.tierStack}>
+      {coach.subscriptionTier === 'free' ? <MobileFreeTierBanner totalClients={totalClients} /> : null}
+      {coach.subscriptionTier === 'elite' && totalClients >= 48 ? <MobileGrowthUpgradeBanner totalClients={totalClients} /> : null}
+    </View>
+  )
+}
+
+function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
+  const { theme } = useTheme()
+  const max = TIER_CONFIG.free.maxClients
+  const used = Math.min(totalClients, max)
+  const pct = Math.round((used / max) * 100)
+  const full = used >= max
+
+  return (
+    <View
+      style={[
+        styles.tierBanner,
+        {
+          borderColor: full ? 'rgba(245,158,11,0.32)' : theme.border,
+          backgroundColor: full ? 'rgba(245,158,11,0.1)' : hexToRgba(theme.card === '#FFFFFF' ? '#FFFFFF' : '#000000', theme.card === '#FFFFFF' ? 0.62 : 0.34),
+          borderRadius: theme.radius.xl,
+        },
+      ]}
+    >
+      <View style={styles.tierMain}>
+        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+          {used}/{max} alumnos - Plan gratuito
+        </Text>
+        <View style={[styles.usageTrack, { backgroundColor: theme.muted }]}>
+          <View
+            style={[
+              styles.usageFill,
+              {
+                width: `${pct}%`,
+                backgroundColor: full ? '#F59E0B' : '#10B981',
+              },
+            ]}
+          />
+        </View>
+      </View>
+      <Text style={[styles.tierAction, { color: full ? '#F59E0B' : theme.primary, fontFamily: 'Inter_700Bold' }]}>
+        {full ? 'Expandir limite' : 'Ver planes'}
+      </Text>
+    </View>
+  )
+}
+
+function MobileGrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
+  const { theme } = useTheme()
+  const max = TIER_CONFIG.elite.maxClients
+  const pct = Math.round((Math.min(totalClients, max) / max) * 100)
+
+  return (
+    <View
+      style={[
+        styles.tierBanner,
+        {
+          borderColor: 'rgba(16,185,129,0.32)',
+          backgroundColor: 'rgba(16,185,129,0.1)',
+          borderRadius: theme.radius.xl,
+        },
+      ]}
+    >
+      <View style={styles.tierMain}>
+        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+          {totalClients}/{max} alumnos - {pct}% de tu plan Elite
+        </Text>
+        <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Hay un plan Growth para coaches con 60-120 alumnos.
+        </Text>
+      </View>
+      <Text style={[styles.tierAction, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
+        Ver Growth
+      </Text>
+    </View>
+  )
+}
+
+function MobileBanner({
+  tone,
+  icon: Icon,
+  children,
+}: {
+  tone: 'info' | 'warn' | 'danger'
+  icon: LucideIcon
+  children: ReactNode
+}) {
+  const { theme } = useTheme()
+  const toneColor = tone === 'danger' ? '#F43F5E' : tone === 'warn' ? '#F59E0B' : theme.primary
+  return (
+    <View
+      style={[
+        styles.banner,
+        {
+          borderColor: hexToRgba(toneColor, 0.32),
+          backgroundColor: hexToRgba(toneColor, 0.1),
+          borderRadius: theme.radius['2xl'],
+        },
+      ]}
+    >
+      <Icon size={18} color={toneColor} strokeWidth={2.2} />
+      <View style={styles.bannerCopy}>
+        <Text style={[styles.bannerText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+          {children}
+        </Text>
+        <View style={[styles.bannerCta, { backgroundColor: toneColor }]}>
+          <CreditCard size={13} color="#FFFFFF" strokeWidth={2.3} />
+          <Text style={[styles.bannerCtaText, { fontFamily: 'Inter_700Bold' }]}>
+            Revisar plan
+          </Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
@@ -51,6 +243,83 @@ function timeAgo(iso: string): string {
   const hrs = Math.floor(mins / 60)
   if (hrs < 24) return `${hrs}h`
   return `${Math.floor(hrs / 24)}d`
+}
+
+export function MobileQuickActionsBar() {
+  const router = useRouter()
+  const { theme } = useTheme()
+  const [modal, setModal] = useState<null | 'client' | 'program' | 'nutrition' | 'payment'>(null)
+
+  return (
+    <>
+      <View style={styles.quickActions}>
+        <QuickActionButton icon={UserPlus} label="+ Alumno" shortLabel="+" onPress={() => setModal('client')} />
+        <QuickActionButton icon={Layers} label="+ Programa" shortLabel="+" onPress={() => router.push('/coach/(tabs)/builder')} />
+        <QuickActionButton icon={Utensils} label="+ Nutricion" shortLabel="+" onPress={() => router.push('/coach/(tabs)/nutricion')} />
+        <QuickActionButton icon={Receipt} label="+ Pago" shortLabel="+" onPress={() => setModal('payment')} />
+      </View>
+
+      <NativeDialog
+        open={modal != null}
+        title={modal === 'payment' ? 'Registrar pago' : modal === 'client' ? 'Agregar alumno' : 'Accion no disponible'}
+        onClose={() => setModal(null)}
+      >
+        <View style={styles.placeholderDialog}>
+          <Text style={[styles.placeholderText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            {modal === 'client'
+              ? 'La accion visual ya esta en mobile. El alta real de alumno requiere el endpoint seguro equivalente al server action web.'
+              : modal === 'payment'
+                ? 'El registro rapido de pago se portara en la capa de modales/sheets para mantener validacion y refresco igual que web.'
+                : 'Esta accion se conectara cuando exista la pantalla nativa correspondiente.'}
+          </Text>
+          <Button label="Entendido" size="md" onPress={() => setModal(null)} full />
+        </View>
+      </NativeDialog>
+    </>
+  )
+}
+
+function QuickActionButton({
+  icon: Icon,
+  label,
+  shortLabel,
+  onPress,
+}: {
+  icon: LucideIcon
+  label: string
+  shortLabel: string
+  onPress: () => void
+}) {
+  const { theme } = useTheme()
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={onPress}
+      style={[
+        styles.quickActionButton,
+        {
+          backgroundColor: theme.card === '#FFFFFF' ? 'rgba(255,255,255,0.95)' : 'rgba(18,18,18,0.68)',
+          borderColor: theme.card === '#FFFFFF' ? 'rgba(0,0,0,0.11)' : theme.border,
+          shadowColor: '#000',
+        },
+      ]}
+    >
+      <Icon size={16} color={theme.primary} strokeWidth={2.3} />
+      <Text
+        style={[styles.quickActionLabel, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[styles.quickActionShort, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}
+        numberOfLines={1}
+      >
+        {shortLabel}
+      </Text>
+    </TouchableOpacity>
+  )
 }
 
 function useGlassStyle() {
@@ -421,6 +690,111 @@ function EmptyPanel({ icon, title, subtitle }: { icon: ReactNode; title: string;
 const styles = StyleSheet.create({
   greeting: {
     gap: 4,
+  },
+  banner: {
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  bannerCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 10,
+  },
+  bannerText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  bannerCta: {
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bannerCtaText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  tierStack: {
+    gap: 8,
+  },
+  tierBanner: {
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  tierMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  tierTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  tierSubtitle: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  tierAction: {
+    flexShrink: 0,
+    fontSize: 11,
+  },
+  usageTrack: {
+    height: 6,
+    width: '100%',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  usageFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickActionButton: {
+    minHeight: 40,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 7,
+    elevation: 2,
+  },
+  quickActionLabel: {
+    fontSize: 13,
+  },
+  quickActionShort: {
+    display: 'none',
+    fontSize: 13,
+  },
+  placeholderDialog: {
+    gap: 16,
+  },
+  placeholderText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   eyebrow: {
     fontSize: 10,

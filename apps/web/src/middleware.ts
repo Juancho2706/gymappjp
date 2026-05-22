@@ -27,7 +27,15 @@ export async function middleware(request: NextRequest) {
     // B-6: Enterprise subdomain rewrite — enterprise.eva-app.cl → /org/*
     if (request.headers.get('host') === 'enterprise.eva-app.cl') {
         const url = request.nextUrl.clone()
-        if (!url.pathname.startsWith('/invite') && !url.pathname.startsWith('/login')) {
+        if (url.pathname === '/' || url.pathname === '') {
+            url.pathname = '/org/login'
+            return NextResponse.redirect(url)
+        }
+        if (url.pathname === '/login') {
+            url.pathname = '/org/login'
+            return NextResponse.rewrite(url)
+        }
+        if (!url.pathname.startsWith('/org') && !url.pathname.startsWith('/invite')) {
             url.pathname = '/org' + url.pathname
         }
         return NextResponse.rewrite(url)

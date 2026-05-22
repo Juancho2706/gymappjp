@@ -7,7 +7,16 @@ export interface CoachProfile {
   slug: string
   primaryColor: string
   subscriptionStatus: string
+  subscriptionTier: 'free' | 'starter' | 'pro' | 'elite' | 'growth' | 'scale'
+  currentPeriodEnd: string | null
+  trialEndsAt: string | null
   maxClients: number
+}
+
+function normalizeSubscriptionTier(raw: string | null | undefined): CoachProfile['subscriptionTier'] {
+  const v = String(raw ?? 'starter').toLowerCase()
+  if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
+  return 'starter'
 }
 
 export async function getCoachProfile(): Promise<CoachProfile | null> {
@@ -16,7 +25,7 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
 
   const { data } = await supabase
     .from('coaches')
-    .select('id, full_name, brand_name, slug, primary_color, subscription_status, max_clients')
+    .select('id, full_name, brand_name, slug, primary_color, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -28,6 +37,9 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
     slug: data.slug,
     primaryColor: data.primary_color,
     subscriptionStatus: data.subscription_status,
+    subscriptionTier: normalizeSubscriptionTier(data.subscription_tier),
+    currentPeriodEnd: data.current_period_end,
+    trialEndsAt: data.trial_ends_at,
     maxClients: data.max_clients,
   }
 }
