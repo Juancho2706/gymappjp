@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { getClientProfileData } from './_actions/client-detail.actions'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, FileDown } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientProfileDashboard } from './ClientProfileDashboard'
@@ -11,13 +11,23 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
     
     return (
         <div className="relative mx-auto max-w-[1600px] w-full min-w-0 space-y-8 animate-fade-in">
-            <Link href="/coach/clients"
-                className="group print:hidden inline-flex max-w-full min-w-0 items-center gap-2 break-words text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground transition-all hover:text-primary">
-                <div className="p-1.5 rounded-full bg-secondary dark:bg-white/5 group-hover:bg-primary/10 transition-colors">
-                    <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
-                </div>
-                Directorio de Unidades
-            </Link>
+            <div className="flex items-center justify-between print:hidden">
+                <Link href="/coach/clients"
+                    className="group inline-flex max-w-full min-w-0 items-center gap-2 break-words text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground transition-all hover:text-primary">
+                    <div className="p-1.5 rounded-full bg-secondary dark:bg-white/5 group-hover:bg-primary/10 transition-colors">
+                        <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                    </div>
+                    Directorio de Unidades
+                </Link>
+                <Link
+                    href={`/coach/clients/${clientId}/progress-print`}
+                    target="_blank"
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground hover:text-primary transition-colors"
+                >
+                    <FileDown className="w-3.5 h-3.5" />
+                    Exportar PDF
+                </Link>
+            </div>
 
             <Suspense fallback={<ProfileSkeleton />}>
                 <ProfileContent clientId={clientId} />
