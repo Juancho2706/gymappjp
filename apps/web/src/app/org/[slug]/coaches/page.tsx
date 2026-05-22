@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
+import Link from 'next/link'
 import { InviteCoachForm } from './_components/InviteCoachForm'
 import { RemoveCoachButton } from './_components/RemoveCoachButton'
 import { RemoveCoachDialog } from './_components/RemoveCoachDialog'
@@ -102,7 +103,16 @@ export default async function OrgCoachesPage({ params }: Props) {
                                     {displayName.charAt(0).toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium truncate">{displayName}</p>
+                                    {member.coach_id ? (
+                                        <Link
+                                            href={`/org/${slug}/coaches/${member.coach_id}`}
+                                            className="text-sm font-medium truncate hover:text-violet-500 transition-colors block"
+                                        >
+                                            {displayName}
+                                        </Link>
+                                    ) : (
+                                        <p className="text-sm font-medium truncate">{displayName}</p>
+                                    )}
                                     <p className="text-[11px] text-muted-foreground">{displayMeta}</p>
                                 </div>
                                 <div className="hidden items-center gap-1 text-[11px] text-muted-foreground md:flex">

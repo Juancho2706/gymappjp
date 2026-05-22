@@ -5,10 +5,11 @@ import {
     findOrgMembers,
     findOrgClients,
     findOrgInvoices,
+    getCoachPerformanceData,
     getOrgStats as _getOrgStats,
 } from '@/infrastructure/db/org.repository'
 
-export type { OrgWithMembership, OrgMember, OrgClient, OrgInvoice } from '@/infrastructure/db/org.repository'
+export type { OrgWithMembership, OrgMember, OrgClient, OrgInvoice, CoachPerformanceData } from '@/infrastructure/db/org.repository'
 
 export const getOrgBySlug = cache(async (slug: string) => {
     const supabase = await createClient()
@@ -35,4 +36,9 @@ export const getOrgStats = cache(async (orgId: string) => {
 export const getOrgInvoices = cache(async (orgId: string) => {
     const supabase = await createClient()
     return findOrgInvoices(supabase, orgId)
+})
+
+export const getCoachPerformance = cache(async (coachId: string, orgId: string) => {
+    const supabase = await createClient()
+    return getCoachPerformanceData(supabase, coachId, orgId)
 })

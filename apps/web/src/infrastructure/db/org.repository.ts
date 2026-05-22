@@ -140,6 +140,112 @@ export type OrgInvoice = {
     created_at: string | null
 }
 
+export type CoachPerformanceData = {
+    assignedCount: number
+    activeCount: number
+    alertCount: number           // active clients with no log in last 7d
+    adherenceWeeks: number[]     // % per week, last 4 weeks (index 0 = oldest)
+    avgAdherence: number         // mean of adherenceWeeks
+    orgAvgAdherence: number      // org-wide comparison
+    alertClients: { id: string; full_name: string | null; daysSinceLastLog: number }[]
+}
+
+export async function getCoachPerformanceData(
+    db: DB,
+    coachId: string,
+    orgId: string
+): Promise<CoachPerformanceData> {
+    const now = Date.now()
+    const msDay = 86400000
+    const sevenDaysAgo = new Date(now - 7 * msDay).toISOString()
+    const thirtyDaysAgo = new Date(now - 30 * msDay).toISOString()
+
+    // assigned client ids via coach_client_assignments
+    const { data: assignments } = await db
+        .from('coach_client_assignments')
+        .select('client_id')
+        .eq('coach_id', coachId)
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+
+    const clientIds = (assignments ?? []).map(a => a.client_id)
+
+    if (!clientIds.length) {
+        return { assignedCount: 0, activeCount: 0, alertCount: 0, adherenceWeeks: [0, 0, 0, 0], avgAdherence: 0, orgAvgAdherence: 0, alertClients: [] }
+    }
+
+    const [clientsRes, logsRes, orgClientsRes] = await Promise.all([
+        db.from('clients').select('id, full_name, is_active').in('id', clientIds),
+        db.from('workout_logs').select('client_id, logged_at').in('client_id', clientIds).gte('logged_at', thirtyDaysAgo),
+        db.from('clients').select('id, is_active').eq('org_id', orgId),
+    ])
+
+    const clients = clientsRes.data ?? []
+    const logs = logsRes.data ?? []
+    const orgClients = orgClientsRes.data ?? []
+
+    const activeClients = clients.filter(c => c.is_active)
+    const activeCount = activeClients.length
+    const activeIds = new Set(activeClients.map(c => c.id))
+
+    // clients with log in last 7d
+    const recentIds = new Set(logs.filter(l => l.logged_at >= sevenDaysAgo).map(l => l.client_id))
+    const alertCount = activeClients.filter(c => !recentIds.has(c.id)).length
+
+    // alert clients with days since last log
+    const lastLogMap: Record<string, string> = {}
+    for (const log of logs) {
+        if (!lastLogMap[log.client_id] || log.logged_at > lastLogMap[log.client_id]) {
+            lastLogMap[log.client_id] = log.logged_at
+        }
+    }
+    const alertClients = activeClients
+        .filter(c => !recentIds.has(c.id))
+        .map(c => ({
+            id: c.id,
+            full_name: c.full_name,
+            daysSinceLastLog: lastLogMap[c.id]
+                ? Math.floor((now - new Date(lastLogMap[c.id]).getTime()) / msDay)
+                : 999,
+        }))
+        .sort((a, b) => b.daysSinceLastLog - a.daysSinceLastLog)
+
+    // weekly adherence (4 weeks, coach)
+    const adherenceWeeks = [3, 2, 1, 0].map(weeksAgo => {
+        const start = new Date(now - (weeksAgo + 1) * 7 * msDay).toISOString()
+        const end = new Date(now - weeksAgo * 7 * msDay).toISOString()
+        const weekLogs = logs.filter(l => l.logged_at >= start && l.logged_at < end)
+        const weekIds = new Set(weekLogs.map(l => l.client_id))
+        const eligible = activeClients.filter(c => activeIds.has(c.id)).length
+        return eligible > 0 ? Math.round((weekIds.size / eligible) * 100) : 0
+    })
+    const avgAdherence = Math.round(adherenceWeeks.reduce((a, b) => a + b, 0) / 4)
+
+    // org-wide adherence (last 7d active / total active)
+    const orgActiveIds = new Set(orgClients.filter(c => c.is_active).map(c => c.id))
+    const orgClientIds = [...orgActiveIds]
+    let orgAvgAdherence = 0
+    if (orgClientIds.length > 0) {
+        const { data: orgLogs } = await db
+            .from('workout_logs')
+            .select('client_id')
+            .in('client_id', orgClientIds)
+            .gte('logged_at', sevenDaysAgo)
+        const orgRecentIds = new Set((orgLogs ?? []).map(l => l.client_id))
+        orgAvgAdherence = Math.round((orgRecentIds.size / orgClientIds.length) * 100)
+    }
+
+    return {
+        assignedCount: clientIds.length,
+        activeCount,
+        alertCount,
+        adherenceWeeks,
+        avgAdherence,
+        orgAvgAdherence,
+        alertClients,
+    }
+}
+
 export async function findOrgInvoices(db: DB, orgId: string): Promise<OrgInvoice[]> {
     const { data } = await db
         .from('org_invoices')

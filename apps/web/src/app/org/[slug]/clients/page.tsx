@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { AddClientForm } from './_components/AddClientForm'
 import { AssignClientSelect } from './_components/AssignClientSelect'
+import { ImportClientsModal } from './_components/ImportClientsModal'
 import { UserCheck, UserX } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Clientes' }
@@ -48,6 +49,12 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
                     <h1 className="text-xl font-bold">Clientes</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">{clients.length} clientes en el pool</p>
                 </div>
+                {isAdmin && (
+                    <ImportClientsModal
+                        orgSlug={slug}
+                        coaches={activeCoaches.map(c => ({ id: c.id, name: c.full_name ?? 'Coach', slug: c.slug }))}
+                    />
+                )}
             </div>
 
             {/* Add client form — admins only */}
