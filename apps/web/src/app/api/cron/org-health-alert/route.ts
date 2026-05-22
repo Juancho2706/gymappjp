@@ -268,6 +268,70 @@ export async function GET(req: Request) {
     }
 
     console.info(`[cron/org-health-alert] inactive digests sent — orgs=${digests}`)
+
+    // ── Block 5: calculate health score per coach ─────────────────────────────
+    const { data: coachMembers } = await admin
+        .from('organization_members')
+        .select('id, coach_id, org_id')
+        .not('coach_id', 'is', null)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+
+    let coachesScored = 0
+    const sevenDaysAgo2 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    for (const member of coachMembers ?? []) {
+        if (!member.coach_id) continue
+        try {
+            const { data: assignedClients } = await admin
+                .from('coach_client_assignments')
+                .select('client_id')
+                .eq('coach_id', member.coach_id)
+                .eq('org_id', member.org_id)
+                .is('deleted_at', null)
+
+            const totalAssigned = assignedClients?.length ?? 0
+            if (totalAssigned === 0) {
+                await admin
+                    .from('organization_members')
+                    .update({ last_health_score: 0, last_health_score_at: now.toISOString() })
+                    .eq('id', member.id)
+                continue
+            }
+
+            const clientIds = (assignedClients ?? []).map(a => a.client_id)
+            const { data: activeClients } = await admin
+                .from('clients')
+                .select('id')
+                .in('id', clientIds)
+                .eq('is_active', true)
+
+            const { data: recentLogs } = await admin
+                .from('workout_logs')
+                .select('client_id')
+                .in('client_id', clientIds)
+                .gte('logged_at', sevenDaysAgo2)
+
+            const activeCount = activeClients?.length ?? 0
+            const engagedCount = new Set(recentLogs?.map(l => l.client_id) ?? []).size
+
+            const activeRatio = activeCount / totalAssigned
+            const engagementRatio = engagedCount / totalAssigned
+            const score = Math.round(activeRatio * 40 + engagementRatio * 60)
+
+            await admin
+                .from('organization_members')
+                .update({ last_health_score: score, last_health_score_at: now.toISOString() })
+                .eq('id', member.id)
+
+            coachesScored++
+        } catch (err) {
+            console.error(`[cron/org-health-alert] coach health score failed for member ${member.id}:`, err)
+            errors++
+        }
+    }
+
+    console.info(`[cron/org-health-alert] coach health scores updated — scored=${coachesScored}`)
     console.info(`[cron/org-health-alert] done — suspended=${suspended} alerted=${alerted} errors=${errors}`)
-    return NextResponse.json({ ok: true, suspended, alerted, digests, errors })
+    return NextResponse.json({ ok: true, suspended, alerted, digests, coachesScored, errors })
 }

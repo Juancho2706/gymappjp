@@ -116,9 +116,20 @@ export default async function OrgCoachesPage({ params }: Props) {
                                     )}
                                     <p className="text-[11px] text-muted-foreground">{displayMeta}</p>
                                 </div>
-                                <div className="hidden items-center gap-1 text-[11px] text-muted-foreground md:flex">
-                                    <Users className="h-3 w-3" />
-                                    {member.coach_id ? (clientCountByCoach[member.coach_id] ?? 0) : 0} alumnos
+                                <div className="hidden items-center gap-3 md:flex">
+                                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                        <Users className="h-3 w-3" />
+                                        {member.coach_id ? (clientCountByCoach[member.coach_id] ?? 0) : 0} alumnos
+                                    </span>
+                                    {member.last_health_score != null && (
+                                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${
+                                            member.last_health_score >= 70 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' :
+                                            member.last_health_score >= 40 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' :
+                                            'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                        }`}>
+                                            {member.last_health_score}%
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                                     <span className="flex items-center gap-1 text-[11px] text-muted-foreground">

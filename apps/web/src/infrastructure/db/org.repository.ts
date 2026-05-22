@@ -29,6 +29,7 @@ export type OrgMember = {
     status: string
     invited_at: string | null
     joined_at: string | null
+    last_health_score: number | null
     coach: {
         id: string
         full_name: string | null
@@ -82,7 +83,7 @@ export async function findOrgMembers(db: DB, orgId: string): Promise<OrgMember[]
     const { data } = await db
         .from('organization_members')
         .select(`
-            id, user_id, coach_id, role, status, invited_at, joined_at,
+            id, user_id, coach_id, role, status, invited_at, joined_at, last_health_score,
             coach:coaches(id, full_name, slug, logo_url, subscription_status, invite_code)
         `)
         .eq('org_id', orgId)

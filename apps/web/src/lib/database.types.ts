@@ -1679,6 +1679,8 @@ export type Database = {
           id: string
           invited_at: string | null
           joined_at: string | null
+          last_health_score: number | null
+          last_health_score_at: string | null
           org_id: string
           role: string
           status: string
@@ -1690,6 +1692,8 @@ export type Database = {
           id?: string
           invited_at?: string | null
           joined_at?: string | null
+          last_health_score?: number | null
+          last_health_score_at?: string | null
           org_id: string
           role: string
           status?: string
@@ -1701,6 +1705,8 @@ export type Database = {
           id?: string
           invited_at?: string | null
           joined_at?: string | null
+          last_health_score?: number | null
+          last_health_score_at?: string | null
           org_id?: string
           role?: string
           status?: string
