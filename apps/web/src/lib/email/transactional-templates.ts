@@ -561,3 +561,58 @@ ${divider()}
 
     return { subject, html }
 }
+
+// ── Org Inactive Clients Alert ───────────────────────────────────────────────
+
+type InactiveClient = { name: string; coachName: string; daysSinceLastLog: number }
+
+type OrgInactiveClientsContext = {
+    orgName: string
+    adminName: string
+    inactiveClients: InactiveClient[]
+    orgUrl: string
+}
+
+export function buildOrgInactiveClientsEmail(ctx: OrgInactiveClientsContext) {
+    const count = ctx.inactiveClients.length
+    const subject = `[${ctx.orgName}] ${count} alumno${count === 1 ? '' : 's'} sin actividad en +14 días`
+
+    const rows = ctx.inactiveClients
+        .map(c => `
+<tr>
+  <td style="padding:8px 12px;font-size:13px;color:#111827;border-bottom:1px solid #f3f4f6;">${c.name}</td>
+  <td style="padding:8px 12px;font-size:13px;color:#6b7280;border-bottom:1px solid #f3f4f6;">${c.coachName}</td>
+  <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#ef4444;border-bottom:1px solid #f3f4f6;text-align:right;">${c.daysSinceLastLog}d</td>
+</tr>`)
+        .join('')
+
+    const body = `
+<h1 style="margin:0 0 6px;font-size:20px;font-weight:800;color:#111827;line-height:1.3;">
+  Alumnos sin actividad
+</h1>
+<p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">
+  Hola ${ctx.adminName}, <strong>${count} alumno${count === 1 ? '' : 's'}</strong> de ${ctx.orgName} no han registrado entrenamiento en más de 14 días.
+</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+  <thead>
+    <tr style="background-color:#f9fafb;">
+      <th style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7280;text-align:left;letter-spacing:0.5px;text-transform:uppercase;">Alumno</th>
+      <th style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7280;text-align:left;letter-spacing:0.5px;text-transform:uppercase;">Coach</th>
+      <th style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7280;text-align:right;letter-spacing:0.5px;text-transform:uppercase;">Días</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+
+<div style="margin-bottom:8px;">
+  ${ctaButton('Ver alumnos en EVA →', ctx.orgUrl)}
+</div>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: `${count} alumno${count === 1 ? '' : 's'} sin registrar entrenamiento en +14 días`,
+        headerTitle: `EVA — ${ctx.orgName}`,
+    })
+
+    return { subject, html }
+}

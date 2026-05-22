@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { getOrgBySlug } from '../_data/org.queries'
+import { getOrgBySlug, getOrgInvoices } from '../_data/org.queries'
 import { OrgSettingsForm } from './_components/OrgSettingsForm'
+import { OrgInvoiceList } from './_components/OrgInvoiceList'
 
 export const metadata: Metadata = { title: 'Configuración' }
 
@@ -15,6 +16,7 @@ export default async function OrgSettingsPage({ params }: Props) {
     if (!org) redirect('/coach/dashboard')
 
     const isAdmin = org.myRole === 'org_owner' || org.myRole === 'org_admin'
+    const invoices = await getOrgInvoices(org.id)
 
     return (
         <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-6">
@@ -65,16 +67,24 @@ export default async function OrgSettingsPage({ params }: Props) {
                 </p>
             )}
 
-            {/* Billing info */}
-            <div className="rounded-xl border border-border bg-card p-4">
-                <h2 className="text-sm font-semibold mb-2">Billing</h2>
-                <p className="text-sm text-muted-foreground">
-                    La facturación enterprise se gestiona manualmente. Contacta a{' '}
-                    <a href="mailto:contacto@eva-app.cl" className="text-violet-500 hover:underline">
-                        contacto@eva-app.cl
-                    </a>{' '}
-                    para cambios de plan o seats.
-                </p>
+            {/* Billing info + invoices */}
+            <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+                <div>
+                    <h2 className="text-sm font-semibold mb-1">Billing</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Facturación gestionada manualmente. Contacta a{' '}
+                        <a href="mailto:contacto@eva-app.cl" className="text-violet-500 hover:underline">
+                            contacto@eva-app.cl
+                        </a>{' '}
+                        para cambios de plan o seats.
+                    </p>
+                </div>
+                {invoices.length > 0 && (
+                    <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Historial de facturas</p>
+                        <OrgInvoiceList invoices={invoices} />
+                    </div>
+                )}
             </div>
         </div>
     )

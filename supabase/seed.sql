@@ -160,25 +160,7 @@ BEGIN
     -- cb5 sin asignar
   ON CONFLICT DO NOTHING;
 
-  -- ============================================================
-  -- 7. Organization invites
-  -- ============================================================
-  INSERT INTO organization_invites (org_id, email, role, token_hash, expires_at, created_by)
-  VALUES
-    (org_a, 'new-coach-a@eva-test.cl', 'coach',
-     encode(sha256('pending-invite-token-org-a'::bytea), 'hex'),
-     now() + interval '7 days', owner_a),
-    (org_b, 'expired-coach@eva-test.cl', 'coach',
-     encode(sha256('expired-invite-token-org-b'::bytea), 'hex'),
-     now() - interval '1 day', owner_b)
-  ON CONFLICT DO NOTHING;
-
-  INSERT INTO organization_invites (org_id, email, role, token_hash, expires_at, used_at, created_by)
-  VALUES
-    (org_a, 'used-coach@eva-test.cl', 'coach',
-     encode(sha256('used-invite-token-org-a'::bytea), 'hex'),
-     now() + interval '6 days', now() - interval '1 hour', owner_a)
-  ON CONFLICT DO NOTHING;
+  -- organization_invites removed — superseded by direct organization_members creation
 
   -- ============================================================
   -- 8. Nutrition plan for client-a1 (E2E fixtures)

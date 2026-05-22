@@ -127,6 +127,29 @@ export async function findOrgClients(
     }))
 }
 
+export type OrgInvoice = {
+    id: string
+    amount_clp: number
+    expected_amount_clp: number | null
+    period_start: string
+    period_end: string
+    status: string
+    paid_at: string | null
+    payment_ref: string | null
+    notes: string | null
+    created_at: string | null
+}
+
+export async function findOrgInvoices(db: DB, orgId: string): Promise<OrgInvoice[]> {
+    const { data } = await db
+        .from('org_invoices')
+        .select('id, amount_clp, expected_amount_clp, period_start, period_end, status, paid_at, payment_ref, notes, created_at')
+        .eq('org_id', orgId)
+        .order('period_start', { ascending: false })
+        .limit(24)
+    return (data ?? []) as OrgInvoice[]
+}
+
 export async function getOrgStats(db: DB, orgId: string) {
     const [membersRes, clientsRes] = await Promise.all([
         db

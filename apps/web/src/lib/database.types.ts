@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -1575,50 +1575,6 @@ export type Database = {
           },
         ]
       }
-      organization_invites: {
-        Row: {
-          created_by: string
-          deleted_at: string | null
-          email: string
-          expires_at: string
-          id: string
-          org_id: string
-          role: string
-          token_hash: string
-          used_at: string | null
-        }
-        Insert: {
-          created_by: string
-          deleted_at?: string | null
-          email: string
-          expires_at?: string
-          id?: string
-          org_id: string
-          role: string
-          token_hash: string
-          used_at?: string | null
-        }
-        Update: {
-          created_by?: string
-          deleted_at?: string | null
-          email?: string
-          expires_at?: string
-          id?: string
-          org_id?: string
-          role?: string
-          token_hash?: string
-          used_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_invites_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       organization_members: {
         Row: {
           coach_id: string | null
@@ -2583,6 +2539,14 @@ export type Database = {
       }
     }
     Functions: {
+      bulk_reassign_clients: {
+        Args: {
+          p_from_coach_id: string
+          p_org_id: string
+          p_to_coach_id: string
+        }
+        Returns: number
+      }
       check_platform_email_availability: {
         Args: { p_email: string }
         Returns: Json

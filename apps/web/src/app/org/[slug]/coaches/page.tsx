@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { InviteCoachForm } from './_components/InviteCoachForm'
 import { RemoveCoachButton } from './_components/RemoveCoachButton'
+import { RemoveCoachDialog } from './_components/RemoveCoachDialog'
 import { CreateEnterpriseCoachForm } from './_components/CreateEnterpriseCoachForm'
 import { CoachEnterpriseActions } from './_components/CoachEnterpriseActions'
 import { UserCheck, Clock, Crown, Shield, User, Link2, Users } from 'lucide-react'
@@ -128,7 +129,21 @@ export default async function OrgCoachesPage({ params }: Props) {
                                         />
                                     )}
                                     {isAdmin && member.role !== 'org_owner' && (
-                                        <RemoveCoachButton orgSlug={slug} memberId={member.id} />
+                                        member.status === 'active' && member.coach_id ? (
+                                            <RemoveCoachDialog
+                                                orgSlug={slug}
+                                                memberId={member.id}
+                                                coachId={member.coach_id}
+                                                coachName={member.coach?.full_name ?? 'Coach'}
+                                                clientCount={clientCountByCoach[member.coach_id] ?? 0}
+                                                otherCoaches={active
+                                                    .filter(m => m.coach_id && m.coach_id !== member.coach_id)
+                                                    .map(m => ({ id: m.coach_id!, name: m.coach?.full_name ?? 'Coach' }))
+                                                }
+                                            />
+                                        ) : (
+                                            <RemoveCoachButton orgSlug={slug} memberId={member.id} label="Cancelar" />
+                                        )
                                     )}
                                 </div>
                             </div>

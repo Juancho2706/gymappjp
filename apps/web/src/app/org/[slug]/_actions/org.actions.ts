@@ -486,3 +486,67 @@ export async function createOrgAction(formData: FormData) {
     revalidatePath('/coach/settings')
     return { success: true, slug }
 }
+
+export async function bulkReassignClientsAction(
+    orgSlug: string,
+    fromCoachId: string,
+    toCoachId: string,
+    memberId: string,
+) {
+    const supabase = await createClient()
+    const admin = createServiceRoleClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado' }
+
+    const { data: org } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('slug', orgSlug)
+        .maybeSingle()
+    if (!org) return { error: 'Organización no encontrada' }
+
+    const { data: myMembership } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('org_id', org.id)
+        .eq('user_id', user.id)
+        .in('role', ['org_owner', 'org_admin'])
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!myMembership) return { error: 'Sin permisos de administrador' }
+
+    const { data: toMember } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('org_id', org.id)
+        .eq('coach_id', toCoachId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!toMember) return { error: 'Coach destino no pertenece a la organización' }
+
+    const { data: count, error: rpcError } = await admin.rpc('bulk_reassign_clients', {
+        p_from_coach_id: fromCoachId,
+        p_to_coach_id: toCoachId,
+        p_org_id: org.id,
+    })
+    if (rpcError) return { error: rpcError.message }
+
+    await admin.from('organization_members')
+        .update({ deleted_at: new Date().toISOString(), status: 'suspended' })
+        .eq('id', memberId)
+
+    await admin.from('org_audit_logs').insert({
+        org_id: org.id,
+        actor_id: user.id,
+        action: 'bulk_reassign_clients',
+        target_type: 'coach',
+        target_id: fromCoachId,
+        metadata: { to_coach_id: toCoachId, clients_moved: count ?? 0 },
+    })
+
+    revalidatePath(`/org/${orgSlug}/coaches`)
+    revalidatePath(`/org/${orgSlug}/clients`)
+    return { success: true, count: count ?? 0 }
+}
