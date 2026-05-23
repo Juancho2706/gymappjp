@@ -15,3 +15,7 @@ export function getRecommendedTier(clientCount: number): SubscriptionTier {
   const ordered: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
   return ordered.find((tier) => TIER_CONFIG[tier].maxClients >= clientCount) ?? 'scale'
 }
+
+export function canUseNutrition(tier: SubscriptionTier): boolean {
+  return tier === 'pro' || tier === 'elite' || tier === 'growth' || tier === 'scale'
+}

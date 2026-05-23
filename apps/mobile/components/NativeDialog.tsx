@@ -11,9 +11,10 @@ interface NativeDialogProps {
   onClose: () => void
   children: ReactNode
   maxWidth?: number
+  showClose?: boolean
 }
 
-export function NativeDialog({ open, title, onClose, children, maxWidth }: NativeDialogProps) {
+export function NativeDialog({ open, title, onClose, children, maxWidth, showClose = true }: NativeDialogProps) {
   const { theme } = useTheme()
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
@@ -28,9 +29,11 @@ export function NativeDialog({ open, title, onClose, children, maxWidth }: Nativ
             <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>
               {title}
             </Text>
-            <HapticPressable onPress={onClose} style={styles.close}>
-              <X size={18} color={theme.mutedForeground} />
-            </HapticPressable>
+            {showClose ? (
+              <HapticPressable onPress={onClose} style={styles.close}>
+                <X size={18} color={theme.mutedForeground} />
+              </HapticPressable>
+            ) : null}
           </View>
           {children}
         </MotiView>

@@ -11,6 +11,7 @@ export interface CoachProfile {
   currentPeriodEnd: string | null
   trialEndsAt: string | null
   maxClients: number
+  hasCoachLogo?: boolean
 }
 
 function normalizeSubscriptionTier(raw: string | null | undefined): CoachProfile['subscriptionTier'] {
@@ -25,7 +26,7 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
 
   const { data } = await supabase
     .from('coaches')
-    .select('id, full_name, brand_name, slug, primary_color, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients')
+    .select('id, full_name, brand_name, slug, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -41,5 +42,6 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
     currentPeriodEnd: data.current_period_end,
     trialEndsAt: data.trial_ends_at,
     maxClients: data.max_clients,
+    hasCoachLogo: Boolean(data.logo_url?.trim()),
   }
 }

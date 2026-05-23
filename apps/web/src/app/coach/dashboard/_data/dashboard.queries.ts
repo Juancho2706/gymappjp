@@ -3,10 +3,13 @@ import { getCachedDirectoryPulse } from '@/lib/coach/directory-pulse-cache'
 import { measureServer } from '@/lib/perf/measure-server'
 import { countCoachClients, findCoachById, findCoachClientSignupDates, findCoachRecentClients } from '@/infrastructure/db'
 import {
+    DashboardService,
     type AttentionFlag,
     mapDirectoryPulseToAdherenceStats,
     mapDirectoryPulseToNutritionStats,
+    type DirectoryPulseRow,
 } from '@/services/dashboard.service'
+import type { DbClient } from '@/infrastructure/db/interfaces'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
     SIN_CHECKIN_1M: 'Adherencia critica · sin check-in en 1 mes',
@@ -144,6 +147,38 @@ export async function getCoachDashboardDataV2(userId: string) {
     })
 }
 
+export async function getCoachDashboardDataV2WithClient(userId: string, supabase: DbClient) {
+    return measureServer('getCoachDashboardDataV2WithClient', async () => {
+        const pulse = await new DashboardService(supabase).getDirectoryPulse(userId)
+        const base = await getCoachDashboardDataInner(userId, supabase, pulse)
+
+        const mrrDeltaPct =
+            base.mrrPreviousMonth > 0
+                ? Math.round(((base.mrrCurrentMonth - base.mrrPreviousMonth) / base.mrrPreviousMonth) * 100)
+                : base.mrrCurrentMonth > 0
+                ? 100
+                : 0
+
+        const agenda = buildAgendaFromPulse(pulse, base.expiringPrograms)
+        const riskCount = base.topRiskClients.length
+
+        const kpi = {
+            mrrCurrentMonth: base.mrrCurrentMonth,
+            mrrPreviousMonth: base.mrrPreviousMonth,
+            mrrDeltaPct,
+            totalClients: base.totalClients,
+            riskCount,
+            avgAdherence: base.avgAdherence,
+            avgNutrition: base.avgNutrition,
+        }
+
+        const clientList = pulse.map((p) => ({ id: p.clientId, name: p.clientName }))
+        const clientPaymentSummary = buildClientPaymentSummary(base._rawClientPayments ?? [], pulse)
+
+        return { ...base, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
+    })
+}
+
 function buildAgendaFromPulse(
     pulse: Awaited<ReturnType<typeof getCachedDirectoryPulse>>,
     expiring: Array<{ id: string; clientId?: string; clientName?: string; daysLeft: number; name: string }>
@@ -198,8 +233,8 @@ function buildAgendaFromPulse(
     return items.slice(0, 8)
 }
 
-async function getCoachDashboardDataInner(userId: string) {
-    const supabase = await createClient()
+async function getCoachDashboardDataInner(userId: string, db?: DbClient, pulseOverride?: DirectoryPulseRow[]) {
+    const supabase = db ?? await createClient()
 
     const now = new Date()
     // Incluye filas antiguas que aún reparten ingresos al mes actual (period_months largos)
@@ -271,7 +306,7 @@ async function getCoachDashboardDataInner(userId: string) {
             .select('client_id, payment_date, amount, status, period_months')
             .eq('coach_id', userId)
             .gte('payment_date', clientPaymentsLookbackStart),
-        getCachedDirectoryPulse(userId),
+        pulseOverride ? Promise.resolve(pulseOverride) : getCachedDirectoryPulse(userId),
         findCoachById(supabase, userId),
     ])
 

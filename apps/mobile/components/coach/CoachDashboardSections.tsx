@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Linking, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import * as Clipboard from 'expo-clipboard'
 import {
   Activity,
   ArrowDownRight,
@@ -10,31 +11,48 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Copy,
   CreditCard,
+  ExternalLink,
   Layers,
+  LockKeyhole,
+  Minus,
+  Monitor,
+  Palette,
   Receipt,
   Sparkles,
+  Smartphone,
+  TrendingDown,
   TrendingUp,
   TriangleAlert,
   UserPlus,
   Users,
   Utensils,
+  XCircle,
+  Zap,
   type LucideIcon,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
   MobileAgendaItem,
+  MobileChartPoint,
+  MobileClientPaymentSummary,
+  MobileClientStats,
   MobileExpiringProgramItem,
   MobileKpiSummary,
   MobileRiskAlertItem,
 } from '../../lib/coach-dashboard'
 import type { CoachProfile } from '../../lib/coach'
 import { getRecommendedTier, TIER_CONFIG } from '../../lib/coach-tiers'
+import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
 import { Button } from '../Button'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { apiFetch, getApiBaseUrl } from '../../lib/api'
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -69,7 +87,7 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
 
   if (blocked) {
     return (
-      <MobileBanner tone="danger" icon={TriangleAlert}>
+      <MobileBanner tone="danger" icon={TriangleAlert} onPress={() => openCoachWebPath('/coach/subscription')}>
         <Text>Tu suscripcion esta cancelada. Reactiva para recuperar acceso.</Text>
       </MobileBanner>
     )
@@ -116,6 +134,10 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
   return null
 }
 
+function openCoachWebPath(path: string) {
+  Linking.openURL(`${getApiBaseUrl()}${path}`).catch(() => null)
+}
+
 export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachProfile; totalClients: number }) {
   return (
     <View style={styles.tierStack}>
@@ -133,7 +155,9 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
   const full = used >= max
 
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={() => openCoachWebPath('/coach/subscription')}
       style={[
         styles.tierBanner,
         {
@@ -162,7 +186,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
       <Text style={[styles.tierAction, { color: full ? '#F59E0B' : theme.primary, fontFamily: 'Inter_700Bold' }]}>
         {full ? 'Expandir limite' : 'Ver planes'}
       </Text>
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -172,7 +196,9 @@ function MobileGrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
   const pct = Math.round((Math.min(totalClients, max) / max) * 100)
 
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={() => openCoachWebPath('/coach/subscription?upgrade=growth')}
       style={[
         styles.tierBanner,
         {
@@ -193,7 +219,7 @@ function MobileGrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
       <Text style={[styles.tierAction, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
         Ver Growth
       </Text>
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -201,15 +227,19 @@ function MobileBanner({
   tone,
   icon: Icon,
   children,
+  onPress,
 }: {
   tone: 'info' | 'warn' | 'danger'
   icon: LucideIcon
   children: ReactNode
+  onPress?: () => void
 }) {
   const { theme } = useTheme()
   const toneColor = tone === 'danger' ? '#F43F5E' : tone === 'warn' ? '#F59E0B' : theme.primary
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.84}
+      onPress={onPress ?? (() => openCoachWebPath('/coach/subscription'))}
       style={[
         styles.banner,
         {
@@ -231,7 +261,7 @@ function MobileBanner({
           </Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -245,10 +275,718 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d`
 }
 
-export function MobileQuickActionsBar() {
+export function MobilePublicCodeRequiredModal({
+  inviteCode,
+  visible,
+  onConfirmed,
+}: {
+  inviteCode: string
+  visible: boolean
+  onConfirmed: () => void
+}) {
+  const { theme } = useTheme()
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const studentPath = `/c/${inviteCode}/login`
+  const studentUrl = `${getApiBaseUrl()}${studentPath}`
+
+  async function confirm() {
+    setPending(true)
+    setError(null)
+    try {
+      await apiFetch<{ ok: true }>('/api/mobile/coach/dashboard', {
+        method: 'POST',
+        authenticated: true,
+        body: { action: 'confirm_public_code' },
+      })
+      onConfirmed()
+    } catch {
+      setError('No se pudo confirmar el codigo. Intenta de nuevo.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function copyLink() {
+    setCopied(false)
+    await Clipboard.setStringAsync(studentUrl)
+    setCopied(true)
+  }
+
+  async function shareLink() {
+    await Share.share({
+      message: `Acceso alumnos EVA: ${studentUrl}`,
+      url: studentUrl,
+    })
+  }
+
+  return (
+    <NativeDialog open={visible} onClose={() => {}} title="Tu link de alumnos cambio" showClose={false}>
+      <View style={styles.publicCodeModal}>
+        <View style={styles.publicCodeIntro}>
+          <View style={[styles.publicCodeIcon, { backgroundColor: theme.primary + '1A' }]}>
+            <LockKeyhole size={22} color={theme.primary} />
+          </View>
+          <Text style={[styles.placeholderText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Este cambio mejora el acceso movil y evita errores al compartir links. Tu slug anterior seguira funcionando como respaldo.
+          </Text>
+        </View>
+
+        <View style={[styles.publicCodeBox, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.xl }]}>
+          <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+            NUEVO ACCESO ALUMNOS
+          </Text>
+          <View style={styles.publicCodeRow}>
+            <Text style={[styles.publicCodeValue, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>
+              {studentPath}
+            </Text>
+            <TouchableOpacity activeOpacity={0.78} onPress={copyLink} style={styles.publicCodeCopy}>
+              <Copy size={14} color={theme.primary} />
+              <Text style={[styles.publicCodeCopyText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+                {copied ? 'Copiado' : 'Copiar'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {error ? (
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+            {error}
+          </Text>
+        ) : null}
+
+        <View style={styles.publicCodeActions}>
+          <Button label="Compartir link" variant="secondary" onPress={shareLink} style={styles.formButton} />
+          <Button label={pending ? 'Confirmando...' : 'Entendido'} onPress={confirm} disabled={pending} style={styles.formButton} />
+        </View>
+      </View>
+    </NativeDialog>
+  )
+}
+
+const FREE_WELCOME_KEY = 'eva_free_welcome_seen'
+
+export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
+  const { theme } = useTheme()
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!enabled) return
+    let mounted = true
+    AsyncStorage.getItem(FREE_WELCOME_KEY).then((seen) => {
+      if (mounted && !seen) setOpen(true)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [enabled])
+
+  async function dismiss() {
+    await AsyncStorage.setItem(FREE_WELCOME_KEY, '1')
+    setOpen(false)
+  }
+
+  return (
+    <NativeDialog open={open} onClose={dismiss} maxWidth={390}>
+      <View style={styles.freeWelcome}>
+        <View style={[styles.freeWelcomeHero, { borderBottomColor: theme.border }]}>
+          <View style={[styles.freeWelcomeIcon, { borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.18)' }]}>
+            <Sparkles size={31} color="#10B981" />
+          </View>
+          <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            Bienvenido a EVA
+          </Text>
+          <Text style={[styles.freeWelcomeSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Tu plan gratuito esta activo. Puedes empezar ahora mismo.
+          </Text>
+        </View>
+
+        <View style={styles.freeWelcomeSection}>
+          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+            PRIMEROS PASOS
+          </Text>
+          <WelcomeStep icon={Users} color="#38BDF8" title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
+          <WelcomeStep icon={Zap} color="#8B5CF6" title="Crea tu primera rutina" subtitle="Constructor de programas sin limites" />
+          <WelcomeStep icon={Palette} color="#F59E0B" title="Personaliza tu app con Starter" subtitle="Tu logo y colores desde el siguiente plan" />
+        </View>
+
+        <View style={styles.freeWelcomeSection}>
+          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+            TU PLAN FREE INCLUYE
+          </Text>
+          <View style={styles.freePlanGrid}>
+            {[
+              { ok: true, text: '3 alumnos activos' },
+              { ok: true, text: 'Entrenos ilimitados' },
+              { ok: true, text: 'App para tus alumnos' },
+              { ok: true, text: 'Check-ins' },
+              { ok: false, text: 'Marca personalizada' },
+              { ok: false, text: 'Nutricion' },
+            ].map((item) => (
+              <View key={item.text} style={styles.freePlanItem}>
+                {item.ok ? (
+                  <CheckCircle2 size={14} color="#10B981" />
+                ) : (
+                  <XCircle size={14} color={theme.mutedForeground} opacity={0.45} />
+                )}
+                <Text
+                  style={[
+                    styles.freePlanText,
+                    {
+                      color: item.ok ? theme.mutedForeground : theme.mutedForeground,
+                      opacity: item.ok ? 1 : 0.55,
+                      fontFamily: theme.fontSans,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.text}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.freeWelcomeActions}>
+          <Button label="Empezar ahora" onPress={dismiss} full />
+          <Button
+            label="Ver todos los planes"
+            variant="ghost"
+            size="sm"
+            onPress={() => {
+              dismiss()
+              openCoachWebPath('/coach/subscription')
+            }}
+            full
+          />
+        </View>
+      </View>
+    </NativeDialog>
+  )
+}
+
+function WelcomeStep({
+  icon: Icon,
+  color,
+  title,
+  subtitle,
+}: {
+  icon: LucideIcon
+  color: string
+  title: string
+  subtitle: string
+}) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.welcomeStep}>
+      <View style={[styles.welcomeStepIcon, { backgroundColor: hexToRgba(color, 0.15) }]}>
+        <Icon size={16} color={color} />
+      </View>
+      <View style={styles.welcomeStepCopy}>
+        <Text style={[styles.welcomeStepTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+          {title}
+        </Text>
+        <Text style={[styles.welcomeStepSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          {subtitle}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
+type OnboardingStepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_checkin'
+type OnboardingGuideState = {
+  completed: Partial<Record<OnboardingStepKey, boolean>>
+  dismissed?: boolean
+  ahaMomentSent?: boolean
+}
+
+function onboardingGuideStorageKey(coachId: string) {
+  return `eva:coach-onboarding:v1:${coachId}`
+}
+
+function normalizeOnboardingGuide(raw: Record<string, unknown> | null | undefined): OnboardingGuideState {
+  if (!raw || typeof raw !== 'object') return { completed: {} }
+  const completedRaw = raw.completed
+  const completed: Partial<Record<OnboardingStepKey, boolean>> = {}
+  if (completedRaw && typeof completedRaw === 'object' && !Array.isArray(completedRaw)) {
+    const src = completedRaw as Record<string, unknown>
+    ;(['profile_branding', 'first_client', 'first_plan', 'first_checkin'] as OnboardingStepKey[]).forEach((key) => {
+      if (typeof src[key] === 'boolean') completed[key] = src[key] as boolean
+    })
+  }
+  return {
+    completed,
+    dismissed: raw.dismissed === true,
+    ahaMomentSent: raw.ahaMomentSent === true,
+  }
+}
+
+function stateHasOnboardingActivity(state: OnboardingGuideState) {
+  return Boolean(state.dismissed || state.ahaMomentSent || Object.keys(state.completed ?? {}).length > 0)
+}
+
+function postMobileOnboardingEvent(
+  stepKey: OnboardingStepKey,
+  eventType: 'step_completed' | 'step_reopened' | 'aha_moment' | 'guide_engagement',
+  metadata?: Record<string, string | number | boolean>
+) {
+  apiFetch<{ ok: true }>('/api/mobile/coach/dashboard', {
+    method: 'POST',
+    authenticated: true,
+    body: {
+      action: 'onboarding_event',
+      stepKey,
+      eventType,
+      metadata,
+    },
+  }).catch(() => null)
+}
+
+export function MobileOnboardingChecklist({
+  coach,
+  publicInviteCode,
+  initialOnboardingGuide,
+  totalClients,
+  activePlans,
+  hasStudentSignal30d,
+}: {
+  coach: CoachProfile
+  publicInviteCode?: string | null
+  initialOnboardingGuide: Record<string, unknown>
+  totalClients: number
+  activePlans: number
+  hasStudentSignal30d: boolean
+}) {
   const router = useRouter()
   const { theme } = useTheme()
-  const [modal, setModal] = useState<null | 'client' | 'program' | 'nutrition' | 'payment'>(null)
+  const glass = useGlassStyle()
+  const [ready, setReady] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const [manualCompleted, setManualCompleted] = useState<Partial<Record<OnboardingStepKey, boolean>>>({})
+  const previousCompletedRef = useRef<Partial<Record<OnboardingStepKey, boolean>>>({})
+  const ahaSentRef = useRef(false)
+  const isFree = coach.subscriptionTier === 'free'
+  const studentPath = `/c/${publicInviteCode || coach.slug}/login`
+
+  useEffect(() => {
+    let mounted = true
+    async function hydrate() {
+      const serverState = normalizeOnboardingGuide(initialOnboardingGuide)
+      const localRaw = await AsyncStorage.getItem(onboardingGuideStorageKey(coach.id)).catch(() => null)
+      const localState = localRaw ? normalizeOnboardingGuide(JSON.parse(localRaw) as Record<string, unknown>) : { completed: {} }
+      const source = stateHasOnboardingActivity(serverState) ? serverState : localState
+      if (!mounted) return
+      setManualCompleted(source.completed ?? {})
+      setDismissed(Boolean(source.dismissed))
+      previousCompletedRef.current = source.completed ?? {}
+      ahaSentRef.current = Boolean(source.ahaMomentSent)
+      setReady(true)
+    }
+    hydrate().catch(() => {
+      if (mounted) setReady(true)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [coach.id, initialOnboardingGuide])
+
+  const autoCompleted = {
+    profile_branding: Boolean(coach.hasCoachLogo),
+    first_client: totalClients > 0,
+    first_plan: activePlans > 0,
+    first_checkin: hasStudentSignal30d,
+  }
+
+  const completed: Record<OnboardingStepKey, boolean> = {
+    profile_branding:
+      manualCompleted.profile_branding === false
+        ? false
+        : autoCompleted.profile_branding || manualCompleted.profile_branding === true,
+    first_client: autoCompleted.first_client || manualCompleted.first_client === true,
+    first_plan: autoCompleted.first_plan || manualCompleted.first_plan === true,
+    first_checkin: autoCompleted.first_checkin || manualCompleted.first_checkin === true,
+  }
+  const completedCount = Object.values(completed).filter(Boolean).length
+  const progressPct = Math.round((completedCount / 4) * 100)
+  const allDone = completedCount === 4
+
+  useEffect(() => {
+    if (!ready) return
+    const previous = previousCompletedRef.current
+    ;(['profile_branding', 'first_client', 'first_plan', 'first_checkin'] as OnboardingStepKey[]).forEach((key) => {
+      const beforeDone = Boolean(previous[key])
+      const nowDone = Boolean(completed[key])
+      if (!beforeDone && nowDone) {
+        postMobileOnboardingEvent(key, 'step_completed', { progressPct })
+      } else if (beforeDone && !nowDone) {
+        postMobileOnboardingEvent(key, 'step_reopened', { progressPct })
+      }
+    })
+
+    if (allDone && !ahaSentRef.current) {
+      ahaSentRef.current = true
+      postMobileOnboardingEvent('first_checkin', 'aha_moment', { progressPct: 100 })
+      persist({ completed: manualCompleted, dismissed, ahaMomentSent: true })
+    }
+
+    previousCompletedRef.current = completed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, progressPct, allDone, completed.profile_branding, completed.first_client, completed.first_plan, completed.first_checkin])
+
+  async function persist(next: OnboardingGuideState) {
+    await AsyncStorage.setItem(onboardingGuideStorageKey(coach.id), JSON.stringify(next)).catch(() => null)
+    apiFetch<{ ok: true }>('/api/mobile/coach/dashboard', {
+      method: 'POST',
+      authenticated: true,
+      body: { action: 'persist_onboarding_guide', guide: next },
+    }).catch(() => null)
+  }
+
+  function updateManual(nextCompleted: Partial<Record<OnboardingStepKey, boolean>>, nextDismissed = dismissed) {
+    setManualCompleted(nextCompleted)
+    setDismissed(nextDismissed)
+    persist({
+      completed: nextCompleted,
+      dismissed: nextDismissed,
+      ahaMomentSent: allDone || progressPct === 100,
+    })
+  }
+
+  function toggleBrandStep() {
+    const autoBranding = Boolean(coach.hasCoachLogo)
+    const currentlyDone =
+      manualCompleted.profile_branding === false
+        ? false
+        : autoBranding || manualCompleted.profile_branding === true
+    updateManual({
+      ...manualCompleted,
+      profile_branding: currentlyDone ? false : true,
+    })
+  }
+
+  function dismiss() {
+    postMobileOnboardingEvent('profile_branding', 'guide_engagement', {
+      widget: 'onboarding_checklist',
+      action: 'dismiss_confirm',
+      progress_pct: progressPct,
+      all_done: allDone,
+    })
+    persist({ completed: manualCompleted, dismissed: true, ahaMomentSent: allDone })
+    setDismissed(true)
+  }
+
+  function resumeGuide() {
+    persist({ completed: manualCompleted, dismissed: false, ahaMomentSent: allDone })
+    setDismissed(false)
+  }
+
+  if (!ready) {
+    return (
+      <View style={[styles.onboardingSkeleton, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius['2xl'] }]} />
+    )
+  }
+
+  if (dismissed && allDone) return null
+
+  if (dismissed && !allDone) {
+    return (
+      <View style={[styles.onboardingResume, { borderColor: hexToRgba(theme.primary, 0.25), backgroundColor: hexToRgba(theme.primary, 0.06), borderRadius: theme.radius['2xl'] }]}>
+        <Text style={[styles.onboardingResumeText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+          Sigues con pasos pendientes en tu guia de inicio.
+        </Text>
+        <Button label="Continuar guia" size="sm" onPress={resumeGuide} />
+      </View>
+    )
+  }
+
+  return (
+    <View style={[styles.onboardingCard, glass, { borderRadius: theme.radius['2xl'] }]}>
+      <View style={styles.onboardingHeader}>
+        <View style={styles.onboardingHeaderCopy}>
+          <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+            TU RUTA EN EVA
+          </Text>
+          <Text style={[styles.onboardingTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            Pon tu estudio en marcha
+          </Text>
+          <Text style={[styles.onboardingDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Cuatro pasos para cerrar el circuito: marca, alumno, plan y senal de uso.
+          </Text>
+        </View>
+        <View style={styles.onboardingProgressBox}>
+          <Text style={[styles.onboardingProgressValue, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            {progressPct}%
+          </Text>
+          <Text style={[styles.onboardingProgressLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+            COMPLETADO
+          </Text>
+          <TouchableOpacity activeOpacity={0.8} onPress={dismiss} style={styles.skipGuideButton}>
+            <XCircle size={13} color="#FFFFFF" />
+            <Text style={styles.skipGuideText}>Saltar guia</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {isFree ? <MobileOnboardingFreePlan /> : null}
+      {!allDone ? <MobileOnboardingLoopStrip /> : null}
+      <MobileOnboardingTwinPanels
+        studentPath={studentPath}
+        onOpenPreview={() => router.push('/coach/(tabs)/perfil')}
+        onOpenStudentApp={() => Linking.openURL(`${getApiBaseUrl()}${studentPath}`).catch(() => null)}
+      />
+
+      <View style={[styles.onboardingTrack, { backgroundColor: theme.muted }]}>
+        <View style={[styles.onboardingFill, { width: `${progressPct}%`, backgroundColor: theme.primary }]} />
+      </View>
+
+      {!allDone ? <MobileOnboardingCarousel completed={completed} /> : null}
+
+      <View style={styles.onboardingSteps}>
+        <MobileOnboardingStepBlock
+          title="1. Tu marca en la app del alumno"
+          description={isFree
+            ? 'Disponible desde Starter. Puedes marcarlo como visto o subir de plan para personalizar logo, color y mensajes.'
+            : 'Logo, color y mensajes: lo que ves en Mi Marca es lo que ellos ven al instalar tu espacio.'}
+          done={completed.profile_branding}
+          actions={isFree ? (
+            <>
+              <Button label="Desbloquear con Starter" size="sm" onPress={() => openCoachWebPath('/coach/subscription')} style={styles.stepButton} />
+              <Button label={completed.profile_branding ? 'Desmarcar paso' : 'Marcar como visto'} variant="ghost" size="sm" onPress={toggleBrandStep} style={styles.stepButton} />
+            </>
+          ) : (
+            <>
+              <Button label="Ir a Mi Marca" size="sm" onPress={() => router.push('/coach/(tabs)/perfil')} style={styles.stepButton} />
+              <Button label={completed.profile_branding ? 'Desmarcar paso' : 'Ya lo deje listo'} variant="ghost" size="sm" onPress={toggleBrandStep} style={styles.stepButton} />
+            </>
+          )}
+        />
+        <MobileOnboardingStepBlock
+          title="2. Primer alumno"
+          description="Crea o importa al menos un perfil para poder asignarle un plan."
+          done={completed.first_client}
+          actions={<Button label="Ir a alumnos" variant="secondary" size="sm" onPress={() => router.push('/coach/(tabs)/clientes')} style={styles.stepButton} />}
+        />
+        <MobileOnboardingStepBlock
+          title="3. Primer plan asignado"
+          description="Desde programas o el constructor: activa un plan para ese alumno."
+          done={completed.first_plan}
+          actions={<Button label="Abrir constructor" variant="secondary" size="sm" onPress={() => router.push('/coach/(tabs)/builder')} style={styles.stepButton} />}
+        />
+        <MobileOnboardingStepBlock
+          title="4. Tu alumno ya uso la app"
+          description="Se marca listo si en los ultimos 30 dias hay al menos un check-in o un registro de entreno."
+          done={completed.first_checkin}
+          actions={<Button label="Ver alumnos" variant="secondary" size="sm" onPress={() => router.push('/coach/(tabs)/clientes')} style={styles.stepButton} />}
+        />
+      </View>
+
+      <MobileNutritionTierBlock subscriptionTier={coach.subscriptionTier} />
+
+      {allDone ? (
+        <View style={[styles.activationReady, { borderColor: 'rgba(16,185,129,0.32)', backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+          <Sparkles size={17} color="#10B981" />
+          <View style={styles.activationCopy}>
+            <Text style={[styles.activationTitle, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
+              Activacion lista
+            </Text>
+            <Text style={[styles.activationText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Completaste el circuito minimo: marca, alumno, plan y senal de uso.
+            </Text>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+function MobileOnboardingFreePlan() {
+  const { theme } = useTheme()
+  const items = [
+    { ok: true, text: '3 alumnos activos' },
+    { ok: true, text: 'Entrenos ilimitados' },
+    { ok: true, text: 'App para tus alumnos' },
+    { ok: true, text: 'Check-ins' },
+    { ok: false, text: 'Marca personalizada' },
+    { ok: false, text: 'Nutricion' },
+  ]
+  return (
+    <View style={[styles.onboardingFreeBox, { borderColor: hexToRgba(theme.primary, 0.2), backgroundColor: hexToRgba(theme.primary, 0.06), borderRadius: theme.radius.xl }]}>
+      <Text style={[styles.onboardingFreeTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        Plan Free - lo que tienes incluido:
+      </Text>
+      <View style={styles.freePlanGrid}>
+        {items.map((item) => (
+          <View key={item.text} style={styles.freePlanItem}>
+            {item.ok ? <CheckCircle2 size={14} color="#10B981" /> : <XCircle size={14} color={theme.mutedForeground} opacity={0.45} />}
+            <Text style={[styles.freePlanText, { color: theme.mutedForeground, opacity: item.ok ? 1 : 0.6, fontFamily: theme.fontSans }]} numberOfLines={1}>
+              {item.text}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function MobileOnboardingLoopStrip() {
+  const { theme } = useTheme()
+  return (
+    <View style={[styles.loopStrip, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius.xl }]}>
+      {[
+        { icon: Palette, label: 'Marca' },
+        { icon: Users, label: 'Alumno' },
+        { icon: Layers, label: 'Plan' },
+        { icon: Activity, label: 'Uso' },
+      ].map((item, index) => {
+        const Icon = item.icon
+        return (
+          <View key={item.label} style={styles.loopStep}>
+            <View style={[styles.loopIcon, { backgroundColor: index === 0 ? hexToRgba(theme.primary, 0.14) : theme.card }]}>
+              <Icon size={15} color={index === 0 ? theme.primary : theme.mutedForeground} />
+            </View>
+            <Text style={[styles.loopLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{item.label}</Text>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+function MobileOnboardingTwinPanels({
+  studentPath,
+  onOpenPreview,
+  onOpenStudentApp,
+}: {
+  studentPath: string
+  onOpenPreview: () => void
+  onOpenStudentApp: () => void
+}) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.twinPanels}>
+      <View style={[styles.twinPanel, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius.xl }]}>
+        <View style={styles.twinTitleRow}>
+          <Monitor size={15} color={theme.primary} />
+          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Tu panel</Text>
+        </View>
+        <Text style={[styles.twinText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Sumas alumnos, armas programas y asignas planes desde tu app de coach.
+        </Text>
+      </View>
+      <View style={[styles.twinPanel, { borderColor: theme.border, backgroundColor: hexToRgba(theme.primary, 0.08), borderRadius: theme.radius.xl }]}>
+        <View style={styles.twinTitleRow}>
+          <Smartphone size={15} color={theme.primary} />
+          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Tu alumno</Text>
+        </View>
+        <Text style={[styles.twinText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Entra a {studentPath}, ve su plan y registra entrenos o check-ins.
+        </Text>
+        <View style={styles.twinActions}>
+          <Button label="Vista previa" variant="secondary" size="sm" onPress={onOpenPreview} style={styles.twinButton} />
+          <Button label="Abrir app" variant="outline" size="sm" rightIcon={ExternalLink} onPress={onOpenStudentApp} style={styles.twinButton} />
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function MobileOnboardingCarousel({ completed }: { completed: Record<OnboardingStepKey, boolean> }) {
+  const { theme } = useTheme()
+  const steps: Array<{ key: OnboardingStepKey; title: string; icon: LucideIcon }> = [
+    { key: 'profile_branding', title: 'Marca', icon: Palette },
+    { key: 'first_client', title: 'Alumno', icon: Users },
+    { key: 'first_plan', title: 'Plan', icon: Layers },
+    { key: 'first_checkin', title: 'Uso', icon: Activity },
+  ]
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.onboardingCarousel}>
+      {steps.map((step, index) => {
+        const Icon = step.icon
+        const done = completed[step.key]
+        return (
+          <View key={step.key} style={[styles.carouselCard, { borderColor: done ? 'rgba(16,185,129,0.36)' : theme.border, backgroundColor: done ? 'rgba(16,185,129,0.1)' : theme.muted, borderRadius: theme.radius.xl }]}>
+            <View style={styles.carouselTop}>
+              <Icon size={16} color={done ? '#10B981' : theme.primary} />
+              {done ? <CheckCircle2 size={15} color="#10B981" /> : null}
+            </View>
+            <Text style={[styles.carouselStep, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>PASO {index + 1}</Text>
+            <Text style={[styles.carouselTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{step.title}</Text>
+          </View>
+        )
+      })}
+    </ScrollView>
+  )
+}
+
+function MobileOnboardingStepBlock({
+  title,
+  description,
+  done,
+  actions,
+}: {
+  title: string
+  description: string
+  done: boolean
+  actions: ReactNode
+}) {
+  const { theme } = useTheme()
+  return (
+    <View style={[styles.stepBlock, { borderColor: theme.border, backgroundColor: theme.card === '#FFFFFF' ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.04)', borderRadius: theme.radius.xl }]}>
+      <View style={styles.stepTitleRow}>
+        {done ? <CheckCircle2 size={17} color="#10B981" /> : <View style={[styles.pendingDot, { borderColor: theme.mutedForeground }]} />}
+        <Text style={[styles.stepTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{title}</Text>
+      </View>
+      <Text style={[styles.stepDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        {description}
+      </Text>
+      <View style={styles.stepActions}>{actions}</View>
+    </View>
+  )
+}
+
+function MobileNutritionTierBlock({ subscriptionTier }: { subscriptionTier: CoachProfile['subscriptionTier'] }) {
+  const { theme } = useTheme()
+  const router = useRouter()
+  const enabled = canUseNutrition(subscriptionTier)
+  return (
+    <View style={[styles.nutritionBlock, { borderColor: enabled ? 'rgba(16,185,129,0.24)' : theme.border, backgroundColor: enabled ? 'rgba(16,185,129,0.08)' : theme.muted, borderRadius: theme.radius.xl }]}>
+      <Text style={[styles.eyebrow, { color: enabled ? '#10B981' : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+        NUTRICION {enabled ? '(OPCIONAL)' : ''}
+      </Text>
+      <Text style={[styles.nutritionTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        {enabled ? 'Cuando quieras, sigue esta ruta' : 'Planes de nutricion en Pro o superior'}
+      </Text>
+      <Text style={[styles.nutritionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        {enabled
+          ? 'Tu plan ya incluye nutricion. Puedes crear plantillas, catalogo y asignar planes nutricionales.'
+          : 'Tu plan actual incluye entrenos. Al subir de plan desbloqueas plantillas, catalogo y asignacion nutricional.'}
+      </Text>
+      <Button
+        label={enabled ? 'Abrir nutricion' : 'Ver planes y upgrade'}
+        variant="secondary"
+        size="sm"
+        onPress={() => enabled ? router.push('/coach/(tabs)/nutricion') : openCoachWebPath('/coach/subscription')}
+        style={styles.nutritionButton}
+      />
+    </View>
+  )
+}
+
+type QuickActionClient = { id: string; name: string }
+
+export function MobileQuickActionsBar({
+  clients,
+  onPaymentCreated,
+  onClientCreated,
+}: {
+  clients: QuickActionClient[]
+  onPaymentCreated: () => void
+  onClientCreated: () => void
+}) {
+  const router = useRouter()
+  const [modal, setModal] = useState<null | 'client' | 'payment'>(null)
 
   return (
     <>
@@ -261,21 +999,354 @@ export function MobileQuickActionsBar() {
 
       <NativeDialog
         open={modal != null}
-        title={modal === 'payment' ? 'Registrar pago' : modal === 'client' ? 'Agregar alumno' : 'Accion no disponible'}
+        title={modal === 'payment' ? 'Registrar pago' : 'Agregar alumno'}
         onClose={() => setModal(null)}
       >
-        <View style={styles.placeholderDialog}>
-          <Text style={[styles.placeholderText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            {modal === 'client'
-              ? 'La accion visual ya esta en mobile. El alta real de alumno requiere el endpoint seguro equivalente al server action web.'
-              : modal === 'payment'
-                ? 'El registro rapido de pago se portara en la capa de modales/sheets para mantener validacion y refresco igual que web.'
-                : 'Esta accion se conectara cuando exista la pantalla nativa correspondiente.'}
-          </Text>
-          <Button label="Entendido" size="md" onPress={() => setModal(null)} full />
-        </View>
+        {modal === 'payment' ? (
+          <QuickAddPaymentForm
+            clients={clients}
+            onDone={() => {
+              setModal(null)
+              onPaymentCreated()
+            }}
+            onCancel={() => setModal(null)}
+          />
+        ) : (
+          <QuickCreateClientForm
+            onDone={() => {
+              setModal(null)
+              onClientCreated()
+            }}
+            onCancel={() => setModal(null)}
+          />
+        )}
       </NativeDialog>
     </>
+  )
+}
+
+type CreateClientResponse = {
+  ok: true
+  clientName: string
+  loginUrl: string
+  newClientPhone: string | null
+}
+
+function generateTempPassword(): string {
+  const n = Math.floor(100000 + Math.random() * 900000)
+  return `Eva${n}!`
+}
+
+function whatsappUrl(phone: string, message: string) {
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return null
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+}
+
+function QuickCreateClientForm({
+  onDone,
+  onCancel,
+}: {
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const { theme } = useTheme()
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [subscriptionStartDate, setSubscriptionStartDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [tempPassword, setTempPassword] = useState(generateTempPassword)
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [created, setCreated] = useState<CreateClientResponse | null>(null)
+
+  async function submit() {
+    setError(null)
+    const name = fullName.trim()
+    const mail = email.trim().toLowerCase()
+    const pass = tempPassword.trim()
+
+    if (name.length < 2) {
+      setError('Indica el nombre del alumno.')
+      return
+    }
+    if (!mail.includes('@')) {
+      setError('Indica un email valido.')
+      return
+    }
+    if (pass.length < 8) {
+      setError('La contrasena temporal debe tener al menos 8 caracteres.')
+      return
+    }
+    if (!ageConfirmed) {
+      setError('Confirma edad minima o consentimiento del tutor.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const result = await apiFetch<CreateClientResponse>('/api/mobile/coach/clients', {
+        method: 'POST',
+        authenticated: true,
+        body: {
+          fullName: name,
+          email: mail,
+          phone: phone.trim(),
+          subscriptionStartDate,
+          tempPassword: pass,
+          ageConfirmed,
+        },
+      })
+      setCreated(result)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo crear el alumno.'
+      setError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (created) {
+    const createdClient = created
+    const accessMessage = `Hola ${createdClient.clientName}! Soy tu coach. Aqui esta tu link para acceder a tu plan: ${createdClient.loginUrl}`
+    const waUrl = createdClient.newClientPhone ? whatsappUrl(createdClient.newClientPhone, accessMessage) : null
+    async function shareAccess() {
+      if (waUrl) {
+        await Linking.openURL(waUrl).catch(() => Share.share({ message: accessMessage, url: createdClient.loginUrl }))
+        return
+      }
+      await Share.share({ message: accessMessage, url: createdClient.loginUrl })
+    }
+
+    return (
+      <View style={styles.paymentForm}>
+        <View style={[styles.successBox, { borderColor: 'rgba(16,185,129,0.35)', backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+          <CheckCircle2 size={19} color="#10B981" />
+          <View style={styles.successCopy}>
+            <Text style={[styles.successTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+              {createdClient.clientName} creado
+            </Text>
+            <Text style={[styles.successText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>
+              Email enviado. Acceso: {createdClient.loginUrl}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.formActions}>
+          <Button label="Cerrar" variant="secondary" onPress={onDone} style={styles.formButton} />
+          <Button label={waUrl ? 'Enviar WhatsApp' : 'Compartir link'} onPress={shareAccess} style={styles.formButton} />
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.paymentForm}>
+      {error ? (
+        <View style={[styles.formError, { borderColor: theme.destructive, backgroundColor: theme.destructive + '14' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+            {error}
+          </Text>
+        </View>
+      ) : null}
+
+      <FormInput label="Nombre" value={fullName} onChangeText={setFullName} placeholder="Nombre completo" />
+      <FormInput label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="alumno@email.com" />
+      <FormInput label="Telefono" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="Opcional" />
+      <FormInput label="Inicio suscripcion" value={subscriptionStartDate} onChangeText={setSubscriptionStartDate} placeholder="YYYY-MM-DD" />
+      <FormInput label="Contrasena temporal" value={tempPassword} onChangeText={setTempPassword} placeholder="Minimo 8 caracteres" />
+
+      <TouchableOpacity
+        activeOpacity={0.82}
+        onPress={() => setAgeConfirmed((value) => !value)}
+        style={[styles.checkboxRow, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}
+      >
+        <View
+          style={[
+            styles.checkboxBox,
+            {
+              borderColor: ageConfirmed ? theme.primary : theme.border,
+              backgroundColor: ageConfirmed ? theme.primary : 'transparent',
+            },
+          ]}
+        >
+          {ageConfirmed ? <CheckCircle2 size={14} color="#FFFFFF" strokeWidth={2.6} /> : null}
+        </View>
+        <Text style={[styles.checkboxText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Alumno 14+ o con consentimiento de tutor legal.
+        </Text>
+      </TouchableOpacity>
+
+      <View style={styles.formActions}>
+        <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={saving} style={styles.formButton} />
+        <Button label={saving ? 'Creando...' : 'Crear alumno'} onPress={submit} disabled={saving} style={styles.formButton} />
+      </View>
+    </View>
+  )
+}
+
+function QuickAddPaymentForm({
+  clients,
+  onDone,
+  onCancel,
+}: {
+  clients: QuickActionClient[]
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const { theme } = useTheme()
+  const [clientId, setClientId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [description, setDescription] = useState('')
+  const [periodMonths, setPeriodMonths] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    setError(null)
+    if (!clientId) {
+      setError('Selecciona un alumno.')
+      return
+    }
+    const amt = Math.round(Number(String(amount).replace(/\s/g, '')))
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setError('Indica un monto valido.')
+      return
+    }
+    if (!paymentDate) {
+      setError('Indica la fecha del pago.')
+      return
+    }
+    const desc = description.trim()
+    if (!desc) {
+      setError('Indica un concepto.')
+      return
+    }
+    const pm = periodMonths.trim() ? Number(periodMonths) : null
+    if (periodMonths.trim() !== '' && (!Number.isFinite(pm) || (pm ?? 0) < 1)) {
+      setError('Periodo en meses debe ser 1 o mayor.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      await apiFetch<{ ok: true }>('/api/mobile/coach/payments', {
+        method: 'POST',
+        authenticated: true,
+        body: {
+          clientId,
+          amount: amt,
+          paymentDate,
+          serviceDescription: desc,
+          periodMonths: pm,
+        },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo registrar el pago. Intenta de nuevo.'
+      setError(message)
+      setSaving(false)
+      return
+    }
+    setSaving(false)
+
+    onDone()
+  }
+
+  return (
+    <View style={styles.paymentForm}>
+      {error ? (
+        <View style={[styles.formError, { borderColor: theme.destructive, backgroundColor: theme.destructive + '14' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+            {error}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.formField}>
+        <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Alumno</Text>
+        <ScrollView style={[styles.clientPicker, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]} nestedScrollEnabled>
+          {clients.length === 0 ? (
+            <Text style={[styles.clientEmpty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Sin alumnos activos.
+            </Text>
+          ) : (
+            clients.map((client) => {
+              const active = clientId === client.id
+              return (
+                <TouchableOpacity
+                  key={client.id}
+                  activeOpacity={0.78}
+                  onPress={() => setClientId(client.id)}
+                  style={[
+                    styles.clientOption,
+                    active && { backgroundColor: theme.primary + '1A' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.clientOptionText,
+                      { color: active ? theme.primary : theme.foreground, fontFamily: 'Inter_600SemiBold' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {client.name}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })
+          )}
+        </ScrollView>
+      </View>
+
+      <FormInput label="Monto" value={amount} onChangeText={setAmount} keyboardType="number-pad" placeholder="CLP" />
+      <FormInput label="Fecha" value={paymentDate} onChangeText={setPaymentDate} placeholder="YYYY-MM-DD" />
+      <FormInput label="Concepto" value={description} onChangeText={setDescription} placeholder="Ej. Mensualidad mayo" />
+      <FormInput label="Meses" value={periodMonths} onChangeText={setPeriodMonths} keyboardType="number-pad" placeholder="Opcional" />
+
+      <View style={styles.formActions}>
+        <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={saving} style={styles.formButton} />
+        <Button label={saving ? 'Guardando...' : 'Confirmar'} onPress={submit} disabled={saving || clients.length === 0} style={styles.formButton} />
+      </View>
+    </View>
+  )
+}
+
+function FormInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+}: {
+  label: string
+  value: string
+  onChangeText: (value: string) => void
+  placeholder?: string
+  keyboardType?: 'default' | 'number-pad' | 'email-address' | 'phone-pad'
+}) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.formField}>
+      <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.mutedForeground}
+        keyboardType={keyboardType}
+        style={[
+          styles.formInput,
+          {
+            color: theme.foreground,
+            backgroundColor: theme.secondary,
+            borderColor: theme.border,
+            borderRadius: theme.radius.lg,
+            fontFamily: theme.fontSans,
+          },
+        ]}
+      />
+    </View>
   )
 }
 
@@ -367,7 +1438,15 @@ export function MobileGreetingHeader({ coachName, pendingCount }: { coachName: s
   )
 }
 
-export function MobileKpiStrip({ kpi }: { kpi: MobileKpiSummary }) {
+export function MobileKpiStrip({
+  kpi,
+  onMrrPress,
+  onAdherencePress,
+}: {
+  kpi: MobileKpiSummary
+  onMrrPress?: () => void
+  onAdherencePress?: () => void
+}) {
   return (
     <View style={styles.kpiGrid}>
       <MobileKpiTile
@@ -376,6 +1455,7 @@ export function MobileKpiStrip({ kpi }: { kpi: MobileKpiSummary }) {
         hint={`Mes anterior: ${formatCurrency(kpi.mrrPreviousMonth)}`}
         icon={TrendingUp}
         deltaPct={kpi.mrrDeltaPct}
+        onPress={onMrrPress}
       />
       <MobileKpiTile label="Alumnos activos" value={String(kpi.totalClients)} icon={Users} />
       <MobileKpiTile
@@ -389,6 +1469,7 @@ export function MobileKpiStrip({ kpi }: { kpi: MobileKpiSummary }) {
         value={`${kpi.avgAdherence}%`}
         hint={`Nutricion: ${kpi.avgNutrition}%`}
         icon={Activity}
+        onPress={onAdherencePress}
       />
     </View>
   )
@@ -400,24 +1481,26 @@ function MobileKpiTile({
   hint,
   icon: Icon,
   deltaPct,
+  onPress,
 }: {
   label: string
   value: string
   hint?: string
   icon: LucideIcon
   deltaPct?: number
+  onPress?: () => void
 }) {
   const { theme } = useTheme()
   const glass = useGlassStyle()
   const hasDelta = typeof deltaPct === 'number'
   const up = hasDelta && deltaPct >= 0
 
-  return (
+  const body = (
     <MotiView
       from={{ opacity: 0, translateY: 14 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 320 }}
-      style={[styles.kpiCard, glass, { borderRadius: theme.radius['2xl'] }]}
+      style={[styles.kpiCard, glass, { borderRadius: theme.radius['2xl'], width: onPress ? '100%' : '48.5%' }]}
     >
       <View style={styles.kpiTop}>
         <Text style={[styles.kpiLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]} numberOfLines={2}>
@@ -446,6 +1529,14 @@ function MobileKpiTile({
         </Text>
       ) : null}
     </MotiView>
+  )
+
+  if (!onPress) return body
+
+  return (
+    <TouchableOpacity activeOpacity={0.84} onPress={onPress} style={styles.kpiTouch}>
+      {body}
+    </TouchableOpacity>
   )
 }
 
@@ -501,18 +1592,134 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
   )
 }
 
-export function MobileNextBestAction({ hasRisk, hasAgenda }: { hasRisk: boolean; hasAgenda: boolean }) {
+type MobileNextAction = {
+  id: string
+  title: string
+  description: string
+  ctaLabel: string
+  tone: 'info' | 'warn' | 'positive'
+}
+
+function resolveMobileNextBestAction({
+  kpi,
+  topRiskClients,
+  agenda,
+  expiringPrograms,
+}: {
+  kpi: MobileKpiSummary
+  topRiskClients: MobileRiskAlertItem[]
+  agenda: MobileAgendaItem[]
+  expiringPrograms: MobileExpiringProgramItem[]
+}): MobileNextAction {
+  const overdueExpiring = expiringPrograms.filter((program) => program.daysLeft <= 0)
+  if (overdueExpiring.length > 0) {
+    return {
+      id: 'programas-vencidos',
+      title: `${overdueExpiring.length} programa${overdueExpiring.length === 1 ? '' : 's'} vencido${overdueExpiring.length === 1 ? '' : 's'}`,
+      description: 'Renueva para que tus alumnos no pierdan continuidad.',
+      ctaLabel: 'Revisar programas',
+      tone: 'warn',
+    }
+  }
+
+  if (topRiskClients.length >= 3) {
+    return {
+      id: 'focus-list',
+      title: `${topRiskClients.length} alumnos en riesgo`,
+      description: 'Prioriza a quienes estan sin check-in o sin ejercicio esta semana.',
+      ctaLabel: 'Ver focus list',
+      tone: 'warn',
+    }
+  }
+
+  if (kpi.avgAdherence < 60) {
+    return {
+      id: 'adherencia-baja',
+      title: 'Adherencia promedio < 60%',
+      description: 'Revisa patrones de abandono y ajusta cargas o frecuencia.',
+      ctaLabel: 'Ver detalle',
+      tone: 'warn',
+    }
+  }
+
+  if (kpi.mrrDeltaPct <= -10) {
+    return {
+      id: 'mrr-cayendo',
+      title: `MRR ${kpi.mrrDeltaPct}% vs mes anterior`,
+      description: 'Activa un programa de referidos o revisa renovaciones.',
+      ctaLabel: 'Ir a facturacion',
+      tone: 'warn',
+    }
+  }
+
+  if (agenda.length > 0) {
+    return {
+      id: 'agenda-hoy',
+      title: `${agenda.length} pendientes hoy`,
+      description: 'Cierra los check-ins y recordatorios pendientes.',
+      ctaLabel: 'Ver agenda',
+      tone: 'info',
+    }
+  }
+
+  return {
+    id: 'todo-ok',
+    title: 'Todo bajo control',
+    description: 'Buen momento para planificar la semana o revisar progresos.',
+    ctaLabel: 'Ver alumnos',
+    tone: 'positive',
+  }
+}
+
+export function MobileNextBestAction({
+  kpi,
+  topRiskClients,
+  agenda,
+  expiringPrograms,
+  onAdherencePress,
+  onRevenuePress,
+}: {
+  kpi: MobileKpiSummary
+  topRiskClients: MobileRiskAlertItem[]
+  agenda: MobileAgendaItem[]
+  expiringPrograms: MobileExpiringProgramItem[]
+  onAdherencePress: () => void
+  onRevenuePress: () => void
+}) {
+  const router = useRouter()
   const { theme } = useTheme()
   const glass = useGlassStyle()
-  const title = hasRisk ? 'Revisa alumnos en riesgo' : hasAgenda ? 'Cierra pendientes de hoy' : 'Planifica el siguiente bloque'
-  const description = hasRisk
-    ? 'Prioriza el primer alumno con adherencia critica y deja una accion concreta.'
-    : hasAgenda
-      ? 'Tienes tareas abiertas para mantener continuidad operativa.'
-      : 'Buen momento para preparar programas, nutricion o seguimiento.'
+  const action = resolveMobileNextBestAction({ kpi, topRiskClients, agenda, expiringPrograms })
+  const toneColor = action.tone === 'warn' ? '#F59E0B' : action.tone === 'positive' ? '#10B981' : theme.primary
+
+  function handlePress() {
+    if (action.id === 'programas-vencidos') {
+      router.push('/coach/(tabs)/builder')
+      return
+    }
+    if (action.id === 'focus-list') {
+      const first = topRiskClients[0]
+      if (first) router.push(`/coach/cliente/${first.clientId}`)
+      return
+    }
+    if (action.id === 'adherencia-baja') {
+      onAdherencePress()
+      return
+    }
+    if (action.id === 'mrr-cayendo') {
+      onRevenuePress()
+      return
+    }
+    if (action.id === 'agenda-hoy') {
+      const first = agenda[0]
+      if (first) router.push(`/coach/cliente/${first.clientId}`)
+      return
+    }
+    router.push('/coach/(tabs)/clientes')
+  }
 
   return (
-    <View style={[styles.nextCard, glass, { borderRadius: theme.radius['2xl'], backgroundColor: hexToRgba(theme.primary, 0.08) }]}>
+    <View style={[styles.nextCard, glass, { borderRadius: theme.radius['2xl'], backgroundColor: hexToRgba(toneColor, 0.08) }]}>
       <View style={styles.panelTitleRow}>
         <Sparkles size={17} color={theme.primary} />
         <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
@@ -520,15 +1727,15 @@ export function MobileNextBestAction({ hasRisk, hasAgenda }: { hasRisk: boolean;
         </Text>
       </View>
       <Text style={[styles.nextTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-        {title}
+        {action.title}
       </Text>
       <Text style={[styles.nextDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {description}
+        {action.description}
       </Text>
-      <View style={[styles.ctaPill, { backgroundColor: theme.primary }]}>
-        <Text style={[styles.ctaText, { fontFamily: 'Inter_700Bold' }]}>Abrir detalle</Text>
+      <TouchableOpacity activeOpacity={0.82} onPress={handlePress} style={[styles.ctaPill, { backgroundColor: theme.primary }]}>
+        <Text style={[styles.ctaText, { fontFamily: 'Inter_700Bold' }]}>{action.ctaLabel}</Text>
         <ArrowRight size={16} color="#FFFFFF" />
-      </View>
+      </TouchableOpacity>
     </View>
   )
 }
@@ -672,6 +1879,330 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   )
 }
 
+export function MobileDashboardCharts({ areaData, barData }: { areaData: MobileChartPoint[]; barData: MobileChartPoint[] }) {
+  return (
+    <View style={styles.chartsGrid}>
+      <MobileSessionsChart data={areaData} />
+      <MobileGrowthChart data={barData} />
+    </View>
+  )
+}
+
+function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
+  const { theme } = useTheme()
+  const glass = useGlassStyle()
+  const width = 320
+  const height = 190
+  const chartTop = 22
+  const chartBottom = 154
+  const chartLeft = 18
+  const chartRight = 302
+  const max = Math.max(1, ...data.map((p) => p.sesiones ?? 0))
+  const points = data.map((p, index) => {
+    const x = data.length <= 1 ? (chartLeft + chartRight) / 2 : chartLeft + (index / (data.length - 1)) * (chartRight - chartLeft)
+    const y = chartBottom - ((p.sesiones ?? 0) / max) * (chartBottom - chartTop)
+    return { x, y }
+  })
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${chartBottom} L ${points[0].x} ${chartBottom} Z`
+    : ''
+
+  return (
+    <View style={[styles.chartCard, glass, { borderRadius: theme.radius['2xl'] }]}>
+      <View style={styles.chartHeader}>
+        <View style={[styles.chartIcon, { backgroundColor: 'rgba(59,130,246,0.12)' }]}>
+          <TrendingUp size={16} color="#3B82F6" />
+        </View>
+        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+          SESIONES 30 DIAS
+        </Text>
+      </View>
+      <View style={styles.chartCanvas}>
+        {data.length === 0 ? (
+          <View style={styles.chartEmpty}>
+            <TrendingUp size={30} color={theme.mutedForeground} opacity={0.25} />
+            <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Sin sesiones registradas en los ultimos 30 dias
+            </Text>
+          </View>
+        ) : (
+          <Svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="sessionsFill" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#3B82F6" stopOpacity="0.32" />
+                <Stop offset="1" stopColor="#3B82F6" stopOpacity="0" />
+              </LinearGradient>
+            </Defs>
+            {[0, 1, 2].map((i) => (
+              <Path
+                key={i}
+                d={`M ${chartLeft} ${chartTop + i * 44} L ${chartRight} ${chartTop + i * 44}`}
+                stroke={theme.mutedForeground}
+                strokeOpacity={0.08}
+                strokeWidth={1}
+              />
+            ))}
+            <Path d={areaPath} fill="url(#sessionsFill)" />
+            <Path d={linePath} fill="none" stroke="#3B82F6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((point, index) => (
+              <Circle key={index} cx={point.x} cy={point.y} r={3.8} fill="#3B82F6" stroke="#FFFFFF" strokeWidth={1.5} />
+            ))}
+          </Svg>
+        )}
+      </View>
+    </View>
+  )
+}
+
+function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
+  const { theme } = useTheme()
+  const glass = useGlassStyle()
+  const width = 320
+  const height = 190
+  const chartTop = 22
+  const chartBottom = 154
+  const chartLeft = 20
+  const chartRight = 300
+  const max = Math.max(1, ...data.map((p) => p.alumnos ?? 0))
+  const gap = 12
+  const barWidth = data.length > 0 ? Math.max(18, (chartRight - chartLeft - gap * (data.length - 1)) / data.length) : 22
+
+  return (
+    <View style={[styles.chartCard, glass, { borderRadius: theme.radius['2xl'] }]}>
+      <View style={styles.chartHeader}>
+        <View style={[styles.chartIcon, { backgroundColor: 'rgba(34,211,238,0.12)' }]}>
+          <Activity size={16} color="#22D3EE" />
+        </View>
+        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+          CRECIMIENTO DE ALUMNOS
+        </Text>
+      </View>
+      <View style={styles.chartCanvas}>
+        <Svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
+          {[0, 1, 2].map((i) => (
+            <Path
+              key={i}
+              d={`M ${chartLeft} ${chartTop + i * 44} L ${chartRight} ${chartTop + i * 44}`}
+              stroke={theme.mutedForeground}
+              strokeOpacity={0.08}
+              strokeWidth={1}
+            />
+          ))}
+          {data.map((point, index) => {
+            const value = point.alumnos ?? 0
+            const barHeight = Math.max(value > 0 ? 4 : 0, (value / max) * (chartBottom - chartTop))
+            const x = chartLeft + index * (barWidth + gap)
+            const y = chartBottom - barHeight
+            return (
+              <Rect
+                key={`${point.name}-${index}`}
+                x={x}
+                y={y}
+                width={barWidth}
+                height={barHeight}
+                rx={5}
+                fill="#22D3EE"
+              />
+            )
+          })}
+        </Svg>
+      </View>
+    </View>
+  )
+}
+
+export function MobileRevenueSheet({
+  open,
+  onClose,
+  kpi,
+  clientPaymentSummary,
+}: {
+  open: boolean
+  onClose: () => void
+  kpi: MobileKpiSummary
+  clientPaymentSummary: MobileClientPaymentSummary[]
+}) {
+  const router = useRouter()
+  const { theme } = useTheme()
+  const deltaPct = kpi.mrrDeltaPct
+  const DeltaIcon = deltaPct > 0 ? TrendingUp : deltaPct < 0 ? TrendingDown : Minus
+  const deltaColor = deltaPct > 0 ? '#10B981' : deltaPct < 0 ? theme.destructive : theme.mutedForeground
+
+  return (
+    <NativeDialog open={open} title="Panel de ingresos" onClose={onClose}>
+      <View style={styles.revenueSheet}>
+        <View style={styles.revenueHeader}>
+          <Text style={[styles.revenueAmount, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            {formatCurrency(kpi.mrrCurrentMonth)}
+          </Text>
+          <View style={styles.revenueDelta}>
+            <DeltaIcon size={16} color={deltaColor} />
+            <Text style={[styles.revenueDeltaText, { color: deltaColor, fontFamily: 'Inter_700Bold' }]}>
+              {deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}%
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.revenueHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Mes anterior: {formatCurrency(kpi.mrrPreviousMonth)}
+        </Text>
+
+        {clientPaymentSummary.length === 0 ? (
+          <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Sin datos de pagos registrados.
+          </Text>
+        ) : (
+          <ScrollView style={styles.revenueList} nestedScrollEnabled>
+            {clientPaymentSummary.map((client, index) => (
+              <TouchableOpacity
+                key={client.clientId}
+                activeOpacity={0.78}
+                onPress={() => {
+                  onClose()
+                  router.push(`/coach/cliente/${client.clientId}`)
+                }}
+                style={[
+                  styles.revenueRow,
+                  index < clientPaymentSummary.length - 1 && {
+                    borderBottomColor: theme.border,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                  },
+                ]}
+              >
+                <View style={styles.rowCopy}>
+                  <View style={styles.revenueNameRow}>
+                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
+                      {client.clientName}
+                    </Text>
+                    <ArrowUpRight size={13} color={theme.mutedForeground} />
+                  </View>
+                  <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>
+                    {client.lastPaymentDate
+                      ? `Ultimo pago: ${client.lastPaymentDate}${client.lastPaymentAmount != null ? ` - ${formatCurrency(client.lastPaymentAmount)}` : ''}`
+                      : 'Sin pagos registrados'}
+                    {client.nextRenewalDate ? ` - Renovacion: ${client.nextRenewalDate}` : ''}
+                  </Text>
+                </View>
+                <PaymentStatusBadge hasRecentPayment={client.hasRecentPayment} hasAnyPayment={client.lastPaymentDate != null} />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+    </NativeDialog>
+  )
+}
+
+export function MobileClientStatsSheet({
+  open,
+  onClose,
+  clientStats,
+}: {
+  open: boolean
+  onClose: () => void
+  clientStats: MobileClientStats[]
+}) {
+  const router = useRouter()
+  const { theme } = useTheme()
+  const [tab, setTab] = useState<'adherence' | 'nutrition'>('adherence')
+  const sorted = [...clientStats].sort((a, b) => {
+    const av = tab === 'adherence' ? a.adherencePct : a.nutritionPct
+    const bv = tab === 'adherence' ? b.adherencePct : b.nutritionPct
+    return av - bv
+  })
+
+  return (
+    <NativeDialog open={open} title="Detalle por alumno" onClose={onClose}>
+      <View style={styles.statsSheet}>
+        <Text style={[styles.revenueHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Ordenado de menor a mayor cumplimiento.
+        </Text>
+        <View style={styles.statsTabs}>
+          <StatsTabButton active={tab === 'adherence'} label="Adherencia" onPress={() => setTab('adherence')} />
+          <StatsTabButton active={tab === 'nutrition'} label="Nutricion" onPress={() => setTab('nutrition')} />
+        </View>
+        {sorted.length === 0 ? (
+          <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Sin datos.
+          </Text>
+        ) : (
+          <ScrollView style={styles.statsList} nestedScrollEnabled>
+            {sorted.map((client) => {
+              const pct = tab === 'adherence' ? client.adherencePct : client.nutritionPct
+              const hint = tab === 'adherence' ? client.adherenceHint : client.nutritionHint
+              return (
+                <TouchableOpacity
+                  key={client.clientId}
+                  activeOpacity={0.78}
+                  onPress={() => {
+                    onClose()
+                    router.push(`/coach/cliente/${client.clientId}`)
+                  }}
+                  style={[
+                    styles.statsRow,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: theme.background === '#F5F5F5' ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.04)',
+                      borderRadius: theme.radius.xl,
+                    },
+                  ]}
+                >
+                  <View style={styles.statsRowHeader}>
+                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
+                      {client.clientName}
+                    </Text>
+                    <Text style={[styles.statsPct, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+                      {pct}%
+                    </Text>
+                  </View>
+                  <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
+                    <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: theme.primary }]} />
+                  </View>
+                  <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+                    {hint}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        )}
+      </View>
+    </NativeDialog>
+  )
+}
+
+function StatsTabButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={[
+        styles.statsTab,
+        {
+          backgroundColor: active ? theme.primary : theme.muted,
+          borderRadius: 999,
+        },
+      ]}
+    >
+      <Text style={[styles.statsTabText, { color: active ? '#FFFFFF' : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  )
+}
+
+function PaymentStatusBadge({ hasRecentPayment, hasAnyPayment }: { hasRecentPayment: boolean; hasAnyPayment: boolean }) {
+  const { theme } = useTheme()
+  const label = !hasAnyPayment ? 'Sin pago' : hasRecentPayment ? 'Al dia' : 'Vencido'
+  const color = !hasAnyPayment ? theme.mutedForeground : hasRecentPayment ? '#10B981' : '#F59E0B'
+  return (
+    <View style={[styles.paymentBadge, { borderColor: hexToRgba(color, 0.42), backgroundColor: hexToRgba(color, 0.12) }]}>
+      <Text style={[styles.paymentBadgeText, { color, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+    </View>
+  )
+}
+
 function EmptyPanel({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   const { theme } = useTheme()
   return (
@@ -796,6 +2327,476 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  publicCodeModal: {
+    gap: 15,
+  },
+  publicCodeIntro: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  publicCodeIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  publicCodeBox: {
+    borderWidth: 1,
+    padding: 12,
+    gap: 9,
+  },
+  publicCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  publicCodeValue: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+  },
+  publicCodeCopy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  publicCodeCopyText: {
+    fontSize: 12,
+  },
+  publicCodeActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  freeWelcome: {
+    gap: 0,
+    marginHorizontal: -18,
+    marginVertical: -18,
+  },
+  freeWelcomeHero: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 22,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(16,185,129,0.08)',
+  },
+  freeWelcomeIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  freeWelcomeTitle: {
+    fontSize: 21,
+    lineHeight: 26,
+    textAlign: 'center',
+  },
+  freeWelcomeSub: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  freeWelcomeSection: {
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    gap: 12,
+  },
+  freeWelcomeEyebrow: {
+    fontSize: 10,
+    letterSpacing: 1.3,
+  },
+  welcomeStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  welcomeStepIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  welcomeStepCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  welcomeStepTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  welcomeStepSub: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  freePlanGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  freePlanItem: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  freePlanText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+  },
+  freeWelcomeActions: {
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    paddingBottom: 22,
+    gap: 8,
+  },
+  onboardingSkeleton: {
+    minHeight: 120,
+    borderWidth: 1,
+    opacity: 0.55,
+  },
+  onboardingResume: {
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  onboardingResumeText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  onboardingCard: {
+    borderWidth: 1,
+    padding: 16,
+    gap: 15,
+    overflow: 'hidden',
+  },
+  onboardingHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  onboardingHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  onboardingTitle: {
+    fontSize: 20,
+    lineHeight: 25,
+  },
+  onboardingDescription: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  onboardingProgressBox: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  onboardingProgressValue: {
+    fontSize: 25,
+    lineHeight: 29,
+  },
+  onboardingProgressLabel: {
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  skipGuideButton: {
+    minHeight: 34,
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+  },
+  skipGuideText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+  },
+  onboardingFreeBox: {
+    borderWidth: 1,
+    padding: 12,
+    gap: 9,
+  },
+  onboardingFreeTitle: {
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  loopStrip: {
+    borderWidth: 1,
+    minHeight: 76,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  loopStep: {
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+  },
+  loopIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loopLabel: {
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  twinPanels: {
+    gap: 10,
+  },
+  twinPanel: {
+    borderWidth: 1,
+    padding: 13,
+    gap: 8,
+  },
+  twinTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  twinTitle: {
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  twinText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  twinActions: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 2,
+  },
+  twinButton: {
+    flex: 1,
+  },
+  onboardingTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  onboardingFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  onboardingCarousel: {
+    gap: 10,
+    paddingRight: 2,
+  },
+  carouselCard: {
+    width: 126,
+    borderWidth: 1,
+    padding: 12,
+    gap: 6,
+  },
+  carouselTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  carouselStep: {
+    fontSize: 9,
+    letterSpacing: 1.1,
+  },
+  carouselTitle: {
+    fontSize: 14,
+  },
+  onboardingSteps: {
+    gap: 10,
+  },
+  stepBlock: {
+    borderWidth: 1,
+    padding: 13,
+    gap: 8,
+  },
+  stepTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pendingDot: {
+    width: 17,
+    height: 17,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    opacity: 0.55,
+  },
+  stepTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  stepDescription: {
+    paddingLeft: 25,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  stepActions: {
+    paddingLeft: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  stepButton: {
+    flexGrow: 1,
+  },
+  nutritionBlock: {
+    borderWidth: 1,
+    padding: 13,
+    gap: 6,
+  },
+  nutritionTitle: {
+    fontSize: 15,
+    lineHeight: 19,
+  },
+  nutritionText: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  nutritionButton: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  activationReady: {
+    borderWidth: 1,
+    padding: 13,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    borderRadius: 14,
+  },
+  activationCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  activationTitle: {
+    fontSize: 14,
+  },
+  activationText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  paymentForm: {
+    gap: 12,
+  },
+  formError: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  formErrorText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  successBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  successCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  successTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  successText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  formField: {
+    gap: 7,
+  },
+  formLabel: {
+    fontSize: 10,
+    lineHeight: 13,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  formInput: {
+    minHeight: 44,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  clientPicker: {
+    maxHeight: 132,
+    borderWidth: 1,
+  },
+  clientOption: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  clientOptionText: {
+    fontSize: 14,
+  },
+  clientEmpty: {
+    padding: 12,
+    fontSize: 13,
+  },
+  formActions: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 4,
+  },
+  formButton: {
+    flex: 1,
+  },
+  checkboxRow: {
+    minHeight: 50,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  checkboxBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   eyebrow: {
     fontSize: 10,
     letterSpacing: 1.7,
@@ -814,6 +2815,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  kpiTouch: {
+    width: '48.5%',
   },
   kpiCard: {
     width: '48.5%',
@@ -972,6 +2976,143 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 11,
+  },
+  chartsGrid: {
+    gap: 14,
+  },
+  chartCard: {
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  chartHeader: {
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(127,127,127,0.16)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(127,127,127,0.06)',
+  },
+  chartIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartTitle: {
+    fontSize: 11,
+    letterSpacing: 1.6,
+  },
+  chartCanvas: {
+    height: 230,
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  chartEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  revenueSheet: {
+    gap: 12,
+  },
+  revenueHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  revenueAmount: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 30,
+    lineHeight: 36,
+  },
+  revenueDelta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingBottom: 5,
+  },
+  revenueDeltaText: {
+    fontSize: 14,
+  },
+  revenueHint: {
+    fontSize: 12,
+  },
+  revenueList: {
+    maxHeight: 420,
+  },
+  revenueRow: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 11,
+  },
+  revenueNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  paymentBadge: {
+    flexShrink: 0,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  paymentBadgeText: {
+    fontSize: 10,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  statsSheet: {
+    gap: 12,
+  },
+  statsTabs: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statsTab: {
+    flex: 1,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  statsTabText: {
+    fontSize: 13,
+  },
+  statsList: {
+    maxHeight: 430,
+  },
+  statsRow: {
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+    marginBottom: 10,
+  },
+  statsRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  statsPct: {
+    fontSize: 14,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
   },
   emptyPanel: {
     alignItems: 'center',

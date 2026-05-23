@@ -1,5 +1,6 @@
 import { getCoachProfile, type CoachProfile } from './coach'
 import { supabase } from './supabase'
+import { apiFetch } from './api'
 
 export type MobileKpiSummary = {
   mrrCurrentMonth: number
@@ -43,8 +44,43 @@ export type MobileActivityItem = {
   clientId?: string | null
 }
 
+export type MobileClientPaymentSummary = {
+  clientId: string
+  clientName: string
+  lastPaymentDate: string | null
+  lastPaymentAmount: number | null
+  lastPaymentPeriodMonths: number | null
+  nextRenewalDate: string | null
+  hasRecentPayment: boolean
+}
+
+export type MobileClientStats = {
+  clientId: string
+  clientName: string
+  adherencePct: number
+  nutritionPct: number
+  adherenceHint: string
+  nutritionHint: string
+}
+
+export type MobileChartPoint = {
+  name: string
+  fullName?: string
+  sesiones?: number
+  alumnos?: number
+}
+
 export type MobileDashboardData = {
   coach: CoachProfile
+  publicCode: { inviteCode: string; shouldConfirm: boolean } | null
+  onboardingGuide: Record<string, unknown>
+  activePlans: number
+  hasStudentSignal30d: boolean
+  clientList: Array<{ id: string; name: string }>
+  clientPaymentSummary: MobileClientPaymentSummary[]
+  clientStats: MobileClientStats[]
+  areaData: MobileChartPoint[]
+  barData: MobileChartPoint[]
   kpi: MobileKpiSummary
   topRiskClients: MobileRiskAlertItem[]
   agenda: MobileAgendaItem[]
@@ -164,7 +200,118 @@ function latestByClient<T extends { client_id: string }>(rows: T[], dateKey: key
   return out
 }
 
-export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData | null> {
+function buildClientPaymentSummary(payments: ClientPaymentRow[], clients: ClientRow[]): MobileClientPaymentSummary[] {
+  const thirtyFiveDaysAgo = Date.now() - 35 * 24 * 60 * 60 * 1000
+  const paidByClient = new Map<string, { payment_date: string; amount: number; period_months: number | null }>()
+
+  for (const payment of payments) {
+    if (!payment.client_id || !isPaidStatus(payment.status)) continue
+    const existing = paidByClient.get(payment.client_id)
+    if (!existing || new Date(payment.payment_date).getTime() > new Date(existing.payment_date).getTime()) {
+      paidByClient.set(payment.client_id, {
+        payment_date: payment.payment_date,
+        amount: Math.round(parsePaymentAmount(payment.amount)),
+        period_months: payment.period_months,
+      })
+    }
+  }
+
+  return clients
+    .map((client) => {
+      const last = paidByClient.get(client.id) ?? null
+      let nextRenewalDate: string | null = null
+      if (last?.period_months && last.period_months > 0) {
+        const d = new Date(last.payment_date)
+        d.setMonth(d.getMonth() + last.period_months)
+        nextRenewalDate = d.toISOString().slice(0, 10)
+      }
+      return {
+        clientId: client.id,
+        clientName: client.full_name,
+        lastPaymentDate: last?.payment_date ?? null,
+        lastPaymentAmount: last?.amount ?? null,
+        lastPaymentPeriodMonths: last?.period_months ?? null,
+        nextRenewalDate,
+        hasRecentPayment: last ? new Date(last.payment_date).getTime() > thirtyFiveDaysAgo : false,
+      }
+    })
+    .sort((a, b) => {
+      if (a.hasRecentPayment === b.hasRecentPayment) return 0
+      return a.hasRecentPayment ? 1 : -1
+    })
+}
+
+type MobileDashboardApiResponse = {
+  coach: CoachProfile
+  publicCode?: { inviteCode: string; shouldConfirm: boolean }
+  onboardingGuide?: Record<string, unknown>
+  dashboard: {
+    kpi: MobileKpiSummary
+    activePlans: number
+    hasStudentSignal30d: boolean
+    clientList: Array<{ id: string; name: string }>
+    clientPaymentSummary: MobileClientPaymentSummary[]
+    adherenceStats: Array<{
+      clientId: string
+      clientName: string
+      percentage: number
+      completedSets: number
+      totalSets: number
+      lastPlan: string
+    }>
+    nutritionStats: Array<{
+      clientId: string
+      clientName: string
+      percentage: number
+      consumed: { cal: number }
+      target: { cal: number }
+      lastPlan: string
+    }>
+    topRiskClients: MobileRiskAlertItem[]
+    agenda: MobileAgendaItem[]
+    expiringPrograms: MobileExpiringProgramItem[]
+    recentActivities: MobileActivityItem[]
+    areaData: MobileChartPoint[]
+    barData: MobileChartPoint[]
+  }
+}
+
+function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardData {
+  const nutritionByClient = new Map(payload.dashboard.nutritionStats.map((stat) => [stat.clientId, stat]))
+  const clientStats: MobileClientStats[] = payload.dashboard.adherenceStats.map((stat) => {
+    const nutrition = nutritionByClient.get(stat.clientId)
+    return {
+      clientId: stat.clientId,
+      clientName: stat.clientName,
+      adherencePct: stat.percentage,
+      nutritionPct: nutrition?.percentage ?? 0,
+      adherenceHint: `${stat.completedSets}/${stat.totalSets} sets - ${stat.lastPlan}`,
+      nutritionHint: nutrition
+        ? `${Math.round(nutrition.consumed.cal)} / ${Math.round(nutrition.target.cal)} kcal`
+        : 'Sin datos de nutricion',
+    }
+  })
+
+  return {
+    coach: payload.coach,
+    publicCode: payload.publicCode ?? null,
+    onboardingGuide: payload.onboardingGuide ?? {},
+    activePlans: payload.dashboard.activePlans ?? 0,
+    hasStudentSignal30d: Boolean(payload.dashboard.hasStudentSignal30d),
+    clientList: payload.dashboard.clientList,
+    clientPaymentSummary: payload.dashboard.clientPaymentSummary,
+    clientStats,
+    areaData: payload.dashboard.areaData ?? [],
+    barData: payload.dashboard.barData ?? [],
+    kpi: payload.dashboard.kpi,
+    topRiskClients: payload.dashboard.topRiskClients,
+    agenda: payload.dashboard.agenda,
+    expiringPrograms: payload.dashboard.expiringPrograms,
+    recentActivities: payload.dashboard.recentActivities,
+  }
+}
+
+async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData | null> {
   const coach = await getCoachProfile()
   if (!coach) return null
 
@@ -327,6 +474,26 @@ export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData
   const avgAdherence = clients.length > 0 ? Math.round((clientsWithWorkout30d / clients.length) * 100) : 0
   const avgNutrition = 0
 
+  const clientStats: MobileClientStats[] = clients.map((client) => {
+    const latestWorkoutRow = latestWorkout.get(client.id)
+    const latestCheckInRow = latestCheckIn.get(client.id)
+    const hasWorkout30d = Boolean(latestWorkoutRow)
+    const hasCheckIn30d = Boolean(latestCheckInRow)
+    const hasWorkout7d = latestWorkoutRow
+      ? new Date(latestWorkoutRow.logged_at).getTime() >= new Date(sevenDaysAgoIso).getTime()
+      : false
+    const adherencePct = hasWorkout7d ? 100 : hasWorkout30d ? 65 : hasCheckIn30d ? 45 : 0
+
+    return {
+      clientId: client.id,
+      clientName: client.full_name,
+      adherencePct,
+      nutritionPct: 0,
+      adherenceHint: latestWorkoutRow ? `Ultimo entreno: ${latestWorkoutRow.logged_at.slice(0, 10)}` : 'Sin entrenos en 30 dias',
+      nutritionHint: 'Sin datos de nutricion mobile aun',
+    }
+  })
+
   const activities: MobileActivityItem[] = []
   clients.slice(0, 5).forEach((client) => {
     activities.push({
@@ -373,6 +540,15 @@ export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData
 
   return {
     coach,
+    publicCode: null,
+    onboardingGuide: {},
+    activePlans: plansCountResult.count ?? 0,
+    hasStudentSignal30d: checkIns.length > 0 || workoutLogs.length > 0,
+    clientList: clients.map((client) => ({ id: client.id, name: client.full_name })),
+    clientPaymentSummary: buildClientPaymentSummary(payments, clients),
+    clientStats,
+    areaData: [],
+    barData: [],
     kpi: {
       mrrCurrentMonth,
       mrrPreviousMonth,
@@ -386,5 +562,17 @@ export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData
     agenda,
     expiringPrograms,
     recentActivities: activities.slice(0, 8),
+  }
+}
+
+export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData | null> {
+  try {
+    const payload = await apiFetch<MobileDashboardApiResponse>('/api/mobile/coach/dashboard', {
+      method: 'GET',
+      authenticated: true,
+    })
+    return mapApiDashboard(payload)
+  } catch {
+    return getCoachDashboardDataMobileLocal()
   }
 }
