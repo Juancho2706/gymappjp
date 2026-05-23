@@ -1,7 +1,7 @@
 import {
   Users2, ShieldCheck, BarChart3, Building2, Bell, Lock,
   Fingerprint, FileText, Zap, Globe, Database, Layers,
-  CheckCircle2, XCircle,
+  XCircle,
 } from 'lucide-react'
 
 // ─── Constants ─────────────────────────────────────────────────────────────

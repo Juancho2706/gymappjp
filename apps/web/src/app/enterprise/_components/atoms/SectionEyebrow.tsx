@@ -9,7 +9,7 @@ export function SectionEyebrow({ children, className }: SectionEyebrowProps) {
   return (
     <p
       className={cn(
-        'text-xs font-bold uppercase tracking-[0.22em] text-amber-400',
+        'text-xs font-bold uppercase tracking-[0.22em] text-[#007AFF]',
         className,
       )}
     >
