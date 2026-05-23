@@ -590,6 +590,7 @@ Estas vars controlan features en UI. Si no están seteadas, valor por defecto es
 | MT-33 | Demo org "EVA Demo Gym" en staging | ⏳ Antes de primer demo de ventas |
 | MT-35 | NEXT_PUBLIC_ENTERPRISE_URL en Vercel | ✅ 2026-05-22 |
 | MT-36 | Post-deploy checklist completo (CSP + URLs + rate limit) | ⏳ Cuando todos los planes estén en prod |
+| MT-37 | Cloudflare Turnstile site key + secret en Vercel | ⏳ Antes de flip eva_auth_v2_* flags |
 | MT-34 | Pipeline ventas Google Sheets | ⏳ Antes de primer prospecto |
 
 ---
@@ -781,6 +782,26 @@ keytool -printcert -jarfile tu-app.apk
    - plan: `enterprise`, status: `trial`
    - Invitar 2-3 coaches de prueba con emails propios
 3. Usar esta org para mostrar en demos de venta
+
+---
+
+## MT-37 — Cloudflare Turnstile (auth captcha) · ⏳ Antes de flip de flags eva_auth_v2_*
+
+Plan: `docs/plans/improve-logins-coach-enterprise.md` (Fase 0).
+
+1. Cloudflare dashboard → Turnstile → "Add Site"
+   - Domains: `eva-app.cl`, `enterprise.eva-app.cl`, `localhost` (dev)
+   - Widget mode: **Managed** (auto-select challenge según riesgo)
+2. Copiar Site Key + Secret.
+3. Vercel → Project → Settings → Environment Variables (Production + Preview):
+   - `NEXT_PUBLIC_TURNSTILE_SITE_KEY=<site key>`
+   - `TURNSTILE_SECRET=<secret>` (NO marcar como public)
+4. Local: agregar ambas en `.env.local` (opcional — sin esto, captcha widget no aparece y `verifyTurnstile` fails-open hasta 5 intentos consecutivos).
+5. Smoke test post-deploy:
+   ```bash
+   # 3 fallos consecutivos → widget Turnstile debe aparecer en /login y /org/login
+   ```
+6. Documentado en `.env.example` (sección "Cloudflare Turnstile").
 
 ---
 

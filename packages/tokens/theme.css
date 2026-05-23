@@ -20,3 +20,13 @@
   --font-eva-sans: Inter, system-ui, sans-serif;
   --font-eva-display: Inter, system-ui, sans-serif;
 }
+
+[data-eva-surface="enterprise"] {
+  --eva-enterprise-bg: #09090b;
+  --eva-enterprise-fg: #f4f4f5;
+  --eva-enterprise-accent: #F59E0B;
+  --eva-enterprise-accent-fg: #09090b;
+  --eva-enterprise-border: #27272a;
+  --eva-enterprise-muted-fg: #71717a;
+  --eva-enterprise-danger: #EF4444;
+}
