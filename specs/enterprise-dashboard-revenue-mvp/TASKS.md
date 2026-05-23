@@ -22,6 +22,15 @@
 - [x] Run `npm run typecheck`.
 - [x] Update `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md` with timestamp.
 
+## Phase 3 - Team & Access Preview
+
+- [x] Research 2026 RBAC/IAM enterprise patterns before implementation.
+- [x] Replace Team & Access placeholder with read-only visual preview.
+- [x] Separate enterprise users from linked coaches in the UI.
+- [x] Add role template matrix and security posture preview.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Phase 4 - Brand Center Preview
 
 - [x] Replace Brand Center placeholder with read-only visual preview.

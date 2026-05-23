@@ -740,6 +740,33 @@ Propósito:
 
 Dueño controla quién entra a plataforma enterprise y qué puede hacer.
 
+### Research Update RBAC/IAM 2026
+
+**Actualizado:** 2026-05-23 17:56:15 -04:00
+
+Fuentes consultadas para esta fase:
+
+- https://dardesign.io/blog/multi-role-b2b-saas-ux-roles-permissions-flows
+- https://www.csoonline.com/article/4148282/6-key-trends-reshaping-the-iam-market.html
+- https://www.propelauth.com/post/guide-to-rbac-for-b2b-saas
+- https://amplitude.com/docs/admin/account-management/rbac-best-practices
+
+Hallazgos aplicables:
+
+- RBAC moderno ya no basta con `admin/member/viewer`; enterprise espera roles por tenant y permisos por recurso.
+- El modelo debe evitar permission creep: roles base claros + custom permissions solo cuando haga falta.
+- La UI debe explicar que significa cada rol y que areas quedan bloqueadas.
+- Estados de acceso denegado deben decir por que y como pedir permiso, no mostrar pantallas vacias.
+- MFA y audit log son parte del producto enterprise, no configuraciones escondidas.
+- Access review / last login / status son señales importantes para dueños.
+
+Traduccion EVA:
+
+- Team & Access debe mostrar una matriz visual de roles/permisos.
+- Cada usuario enterprise debe tener estado, rol, ultimo acceso y cobertura MFA.
+- Coaches y alumnos quedan fuera de esta lista salvo referencia contextual.
+- Todas las mutations futuras de staff deben escribir audit log.
+
 Tipos:
 
 - owner;
@@ -1102,7 +1129,14 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 3 - Team & Access MVP
 
-- Lista staff.
+- **Estado:** INICIADA con preview read-only.
+- **Completado parcial:** 2026-05-23 17:55:15 -04:00
+- **Notas:** `/org/[slug]/team` ya muestra control plane visual de identidad, usuarios enterprise separados de coaches, postura de seguridad y matriz de roles. Sin persistencia, sin creacion de usuarios, sin mutations, sin cambios RLS y sin DB changes.
+
+- [x] Lista staff enterprise read-only.
+- [x] Separacion visual enterprise users vs coaches vinculados.
+- [x] Matriz visual de roles base.
+- [x] Security posture preview.
 - Crear usuario con email + password temporal.
 - Roles.
 - Permisos.
