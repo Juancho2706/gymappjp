@@ -567,12 +567,12 @@ Estas vars controlan features en UI. Si no están seteadas, valor por defecto es
 | MT-7 | Contrato enterprise template | ✅ Redactado — `docs/legal/enterprise-contract-template.md` |
 | MT-8 | ToS + Privacy Policy | ✅ Redactados — `docs/legal/tos.md` + `docs/legal/privacy-policy.md` |
 | MT-9 | Google Sheets Pipeline | ✅ Hecho |
-| MT-10 | UptimeRobot | ✅ Hecho |
+| MT-10 | UptimeRobot | ✅ Hecho (confirmado 2026-05-22) |
 | MT-11 | Guimel Team ID | ⏳ Esperando respuesta de Guimel — placeholder en eas.json + AASA |
 | MT-12 | Bundle IDs App Store | ⏳ Depende de MT-11 |
-| MT-13 | Google Play ($25) | ⏸ EN ESPERA — pagar próxima semana |
+| MT-13 | Google Play ($25) | ⏸ EN ESPERA — pagar fin de mes |
 | MT-14 | Cuenta Expo EAS | ✅ Hecho — juandeveva, proyecto eva, EAS ID configurado |
-| MT-15 | Cuenta Sentry | ❌ Descartado por ahora (revisar en v1.1) |
+| MT-15 | Sentry web instalado | ✅ @sentry/nextjs instalado 2026-05-22 — falta vars en Vercel (ver MT-30) |
 | MT-16 | One-pager PDF | ✅ Hecho por KimiCode — `scripts/output/EVA-Enterprise-One-Pager.pdf` |
 | MT-17 | FirmaFácil | ⏳ Pendiente |
 | MT-18 | DNS enterprise.eva-app.cl | ⏳ Pendiente (Fase 6) |
@@ -584,6 +584,13 @@ Estas vars controlan features en UI. Si no están seteadas, valor por defecto es
 | MT-24 | Calcular health score D14 (por cliente) | ⏳ 14 días post-onboarding |
 | MT-25 | Configurar TODAS las env vars en Vercel/GitHub/EAS | ⏳ Al deployar — ver sección completa arriba |
 | MT-26 | Cambiar Vercel Root Directory a `apps/web` | ⏳ Al deployar / antes de preview v2 |
+| MT-30 | Sentry env vars en Vercel | ⏳ Al deployar — ver sección MT-30 arriba |
+| MT-31 | Screenshots iPhone 16 Pro Max | ⏳ Próxima semana (Sem 13) |
+| MT-32 | assetlinks.json SHA256 real | ⏳ Después de primer build Android |
+| MT-33 | Demo org "EVA Demo Gym" en staging | ⏳ Antes de primer demo de ventas |
+| MT-35 | NEXT_PUBLIC_ENTERPRISE_URL en Vercel | ✅ 2026-05-22 |
+| MT-36 | Post-deploy checklist completo (CSP + URLs + rate limit) | ⏳ Cuando todos los planes estén en prod |
+| MT-34 | Pipeline ventas Google Sheets | ⏳ Antes de primer prospecto |
 
 ---
 
@@ -711,3 +718,121 @@ EAS genera un `.ipa` con provisioning ad-hoc que incluye el UDID del amigo.
 **Futuro (cuando haya listing en App Store Connect):** usar TestFlight — más limpio, hasta 10.000 testers, sin límite de dispositivos. Ese paso viene en Sem 13 (auditoría + polish).
 
 **Importante:** máx. 100 dispositivos registrados en plan de Guimel (Apple Developer). Más que suficiente para pruebas.
+
+---
+
+## MT-30 — Sentry env vars en Vercel · ⏳ Al deployar
+
+**Pasos:**
+1. Crear cuenta en [sentry.io](https://sentry.io) → New Project → JavaScript → Next.js → nombre `eva-web`
+2. Copiar el DSN (formato: `https://abc123@o123456.ingest.sentry.io/789`)
+3. En Vercel → tu proyecto → Settings → Environment Variables, agregar:
+   - `SENTRY_DSN` = el DSN → solo Production
+   - `NEXT_PUBLIC_SENTRY_DSN` = el mismo DSN → Production + Preview
+   - `SENTRY_ORG` = slug de tu org en sentry.io (visible en la URL: `sentry.io/organizations/[SLUG]/`)
+   - `SENTRY_PROJECT` = slug del proyecto (Settings → Projects → `eva-web`)
+4. En GitHub Secrets (repo → Settings → Secrets → Actions), agregar:
+   - `SENTRY_AUTH_TOKEN` = sentry.io → Settings → Auth Tokens → Create → scopes: `project:releases`, `org:read`, `project:read`
+
+---
+
+## MT-31 — Screenshots iPhone 16 Pro Max (Sem 13) · ⏳ Próxima semana
+
+**Requerido por:** App Store submission
+**Mínimo:** 3 por rol (coach + alumno) = 6 total. Recomendado: 8-10.
+
+**Pantallas sugeridas coach:** lista clientes, builder de rutina, analytics dashboard
+**Pantallas sugeridas alumno:** pantalla de entrenamiento activo, log de nutrición, check-in semanal
+
+**Herramienta:** Xcode Simulator → iPhone 16 Pro Max → File → Take Screenshot. O dispositivo físico → compartir por AirDrop.
+
+**Tamaño requerido por Apple:** 1290 × 2796 px (iPhone 16 Pro Max).
+
+---
+
+## MT-32 — assetlinks.json — SHA256 real del APK Android · ⏳ Después de primer build Android
+
+**Archivo:** `apps/web/public/.well-known/assetlinks.json` tiene `PLACEHOLDER_SHA256_CERT_FINGERPRINT`
+
+**Cómo obtener el SHA256 real:**
+```bash
+# Opción A: desde el keystore (si usas credenciales locales)
+keytool -list -v -keystore tu-keystore.jks -alias tu-alias
+
+# Opción B: desde un APK ya firmado
+keytool -printcert -jarfile tu-app.apk
+
+# Opción C: desde Google Play Console → Setup → App integrity → SHA-256
+```
+
+**Luego reemplazar** en `apps/web/public/.well-known/assetlinks.json`:
+```json
+"sha256_cert_fingerprints": ["EL:SHA:256:REAL:AQUI"]
+```
+
+---
+
+## MT-33 — Demo org "EVA Demo Gym" en staging · ⏳ Antes de primer demo de ventas
+
+1. Supabase local: correr `npx supabase db reset` (aplica seeds con datos de test)
+2. O en staging: panel admin → `/admin/orgs` → crear org manual con:
+   - slug: `demo-gym`
+   - nombre: "EVA Demo Gym"
+   - plan: `enterprise`, status: `trial`
+   - Invitar 2-3 coaches de prueba con emails propios
+3. Usar esta org para mostrar en demos de venta
+
+---
+
+## MT-36 — Post-deploy checklist completo · ⏳ Cuando todos los planes estén en prod
+
+Hacer UNA VEZ después de que Plan A + B + C estén mergeados y en producción.
+
+### CSP check (enterprise.eva-app.cl)
+1. Abrir Chrome DevTools → Console en `enterprise.eva-app.cl`
+2. Verificar que no hay errores `Content-Security-Policy`
+3. Si hay errores de `connect-src` o `img-src`: agregar dominios faltantes en `apps/web/vercel.json` CSP header
+
+### Rate limit test (enterprise login)
+```bash
+for i in $(seq 1 42); do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    -X POST https://enterprise.eva-app.cl/login \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@test.com","password":"wrong"}'
+done
+# Últimas respuestas deben ser 429
+```
+
+### Routing verification
+- `enterprise.eva-app.cl/` → landing amber (NO login)
+- `enterprise.eva-app.cl/login` → org login form
+- `eva-app.cl/org/anything` → redirect 302 a `enterprise.eva-app.cl/org/anything`
+- `enterprise.eva-app.cl/[slug]` → org dashboard (si autenticado)
+
+### Cookie isolation
+- Login en `enterprise.eva-app.cl` → abrir `eva-app.cl` → debe pedir login de nuevo (sesiones separadas)
+
+### OG/SEO
+- Verificar que `enterprise.eva-app.cl` tiene OG tags correctos (`EVA Enterprise — Panel para Gyms...`)
+
+---
+
+## MT-35 — NEXT_PUBLIC_ENTERPRISE_URL en Vercel · ✅ 2026-05-22
+
+1. Ir a Vercel → proyecto EVA → Settings → Environment Variables
+2. Agregar en **Production** y **Preview**:
+   - Key: `NEXT_PUBLIC_ENTERPRISE_URL`
+   - Value: `https://enterprise.eva-app.cl`
+3. Redeploy para que tome efecto
+4. Verificar: `eva-app.cl` → sección Enterprise → botón "Ver EVA Enterprise" → lleva a `enterprise.eva-app.cl`
+
+**Por qué:** El CTA del landing principal usa esta variable. Sin ella funciona con el valor hardcodeado en LandingEnterpriseSection.tsx, pero si el dominio cambia la variable permite actualizarlo sin código.
+
+---
+
+## MT-34 — Pipeline ventas Google Sheets · ⏳ Antes de primer prospecto
+
+1. [sheets.google.com](https://sheets.google.com) → nuevo documento: **"EVA Enterprise Pipeline"**
+2. Columnas: `Gym | Contacto | Email | Tel | Fuente | Coaches | Estado | Fecha Demo | Fecha Firma | Plan | MRR | Notas`
+3. Estados: `Prospecto → Demo agendada → Demo hecha → Contrato → Trial → Pagando → Churned`
