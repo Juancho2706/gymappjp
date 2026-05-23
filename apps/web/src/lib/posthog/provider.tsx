@@ -12,13 +12,12 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         if (!token) return
         posthog.init(token, {
-            // Route through our domain proxy (/ph) so adblockers don't block it.
             api_host: '/ph',
             ui_host: uiHost,
-            // Ley 21.719: no crear perfiles identificados sin consentimiento explícito.
-            // Los eventos se capturan anónimamente hasta que el coach llama posthog.identify().
+            // Ley 21.719: no capturar sin consentimiento explícito. CookieConsent llama opt_in_capturing() al aceptar.
+            opt_out_capturing_by_default: true,
             person_profiles: 'identified_only',
-            capture_pageview: false, // manejado manualmente en PageviewTracker
+            capture_pageview: false,
             capture_pageleave: true,
         })
     }, [token, uiHost])

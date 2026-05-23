@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com'
 
@@ -13,7 +14,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['127.0.0.1'],
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   async headers() {
     return [
       {
@@ -71,4 +72,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+    org: process.env.SENTRY_ORG ?? 'eva-zs',
+    project: process.env.SENTRY_PROJECT ?? 'eva-nextjs',
+    silent: !process.env.CI,
+    widenClientFileUpload: true,
+    tunnelRoute: '/monitoring',
+    sourcemaps: { disable: false },
+    disableLogger: true,
+    automaticVercelMonitors: false,
+});

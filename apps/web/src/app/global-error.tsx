@@ -1,5 +1,6 @@
 'use client'
- 
+
+import * as Sentry from '@sentry/nextjs'
 import { useEffect } from 'react'
 import { AlertCircle, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,8 +14,7 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log the error to an error reporting service
-    console.error('Global unhandled error:', error)
+    Sentry.captureException(error)
   }, [error])
  
   return (
