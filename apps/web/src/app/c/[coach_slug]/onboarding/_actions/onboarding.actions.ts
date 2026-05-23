@@ -28,9 +28,13 @@ export async function submitIntakeForm(
     const injuries = formData.get('injuries') as string
     const medicalConditions = formData.get('medical_conditions') as string
     const availability = formData.get('availability') as string
+    const ageConfirmed = formData.get('age_confirmed') === 'on'
 
     if (!weight || !height || !goals || !experienceLevel || !availability) {
         return { error: 'Por favor, completa todos los campos obligatorios.' }
+    }
+    if (!ageConfirmed) {
+        return { error: 'Debes confirmar que tienes 14 años o más.' }
     }
 
     const { error: intakeError } = await supabase
@@ -54,7 +58,7 @@ export async function submitIntakeForm(
 
     const { error: clientError } = await supabase
         .from('clients')
-        .update({ onboarding_completed: true })
+        .update({ onboarding_completed: true, age_confirmed_at: new Date().toISOString() })
         .eq('id', user.id)
 
     if (clientError) {

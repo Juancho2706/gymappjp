@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Trophy, Zap } from 'lucide-react'
+import { Trophy, Zap, Share2, Check } from 'lucide-react'
 import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
 
@@ -148,6 +148,20 @@ export function WorkoutSummaryOverlay({
     const completedSets = logs.length
     const totalReps = logs.reduce((acc, l) => acc + (l.reps_done || 0), 0)
     const totalVolume = logs.reduce((acc, l) => acc + (l.weight_kg || 0) * (l.reps_done || 0), 0)
+
+    const [shared, setShared] = useState(false)
+
+    const handleShare = useCallback(async () => {
+        const prText = detectedPRs.length > 0 ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
+        const text = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${Math.round(totalVolume)} kg${prText}`
+        if (navigator.share) {
+            await navigator.share({ title: 'EVA Fitness', text }).catch(() => null)
+        } else {
+            await navigator.clipboard.writeText(text).catch(() => null)
+            setShared(true)
+            setTimeout(() => setShared(false), 2000)
+        }
+    }, [planTitle, completedSets, totalReps, totalVolume, detectedPRs])
 
     useEffect(() => {
         if (detectedPRs.length > 0) {
@@ -295,14 +309,27 @@ export function WorkoutSummaryOverlay({
                     </section>
                 )}
 
-                <button
-                    type="button"
-                    onClick={onDone}
-                    className="mt-auto w-full h-12 rounded-2xl font-bold text-primary-foreground shadow-lg"
-                    style={{ backgroundColor: 'var(--theme-primary)' }}
-                >
-                    Volver al inicio
-                </button>
+                <div className="mt-auto flex flex-col gap-2">
+                    <button
+                        type="button"
+                        onClick={handleShare}
+                        className="w-full h-10 rounded-2xl font-semibold text-sm border border-border bg-card/60 hover:bg-accent transition-colors flex items-center justify-center gap-2"
+                    >
+                        {shared ? (
+                            <><Check className="w-4 h-4 text-emerald-500" /> Copiado</>
+                        ) : (
+                            <><Share2 className="w-4 h-4" /> Compartir logro</>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onDone}
+                        className="w-full h-12 rounded-2xl font-bold text-primary-foreground shadow-lg"
+                        style={{ backgroundColor: 'var(--theme-primary)' }}
+                    >
+                        Volver al inicio
+                    </button>
+                </div>
             </div>
         </div>
     )

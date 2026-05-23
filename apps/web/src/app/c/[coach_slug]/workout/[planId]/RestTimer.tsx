@@ -174,6 +174,30 @@ export function RestTimer({
 
   const toggleTimer = () => setIsActive(!isActive);
 
+  // Media Session API — allows lock screen / headset controls to pause/play timer
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (isActive) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Descanso activo',
+        artist: `${formatTime(timeLeft)} restantes`,
+        album: 'EVA Fitness',
+        artwork: [{ src: BRAND_APP_ICON, sizes: '512x512', type: 'image/png' }],
+      });
+      navigator.mediaSession.setActionHandler('pause', () => setIsActive(false));
+      navigator.mediaSession.setActionHandler('play', () => setIsActive(true));
+    } else {
+      navigator.mediaSession.setActionHandler('pause', null);
+      navigator.mediaSession.setActionHandler('play', null);
+    }
+    return () => {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.setActionHandler('pause', null);
+      navigator.mediaSession.setActionHandler('play', null);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
   const resetTimer = () => {
     stopAlarm();
     setTimeLeft(initialSeconds);

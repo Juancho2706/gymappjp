@@ -28,6 +28,8 @@ export function OnboardingForm({ coachSlug }: Props) {
         injuries: '',
         medical_conditions: ''
     })
+    const [ageConfirmed, setAgeConfirmed] = useState(false)
+    const [ageError, setAgeError] = useState(false)
     const [touched, setTouched] = useState<Record<string, boolean>>({})
 
     // Load from localStorage on mount
@@ -96,6 +98,9 @@ export function OnboardingForm({ coachSlug }: Props) {
         }
         if (currentStep === 2) {
             return formData.goals !== '' && formData.experience_level !== '' && formData.availability !== ''
+        }
+        if (currentStep === 3) {
+            if (!ageConfirmed) { setAgeError(true); return false }
         }
         return true
     }
@@ -340,6 +345,25 @@ export function OnboardingForm({ coachSlug }: Props) {
                                 
                                 Fix: Use hidden inputs for all fields in the final step.
                             */}
+                            <div className="space-y-1">
+                                <label className="flex items-start gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        name="age_confirmed"
+                                        checked={ageConfirmed}
+                                        onChange={e => { setAgeConfirmed(e.target.checked); setAgeError(false) }}
+                                        className="mt-0.5 h-4 w-4 rounded border-border accent-[var(--theme-primary)] cursor-pointer flex-shrink-0"
+                                    />
+                                    <span className="text-xs text-muted-foreground leading-snug">
+                                        Confirmo que tengo 14 años o más y acepto los{' '}
+                                        <a href="/legal/terms" target="_blank" className="underline hover:text-foreground">términos de uso</a>
+                                        {' '}y la{' '}
+                                        <a href="/legal/privacy" target="_blank" className="underline hover:text-foreground">política de privacidad</a>.*
+                                    </span>
+                                </label>
+                                {ageError && <p className="text-xs text-red-400 pl-6">Debes confirmar tu edad para continuar.</p>}
+                            </div>
+
                             <input type="hidden" name="weight" value={formData.weight} />
                             <input type="hidden" name="height" value={formData.height} />
                             <input type="hidden" name="goals" value={formData.goals} />
@@ -378,9 +402,10 @@ export function OnboardingForm({ coachSlug }: Props) {
                             <ChevronRight className="w-4 h-4 ml-2" />
                         </Button>
                     ) : (
-                        <Button 
-                            type="submit" 
+                        <Button
+                            type="submit"
                             disabled={isPending}
+                            onClick={e => { if (!ageConfirmed) { e.preventDefault(); setAgeError(true) } }}
                             className="flex-1 h-12 text-white bg-[var(--theme-primary)] hover:opacity-90"
                         >
                             {isPending ? 'Guardando...' : 'Finalizar registro'}

@@ -1,7 +1,9 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { z } from 'zod/v4'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { rateLimitInviteAccept } from '@/lib/rate-limit'
 
 const JoinSchema = z.object({
     full_name: z.string().min(2).max(120),
@@ -11,6 +13,11 @@ const JoinSchema = z.object({
 })
 
 export async function joinViaInviteAction(inviteCode: string, _prev: unknown, formData: FormData) {
+    const hdrs = await headers()
+    const ip = hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    const rl = await rateLimitInviteAccept(ip)
+    if (!rl.ok) return { error: 'Demasiados intentos. Espera un momento antes de volver a intentar.' }
+
     const parsed = JoinSchema.safeParse({
         full_name: formData.get('full_name'),
         email: formData.get('email'),
