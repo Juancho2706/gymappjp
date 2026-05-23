@@ -959,6 +959,31 @@ Campos:
 - metadata;
 - IP/user agent si disponible.
 
+### Research Update Audit/RBAC Evidence 2026
+
+**Actualizado:** 2026-05-23 18:09:24 -04:00
+
+Fuentes consultadas para esta fase:
+
+- https://agnitestudio.com/blog/designing-tamper-resistant-audit-trails-compliance-systems/
+- https://agnitestudio.com/blog/audit-trail-requirements-saas-compliance/
+- https://www.mainfoundry.com/saas-rbac-audit-logging-security
+- https://www.enterpriseready.io/features/audit-log/
+
+Hallazgos aplicables:
+
+- Audit log enterprise no es solo historial: es evidencia de seguridad y tenant isolation.
+- Eventos debiles tipo "user updated record" no sirven; deben probar actor, accion, target, tenant y contexto.
+- Buyers enterprise esperan audit logs exportables, buscables y conectados a RBAC.
+- Exportar o leer logs tambien debe tener permisos dedicados y generar su propio audit event.
+
+Traduccion EVA:
+
+- Usar `org_audit_logs` existente antes de crear tablas nuevas.
+- `/org/[slug]/audit` empieza read-only para validar evidencia y taxonomia.
+- Todas las mutations futuras deben usar helper central de audit events.
+- Antes de export CSV: filtros, permisos, retention y evento `audit.exported`.
+
 ---
 
 ## Dirección Visual
@@ -1112,11 +1137,18 @@ organization_users
 organization_roles
 organization_permissions
 organization_user_permissions
-organization_audit_logs
 client_assignment_events
 organization_branding
 student_payment_status
 ```
+
+Ya existen y no deben duplicarse:
+
+- `organization_members`;
+- `coach_client_assignments`;
+- `org_audit_logs`;
+- `org_invoices`;
+- `payment_exceptions`.
 
 Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial primero.
 
@@ -1247,6 +1279,20 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 - Pagos alumnos operacional.
 - CSV export.
 - PDF después.
+
+### Fase 7A - Audit Log Read-Only
+
+- **Estado:** COMPLETADA para preview real read-only.
+- **Completado:** 2026-05-23 18:09:24 -04:00
+- **Notas:** `/org/[slug]/audit` ya lee `org_audit_logs` existente via repository/query layer y muestra timeline, actores, target types, guardrails y filtros futuros. Sin migrations, sin mutations, sin export y sin DB changes.
+
+- [x] Reusar tabla `org_audit_logs` existente.
+- [x] Timeline read-only de eventos.
+- [x] Estado del modelo y RLS visible.
+- [x] Guardrails para export y helper central futuro.
+- [ ] Helper central para escribir audit events.
+- [ ] Normalizar taxonomia de acciones.
+- [ ] Export CSV con permiso dedicado.
 
 ### Fase 8 - Sales/Implementation Layer
 

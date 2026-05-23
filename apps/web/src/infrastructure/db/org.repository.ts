@@ -141,6 +141,28 @@ export type OrgInvoice = {
     created_at: string | null
 }
 
+export type OrgAuditLog = {
+    id: string
+    org_id: string
+    actor_id: string
+    action: string
+    target_id: string | null
+    target_type: string | null
+    metadata: Database['public']['Tables']['org_audit_logs']['Row']['metadata']
+    created_at: string | null
+}
+
+export async function findOrgAuditLogs(db: DB, orgId: string): Promise<OrgAuditLog[]> {
+    const { data } = await db
+        .from('org_audit_logs')
+        .select('id, org_id, actor_id, action, target_id, target_type, metadata, created_at')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+    return (data ?? []) as OrgAuditLog[]
+}
+
 export type CoachPerformanceData = {
     assignedCount: number
     activeCount: number

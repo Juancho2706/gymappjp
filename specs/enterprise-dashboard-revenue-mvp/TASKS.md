@@ -56,6 +56,15 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 7A - Audit Log Preview
+
+- [x] Research 2026 SaaS audit/RBAC evidence patterns before implementation.
+- [x] Confirm existing `org_audit_logs`/RLS before adding any migration.
+- [x] Add repository/query access for org audit events.
+- [x] Replace Audit placeholder with read-only real timeline.
+- [x] Document completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`
