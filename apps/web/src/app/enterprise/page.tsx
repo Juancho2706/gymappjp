@@ -1,14 +1,12 @@
 import type { Metadata } from 'next'
 import { EnterpriseNav } from './_components/sections/EnterpriseNav'
 import { EnterpriseHero } from './_components/sections/EnterpriseHero'
-import { EnterpriseLogoWall } from './_components/sections/EnterpriseLogoWall'
 import { EnterpriseProblemStatement } from './_components/sections/EnterpriseProblemStatement'
+import { EnterpriseTechStack } from './_components/sections/EnterpriseTechStack'
 import { EnterpriseFeatureBento } from './_components/sections/EnterpriseFeatureBento'
 import { EnterpriseUseCases } from './_components/sections/EnterpriseUseCases'
-import { EnterpriseSecurityCompliance } from './_components/sections/EnterpriseSecurityCompliance'
 import { EnterpriseROIComparison } from './_components/sections/EnterpriseROIComparison'
 import { EnterprisePricing } from './_components/sections/EnterprisePricing'
-import { EnterpriseIntegrations } from './_components/sections/EnterpriseIntegrations'
 import { EnterpriseTestimonials } from './_components/sections/EnterpriseTestimonials'
 import { EnterpriseFAQ } from './_components/sections/EnterpriseFAQ'
 import { EnterpriseFinalCTA } from './_components/sections/EnterpriseFinalCTA'
@@ -31,19 +29,17 @@ export default function EnterpriseLandingPage() {
   return (
     <div
       className="min-h-dvh overflow-x-clip"
-      style={{ backgroundColor: '#09090b', color: '#f4f4f5' }}
+      style={{ backgroundColor: '#ffffff', color: '#121212' }}
     >
       <EnterpriseNav />
       <main id="main-content">
         <EnterpriseHero />
-        <EnterpriseLogoWall />
         <EnterpriseProblemStatement />
+        <EnterpriseTechStack />
         <EnterpriseFeatureBento />
         <EnterpriseUseCases />
-        <EnterpriseSecurityCompliance />
         <EnterpriseROIComparison />
         <EnterprisePricing />
-        <EnterpriseIntegrations />
         <EnterpriseTestimonials />
         <EnterpriseFAQ />
         <EnterpriseFinalCTA />
