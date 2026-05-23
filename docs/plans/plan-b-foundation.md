@@ -1,297 +1,278 @@
-# Plan B — Foundation: Clean Architecture · Atomic Design · Feature-First · SDD
-**Version:** 2.1 | **Date:** 2026-05-23 | **Priority:** P1 | **Status:** PENDING
-**Reemplaza:** `plan-b-design-system.md` (v1.0 — scope era solo Storybook + SDD)
-**Docs de referencia:** `AGENTS.md §4.0` · `CLAUDE.md §Pilares Arquitectónicos`
+# Plan B - Foundation: Clean Architecture, Atomic Design, Feature-First, SDD
+
+**Version:** 2.2  
+**Date:** 2026-05-23  
+**Priority:** P1  
+**Status:** READY FOR SESSION 1  
+**Replaces:** `plan-b-design-system.md` scope. Prior plans A/C/D/E were archived/removed in commit `17252b5`.
 
 ---
 
-## Diagnóstico: Estado actual
+## Executive Decision
 
-| Pilar | Estado | Gap |
-|-------|--------|-----|
-| **Clean Architecture** | ✅ 80% | `domain/` + `infrastructure/db/` + `services/` existen. Gap: algunos `_data/` van directo a Supabase, bypasean repositories. |
-| **Feature-First** | ✅ Completo | Module pattern `_data/_actions/_components` en todo `/coach/*`, `/org/*`, `/c/*`. Ningún gap. |
-| **Atomic Design** | ⚠️ Esqueleto | `atoms/`, `molecules/`, `organisms/` son barrel exports vacíos. Componentes reales dispersos en `coach/`, `auth/`, `landing/`, `ui/`. |
-| **SDD** | ❌ Ausente | `specs/` directory no existe. Contexto de features vive en conversaciones, no escala con AI ni con equipo. |
-| **Design System / Storybook** | ⚠️ Parcial | `packages/tokens/` existe con paleta y espaciado. Storybook no existe, sin catálogo visual ni stories. |
+This plan is worth executing, but only incrementally.
 
-**Conclusión:** No se necesita reestructuración mayor. Los huesos son sólidos.
-El trabajo es: llenar gaps + estandarizar inconsistencias + documentar con specs.
+Do **not** run the whole plan as one refactor. The safe path is:
 
-**Ya documentado en:**
-- `AGENTS.md §4.0` — reglas de capas + checklist pre-código
-- `CLAUDE.md §Pilares Arquitectónicos` — referencia rápida + data flow obligatorio
+1. Session 1: docs + specs + audit only. No runtime changes.
+2. Session 2: Storybook setup and stories. No component moves.
+3. Session 3+: small Clean Architecture fixes by module, with tests.
+4. Atomic Design migration: additive only at first. Move files only when usage and imports are proven.
+
+Goal: improve maintainability without breaking working coach/client/org flows.
 
 ---
 
-## Decisión de Arquitectura: Atomic Design vs Domain-Driven Components
+## Current State
 
-**Problema:** Dos estrategias coexisten sin estándar claro:
-- `components/atoms/`, `molecules/`, `organisms/` — existen pero vacíos
-- Componentes reales en `components/coach/`, `components/auth/`, `components/landing/`
+| Pillar | State | Gap |
+|---|---:|---|
+| Clean Architecture | Partial | `domain/`, `infrastructure/db/`, `services/` exist, but many `_data/*.queries.ts` still call Supabase directly. |
+| Feature-First | Good | Route-local `_data/_actions/_components` pattern is present across major app areas. |
+| Atomic Design | Skeleton | `atoms/`, `molecules/`, `organisms/` exist but are mostly barrels; real reusable auth components now live in `components/auth/`. |
+| SDD | Missing | `specs/` does not exist. Feature context still lives mostly in plans/conversations. |
+| Storybook | Missing | No `.storybook/`, no `storybook` scripts in `@eva/web`, no visual catalog. |
 
-**Decisión (elegir una antes de implementar):**
+Important repo reality:
 
-### Opción A — Strict Atomic (recomendada para design system puro)
-```
-components/
-├── atoms/          ← Button, Input, Badge, Avatar, Spinner, Label
-├── molecules/      ← FormField, SearchBar, InfoTooltip, CheckInCard
-├── organisms/      ← DataTable, NavSidebar, MfaBanner, OrgLoginForm
-├── auth/           ← mantener (domain-specific, no reutilizable)
-├── coach/          ← mantener (domain-specific)
-├── landing/        ← mantener (domain-specific)
-└── ui/             ← shadcn primitives (no mover, son externos)
-```
-Migrar shared components de `coach/`, `auth/` a atomic layers.
-Costo: medio (renombrar imports).
-
-### Opción B — Domain-Driven + Atomic como namespace (recomendada para velocidad)
-Dejar todo donde está. Usar atomic layers solo para componentes verdaderamente
-transversales (usados en 3+ domains distintos).
-```
-atoms/     ← solo primitivos reutilizables en cualquier domain
-molecules/ ← solo compuestos reutilizables en cualquier domain
-organisms/ ← solo organismos multi-domain
-```
-Costo: mínimo, sin migración.
-
-**Recomendación: Opción B.** Opción A tiene alto costo de migración y EVA no tiene equipo
-de diseño dedicado que justifique catálogo estricto. Opción B permite crecer el catálogo
-progresivamente sin romper nada.
+- Monorepo uses root lockfile and workspaces.
+- Web app package is `@eva/web` under `apps/web`.
+- Root scripts delegate with `-w @eva/web`.
+- Storybook commands and CI must respect that layout.
 
 ---
 
-## B.1 — Clean Architecture: Auditoría y Estandarización
+## Non-Negotiable Safety Rules
 
-### Gap identificado
-Algunos módulos en `app/coach/*/._data/` hacen queries directamente con Supabase client
-en vez de pasar por `infrastructure/db/*.repository.ts`. Esto rompe la separación de capas.
-
-### Estándar obligatorio
-```
-app/coach/[module]/_data/[module].queries.ts
-  → llama a services/[domain].service.ts
-  → llama a infrastructure/db/[domain].repository.ts
-  → llama a Supabase client
-```
-
-Nunca:
-```
-app/coach/[module]/_data/[module].queries.ts
-  → llama directamente a Supabase client  ← INCORRECTO
-```
-
-### Módulos a auditar (inconsistencia conocida o probable)
-- `coach/nutrition/` — verificar si usa nutrition.service.ts o va directo
-- `coach/check-ins/` — verificar si usa repository layer
-- `coach/settings/` — verificar
-- `org/*/` — verificar si usa org.service.ts
-
-### Tarea B.1
-- [ ] B.1.1 — Auditar cada módulo en `app/coach/` y `app/org/`: listar cuáles bypasean repositories
-- [ ] B.1.2 — Para cada bypass: mover query a repository + exponer desde service
-- [ ] B.1.3 — Agregar a CLAUDE.md: "Data flow obligatorio: _data → service → repository → Supabase"
-- [ ] B.1.4 — Agregar a Definition of Done en specs/: "No Supabase directo en _data/"
-
-**Scope:** No romper nada existente. Solo mover código, no reescribir lógica.
+- Keep every change scoped and reversible.
+- Never move a component in the same PR/session where Storybook is introduced.
+- Never refactor all `_data` files at once.
+- Auth/session reads are allowed in `_data` only to establish user context, then pass into services.
+- No behavior rewrite while moving queries. Move code first, preserve return shapes.
+- Run `npm run typecheck` after every code-changing session.
+- Run targeted tests for touched domains.
+- `npm run lint` currently has pre-existing failures; do not claim full lint green until those are fixed separately.
 
 ---
 
-## B.2 — Atomic Design: Poblar Layers con Componentes Reales
+## Architecture Standard
 
-Siguiendo **Opción B** (domain-driven + atomic como namespace para transversales).
+Preferred data flow:
 
-### Componentes a agregar a atoms/ (primitivos multi-domain)
+```text
+app/[feature]/_data/*.queries.ts
+  -> services/[domain]/*.service.ts
+  -> infrastructure/db/*.repository.ts
+  -> Supabase
+```
 
-| Componente | Fuente actual | Target |
-|-----------|--------------|--------|
-| Button | `components/ui/button.tsx` (shadcn) | No mover — crear wrapper en atoms si se necesita extender |
-| Input | `components/ui/input.tsx` (shadcn) | No mover |
-| Badge | `components/ui/badge.tsx` (shadcn) | No mover |
-| StatusBadge | disperso en coach/ | `atoms/StatusBadge.tsx` |
-| Spinner / LoadingDot | disperso en loaders/ | `atoms/Spinner.tsx` |
-| EmptyState | si existe disperso | `atoms/EmptyState.tsx` |
+Allowed in `_data`:
 
-### Componentes a agregar a molecules/
+- `createClient()` to create request-scoped Supabase client.
+- `supabase.auth.getUser()` / auth context reads.
+- `React.cache`.
+- Calling service functions.
 
-| Componente | Fuente actual | Target |
-|-----------|--------------|--------|
-| InfoTooltip | si existe en molecules/ | verificar |
-| FormField (label + input + error) | disperso en forms | `molecules/FormField.tsx` |
-| SearchBar | si existe disperso | `molecules/SearchBar.tsx` |
-| AvatarWithName | disperso en coach/ | `molecules/AvatarWithName.tsx` |
+Not allowed in `_data` for feature data:
 
-### Componentes a agregar a organisms/
+- `supabase.from(...)`
+- `supabase.rpc(...)`
+- domain mapping/parsing that belongs in service/repository
 
-| Componente | Fuente actual | Target |
-|-----------|--------------|--------|
-| MfaBanner | `components/organisms/` (verificar) | ya debería estar |
-| DataTable genérico | disperso | `organisms/DataTable.tsx` si es multi-domain |
+Temporary exception:
 
-### Tareas B.2
-- [ ] B.2.1 — Auditar `components/coach/`, `components/auth/`, `components/landing/`: identificar qué componentes se usan en 2+ domains distintos
-- [ ] B.2.2 — Mover componentes multi-domain a `atoms/` o `molecules/` según tamaño/complejidad
-- [ ] B.2.3 — Actualizar barrel exports en `atoms/index.ts`, `molecules/index.ts`, `organisms/index.ts`
-- [ ] B.2.4 — Actualizar imports en todos los archivos que usaban la ubicación anterior
+- Admin/service-role operational pages may be audited first and migrated later. They still need explicit documentation if left as-is.
 
 ---
 
-## B.3 — SDD: Spec-Driven Development
+## B.1 - Clean Architecture Audit First
 
-### Estructura a crear
+### Known Reality
 
-```
+Direct Supabase usage exists beyond the original list. Audit must include:
+
+- `apps/web/src/app/coach/**/_data/*.queries.ts`
+- `apps/web/src/app/c/[coach_slug]/**/_data/*.queries.ts`
+- `apps/web/src/app/org/**/_data/*.queries.ts`
+- `apps/web/src/app/admin/**/_data/*.queries.ts`
+
+### Task B.1
+
+- [ ] B.1.1 Create audit doc: `docs/architecture/CLEAN_ARCHITECTURE_AUDIT.md`.
+- [ ] B.1.2 For every `_data/*.queries.ts`, classify:
+  - `OK`: auth/context only + service call.
+  - `BYPASS`: feature data uses `.from()` / `.rpc()` directly.
+  - `ADMIN_EXCEPTION`: service-role admin page to migrate later.
+  - `HIGH_RISK`: large query shape or user-facing critical flow.
+- [ ] B.1.3 Prioritize fixes by risk:
+  1. Low-risk read-only catalogs.
+  2. Settings/profile reads.
+  3. Coach dashboard.
+  4. Student dashboard/workout/nutrition.
+  5. Admin pages.
+- [ ] B.1.4 Do not refactor during audit session.
+
+### Fix Strategy
+
+For each later fix:
+
+- Add repository function first.
+- Add service wrapper second.
+- Update `_data` last.
+- Preserve exact return object.
+- Add or update focused tests if mapping logic changes.
+
+---
+
+## B.2 - Atomic Design: Additive, Not Big-Bang
+
+Decision: **Domain-driven components + atomic namespace only for true cross-domain reuse.**
+
+Rule from `AGENTS.md`: promote to `atoms/`, `molecules/`, `organisms/` only when used in **3+ domains** or clearly intended as platform primitive.
+
+### Current Component Guidance
+
+Keep:
+
+- `components/ui/*`: shadcn/base primitives. Do not move.
+- `components/auth/*`: auth-domain shared components. Keep here unless reused outside auth.
+- `components/coach/*`, `components/client/*`, `components/landing/*`: domain-specific.
+
+Atomic layers should start with:
+
+- `atoms/`: platform primitives not tied to auth/coach/client.
+- `molecules/`: reusable composites used in 3+ domains.
+- `organisms/`: domain-aware but multi-domain.
+
+### Task B.2
+
+- [ ] B.2.1 Audit component reuse with `rg` before moving anything.
+- [ ] B.2.2 Create candidate list with current usage counts.
+- [ ] B.2.3 Prefer re-export wrappers over physical moves for first migration.
+- [ ] B.2.4 If a file is moved, update imports in same commit and run typecheck.
+- [ ] B.2.5 Add Storybook stories for new atomic components.
+
+Do **not** migrate 50+ imports as cleanup. That is churn and risk.
+
+---
+
+## B.3 - SDD: Specs Foundation
+
+Create:
+
+```text
 specs/
-├── _templates/
-│   ├── SPEC.md          ← qué y por qué (user stories, AC)
-│   ├── PLAN.md          ← cómo construir (arquitectura, DB, fases)
-│   └── TASKS.md         ← tareas descompuestas + DoD checklist
-├── enterprise-org-management/     ← spec retroactivo (ya implementado)
-│   ├── SPEC.md
-│   └── TASKS.md
-├── enterprise-subdomain/          ← Plan A (completado)
-│   ├── SPEC.md
-│   └── TASKS.md
-└── [future-feature]/
-    ├── SPEC.md
-    ├── PLAN.md
-    └── TASKS.md
+  _templates/
+    SPEC.md
+    PLAN.md
+    TASKS.md
+  enterprise-org-management/
+    SPEC.md
+    TASKS.md
+  enterprise-subdomain/
+    SPEC.md
+    TASKS.md
 ```
 
-### Workflow SDD (obligatorio para features nuevas, no bugfixes)
+### Template Rules
 
-```
-1. SPEC.md   → qué resuelve, para quién, user stories, acceptance criteria
-2. PLAN.md   → arquitectura, DB changes, fases de implementación
-3. TASKS.md  → tareas atómicas, Definition of Done por task
-4. Implementar usando TASKS.md como guía
-5. Marcar tasks ✅ al completar
-```
+`SPEC.md`:
 
-### Definition of Done (universal — va en cada TASKS.md)
+- Problem
+- Users
+- User stories
+- Acceptance criteria
+- Out of scope
+- Risks
 
-Cada task está done cuando:
-- [ ] TypeScript sin errores (`npm run typecheck`)
-- [ ] ESLint sin warnings (`npm run lint`)
-- [ ] Vitest pasan si hay unit tests
-- [ ] Dark mode verificado visualmente
-- [ ] Mobile viewport: `h-dvh` no `h-screen`
-- [ ] No Supabase directo en `_data/` — pasar por service layer
-- [ ] Si componente UI nuevo: story en Storybook creada
+`PLAN.md`:
 
-### Tareas B.3
-- [ ] B.3.1 — Crear `specs/_templates/SPEC.md` (template)
-- [ ] B.3.2 — Crear `specs/_templates/PLAN.md` (template)
-- [ ] B.3.3 — Crear `specs/_templates/TASKS.md` (template con DoD universal)
-- [ ] B.3.4 — Crear spec retroactivo `specs/enterprise-org-management/`
-- [ ] B.3.5 — Crear spec retroactivo `specs/enterprise-subdomain/`
-- [ ] B.3.6 — Actualizar CLAUDE.md: agregar sección "SDD Workflow"
+- Architecture
+- Data flow
+- DB changes, if any
+- Phases
+- Test plan
+- Rollback plan
+
+`TASKS.md`:
+
+- Atomic tasks
+- Owner/status
+- Definition of Done
+
+Universal DoD:
+
+- [ ] `npm run typecheck`
+- [ ] Targeted tests for touched domain
+- [ ] No direct feature-data Supabase calls in `_data`
+- [ ] Server actions validate with Zod
+- [ ] Mobile viewport uses `dvh`, not `vh`/`h-screen`
+- [ ] Dark mode checked when UI changes
+- [ ] New atomic UI has Storybook story
+- [ ] Docs updated when routes, flows, DB, tests, or priorities change
+
+### Task B.3
+
+- [ ] B.3.1 Create `specs/_templates/SPEC.md`.
+- [ ] B.3.2 Create `specs/_templates/PLAN.md`.
+- [ ] B.3.3 Create `specs/_templates/TASKS.md`.
+- [ ] B.3.4 Create retro spec `specs/enterprise-org-management/`.
+- [ ] B.3.5 Create retro spec `specs/enterprise-subdomain/`.
+- [ ] B.3.6 Link templates from `CLAUDE.md` and `AGENTS.md` only if content changed.
+
+Session 1 can safely execute B.3 and B.1 audit.
 
 ---
 
-## B.4 — Storybook 8: Catálogo Visual
+## B.4 - Storybook 8/Latest: Monorepo-Safe Setup
 
-### Stack
-- **Storybook 8.x** + `@storybook/nextjs-vite` (Vite builder, compatible con Next.js 15 + React 19 + Tailwind v4)
-- **No Webpack** — solo Vite
-- **Dark-first** — EVA usa dark mode por defecto
+Before install, verify current official package names/version because Storybook changes frequently.
 
-### Setup
+Target:
+
+- Framework: `@storybook/nextjs-vite` if compatible with current Next/React setup.
+- Dark-first preview.
+- Tailwind v4 via importing `src/app/globals.css`.
+- No Chromatic for now.
+
+### Install Commands
+
+Run from repo root:
 
 ```bash
-cd apps/web
-npx storybook@latest init --type nextjs
-# Elegir @storybook/nextjs-vite
-npx storybook@latest add @storybook/addon-themes
-npx storybook@latest add @storybook/addon-interactions
+npx storybook@latest init --type nextjs --directory apps/web
 ```
 
-### Configuración
+Then normalize package scripts in `apps/web/package.json`:
 
-**`apps/web/.storybook/main.ts`:**
-```typescript
-import type { StorybookConfig } from '@storybook/nextjs-vite'
-
-const config: StorybookConfig = {
-  framework: '@storybook/nextjs-vite',
-  stories: [
-    '../src/**/*.stories.@(ts|tsx)',
-    '../../../packages/**/*.stories.@(ts|tsx)',
-  ],
-  addons: [
-    '@storybook/addon-essentials',
-    '@storybook/addon-interactions',
-    '@storybook/addon-themes',
-  ],
+```json
+{
+  "scripts": {
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  }
 }
-export default config
 ```
 
-**`apps/web/.storybook/preview.ts`:**
-```typescript
-import '../src/app/globals.css'
-import { withThemeByClassName } from '@storybook/addon-themes'
-import type { Preview } from '@storybook/react'
+Root convenience scripts may be added:
 
-const preview: Preview = {
-  decorators: [
-    withThemeByClassName({
-      themes: { light: '', dark: 'dark' },
-      defaultTheme: 'dark',
-    }),
-  ],
-  parameters: {
-    layout: 'centered',
-    backgrounds: {
-      default: 'dark',
-      values: [
-        { name: 'dark', value: '#09090b' },
-        { name: 'light', value: '#ffffff' },
-      ],
-    },
-  },
+```json
+{
+  "scripts": {
+    "storybook": "npm run storybook -w @eva/web",
+    "build-storybook": "npm run build-storybook -w @eva/web"
+  }
 }
-export default preview
 ```
 
-### Stories a crear (prioridad)
+### CI Job
 
-**Atoms:**
-| Story | Variantes |
-|-------|-----------|
-| `atoms/StatusBadge.stories.tsx` | active, inactive, pending, expired |
-| `atoms/Spinner.stories.tsx` | sizes: sm, md, lg |
-| `atoms/EmptyState.stories.tsx` | con/sin acción |
+Use root lockfile. Do **not** run `npm ci` inside `apps/web`.
 
-**Molecules:**
-| Story | Variantes |
-|-------|-----------|
-| `molecules/FormField.stories.tsx` | default, error, disabled |
-| `molecules/AvatarWithName.stories.tsx` | con imagen, fallback initials |
-
-**Organisms (enterprise-specific):**
-| Story | Variantes |
-|-------|-----------|
-| `organisms/MfaBanner.stories.tsx` | pending MFA |
-| `app/org/login/OrgLoginForm.stories.tsx` | initial, loading, error |
-
-**Auth components:**
-| Story | Variantes |
-|-------|-----------|
-| `components/auth/AuthErrorAlert.stories.tsx` | diferentes tipos de error |
-| `components/auth/PasswordInput.stories.tsx` | empty, filled, error |
-
-### CI: Storybook Build Check
-
-**`.github/workflows/ci.yml` — agregar job:**
 ```yaml
 storybook-build:
   runs-on: ubuntu-latest
   needs: quality
-  defaults:
-    run:
-      working-directory: apps/web
   steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -300,112 +281,139 @@ storybook-build:
         cache: 'npm'
     - run: npm ci
     - name: Build Storybook
-      run: npm run build-storybook
-    - uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: storybook-build-errors
-        path: apps/web/.storybook/
-        retention-days: 3
+      run: npm run build-storybook -w @eva/web
 ```
 
-No deploy de Storybook todavía (no Chromatic — tiene costo). CI solo verifica build.
+### Stories Priority
 
-### Tareas B.4
-- [ ] B.4.1 — Instalar Storybook (`npx storybook@latest init`)
-- [ ] B.4.2 — Configurar `.storybook/main.ts` y `preview.ts`
-- [ ] B.4.3 — Agregar `@source` en `globals.css` para monorepo tokens
-- [ ] B.4.4 — Crear stories atoms (StatusBadge, Spinner, EmptyState)
-- [ ] B.4.5 — Crear stories molecules (FormField, AvatarWithName)
-- [ ] B.4.6 — Crear stories organisms/auth (MfaBanner, OrgLoginForm, AuthErrorAlert)
-- [ ] B.4.7 — Agregar `storybook-build` job en CI
+Start with components already shared and low-risk:
+
+- `components/auth/AuthFormField.stories.tsx`
+- `components/auth/PasswordInput.stories.tsx`
+- `components/auth/AuthErrorAlert.stories.tsx`
+- `components/auth/AuthSubmitButton.stories.tsx`
+- `components/auth/CaptchaSlot.stories.tsx` with mocked/no-site-key state
+- `app/org/login/_components/EnterpriseLoginShell.stories.tsx`
+
+Atomic stories can wait until actual atomic components exist.
+
+### Task B.4
+
+- [ ] B.4.1 Verify latest Storybook package compatibility.
+- [ ] B.4.2 Install Storybook in `apps/web` workspace.
+- [ ] B.4.3 Add scripts to `apps/web/package.json`; optional root wrappers.
+- [ ] B.4.4 Configure `.storybook/main.ts` and `preview.ts`.
+- [ ] B.4.5 Add first auth/login stories.
+- [ ] B.4.6 Add CI build job using root `npm ci`.
+- [ ] B.4.7 Run `npm run build-storybook -w @eva/web`.
 
 ---
 
-## B.5 — CLAUDE.md: Actualizar con Estándares
+## B.5 - Docs Updates
 
-Agregar/actualizar secciones en `CLAUDE.md`:
+Update only if not already present:
 
-```markdown
-## Data Flow (obligatorio)
-_data/ → service (services/) → repository (infrastructure/db/) → Supabase
-NUNCA: _data/ → Supabase directo
+- `CLAUDE.md`: SDD workflow, data flow, Storybook rule.
+- `AGENTS.md`: keep aligned with actual repo rules.
+- `docs/architecture/PROJECT_STRUCTURE.md`: only if structure changes.
+- `docs/architecture/FLOWS_AND_COMPONENTS.md`: only if flows/components change.
+- `docs/testing/TEST_STATUS.md`: record relevant Storybook/test status.
+- `docs/status/NEXT_STEPS.md`: only if priorities change.
 
-## Atomic Design (Opción B — domain-driven + atomic transversal)
-atoms/       ← primitivos usados en 3+ domains distintos
-molecules/   ← compuestos usados en 3+ domains distintos
-organisms/   ← organismos multi-domain
-coach/, auth/, landing/ ← componentes domain-specific (no mover)
-ui/          ← shadcn primitives (no tocar)
-
-## SDD Workflow
-Toda feature nueva (no bugfix) requiere specs/[feature]/{SPEC,PLAN,TASKS}.md antes de código.
-Templates en specs/_templates/.
-
-## Storybook
-Todo componente nuevo en atoms/molecules/organisms DEBE tener .stories.tsx en el mismo PR.
-Correr: cd apps/web && npm run storybook
-```
-
-### Tarea B.5
-- [ ] B.5.1 — Actualizar CLAUDE.md con secciones anteriores
+Avoid doc churn. Update docs in the same commit as the change that makes them true.
 
 ---
 
-## Orden de Ejecución
+## Execution Order
 
-```
-Sesión 1 — Docs Foundation (sin tocar código):
-  ✅ HECHO: Actualizar CLAUDE.md con §Pilares Arquitectónicos
-  ✅ HECHO: Actualizar AGENTS.md §4.0 + checklist §14
-  B.3.1–B.3.3  → Crear specs/_templates/ (SPEC, PLAN, TASKS)
-  B.3.4–B.3.5  → Specs retroactivos (enterprise-org-management, enterprise-subdomain)
-  B.3.6        → Actualizar CLAUDE.md con §SDD Workflow (ya parcialmente hecho)
-  B.1.1        → Auditar bypasses Clean Architecture (solo auditoría, sin fixes aún)
+### Session 1 - Foundation Without Runtime Risk
 
-Sesión 2 — Storybook:
-  B.4.1–B.4.3  → Instalar Storybook + configurar
-  B.4.4–B.4.6  → Crear stories prioritarias (atoms, molecules, organisms/auth)
-  B.4.7        → CI job storybook-build
+- [ ] Create `specs/_templates/*`.
+- [ ] Create retro specs for enterprise work.
+- [ ] Create `docs/architecture/CLEAN_ARCHITECTURE_AUDIT.md`.
+- [ ] Audit `_data/*.queries.ts` and classify.
+- [ ] Update CLAUDE/AGENTS only for missing rules.
+- [ ] Run `npm run typecheck`.
 
-Sesión 3 — Atomic + Clean Architecture fix:
-  B.2.1–B.2.4  → Identificar y mover componentes multi-domain a atomic layers
-  B.1.2–B.1.4  → Corregir bypasses repository (basado en auditoría Sesión 1)
-```
+No UI changes. No component moves. No query refactors.
 
-**Sesión 1 es la más valiosa** — no toca UI, solo estructura de conocimiento
-que hace todas las sesiones futuras más eficientes (AI y humanos).
+### Session 2 - Storybook
+
+- [ ] Install/configure Storybook.
+- [ ] Add auth/login stories first.
+- [ ] Add CI build check.
+- [ ] Run `npm run build-storybook -w @eva/web`.
+
+No component moves.
+
+### Session 3 - First Clean Architecture Fixes
+
+- [ ] Pick 1-2 low-risk BYPASS files from audit.
+- [ ] Move read queries to repository/service.
+- [ ] Preserve return shape.
+- [ ] Run typecheck + targeted tests.
+
+### Session 4 - Atomic Additive Pass
+
+- [ ] Promote only proven 3+ domain components.
+- [ ] Prefer wrappers/re-exports first.
+- [ ] Add stories.
+- [ ] Run typecheck + Storybook build.
 
 ---
 
-## Verificación
+## Verification
+
+Always:
 
 ```bash
-# Storybook local
-cd apps/web && npm run storybook
-# → http://localhost:6006
-# → Verificar dark mode toggle
-# → Verificar atoms/molecules renderizan sin errores Tailwind
-
-# Build (igual que CI)
-cd apps/web && npm run build-storybook
-
-# TypeCheck + Lint (después de cualquier cambio)
-npm run typecheck && npm run lint
+npm run typecheck
 ```
+
+For auth-related changes:
+
+```bash
+npm run test -- apps/web/src/lib/auth/fail-counter.test.ts apps/web/src/lib/auth/timing.test.ts apps/web/src/lib/auth/turnstile.test.ts
+```
+
+For Storybook:
+
+```bash
+npm run build-storybook -w @eva/web
+```
+
+Known current caveat:
+
+```text
+npm run lint
+```
+
+At time of plan update, lint is not clean because of a pre-existing React Compiler purity error in:
+
+```text
+apps/web/src/app/coach/nutrition-plans/new/page.tsx
+```
+
+Do not mix that fix into Plan B unless the session explicitly owns lint cleanup.
 
 ---
 
-## Notas
+## Ready Criteria
 
-**Por qué SDD primero:** Sin specs/, cada feature nueva empieza desde cero de contexto.
-Con specs/, Claude Code puede implementar features completas dando SPEC+PLAN como contexto.
-ROI inmediato desde la primera feature nueva.
+Ready to execute Session 1 when:
 
-**Por qué NO Strict Atomic (Opción A):** Migración de 50+ componentes con alto riesgo de
-romper imports. EVA no tiene equipo de diseño dedicado que justifique catálogo estricto.
-Opción B da 80% del beneficio con 20% del esfuerzo.
+- Worktree is clean.
+- Current branch pushed.
+- User accepts docs/audit-only scope.
 
-**Por qué no reestructuración mayor:** `domain/`, `infrastructure/db/`, `services/` ya están
-bien implementados. El 80% de Clean Architecture que falta es estandarización de consistencia,
-no reescritura.
+Ready to execute Session 2 when:
+
+- Session 1 audit exists.
+- No uncommitted runtime work.
+- Storybook package/version has been verified.
+
+Ready to execute Session 3 when:
+
+- Audit identifies first low-risk bypass candidates.
+- Each candidate has expected current behavior noted.
+
