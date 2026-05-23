@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getOrgBySlug } from './_data/org.queries'
 import { MfaBanner } from './_components/MfaBanner'
+import { OrgSignOutButton } from './_components/OrgSignOutButton'
 import { Building2, Users, UserCheck, Settings, LayoutDashboard, ChevronLeft, Megaphone, Salad } from 'lucide-react'
 
 interface Props {
@@ -82,7 +83,7 @@ export default async function OrgAdminLayout({ children, params }: Props) {
                         </Link>
                     ))}
                 </nav>
-                <div className="p-4 border-t border-border">
+                <div className="p-4 border-t border-border space-y-3">
                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                         <Building2 className="w-3 h-3" />
                         <span className="capitalize">{org.plan}</span>
@@ -91,6 +92,7 @@ export default async function OrgAdminLayout({ children, params }: Props) {
                             {org.status === 'active' ? 'Activo' : org.status}
                         </span>
                     </div>
+                    <OrgSignOutButton />
                 </div>
             </aside>
 
@@ -106,7 +108,8 @@ export default async function OrgAdminLayout({ children, params }: Props) {
                     >
                         {org.name.charAt(0).toUpperCase()}
                     </div>
-                    <p className="font-semibold text-sm truncate">{org.name}</p>
+                    <p className="font-semibold text-sm truncate flex-1">{org.name}</p>
+                    <OrgSignOutButton />
                 </header>
 
                 {/* Mobile nav */}

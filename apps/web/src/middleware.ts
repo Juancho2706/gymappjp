@@ -12,33 +12,18 @@ import {
     rateLimitPayment,
     rateLimitAdmin,
 } from '@/lib/rate-limit'
+import { getEnterpriseDomain, getEnterpriseUrl } from '@/lib/enterprise/domain'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
+    const host = request.headers.get('host') ?? ''
 
     // Keep webhook endpoint lightweight and avoid auth calls in middleware.
     if (pathname === '/api/payments/webhook') {
         return NextResponse.next({ request })
-    }
-
-    // B-6: Enterprise subdomain rewrite — enterprise.eva-app.cl → /org/*
-    if (request.headers.get('host') === 'enterprise.eva-app.cl') {
-        const url = request.nextUrl.clone()
-        if (url.pathname === '/' || url.pathname === '') {
-            url.pathname = '/org/login'
-            return NextResponse.redirect(url)
-        }
-        if (url.pathname === '/login') {
-            url.pathname = '/org/login'
-            return NextResponse.rewrite(url)
-        }
-        if (!url.pathname.startsWith('/org') && !url.pathname.startsWith('/invite')) {
-            url.pathname = '/org' + url.pathname
-        }
-        return NextResponse.rewrite(url)
     }
 
     // Edge Config kill switch — disable free tier registration without a deploy.
@@ -63,7 +48,8 @@ export async function middleware(request: NextRequest) {
 
     const ip = clientIpFromRequest(request)
 
-    // SEC-002: rate limit auth-related POSTs (login, register, password flows, client login).
+    // SEC-002: rate limit auth-related POSTs — runs BEFORE enterprise subdomain rewrite
+    // so enterprise.eva-app.cl/login and direct /org/login POSTs are both protected.
     if (request.method === 'POST') {
         const authPost =
             pathname === '/login' ||
@@ -71,6 +57,7 @@ export async function middleware(request: NextRequest) {
             pathname === '/forgot-password' ||
             pathname === '/reset-password' ||
             pathname === '/registro-beta' ||
+            pathname === '/org/login' ||
             /^\/c\/[^/]+\/login$/.test(pathname)
         if (authPost) {
             const rl = await rateLimitAuth(ip)
@@ -93,6 +80,35 @@ export async function middleware(request: NextRequest) {
             const rl = await rateLimitAdmin(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
         }
+    }
+
+    // B-6: Enterprise subdomain rewrite — enterprise.eva-app.cl → /org/*
+    if (host === getEnterpriseDomain()) {
+        const url = request.nextUrl.clone()
+        if (url.pathname === '/' || url.pathname === '') {
+            // Show enterprise landing page, not login
+            url.pathname = '/enterprise'
+            return NextResponse.rewrite(url)
+        }
+        if (url.pathname === '/login') {
+            url.pathname = '/org/login'
+            return NextResponse.rewrite(url)
+        }
+        if (
+            !url.pathname.startsWith('/org') &&
+            !url.pathname.startsWith('/invite') &&
+            !url.pathname.startsWith('/enterprise')
+        ) {
+            url.pathname = '/org' + url.pathname
+        }
+        return NextResponse.rewrite(url)
+    }
+
+    // Protect /org/* — accessible only via enterprise.eva-app.cl subdomain.
+    // Redirect main domain requests to the enterprise subdomain.
+    const isLocalDev = host.includes('localhost') || host.includes('127.0.0.1')
+    if (pathname.startsWith('/org/') && !isLocalDev) {
+        return NextResponse.redirect(getEnterpriseUrl() + pathname)
     }
 
     let supabaseResponse = NextResponse.next({ request })
@@ -168,6 +184,37 @@ export async function middleware(request: NextRequest) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/'
             return NextResponse.redirect(redirectUrl)
+        }
+
+        return supabaseResponse
+    }
+
+    // ============================================================
+    // 0. PROTECT /org/* routes (enterprise org admins/owners)
+    // ============================================================
+    if (pathname.startsWith('/org/')) {
+        const isPublicOrgPath =
+            pathname === '/org/login' ||
+            pathname.startsWith('/org/setup-account')
+        if (isPublicOrgPath) return supabaseResponse
+
+        if (!user) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/org/login'
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        // MFA enforcement: org_owner/org_admin must enroll TOTP before accessing org
+        const appMeta = user.app_metadata as { requires_mfa_setup?: boolean }
+        if (appMeta?.requires_mfa_setup) {
+            // Extract slug from /org/[slug]/...
+            const slugMatch = pathname.match(/^\/org\/([^/]+)/)
+            const slug = slugMatch?.[1]
+            if (slug && !pathname.includes('/setup-mfa')) {
+                const redirectUrl = request.nextUrl.clone()
+                redirectUrl.pathname = `/org/${slug}/setup-mfa`
+                return NextResponse.redirect(redirectUrl)
+            }
         }
 
         return supabaseResponse

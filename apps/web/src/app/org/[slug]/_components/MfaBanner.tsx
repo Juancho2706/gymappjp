@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { ShieldAlert, X } from 'lucide-react'
 
 const DISMISSED_KEY = 'eva-mfa-banner-dismissed-v1'
@@ -23,14 +24,12 @@ export function MfaBanner({ orgSlug }: { orgSlug: string }) {
                 <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                 <p className="text-xs text-amber-700 dark:text-amber-300 leading-tight">
                     <span className="font-semibold">Recomendado:</span> Activa la autenticación de dos factores (2FA) para proteger tu cuenta de administrador.{' '}
-                    <a
-                        href="https://supabase.com/dashboard/project/_/auth/users"
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    <Link
+                        href={`/org/${orgSlug}/setup-mfa`}
                         className="underline hover:no-underline font-medium"
                     >
-                        Configurar en perfil →
-                    </a>
+                        Activar 2FA →
+                    </Link>
                 </p>
             </div>
             <button

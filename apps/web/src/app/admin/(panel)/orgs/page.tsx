@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Building2, Users, UserCheck, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import { getOrgs, type OrgRow } from './_data/orgs.queries'
+import { ResendOwnerInviteButton } from './_components/ResendOwnerInviteButton'
 
 export const metadata: Metadata = { title: 'Organizaciones' }
 
@@ -86,14 +87,17 @@ export default async function AdminOrgsPage() {
                                             {org.created_at ? new Date(org.created_at).toLocaleDateString('es-CL') : '—'}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <a
-                                                href={`/org/${org.slug}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-[11px] text-violet-500 hover:underline whitespace-nowrap"
-                                            >
-                                                Ver org →
-                                            </a>
+                                            <div className="flex flex-col gap-1.5">
+                                                <a
+                                                    href={`/org/${org.slug}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[11px] text-violet-500 hover:underline whitespace-nowrap"
+                                                >
+                                                    Ver org →
+                                                </a>
+                                                <ResendOwnerInviteButton orgId={org.id} />
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

@@ -16,6 +16,7 @@ DECLARE
   coach_solo uuid := '00000000-0000-0000-0001-000000000007';
   coach_inv  uuid := '00000000-0000-0000-0001-000000000008';
   org_owner_nocoach uuid := '00000000-0000-0000-0001-000000000009';
+  coach_susp uuid := '00000000-0000-0000-0001-000000000010';
   -- Org IDs
   org_a uuid := '00000000-0000-0000-0002-000000000001';
   org_b uuid := '00000000-0000-0000-0002-000000000002';
@@ -56,7 +57,8 @@ BEGIN
     (coach_b1,  'coach-member-b1@eva-test.cl',  pw, now(), '{"full_name":"Coach B1"}'::jsonb,      '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (coach_both,'coach-both@eva-test.cl',        pw, now(), '{"full_name":"Coach Both"}'::jsonb,    '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (coach_solo,'coach-solo@eva-test.cl',        pw, now(), '{"full_name":"Coach Solo"}'::jsonb,    '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
-    (coach_inv, 'coach-invited@eva-test.cl',     pw, now(), '{"full_name":"Coach Invited"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
+    (coach_inv,  'coach-invited@eva-test.cl',    pw, now(), '{"full_name":"Coach Invited"}'::jsonb,   '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
+    (coach_susp, 'coach-suspended@eva-test.cl', pw, now(), '{"full_name":"Coach Suspended"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (org_owner_nocoach, 'org-owner-nocoach@eva-test.cl', pw, now(), '{"full_name":"Org Owner No Coach"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (ca1, 'client-a1@eva-test.cl', pw, now(), '{"full_name":"Client A1"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (ca2, 'client-a2@eva-test.cl', pw, now(), '{"full_name":"Client A2"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
@@ -86,7 +88,8 @@ BEGIN
     (coach_b1,   'coach-b1-test',   'Coach B1',      'B1 Fitness',       'org_managed', 100, 'B1FIT'),
     (coach_both, 'coach-both-test', 'Coach Both',    'Both Fitness',     'org_managed', 100, 'BOTH1'),
     (coach_solo, 'coach-solo-test', 'Coach Solo',    'Solo Fitness',     'active',      10,  'SOLO1'),
-    (coach_inv,  'coach-inv-test',  'Coach Invited', 'Invited Fitness',  'active',      10,  'INVIT')
+    (coach_inv,  'coach-inv-test',   'Coach Invited',   'Invited Fitness',   'active', 10, 'INVIT'),
+    (coach_susp, 'coach-susp-test', 'Coach Suspended', 'Suspended Fitness', 'active', 10, 'SUSP1')
   ON CONFLICT (id) DO NOTHING;
 
   -- ============================================================
@@ -114,7 +117,8 @@ BEGIN
     (org_b, owner_b,           owner_b,    'org_owner', 'active',  now()),
     (org_b, coach_b1,          coach_b1,   'coach',     'active',  now()),
     (org_b, coach_both,        coach_both, 'coach',     'active',  now()),
-    (org_b, coach_inv,         coach_inv,  'coach',     'invited', now())
+    (org_b, coach_inv,         coach_inv,  'coach',     'invited',   now()),
+    (org_b, coach_susp,        coach_susp, 'coach',     'suspended', now())
   ON CONFLICT DO NOTHING;
 
   -- ============================================================

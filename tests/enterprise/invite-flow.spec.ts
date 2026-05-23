@@ -76,43 +76,46 @@ test.describe('Invite coach via org panel', () => {
     }, { timeout: 10_000 }).toBeGreaterThan(0)
   })
 
-  test('invite token expirado retorna error al intentar usar', async () => {
-    // Verify via DB that expired invite has expires_at in the past
+  test('coach suspendido tiene status suspended en organization_members', async () => {
+    // organization_invites was dropped — invite states now live in organization_members.status
     const admin = makeAdminClient()
-    const { data: invite } = await admin
-      .from('organization_invites')
-      .select('expires_at, used_at')
-      .eq('email', 'expired-coach@eva-test.cl')
+    const { data: member } = await admin
+      .from('organization_members')
+      .select('status')
+      .eq('coach_id', '00000000-0000-0000-0001-000000000010') // coach_susp
+      .eq('org_id',   '00000000-0000-0000-0002-000000000002') // org_b
       .maybeSingle()
 
-    expect(invite).not.toBeNull()
-    expect(new Date(invite!.expires_at) < new Date()).toBe(true)
-    expect(invite!.used_at).toBeNull()
+    expect(member).not.toBeNull()
+    expect(member!.status).toBe('suspended')
   })
 
-  test('invite ya usado tiene used_at definido', async () => {
+  test('coach activo tiene status active en organization_members', async () => {
     const admin = makeAdminClient()
-    const { data: invite } = await admin
-      .from('organization_invites')
-      .select('used_at, expires_at')
-      .eq('email', 'used-coach@eva-test.cl')
+    const { data: member } = await admin
+      .from('organization_members')
+      .select('status, joined_at')
+      .eq('coach_id', '00000000-0000-0000-0001-000000000002') // coach_a1
+      .eq('org_id',   '00000000-0000-0000-0002-000000000001') // org_a
       .maybeSingle()
 
-    expect(invite).not.toBeNull()
-    expect(invite!.used_at).not.toBeNull()
+    expect(member).not.toBeNull()
+    expect(member!.status).toBe('active')
+    expect(member!.joined_at).not.toBeNull()
   })
 
-  test('invite pendiente tiene expires_at en el futuro y used_at null', async () => {
+  test('coach invitado tiene status invited en organization_members', async () => {
     const admin = makeAdminClient()
-    const { data: invite } = await admin
-      .from('organization_invites')
-      .select('expires_at, used_at')
-      .eq('email', 'new-coach-a@eva-test.cl')
+    const { data: member } = await admin
+      .from('organization_members')
+      .select('status, invited_at')
+      .eq('coach_id', '00000000-0000-0000-0001-000000000008') // coach_inv
+      .eq('org_id',   '00000000-0000-0000-0002-000000000002') // org_b
       .maybeSingle()
 
-    expect(invite).not.toBeNull()
-    expect(new Date(invite!.expires_at) > new Date()).toBe(true)
-    expect(invite!.used_at).toBeNull()
+    expect(member).not.toBeNull()
+    expect(member!.status).toBe('invited')
+    expect(member!.invited_at).not.toBeNull()
   })
 })
 

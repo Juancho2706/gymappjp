@@ -13,6 +13,7 @@ export type OrgRow = {
     billing_cycle: string | null
     memberCount: number
     clientCount: number
+    ownerUserId: string | null
 }
 
 export async function getOrgs(): Promise<OrgRow[]> {
@@ -28,7 +29,7 @@ export async function getOrgs(): Promise<OrgRow[]> {
 
     const orgIds = orgs.map(o => o.id)
 
-    const [membersRes, clientsRes] = await Promise.all([
+    const [membersRes, clientsRes, ownersRes] = await Promise.all([
         admin
             .from('organization_members')
             .select('org_id')
@@ -39,20 +40,32 @@ export async function getOrgs(): Promise<OrgRow[]> {
             .from('clients')
             .select('org_id')
             .in('org_id', orgIds),
+        admin
+            .from('organization_members')
+            .select('org_id, user_id')
+            .in('org_id', orgIds)
+            .eq('role', 'org_owner')
+            .eq('status', 'active')
+            .is('deleted_at', null),
     ])
 
     const memberCounts: Record<string, number> = {}
     const clientCounts: Record<string, number> = {}
+    const ownerUserIds: Record<string, string> = {}
     for (const m of membersRes.data ?? []) {
         memberCounts[m.org_id] = (memberCounts[m.org_id] ?? 0) + 1
     }
     for (const c of clientsRes.data ?? []) {
         if (c.org_id) clientCounts[c.org_id] = (clientCounts[c.org_id] ?? 0) + 1
     }
+    for (const o of ownersRes.data ?? []) {
+        ownerUserIds[o.org_id] = o.user_id
+    }
 
     return orgs.map(o => ({
         ...o,
         memberCount: memberCounts[o.id] ?? 0,
         clientCount: clientCounts[o.id] ?? 0,
+        ownerUserId: ownerUserIds[o.id] ?? null,
     }))
 }
