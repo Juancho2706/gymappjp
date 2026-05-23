@@ -29,6 +29,7 @@
       }
     },
     "staging": {
+      "channel": "staging",
       "distribution": "internal",
       "ios": {
         "buildConfiguration": "Release",
@@ -43,6 +44,7 @@
       }
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "env": {
         "APP_ENV": "production",
