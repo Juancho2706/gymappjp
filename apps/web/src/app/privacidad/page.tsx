@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     description: 'Política de privacidad de EVA conforme a la Ley 21.719 de Chile.',
 }
 
-const LAST_UPDATED = '17 de mayo de 2026'
+const LAST_UPDATED = '22 de mayo de 2026'
 const CONTACT_EMAIL = 'privacidad@eva-app.cl'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

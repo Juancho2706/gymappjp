@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     description: 'Términos y condiciones de uso de EVA, plataforma para coaches, entrenadores personales y organizaciones.',
 }
 
-const LAST_UPDATED = '17 de mayo de 2026'
+const LAST_UPDATED = '22 de mayo de 2026'
 
 export default function AvisoLegalPage() {
   return (
@@ -182,6 +182,7 @@ export default function AvisoLegalPage() {
                     <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">
                         <Link href="/legal" className="transition-colors hover:text-foreground">Aviso Legal</Link>
                         <Link href="/privacidad" className="transition-colors hover:text-foreground">Privacidad</Link>
+                        <Link href="/legal/contrato-enterprise" className="transition-colors hover:text-foreground">Contrato Enterprise</Link>
                     </div>
                 </div>
             </div>
