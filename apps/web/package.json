@@ -8,5 +8,8 @@
     "start": "next start",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sentry/nextjs": "^10.53.1"
   }
 }
