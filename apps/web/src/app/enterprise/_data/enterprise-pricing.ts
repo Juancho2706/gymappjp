@@ -132,6 +132,13 @@ export const PRICING_TIERS: PricingTier[] = [
 // ROI calculator: individual vs plan
 export const INDIVIDUAL_PRICE = 29990
 
+const COACH_LIMITS: Record<string, number | null> = {
+  starter: 5,
+  pro: 10,
+  elite: 20,
+  enterprise: null,
+}
+
 export function calcROI(numCoaches: number): {
   individualTotal: number
   bestPlan: PricingTier | null
@@ -156,5 +163,38 @@ export function calcROI(numCoaches: number): {
     bestPlan,
     savings,
     annualSavings: savings * 12,
+  }
+}
+
+export interface PlanROI {
+  tier: PricingTier
+  applicable: boolean
+  planPrice: number
+  savings: number
+  annualSavings: number
+  isBest: boolean
+}
+
+export function calcROIAllPlans(numCoaches: number): {
+  individualTotal: number
+  plans: PlanROI[]
+} {
+  const individualTotal = numCoaches * INDIVIDUAL_PRICE
+
+  const plans: Omit<PlanROI, 'isBest'>[] = PRICING_TIERS.map(tier => {
+    const limit = COACH_LIMITS[tier.id]
+    const applicable = limit === null ? numCoaches >= 21 : numCoaches <= limit
+    const planPrice = tier.priceMonthly ?? 400000
+    const savings = individualTotal - planPrice
+    return { tier, applicable, planPrice, savings, annualSavings: savings * 12 }
+  })
+
+  const best = plans
+    .filter(p => p.applicable && p.savings > 0)
+    .sort((a, b) => b.savings - a.savings)[0] ?? null
+
+  return {
+    individualTotal,
+    plans: plans.map(p => ({ ...p, isBest: p === best })),
   }
 }

@@ -1,5 +1,3 @@
-// RN equivalent: FlatList 2-col grid with IntegrationLogo cards
-
 import { INTEGRATIONS } from '../../_data/enterprise-content'
 import { IntegrationLogo } from '../molecules/IntegrationLogo'
 import { SectionEyebrow } from '../atoms/SectionEyebrow'
@@ -8,17 +6,19 @@ export function EnterpriseIntegrations() {
   return (
     <section
       id="integraciones"
-      className="py-20 px-4 sm:px-6 lg:px-8"
-      style={{ background: '#020617' }}
+      className="py-20 px-4 sm:px-6 lg:px-8 bg-white"
       aria-labelledby="integrations-heading"
     >
       <div className="mx-auto max-w-5xl">
         <div className="mb-12 text-center">
           <SectionEyebrow className="mb-3">Stack técnico</SectionEyebrow>
-          <h2 id="integrations-heading" className="text-3xl font-black tracking-tight text-zinc-100">
+          <h2
+            id="integrations-heading"
+            className="text-3xl font-display font-black tracking-tight text-gray-900"
+          >
             Integrado con las mejores herramientas
           </h2>
-          <p className="mt-3 text-base text-zinc-400 max-w-lg mx-auto">
+          <p className="mt-3 text-base text-gray-500 max-w-lg mx-auto">
             Infraestructura enterprise-grade lista desde el día uno.
           </p>
         </div>
