@@ -751,6 +751,31 @@ Chile/legal:
 - campos de monto/estado son registro operacional interno;
 - revisar lenguaje antes de mostrarlo a clientes enterprise.
 
+### Research Update Payment Ops UX 2026
+
+**Actualizado:** 2026-05-23 18:05:05 -04:00
+
+Fuentes consultadas para esta fase:
+
+- https://designpixil.com/blog/saas-dashboard-ux-best-practices
+- https://designpixil.com/blog/fintech-dashboard-design
+- https://www.gitnexa.com/blogs/saas-dashboard-ux-patterns
+- https://www.saasui.design/blog/7-saas-ui-design-trends-2026
+
+Hallazgos aplicables:
+
+- Dashboards financieros deben ser decision-first: que esta pagado, que falta, que vence y que necesita accion.
+- En contexto fintech/payment ops, el detalle de transaccion importa mas que una tarjeta bonita.
+- Role-based views evitan mezclar billing, operaciones y finanzas para usuarios que no deben verlo.
+- Progressive disclosure reduce errores en pantallas sensibles como pagos, export y conciliacion.
+
+Traduccion EVA:
+
+- Pagos alumnos empieza como ledger operacional, no como checkout.
+- Si no existe source of truth de pagos, mostrar "sin registro" antes que inventar estados.
+- Export CSV y filtros solo despues de tabla real + permisos + audit log.
+- Copy legal debe aclarar que EVA no emite boleta/factura ni reemplaza contabilidad.
+
 ---
 
 ## Team & Access
@@ -1200,7 +1225,14 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 6 - Pagos Alumnos Operacional
 
-- Estado pago por alumno.
+- **Estado:** INICIADA con preview read-only.
+- **Completado parcial:** 2026-05-23 18:05:05 -04:00
+- **Notas:** `/org/[slug]/payments` ya muestra ledger operacional read-only, estados MVP, guardrails legales/financieros y decision tecnica pendiente para source of truth. Sin montos reales, sin cobro in-app, sin export, sin mutations y sin DB changes.
+
+- [x] Ledger operacional read-only.
+- [x] Estados MVP visibles: pagado, pendiente, vencido, becado, pausado.
+- [x] Guardrails: no checkout, no facturacion tributaria, no contabilidad.
+- [x] Cobertura real sin inventar payment statuses.
 - Vencimientos.
 - Filtros pagado/pendiente/vencido.
 - Export CSV.

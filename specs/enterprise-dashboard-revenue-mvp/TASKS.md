@@ -47,6 +47,15 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 6 - Student Payment Ops Preview
+
+- [x] Research 2026 dashboard/payment ops UX patterns before implementation.
+- [x] Replace Payments placeholder with read-only operational ledger.
+- [x] Keep copy explicit: no in-app charging, no tax invoice, no accounting replacement.
+- [x] Show MVP payment states without inventing real payment records.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`
