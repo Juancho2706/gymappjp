@@ -4,7 +4,21 @@ import type { Metadata } from 'next'
 import { getOrgBySlug } from './_data/org.queries'
 import { MfaBanner } from './_components/MfaBanner'
 import { OrgSignOutButton } from './_components/OrgSignOutButton'
-import { Building2, Users, UserCheck, Settings, LayoutDashboard, ChevronLeft, Megaphone, Salad } from 'lucide-react'
+import {
+    BadgeCheck,
+    BarChart3,
+    Building2,
+    ClipboardCheck,
+    FileText,
+    LayoutDashboard,
+    Megaphone,
+    Palette,
+    Salad,
+    Settings,
+    ShieldCheck,
+    UserCheck,
+    Users,
+} from 'lucide-react'
 
 interface Props {
     children: React.ReactNode
@@ -16,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const org = await getOrgBySlug(slug)
     return {
         title: {
-            default: org?.name ?? 'Organización',
+            default: org?.name ?? 'Organizacion',
             template: `%s | ${org?.name ?? 'EVA Org'}`,
         },
     }
@@ -25,10 +39,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 const NAV_ITEMS = [
     { href: '', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/coaches', label: 'Coaches', icon: Users },
-    { href: '/clients', label: 'Clientes', icon: UserCheck },
+    { href: '/clients', label: 'Alumnos', icon: UserCheck },
+    { href: '/assignments', label: 'Asignaciones', icon: ClipboardCheck },
+    { href: '/brand', label: 'Brand Center', icon: Palette },
+    { href: '/reports', label: 'Reportes', icon: BarChart3 },
+    { href: '/payments', label: 'Pagos alumnos', icon: BadgeCheck },
     { href: '/announcements', label: 'Novedades', icon: Megaphone },
-    { href: '/nutrition', label: 'Nutrición', icon: Salad },
-    { href: '/settings', label: 'Configuración', icon: Settings },
+    { href: '/nutrition', label: 'Nutricion', icon: Salad },
+    { href: '/team', label: 'Team & Access', icon: ShieldCheck },
+    { href: '/settings', label: 'Settings', icon: Settings },
+    { href: '/audit', label: 'Audit Log', icon: FileText },
 ]
 
 export default async function OrgAdminLayout({ children, params }: Props) {
@@ -42,53 +62,54 @@ export default async function OrgAdminLayout({ children, params }: Props) {
     const baseHref = `/org/${slug}`
 
     return (
-        <div className="flex min-h-dvh bg-background">
-            {/* Sidebar */}
-            <aside className="hidden md:flex flex-col w-60 border-r border-border bg-card shrink-0">
-                <div className="p-4 border-b border-border">
+        <div className="flex min-h-dvh bg-zinc-950 text-zinc-100">
+            <aside className="hidden w-72 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 md:flex">
+                <div className="border-b border-zinc-800 p-4">
                     <Link
-                        href="/coach/dashboard"
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
+                        href={baseHref}
+                        className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300"
                     >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                        Panel Coach
+                        <Building2 className="h-3 w-3" aria-hidden="true" />
+                        EVA Enterprise
                     </Link>
                     <div className="flex items-center gap-2">
                         {org.logo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={org.logo_url} alt={org.name} className="w-8 h-8 rounded-md object-cover" />
+                            <img src={org.logo_url} alt={org.name} className="h-9 w-9 rounded-xl object-cover" />
                         ) : (
                             <div
-                                className="w-8 h-8 rounded-md flex items-center justify-center text-white font-bold text-sm"
-                                style={{ backgroundColor: org.primary_color ?? '#10B981' }}
+                                className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black text-white"
+                                style={{ backgroundColor: org.primary_color ?? '#F59E0B' }}
                             >
                                 {org.name.charAt(0).toUpperCase()}
                             </div>
                         )}
                         <div className="min-w-0">
-                            <p className="text-sm font-semibold truncate">{org.name}</p>
-                            <p className="text-[10px] text-muted-foreground capitalize">{org.myRole.replace('_', ' ')}</p>
+                            <p className="truncate text-sm font-semibold text-white">{org.name}</p>
+                            <p className="text-[10px] capitalize text-zinc-500">{org.myRole.replace('_', ' ')}</p>
                         </div>
                     </div>
                 </div>
-                <nav className="flex-1 p-3 space-y-0.5">
+
+                <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
                     {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
                         <Link
                             key={href}
                             href={`${baseHref}${href}`}
-                            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white"
                         >
-                            <Icon className="w-4 h-4 shrink-0" />
+                            <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                             {label}
                         </Link>
                     ))}
                 </nav>
-                <div className="p-4 border-t border-border space-y-3">
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <Building2 className="w-3 h-3" />
+
+                <div className="space-y-3 border-t border-zinc-800 p-4">
+                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                        <Building2 className="h-3 w-3" aria-hidden="true" />
                         <span className="capitalize">{org.plan}</span>
                         <span>·</span>
-                        <span className={org.status === 'active' ? 'text-emerald-500' : 'text-amber-500'}>
+                        <span className={org.status === 'active' ? 'text-emerald-400' : 'text-amber-400'}>
                             {org.status === 'active' ? 'Activo' : org.status}
                         </span>
                     </div>
@@ -96,31 +117,29 @@ export default async function OrgAdminLayout({ children, params }: Props) {
                 </div>
             </aside>
 
-            {/* Mobile top bar */}
-            <div className="flex flex-col flex-1 min-w-0">
-                <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
-                    <Link href="/coach/dashboard" className="text-muted-foreground hover:text-foreground">
-                        <ChevronLeft className="w-5 h-5" />
-                    </Link>
+            <div className="flex min-w-0 flex-1 flex-col">
+                <header className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-4 py-3 md:hidden">
                     <div
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
-                        style={{ backgroundColor: org.primary_color ?? '#10B981' }}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-black text-white"
+                        style={{ backgroundColor: org.primary_color ?? '#F59E0B' }}
                     >
                         {org.name.charAt(0).toUpperCase()}
                     </div>
-                    <p className="font-semibold text-sm truncate flex-1">{org.name}</p>
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-white">{org.name}</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-amber-300">Enterprise</p>
+                    </div>
                     <OrgSignOutButton />
                 </header>
 
-                {/* Mobile nav */}
-                <nav className="md:hidden flex gap-1 px-3 pt-2 pb-1 border-b border-border overflow-x-auto">
+                <nav className="flex gap-1 overflow-x-auto border-b border-zinc-800 bg-zinc-950 px-3 pb-1 pt-2 md:hidden">
                     {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
                         <Link
                             key={href}
                             href={`${baseHref}${href}`}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent whitespace-nowrap transition-colors"
+                            className="flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white"
                         >
-                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                             {label}
                         </Link>
                     ))}
@@ -134,3 +153,4 @@ export default async function OrgAdminLayout({ children, params }: Props) {
         </div>
     )
 }
+

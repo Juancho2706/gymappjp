@@ -9,7 +9,7 @@ Ultima modificacion: 2026-05-21 18:25 -04:00
 | Public | `/`, `/pricing`, `/legal`, `/privacidad` | Visitante | Landing, precios, legal. |
 | Coach | `/coach/*` | Coach | Gestion de alumnos, programas, nutricion, marca y billing. |
 | Client | `/c/[coach_slug]/*` | Alumno | App white-label para entrenar, nutricion y check-ins. |
-| Org | `/org/[slug]/*` | Owner/admin enterprise | Gestion de gimnasio/academia, coaches y pool de clientes. |
+| Org | `/org/[slug]/*` | Owner/admin enterprise | Gestion de gimnasio/academia, coaches, alumnos, marca, reportes y operacion. |
 | Admin | `/admin/*` | EVA interno | Operaciones internas, finanzas, auditoria, sistema. |
 
 ## Flujo: coach crea alumno
@@ -64,6 +64,12 @@ Ultima modificacion: 2026-05-21 18:25 -04:00
 | Dashboard org | `/org/[slug]` | `_data/org.queries.ts` |
 | Invitar coach | `/org/[slug]/coaches` | `InviteCoachForm`, `CreateEnterpriseCoachForm`, `_actions/org.actions.ts` |
 | Gestionar pool | `/org/[slug]/clients` | `AssignClientSelect`, `AddClientForm`, `_actions/clients.actions.ts` |
+| Brand Center | `/org/[slug]/brand` | `EnterpriseComingSoonPage` placeholder, white-label enterprise |
+| Asignaciones | `/org/[slug]/assignments` | `EnterpriseComingSoonPage` placeholder |
+| Reportes | `/org/[slug]/reports` | `EnterpriseComingSoonPage` placeholder |
+| Pagos alumnos | `/org/[slug]/payments` | `EnterpriseComingSoonPage` placeholder, sin cobro in-app |
+| Team & Access | `/org/[slug]/team` | `EnterpriseComingSoonPage` placeholder, cuentas enterprise separadas |
+| Audit Log | `/org/[slug]/audit` | `EnterpriseComingSoonPage` placeholder |
 | Onboarding org | `/org/[slug]/onboarding` | `OnboardingWizard`, `_actions/onboarding.actions.ts` |
 
 ## Flujo: admin interno
