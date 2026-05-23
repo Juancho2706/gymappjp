@@ -1,0 +1,298 @@
+import { useMemo, useState } from 'react'
+import { Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Check, Share2, Trophy, X, Zap } from 'lucide-react-native'
+import * as Haptics from 'expo-haptics'
+import { useTheme } from '../../context/ThemeContext'
+
+interface LogEntry {
+  blockId: string
+  setNumber: number
+  weightKg: string
+  repsDone: string
+}
+
+interface Exercise {
+  id: string
+  name: string
+  muscle_group: string | null
+}
+
+interface Block {
+  id: string
+  sets: number
+  exercises: Exercise | null
+}
+
+export interface WorkoutSummaryModalProps {
+  visible: boolean
+  planTitle: string
+  blocks: Block[]
+  logs: Record<string, LogEntry[]>
+  onDone: () => void
+  onClose?: () => void
+}
+
+export function WorkoutSummaryModal({
+  visible,
+  planTitle,
+  blocks,
+  logs,
+  onDone,
+  onClose,
+}: WorkoutSummaryModalProps) {
+  const { theme } = useTheme()
+  const [shared, setShared] = useState(false)
+
+  const allLogs = useMemo(() => Object.values(logs).flat(), [logs])
+
+  const stats = useMemo(() => {
+    const completedSets = allLogs.length
+    const totalReps = allLogs.reduce((acc, l) => acc + (parseInt(l.repsDone) || 0), 0)
+    const totalVolume = allLogs.reduce(
+      (acc, l) => acc + (parseFloat(l.weightKg) || 0) * (parseInt(l.repsDone) || 0),
+      0,
+    )
+    return { completedSets, totalReps, totalVolume }
+  }, [allLogs])
+
+  const exerciseBreakdown = useMemo(() => {
+    const result: Array<{ name: string; muscleGroup: string; sets: number; volume: number }> = []
+    for (const block of blocks) {
+      const blockLogs = logs[block.id] ?? []
+      if (!blockLogs.length || !block.exercises) continue
+      const volume = blockLogs.reduce(
+        (acc, l) => acc + (parseFloat(l.weightKg) || 0) * (parseInt(l.repsDone) || 0),
+        0,
+      )
+      result.push({
+        name: block.exercises.name,
+        muscleGroup: block.exercises.muscle_group ?? 'General',
+        sets: blockLogs.length,
+        volume,
+      })
+    }
+    return result
+  }, [blocks, logs])
+
+  const muscleGroupVolume = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const ex of exerciseBreakdown) {
+      map.set(ex.muscleGroup, (map.get(ex.muscleGroup) ?? 0) + ex.volume)
+    }
+    const entries = [...map.entries()].sort((a, b) => b[1] - a[1])
+    const maxVol = entries[0]?.[1] ?? 1
+    return entries.map(([group, vol]) => ({ group, vol, pct: Math.round((vol / maxVol) * 100) }))
+  }, [exerciseBreakdown])
+
+  async function handleShare() {
+    const text = `¡Completé "${planTitle}"! 💪 ${stats.completedSets} series · ${stats.totalReps} reps · ${Math.round(stats.totalVolume)} kg`
+    try {
+      await Share.share({ message: text })
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      setShared(true)
+      setTimeout(() => setShared(false), 2000)
+    } catch {
+      // user cancelled share
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
+        {/* Sheet close handle */}
+        <View style={[styles.handle, { backgroundColor: theme.border }]} />
+
+        {/* Dismiss button */}
+        {onClose && (
+          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.secondary }]} onPress={onClose} activeOpacity={0.7}>
+            <X size={16} color={theme.mutedForeground} />
+          </TouchableOpacity>
+        )}
+
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.iconRow}>
+              <View style={[styles.iconWrap, { backgroundColor: '#F59E0B22', borderRadius: 40 }]}>
+                <Trophy size={28} color="#F59E0B" />
+              </View>
+              <View style={[styles.iconWrap, { backgroundColor: theme.primary + '18', borderRadius: 40 }]}>
+                <Zap size={28} color={theme.primary} />
+              </View>
+            </View>
+            <Text style={[styles.headline, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+              ¡Sesión completada!
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              {planTitle}
+            </Text>
+          </View>
+
+          {/* Stats */}
+          <View style={styles.statsRow}>
+            <StatCard label="Sets" value={String(stats.completedSets)} theme={theme} />
+            <StatCard label="Reps" value={String(stats.totalReps)} theme={theme} />
+            <StatCard label="Volumen" value={`${Math.round(stats.totalVolume)} kg`} theme={theme} />
+          </View>
+
+          {/* Exercise breakdown */}
+          {exerciseBreakdown.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+                Por ejercicio
+              </Text>
+              {exerciseBreakdown.map((ex, i) => (
+                <View key={`${ex.name}-${i}`} style={[styles.exRow, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[styles.exName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                      {ex.name}
+                    </Text>
+                    <Text style={[styles.exMuscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                      {ex.muscleGroup}
+                    </Text>
+                  </View>
+                  <Text style={[styles.exMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>{ex.sets}</Text>
+                    {' series'}
+                    {ex.volume > 0 ? (
+                      <>
+                        {' · '}
+                        <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>
+                          {Math.round(ex.volume)}
+                        </Text>
+                        {' kg'}
+                      </>
+                    ) : null}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Muscle group bars */}
+          {muscleGroupVolume.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+                Volumen por grupo
+              </Text>
+              {muscleGroupVolume.map(({ group, vol, pct }) => (
+                <View key={group} style={styles.barRow}>
+                  <View style={styles.barHeader}>
+                    <Text style={[styles.barLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>{group}</Text>
+                    <Text style={[styles.barValue, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                      {Math.round(vol)} kg
+                    </Text>
+                  </View>
+                  <View style={[styles.barTrack, { backgroundColor: theme.border }]}>
+                    <View style={[styles.barFill, { backgroundColor: theme.primary, width: `${pct}%` as any }]} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Actions */}
+        <View style={[styles.actions, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
+          <TouchableOpacity
+            style={[styles.shareBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            {shared ? (
+              <>
+                <Check size={16} color={theme.success} />
+                <Text style={[styles.shareBtnLabel, { color: theme.success, fontFamily: theme.fontSans }]}>Copiado</Text>
+              </>
+            ) : (
+              <>
+                <Share2 size={16} color={theme.foreground} />
+                <Text style={[styles.shareBtnLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Compartir logro</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.doneBtn, { backgroundColor: theme.primary }]}
+            onPress={onDone}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.doneBtnLabel, { fontFamily: 'Montserrat_700Bold' }]}>Volver al inicio</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function StatCard({ label, value, theme }: { label: string; value: string; theme: any }) {
+  return (
+    <View style={[styles.statCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
+      <Text style={[styles.statLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, paddingTop: 8 },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
+  closeBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  scroll: { padding: 24, paddingBottom: 16, gap: 20 },
+  header: { alignItems: 'center', gap: 10, paddingTop: 8 },
+  iconRow: { flexDirection: 'row', gap: 10 },
+  iconWrap: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+  headline: { fontSize: 22, letterSpacing: -0.3, textAlign: 'center' },
+  subtitle: { fontSize: 14, textAlign: 'center', opacity: 0.8 },
+  statsRow: { flexDirection: 'row', gap: 8 },
+  statCard: { flex: 1, borderRadius: 12, borderWidth: 1, padding: 12, alignItems: 'center', gap: 3 },
+  statLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
+  statValue: { fontSize: 18 },
+  section: { gap: 8 },
+  sectionTitle: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2 },
+  exRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+  },
+  exName: { fontSize: 13 },
+  exMuscle: { fontSize: 11 },
+  exMeta: { fontSize: 12 },
+  barRow: { gap: 5 },
+  barHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  barLabel: { fontSize: 13 },
+  barValue: { fontSize: 12 },
+  barTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3 },
+  actions: {
+    padding: 16,
+    paddingBottom: 32,
+    gap: 10,
+    borderTopWidth: 1,
+  },
+  shareBtn: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  shareBtnLabel: { fontSize: 14 },
+  doneBtn: { height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  doneBtnLabel: { fontSize: 16, color: '#fff' },
+})

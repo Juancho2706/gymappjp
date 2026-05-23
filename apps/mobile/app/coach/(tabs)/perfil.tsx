@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
+import { Bell, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
@@ -39,6 +39,8 @@ export default function CoachPerfilScreen() {
     currentPeriodEnd: string | null
     trialEndsAt: string | null
   } | null>(null)
+  const [activeClientCount, setActiveClientCount] = useState<number | null>(null)
+  const [pushEnabled, setPushEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -51,19 +53,29 @@ export default function CoachPerfilScreen() {
     setCoach(coachData)
     setOrg(orgData)
 
-    if (coachData && !orgData.isOrgManaged) {
-      const { data } = await supabase
-        .from('coaches')
-        .select('subscription_tier, current_period_end, trial_ends_at')
-        .eq('id', coachData.id)
-        .maybeSingle()
-      if (data) {
+    if (coachData) {
+      const [{ data: subData }, { count }] = await Promise.all([
+        orgData.isOrgManaged
+          ? Promise.resolve({ data: null })
+          : supabase
+              .from('coaches')
+              .select('subscription_tier, current_period_end, trial_ends_at')
+              .eq('id', coachData.id)
+              .maybeSingle(),
+        supabase
+          .from('clients')
+          .select('*', { count: 'exact', head: true })
+          .eq('coach_id', coachData.id)
+          .eq('is_active', true),
+      ])
+      if (subData) {
         setSubscriptionDetails({
-          tier: data.subscription_tier,
-          currentPeriodEnd: data.current_period_end,
-          trialEndsAt: data.trial_ends_at,
+          tier: subData.subscription_tier,
+          currentPeriodEnd: subData.current_period_end,
+          trialEndsAt: subData.trial_ends_at,
         })
       }
+      setActiveClientCount(count ?? 0)
     }
     setLoading(false)
   }
@@ -146,7 +158,11 @@ export default function CoachPerfilScreen() {
             {subscriptionDetails?.currentPeriodEnd ? (
               <InfoRow label="Proxima renovacion" value={formatDate(subscriptionDetails.currentPeriodEnd) ?? '-'} />
             ) : null}
-            <View style={[styles.webLink, { borderTopColor: theme.border }]}>
+            <TouchableOpacity
+              style={[styles.webLink, { borderTopColor: theme.border }]}
+              onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription')}
+              activeOpacity={0.7}
+            >
               <View style={styles.webLinkLeft}>
                 <CreditCard size={16} color={theme.primary} />
                 <Text style={[styles.webLinkText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
@@ -154,12 +170,44 @@ export default function CoachPerfilScreen() {
                 </Text>
               </View>
               <ExternalLink size={16} color={theme.mutedForeground} />
-            </View>
+            </TouchableOpacity>
           </Section>
         ) : null}
 
+        <Section title="Alumnos">
+          <InfoRow
+            label="Activos"
+            value={activeClientCount !== null ? String(activeClientCount) : '-'}
+          />
+          <InfoRow label="Límite" value={`${coach?.maxClients ?? '-'}`} last />
+        </Section>
+
+        <Section title="Notificaciones">
+          <View style={[styles.notifRow, { borderColor: theme.border }]}>
+            <Bell size={16} color={theme.primary} />
+            <Text style={[styles.notifLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              Push notifications
+            </Text>
+            <Switch
+              value={pushEnabled}
+              onValueChange={setPushEnabled}
+              trackColor={{ false: theme.border, true: theme.primary + '88' }}
+              thumbColor={pushEnabled ? theme.primary : theme.mutedForeground}
+            />
+          </View>
+        </Section>
+
         <Section title="Cuenta">
-          <InfoRow label="Alumnos max." value={`${coach?.maxClients ?? '-'}`} last />
+          <TouchableOpacity
+            style={[styles.linkRow, { borderColor: theme.border }]}
+            onPress={() => Linking.openURL('https://eva-app.cl/c/change-password')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              Cambiar contraseña
+            </Text>
+            <ExternalLink size={14} color={theme.mutedForeground} />
+          </TouchableOpacity>
         </Section>
 
         <Button
@@ -200,4 +248,21 @@ const styles = StyleSheet.create({
   },
   webLinkLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   webLinkText: { fontSize: 13, letterSpacing: 0.3 },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  notifLabel: { flex: 1, fontSize: 14 },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  linkText: { fontSize: 14 },
 })

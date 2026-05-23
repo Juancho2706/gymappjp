@@ -17,13 +17,15 @@ import {
 import { useKeepAwake } from 'expo-keep-awake'
 import * as Haptics from 'expo-haptics'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, Dumbbell, Info, Timer, Trophy } from 'lucide-react-native'
+import { Check, Dumbbell, Info, Trophy } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, NativeDialog, OfflineBanner, ProgressBar, TopBar } from '../../../components'
+import { RestTimer } from '../../../components/workout/RestTimer'
+import { WorkoutSummaryModal } from '../../../components/workout/WorkoutSummaryModal'
 
 interface Exercise {
   id: string
@@ -230,17 +232,8 @@ export default function WorkoutExecutionScreen() {
 
   function startRest(seconds: number) {
     if (restInterval.current) clearInterval(restInterval.current)
+    restInterval.current = null
     setRestSeconds(seconds)
-    restInterval.current = setInterval(() => {
-      setRestSeconds((s) => {
-        if (s == null || s <= 1) {
-          clearInterval(restInterval.current!)
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-          return null
-        }
-        return s - 1
-      })
-    }, 1000)
   }
 
   async function logSet(block: Block, setNumber: number, weight: string, reps: string, rpe: string, rir: string) {
@@ -365,18 +358,11 @@ export default function WorkoutExecutionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {restSeconds != null && (
-        <MotiView from={{ opacity: 0, translateY: -16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', damping: 14 }}>
-          <TouchableOpacity
-            style={[styles.restBanner, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
-            onPress={() => { if (restInterval.current) clearInterval(restInterval.current); setRestSeconds(null) }}
-            activeOpacity={0.85}
-          >
-            <Timer size={16} color={theme.primaryForeground} />
-            <Text style={[styles.restText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-              Descanso · {restSeconds}s · toca para saltar
-            </Text>
-          </TouchableOpacity>
-        </MotiView>
+        <RestTimer
+          duration={restSeconds}
+          onComplete={() => setRestSeconds(null)}
+          onSkip={() => setRestSeconds(null)}
+        />
       )}
 
       <OfflineBanner visible={!isOnline} />
@@ -443,20 +429,14 @@ export default function WorkoutExecutionScreen() {
         </KeyboardAvoidingView>
       )}
 
-      <NativeDialog open={summaryOpen} title="Entrenamiento completado" onClose={() => setSummaryOpen(false)}>
-        <View style={styles.summaryBody}>
-          <View style={[styles.summaryIcon, { backgroundColor: theme.success + '18', borderRadius: theme.radius['2xl'] }]}>
-            <Trophy size={34} color={theme.success} />
-          </View>
-          <Text style={[styles.summaryTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-            {planTitle}
-          </Text>
-          <Text style={[styles.summaryText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Registraste {completedSetCount} de {requiredSets} series. El detalle queda sincronizado con tu coach.
-          </Text>
-          <Button label="Volver al dashboard" onPress={() => router.replace('/alumno/home')} full />
-        </View>
-      </NativeDialog>
+      <WorkoutSummaryModal
+        visible={summaryOpen}
+        planTitle={planTitle}
+        blocks={blocks}
+        logs={logs}
+        onDone={() => router.replace('/alumno/home')}
+        onClose={() => setSummaryOpen(false)}
+      />
 
       <TechniqueDialog exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} />
     </SafeAreaView>
@@ -696,7 +676,7 @@ function TechniqueDialog({ exercise, onClose }: { exercise: Exercise | null; onC
             ))}
           </View>
         ) : (
-          <Text style={[styles.summaryText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text style={[styles.techHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
             No hay instrucciones detalladas disponibles.
           </Text>
         )}
@@ -707,14 +687,6 @@ function TechniqueDialog({ exercise, onClose }: { exercise: Exercise | null; onC
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  restBanner: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  restText: { fontSize: 14, letterSpacing: 0.3 },
   progressHeader: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   progressTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   progressText: { fontSize: 13 },
@@ -760,10 +732,6 @@ const styles = StyleSheet.create({
   setLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
   logRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logInput: { flex: 1, height: 44, borderWidth: 1, textAlign: 'center', fontSize: 14, fontWeight: '500' },
-  summaryBody: { alignItems: 'center', gap: 12 },
-  summaryIcon: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center' },
-  summaryTitle: { fontSize: 20, textAlign: 'center' },
-  summaryText: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
   techBody: { gap: 14 },
   techImage: { width: '100%', height: 220 },
   instructions: { gap: 12 },
@@ -771,4 +739,5 @@ const styles = StyleSheet.create({
   instructionNum: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   instructionNumText: { fontSize: 12 },
   instructionText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  techHint: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
 })

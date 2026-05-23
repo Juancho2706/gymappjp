@@ -9,8 +9,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { Calendar, Dumbbell } from 'lucide-react-native'
+import { Calendar, Dumbbell, Plus } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
@@ -29,6 +30,7 @@ interface Plan {
 
 export default function BuilderScreen() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [plans, setPlans] = useState<Plan[]>([])
@@ -162,7 +164,7 @@ export default function BuilderScreen() {
             <EmptyState
               icon={Dumbbell}
               title="Sin planes asignados"
-              subtitle="Crea planes desde la app web en eva-app.cl."
+              subtitle="Crea el primer plan para este alumno."
             />
           ) : (
             <FlatList
@@ -220,12 +222,43 @@ export default function BuilderScreen() {
           )}
         </View>
       )}
+
+      {/* FAB: create new plan for selected client */}
+      {selectedClient && (
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: theme.primary }]}
+          onPress={() =>
+            router.push({
+              pathname: '/coach/program-builder',
+              params: { clientId: selectedClient.id, clientName: selectedClient.full_name },
+            })
+          }
+          activeOpacity={0.85}
+        >
+          <Plus size={24} color="#fff" />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, position: 'relative' },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   pickerRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   clientChip: {
     paddingHorizontal: 14,
