@@ -886,6 +886,31 @@ Campos:
 
 ## Dirección Visual
 
+### Research Update - Mayo 2026
+
+**Actualizado:** 2026-05-23 18:07:00 -04:00  
+**Motivo:** incorporar tendencias actuales de UI/UX enterprise, dashboards B2B, PWA y white-label antes de seguir implementando fases visuales.
+
+Hallazgos aplicables:
+
+- Dashboards B2B 2026 estan migrando de "pared de metricas" a **orchestrator dashboards**: una vista que prioriza decisiones, action queue, contexto y proximos pasos.
+- Enterprise buyers evaluan claridad operacional antes de firmar. La UI debe explicar valor sin demo guiada.
+- Progressive disclosure gana sobre dashboards saturados: mostrar resumen accionable primero, drill-down despues.
+- Dense-clean UI: alta densidad para operadores, pero con jerarquia fuerte, tablas utiles y espacios controlados.
+- Explainable UI: si aparece un score o insight, debe explicar por que existe y que accion recomienda.
+- PWA/responsive sigue vigente cuando se disena app-like: navegacion compacta, acciones sticky, offline/fast states futuros.
+- Design systems 2026 priorizan tokens, accesibilidad, theming y governance, no cantidad de componentes.
+- White-label enterprise moderno exige custom domain/portal, branding profundo, loaders, manifests, emails, reportes y ausencia de rastros visibles del proveedor base donde importa.
+- Accesibilidad y compliance son parte del valor enterprise, no una etapa posterior.
+
+Traduccion para EVA Enterprise:
+
+- El dashboard home debe funcionar como **Action Command Center**, no como analytics decorativo.
+- Cada grafico debe tener texto de estado y accion sugerida.
+- Cada modulo debe tener vista desktop densa y mobile/PWA simplificada.
+- Brand Center debe gobernar marca de enterprise, coaches enterprise y alumnos.
+- La identidad EVA puede quedar como "powered by" opcional, nunca competir con la marca del cliente enterprise.
+
 ### Sensación
 
 Premium, operacional, seria. Menos "fitness app", más "business command center".
@@ -906,6 +931,18 @@ Premium, operacional, seria. Menos "fitness app", más "business command center"
 - no cards dentro de cards;
 - empty states con acción real;
 - acciones core visibles en mobile.
+- progressive disclosure:
+  - resumen primero;
+  - causa/razon despues;
+  - accion final siempre visible.
+- cada score debe mostrar:
+  - formula o proxy;
+  - ultima actualizacion;
+  - recomendacion.
+- cada chart debe tener alternativa textual:
+  - estado;
+  - tendencia;
+  - dato numerico principal.
 
 ### Animación
 
@@ -1074,15 +1111,19 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 4 - Brand Center y White-Label Propagation
 
-- Brand Center.
-- Upload/seleccion logo.
-- Paleta y contraste.
-- Loader custom.
-- Previews coach/alumno/enterprise.
-- Publicar brand config.
-- Ocultar `Mi marca` y `Billing` en coaches enterprise.
-- Aplicar branding enterprise en alumnos.
-- Audit events de cambios de marca.
+**Estado:** INICIADA con preview read-only.  
+**Completado parcial:** 2026-05-23 17:51:02 -04:00  
+**Notas:** `/org/[slug]/brand` ya muestra Brand Center visual con previews para coach app, alumno PWA, enterprise dashboard y loader. Sin persistencia, sin upload, sin mutations y sin DB changes.
+
+- [x] Brand Center preview.
+- [ ] Upload/seleccion logo.
+- [x] Paleta y contraste preview.
+- [x] Loader custom preview.
+- [x] Previews coach/alumno/enterprise.
+- [ ] Publicar brand config.
+- [ ] Ocultar `Mi marca` y `Billing` en coaches enterprise.
+- [ ] Aplicar branding enterprise en alumnos.
+- [ ] Audit events de cambios de marca.
 
 ### Fase 5 - Asignaciones
 
@@ -1295,3 +1336,17 @@ Inputs usados para esta version del plan:
 - Activo Consulting: custom branding en enterprise portals requiere governance, accesibilidad, consistencia de marca y multi-brand readiness.
 - FluxBilling: portales white-label 2026 deben ser mobile-first y no romper experiencia mostrando rastros del proveedor base.
 - Reddit SaaS/white-label founder notes 2026: enterprise white-label valora confiabilidad, branding, controles, seguridad, reporting y soporte mas que solo "logo swap".
+
+## Referencias UI/UX Enterprise Mayo 2026
+
+Inputs usados antes de seguir implementando:
+
+- SaaSUI Design 2026: roles, mejores patrones SaaS modernos y B2B con mas carga emocional sin perder claridad.
+- Dfeelings B2B UX 2026: predictive/intent-oriented B2B experiences y experiencias globales mas guiadas.
+- Brandson Digital dashboard principles: dashboards escalables necesitan jerarquia, foco y navegacion primaria limitada.
+- Orbix B2B dashboard trends 2026: progressive disclosure, modulos colapsables y claridad como factor de venta enterprise.
+- CorgenX UI/UX 2026: design systems mas livianos, tokens, accesibilidad y extensibilidad por producto.
+- GetStream dashboard redesign 2026: alta densidad de informacion puede funcionar si sigue siendo limpia y funcional.
+- Outrunly AI SaaS UI 2026: Explainable UI y orchestrator dashboards para generar confianza.
+- Accessibility.com 2026: accesibilidad como gobernanza continua, no checklist final.
+- Reddit UIUX/SaaS mayo 2026: lo que funciona es menos friccion, rapidez, progressive disclosure y contenido adaptativo util.

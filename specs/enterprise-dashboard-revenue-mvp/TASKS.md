@@ -22,6 +22,13 @@
 - [x] Run `npm run typecheck`.
 - [x] Update `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md` with timestamp.
 
+## Phase 4 - Brand Center Preview
+
+- [x] Replace Brand Center placeholder with read-only visual preview.
+- [x] Add coach app, student PWA, enterprise dashboard and loader previews.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`
