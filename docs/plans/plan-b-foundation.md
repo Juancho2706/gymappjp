@@ -3,7 +3,7 @@
 **Version:** 2.2  
 **Date:** 2026-05-23  
 **Priority:** P1  
-**Status:** READY FOR SESSION 1  
+**Status:** SESSION 1 COMPLETE  
 **Replaces:** `plan-b-design-system.md` scope. Prior plans A/C/D/E were archived/removed in commit `17252b5`.
 
 ---
@@ -30,7 +30,7 @@ Goal: improve maintainability without breaking working coach/client/org flows.
 | Clean Architecture | Partial | `domain/`, `infrastructure/db/`, `services/` exist, but many `_data/*.queries.ts` still call Supabase directly. |
 | Feature-First | Good | Route-local `_data/_actions/_components` pattern is present across major app areas. |
 | Atomic Design | Skeleton | `atoms/`, `molecules/`, `organisms/` exist but are mostly barrels; real reusable auth components now live in `components/auth/`. |
-| SDD | Missing | `specs/` does not exist. Feature context still lives mostly in plans/conversations. |
+| SDD | Started | `specs/_templates` and retroactive enterprise specs exist. Future features still need specs before code. |
 | Storybook | Missing | No `.storybook/`, no `storybook` scripts in `@eva/web`, no visual catalog. |
 
 Important repo reality:
@@ -98,19 +98,19 @@ Direct Supabase usage exists beyond the original list. Audit must include:
 
 ### Task B.1
 
-- [ ] B.1.1 Create audit doc: `docs/architecture/CLEAN_ARCHITECTURE_AUDIT.md`.
-- [ ] B.1.2 For every `_data/*.queries.ts`, classify:
+- [x] B.1.1 Create audit doc: `docs/architecture/CLEAN_ARCHITECTURE_AUDIT.md`.
+- [x] B.1.2 For every `_data/*.queries.ts`, classify:
   - `OK`: auth/context only + service call.
   - `BYPASS`: feature data uses `.from()` / `.rpc()` directly.
   - `ADMIN_EXCEPTION`: service-role admin page to migrate later.
   - `HIGH_RISK`: large query shape or user-facing critical flow.
-- [ ] B.1.3 Prioritize fixes by risk:
+- [x] B.1.3 Prioritize fixes by risk:
   1. Low-risk read-only catalogs.
   2. Settings/profile reads.
   3. Coach dashboard.
   4. Student dashboard/workout/nutrition.
   5. Admin pages.
-- [ ] B.1.4 Do not refactor during audit session.
+- [x] B.1.4 Do not refactor during audit session.
 
 ### Fix Strategy
 
@@ -213,12 +213,12 @@ Universal DoD:
 
 ### Task B.3
 
-- [ ] B.3.1 Create `specs/_templates/SPEC.md`.
-- [ ] B.3.2 Create `specs/_templates/PLAN.md`.
-- [ ] B.3.3 Create `specs/_templates/TASKS.md`.
-- [ ] B.3.4 Create retro spec `specs/enterprise-org-management/`.
-- [ ] B.3.5 Create retro spec `specs/enterprise-subdomain/`.
-- [ ] B.3.6 Link templates from `CLAUDE.md` and `AGENTS.md` only if content changed.
+- [x] B.3.1 Create `specs/_templates/SPEC.md`.
+- [x] B.3.2 Create `specs/_templates/PLAN.md`.
+- [x] B.3.3 Create `specs/_templates/TASKS.md`.
+- [x] B.3.4 Create retro spec `specs/enterprise-org-management/`.
+- [x] B.3.5 Create retro spec `specs/enterprise-subdomain/`.
+- [x] B.3.6 Link templates from `CLAUDE.md` and `AGENTS.md` only if content changed. Existing docs already had the core rules, so no edit was needed.
 
 Session 1 can safely execute B.3 and B.1 audit.
 
@@ -328,12 +328,12 @@ Avoid doc churn. Update docs in the same commit as the change that makes them tr
 
 ### Session 1 - Foundation Without Runtime Risk
 
-- [ ] Create `specs/_templates/*`.
-- [ ] Create retro specs for enterprise work.
-- [ ] Create `docs/architecture/CLEAN_ARCHITECTURE_AUDIT.md`.
-- [ ] Audit `_data/*.queries.ts` and classify.
-- [ ] Update CLAUDE/AGENTS only for missing rules.
-- [ ] Run `npm run typecheck`.
+- [x] Create `specs/_templates/*`.
+- [x] Create retro specs for enterprise work.
+- [x] Create `docs/architecture/CLEAN_ARCHITECTURE_AUDIT.md`.
+- [x] Audit `_data/*.queries.ts` and classify.
+- [x] Update CLAUDE/AGENTS only for missing rules. No edit needed.
+- [x] Run `npm run typecheck`.
 
 No UI changes. No component moves. No query refactors.
 
@@ -400,11 +400,12 @@ Do not mix that fix into Plan B unless the session explicitly owns lint cleanup.
 
 ## Ready Criteria
 
-Ready to execute Session 1 when:
+Session 1 completed:
 
-- Worktree is clean.
-- Current branch pushed.
-- User accepts docs/audit-only scope.
+- Specs templates created.
+- Retro enterprise specs created.
+- Clean Architecture audit created.
+- Runtime untouched.
 
 Ready to execute Session 2 when:
 
@@ -416,4 +417,3 @@ Ready to execute Session 3 when:
 
 - Audit identifies first low-risk bypass candidates.
 - Each candidate has expected current behavior noted.
-
