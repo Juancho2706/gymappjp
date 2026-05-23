@@ -549,6 +549,31 @@ Propósito:
 
 Convertir asignación alumno-coach en workflow central.
 
+### Research Update Scheduling/Capacity UX 2026
+
+**Actualizado:** 2026-05-23 18:02:03 -04:00
+
+Fuentes consultadas para esta fase:
+
+- https://www.equal.design/blog/saas-ux-best-practices-b2b-us
+- https://www.onething.design/post/b2b-saas-ux-design
+- https://fieldcode.com/en/field-service-daily/what-makes-field-service-scheduling-break-down-at-scale
+- https://knowledge.kantata.com/hc/en-us/articles/360035345993-Insights-Classic-Staffing-Capacity-Dashboard
+
+Hallazgos aplicables:
+
+- Operaciones B2B 2026 prioriza claridad, outcomes y reduccion de carga cognitiva sobre dashboards decorativos.
+- Interfaces por rol y progressive disclosure evitan mostrar controles peligrosos antes de tener permisos/modelo robusto.
+- La asignacion escala mal cuando depende de memoria humana y no muestra capacidad, excepciones y efecto domino.
+- Dashboards de staffing/capacity deben responder rapido: quien tiene demanda, quien tiene capacidad y donde hay riesgo.
+
+Traduccion EVA:
+
+- Asignaciones debe empezar como cockpit read-only antes de habilitar mutations.
+- Desktop necesita tablero de capacidad y queue; mobile necesita stepper guiado.
+- Cada cambio futuro debe mostrar impacto antes/despues y escribir audit event.
+- Bulk assign debe tener preview, confirmacion y camino de rollback.
+
 Features:
 
 - queue de alumnos sin coach;
@@ -1161,8 +1186,14 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 5 - Asignaciones
 
-- Queue alumnos sin coach.
-- Capacidad por coach.
+- **Estado:** INICIADA con preview read-only.
+- **Completado parcial:** 2026-05-23 18:02:03 -04:00
+- **Notas:** `/org/[slug]/assignments` ya muestra queue de alumnos sin coach, capacidad por coach, sobrecarga, cupos sugeridos y reglas para el flujo editable. Sin drag-and-drop, sin mutations, sin audit writes y sin DB changes.
+
+- [x] Queue alumnos sin coach read-only.
+- [x] Capacidad por coach read-only.
+- [x] Warning visual por sobrecarga.
+- [x] Reglas de bulk assign seguro.
 - Asignar/reasignar.
 - Historial.
 - Bulk assign.

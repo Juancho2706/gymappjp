@@ -38,6 +38,15 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 5 - Assignments Preview
+
+- [x] Research 2026 scheduling/capacity UX patterns before implementation.
+- [x] Replace Assignments placeholder with read-only operational cockpit.
+- [x] Add unassigned student queue, coach capacity and overload warnings.
+- [x] Add future-safe rules for bulk assign, audit and rollback.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`
