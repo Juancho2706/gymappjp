@@ -3,13 +3,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { LoginSchema } from '@eva/schemas'
+import { headers } from 'next/headers'
+import { CoachLoginSchema } from '@eva/schemas'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
+import { jitter } from '@/lib/auth/timing'
+import { readFailCount, incrementFailCount, clearFailCount, CAPTCHA_THRESHOLD } from '@/lib/auth/fail-counter'
+import { verifyTurnstile } from '@/lib/auth/turnstile'
 
 export type LoginState = {
     error?: string
     success?: boolean
 }
+
+const GENERIC_ERROR = 'No pudimos verificar tus credenciales. Revisá email y contraseña.'
 
 export async function loginAction(
     _prevState: LoginState,
@@ -18,11 +24,26 @@ export async function loginAction(
     const raw = {
         email: formData.get('email') as string,
         password: formData.get('password') as string,
+        captchaToken: (formData.get('cf-turnstile-response') as string) || undefined,
     }
 
-    const parsed = LoginSchema.safeParse(raw)
+    const parsed = CoachLoginSchema.safeParse(raw)
     if (!parsed.success) {
-        return { error: parsed.error.issues[0].message }
+        await jitter()
+        return { error: GENERIC_ERROR }
+    }
+
+    const failCount = await readFailCount('coach')
+
+    if (failCount >= CAPTCHA_THRESHOLD) {
+        const hdrs = await headers()
+        const ip = hdrs.get('x-forwarded-for') ?? hdrs.get('x-real-ip') ?? null
+        const captchaOk = await verifyTurnstile(parsed.data.captchaToken, ip, { failCount })
+        if (!captchaOk) {
+            await jitter()
+            await incrementFailCount('coach')
+            return { error: GENERIC_ERROR }
+        }
     }
 
     const supabase = await createClient()
@@ -33,15 +54,16 @@ export async function loginAction(
     })
 
     if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-            return { error: 'Email o contraseña incorrectos.' }
-        }
-        return { error: error.message }
+        await jitter()
+        await incrementFailCount('coach')
+        return { error: GENERIC_ERROR }
     }
 
-    // Verify the user is actually a coach
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Error al obtener la sesión.' }
+    if (!user) {
+        await jitter()
+        return { error: GENERIC_ERROR }
+    }
 
     const { data: coach } = await supabase
         .from('coaches')
@@ -50,10 +72,12 @@ export async function loginAction(
         .maybeSingle()
 
     if (!coach) {
-        // Not a coach → sign them out
         await supabase.auth.signOut()
-        return { error: 'Esta cuenta no tiene acceso al panel de Coach.' }
+        await jitter()
+        return { error: GENERIC_ERROR }
     }
+
+    await clearFailCount('coach')
 
     const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
 

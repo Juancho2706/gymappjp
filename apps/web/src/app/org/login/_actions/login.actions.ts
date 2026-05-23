@@ -1,29 +1,64 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { OrgLoginSchema } from '@eva/schemas'
+import { jitter } from '@/lib/auth/timing'
+import { readFailCount, incrementFailCount, clearFailCount, CAPTCHA_THRESHOLD } from '@/lib/auth/fail-counter'
+import { verifyTurnstile } from '@/lib/auth/turnstile'
 
 export type OrgLoginState = {
     error?: string
 }
 
-export async function loginOrgAction(_prevState: OrgLoginState, formData: FormData): Promise<OrgLoginState> {
-    const email = String(formData.get('email') ?? '').trim().toLowerCase()
-    const password = String(formData.get('password') ?? '')
+const GENERIC_ERROR = 'No pudimos iniciar sesión.'
 
-    if (!email || !password) {
-        return { error: 'Email y contrasena requeridos.' }
+export async function loginOrgAction(
+    _prevState: OrgLoginState,
+    formData: FormData,
+): Promise<OrgLoginState> {
+    const raw = {
+        email: formData.get('email') as string,
+        password: formData.get('password') as string,
+        captchaToken: (formData.get('cf-turnstile-response') as string) || undefined,
+    }
+
+    const parsed = OrgLoginSchema.safeParse(raw)
+    if (!parsed.success) {
+        await jitter()
+        return { error: GENERIC_ERROR }
+    }
+
+    const failCount = await readFailCount('org')
+
+    if (failCount >= CAPTCHA_THRESHOLD) {
+        const hdrs = await headers()
+        const ip = hdrs.get('x-forwarded-for') ?? hdrs.get('x-real-ip') ?? null
+        const captchaOk = await verifyTurnstile(parsed.data.captchaToken, ip, { failCount })
+        if (!captchaOk) {
+            await jitter()
+            await incrementFailCount('org')
+            return { error: GENERIC_ERROR }
+        }
     }
 
     const supabase = await createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({
+        email: parsed.data.email,
+        password: parsed.data.password,
+    })
+
     if (error) {
-        return { error: 'Credenciales invalidas.' }
+        await jitter()
+        await incrementFailCount('org')
+        return { error: GENERIC_ERROR }
     }
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-        return { error: 'No se pudo iniciar sesion.' }
+        await jitter()
+        return { error: GENERIC_ERROR }
     }
 
     const { data: membership } = await supabase
@@ -38,7 +73,8 @@ export async function loginOrgAction(_prevState: OrgLoginState, formData: FormDa
 
     if (!membership?.org_id) {
         await supabase.auth.signOut()
-        return { error: 'No tienes acceso a ninguna organizacion.' }
+        await jitter()
+        return { error: GENERIC_ERROR }
     }
 
     const { data: org } = await supabase
@@ -50,8 +86,11 @@ export async function loginOrgAction(_prevState: OrgLoginState, formData: FormDa
 
     if (!org?.slug) {
         await supabase.auth.signOut()
-        return { error: 'Organizacion no encontrada.' }
+        await jitter()
+        return { error: GENERIC_ERROR }
     }
+
+    await clearFailCount('org')
 
     redirect(`/org/${org.slug}`)
 }

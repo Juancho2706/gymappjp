@@ -27,7 +27,7 @@ function getAuthRatelimit(): Ratelimit | null {
     }
     authRatelimit = new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(40, '1 m'),
+        limiter: Ratelimit.slidingWindow(20, '1 m'),
         prefix: 'ratelimit:auth',
     })
     return authRatelimit
