@@ -7,7 +7,7 @@ import {
 // ─── Constants ─────────────────────────────────────────────────────────────
 export const CALENDLY_URL = 'https://calendly.com/contacto-eva-app/eva-enterprise'
 export const CONTACT_EMAIL = 'contacto@eva-app.cl'
-export const ENTERPRISE_LOGIN_PATH = '/login'
+export const ENTERPRISE_LOGIN_PATH = '/org/login'
 
 // ─── Hero ──────────────────────────────────────────────────────────────────
 export const HERO = {
