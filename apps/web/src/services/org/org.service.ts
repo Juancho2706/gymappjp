@@ -3,6 +3,17 @@ import type { Database } from '@/lib/database.types'
 
 type DB = SupabaseClient<Database>
 
+type Json = Database['public']['Tables']['org_audit_logs']['Row']['metadata']
+
+export type OrgAuditEventInput = {
+    orgId: string
+    actorId: string
+    action: string
+    targetType?: string | null
+    targetId?: string | null
+    metadata?: Json
+}
+
 export function slugify(value: string): string {
     return value
         .toLowerCase()
@@ -60,4 +71,21 @@ export async function getOrgAdminContext(
     if (!membership) return { error: 'Sin permisos de administrador' }
 
     return { supabase, user: { id: userId }, org, membership }
+}
+
+export async function writeOrgAuditEvent(db: DB, event: OrgAuditEventInput): Promise<{ error?: string }> {
+    const { error } = await db.from('org_audit_logs').insert({
+        org_id: event.orgId,
+        actor_id: event.actorId,
+        action: event.action,
+        target_type: event.targetType ?? null,
+        target_id: event.targetId ?? null,
+        metadata: event.metadata ?? {},
+    })
+
+    if (error) {
+        return { error: error.message }
+    }
+
+    return {}
 }

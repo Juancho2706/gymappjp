@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { writeOrgAuditEvent } from '@/services/org/org.service'
 
 const MealNameSchema = z.object({
     name: z.string().min(1).max(80),
@@ -57,7 +58,7 @@ export async function createOrgNutritionTemplateAction(orgSlug: string, payload:
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
 
     const admin = createServiceRoleClient()
-    const { error } = await admin.from('org_nutrition_templates').insert({
+    const { data: template, error } = await admin.from('org_nutrition_templates').insert({
         org_id: ctx.org.id,
         name: parsed.data.name,
         description: parsed.data.description || null,
@@ -69,10 +70,23 @@ export async function createOrgNutritionTemplateAction(orgSlug: string, payload:
         instructions: parsed.data.instructions || null,
         meal_names: parsed.data.meal_names,
         created_by: ctx.user.id,
-    })
+    }).select('id').single()
 
     if (error) return { error: error.message }
+    await writeOrgAuditEvent(admin, {
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
+        action: 'org_nutrition_template.created',
+        targetType: 'org_nutrition_template',
+        targetId: template.id,
+        metadata: {
+            name: parsed.data.name,
+            goal_type: parsed.data.goal_type || null,
+            meal_count: parsed.data.meal_names.length,
+        },
+    })
     revalidatePath(`/org/${orgSlug}/nutrition`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
 
@@ -88,6 +102,15 @@ export async function deleteOrgNutritionTemplateAction(orgSlug: string, id: stri
         .eq('org_id', ctx.org.id)
 
     if (error) return { error: error.message }
+    await writeOrgAuditEvent(admin, {
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
+        action: 'org_nutrition_template.deleted',
+        targetType: 'org_nutrition_template',
+        targetId: id,
+        metadata: {},
+    })
     revalidatePath(`/org/${orgSlug}/nutrition`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }

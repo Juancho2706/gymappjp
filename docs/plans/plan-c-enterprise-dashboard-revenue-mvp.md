@@ -1294,6 +1294,20 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 - [ ] Normalizar taxonomia de acciones.
 - [ ] Export CSV con permiso dedicado.
 
+### Fase 7B - Audit Event Helper
+
+- **Estado:** INICIADA con cobertura parcial.
+- **Completado parcial:** 2026-05-23 21:55:26 -04:00
+- **Notas:** Se agrego `writeOrgAuditEvent()` en `services/org/org.service.ts` y se conecto a mutations reales de announcements y nutrition templates. Sin migrations porque `org_audit_logs` ya existe. Falta migrar el resto de actions enterprise al helper y decidir si la escritura de audit debe ser fail-closed via RPC/transaccion.
+
+- [x] Helper central en service layer.
+- [x] Taxonomia inicial `resource.action`.
+- [x] Audit events para announcements.
+- [x] Audit events para nutrition templates.
+- [ ] Migrar staff/coaches/client actions al helper.
+- [ ] Definir politica fail-open vs fail-closed.
+- [ ] RPC transaccional para mutations sensibles.
+
 ### Fase 8 - Sales/Implementation Layer
 
 - Demo org con datos realistas.

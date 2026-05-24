@@ -65,6 +65,15 @@
 - [x] Document completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 7B - Audit Event Helper
+
+- [x] Add central `writeOrgAuditEvent` service helper.
+- [x] Use `resource.action` event naming for new connections.
+- [x] Connect announcement mutations to audit helper.
+- [x] Connect nutrition template mutations to audit helper.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`

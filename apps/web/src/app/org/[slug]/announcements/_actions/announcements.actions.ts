@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { writeOrgAuditEvent } from '@/services/org/org.service'
 
 const CreateAnnouncementSchema = z.object({
     title: z.string().min(1).max(120),
@@ -49,16 +50,25 @@ export async function createAnnouncementAction(orgSlug: string, _prev: unknown, 
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
 
     const admin = createServiceRoleClient()
-    const { error } = await admin.from('org_announcements').insert({
+    const { data: announcement, error } = await admin.from('org_announcements').insert({
         org_id: ctx.org.id,
         title: parsed.data.title,
         body: parsed.data.body,
         active_until: parsed.data.active_until ? new Date(parsed.data.active_until).toISOString() : null,
         created_by: ctx.user.id,
-    })
+    }).select('id').single()
 
     if (error) return { error: error.message }
+    await writeOrgAuditEvent(admin, {
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
+        action: 'org_announcement.created',
+        targetType: 'org_announcement',
+        targetId: announcement.id,
+        metadata: { title: parsed.data.title, active_until: parsed.data.active_until ?? null },
+    })
     revalidatePath(`/org/${orgSlug}/announcements`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
 
@@ -74,7 +84,16 @@ export async function toggleAnnouncementAction(orgSlug: string, id: string, isAc
         .eq('org_id', ctx.org.id)
 
     if (error) return { error: error.message }
+    await writeOrgAuditEvent(admin, {
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
+        action: isActive ? 'org_announcement.activated' : 'org_announcement.deactivated',
+        targetType: 'org_announcement',
+        targetId: id,
+        metadata: { is_active: isActive },
+    })
     revalidatePath(`/org/${orgSlug}/announcements`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
 
@@ -90,6 +109,15 @@ export async function deleteAnnouncementAction(orgSlug: string, id: string) {
         .eq('org_id', ctx.org.id)
 
     if (error) return { error: error.message }
+    await writeOrgAuditEvent(admin, {
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
+        action: 'org_announcement.deleted',
+        targetType: 'org_announcement',
+        targetId: id,
+        metadata: {},
+    })
     revalidatePath(`/org/${orgSlug}/announcements`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
