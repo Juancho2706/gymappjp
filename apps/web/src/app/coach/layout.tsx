@@ -13,6 +13,8 @@ import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { getCoachEnterpriseContext } from './_data/layout.queries'
+import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 export const metadata: Metadata = {
     title: {
@@ -43,10 +45,15 @@ export default async function CoachLayout({
         getPublishedNewsItems(),
     ])
 
-    const enterpriseContext = await getCoachEnterpriseContext(coach)
+    const supabase = await createClient()
+    const activeWorkspace = await resolvePreferredWorkspace(supabase, coach.id)
+    const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
+    const enterpriseContext = await getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null)
 
     const primaryColor =
-        coach.use_brand_colors_coach === false
+        enterpriseContext?.primaryColor
+            ? enterpriseContext.primaryColor
+            : coach.use_brand_colors_coach === false
             ? SYSTEM_PRIMARY_COLOR
             : (coach.primary_color || BRAND_PRIMARY_COLOR)
     const palette = generateBrandPalette(primaryColor)
@@ -103,9 +110,9 @@ export default async function CoachLayout({
             <NewsFeedProvider initialUnreadCount={unreadCount} initialItems={newsItems}>
                 <CoachSidebar
                     coachName={coach.full_name}
-                    coachBrand={coach.brand_name}
+                    coachBrand={enterpriseContext?.orgName ?? coach.brand_name}
                     primaryColor={primaryColor}
-                    subscriptionStatus={coach.subscription_status}
+                    subscriptionStatus={activeEnterpriseCoach ? 'org_managed' : coach.subscription_status}
                     enterpriseContext={enterpriseContext}
                 />
                 <CoachMainWrapper>
