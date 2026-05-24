@@ -12,6 +12,7 @@ import {
     Sparkles,
 } from 'lucide-react'
 import { getOrgBySlug } from '../_data/org.queries'
+import { BrandCenterActions } from './_components/BrandCenterActions'
 
 export const metadata: Metadata = { title: 'Brand Center' }
 
@@ -63,7 +64,7 @@ export default async function OrgBrandPage({ params }: Props) {
                                 Brand Center
                             </h1>
                             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
-                                Define la marca que veran el owner, staff enterprise, coaches creados por la empresa y alumnos. Este primer slice es preview read-only: sin guardar cambios todavia.
+                                Define la marca que veran el owner, staff enterprise, coaches creados por la empresa y alumnos. Guarda un draft y publicalo a coaches enterprise sin herramientas externas.
                             </p>
                         </div>
 
@@ -197,6 +198,21 @@ export default async function OrgBrandPage({ params }: Props) {
                         </section>
 
                         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <h2 className="text-lg font-black text-white">Editar y publicar</h2>
+                            <p className="mt-2 text-sm leading-6 text-zinc-500">
+                                Draft usa `organizations`. Publicar sincroniza coaches enterprise activos con `coaches.brand_name`, colores, logo y loader.
+                            </p>
+                            <div className="mt-5">
+                                <BrandCenterActions
+                                    orgSlug={slug}
+                                    defaultName={org.name}
+                                    defaultColor={primaryColor}
+                                    logoUrl={org.logo_url}
+                                />
+                            </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                             <h2 className="text-lg font-black text-white">Loader library</h2>
                             <div className="mt-4 space-y-3">
                                 {LOADER_OPTIONS.map((option) => (
@@ -236,7 +252,7 @@ export default async function OrgBrandPage({ params }: Props) {
                     <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-5">
                         <h2 className="text-lg font-black text-white">Estado de esta fase</h2>
                         <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                            Preview visual listo. Persistencia, upload, draft/publish y propagacion real quedan para la fase con modelo `organization_branding`.
+                            Draft, upload y publish inicial ya funcionan con el modelo existente. Queda pendiente modelo dedicado `organization_branding` si necesitamos versionado, rollback y publish avanzado.
                         </p>
                     </div>
                 </section>
@@ -244,4 +260,3 @@ export default async function OrgBrandPage({ params }: Props) {
         </div>
     )
 }
-

@@ -75,7 +75,18 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
         .eq('id', org.id)
     if (dbErr) return { error: dbErr.message }
 
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'brand.logo_uploaded',
+        targetType: 'organization',
+        targetId: org.id,
+        metadata: { path, content_type: file.type, size: file.size },
+    })
+
     revalidatePath(`/org/${orgSlug}`)
+    revalidatePath(`/org/${orgSlug}/brand`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true, logoUrl: publicUrl }
 }
 
@@ -118,8 +129,78 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
 
     if (error) return { error: error.message }
 
+    await writeOrgAuditEvent(supabase, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'brand.updated',
+        targetType: 'organization',
+        targetId: org.id,
+        metadata: updateData,
+    })
+
     revalidatePath(`/org/${orgSlug}`)
+    revalidatePath(`/org/${orgSlug}/brand`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
+}
+
+export async function publishEnterpriseBrandAction(orgSlug: string) {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+    const primaryColor = org.primary_color ?? '#10B981'
+    const loaderText = org.name
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(0, 10)
+        .toUpperCase() || 'APP'
+
+    const { data: coachMembers, error: membersError } = await admin
+        .from('organization_members')
+        .select('coach_id')
+        .eq('org_id', org.id)
+        .eq('role', 'coach')
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .not('coach_id', 'is', null)
+
+    if (membersError) return { error: membersError.message }
+
+    const coachIds = [...new Set((coachMembers ?? []).map(member => member.coach_id).filter(Boolean))] as string[]
+
+    if (coachIds.length > 0) {
+        const { error: coachesError } = await admin
+            .from('coaches')
+            .update({
+                brand_name: org.name,
+                primary_color: primaryColor,
+                logo_url: org.logo_url,
+                use_brand_colors_coach: true,
+                use_custom_loader: true,
+                loader_text: loaderText,
+                loader_text_color: primaryColor,
+                loader_icon_mode: 'coach',
+            })
+            .in('id', coachIds)
+
+        if (coachesError) return { error: coachesError.message }
+    }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'brand.published',
+        targetType: 'organization',
+        targetId: org.id,
+        metadata: { coach_count: coachIds.length, primary_color: primaryColor, has_logo: Boolean(org.logo_url) },
+    })
+
+    revalidatePath(`/org/${orgSlug}`)
+    revalidatePath(`/org/${orgSlug}/brand`)
+    revalidatePath(`/org/${orgSlug}/coaches`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, coachCount: coachIds.length }
 }
 
 async function resolveOrgAdminContext(orgSlug: string, allowedRoles: string[] = ['org_owner', 'org_admin']) {

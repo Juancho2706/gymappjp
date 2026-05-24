@@ -38,6 +38,16 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 4B - Brand Center Functional Draft/Publish
+
+- [x] Research 2026 white-label brand ops patterns before implementation.
+- [x] Reuse existing org/coach branding fields instead of adding premature migration.
+- [x] Add Brand Center draft controls for org name, color and logo upload.
+- [x] Add publish action to sync enterprise brand to active org coaches.
+- [x] Add brand audit events and local Supabase image support.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Phase 5 - Assignments Preview
 
 - [x] Research 2026 scheduling/capacity UX patterns before implementation.

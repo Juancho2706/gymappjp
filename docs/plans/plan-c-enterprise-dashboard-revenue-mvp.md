@@ -129,6 +129,30 @@ Aplicacion EVA:
 - En experiencia del alumno y coach enterprise, la marca visible principal es la empresa.
 - La marca debe poder escalar a app mobile enterprise futura.
 
+### Research Update White-Label Brand Ops 2026
+
+**Actualizado:** 2026-05-23 22:20:38 -04:00
+
+Fuentes consultadas para esta fase:
+
+- https://www.equal.design/blog/saas-ux-best-practices-b2b-us
+- https://www.velocityos.ai/help/portal-setup-branding-access/
+- https://www.docsie.io/blog/glossary/white-label-portal/
+- https://noloco.io/blog/client-portal-best-practices
+
+Hallazgos aplicables:
+
+- White-label 2026 debe cubrir logo, color, dominio/ruta, mobile, emails/reportes y governance.
+- Los portales B2B deben permitir publish controlado, no solo guardar settings sueltos.
+- Brand/access changes necesitan auditoria y responsables claros.
+- Si no hay presupuesto para herramientas externas, usar configuracion in-app + storage existente es suficiente para validar.
+
+Traduccion EVA:
+
+- Usar `organizations.logo_url/primary_color/name` como draft inicial antes de crear `organization_branding`.
+- Publicar debe sincronizar coaches enterprise activos y auditar `brand.published`.
+- Mantener pendiente `organization_branding` solo cuando se necesite versionado, rollback o publish avanzado.
+
 ### Modulo: Brand Center
 
 Ruta:
@@ -1252,19 +1276,19 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 4 - Brand Center y White-Label Propagation
 
-**Estado:** INICIADA con preview read-only.  
-**Completado parcial:** 2026-05-23 17:51:02 -04:00  
-**Notas:** `/org/[slug]/brand` ya muestra Brand Center visual con previews para coach app, alumno PWA, enterprise dashboard y loader. Sin persistencia, sin upload, sin mutations y sin DB changes.
+**Estado:** INICIADA con controles funcionales sobre modelo existente.
+**Completado parcial:** 2026-05-23 22:20:38 -04:00
+**Notas:** `/org/[slug]/brand` ya permite guardar nombre/color, subir logo a `org-assets` y publicar marca a coaches enterprise activos. Sin nuevas dependencias y sin migrations porque ya existen `organizations` + campos de branding en `coaches`. Queda pendiente modelo dedicado `organization_branding` para versionado/rollback/publish avanzado.
 
 - [x] Brand Center preview.
-- [ ] Upload/seleccion logo.
+- [x] Upload/seleccion logo.
 - [x] Paleta y contraste preview.
 - [x] Loader custom preview.
 - [x] Previews coach/alumno/enterprise.
-- [ ] Publicar brand config.
+- [x] Publicar brand config inicial a coaches enterprise.
 - [ ] Ocultar `Mi marca` y `Billing` en coaches enterprise.
-- [ ] Aplicar branding enterprise en alumnos.
-- [ ] Audit events de cambios de marca.
+- [x] Aplicar branding enterprise en alumnos via coaches enterprise actualizados.
+- [x] Audit events de cambios de marca.
 
 ### Fase 5 - Asignaciones
 
