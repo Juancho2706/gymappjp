@@ -42,7 +42,8 @@
 - [x] Add last workspace persistence service.
 - [x] Add branding resolver.
 - [x] Add permission helper.
-- [ ] Add audit events for activation/revocation/switch.
+- [ ] Add audit events for revocation and invite creation.
+- [x] Add audit events for activation/switch. Completed 2026-05-24 18:22:42 -04:00.
 
 ## Phase 4 - Login And Workspace UX
 

@@ -1608,7 +1608,8 @@ Prioridad P1.5 - Identity & Workspace antes de seguir P2:
 - [ ] Login enterprise staff: mantener `/org/login`, sin mostrarlo a standalone salvo link explicito.
 - [x] Workspace switcher: solo visible para usuarios con 2+ contextos. Completado el 2026-05-24 18:17:52 -04:00. Archivos: `/workspace/select`, `login.actions.ts`, `workspace.service.ts`. Login coach standalone con un solo contexto mantiene redirect directo; usuarios multi-workspace pasan por selector y persisten `last_workspace`.
 - [x] Persistir `last_workspace` de forma segura y portable a React Native. Completado el 2026-05-24 16:01:32 -04:00. Archivos: `workspace_preferences` migration, `workspace.repository.ts`, `workspace.service.ts`. Server-side preference lista; localStorage queda solo como cache futura.
-- [ ] Auditoria: `invite.created`, `invite.redeemed`, `invite.revoked`, `workspace.activated`, `membership.revoked`.
+- [ ] Auditoria completa: `invite.created`, `invite.revoked`, `membership.revoked`.
+- [x] Auditoria parcial de activacion/cambio workspace. Completado el 2026-05-24 18:22:42 -04:00. `invite.redeemed` se escribe al usar codigo enterprise; `setLastWorkspace` escribe `workspace.activated` o `workspace.switched` solo para workspaces enterprise con `orgId`, sin bloquear login si el audit no aplica por RLS.
 - [ ] RLS: validar membership dinamica por `org_id`, no solo UI.
 - [ ] Documentar flujo coach standalone que se suma a enterprise sin duplicar correo.
 - [ ] Documentar flujo owner/staff que tambien es coach/alumno sin mezclar permisos.

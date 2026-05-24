@@ -7,6 +7,7 @@ import {
     upsertWorkspacePreference,
     type WorkspacePreferenceRow,
 } from '@/infrastructure/db/workspace.repository'
+import { writeOrgAuditEvent } from '@/services/org/org.service'
 
 type DB = SupabaseClient<Database>
 
@@ -110,7 +111,8 @@ export async function resolvePreferredWorkspace(db: DB, userId: string): Promise
 }
 
 export async function setLastWorkspace(db: DB, workspace: ActiveWorkspace): Promise<{ error?: string }> {
-    return upsertWorkspacePreference(db, {
+    const previous = await findWorkspacePreference(db, workspace.userId)
+    const result = await upsertWorkspacePreference(db, {
         user_id: workspace.userId,
         last_workspace_type: workspace.type,
         last_org_id: 'orgId' in workspace ? workspace.orgId : null,
@@ -118,6 +120,10 @@ export async function setLastWorkspace(db: DB, workspace: ActiveWorkspace): Prom
         last_client_id: 'clientId' in workspace ? workspace.clientId : null,
         updated_at: new Date().toISOString(),
     })
+
+    if (result.error) return result
+    await writeWorkspaceAuditEvent(db, workspace, previous)
+    return {}
 }
 
 export function workspaceKey(workspace: ActiveWorkspace): string {
@@ -149,4 +155,30 @@ function workspaceMatchesPreference(workspace: ActiveWorkspace, preference: Work
     if ('clientId' in workspace && workspace.clientId !== preference.last_client_id) return false
     if (!('clientId' in workspace) && preference.last_client_id) return false
     return true
+}
+
+async function writeWorkspaceAuditEvent(
+    db: DB,
+    workspace: ActiveWorkspace,
+    previous: WorkspacePreferenceRow | null
+): Promise<void> {
+    if (!('orgId' in workspace) || !workspace.orgId) return
+    if (previous && workspaceMatchesPreference(workspace, previous)) return
+
+    await writeOrgAuditEvent(db, {
+        orgId: workspace.orgId,
+        actorId: workspace.userId,
+        action: previous ? 'workspace.switched' : 'workspace.activated',
+        targetType: 'workspace',
+        targetId: workspace.orgId,
+        metadata: {
+            workspace_type: workspace.type,
+            previous_workspace_type: previous?.last_workspace_type ?? null,
+            previous_org_id: previous?.last_org_id ?? null,
+            coach_id: 'coachId' in workspace ? workspace.coachId : null,
+            client_id: 'clientId' in workspace ? workspace.clientId : null,
+            member_id: 'memberId' in workspace ? workspace.memberId : null,
+            source: 'setLastWorkspace',
+        },
+    })
 }
