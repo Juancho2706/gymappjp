@@ -1,7 +1,8 @@
 'use client'
 
 import { useTransition } from 'react'
-import { toggleAnnouncementAction, deleteAnnouncementAction } from '../_actions/announcements.actions'
+import { CalendarClock, CheckCircle2, EyeOff, Loader2, Power, Trash2 } from 'lucide-react'
+import { deleteAnnouncementAction, toggleAnnouncementAction } from '../_actions/announcements.actions'
 
 interface Props {
     orgSlug: string
@@ -15,60 +16,85 @@ interface Props {
     }
 }
 
-export function AnnouncementRow({ orgSlug, announcement: a }: Props) {
+function formatDate(value: string) {
+    return new Date(value).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+export function AnnouncementRow({ orgSlug, announcement }: Props) {
     const [pending, start] = useTransition()
 
+    const expiredAt = announcement.active_until ? new Date(announcement.active_until) : null
+    const isExpired = expiredAt ? expiredAt < new Date() : false
+    const isLive = announcement.is_active && !isExpired
+
     const toggle = () => start(async () => {
-        await toggleAnnouncementAction(orgSlug, a.id, !a.is_active)
+        await toggleAnnouncementAction(orgSlug, announcement.id, !announcement.is_active)
     })
 
     const remove = () => {
-        if (!confirm('¿Eliminar esta novedad?')) return
-        start(async () => { await deleteAnnouncementAction(orgSlug, a.id) })
+        if (!confirm('Eliminar esta novedad?')) return
+        start(async () => {
+            await deleteAnnouncementAction(orgSlug, announcement.id)
+        })
     }
 
-    const expiredAt = a.active_until ? new Date(a.active_until) : null
-    const isExpired = expiredAt ? expiredAt < new Date() : false
-
     return (
-        <div className={`rounded-xl border p-4 ${a.is_active && !isExpired ? 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900'}`}>
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">{a.title}</p>
-                        {a.is_active && !isExpired && (
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">Activo</span>
+        <article className={`rounded-2xl border p-4 ${
+            isLive
+                ? 'border-cyan-400/25 bg-cyan-400/10'
+                : isExpired
+                    ? 'border-zinc-800 bg-zinc-950/60'
+                    : 'border-amber-400/20 bg-amber-400/10'
+        }`}>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-black text-white">{announcement.title}</p>
+                        {isLive && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-xs font-bold text-emerald-300">
+                                <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                                Activo
+                            </span>
                         )}
                         {isExpired && (
-                            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-700">Expirado</span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-bold text-zinc-400">
+                                <EyeOff className="h-3 w-3" aria-hidden="true" />
+                                Expirado
+                            </span>
                         )}
-                        {!a.is_active && !isExpired && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">Inactivo</span>
+                        {!announcement.is_active && !isExpired && (
+                            <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-1 text-xs font-bold text-amber-300">
+                                Inactivo
+                            </span>
                         )}
                     </div>
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2">{a.body}</p>
-                    <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-                        {new Date(a.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        {expiredAt && ` · vence ${expiredAt.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}`}
+                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-400">{announcement.body}</p>
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-zinc-500">
+                        <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+                        {announcement.created_at ? formatDate(announcement.created_at) : 'Sin fecha'}
+                        {expiredAt && ` / vence ${expiredAt.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}`}
                     </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <button
                         onClick={toggle}
                         disabled={pending}
-                        className="text-xs font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-700 px-3 text-xs font-bold text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-50"
                     >
-                        {a.is_active ? 'Desactivar' : 'Activar'}
+                        {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Power className="h-3.5 w-3.5" aria-hidden="true" />}
+                        {announcement.is_active ? 'Desactivar' : 'Activar'}
                     </button>
                     <button
                         onClick={remove}
                         disabled={pending}
-                        className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50"
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-red-400/20 px-3 text-xs font-bold text-red-300 transition hover:bg-red-400/10 disabled:opacity-50"
                     >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                         Eliminar
                     </button>
                 </div>
             </div>
-        </div>
+        </article>
     )
 }

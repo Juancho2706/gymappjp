@@ -1,21 +1,23 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
+import { CalendarClock, Loader2, Send } from 'lucide-react'
 import { createAnnouncementAction } from '../_actions/announcements.actions'
 
 interface Props {
     orgSlug: string
+    audienceCount: number
 }
 
-export function CreateAnnouncementForm({ orgSlug }: Props) {
+export function CreateAnnouncementForm({ orgSlug, audienceCount }: Props) {
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
     const [pending, start] = useTransition()
     const formRef = useRef<HTMLFormElement>(null)
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault()
-        const formData = new FormData(e.currentTarget)
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault()
+        const formData = new FormData(event.currentTarget)
         setError(null)
         setSuccess(false)
         start(async () => {
@@ -30,44 +32,67 @@ export function CreateAnnouncementForm({ orgSlug }: Props) {
     }
 
     return (
-        <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">Nueva novedad</h3>
-            <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">Título</label>
-                <input
-                    name="title"
-                    maxLength={120}
-                    required
-                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    placeholder="Ej: Cambio de horarios semana santa"
-                />
+        <form ref={formRef} onSubmit={handleSubmit} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <Send className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+                        <h2 className="text-lg font-black text-white">Nueva novedad</h2>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-zinc-500">
+                        Publicacion simple para alumnos enterprise. Mantenerla corta reduce soporte y confusion.
+                    </p>
+                </div>
+                <span className="shrink-0 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2 py-1 text-xs font-bold text-cyan-300">
+                    {audienceCount} alumnos
+                </span>
             </div>
-            <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">Cuerpo</label>
-                <textarea
-                    name="body"
-                    maxLength={1000}
-                    required
-                    rows={3}
-                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    placeholder="Mensaje para todos los alumnos..."
-                />
+
+            <div className="mt-5 space-y-3">
+                <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Titulo</label>
+                    <input
+                        name="title"
+                        maxLength={120}
+                        required
+                        className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-300"
+                        placeholder="Ej: Horarios especiales de feriado"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Mensaje</label>
+                    <textarea
+                        name="body"
+                        maxLength={1000}
+                        required
+                        rows={4}
+                        className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm leading-6 text-zinc-100 outline-none transition focus:border-cyan-300"
+                        placeholder="Mensaje para alumnos enterprise..."
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Activo hasta</label>
+                    <div className="relative">
+                        <CalendarClock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
+                        <input
+                            name="active_until"
+                            type="datetime-local"
+                            className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-950 pl-9 pr-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-300"
+                        />
+                    </div>
+                    <p className="mt-1 text-[11px] leading-5 text-zinc-500">Opcional. Recomendado para evitar mensajes antiguos.</p>
+                </div>
             </div>
-            <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">Activo hasta (opcional)</label>
-                <input
-                    name="active_until"
-                    type="datetime-local"
-                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                />
-            </div>
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-            {success && <p className="text-sm text-emerald-600 dark:text-emerald-400">Novedad publicada</p>}
+
+            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+            {success && <p className="mt-3 text-sm text-emerald-400">Novedad publicada</p>}
+
             <button
                 type="submit"
                 disabled={pending}
-                className="self-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="mt-5 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 text-sm font-black text-zinc-950 transition hover:bg-cyan-200 disabled:opacity-50"
             >
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
                 {pending ? 'Publicando...' : 'Publicar'}
             </button>
         </form>

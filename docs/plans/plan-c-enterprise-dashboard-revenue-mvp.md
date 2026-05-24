@@ -1369,7 +1369,7 @@ Prioridad P1 - menus sin rework suficiente:
 - [x] Rework `/org/[slug]/coaches` como "Equipo > Coaches": header profesional, stats, capacidad, health, acciones, tabla responsive. Completado el 2026-05-24 14:37:37 -04:00.
 - [x] Rework `/org/[slug]/clients` como "Operaciones > Alumnos": KPIs, filtros claros, estado pago/asignacion, import visible pero no dominante. Completado el 2026-05-24 14:46:46 -04:00. Nota: bulk actions seguros quedan P2 para no tocar mutations compartidas sin auditoria adicional.
 - [x] Rework `/org/[slug]/settings` como "Seguridad y Admin > Admin": separar datos org, billing enterprise manual, seats, accesos, auditoria y guardrails enterprise-coach-alumno. Completado el 2026-05-24 14:52:19 -04:00. Nota: automatizacion de seats/billing queda fuera hasta definir reglas comerciales.
-- [ ] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": calendario/estado, audience preview, expiracion, impacto esperado.
+- [x] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": estado, audience preview, expiracion, impacto esperado y preview alumno enterprise. Completado el 2026-05-24 14:57:32 -04:00. Nota: canal actual sigue siendo solo alumnos enterprise; entrega a coaches queda como decision futura.
 - [ ] Rework `/org/[slug]/nutrition` como "Herramientas > Nutricion": biblioteca de templates, tags, macro summary, usage by coaches.
 
 Prioridad P2 - completar features que ya existen pero siguen incompletas:
@@ -1382,6 +1382,7 @@ Prioridad P2 - completar features que ya existen pero siguen incompletas:
 - [ ] Brand Studio: modelo `organization_branding` con draft/published/versionado/rollback.
 - [ ] Team: permisos granulares por feature, no solo `org_owner/org_admin/coach`.
 - [ ] Admin: definir flujo comercial para aumentar seats, cambiar plan y registrar contacto legal/finanzas sin cobro in-app.
+- [ ] Novedades: evaluar canal separado para coaches enterprise con audience/permissions propios antes de tocar el flujo coach normal.
 
 Prioridad P3 - diferenciadores futuros sin costo externo:
 

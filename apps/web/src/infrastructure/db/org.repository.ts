@@ -51,6 +51,15 @@ export type OrgClient = {
     assignedCoach: { id: string; full_name: string | null; slug: string | null } | null
 }
 
+export type OrgAnnouncement = {
+    id: string
+    title: string
+    body: string
+    is_active: boolean
+    active_until: string | null
+    created_at: string | null
+}
+
 export async function findOrgBySlug(
     db: DB,
     userId: string,
@@ -91,6 +100,17 @@ export async function findOrgMembers(db: DB, orgId: string): Promise<OrgMember[]
         .order('joined_at', { ascending: false })
 
     return (data ?? []) as OrgMember[]
+}
+
+export async function findOrgAnnouncements(db: DB, orgId: string): Promise<OrgAnnouncement[]> {
+    const { data } = await db
+        .from('org_announcements')
+        .select('id, title, body, is_active, active_until, created_at')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+    return (data ?? []) as OrgAnnouncement[]
 }
 
 export async function findOrgClients(
