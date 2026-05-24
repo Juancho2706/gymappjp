@@ -14,7 +14,8 @@ import {
     ShieldCheck,
     WalletCards,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgClients } from '../_data/org.queries'
+import { getOrgBySlug, getOrgClientPayments, getOrgClients } from '../_data/org.queries'
+import { recordEnterpriseClientPaymentFormAction } from './_actions/payment.actions'
 
 export const metadata: Metadata = { title: 'Pagos alumnos' }
 
@@ -30,8 +31,29 @@ const PAYMENT_STATES = [
     { label: 'Pausado', tone: 'border-zinc-600 bg-zinc-800 text-zinc-300' },
 ]
 
+const PAYMENT_STATUS_OPTIONS = [
+    ['paid', 'Pagado'],
+    ['pending', 'Pendiente'],
+    ['overdue', 'Vencido'],
+    ['scholarship', 'Becado'],
+    ['paused', 'Pausado'],
+] as const
+
+function paymentStateForStatus(status: string | null | undefined) {
+    if (status === 'paid') return PAYMENT_STATES[0]
+    if (status === 'pending') return PAYMENT_STATES[1]
+    if (status === 'overdue') return PAYMENT_STATES[2]
+    if (status === 'scholarship') return PAYMENT_STATES[3]
+    if (status === 'paused') return PAYMENT_STATES[4]
+    return { label: 'Sin registro', tone: 'border-zinc-700 bg-zinc-900 text-zinc-400' }
+}
+
 function initials(name: string | null | undefined) {
     return (name?.trim()?.charAt(0) || '?').toUpperCase()
+}
+
+function formatCLP(amount: number) {
+    return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(amount)
 }
 
 export default async function OrgPaymentsPage({ params }: Props) {
@@ -39,12 +61,22 @@ export default async function OrgPaymentsPage({ params }: Props) {
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
-    const clients = await getOrgClients(org.id)
+    const [clients, payments] = await Promise.all([
+        getOrgClients(org.id),
+        getOrgClientPayments(org.id),
+    ])
     const activeClients = clients.filter((client) => client.is_active !== false)
     const inactiveClients = clients.filter((client) => client.is_active === false)
-    const trackedPayments = 0
-    const missingPaymentStatus = activeClients.length
+    const latestPaymentByClient = new Map<string, typeof payments[number]>()
+    for (const payment of payments) {
+        if (!latestPaymentByClient.has(payment.client_id)) {
+            latestPaymentByClient.set(payment.client_id, payment)
+        }
+    }
+    const trackedPayments = activeClients.filter((client) => latestPaymentByClient.has(client.id)).length
+    const missingPaymentStatus = activeClients.length - trackedPayments
     const coverage = activeClients.length > 0 ? Math.round((trackedPayments / activeClients.length) * 100) : 0
+    const today = new Date().toISOString().slice(0, 10)
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -91,15 +123,20 @@ export default async function OrgPaymentsPage({ params }: Props) {
                             <h2 className="text-lg font-black text-white">Ledger operacional</h2>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-zinc-500">
-                            Preview del libro de control. Los estados reales deben venir de una tabla dedicada antes de habilitar edicion.
+                            Libro de control manual. Registra pagos externos sin cobrar dentro de EVA y con audit log obligatorio.
                         </p>
 
                         <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
                             {clients.length > 0 ? (
                                 clients.slice(0, 10).map((client) => {
-                                    const state = client.is_active === false ? PAYMENT_STATES[4] : { label: 'Sin registro', tone: 'border-zinc-700 bg-zinc-900 text-zinc-400' }
+                                    const latestPayment = latestPaymentByClient.get(client.id)
+                                    const state = client.is_active === false
+                                        ? PAYMENT_STATES[4]
+                                        : latestPayment
+                                            ? paymentStateForStatus(latestPayment.status)
+                                            : { label: 'Sin registro', tone: 'border-zinc-700 bg-zinc-900 text-zinc-400' }
                                     return (
-                                        <div key={client.id} className="grid gap-3 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 md:grid-cols-[1fr_140px_150px_120px] md:items-center">
+                                        <div key={client.id} className="grid gap-3 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 xl:grid-cols-[1fr_130px_125px_150px] xl:items-center">
                                             <div className="flex min-w-0 items-center gap-3">
                                                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-400/10 text-sm font-black text-sky-300">
                                                     {initials(client.full_name)}
@@ -118,8 +155,57 @@ export default async function OrgPaymentsPage({ params }: Props) {
                                             </span>
                                             <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
                                                 <CalendarClock className="h-3 w-3" aria-hidden="true" />
-                                                Sin fecha
+                                                {latestPayment ? latestPayment.payment_date : 'Sin fecha'}
                                             </div>
+                                            <details className="xl:col-span-4">
+                                                <summary className="cursor-pointer text-xs font-bold text-sky-300">
+                                                    {latestPayment ? `Ultimo: ${formatCLP(Number(latestPayment.amount))}` : 'Registrar pago externo'}
+                                                </summary>
+                                                <form action={recordEnterpriseClientPaymentFormAction.bind(null, slug)} className="mt-3 grid gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 md:grid-cols-[120px_140px_150px_1fr_auto]">
+                                                    <input type="hidden" name="client_id" value={client.id} />
+                                                    <input
+                                                        name="amount"
+                                                        type="number"
+                                                        min="0"
+                                                        step="1000"
+                                                        defaultValue={latestPayment ? Math.round(Number(latestPayment.amount)) : 0}
+                                                        className="h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-sky-400"
+                                                        aria-label="Monto"
+                                                    />
+                                                    <input
+                                                        name="payment_date"
+                                                        type="date"
+                                                        defaultValue={latestPayment?.payment_date ?? today}
+                                                        className="h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-sky-400"
+                                                        aria-label="Fecha de pago"
+                                                    />
+                                                    <select
+                                                        name="status"
+                                                        defaultValue={latestPayment?.status ?? 'paid'}
+                                                        className="h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-sky-400"
+                                                        aria-label="Estado"
+                                                    >
+                                                        {PAYMENT_STATUS_OPTIONS.map(([value, label]) => (
+                                                            <option key={value} value={value}>{label}</option>
+                                                        ))}
+                                                    </select>
+                                                    <input
+                                                        name="service_description"
+                                                        placeholder="Nota interna opcional"
+                                                        className="h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-sky-400"
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={!client.coach_id}
+                                                        className="inline-flex h-10 items-center justify-center rounded-lg bg-sky-400 px-4 text-sm font-black text-zinc-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-40"
+                                                    >
+                                                        Guardar
+                                                    </button>
+                                                </form>
+                                                {!client.coach_id && (
+                                                    <p className="mt-2 text-xs text-amber-300">Asigna un coach antes de registrar pagos.</p>
+                                                )}
+                                            </details>
                                         </div>
                                     )
                                 })
@@ -165,7 +251,7 @@ export default async function OrgPaymentsPage({ params }: Props) {
                                 <h2 className="text-lg font-black text-white">Guardrails</h2>
                             </div>
                             <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                                No guardar montos, vencimientos ni estados sin permission checks, audit log y texto legal claro para Chile.
+                                Registro interno: no emite boleta/factura y no reemplaza contabilidad. Cada cambio escribe audit log.
                             </p>
                         </section>
                     </aside>
@@ -192,7 +278,7 @@ export default async function OrgPaymentsPage({ params }: Props) {
                             <div>
                                 <h2 className="text-sm font-black text-white">Decision tecnica pendiente</h2>
                                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                                    Falta crear el source of truth de pagos por alumno. Hasta entonces, esta pantalla no debe permitir editar ni exportar datos financieros.
+                                    Hay alumnos activos sin registro de pago operacional. Completa estado, monto y fecha solo si el negocio ya verifico el pago por fuera de EVA.
                                 </p>
                             </div>
                         </div>

@@ -141,6 +141,18 @@ export type OrgInvoice = {
     created_at: string | null
 }
 
+export type OrgClientPayment = {
+    id: string
+    client_id: string
+    coach_id: string
+    amount: number
+    service_description: string
+    period_months: number | null
+    payment_date: string
+    status: string
+    created_at: string
+}
+
 export type OrgAuditLog = {
     id: string
     org_id: string
@@ -277,6 +289,25 @@ export async function findOrgInvoices(db: DB, orgId: string): Promise<OrgInvoice
         .order('period_start', { ascending: false })
         .limit(24)
     return (data ?? []) as OrgInvoice[]
+}
+
+export async function findOrgClientPayments(db: DB, orgId: string): Promise<OrgClientPayment[]> {
+    const { data: clients } = await db
+        .from('clients')
+        .select('id')
+        .eq('org_id', orgId)
+
+    const clientIds = (clients ?? []).map((client) => client.id)
+    if (clientIds.length === 0) return []
+
+    const { data } = await db
+        .from('client_payments')
+        .select('id, client_id, coach_id, amount, service_description, period_months, payment_date, status, created_at')
+        .in('client_id', clientIds)
+        .order('payment_date', { ascending: false })
+        .limit(500)
+
+    return (data ?? []) as OrgClientPayment[]
 }
 
 export async function getOrgStats(db: DB, orgId: string) {

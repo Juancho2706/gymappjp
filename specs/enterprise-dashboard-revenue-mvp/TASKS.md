@@ -28,6 +28,8 @@
 - [x] Replace Team & Access placeholder with read-only visual preview.
 - [x] Separate enterprise users from linked coaches in the UI.
 - [x] Add role template matrix and security posture preview.
+- [x] Create org admins as enterprise staff without coach rows.
+- [x] Keep enterprise coaches as org-managed coach accounts.
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
@@ -64,6 +66,8 @@
 - [x] Replace Payments placeholder with read-only operational ledger.
 - [x] Keep copy explicit: no in-app charging, no tax invoice, no accounting replacement.
 - [x] Show MVP payment states without inventing real payment records.
+- [x] Reuse `client_payments` for manual external payment records.
+- [x] Add owner/admin payment record form with audit event.
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 

@@ -1307,18 +1307,19 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 3 - Team & Access MVP
 
-- **Estado:** INICIADA con preview read-only.
-- **Completado parcial:** 2026-05-23 17:55:15 -04:00
-- **Notas:** `/org/[slug]/team` ya muestra control plane visual de identidad, usuarios enterprise separados de coaches, postura de seguridad y matriz de roles. Sin persistencia, sin creacion de usuarios, sin mutations, sin cambios RLS y sin DB changes.
+- **Estado:** INICIADA con separacion funcional base.
+- **Completado parcial:** 2026-05-23 22:53:33 -04:00
+- **Notas:** `/org/[slug]/team` ya muestra control plane visual de identidad, usuarios enterprise separados de coaches, postura de seguridad y matriz de roles. La creacion desde `/org/[slug]/coaches` ahora separa `org_admin` como staff enterprise real: auth user + `organization_members` con `coach_id = null`, sin fila `coaches`, sin coach dashboard ni billing propio. Si el rol es `coach`, se crea coach enterprise gestionado por la empresa.
 
 - [x] Lista staff enterprise read-only.
 - [x] Separacion visual enterprise users vs coaches vinculados.
 - [x] Matriz visual de roles base.
 - [x] Security posture preview.
-- Crear usuario con email + password temporal.
-- Roles.
-- Permisos.
-- Audit events.
+- [x] Crear usuario con email + password temporal.
+- [x] Roles base `org_admin` y `coach`.
+- [x] Staff enterprise separado de coach/alumno.
+- [x] Audit events para creacion de coach/staff.
+- Permisos granulares por feature.
 - First-login reset/MFA si aplica.
 
 ### Fase 4 - Brand Center y White-Label Propagation
@@ -1357,19 +1358,21 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 6 - Pagos Alumnos Operacional
 
-- **Estado:** INICIADA con preview read-only.
-- **Completado parcial:** 2026-05-23 18:05:05 -04:00
-- **Notas:** `/org/[slug]/payments` ya muestra ledger operacional read-only, estados MVP, guardrails legales/financieros y decision tecnica pendiente para source of truth. Sin montos reales, sin cobro in-app, sin export, sin mutations y sin DB changes.
+- **Estado:** INICIADA con registro operacional funcional.
+- **Completado parcial:** 2026-05-23 22:53:33 -04:00
+- **Notas:** `/org/[slug]/payments` ya muestra ledger operacional con pagos reales desde `client_payments`, permite registrar pago externo por alumno con monto/fecha/estado/nota, escribe audit event `client_payment.recorded` y mantiene texto legal: no cobra in-app, no emite boleta/factura y no reemplaza contabilidad.
 
-- [x] Ledger operacional read-only.
+- [x] Ledger operacional.
 - [x] Estados MVP visibles: pagado, pendiente, vencido, becado, pausado.
 - [x] Guardrails: no checkout, no facturacion tributaria, no contabilidad.
-- [x] Cobertura real sin inventar payment statuses.
+- [x] Cobertura real usando `client_payments`.
+- [x] Registrar pago externo por alumno.
+- [x] Audit event para registro de pago.
 - Vencimientos.
 - Filtros pagado/pendiente/vencido.
 - Export CSV.
 - Alertas en dashboard.
-- Sin cobro in-app.
+- [x] Sin cobro in-app.
 
 ### Fase 7 - Reportes y Exports
 
@@ -1578,22 +1581,130 @@ Demo story:
 
 ---
 
+## Auditoria Multi-Rol 2026
+
+**Actualizado:** 2026-05-23 22:53:33 -04:00
+
+Auditoria sin servicios pagos, considerando Web/PWA actual y futura app React Native.
+
+### Product Manager / UX/UI Designer
+
+Estado:
+
+- Dashboard ya cuenta historia clara: salud, riesgo, coaches, acciones.
+- Brand Studio ya es diferenciador visual: score, QA, propagation map y parity web/mobile.
+
+Mejoras futuras:
+
+- "Command Center" configurable por rol: owner ve salud/finanzas; ops ve alumnos/asignaciones; brand manager ve white-label.
+- Preview "antes/despues" de publish brand para evitar errores de marca.
+- Empty states con quick actions reales, no texto generico.
+
+### Software Architect / Backend / SecOps
+
+Estado:
+
+- Separacion staff enterprise vs coach corregida: `org_admin` no crea fila `coaches`.
+- Bulk reassignment sensible ahora es transaccional por RPC con audit integrado.
+- Audit export es owner-only y fail-closed.
+
+Mejoras futuras:
+
+- Permission matrix persistente por feature (`org.permissions`) en vez de roles fijos.
+- RPC transaccional para publish brand con versionado/rollback.
+- Checksums periodicos de `org_audit_logs` usando tabla existente `audit_log_checksums`.
+
+### DevOps / SRE / FinOps
+
+Estado:
+
+- Demo local opt-in evita tocar live y no agrega costos.
+- No se agregaron SaaS pagos ni dependencias nuevas.
+
+Mejoras futuras:
+
+- Script local de health-check enterprise: buckets, policies, RPC grants, RLS y seed status.
+- Cost guardrails por org: storage logos, exports, volumen de audit logs y reportes programados.
+- Runbook de deploy: aplicar migrations locales -> staging -> live con checklist.
+
+### Web / Mobile / QA
+
+Estado:
+
+- UI principal es responsive y evita depender de features web-only.
+- Plan registra regla Web/PWA + React Native.
+
+Mejoras futuras:
+
+- Contrato compartido de brand tokens para React Native (`@eva/tokens` + org branding).
+- Matriz de parity por feature: web, PWA, RN, native-only.
+- E2E smoke pendiente para login, permisos, asignacion y brand propagation.
+
+### Data / Analytics
+
+Estado:
+
+- KPIs actuales son conservadores y no prometen IA falsa.
+- Reports separa facts de insights.
+
+Mejoras futuras:
+
+- Risk score versionado con formula visible.
+- Coach capacity model por alumnos activos, adherencia y alertas, no solo conteo.
+- Export de reports con snapshot firmado/auditado.
+
+### Growth / Sales / CSM / Implementation
+
+Estado:
+
+- Demo org local permite vender y explicar sin datos reales.
+- Onboarding workspace enfoca outcomes.
+
+Mejoras futuras:
+
+- Demo script por ICP: gym boutique, box funcional, equipo de personal trainers.
+- Implementation checklist con owner asignado, fecha objetivo y bloqueo visible.
+- "Proof pack" exportable: brand preview, roles, audit, alumnos asignados, reporte semanal.
+
+### Legal Chile / Fintech
+
+Estado:
+
+- Pagos alumnos se mantienen como registro operacional, no cobro/facturacion tributaria.
+- Enterprise billing no se mezcla con billing de coaches.
+
+Mejoras futuras:
+
+- Texto legal claro en pagos: "registro interno, no boleta/factura".
+- Consentimiento explicito para datos sensibles de salud/progreso.
+- Preparar integraciones futuras Transbank/MercadoPago solo si hay validacion comercial.
+
+### Features Futuras Diferenciadoras
+
+- Brand Studio Pro: presets por tipo de negocio, contraste automatico, preview PWA/RN, rollback de marca.
+- Trust Center Lite: audit export, security posture, MFA status, retention y permisos en un solo panel.
+- Capacity Autopilot: sugerencias de reasignacion por carga y riesgo, con aprobacion humana.
+- Client Revenue Ops: estado pagado/pendiente/vencido, promesas de pago y recordatorios manuales sin cobrar in-app.
+- Mobile-native roadmap: pasos, HealthKit/Google Fit, smartwatch, widgets y notificaciones nativas, estudiadas aparte.
+
+---
+
 ## Acceptance Criteria MVP
 
-- [ ] Dueño entiende salud del negocio en menos de 30 segundos.
-- [ ] Dueño identifica alumnos en riesgo.
-- [ ] Dueño identifica carga/performance de coaches.
-- [ ] Dueño crea staff enterprise con rol/permisos.
-- [ ] Dueño configura white-label enterprise.
-- [ ] White-label enterprise se aplica a coaches enterprise y alumnos.
-- [ ] Coaches enterprise no ven `Mi marca` ni `Billing`.
-- [ ] Staff enterprise separado de coach/alumno.
-- [ ] Dueño asigna/reasigna alumnos a coaches.
-- [ ] Dueño puede registrar estado de pago alumno sin cobro in-app.
-- [ ] Mutations enterprise escriben audit log.
-- [ ] Dashboard responsive desktop/tablet/mobile.
-- [ ] No direct feature-data Supabase calls nuevos en `_data`.
-- [ ] `npm run typecheck` pasa.
+- [x] Dueño entiende salud del negocio en menos de 30 segundos. Verificado por dashboard/action queue.
+- [x] Dueño identifica alumnos en riesgo. Verificado por dashboard/reports/assignments.
+- [x] Dueño identifica carga/performance de coaches. Verificado por dashboard/reports/coach detail.
+- [x] Dueño crea staff enterprise con rol/permisos base. `org_admin` queda separado de coaches.
+- [x] Dueño configura white-label enterprise. Brand Studio funcional.
+- [x] White-label enterprise se aplica a coaches enterprise y alumnos. Publish inicial a coaches enterprise.
+- [x] Coaches enterprise no ven `Mi marca` ni `Billing`.
+- [x] Staff enterprise separado de coach/alumno.
+- [x] Dueño asigna/reasigna alumnos a coaches.
+- [x] Dueño puede registrar estado de pago alumno sin cobro in-app.
+- [x] Mutations enterprise escriben audit log.
+- [x] Dashboard responsive desktop/tablet/mobile.
+- [x] No direct feature-data Supabase calls nuevos en `_data`.
+- [x] `npm run typecheck` pasa.
 - [ ] E2E smoke cubre login, dashboard, permisos y asignación.
 
 ---

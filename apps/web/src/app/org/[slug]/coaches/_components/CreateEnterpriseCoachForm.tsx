@@ -18,7 +18,7 @@ function SubmitButton() {
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
         >
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-            Crear coach
+            Crear cuenta
         </button>
     )
 }
@@ -35,7 +35,11 @@ export function CreateEnterpriseCoachForm({ orgSlug }: Props) {
     }, [state])
 
     const credentials = state?.success
-        ? `Email: ${state.email}\nPassword: ${state.tempPassword}\nCodigo alumnos: ${state.inviteCode}`
+        ? [
+            `Email: ${state.email}`,
+            `Password: ${state.tempPassword}`,
+            state.inviteCode ? `Codigo alumnos: ${state.inviteCode}` : 'Tipo: staff enterprise',
+        ].join('\n')
         : ''
 
     return (
@@ -44,7 +48,7 @@ export function CreateEnterpriseCoachForm({ orgSlug }: Props) {
                 <input
                     name="full_name"
                     required
-                    placeholder="Nombre del coach"
+                    placeholder="Nombre del coach o admin"
                     className="h-10 rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
                 />
                 <input
@@ -77,7 +81,7 @@ export function CreateEnterpriseCoachForm({ orgSlug }: Props) {
                 <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm">
                     <div className="mb-2 flex items-center gap-2 font-semibold text-emerald-600 dark:text-emerald-400">
                         <CheckCircle2 className="h-4 w-4" />
-                        Coach creado. Entrega estas credenciales si el email no está configurado en local.
+                        Cuenta creada. Entrega estas credenciales si el email no esta configurado en local.
                     </div>
                     <pre className="overflow-x-auto rounded-md bg-background/70 p-2 text-xs text-foreground">{credentials}</pre>
                     <button

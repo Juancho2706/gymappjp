@@ -238,11 +238,6 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
     if (!availability.ok) return { error: availability.error }
 
     const tempPassword = parsed.data.temp_password || generateTempPassword()
-    const [slug, inviteCode] = await Promise.all([
-        generateUniqueCoachSlug(admin, `${org.slug}-${parsed.data.full_name}`),
-        generateUniqueInviteCode(admin),
-    ])
-
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
         email,
         password: tempPassword,
@@ -251,31 +246,41 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
     })
     if (authError || !authData.user) return { error: authError?.message ?? 'No se pudo crear el usuario' }
 
-    const { error: coachError } = await admin.from('coaches').insert({
-        id: authData.user.id,
-        full_name: parsed.data.full_name,
-        brand_name: org.name,
-        slug,
-        invite_code: inviteCode,
-        primary_color: org.primary_color ?? '#10B981',
-        logo_url: org.logo_url,
-        subscription_status: 'org_managed',
-        subscription_tier: 'scale',
-        billing_cycle: 'monthly',
-        payment_provider: 'admin',
-        max_clients: 500,
-        active_org_id: org.id,
-        onboarding_guide: { invite_code_confirmed: false },
-    })
-    if (coachError) {
-        await admin.auth.admin.deleteUser(authData.user.id)
-        return { error: coachError.message }
+    let inviteCode: string | null = null
+
+    if (parsed.data.role === 'coach') {
+        const [slug, generatedInviteCode] = await Promise.all([
+            generateUniqueCoachSlug(admin, `${org.slug}-${parsed.data.full_name}`),
+            generateUniqueInviteCode(admin),
+        ])
+        inviteCode = generatedInviteCode
+
+        const { error: coachError } = await admin.from('coaches').insert({
+            id: authData.user.id,
+            full_name: parsed.data.full_name,
+            brand_name: org.name,
+            slug,
+            invite_code: inviteCode,
+            primary_color: org.primary_color ?? '#10B981',
+            logo_url: org.logo_url,
+            subscription_status: 'org_managed',
+            subscription_tier: 'scale',
+            billing_cycle: 'monthly',
+            payment_provider: 'admin',
+            max_clients: 500,
+            active_org_id: org.id,
+            onboarding_guide: { invite_code_confirmed: false },
+        })
+        if (coachError) {
+            await admin.auth.admin.deleteUser(authData.user.id)
+            return { error: coachError.message }
+        }
     }
 
     const { error: memberError } = await admin.from('organization_members').insert({
         org_id: org.id,
         user_id: authData.user.id,
-        coach_id: authData.user.id,
+        coach_id: parsed.data.role === 'coach' ? authData.user.id : null,
         role: parsed.data.role,
         status: 'active',
         joined_at: new Date().toISOString(),
@@ -288,8 +293,8 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
     await writeOrgAuditEvent(admin, {
         orgId: org.id,
         actorId: user.id,
-        action: 'enterprise_coach.created',
-        targetType: 'coach',
+        action: parsed.data.role === 'coach' ? 'enterprise_coach.created' : 'enterprise_staff.created',
+        targetType: parsed.data.role === 'coach' ? 'coach' : 'organization_member',
         targetId: authData.user.id,
         metadata: { email, role: parsed.data.role, invite_code: inviteCode },
     })
@@ -300,16 +305,18 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
         subject: `Tu cuenta de coach en ${org.name}`,
         html: `
             <p>Hola ${parsed.data.full_name},</p>
-            <p>${org.name} creó tu cuenta de coach enterprise en EVA.</p>
-            <p><strong>Login:</strong> ${appUrl}/login</p>
+            <p>${org.name} creó tu cuenta enterprise en EVA.</p>
+            <p><strong>Login:</strong> ${parsed.data.role === 'coach' ? `${appUrl}/login` : `${appUrl}/org/login`}</p>
             <p><strong>Email:</strong> ${email}</p>
             <p><strong>Contraseña temporal:</strong> ${tempPassword}</p>
-            <p><strong>Código de alumnos:</strong> ${inviteCode}</p>
+            ${inviteCode ? `<p><strong>Código de alumnos:</strong> ${inviteCode}</p>` : ''}
         `,
     }).catch(() => null)
 
     revalidatePath(`/org/${orgSlug}/coaches`)
-    return { success: true, email, tempPassword, inviteCode }
+    revalidatePath(`/org/${orgSlug}/team`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, email, tempPassword, inviteCode, role: parsed.data.role }
 }
 
 export async function inviteCoachAction(orgSlug: string, formData: FormData) {
