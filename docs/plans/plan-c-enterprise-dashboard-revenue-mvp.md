@@ -84,6 +84,227 @@ Al abrir `/org/[slug]`, el dueño debe entender inmediatamente:
 
 ---
 
+## Identity, Workspace y Acceso - Modelo Canonico
+
+Esta seccion reemplaza las reglas simples anteriores de "cuentas separadas". La decision nueva es mas robusta:
+
+```text
+Una identidad global.
+Multiples workspaces/contextos.
+Un workspace activo por sesion.
+Permisos, branding y datos resueltos por workspace activo.
+```
+
+### Investigacion Mayo 2026
+
+Fuentes revisadas antes de fijar este bloque:
+
+- Supabase multi-tenant/RLS 2026: identidad en `auth.users`, aislamiento por tablas de membership, RLS y checks server-side.
+- B2B SaaS identity 2026: la organizacion/workspace es modelo de primer nivel; un usuario puede pertenecer a varios tenants con roles distintos.
+- Mobile/web account switching 2026: la app debe recordar ultimo workspace, permitir cambio rapido y no mostrar superficies irrelevantes al usuario.
+- Enterprise access 2026: invitaciones/codigos sirven para enrolar o vincular acceso, no como identidad permanente sin sesion segura.
+
+### Regla Madre de Identidad
+
+- `auth.users.email` debe ser unico global en EVA.
+- No duplicar correos entre staff enterprise, coaches y alumnos como si fueran personas distintas.
+- Una persona puede tener varios contextos:
+  - coach standalone;
+  - coach enterprise en una o mas organizaciones;
+  - owner/admin/staff enterprise;
+  - alumno standalone;
+  - alumno enterprise.
+- El correo identifica a la persona; el workspace define que puede ver y hacer.
+- El codigo enterprise NO reemplaza auth permanente. El codigo activa/vincula un workspace enterprise y luego la app mantiene una sesion segura.
+
+### Separacion de Superficies
+
+- Staff enterprise entra al dashboard enterprise `/org/[slug]`.
+- Coach standalone entra al dashboard coach normal y no ve enterprise si no tiene membership enterprise.
+- Coach enterprise entra a experiencia coach limitada bajo organizacion, no al dashboard owner/admin.
+- Alumno standalone entra a dashboard alumno con marca del coach.
+- Alumno enterprise entra a dashboard alumno con marca de la organizacion.
+- Alumnos nunca entran al dashboard enterprise.
+- Coaches no entran al dashboard enterprise por ser coaches.
+- Toda accion sensible debe pasar por server-side permission checks.
+- Ocultar botones en UI no es autorizacion.
+
+### Workspace Activo
+
+Cada sesion debe resolver un `activeWorkspace`:
+
+```ts
+type ActiveWorkspace =
+  | { type: 'coach_standalone'; userId: string; coachId: string }
+  | { type: 'enterprise_coach'; userId: string; orgId: string; coachId: string; memberId: string }
+  | { type: 'enterprise_staff'; userId: string; orgId: string; memberId: string; role: 'org_owner' | 'org_admin' | 'ops' | 'analyst' | 'brand_manager' }
+  | { type: 'student_standalone'; userId: string; clientId: string; coachId: string }
+  | { type: 'student_enterprise'; userId: string; clientId: string; orgId: string; coachId: string | null }
+```
+
+Reglas:
+
+- Si el usuario tiene un solo workspace, entrar directo.
+- Si tiene varios, entrar al ultimo workspace usado.
+- Si el ultimo workspace fue revocado, mostrar selector.
+- Selector de workspace solo aparece para usuarios con 2+ contextos.
+- Standalone no debe ver UI enterprise si no tiene workspace enterprise.
+- Enterprise no debe contaminar billing/marca del coach standalone.
+- Workspace activo debe persistirse de forma portable web/mobile: server-side preference + storage local solo como cache.
+
+### Coach Enterprise con Codigo
+
+Flujo deseado:
+
+1. App/web muestra login normal de coach.
+2. Debajo aparece opcion `Coach Enterprise`.
+3. Coach ingresa codigo de empresa/invitacion.
+4. Codigo valida organizacion, estado, expiracion, cupo/seats, email esperado si aplica y si ya existe usuario con ese email.
+5. Si no existe identidad, crear/activar cuenta segura.
+6. Si existe identidad, vincular workspace enterprise.
+7. Guardar `last_workspace`.
+8. Proximos ingresos abren directo en modo enterprise coach, salvo cerrar sesion o cambiar workspace.
+
+No hacer:
+
+- No usar codigo como password permanente.
+- No crear multiples `auth.users` con el mismo email.
+- No permitir que un codigo filtrado cree acceso sin trazabilidad.
+
+### Coach con EVA Normal y EVA Enterprise
+
+Caso:
+
+```text
+coach@email.com
+  -> coach standalone propio
+  -> coach enterprise en Org A
+```
+
+Debe funcionar asi:
+
+- Un solo `auth.users`.
+- Un registro coach puede operar standalone y enterprise si el modelo actual lo soporta, pero las queries deben filtrar por workspace.
+- Alumnos standalone: `clients.coach_id = coach.id AND clients.org_id IS NULL`.
+- Alumnos enterprise: `clients.org_id = org.id AND clients.coach_id = coach.id`.
+- Billing standalone solo aplica al workspace standalone.
+- Billing enterprise lo maneja la organizacion.
+- Branding standalone solo aplica a alumnos standalone.
+- Branding enterprise gana siempre si `client.org_id` existe.
+
+UX:
+
+- Si solo tiene standalone: entra directo a coach normal.
+- Si solo tiene enterprise coach: entra directo a coach enterprise.
+- Si tiene ambos: entra al ultimo workspace usado y puede cambiar desde perfil.
+- El selector debe usar labels humanos:
+  - `Mi negocio EVA`;
+  - `Empresa X - Coach`;
+  - `Empresa Y - Coach`.
+
+### Alumno Standalone y Alumno Enterprise
+
+- Alumno con un solo contexto entra directo a su dashboard.
+- Alumno con varios contextos ve selector simple:
+  - `Entrenar con Coach Pedro`;
+  - `Entrenar con Empresa X`.
+- Alumno enterprise siempre ve white-label enterprise.
+- Alumno standalone siempre ve white-label coach.
+- No mezclar historiales, planes, pagos manuales ni notificaciones entre contextos.
+
+### Owner/Staff que Tambien Sea Coach o Alumno
+
+Permitido, pero por workspace separado:
+
+```text
+persona@email.com
+  -> Empresa X / Owner
+  -> Empresa X / Coach operativo
+  -> Coach standalone propio
+  -> Alumno de Coach Pedro
+```
+
+Reglas:
+
+- Ser owner no da permisos automaticos de coach.
+- Ser coach no da acceso enterprise admin.
+- Ser alumno no desbloquea pantallas coach/admin.
+- Cada workspace tiene home, permisos y branding propios.
+- UI debe dejar claro en que contexto esta trabajando.
+
+### Regla de Datos Supabase
+
+Objetivo: no mezclar tenants ni contextos.
+
+- `auth.users`: identidad unica.
+- `profiles` o `platform_identities`: datos base de persona, si falta crear fase/migration.
+- `organizations`: tenant enterprise.
+- `organization_members`: membership enterprise por `org_id + user_id`, con `role`, `status`, `coach_id` opcional.
+- `coaches`: perfil coach operativo, standalone y/o enterprise segun contexto.
+- `clients`: perfil alumno, con `org_id` para enterprise y `coach_id` para asignacion.
+- `workspace_preferences`: preferencia de ultimo workspace por usuario y device/app si se necesita.
+- `enterprise_invites` o equivalente: codigos de activacion con hash, expiracion, estado, scope, org, rol y audit.
+
+Restricciones deseadas:
+
+- unique global email via Supabase Auth.
+- unique membership: `(org_id, user_id)` en `organization_members`.
+- unique coach membership por org: `(org_id, coach_id)` cuando `coach_id IS NOT NULL`.
+- codigos enterprise almacenados hasheados, no plain text.
+- revocar membership no borra usuario ni coach standalone.
+- todas las queries enterprise filtran por `org_id`.
+- todas las queries standalone excluyen `org_id` cuando corresponda.
+
+### Branding Resolver
+
+Prioridad de marca:
+
+1. Si `activeWorkspace.type` es enterprise staff: marca de organizacion.
+2. Si coach enterprise: marca de organizacion.
+3. Si alumno enterprise: marca de organizacion.
+4. Si coach standalone: marca del coach.
+5. Si alumno standalone: marca del coach.
+6. Si no hay marca: EVA default.
+
+Esto aplica a dashboard web, PWA, futura app React Native, manifests, loaders, emails/reportes futuros, pantallas de login y selector de workspace.
+
+### Auditoria y Seguridad
+
+- Registrar `workspace.activated` cuando se usa codigo enterprise.
+- Registrar `workspace.switched` solo si aporta valor operativo; evitar ruido excesivo.
+- Registrar `membership.revoked`, `membership.role_changed`, `invite.created`, `invite.redeemed`, `invite.expired`.
+- MFA obligatorio primero para owner/admin; recomendado para staff; opcional para coach enterprise al inicio.
+- Login y redeem code con rate limit.
+- Codigos con expiracion, max attempts y revocacion.
+- No exponer service role en cliente.
+- RLS debe validar membership dinamica, no confiar solo en UI.
+
+### UX Login Web/Mobile
+
+Pantalla de entrada recomendada:
+
+```text
+Soy coach
+  - Coach independiente
+  - Coach Enterprise con codigo
+
+Soy alumno
+  - Entrar a mi entrenamiento
+
+Soy empresa
+  - Dashboard enterprise
+```
+
+Comportamiento:
+
+- Recordar ultimo workspace.
+- Cierre de sesion borra sesion activa, no borra lista historica local de cuentas conocidas salvo "olvidar este dispositivo".
+- Si un usuario tiene varios workspaces, mostrar selector despues de autenticacion.
+- En mobile, selector debe ser una pantalla nativa simple, no un menu escondido.
+- En web/PWA, selector puede vivir en profile menu y en pantalla post-login.
+
+---
+
 ## White-Label Enterprise
 
 El dashboard enterprise tambien administra la marca de la organizacion.
@@ -1372,8 +1593,30 @@ Prioridad P1 - menus sin rework suficiente:
 - [x] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": estado, audience preview, expiracion, impacto esperado y preview alumno enterprise. Completado el 2026-05-24 14:57:32 -04:00. Nota: canal actual sigue siendo solo alumnos enterprise; entrega a coaches queda como decision futura.
 - [x] Rework `/org/[slug]/nutrition` como "Herramientas > Nutricion": biblioteca de templates, coverage por objetivo, macro summary, meals y acceso para coaches enterprise. Completado el 2026-05-24 15:03:22 -04:00. Nota: usage real por coach queda P2 porque requiere instrumentar aplicacion de template.
 
+Prioridad P1.5 - Identity & Workspace antes de seguir P2:
+
+- [ ] Auditar tablas actuales `auth.users`, `coaches`, `clients`, `organizations`, `organization_members` y cualquier RPC/email uniqueness para confirmar el modelo real.
+- [ ] Definir SPEC/PLAN/TASKS de `identity-workspace-access` antes de migrations.
+- [ ] Disenar migration local para `workspace_preferences` si no existe.
+- [ ] Disenar migration local para `enterprise_invites`/codigos hasheados si no existe modelo equivalente.
+- [ ] Definir `ActiveWorkspace` compartible web/mobile en `packages/types` o domain layer.
+- [ ] Crear resolver server-side de workspaces disponibles por usuario.
+- [ ] Crear resolver server-side de branding por workspace.
+- [ ] Crear guard central para no mezclar `coach_standalone`, `enterprise_coach`, `enterprise_staff`, `student_standalone`, `student_enterprise`.
+- [ ] Login web/PWA: agregar opcion `Coach Enterprise` con codigo, sin romper login coach standalone.
+- [ ] Login alumno: mantener entrada directa si hay un solo contexto; selector si hay varios.
+- [ ] Login enterprise staff: mantener `/org/login`, sin mostrarlo a standalone salvo link explicito.
+- [ ] Workspace switcher: solo visible para usuarios con 2+ contextos.
+- [ ] Persistir `last_workspace` de forma segura y portable a React Native.
+- [ ] Auditoria: `invite.created`, `invite.redeemed`, `invite.revoked`, `workspace.activated`, `membership.revoked`.
+- [ ] RLS: validar membership dinamica por `org_id`, no solo UI.
+- [ ] Documentar flujo coach standalone que se suma a enterprise sin duplicar correo.
+- [ ] Documentar flujo owner/staff que tambien es coach/alumno sin mezclar permisos.
+- [ ] Plan de migracion local primero, live despues con backup/rollback.
+
 Prioridad P2 - completar features que ya existen pero siguen incompletas:
 
+- [ ] BLOQUEADO hasta cerrar P1.5 Identity & Workspace: no avanzar bulk actions, pagos/reportes profundos ni features que toquen coach/alumno.
 - [ ] Asignaciones: pasar de preview a cockpit accionable para asignar/reasignar desde `/assignments`, no solo desde alumnos/coaches.
 - [ ] Alumnos: bulk actions seguros con preview, confirmacion, audit event y compatibilidad enterprise-coach-alumno sin afectar coach standalone.
 - [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
@@ -1410,6 +1653,141 @@ No hacer todavia:
 - [x] Crear `specs/enterprise-dashboard-revenue-mvp/{SPEC,PLAN,TASKS}.md`.
 - Definir matriz exacta de permisos.
 - Definir fórmulas de métricas.
+
+### Fase 0B - Identity, Workspace y Tenant Isolation
+
+**Estado:** NUEVA / BLOQUEANTE antes de P2 profundo.
+**Creada:** 2026-05-24.
+**Motivo:** evitar mezcla de datos entre `coach standalone -> alumno` y `enterprise -> coach enterprise -> alumno enterprise`, y preparar UX rapida web/mobile.
+
+#### Resultado Esperado
+
+Un usuario puede tener varias capacidades sin duplicar email ni mezclar datos:
+
+```text
+auth.user unico
+  -> workspace coach standalone
+  -> workspace enterprise coach
+  -> workspace enterprise staff
+  -> workspace alumno standalone
+  -> workspace alumno enterprise
+```
+
+La app siempre sabe quien es la persona, que workspaces tiene, cual workspace esta activo, que datos puede leer/escribir, que marca debe ver y que menus no debe ver.
+
+#### Decisiones Arquitectonicas
+
+- Supabase Auth sigue siendo fuente de identidad.
+- `auth.users.email` unico global.
+- Memberships definen acceso, no emails duplicados.
+- Codigos enterprise son activadores de workspace, no passwords permanentes.
+- RLS y server actions validan membership real.
+- `activeWorkspace` vive en server/domain; UI solo consume decisiones.
+- Web/PWA y futura React Native deben compartir tipos/schemas.
+
+#### Modelo Supabase Propuesto
+
+Revisar primero si ya existe algo equivalente antes de crear migrations:
+
+```text
+auth.users
+profiles/platform_identities
+organizations
+organization_members
+coaches
+clients
+workspace_preferences
+enterprise_invites
+org_audit_logs
+```
+
+Campos/ideas:
+
+- `workspace_preferences.user_id`
+- `workspace_preferences.last_workspace_type`
+- `workspace_preferences.last_org_id`
+- `workspace_preferences.last_coach_id`
+- `workspace_preferences.last_client_id`
+- `workspace_preferences.updated_at`
+- `enterprise_invites.org_id`
+- `enterprise_invites.code_hash`
+- `enterprise_invites.role`
+- `enterprise_invites.coach_id`
+- `enterprise_invites.email`
+- `enterprise_invites.status`
+- `enterprise_invites.expires_at`
+- `enterprise_invites.redeemed_by`
+- `enterprise_invites.redeemed_at`
+- `enterprise_invites.max_attempts`
+- `enterprise_invites.attempt_count`
+
+Restricciones:
+
+- unique `(org_id, user_id)` en `organization_members`.
+- unique `(org_id, coach_id)` parcial cuando `coach_id IS NOT NULL`.
+- codigo hasheado, nunca plain text persistido.
+- revocacion por membership, no borrado destructivo.
+
+#### UX Web/PWA
+
+- Login coach normal se mantiene simple para standalone.
+- Agregar entrada secundaria `Coach Enterprise` con codigo.
+- No mostrar dashboard enterprise a standalone.
+- No mostrar billing/mi marca a coach enterprise.
+- Si solo hay un workspace, redirect directo.
+- Si hay varios, usar ultimo workspace.
+- Selector de workspace:
+  - visible en menu perfil;
+  - pantalla post-login si no hay ultimo workspace valido;
+  - labels humanos y marca clara.
+
+#### UX Mobile React Native Futura
+
+- Mismo modelo de workspaces.
+- Selector como pantalla nativa, no menu escondido.
+- Persistencia local solo cache; server decide acceso final.
+- Native-only future features se cuelgan del workspace correcto:
+  - pasos/smartwatch para alumno;
+  - notificaciones nativas por org/coach;
+  - widgets por alumno/workout.
+
+#### Casos que Deben Quedar Resueltos
+
+- Coach standalone se une a empresa sin crear otro correo.
+- Coach enterprise luego crea negocio standalone sin perder empresa.
+- Owner enterprise tambien opera como coach.
+- Staff enterprise tambien es alumno.
+- Alumno tiene contexto standalone y enterprise.
+- Empresa revoca coach enterprise sin borrar su coach standalone.
+- Empresa cambia marca y solo afecta enterprise.
+- Standalone cambia marca y no afecta enterprise.
+- Alumno enterprise nunca ve marca del coach si hay `org_id`.
+- Alumno standalone nunca ve marca enterprise.
+
+#### Riesgos a Auditar
+
+- Queries coach existentes que no filtren `org_id IS NULL` para standalone.
+- Queries alumno que asuman un solo `client` por usuario/email.
+- Middleware que redirija por rol global en vez de workspace.
+- Sidebar coach que muestre billing/marca a `org_managed`.
+- Actions compartidas que escriban datos sin `org_id`.
+- RLS policies que validen solo `authenticated` y no membership.
+- Caches/localStorage que mantengan workspace revocado.
+
+#### Entregables Antes de Implementar P2
+
+- [ ] SPEC `identity-workspace-access`.
+- [ ] PLAN `identity-workspace-access`.
+- [ ] TASKS `identity-workspace-access`.
+- [ ] Auditoria DB actual.
+- [ ] Diagrama de datos final.
+- [ ] Matriz de permisos por workspace.
+- [ ] Matriz de branding por workspace.
+- [ ] Lista de rutas afectadas web.
+- [ ] Lista de contratos compartibles mobile.
+- [ ] Migrations locales necesarias.
+- [ ] Plan rollback local/live.
+- [ ] Criterios QA web/mobile.
 
 ### Fase 1 - Shell Visual y Navegación
 
@@ -2158,3 +2536,16 @@ Inputs usados antes de seguir implementando:
 - Outrunly AI SaaS UI 2026: Explainable UI y orchestrator dashboards para generar confianza.
 - Accessibility.com 2026: accesibilidad como gobernanza continua, no checklist final.
 - Reddit UIUX/SaaS mayo 2026: lo que funciona es menos friccion, rapidez, progressive disclosure y contenido adaptativo util.
+
+## Referencias Identity / Workspace Mayo 2026
+
+Inputs usados para el bloque `Identity, Workspace y Acceso`:
+
+- Supabase Docs - Multiple SSO Providers: organizaciones, role-based routing e invitaciones explicitas por entorno.
+- Supabase Docs - Access Control: roles y asignacion scoped.
+- DOTxLabs 2026 - Next.js + Supabase Multi-Tenant SaaS: Auth + RLS + middleware/server checks como tres capas.
+- CIAM Compass 2026 - B2B SaaS Identity: organizaciones como entidad central del modelo B2B.
+- Afterbuild Labs 2026 - Supabase RLS SaaS Blueprint: membership helpers, soft-delete, audit y tenant checks.
+- TokenIDP 2026 - Designing Multi-Tenant Identity: tenants/clientes como entidades de primer nivel.
+- Techstack 2026 - SaaS Auth Providers: Supabase viable sin costo, pero requiere disciplina manual en organizaciones/RLS.
+- Reddit Supabase/Next.js 2026: usuarios pueden pertenecer a multiples organizaciones; tenant/membership no debe vivir solo en UI.
