@@ -1789,6 +1789,439 @@ Restricciones:
 - [ ] Plan rollback local/live.
 - [ ] Criterios QA web/mobile.
 
+#### Regla de Ejecucion y Trazabilidad del Plan
+
+Cuando se implemente codigo para cualquier punto de esta fase:
+
+- marcar el checklist correspondiente como `[x]`;
+- agregar fecha/hora exacta `YYYY-MM-DD HH:mm:ss -04:00`;
+- describir archivos/rutas/DB afectadas;
+- indicar verificacion realizada;
+- indicar si afecta web, PWA, futura React Native o Supabase local/live.
+
+Formato:
+
+```text
+- [x] Punto N / item. Completado el 2026-05-24 15:30:00 -04:00. Notas: ...
+```
+
+#### Auditoria P1.5 por Punto Critico
+
+Cada punto debe ejecutarse en orden. No avanzar al siguiente bloque de features si el punto actual toca datos compartidos y no tiene guardrails.
+
+##### 1. Offboarding / Revocacion
+
+Investigacion 2026:
+
+- Identity governance moderno prioriza revocar accesos no justificados y registrar el resultado.
+- En B2B SaaS, offboarding debe revocar membership/roles, no destruir identidad global.
+
+Auditoria EVA:
+
+- Revisar `organization_members.status`, `deleted_at`, `coach_id`.
+- Revisar acciones que suspenden coach enterprise.
+- Revisar si revocar coach enterprise tambien desasigna alumnos, suspende acceso o solo bloquea workspace.
+- Revisar que revocar enterprise no borre coach standalone ni alumno standalone.
+
+Solucion propuesta:
+
+- Crear flujo `membership.revoked` por workspace.
+- Revocar acceso enterprise cambiando membership a `revoked`/`inactive`.
+- Mantener `auth.users` y registros standalone.
+- Si coach enterprise sale, alumnos quedan en cola `unassigned` o reasignacion guiada.
+- Registrar audit con actor, target, reason, affected_clients_count.
+
+Fases futuras:
+
+- [ ] Auditar schema actual de revocacion.
+- [ ] Definir estados canonicos `active`, `invited`, `revoked`, `suspended`.
+- [ ] Crear action segura para revocar staff/coach enterprise.
+- [ ] Agregar UI de revocacion con preview de impacto.
+- [ ] Agregar prueba: coach revocado no entra enterprise pero mantiene standalone.
+
+##### 2. RLS y Tenant Isolation
+
+Investigacion 2026:
+
+- Postgres RLS es capa no opcional para Supabase multi-tenant.
+- Los leaks ocurren por `WHERE org_id` olvidado, joins indirectos, reports y service role mal usado.
+
+Auditoria EVA:
+
+- Revisar RLS de `clients`, `coaches`, `organization_members`, `org_*`, `client_payments`, `workout_*`, `nutrition_*`.
+- Revisar queries enterprise que usan service role.
+- Revisar queries standalone que deberian excluir `org_id`.
+- Revisar joins que permiten leer por `coach_id` sin validar `org_id`.
+
+Solucion propuesta:
+
+- Policies por tenant con helper SQL estable: `is_org_member(org_id, roles[])`.
+- Queries enterprise siempre con `org_id`.
+- Queries standalone con `org_id IS NULL` cuando aplique.
+- Service role solo en server actions con permission helper y audit.
+
+Fases futuras:
+
+- [ ] Inventariar tablas con datos tenant-sensitive.
+- [ ] Crear checklist RLS por tabla.
+- [ ] Agregar negative tests org A vs org B.
+- [ ] Revisar RPCs transaccionales con `org_id` obligatorio.
+- [ ] Documentar excepciones service role.
+
+##### 3. Storage y Archivos
+
+Investigacion 2026:
+
+- Supabase Storage usa RLS en `storage.objects`; bucket publico o path mal definido puede saltarse aislamiento.
+- Storage no tiene carpetas reales; policies por prefix deben ser explicitas y testeadas.
+
+Auditoria EVA:
+
+- Revisar buckets `org-assets`, logos, progress photos, PDFs, QR, exports.
+- Revisar paths actuales: si usan `coach_id`, `client_id`, `org_id`.
+- Revisar buckets publicos vs signed URLs.
+- Revisar upload de logos enterprise y coach standalone.
+
+Solucion propuesta:
+
+- Namespace canonico:
+  - `orgs/{org_id}/...`
+  - `coaches/{coach_id}/...`
+  - `clients/{client_id}/...`
+- Assets enterprise bajo `orgs/{org_id}`.
+- Exports sensibles privados/signed, no public.
+- Policies por membership y ownership.
+
+Fases futuras:
+
+- [ ] Inventariar buckets y paths.
+- [ ] Definir storage path matrix.
+- [ ] Crear policies por bucket/path.
+- [ ] Test org A no lee assets org B.
+- [ ] Revisar manifests/loaders/brand assets enterprise.
+
+##### 4. Caches y `last_workspace`
+
+Investigacion 2026:
+
+- Workspace switching moderno usa cache local solo como acelerador; servidor decide acceso.
+- Revocacion debe invalidar sesiones/workspaces obsoletos.
+
+Auditoria EVA:
+
+- Revisar localStorage/sessionStorage/cookies usados en login, PWA, theme, language, onboarding.
+- Revisar si middleware confia en datos cliente.
+- Revisar caches RSC/React.cache por request.
+
+Solucion propuesta:
+
+- `workspace_preferences` server-side como fuente final.
+- Local cache: `last_workspace_hint`, nunca autorizacion.
+- Al entrar a workspace, validar membership vigente.
+- Si workspace revocado, limpiar cache y mostrar selector.
+
+Fases futuras:
+
+- [ ] Inventariar storage/cookies relevantes.
+- [ ] Disenar `workspace_preferences`.
+- [ ] Resolver workspace server-side.
+- [ ] Agregar invalidacion al revocar membership.
+- [ ] Test workspace revocado no reingresa por cache.
+
+##### 5. Exports y Reportes
+
+Investigacion 2026:
+
+- Audit logs de SaaS deben capturar data exports y report generation.
+- Exports son punto frecuente de fuga cross-tenant.
+
+Auditoria EVA:
+
+- Revisar `/org/[slug]/audit/export`, reportes CSV/PDF, progress-print, pagos.
+- Revisar filtros de reportes por `org_id`.
+- Revisar si export usa service role y si audita.
+
+Solucion propuesta:
+
+- Todo export enterprise requiere permission helper.
+- Audit `report.exported` con actor, org, filters, row_count, format.
+- Exports standalone y enterprise separados.
+- Paginacion/limits para evitar exports masivos accidentales.
+
+Fases futuras:
+
+- [ ] Inventariar exports actuales.
+- [ ] Definir `exportPolicy`.
+- [ ] Agregar audit obligatorio.
+- [ ] Test export org A no contiene org B.
+- [ ] Agregar UI de filtros claros antes de exportar.
+
+##### 6. Billing Separado
+
+Investigacion 2026:
+
+- B2B SaaS separa billing owner/admin de usuarios operativos.
+- Per-seat/tenant billing no debe bloquear usuarios equivocados sin proceso comercial.
+
+Auditoria EVA:
+
+- Revisar middleware de subscription coach.
+- Revisar `/coach/subscription`, `/coach/settings`, sidebar coach.
+- Revisar `subscription_status = org_managed`.
+- Revisar pagos enterprise manuales vs pagos alumno.
+
+Solucion propuesta:
+
+- Coach standalone: billing EVA propio.
+- Coach enterprise: no billing propio, no `Mi marca`.
+- Enterprise: billing manual/tenant, owner/admin.
+- Alumno payments: estado operativo, no cobro in-app.
+
+Fases futuras:
+
+- [ ] Auditar rutas billing.
+- [ ] Centralizar `canViewBilling(workspace)`.
+- [ ] Bloquear direct access server-side.
+- [ ] Mostrar mensaje claro a coach enterprise.
+- [ ] Test coach enterprise no accede subscription.
+
+##### 7. Branding Resolver End-to-End
+
+Investigacion 2026:
+
+- White-label real incluye login, domain, manifests, emails, reports, loaders y no solo logo/color.
+- Branding parcial genera desconfianza B2B.
+
+Auditoria EVA:
+
+- Revisar dashboard enterprise, coach app, alumno PWA, manifest, loader, emails, PDFs, QR, error pages.
+- Revisar si `org_id` gana siempre sobre coach brand para alumno enterprise.
+
+Solucion propuesta:
+
+- Crear `resolveBrandForWorkspace(activeWorkspace)`.
+- Aplicar en shell, login, manifests, loaders, reportes.
+- Brand score/governance valida contraste y assets.
+
+Fases futuras:
+
+- [ ] Inventariar superficies de marca.
+- [ ] Crear matriz brand resolver.
+- [ ] Centralizar helper.
+- [ ] Test alumno enterprise ve org brand.
+- [ ] Test alumno standalone ve coach brand.
+
+##### 8. Invite Codes / Codigos Enterprise
+
+Investigacion 2026:
+
+- Codigos/links de invitacion deben tener expiracion, revocacion, rate limit y audit.
+- Magic links/codes deben tener fallback mobile-friendly, pero no ser identidad permanente.
+
+Auditoria EVA:
+
+- Revisar `invite_code` coach actual.
+- Revisar `/join/[invite_code]`.
+- Revisar creacion de coaches enterprise y staff.
+- Revisar si codigos se guardan plano.
+
+Solucion propuesta:
+
+- `enterprise_invites` con `code_hash`, scope, role, org_id, optional email, expires_at, status.
+- Codigo visible solo al crear; DB guarda hash.
+- Redeem code crea/vincula workspace.
+- Rate limit y max attempts.
+
+Fases futuras:
+
+- [ ] Auditar invite model actual.
+- [ ] Disenar migration local.
+- [ ] Crear redeem action con audit.
+- [ ] UI `Coach Enterprise` con codigo.
+- [ ] Test codigo expirado/revocado/fuerza bruta.
+
+##### 9. Usuarios con Multiples Roles
+
+Investigacion 2026:
+
+- B2B SaaS debe evitar `role` global; roles son por workspace/tenant/recurso.
+- RBAC puede iniciar simple, pero permisos deben ser evaluados con contexto.
+
+Auditoria EVA:
+
+- Revisar checks por `role`, `subscription_status`, `active_org_id`.
+- Revisar si una persona puede ser owner + coach + alumno.
+- Revisar perfiles duplicados por email.
+
+Solucion propuesta:
+
+- `ActiveWorkspace` decide permisos.
+- `org_member.role` solo vale dentro de org.
+- Coach/alumno son capabilities, no identidad global unica.
+- Selector solo para 2+ workspaces.
+
+Fases futuras:
+
+- [ ] Crear matriz roles/capabilities.
+- [ ] Auditar checks globales.
+- [ ] Crear permission helper por workspace.
+- [ ] UI switcher.
+- [ ] Tests multi-role.
+
+##### 10. Rutas y Middleware
+
+Investigacion 2026:
+
+- Middleware sirve para gates amplios; server actions/data layer deben repetir autorizacion.
+- Route RBAC en Next.js debe cubrir middleware, server components, route handlers y actions.
+
+Auditoria EVA:
+
+- Revisar `middleware/proxy`, `/coach/*`, `/org/*`, `/c/[coach_slug]/*`, `/api/mobile/*`.
+- Revisar redirects por rol global.
+- Revisar direct route access a billing/brand.
+
+Solucion propuesta:
+
+- Route matrix por workspace:
+  - `/org/*`: enterprise_staff.
+  - `/coach/*`: coach_standalone o enterprise_coach con feature gates.
+  - `/c/*`: student workspace.
+- Middleware bloquea broad routes.
+- Server actions validan recurso.
+
+Fases futuras:
+
+- [ ] Crear route/workspace matrix.
+- [ ] Refactor guard central.
+- [ ] Bloquear direct URLs sensibles.
+- [ ] Test route access por workspace.
+- [ ] Documentar mobile route equivalents.
+
+##### 11. Mobile y Deep Links
+
+Investigacion 2026:
+
+- Deep links deben abrir pantalla correcta y preservar contexto; deferred deep links requieren fallback.
+- En B2B mobile, workspace selector debe ser claro si hay multiples contextos.
+
+Auditoria EVA:
+
+- Revisar manifests PWA, `/join/[invite_code]`, futuros app links.
+- Revisar push notification future y URLs alumno/coach.
+- Revisar si slug/codigo identifica org correctamente.
+
+Solucion propuesta:
+
+- Deep link payload incluye `workspace_type`, `org_id/slug`, target.
+- Si no hay sesion, login y luego resolver target.
+- Si usuario no tiene workspace, mostrar error/invite redeem.
+- No abrir enterprise data desde standalone context.
+
+Fases futuras:
+
+- [ ] Definir deep link schema.
+- [ ] Mapear web routes a RN screens.
+- [ ] Plan app links/universal links futuro.
+- [ ] Test link alumno enterprise con sesion standalone.
+- [ ] Documentar fallback PWA.
+
+##### 12. Auditoria Util
+
+Investigacion 2026:
+
+- Audit logs utiles capturan membership changes, role escalation, exports, admin/support access y acciones sensibles.
+- Auditar demasiado genera ruido; auditar poco no sirve en ventas/compliance.
+
+Auditoria EVA:
+
+- Revisar `org_audit_logs` coverage.
+- Revisar eventos existentes de brand, payments, announcements, nutrition, clients, onboarding.
+- Revisar export CSV auditado.
+
+Solucion propuesta:
+
+- Taxonomia:
+  - `invite.*`
+  - `membership.*`
+  - `workspace.*`
+  - `brand.*`
+  - `report.*`
+  - `assignment.*`
+  - `payment.*`
+- Cada evento con actor, target, org_id, metadata minima.
+
+Fases futuras:
+
+- [ ] Crear audit event taxonomy.
+- [ ] Detectar mutations sin audit.
+- [ ] Agregar filters en audit UI.
+- [ ] Export audit con checksum.
+- [ ] Test audit obligatorio en sensitive actions.
+
+##### 13. Legal Chile / Privacidad
+
+Investigacion 2026:
+
+- Chile mantiene Ley 19.628 hasta el 30 de noviembre de 2026.
+- Ley 21.719 entra en vigencia el 1 de diciembre de 2026 y crea una autoridad de datos personales.
+- Datos de salud/fitness/nutricion/fotos pueden requerir mayor cuidado operativo.
+
+Auditoria EVA:
+
+- Revisar datos personales/sensibles: email, telefono, fotos, peso, medidas, nutricion, workouts, pagos manuales.
+- Revisar quien es responsable: EVA, empresa, coach.
+- Revisar consentimiento y borrado/export futuro.
+
+Solucion propuesta:
+
+- Data map por workspace.
+- Minimizar acceso: enterprise owner ve lo necesario; coach enterprise solo asignados.
+- Terminos enterprise: empresa como responsable/mandante segun contrato; EVA como proveedor/procesador segun modelo final.
+- Preparar derechos ARCO/portabilidad/borrado.
+
+Fases futuras:
+
+- [ ] Crear data inventory.
+- [ ] Revisar legal copy enterprise.
+- [ ] Definir retention/export/delete.
+- [ ] Auditar acceso a fotos/progreso.
+- [ ] Preparar checklist Ley 21.719 antes de 2026-12-01.
+
+##### 14. Testing Web/Mobile
+
+Investigacion 2026:
+
+- Negative testing multi-tenant es obligatorio: probar que org A no lee org B.
+- QA debe cubrir middleware, server actions, RLS, storage, exports y mobile navigation.
+
+Auditoria EVA:
+
+- Revisar coverage Vitest/Playwright actual.
+- Revisar ausencia de tests para multi-workspace.
+- Revisar scripts Supabase local.
+
+Solucion propuesta:
+
+- Test matrix por workspace:
+  - coach standalone;
+  - enterprise coach;
+  - enterprise staff;
+  - student standalone;
+  - student enterprise.
+- Seed local con dos orgs, dos coaches, alumnos cruzados.
+- Negative tests cross-tenant.
+
+Fases futuras:
+
+- [ ] Crear seed multi-workspace local.
+- [ ] Tests route guards.
+- [ ] Tests RLS/API negative.
+- [ ] Tests branding resolver.
+- [ ] Tests revocation/cache.
+- [ ] Tests exports.
+- [ ] Checklist RN futuro por screen/deep link.
+
 ### Fase 1 - Shell Visual y Navegación
 
 **Estado:** COMPLETADA para primer slice read-only.  
