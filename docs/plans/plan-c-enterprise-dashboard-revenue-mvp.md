@@ -1366,7 +1366,7 @@ Prioridad P0 - arreglar arquitectura de navegacion:
 
 Prioridad P1 - menus sin rework suficiente:
 
-- [ ] Rework `/org/[slug]/coaches` como "Equipo > Coaches": header profesional, stats, capacidad, health, acciones, filtros, tabla responsive.
+- [x] Rework `/org/[slug]/coaches` como "Equipo > Coaches": header profesional, stats, capacidad, health, acciones, tabla responsive. Completado el 2026-05-24 14:37:37 -04:00.
 - [ ] Rework `/org/[slug]/clients` como "Operaciones > Alumnos": KPIs, filtros claros, bulk actions seguros, estado pago/asignacion, import visible pero no dominante.
 - [ ] Rework `/org/[slug]/settings` como "Seguridad y Admin > Admin": separar datos org, billing enterprise, seats, contacto, MFA/security, peligro.
 - [ ] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": calendario/estado, audience preview, expiracion, impacto esperado.
