@@ -1,15 +1,17 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import {
-    BadgeCheck,
+    AlertTriangle,
     CheckCircle2,
     Eye,
+    GitBranch,
     Loader2,
     Lock,
     MonitorSmartphone,
     Palette,
     Smartphone,
     Sparkles,
+    TabletSmartphone,
 } from 'lucide-react'
 import { getOrgBySlug } from '../_data/org.queries'
 import { BrandCenterActions } from './_components/BrandCenterActions'
@@ -38,6 +40,30 @@ function getReadableColor(color: string | null) {
     return color && /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#F59E0B'
 }
 
+function hexToRgb(color: string) {
+    const hex = color.replace('#', '')
+    return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+    }
+}
+
+function luminance(color: string) {
+    const { r, g, b } = hexToRgb(color)
+    const channels = [r, g, b].map((value) => {
+        const normalized = value / 255
+        return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+    })
+    return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2])
+}
+
+function contrastRatio(foreground: string, background: string) {
+    const light = Math.max(luminance(foreground), luminance(background))
+    const dark = Math.min(luminance(foreground), luminance(background))
+    return Number(((light + 0.05) / (dark + 0.05)).toFixed(2))
+}
+
 export default async function OrgBrandPage({ params }: Props) {
     const { slug } = await params
     const org = await getOrgBySlug(slug)
@@ -45,6 +71,21 @@ export default async function OrgBrandPage({ params }: Props) {
 
     const primaryColor = getReadableColor(org.primary_color)
     const compactName = org.name.length > 18 ? `${org.name.slice(0, 18)}...` : org.name
+    const contrastOnDark = contrastRatio(primaryColor, '#18181B')
+    const contrastOnWhite = contrastRatio(primaryColor, '#FFFFFF')
+    const brandScore = Math.min(100,
+        (org.logo_url ? 25 : 0) +
+        (org.name.length >= 3 ? 20 : 0) +
+        (contrastOnDark >= 3 ? 25 : 10) +
+        (contrastOnWhite >= 2.2 ? 15 : 5) +
+        15
+    )
+    const qaItems = [
+        { label: 'Logo principal', detail: org.logo_url ? 'Asset cargado' : 'Usando fallback inicial', ok: Boolean(org.logo_url) },
+        { label: 'Contraste dark', detail: `${contrastOnDark}:1`, ok: contrastOnDark >= 3 },
+        { label: 'Contraste light', detail: `${contrastOnWhite}:1`, ok: contrastOnWhite >= 2.2 },
+        { label: 'Nombre visible', detail: org.name, ok: org.name.length >= 3 },
+    ]
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -69,23 +110,42 @@ export default async function OrgBrandPage({ params }: Props) {
                         </div>
 
                         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/75 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Brand source</p>
-                            <div className="mt-4 flex items-center gap-3">
+                            <div className="flex items-end justify-between gap-4">
+                                <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Brand score</p>
+                                    <p className="mt-2 text-5xl font-black text-white">{brandScore}</p>
+                                </div>
                                 <div
                                     className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-black text-white shadow-lg"
                                     style={{ backgroundColor: primaryColor, boxShadow: `0 18px 42px ${primaryColor}33` }}
                                 >
                                     {org.name.charAt(0).toUpperCase()}
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="truncate text-base font-black text-white">{org.name}</p>
-                                    <p className="mt-1 text-xs text-zinc-500">
-                                        {org.logo_url ? 'Logo configurado en organizacion' : 'Fallback activo hasta cargar logo'}
-                                    </p>
-                                </div>
                             </div>
+                            <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-800">
+                                <div className="h-full rounded-full bg-amber-400" style={{ width: `${brandScore}%` }} />
+                            </div>
+                            <p className="mt-3 text-xs leading-5 text-zinc-500">
+                                Score local sin servicios pagos: logo, nombre, contraste y readiness de propagacion.
+                            </p>
                         </div>
                     </div>
+                </section>
+
+                <section className="grid gap-3 md:grid-cols-4">
+                    {qaItems.map((item) => (
+                        <div key={item.label} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">{item.label}</p>
+                                {item.ok ? (
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                                ) : (
+                                    <AlertTriangle className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                                )}
+                            </div>
+                            <p className="mt-3 truncate text-sm font-black text-white">{item.detail}</p>
+                        </div>
+                    ))}
                 </section>
 
                 <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
@@ -213,6 +273,25 @@ export default async function OrgBrandPage({ params }: Props) {
                         </section>
 
                         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <div className="flex items-center gap-2">
+                                <TabletSmartphone className="h-4 w-4 text-sky-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Web + Mobile parity</h2>
+                            </div>
+                            <div className="mt-4 grid gap-3 md:grid-cols-3">
+                                {[
+                                    ['Web/PWA', 'Dashboard, coach app, alumno PWA'],
+                                    ['React Native', 'Tokens listos para app futura'],
+                                    ['Nativo futuro', 'Pasos/smartwatch se estudian aparte'],
+                                ].map(([label, detail]) => (
+                                    <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+                                        <p className="mt-2 text-sm leading-5 text-zinc-300">{detail}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                             <h2 className="text-lg font-black text-white">Loader library</h2>
                             <div className="mt-4 space-y-3">
                                 {LOADER_OPTIONS.map((option) => (
@@ -236,14 +315,21 @@ export default async function OrgBrandPage({ params }: Props) {
                 <section className="grid gap-4 lg:grid-cols-[1fr_0.75fr]">
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                         <div className="flex items-center gap-2">
-                            <BadgeCheck className="h-4 w-4 text-emerald-300" aria-hidden="true" />
-                            <h2 className="text-lg font-black text-white">Propagation rules</h2>
+                            <GitBranch className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                            <h2 className="text-lg font-black text-white">Propagation map</h2>
                         </div>
                         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                            {BRAND_SURFACES.map((surface) => (
+                            {BRAND_SURFACES.map((surface, index) => (
                                 <div key={surface} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
-                                    <p className="text-sm leading-5 text-zinc-300">{surface}</p>
+                                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-400/10 text-xs font-black text-emerald-300">
+                                        {index + 1}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold leading-5 text-zinc-100">{surface}</p>
+                                        <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                            {index < 3 ? 'Soportado con modelo actual' : 'Roadmap sin costo externo'}
+                                        </p>
+                                    </div>
                                 </div>
                             ))}
                         </div>

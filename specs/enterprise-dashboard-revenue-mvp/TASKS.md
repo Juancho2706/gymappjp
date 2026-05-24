@@ -45,6 +45,7 @@
 - [x] Add Brand Center draft controls for org name, color and logo upload.
 - [x] Add publish action to sync enterprise brand to active org coaches.
 - [x] Add brand audit events and local Supabase image support.
+- [x] Add Brand Studio score, QA, propagation map and web/mobile parity notes.
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 

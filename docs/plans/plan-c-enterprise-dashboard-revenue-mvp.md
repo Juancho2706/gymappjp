@@ -129,6 +129,23 @@ Aplicacion EVA:
 - En experiencia del alumno y coach enterprise, la marca visible principal es la empresa.
 - La marca debe poder escalar a app mobile enterprise futura.
 
+### Regla Cross-Platform Web + React Native
+
+Toda decision de EVA Enterprise debe considerar desde el inicio:
+
+- web/PWA actual;
+- futura app mobile React Native;
+- contratos compartibles para web+mobile;
+- estados, permisos y data model portables;
+- diferencias nativas documentadas, no descartadas.
+
+Aplicacion:
+
+- Si una feature existe en web y puede existir en mobile, se diseña para ambas.
+- Si una feature solo tiene sentido en React Native, se estudia como roadmap nativo.
+- Ejemplos nativos futuros: pasos, smartwatch, HealthKit/Google Fit, notificaciones nativas, widgets.
+- No usar servicios pagos para resolver esto salvo decision explicita.
+
 ### Research Update White-Label Brand Ops 2026
 
 **Actualizado:** 2026-05-23 22:20:38 -04:00
@@ -152,6 +169,36 @@ Traduccion EVA:
 - Usar `organizations.logo_url/primary_color/name` como draft inicial antes de crear `organization_branding`.
 - Publicar debe sincronizar coaches enterprise activos y auditar `brand.published`.
 - Mantener pendiente `organization_branding` solo cuando se necesite versionado, rollback o publish avanzado.
+
+### Brand Studio Direction
+
+**Actualizado:** 2026-05-23 22:34:08 -04:00
+
+Brand Center debe evolucionar a Brand Studio, no quedarse como formulario de logo/color.
+
+Criterios 2026 investigados:
+
+- White-label moderno exige que el portal, URLs, emails, loaders y experiencia final no rompan la marca del negocio.
+- Dashboard B2B fuerte prioriza claridad, progressive disclosure, permisos visibles y acciones por rol.
+- Design systems 2026 deben mantener accesibilidad, theming y responsive web/mobile como obligacion continua.
+- EVA debe lograr esto con recursos propios: CSS/tokens, Supabase, auditoria local y previews internos.
+
+Componentes diferenciales sin costo:
+
+- Brand score local: logo, nombre, contraste, readiness de propagacion.
+- Brand QA: contraste dark/light, asset presente, nombre visible, warnings antes de publish.
+- Propagation map: dashboard enterprise, coach app, alumno PWA, loaders, manifest futuro.
+- Web + React Native parity: tokens y estados pensados para web/PWA y futura app mobile.
+- Native-only roadmap: pasos, smartwatch, HealthKit/Google Fit, widgets y notificaciones nativas se estudian aparte.
+- No CSS/JS custom arbitrario; creatividad dentro de un sistema seguro.
+
+Pendiente avanzado:
+
+- `organization_branding` con draft/published/versionado.
+- rollback de publish.
+- publish preview antes/despues.
+- brand presets por tipo de negocio.
+- derivacion automatica de paletas desde logo sin servicio pago, si se implementa localmente.
 
 ### Modulo: Brand Center
 
@@ -1277,14 +1324,18 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 ### Fase 4 - Brand Center y White-Label Propagation
 
 **Estado:** INICIADA con controles funcionales sobre modelo existente.
-**Completado parcial:** 2026-05-23 22:20:38 -04:00
-**Notas:** `/org/[slug]/brand` ya permite guardar nombre/color, subir logo a `org-assets` y publicar marca a coaches enterprise activos. Sin nuevas dependencias y sin migrations porque ya existen `organizations` + campos de branding en `coaches`. Queda pendiente modelo dedicado `organization_branding` para versionado/rollback/publish avanzado.
+**Completado parcial:** 2026-05-23 22:34:08 -04:00
+**Notas:** `/org/[slug]/brand` ya permite guardar nombre/color, subir logo a `org-assets`, publicar marca a coaches enterprise activos, ver Brand score, QA visual, propagation map y web/mobile parity. Sin nuevas dependencias y sin migrations porque ya existen `organizations` + campos de branding en `coaches`. Queda pendiente modelo dedicado `organization_branding` para versionado/rollback/publish avanzado.
 
 - [x] Brand Center preview.
 - [x] Upload/seleccion logo.
 - [x] Paleta y contraste preview.
 - [x] Loader custom preview.
 - [x] Previews coach/alumno/enterprise.
+- [x] Brand score local.
+- [x] Brand QA visual.
+- [x] Propagation map.
+- [x] Web + React Native parity notes.
 - [x] Publicar brand config inicial a coaches enterprise.
 - [ ] Ocultar `Mi marca` y `Billing` en coaches enterprise.
 - [x] Aplicar branding enterprise en alumnos via coaches enterprise actualizados.
