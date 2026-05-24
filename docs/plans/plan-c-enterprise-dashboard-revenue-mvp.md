@@ -1357,12 +1357,12 @@ Reglas de implementacion:
 
 Prioridad P0 - arreglar arquitectura de navegacion:
 
-- [ ] Rework shell enterprise con nav agrupada IA v2.
-- [ ] Active state desktop/mobile.
-- [ ] Subnav contextual para Operaciones, Equipo, Marca, Herramientas, Seguridad.
-- [ ] Renombrar labels visibles: `Brand Center` -> `Marca`; `Team & Access` -> `Equipo`; `Audit Log` -> `Auditoria`; `Settings` -> `Admin`.
-- [ ] Reemplazar `<img>` del logo en enterprise layout por `next/image`.
-- [ ] Revisar mobile nav: no depender de scroll horizontal largo para encontrar funciones.
+- [x] Rework shell enterprise con nav agrupada IA v2. Completado el 2026-05-24 13:11:31 -04:00.
+- [x] Active state desktop/mobile.
+- [x] Subnav contextual para Operaciones, Equipo, Marca, Herramientas, Seguridad.
+- [x] Renombrar labels visibles: `Brand Center` -> `Marca`; `Team & Access` -> `Equipo`; `Audit Log` -> `Auditoria`; `Settings` -> `Admin`.
+- [x] Reemplazar `<img>` del logo en enterprise layout por `next/image`.
+- [x] Revisar mobile nav: no depender de scroll horizontal largo para encontrar funciones.
 
 Prioridad P1 - menus sin rework suficiente:
 

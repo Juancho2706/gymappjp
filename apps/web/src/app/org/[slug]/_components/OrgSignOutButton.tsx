@@ -3,8 +3,13 @@
 import { LogOut } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { cn } from '@/lib/utils'
 
-export function OrgSignOutButton() {
+type Props = {
+    compact?: boolean
+}
+
+export function OrgSignOutButton({ compact = false }: Props) {
     const router = useRouter()
 
     async function handleSignOut() {
@@ -16,11 +21,16 @@ export function OrgSignOutButton() {
 
     return (
         <button
+            type="button"
             onClick={handleSignOut}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-destructive transition-colors w-full"
+            className={cn(
+                'flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-destructive',
+                compact ? 'h-9 w-9 justify-center rounded-lg border border-zinc-800 bg-zinc-900' : 'w-full'
+            )}
+            aria-label="Cerrar sesion"
         >
-            <LogOut className="w-3 h-3 shrink-0" />
-            Cerrar sesión
+            <LogOut className="h-3 w-3 shrink-0" />
+            {!compact && 'Cerrar sesion'}
         </button>
     )
 }
