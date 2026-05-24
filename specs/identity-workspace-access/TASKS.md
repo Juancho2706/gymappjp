@@ -25,7 +25,7 @@
 - [x] Define `ActiveWorkspace`.
 - [x] Define `WorkspaceSummary`.
 - [x] Define `WorkspaceBrand`.
-- [ ] Define workspace permissions.
+- [x] Define workspace permissions.
 - [ ] Add shared Zod schemas if needed.
 
 ## Phase 2 - Supabase Local Migrations
@@ -40,8 +40,8 @@
 
 - [x] Add workspace resolver service.
 - [ ] Add last workspace persistence service.
-- [ ] Add branding resolver.
-- [ ] Add permission helper.
+- [x] Add branding resolver.
+- [x] Add permission helper.
 - [ ] Add audit events for activation/revocation/switch.
 
 ## Phase 4 - Login And Workspace UX

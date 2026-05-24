@@ -1601,7 +1601,7 @@ Prioridad P1.5 - Identity & Workspace antes de seguir P2:
 - [x] Disenar migration local para `enterprise_invites`/codigos hasheados si no existe modelo equivalente. Completado el 2026-05-24 15:57:27 -04:00. Decision: extender `organization_invites` existente en vez de duplicar tabla; ya tenia `token_hash`. Archivo: `supabase/migrations/20260524155600_extend_organization_invites_workspace.sql`. Migration aditiva: agrega `status`, `redeemed_by`, `redeemed_at`, `max_attempts`, `attempt_count`, `last_attempt_at`, indices y constraints.
 - [x] Definir `ActiveWorkspace` compartible web/mobile en `packages/types` o domain layer. Completado el 2026-05-24 15:55:59 -04:00. Archivo: `apps/web/src/domain/auth/types.ts`, exportado via `@eva/types`.
 - [x] Crear resolver server-side de workspaces disponibles por usuario. Completado el 2026-05-24 15:55:59 -04:00. Archivos: `apps/web/src/infrastructure/db/workspace.repository.ts`, `apps/web/src/services/auth/workspace.service.ts`. No conectado aun a login/middleware.
-- [ ] Crear resolver server-side de branding por workspace.
+- [x] Crear resolver server-side de branding por workspace. Completado el 2026-05-24 15:59:30 -04:00. Archivo: `apps/web/src/services/auth/workspace-brand.service.ts`. No conectado aun a middleware para evitar cambios visibles prematuros.
 - [ ] Crear guard central para no mezclar `coach_standalone`, `enterprise_coach`, `enterprise_staff`, `student_standalone`, `student_enterprise`.
 - [ ] Login web/PWA: agregar opcion `Coach Enterprise` con codigo, sin romper login coach standalone.
 - [ ] Login alumno: mantener entrada directa si hay un solo contexto; selector si hay varios.

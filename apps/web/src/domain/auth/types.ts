@@ -66,3 +66,15 @@ export type WorkspaceBrand = {
     loaderText?: string | null
     source: 'organization' | 'coach' | 'eva_default'
 }
+
+export type WorkspacePermission =
+    | 'org.dashboard.view'
+    | 'org.team.manage'
+    | 'org.brand.manage'
+    | 'org.audit.view'
+    | 'org.billing.view'
+    | 'coach.dashboard.view'
+    | 'coach.clients.manage'
+    | 'coach.brand.manage'
+    | 'coach.billing.view'
+    | 'student.dashboard.view'

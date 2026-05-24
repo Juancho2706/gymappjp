@@ -37,6 +37,15 @@ export type WorkspaceOrgRow = {
     primary_color: string | null
 }
 
+export type WorkspaceBrandOrgRow = Pick<WorkspaceOrgRow, 'id' | 'name' | 'logo_url' | 'primary_color'>
+
+export type WorkspaceBrandCoachRow = Pick<
+    WorkspaceCoachRow,
+    'id' | 'full_name' | 'brand_name' | 'logo_url' | 'primary_color'
+> & {
+    loader_text?: string | null
+}
+
 export async function findWorkspaceIdentityRows(db: DB, userId: string) {
     const [coachRes, clientRes, membersRes] = await Promise.all([
         db
@@ -93,4 +102,24 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
         orgs: (orgsRes.data ?? []) as WorkspaceOrgRow[],
         coaches: (coachesRes.data ?? []) as WorkspaceCoachRow[],
     }
+}
+
+export async function findWorkspaceOrgBrand(db: DB, orgId: string): Promise<WorkspaceBrandOrgRow | null> {
+    const { data } = await db
+        .from('organizations')
+        .select('id, name, logo_url, primary_color')
+        .eq('id', orgId)
+        .maybeSingle()
+
+    return (data ?? null) as WorkspaceBrandOrgRow | null
+}
+
+export async function findWorkspaceCoachBrand(db: DB, coachId: string): Promise<WorkspaceBrandCoachRow | null> {
+    const { data } = await db
+        .from('coaches')
+        .select('id, full_name, brand_name, logo_url, primary_color, loader_text')
+        .eq('id', coachId)
+        .maybeSingle()
+
+    return (data ?? null) as WorkspaceBrandCoachRow | null
 }
