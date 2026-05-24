@@ -39,7 +39,7 @@
 ## Phase 3 - Services
 
 - [x] Add workspace resolver service.
-- [ ] Add last workspace persistence service.
+- [x] Add last workspace persistence service.
 - [x] Add branding resolver.
 - [x] Add permission helper.
 - [ ] Add audit events for activation/revocation/switch.

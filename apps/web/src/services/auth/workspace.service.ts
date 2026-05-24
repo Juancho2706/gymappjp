@@ -1,7 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ActiveWorkspace, EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import type { Database } from '@/lib/database.types'
-import { findWorkspaceIdentityRows } from '@/infrastructure/db/workspace.repository'
+import {
+    findWorkspaceIdentityRows,
+    findWorkspacePreference,
+    upsertWorkspacePreference,
+    type WorkspacePreferenceRow,
+} from '@/infrastructure/db/workspace.repository'
 
 type DB = SupabaseClient<Database>
 
@@ -89,6 +94,31 @@ export async function listUserWorkspaces(db: DB, userId: string): Promise<Worksp
     return dedupeWorkspaces(workspaces)
 }
 
+export async function resolvePreferredWorkspace(db: DB, userId: string): Promise<WorkspaceSummary | null> {
+    const [preference, workspaces] = await Promise.all([
+        findWorkspacePreference(db, userId),
+        listUserWorkspaces(db, userId),
+    ])
+
+    if (workspaces.length === 0) return null
+    if (workspaces.length === 1) return { ...workspaces[0], isLastUsed: true }
+    if (!preference) return null
+
+    const preferred = workspaces.find(workspace => workspaceMatchesPreference(workspace, preference))
+    return preferred ? { ...preferred, isLastUsed: true } : null
+}
+
+export async function setLastWorkspace(db: DB, workspace: ActiveWorkspace): Promise<{ error?: string }> {
+    return upsertWorkspacePreference(db, {
+        user_id: workspace.userId,
+        last_workspace_type: workspace.type,
+        last_org_id: 'orgId' in workspace ? workspace.orgId : null,
+        last_coach_id: 'coachId' in workspace ? workspace.coachId : null,
+        last_client_id: 'clientId' in workspace ? workspace.clientId : null,
+        updated_at: new Date().toISOString(),
+    })
+}
+
 export function workspaceKey(workspace: ActiveWorkspace): string {
     if (workspace.type === 'coach_standalone') return `${workspace.type}:${workspace.coachId}`
     if (workspace.type === 'enterprise_coach') return `${workspace.type}:${workspace.orgId}:${workspace.coachId}`
@@ -107,4 +137,15 @@ function dedupeWorkspaces(workspaces: WorkspaceSummary[]): WorkspaceSummary[] {
         result.push(workspace)
     }
     return result
+}
+
+function workspaceMatchesPreference(workspace: ActiveWorkspace, preference: WorkspacePreferenceRow): boolean {
+    if (workspace.type !== preference.last_workspace_type) return false
+    if ('orgId' in workspace && workspace.orgId !== preference.last_org_id) return false
+    if (!('orgId' in workspace) && preference.last_org_id) return false
+    if ('coachId' in workspace && workspace.coachId !== preference.last_coach_id) return false
+    if (!('coachId' in workspace) && preference.last_coach_id) return false
+    if ('clientId' in workspace && workspace.clientId !== preference.last_client_id) return false
+    if (!('clientId' in workspace) && preference.last_client_id) return false
+    return true
 }

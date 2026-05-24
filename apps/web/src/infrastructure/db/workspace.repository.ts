@@ -46,6 +46,15 @@ export type WorkspaceBrandCoachRow = Pick<
     loader_text?: string | null
 }
 
+export type WorkspacePreferenceRow = {
+    user_id: string
+    last_workspace_type: string
+    last_org_id: string | null
+    last_coach_id: string | null
+    last_client_id: string | null
+    updated_at: string
+}
+
 export async function findWorkspaceIdentityRows(db: DB, userId: string) {
     const [coachRes, clientRes, membersRes] = await Promise.all([
         db
@@ -122,4 +131,22 @@ export async function findWorkspaceCoachBrand(db: DB, coachId: string): Promise<
         .maybeSingle()
 
     return (data ?? null) as WorkspaceBrandCoachRow | null
+}
+
+export async function findWorkspacePreference(db: DB, userId: string): Promise<WorkspacePreferenceRow | null> {
+    const { data } = await db
+        .from('workspace_preferences')
+        .select('user_id, last_workspace_type, last_org_id, last_coach_id, last_client_id, updated_at')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+    return (data ?? null) as WorkspacePreferenceRow | null
+}
+
+export async function upsertWorkspacePreference(db: DB, preference: WorkspacePreferenceRow): Promise<{ error?: string }> {
+    const { error } = await db
+        .from('workspace_preferences')
+        .upsert(preference, { onConflict: 'user_id' })
+
+    return error ? { error: error.message } : {}
 }
