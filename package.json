@@ -25,7 +25,8 @@
     "audit:nutrition-empty-meals:runbook": "node scripts/build-nutrition-remediation-runbook.mjs",
     "audit:nutrition-empty-meals:priority": "node scripts/build-nutrition-remediation-priority.mjs",
     "audit:nutrition-empty-meals:baseline": "node scripts/snapshot-nutrition-audit-baseline.mjs",
-    "audit:nutrition-empty-meals:delta": "node scripts/build-nutrition-audit-delta.mjs"
+    "audit:nutrition-empty-meals:delta": "node scripts/build-nutrition-audit-delta.mjs",
+    "seed:enterprise-demo:local": "node scripts/seed-enterprise-demo-local.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

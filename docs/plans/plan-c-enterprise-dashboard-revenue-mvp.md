@@ -1415,10 +1415,10 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 ### Fase 8 - Sales/Implementation Layer
 
 - **Estado:** INICIADA con workspace de implementation.
-- **Completado parcial:** 2026-05-23 22:13:27 -04:00
-- **Notas:** `/org/[slug]/onboarding` fue rearmado como implementation workspace responsive con readiness score, outcome checklist, rutas directas a modulos y CSM notes. Sin herramientas pagas, sin nuevas dependencias, sin migrations y sin DB changes. Las mutations existentes de onboarding ahora escriben audit events.
+- **Completado parcial:** 2026-05-23 22:45:03 -04:00
+- **Notas:** `/org/[slug]/onboarding` fue rearmado como implementation workspace responsive con readiness score, outcome checklist, rutas directas a modulos y CSM notes. Se agrego seed opt-in local `npm run seed:enterprise-demo:local` para demo org realista en Supabase local. Sin herramientas pagas, sin nuevas dependencias y sin migrations. Las mutations existentes de onboarding ahora escriben audit events.
 
-- [ ] Demo org con datos realistas.
+- [x] Demo org con datos realistas. Ejecutado localmente el 2026-05-23 22:45:03 -04:00.
 - [x] Checklist onboarding orientado a outcomes.
 - [x] Guia implementacion inline sin herramienta externa.
 - [x] Estados utiles para CSM.

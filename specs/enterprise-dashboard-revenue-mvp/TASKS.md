@@ -114,6 +114,14 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 8B - Local Demo Workspace
+
+- [x] Add opt-in local Supabase seed for enterprise demo org.
+- [x] Guard seed against non-local Supabase URLs.
+- [x] Create realistic owner, admin, coaches, students, assignments, invoices and audit logs.
+- [x] Execute seed against local Supabase.
+- [x] Document completion timestamp in plan.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`
