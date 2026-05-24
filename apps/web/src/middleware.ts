@@ -1,8 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
+import type { WorkspaceSummary } from '@/domain/auth/types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
+import { listUserWorkspaces, resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { canAccessWorkspacePath, defaultWorkspaceHome } from '@/services/auth/workspace-route-guard.service'
 import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import {
     clientIpFromRequest,
@@ -258,6 +262,24 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
+        const activeWorkspace = await resolveCoachRouteWorkspace(supabase, user.id)
+        if (activeWorkspace === 'select') {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = '/workspace/select'
+            redirectUrl.searchParams.set('from', 'coach')
+            return NextResponse.redirect(redirectUrl)
+        }
+
+        if (activeWorkspace) {
+            const decision = canAccessWorkspacePath(activeWorkspace, pathname)
+            if (!decision.allowed) {
+                const redirectUrl = request.nextUrl.clone()
+                redirectUrl.pathname = decision.redirectTo ?? defaultWorkspaceHome(activeWorkspace)
+                if (decision.reason) redirectUrl.searchParams.set('reason', decision.reason)
+                return NextResponse.redirect(redirectUrl)
+            }
+        }
+
         if (pathname === '/coach/dashboard') {
             const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
             if (redirectPath.startsWith('/org/')) {
@@ -499,4 +521,16 @@ export const config = {
     matcher: [
         '/((?!_next/static|_next/image|favicon.ico|api/manifest/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
+}
+
+async function resolveCoachRouteWorkspace(
+    supabase: SupabaseClient<Database>,
+    userId: string
+): Promise<WorkspaceSummary | 'select' | null> {
+    const preferred = await resolvePreferredWorkspace(supabase, userId)
+    if (preferred) return preferred
+
+    const workspaces = await listUserWorkspaces(supabase, userId)
+    if (workspaces.length > 1) return 'select'
+    return workspaces[0] ?? null
 }

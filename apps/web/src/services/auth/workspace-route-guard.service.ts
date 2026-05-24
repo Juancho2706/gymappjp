@@ -1,4 +1,4 @@
-import type { ActiveWorkspace } from '@/domain/auth/types'
+import type { ActiveWorkspace, WorkspaceSummary } from '@/domain/auth/types'
 
 export type WorkspaceRouteDecision = {
     allowed: boolean
@@ -35,8 +35,9 @@ export function canAccessWorkspacePath(workspace: ActiveWorkspace, pathname: str
     return { allowed: true }
 }
 
-export function defaultWorkspaceHome(workspace: ActiveWorkspace): string {
-    if (workspace.type === 'enterprise_staff') return '/org'
+export function defaultWorkspaceHome(workspace: ActiveWorkspace | WorkspaceSummary): string {
+    if (workspace.type === 'enterprise_staff') return 'slug' in workspace && workspace.slug ? `/org/${workspace.slug}` : '/org/login'
     if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach') return '/coach/dashboard'
+    if ('slug' in workspace && workspace.slug) return `/c/${workspace.slug}/dashboard`
     return '/login'
 }

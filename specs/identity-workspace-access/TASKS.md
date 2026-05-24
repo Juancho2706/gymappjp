@@ -56,7 +56,8 @@
 ## Phase 5 - Guards
 
 - [x] Route matrix helper before middleware/proxy integration.
-- [ ] Route matrix in middleware/proxy.
+- [ ] Route matrix in middleware/proxy for org/student routes.
+- [x] Route matrix in middleware/proxy for coach routes. Completed 2026-05-24 18:24:45 -04:00.
 - [ ] Server action guards.
 - [ ] Repository filters for standalone vs enterprise.
 - [ ] Storage policy checks.
