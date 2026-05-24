@@ -1339,10 +1339,40 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 8 - Sales/Implementation Layer
 
-- Demo org con datos realistas.
-- Checklist onboarding.
-- Guía implementación.
-- Estados útiles para CSM.
+- **Estado:** INICIADA con workspace de implementation.
+- **Completado parcial:** 2026-05-23 22:13:27 -04:00
+- **Notas:** `/org/[slug]/onboarding` fue rearmado como implementation workspace responsive con readiness score, outcome checklist, rutas directas a modulos y CSM notes. Sin herramientas pagas, sin nuevas dependencias, sin migrations y sin DB changes. Las mutations existentes de onboarding ahora escriben audit events.
+
+- [ ] Demo org con datos realistas.
+- [x] Checklist onboarding orientado a outcomes.
+- [x] Guia implementacion inline sin herramienta externa.
+- [x] Estados utiles para CSM.
+- [x] Audit events para onboarding progress/branding/completion.
+
+### Research Update Onboarding/Implementation 2026
+
+**Actualizado:** 2026-05-23 22:13:27 -04:00
+
+Fuentes consultadas para esta fase:
+
+- https://www.equal.design/blog/saas-ux-best-practices-b2b-us
+- https://www.onboard-success.com/playbooks/saas-onboarding-checklist-2026
+- https://www.docebo.com/learning-network/blog/b2b-customer-onboarding/
+- https://www.velaris.io/articles/saas-onboarding-checklist-ensuring-smooth-customer-journeys
+
+Hallazgos aplicables:
+
+- Onboarding B2B no debe medir solo pasos completados; debe medir time-to-value y outcomes.
+- Checklists funcionan mejor cuando separan tareas del cliente, CSM e implementation.
+- Para startups sin presupuesto, un workspace in-app + follow-up manual es mejor que pagar herramientas externas.
+- Completion no equivale a success: hay que validar que el negocio logre un cambio observable.
+
+Traduccion EVA:
+
+- Readiness score debe reflejar marca, coaches, alumnos y asignaciones.
+- El onboarding puede vivir dentro de EVA sin pagar Customer Success tools.
+- Cada avance relevante debe auditarse.
+- La demo org queda pendiente hasta tener seed local controlado.
 
 ---
 

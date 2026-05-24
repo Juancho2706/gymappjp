@@ -19,8 +19,10 @@ export default async function OnboardingPage({ params }: Props) {
         getOrgClients(org.id),
     ])
 
-    const activeCoaches = members.filter(m => m.status === 'active').length
+    const activeCoaches = members.filter(m => m.status === 'active' && m.role === 'coach').length
     const pendingInvites = members.filter(m => m.status === 'invited').length
+    const unassignedClients = clients.filter(client => client.is_active !== false && !client.coach_id).length
+    const assignedClients = clients.filter(client => client.is_active !== false && client.coach_id).length
 
     return (
         <OnboardingWizard
@@ -29,10 +31,13 @@ export default async function OnboardingPage({ params }: Props) {
             currentStep={org.onboarding_step ?? 0}
             primaryColor={org.primary_color ?? '#10B981'}
             seatsIncluded={org.seats_included}
+            hasLogo={Boolean(org.logo_url)}
             stats={{
                 activeCoaches,
                 pendingInvites,
                 totalClients: clients.length,
+                assignedClients,
+                unassignedClients,
             }}
         />
     )

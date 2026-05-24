@@ -85,6 +85,15 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 8A - Implementation Workspace
+
+- [x] Research 2026 B2B onboarding/implementation patterns before implementation.
+- [x] Rework onboarding into a responsive implementation workspace.
+- [x] Add readiness score, outcome checklist and CSM notes without paid tools.
+- [x] Add audit events for onboarding progress, branding update and completion.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`
