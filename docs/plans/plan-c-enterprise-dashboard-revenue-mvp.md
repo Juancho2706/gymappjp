@@ -1595,12 +1595,12 @@ Prioridad P1 - menus sin rework suficiente:
 
 Prioridad P1.5 - Identity & Workspace antes de seguir P2:
 
-- [ ] Auditar tablas actuales `auth.users`, `coaches`, `clients`, `organizations`, `organization_members` y cualquier RPC/email uniqueness para confirmar el modelo real.
-- [ ] Definir SPEC/PLAN/TASKS de `identity-workspace-access` antes de migrations.
-- [ ] Disenar migration local para `workspace_preferences` si no existe.
-- [ ] Disenar migration local para `enterprise_invites`/codigos hasheados si no existe modelo equivalente.
-- [ ] Definir `ActiveWorkspace` compartible web/mobile en `packages/types` o domain layer.
-- [ ] Crear resolver server-side de workspaces disponibles por usuario.
+- [x] Auditar tablas actuales `auth.users`, `coaches`, `clients`, `organizations`, `organization_members` y cualquier RPC/email uniqueness para confirmar el modelo real. Completado el 2026-05-24 15:52:13 -04:00. Notas: existen `organization_members.user_id`, `organization_invites.token_hash`, `clients.org_id`, `coaches.active_org_id`, `org_managed`, `check_platform_email_availability`; faltan `workspace_preferences`, contrato `ActiveWorkspace` y resolver canonico.
+- [x] Definir SPEC/PLAN/TASKS de `identity-workspace-access` antes de migrations. Completado el 2026-05-24 15:52:13 -04:00. Archivos: `specs/identity-workspace-access/{SPEC,PLAN,TASKS}.md`.
+- [x] Disenar migration local para `workspace_preferences` si no existe. Completado el 2026-05-24 15:55:59 -04:00. Archivos: `supabase/migrations/20260524155213_workspace_preferences.sql`, `apps/web/src/lib/database.types.ts`. Migration aditiva local: no modifica datos existentes ni cambia comportamiento live actual.
+- [x] Disenar migration local para `enterprise_invites`/codigos hasheados si no existe modelo equivalente. Completado el 2026-05-24 15:57:27 -04:00. Decision: extender `organization_invites` existente en vez de duplicar tabla; ya tenia `token_hash`. Archivo: `supabase/migrations/20260524155600_extend_organization_invites_workspace.sql`. Migration aditiva: agrega `status`, `redeemed_by`, `redeemed_at`, `max_attempts`, `attempt_count`, `last_attempt_at`, indices y constraints.
+- [x] Definir `ActiveWorkspace` compartible web/mobile en `packages/types` o domain layer. Completado el 2026-05-24 15:55:59 -04:00. Archivo: `apps/web/src/domain/auth/types.ts`, exportado via `@eva/types`.
+- [x] Crear resolver server-side de workspaces disponibles por usuario. Completado el 2026-05-24 15:55:59 -04:00. Archivos: `apps/web/src/infrastructure/db/workspace.repository.ts`, `apps/web/src/services/auth/workspace.service.ts`. No conectado aun a login/middleware.
 - [ ] Crear resolver server-side de branding por workspace.
 - [ ] Crear guard central para no mezclar `coach_standalone`, `enterprise_coach`, `enterprise_staff`, `student_standalone`, `student_enterprise`.
 - [ ] Login web/PWA: agregar opcion `Coach Enterprise` con codigo, sin romper login coach standalone.
@@ -1776,10 +1776,10 @@ Restricciones:
 
 #### Entregables Antes de Implementar P2
 
-- [ ] SPEC `identity-workspace-access`.
-- [ ] PLAN `identity-workspace-access`.
-- [ ] TASKS `identity-workspace-access`.
-- [ ] Auditoria DB actual.
+- [x] SPEC `identity-workspace-access`. Completado el 2026-05-24 15:52:13 -04:00.
+- [x] PLAN `identity-workspace-access`. Completado el 2026-05-24 15:52:13 -04:00.
+- [x] TASKS `identity-workspace-access`. Completado el 2026-05-24 15:52:13 -04:00.
+- [x] Auditoria DB actual. Completado el 2026-05-24 15:52:13 -04:00. Nota: auditoria inicial de schema/migrations; RLS tabla por tabla queda pendiente.
 - [ ] Diagrama de datos final.
 - [ ] Matriz de permisos por workspace.
 - [ ] Matriz de branding por workspace.

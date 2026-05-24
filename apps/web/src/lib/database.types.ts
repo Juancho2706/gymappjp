@@ -1672,6 +1672,68 @@ export type Database = {
           },
         ]
       }
+      organization_invites: {
+        Row: {
+          attempt_count: number
+          created_by: string
+          deleted_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          last_attempt_at: string | null
+          max_attempts: number
+          org_id: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+          role: string
+          status: string
+          token_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          attempt_count?: number
+          created_by: string
+          deleted_at?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          max_attempts?: number
+          org_id: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          role: string
+          status?: string
+          token_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          attempt_count?: number
+          created_by?: string
+          deleted_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          max_attempts?: number
+          org_id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          role?: string
+          status?: string
+          token_hash?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           coach_id: string | null
@@ -2567,6 +2629,55 @@ export type Database = {
             columns: ["source_template_id"]
             isOneToOne: false
             referencedRelation: "workout_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_preferences: {
+        Row: {
+          last_client_id: string | null
+          last_coach_id: string | null
+          last_org_id: string | null
+          last_workspace_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_client_id?: string | null
+          last_coach_id?: string | null
+          last_org_id?: string | null
+          last_workspace_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_client_id?: string | null
+          last_coach_id?: string | null
+          last_org_id?: string | null
+          last_workspace_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_preferences_last_client_id_fkey"
+            columns: ["last_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_preferences_last_coach_id_fkey"
+            columns: ["last_coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_preferences_last_org_id_fkey"
+            columns: ["last_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
