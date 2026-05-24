@@ -28,15 +28,18 @@ import {
     resolveActiveWeekVariantForDisplay,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error("Unauthorized")
+    const workspace = await resolvePreferredWorkspace(supabase, user.id)
+    const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
 
     // Fetch client base data
-    const clientPromise = supabase
+    let clientQuery = supabase
         .from('clients')
         .select(`
             *,
@@ -45,7 +48,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
         `)
         .eq('id', clientId)
         .eq('coach_id', user.id)
-        .maybeSingle()
+
+    clientQuery = orgId ? clientQuery.eq('org_id', orgId) : clientQuery.is('org_id', null)
+    const clientPromise = clientQuery.maybeSingle()
 
     // Fetch active workout program
     const activeProgramPromise = supabase
