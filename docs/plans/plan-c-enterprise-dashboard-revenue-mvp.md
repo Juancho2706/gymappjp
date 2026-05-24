@@ -1370,7 +1370,7 @@ Prioridad P1 - menus sin rework suficiente:
 - [x] Rework `/org/[slug]/clients` como "Operaciones > Alumnos": KPIs, filtros claros, estado pago/asignacion, import visible pero no dominante. Completado el 2026-05-24 14:46:46 -04:00. Nota: bulk actions seguros quedan P2 para no tocar mutations compartidas sin auditoria adicional.
 - [x] Rework `/org/[slug]/settings` como "Seguridad y Admin > Admin": separar datos org, billing enterprise manual, seats, accesos, auditoria y guardrails enterprise-coach-alumno. Completado el 2026-05-24 14:52:19 -04:00. Nota: automatizacion de seats/billing queda fuera hasta definir reglas comerciales.
 - [x] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": estado, audience preview, expiracion, impacto esperado y preview alumno enterprise. Completado el 2026-05-24 14:57:32 -04:00. Nota: canal actual sigue siendo solo alumnos enterprise; entrega a coaches queda como decision futura.
-- [ ] Rework `/org/[slug]/nutrition` como "Herramientas > Nutricion": biblioteca de templates, tags, macro summary, usage by coaches.
+- [x] Rework `/org/[slug]/nutrition` como "Herramientas > Nutricion": biblioteca de templates, coverage por objetivo, macro summary, meals y acceso para coaches enterprise. Completado el 2026-05-24 15:03:22 -04:00. Nota: usage real por coach queda P2 porque requiere instrumentar aplicacion de template.
 
 Prioridad P2 - completar features que ya existen pero siguen incompletas:
 
@@ -1383,6 +1383,7 @@ Prioridad P2 - completar features que ya existen pero siguen incompletas:
 - [ ] Team: permisos granulares por feature, no solo `org_owner/org_admin/coach`.
 - [ ] Admin: definir flujo comercial para aumentar seats, cambiar plan y registrar contacto legal/finanzas sin cobro in-app.
 - [ ] Novedades: evaluar canal separado para coaches enterprise con audience/permissions propios antes de tocar el flujo coach normal.
+- [ ] Nutricion: tracking de uso por template/coach y filtros por objetivo cuando exista volumen suficiente de datos.
 
 Prioridad P3 - diferenciadores futuros sin costo externo:
 

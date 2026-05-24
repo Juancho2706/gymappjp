@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Salad, Trash2 } from 'lucide-react'
 import { createOrgNutritionTemplateAction } from '../_actions/nutrition-templates.actions'
 
 interface Props { orgSlug: string }
@@ -9,13 +9,13 @@ interface Props { orgSlug: string }
 type MealRow = { name: string; description: string }
 
 const GOAL_OPTIONS = [
-    { value: '', label: 'Sin objetivo específico' },
-    { value: 'deficit', label: 'Déficit / Pérdida de grasa' },
+    { value: '', label: 'Sin objetivo especifico' },
+    { value: 'deficit', label: 'Deficit / perdida de grasa' },
     { value: 'maintenance', label: 'Mantenimiento' },
-    { value: 'surplus', label: 'Volumen / Ganancia muscular' },
+    { value: 'surplus', label: 'Volumen / ganancia muscular' },
 ]
 
-const inputClass = 'w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100'
+const inputClass = 'w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-emerald-300'
 const numInput = inputClass + ' [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
 
 export function CreateOrgNutritionTemplateForm({ orgSlug }: Props) {
@@ -23,28 +23,32 @@ export function CreateOrgNutritionTemplateForm({ orgSlug }: Props) {
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
     const [pending, start] = useTransition()
-    const [meals, setMeals] = useState<MealRow[]>([{ name: 'Desayuno', description: '' }, { name: 'Almuerzo', description: '' }, { name: 'Cena', description: '' }])
+    const [meals, setMeals] = useState<MealRow[]>([
+        { name: 'Desayuno', description: '' },
+        { name: 'Almuerzo', description: '' },
+        { name: 'Cena', description: '' },
+    ])
 
-    const addMeal = () => setMeals(p => [...p, { name: '', description: '' }])
-    const removeMeal = (i: number) => setMeals(p => p.filter((_, idx) => idx !== i))
-    const updateMeal = (i: number, field: keyof MealRow, val: string) =>
-        setMeals(p => p.map((m, idx) => idx === i ? { ...m, [field]: val } : m))
+    const addMeal = () => setMeals(previous => [...previous, { name: '', description: '' }])
+    const removeMeal = (index: number) => setMeals(previous => previous.filter((_, currentIndex) => currentIndex !== index))
+    const updateMeal = (index: number, field: keyof MealRow, value: string) =>
+        setMeals(previous => previous.map((meal, currentIndex) => currentIndex === index ? { ...meal, [field]: value } : meal))
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault()
-        const fd = new FormData(e.currentTarget)
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault()
+        const formData = new FormData(event.currentTarget)
         setError(null)
         setSuccess(false)
         const payload = {
-            name: fd.get('name'),
-            description: fd.get('description'),
-            goal_type: fd.get('goal_type'),
-            daily_calories: fd.get('daily_calories') ? Number(fd.get('daily_calories')) : undefined,
-            protein_g: fd.get('protein_g') ? Number(fd.get('protein_g')) : undefined,
-            carbs_g: fd.get('carbs_g') ? Number(fd.get('carbs_g')) : undefined,
-            fats_g: fd.get('fats_g') ? Number(fd.get('fats_g')) : undefined,
-            instructions: fd.get('instructions'),
-            meal_names: meals.filter(m => m.name.trim()).map((m, i) => ({ name: m.name, order_index: i, description: m.description })),
+            name: formData.get('name'),
+            description: formData.get('description'),
+            goal_type: formData.get('goal_type'),
+            daily_calories: formData.get('daily_calories') ? Number(formData.get('daily_calories')) : undefined,
+            protein_g: formData.get('protein_g') ? Number(formData.get('protein_g')) : undefined,
+            carbs_g: formData.get('carbs_g') ? Number(formData.get('carbs_g')) : undefined,
+            fats_g: formData.get('fats_g') ? Number(formData.get('fats_g')) : undefined,
+            instructions: formData.get('instructions'),
+            meal_names: meals.filter(meal => meal.name.trim()).map((meal, index) => ({ name: meal.name, order_index: index, description: meal.description })),
         }
         start(async () => {
             const result = await createOrgNutritionTemplateAction(orgSlug, payload)
@@ -59,87 +63,107 @@ export function CreateOrgNutritionTemplateForm({ orgSlug }: Props) {
     }
 
     return (
-        <>
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <Salad className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                        <h2 className="text-lg font-black text-white">Crear template</h2>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-zinc-500">
+                        Bases reutilizables para coaches enterprise. Evita plantillas ambiguas: objetivo, macros y comidas claras.
+                    </p>
+                </div>
+            </div>
+
             <button
                 onClick={() => setOpen(true)}
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="mt-5 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-sm font-black text-zinc-950 transition hover:bg-emerald-300"
             >
-                <Plus className="w-4 h-4" />
+                <Plus className="h-4 w-4" aria-hidden="true" />
                 Nuevo template
             </button>
 
+            {success && (
+                <p className="mt-3 text-sm text-emerald-400">Template creado</p>
+            )}
+
             {open && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setOpen(false)}>
-                    <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-                        <h3 className="font-bold text-zinc-900 dark:text-zinc-100">Nuevo template nutricional</h3>
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center" onClick={() => setOpen(false)}>
+                    <div className="flex max-h-[90dvh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl" onClick={event => event.stopPropagation()}>
+                        <div>
+                            <h3 className="text-lg font-black text-white">Nuevo template nutricional</h3>
+                            <p className="mt-1 text-sm text-zinc-500">Visible para coaches enterprise activos.</p>
+                        </div>
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs font-medium text-zinc-500">Nombre *</label>
-                                <input name="name" required maxLength={120} className={inputClass} placeholder="Ej: Plan Déficit 1800 kcal" />
+                            <div>
+                                <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Nombre</label>
+                                <input name="name" required maxLength={120} className={inputClass} placeholder="Ej: Deficit 1800 kcal" />
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs font-medium text-zinc-500">Objetivo</label>
+                            <div>
+                                <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Objetivo</label>
                                 <select name="goal_type" className={inputClass}>
-                                    {GOAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    {GOAL_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                                 </select>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-xs font-medium text-zinc-500">Calorías</label>
-                                    <input name="daily_calories" type="number" min={0} className={numInput} placeholder="ej: 2000" />
+                                <div>
+                                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Calorias</label>
+                                    <input name="daily_calories" type="number" min={0} className={numInput} placeholder="2000" />
                                 </div>
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-xs font-medium text-zinc-500">Proteína (g)</label>
-                                    <input name="protein_g" type="number" min={0} className={numInput} placeholder="ej: 150" />
+                                <div>
+                                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Proteina (g)</label>
+                                    <input name="protein_g" type="number" min={0} className={numInput} placeholder="150" />
                                 </div>
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-xs font-medium text-zinc-500">Carbos (g)</label>
-                                    <input name="carbs_g" type="number" min={0} className={numInput} placeholder="ej: 200" />
+                                <div>
+                                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Carbos (g)</label>
+                                    <input name="carbs_g" type="number" min={0} className={numInput} placeholder="200" />
                                 </div>
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-xs font-medium text-zinc-500">Grasas (g)</label>
-                                    <input name="fats_g" type="number" min={0} className={numInput} placeholder="ej: 70" />
+                                <div>
+                                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Grasas (g)</label>
+                                    <input name="fats_g" type="number" min={0} className={numInput} placeholder="70" />
                                 </div>
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs font-medium text-zinc-500">Descripción</label>
-                                <textarea name="description" maxLength={500} rows={2} className={inputClass} placeholder="Para qué tipo de cliente es este template..." />
+                            <div>
+                                <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Descripcion</label>
+                                <textarea name="description" maxLength={500} rows={2} className={inputClass} placeholder="Para que tipo de alumno sirve este template..." />
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs font-medium text-zinc-500">Instrucciones</label>
-                                <textarea name="instructions" maxLength={2000} rows={2} className={inputClass} placeholder="Instrucciones generales del plan..." />
+                            <div>
+                                <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Instrucciones</label>
+                                <textarea name="instructions" maxLength={2000} rows={3} className={inputClass} placeholder="Reglas generales, sustituciones y notas para el coach..." />
                             </div>
 
-                            <div className="flex flex-col gap-2">
+                            <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-xs font-medium text-zinc-500">Comidas</label>
-                                    <button type="button" onClick={addMeal} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
-                                        <Plus className="w-3 h-3" /> Agregar
+                                    <label className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Comidas</label>
+                                    <button type="button" onClick={addMeal} className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300 hover:text-emerald-200">
+                                        <Plus className="h-3 w-3" aria-hidden="true" /> Agregar
                                     </button>
                                 </div>
-                                {meals.map((m, i) => (
-                                    <div key={i} className="flex items-center gap-2">
+                                {meals.map((meal, index) => (
+                                    <div key={index} className="flex items-center gap-2">
                                         <input
-                                            value={m.name}
-                                            onChange={e => updateMeal(i, 'name', e.target.value)}
-                                            placeholder={`Comida ${i + 1}`}
-                                            className={inputClass + ' flex-1'}
+                                            value={meal.name}
+                                            onChange={event => updateMeal(index, 'name', event.target.value)}
+                                            placeholder={`Comida ${index + 1}`}
+                                            className={`${inputClass} flex-1`}
                                             maxLength={80}
                                         />
-                                        <button type="button" onClick={() => removeMeal(i)} className="text-zinc-400 hover:text-red-500 shrink-0">
-                                            <Trash2 className="w-4 h-4" />
+                                        <button type="button" onClick={() => removeMeal(index)} className="shrink-0 rounded-xl border border-zinc-700 p-2 text-zinc-400 transition hover:border-red-400/40 hover:text-red-300">
+                                            <Trash2 className="h-4 w-4" aria-hidden="true" />
                                         </button>
                                     </div>
                                 ))}
                             </div>
 
-                            {error && <p className="text-sm text-red-600">{error}</p>}
+                            {error && <p className="text-sm text-red-400">{error}</p>}
 
-                            <div className="flex gap-2 justify-end pt-2">
-                                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button type="button" onClick={() => setOpen(false)} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 px-4 text-sm font-bold text-zinc-200 transition hover:bg-zinc-800">
                                     Cancelar
                                 </button>
-                                <button type="submit" disabled={pending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                                <button type="submit" disabled={pending} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-sm font-black text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-50">
+                                    {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                                     {pending ? 'Guardando...' : 'Crear template'}
                                 </button>
                             </div>
@@ -147,10 +171,6 @@ export function CreateOrgNutritionTemplateForm({ orgSlug }: Props) {
                     </div>
                 </div>
             )}
-
-            {success && (
-                <p className="text-sm text-emerald-600 dark:text-emerald-400">Template creado</p>
-            )}
-        </>
+        </section>
     )
 }

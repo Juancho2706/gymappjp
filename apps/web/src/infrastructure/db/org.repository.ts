@@ -60,6 +60,20 @@ export type OrgAnnouncement = {
     created_at: string | null
 }
 
+export type OrgNutritionTemplate = {
+    id: string
+    name: string
+    description: string | null
+    goal_type: string | null
+    daily_calories: number | null
+    protein_g: number | null
+    carbs_g: number | null
+    fats_g: number | null
+    instructions: string | null
+    meal_names: { name: string; order_index: number; description?: string }[]
+    created_at: string | null
+}
+
 export async function findOrgBySlug(
     db: DB,
     userId: string,
@@ -111,6 +125,19 @@ export async function findOrgAnnouncements(db: DB, orgId: string): Promise<OrgAn
         .limit(50)
 
     return (data ?? []) as OrgAnnouncement[]
+}
+
+export async function findOrgNutritionTemplates(db: DB, orgId: string): Promise<OrgNutritionTemplate[]> {
+    const { data } = await db
+        .from('org_nutrition_templates')
+        .select('id, name, description, goal_type, daily_calories, protein_g, carbs_g, fats_g, instructions, meal_names, created_at')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+
+    return (data ?? []).map(template => ({
+        ...template,
+        meal_names: Array.isArray(template.meal_names) ? (template.meal_names as OrgNutritionTemplate['meal_names']) : [],
+    }))
 }
 
 export async function findOrgClients(
