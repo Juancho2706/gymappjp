@@ -1,13 +1,42 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import type { Metadata } from 'next'
-import { getOrgBySlug, getOrgInvoices } from '../_data/org.queries'
+import {
+    AlertTriangle,
+    ArrowRight,
+    BadgeDollarSign,
+    Building2,
+    CalendarClock,
+    CheckCircle2,
+    CreditCard,
+    Database,
+    KeyRound,
+    LockKeyhole,
+    Palette,
+    ReceiptText,
+    ShieldCheck,
+    Users,
+} from 'lucide-react'
+import { getOrgBySlug, getOrgInvoices, getOrgMembers } from '../_data/org.queries'
 import { OrgSettingsForm } from './_components/OrgSettingsForm'
 import { OrgInvoiceList } from './_components/OrgInvoiceList'
 
-export const metadata: Metadata = { title: 'Configuración' }
+export const metadata: Metadata = { title: 'Admin' }
 
 interface Props {
     params: Promise<{ slug: string }>
+}
+
+function statusTone(status: string) {
+    if (status === 'active') return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+    if (status === 'trialing') return 'border-sky-400/25 bg-sky-400/10 text-sky-300'
+    if (status === 'past_due') return 'border-amber-400/25 bg-amber-400/10 text-amber-300'
+    return 'border-zinc-700 bg-zinc-900 text-zinc-400'
+}
+
+function formatDate(value: string | null) {
+    if (!value) return 'No definido'
+    return new Date(value).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export default async function OrgSettingsPage({ params }: Props) {
@@ -16,75 +45,207 @@ export default async function OrgSettingsPage({ params }: Props) {
     if (!org) redirect('/coach/dashboard')
 
     const isAdmin = org.myRole === 'org_owner' || org.myRole === 'org_admin'
-    const invoices = await getOrgInvoices(org.id)
+    const [invoices, members] = await Promise.all([
+        getOrgInvoices(org.id),
+        getOrgMembers(org.id),
+    ])
+
+    const activeMembers = members.filter(member => member.status === 'active')
+    const enterpriseUsers = activeMembers.filter(member => member.role !== 'coach')
+    const activeCoaches = activeMembers.filter(member => member.role === 'coach' && member.coach_id)
+    const usedSeats = activeCoaches.length
+    const seatUsage = Math.round((usedSeats / Math.max(1, org.seats_included)) * 100)
+    const latestInvoice = invoices[0] ?? null
+    const hasBillingRisk = latestInvoice?.status === 'overdue' || latestInvoice?.status === 'pending'
+    const trialEndsSoon = org.trial_ends_at ? new Date(org.trial_ends_at).getTime() - Date.now() < 1000 * 60 * 60 * 24 * 14 : false
+
+    const guardrails = [
+        'Cuentas enterprise separadas de coaches y alumnos.',
+        'Coaches enterprise no manejan billing ni marca propia del negocio.',
+        'White-label publicado afecta coaches enterprise y alumnos enterprise.',
+        'Cambios sensibles deben quedar auditados antes de automatizar bulk actions.',
+    ]
 
     return (
-        <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-xl font-bold">Configuración</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">Administra los datos de la organización</p>
-            </div>
+        <div className="min-h-full bg-zinc-950 text-zinc-100">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 md:px-8 md:py-8">
+                <section className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl shadow-black/20 md:p-7">
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,rgba(59,130,246,0.16),transparent_32%),radial-gradient(circle_at_86%_12%,rgba(16,185,129,0.12),transparent_30%)]"
+                    />
+                    <div className="relative grid gap-6 xl:grid-cols-[1fr_440px] xl:items-end">
+                        <div>
+                            <span className="inline-flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-sky-300">
+                                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                                Seguridad y Admin
+                            </span>
+                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                                Admin center enterprise
+                            </h1>
+                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                                Datos de negocio, seats, billing manual y controles que protegen el flujo enterprise sin mezclarlo con coach standalone.
+                            </p>
+                            <div className="mt-5 flex flex-wrap gap-2">
+                                <Link
+                                    href={`/org/${slug}/team`}
+                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-sky-400 px-4 text-sm font-black text-zinc-950 transition hover:bg-sky-300"
+                                >
+                                    Revisar accesos
+                                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                                </Link>
+                                <Link
+                                    href={`/org/${slug}/audit`}
+                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 text-sm font-bold text-zinc-200 transition hover:bg-zinc-800"
+                                >
+                                    <Database className="h-4 w-4" aria-hidden="true" />
+                                    Ver auditoria
+                                </Link>
+                            </div>
+                        </div>
 
-            {/* Org info */}
-            <div className="rounded-xl border border-border bg-card p-4 space-y-1">
-                <h2 className="text-sm font-semibold mb-3">Información</h2>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                        <p className="text-[11px] text-muted-foreground">Slug</p>
-                        <p className="font-mono text-xs bg-muted px-2 py-1 rounded mt-0.5">{org.slug}</p>
+                        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/75 p-3 md:grid-cols-4">
+                            {[
+                                ['Plan', org.plan],
+                                ['Estado', org.status],
+                                ['Seats', `${usedSeats}/${org.seats_included}`],
+                                ['Staff', enterpriseUsers.length],
+                            ].map(([label, value]) => (
+                                <div key={label} className="rounded-xl bg-zinc-900 p-3 text-center">
+                                    <p className="truncate text-lg font-black text-white">{value}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-[11px] text-muted-foreground">Plan</p>
-                        <p className="font-medium capitalize">{org.plan}</p>
-                    </div>
-                    <div>
-                        <p className="text-[11px] text-muted-foreground">Estado</p>
-                        <p className={`font-medium capitalize ${org.status === 'active' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                            {org.status}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-[11px] text-muted-foreground">Seats</p>
-                        <p className="font-medium">{org.seats_included}</p>
-                    </div>
-                </div>
-                {org.trial_ends_at && (
-                    <p className="text-[11px] text-amber-500 mt-2">
-                        Trial hasta: {new Date(org.trial_ends_at).toLocaleDateString('es-CL')}
-                    </p>
-                )}
-            </div>
+                </section>
 
-            {/* Editable settings — admins only */}
-            {isAdmin ? (
-                <div className="rounded-xl border border-border bg-card p-4">
-                    <h2 className="text-sm font-semibold mb-3">Branding</h2>
-                    <OrgSettingsForm orgSlug={slug} defaultName={org.name} defaultColor={org.primary_color ?? ''} currentLogoUrl={org.logo_url} />
-                </div>
-            ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                    Solo admins pueden editar la configuración.
-                </p>
-            )}
+                <section className="grid gap-3 md:grid-cols-4">
+                    {[
+                        [Building2, 'Organizacion', org.slug, 'slug publico enterprise'],
+                        [Users, 'Uso seats', `${seatUsage}%`, `${Math.max(0, org.seats_included - usedSeats)} disponibles`],
+                        [CreditCard, 'Billing', org.billing_cycle ?? 'manual', latestInvoice ? `ultima: ${latestInvoice.status}` : 'sin facturas'],
+                        [CalendarClock, 'Trial', formatDate(org.trial_ends_at), trialEndsSoon ? 'revisar cierre' : 'estado controlado'],
+                    ].map(([Icon, title, value, detail]) => (
+                        <div key={title as string} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <Icon className="h-5 w-5 text-sky-300" aria-hidden="true" />
+                                <p className="truncate text-right text-lg font-black text-white">{value as string}</p>
+                            </div>
+                            <h2 className="mt-4 text-sm font-black text-white">{title as string}</h2>
+                            <p className="mt-1 text-xs leading-5 text-zinc-500">{detail as string}</p>
+                        </div>
+                    ))}
+                </section>
 
-            {/* Billing info + invoices */}
-            <div className="rounded-xl border border-border bg-card p-4 space-y-4">
-                <div>
-                    <h2 className="text-sm font-semibold mb-1">Billing</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Facturación gestionada manualmente. Contacta a{' '}
-                        <a href="mailto:contacto@eva-app.cl" className="text-violet-500 hover:underline">
-                            contacto@eva-app.cl
-                        </a>{' '}
-                        para cambios de plan o seats.
-                    </p>
-                </div>
-                {invoices.length > 0 && (
-                    <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Historial de facturas</p>
-                        <OrgInvoiceList invoices={invoices} />
+                <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
+                    <div className="space-y-5">
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-sky-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Datos del negocio</h2>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-zinc-500">
+                                Identidad administrativa de la organizacion. La marca publica vive en Marca, pero este resumen ayuda a soporte, ventas y onboarding.
+                            </p>
+
+                            <div className="mt-5 grid gap-3 md:grid-cols-2">
+                                {[
+                                    ['Nombre', org.name],
+                                    ['Slug', org.slug],
+                                    ['Moneda', org.currency],
+                                    ['Creada', formatDate(org.created_at)],
+                                    ['Plan', org.plan],
+                                    ['Billing cycle', org.billing_cycle ?? 'manual'],
+                                ].map(([label, value]) => (
+                                    <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+                                        <p className="mt-2 truncate text-sm font-bold text-zinc-100">{value}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {isAdmin ? (
+                            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                                <div className="flex items-center gap-2">
+                                    <Palette className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                                    <h2 className="text-lg font-black text-white">Ajustes rapidos de marca</h2>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-zinc-500">
+                                    Cambios basicos. El publish avanzado y el preview cross-platform se controlan desde Marca.
+                                </p>
+                                <div className="mt-5">
+                                    <OrgSettingsForm orgSlug={slug} defaultName={org.name} defaultColor={org.primary_color ?? ''} currentLogoUrl={org.logo_url} />
+                                </div>
+                            </section>
+                        ) : (
+                            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 text-sm text-zinc-500">
+                                Solo owner/admin pueden editar configuracion.
+                            </section>
+                        )}
                     </div>
-                )}
+
+                    <aside className="space-y-5">
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                    <BadgeDollarSign className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                                    <h2 className="text-lg font-black text-white">Billing enterprise</h2>
+                                </div>
+                                <span className={`rounded-full border px-2 py-1 text-xs font-bold ${statusTone(org.status)}`}>
+                                    {org.status}
+                                </span>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-zinc-500">
+                                Por ahora EVA Enterprise no cobra dentro de la app. Esta zona mantiene trazabilidad comercial y facturas manuales.
+                            </p>
+
+                            <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                                {hasBillingRisk ? (
+                                    <div className="flex items-start gap-3">
+                                        <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" aria-hidden="true" />
+                                        <div>
+                                            <p className="text-sm font-black text-amber-200">Billing requiere revision</p>
+                                            <p className="mt-1 text-xs leading-5 text-zinc-500">Hay factura pendiente o vencida. No bloquear alumnos automaticamente sin decision comercial.</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-start gap-3">
+                                        <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" aria-hidden="true" />
+                                        <div>
+                                            <p className="text-sm font-black text-emerald-200">Sin bloqueo de cobro in-app</p>
+                                            <p className="mt-1 text-xs leading-5 text-zinc-500">Modelo manual listo para pre-revenue y ventas B2B.</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-5">
+                                <div className="mb-2 flex items-center gap-2">
+                                    <ReceiptText className="h-4 w-4 text-zinc-400" aria-hidden="true" />
+                                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Historial</p>
+                                </div>
+                                <OrgInvoiceList invoices={invoices} />
+                            </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <div className="flex items-center gap-2">
+                                <LockKeyhole className="h-4 w-4 text-sky-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Guardrails</h2>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                                {guardrails.map(item => (
+                                    <div key={item} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                                        <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" aria-hidden="true" />
+                                        <p className="text-sm leading-5 text-zinc-400">{item}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    </aside>
+                </section>
             </div>
         </div>
     )
