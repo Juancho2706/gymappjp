@@ -1,3 +1,15 @@
+CREATE TABLE IF NOT EXISTS organization_invites (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id          uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  email           text NOT NULL,
+  role            text NOT NULL CHECK (role IN ('org_admin','coach')),
+  token_hash      text UNIQUE NOT NULL,
+  expires_at      timestamptz NOT NULL DEFAULT now() + interval '7 days',
+  used_at         timestamptz,
+  created_by      uuid NOT NULL REFERENCES auth.users(id),
+  deleted_at      timestamptz
+);
+
 ALTER TABLE organization_invites
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active',
   ADD COLUMN IF NOT EXISTS redeemed_by uuid REFERENCES auth.users(id),
@@ -47,3 +59,22 @@ CREATE INDEX IF NOT EXISTS idx_org_invites_active_email
 CREATE INDEX IF NOT EXISTS idx_org_invites_redeemed_by
   ON organization_invites(redeemed_by)
   WHERE redeemed_by IS NOT NULL;
+
+ALTER TABLE organization_invites ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "org_admin_see_invites" ON organization_invites;
+CREATE POLICY "org_admin_see_invites" ON organization_invites
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM organization_members om
+      WHERE om.org_id = organization_invites.org_id
+        AND om.user_id = auth.uid()
+        AND om.role IN ('org_owner', 'org_admin')
+        AND om.status = 'active'
+        AND om.deleted_at IS NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "service_role_manage_invites" ON organization_invites;
+CREATE POLICY "service_role_manage_invites" ON organization_invites
+  FOR ALL USING (auth.role() = 'service_role');

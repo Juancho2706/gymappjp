@@ -46,7 +46,7 @@
 
 ## Phase 4 - Login And Workspace UX
 
-- [ ] Add `Coach Enterprise` code entry without breaking coach standalone login.
+- [x] Add `Coach Enterprise` code entry without breaking coach standalone login.
 - [ ] Add workspace selector for 2+ workspaces.
 - [ ] Preserve direct redirect for one workspace.
 - [ ] Add enterprise staff route isolation.

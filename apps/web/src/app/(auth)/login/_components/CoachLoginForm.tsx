@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useActionState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Mail, ArrowRight } from 'lucide-react'
+import { Building2, Mail, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { CoachLoginSchema, type CoachLoginInput } from '@eva/schemas'
 import { loginAction, type LoginState } from '../_actions/login.actions'
@@ -117,6 +117,14 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
                 </svg>
                 Continuar con Google
             </button>
+
+            <Link
+                href="/login/enterprise-coach"
+                className="flex h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:text-emerald-300"
+            >
+                <Building2 className="h-4 w-4" aria-hidden="true" />
+                Coach Enterprise con codigo
+            </Link>
 
             <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-border" />
