@@ -680,6 +680,31 @@ Export:
 - PDF después;
 - scheduled email después.
 
+### Research Update Reporting/Decision Intelligence UX 2026
+
+**Actualizado:** 2026-05-23 22:04:56 -04:00
+
+Fuentes consultadas para esta fase:
+
+- https://designpixil.com/blog/saas-dashboard-ux-best-practices
+- https://www.merveilleux.design/en/blog/article/saas-dashboard-design-ux
+- https://www.orbix.studio/blogs/b2b-saas-dashboard-design-examples
+- https://help.gooddata.com/doc/enterprise/en/dashboards-and-insights/dashboards/export-dashboards/
+
+Hallazgos aplicables:
+
+- Reportes B2B 2026 deben organizarse por decision y urgencia, no por cantidad de graficos.
+- Enterprise buyers esperan vistas listas para stakeholders, no solo dashboards para operadores.
+- Progressive disclosure y exports claros reducen ruido para owners que revisan semanalmente.
+- CSV sirve para analisis externo; PDF sirve para lectura ejecutiva. No son el mismo producto.
+
+Traduccion EVA:
+
+- `/org/[slug]/reports` debe empezar como weekly brief read-only.
+- Exports quedan bloqueados hasta permiso dedicado + audit event.
+- Metricas avanzadas no se prometen hasta normalizar workout/check-in/payment facts.
+- El reporte debe mostrar formula status para no vender insights falsos.
+
 Métricas:
 
 - alumnos activos;
@@ -1273,10 +1298,14 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 7 - Reportes y Exports
 
-- Reporte semanal.
-- Coach performance.
-- Student risk.
-- Pagos alumnos operacional.
+- **Estado:** INICIADA con preview read-only.
+- **Completado parcial:** 2026-05-23 22:04:56 -04:00
+- **Notas:** `/org/[slug]/reports` ya muestra weekly brief, KPIs conservadores, coach performance por carga, findings, exports bloqueados y formula status. Sin CSV/PDF real, sin mutations y sin DB changes.
+
+- [x] Reporte semanal read-only.
+- [x] Coach performance por carga actual.
+- [x] Student risk basico por sin coach/inactivos.
+- [x] Pagos enterprise operacional via invoices pendientes.
 - CSV export.
 - PDF después.
 

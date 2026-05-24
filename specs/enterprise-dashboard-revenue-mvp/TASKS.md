@@ -76,6 +76,15 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
+## Phase 7C - Reports Preview
+
+- [x] Research 2026 reporting/dashboard UX patterns before implementation.
+- [x] Replace Reports placeholder with read-only weekly brief.
+- [x] Add conservative KPIs, coach load report and findings.
+- [x] Keep CSV/PDF exports blocked behind future permission and audit requirements.
+- [x] Document partial completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
 ## Universal Definition of Done
 
 - [x] `npm run typecheck`
