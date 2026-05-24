@@ -13,6 +13,7 @@ import { BRAND_APP_ICON, BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_W
 import { resolveMetadataBase } from '@/lib/site-url'
 import { PostHogProvider } from '@/lib/posthog/provider'
 import { CookieConsent } from '@/components/CookieConsent'
+import { ThemeScriptSuppressor } from '@/components/ThemeScriptSuppressor'
 
 const metadataBase = resolveMetadataBase()
 /** Crawlers (WhatsApp, X) suelen exigir URL absoluta y sin caracteres problemáticos en la ruta. */
@@ -101,6 +102,7 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <body className={`${inter.variable} ${montserrat.variable} antialiased`} suppressHydrationWarning>
         <PostHogProvider>
+          <ThemeScriptSuppressor />
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"

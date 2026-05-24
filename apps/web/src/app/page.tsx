@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import { LandingPillNav } from '@/components/landing/LandingPillNav'
 import { LandingStickyBrandingCard } from '@/components/landing/LandingStickyBrandingCard'
 import { LandingHeroSection } from '@/components/landing/LandingHeroSection'
@@ -57,9 +58,9 @@ export default async function LandingPage() {
 
     return (
         <div className="min-h-dvh bg-background text-foreground overflow-x-hidden">
-            <script
+            <Script
+                id="home-json-ld"
                 type="application/ld+json"
-                // eslint-disable-next-line react/no-danger
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
             />
             <LandingPillNav />

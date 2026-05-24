@@ -7,7 +7,7 @@
  */
 const SHELL_CACHE = 'eva-shell-v4';
 const NAV_CACHE = 'eva-nav-v3';
-const STATIC_CACHE = 'eva-static-v4';
+const STATIC_CACHE = 'eva-static-v5';
 const CLIENT_DATA_CACHE = 'eva-client-data-v2';
 
 const OFFLINE_URL = '/offline.html';
@@ -57,9 +57,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Next.js immutable static assets — cache-first forever
+  // Next.js static assets — network-first so redeployed chunks are never stale;
+  // cache fallback keeps offline support for /c/ routes intact.
   if (url.pathname.startsWith('/_next/static/')) {
-    event.respondWith(cacheFirst(STATIC_CACHE, event.request));
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.ok) {
+            caches.open(STATIC_CACHE).then((cache) => cache.put(event.request, res.clone()));
+          }
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request, { cacheName: STATIC_CACHE });
+          return cached || new Response('', { status: 408, statusText: 'Offline' });
+        })
+    );
     return;
   }
 
