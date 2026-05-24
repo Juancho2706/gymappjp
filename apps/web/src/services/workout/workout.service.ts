@@ -7,6 +7,7 @@ import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-prog
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildProgramAssignedEmail } from '@/lib/email/transactional-templates'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 // Re-export types for backward compatibility
 export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@eva/schemas'
@@ -41,6 +42,24 @@ async function deactivateActiveProgramsForClient(adminDb: any, clientId: string)
         .eq('is_active', true)
 }
 
+type CoachWorkoutScope =
+    | { ok: true; orgId: string | null }
+    | { ok: false; error: string }
+
+async function getCoachWorkoutScope(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<CoachWorkoutScope> {
+    const workspace = await resolvePreferredWorkspace(supabase, userId)
+    if (!workspace || workspace.type === 'coach_standalone') return { ok: true, orgId: null }
+    if (workspace.type === 'enterprise_coach') return { ok: true, orgId: workspace.orgId }
+    return { ok: false, error: 'Workspace invalido para gestionar entrenamientos.' }
+}
+
+function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    orgId: string | null
+): T {
+    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
 /**
  * Guarda o actualiza un programa de entrenamiento completo, incluyendo sus planes y bloques.
  */
@@ -72,6 +91,8 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     let startDateToUse = startDate
 
@@ -95,12 +116,13 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
     // Verificar que el alumno pertenezca al coach (si se proporcionó clientId)
     if (clientId) {
-        const { data: client } = await supabase
+        let clientQuery = supabase
             .from('clients')
             .select('id')
             .eq('id', clientId)
             .eq('coach_id', user.id)
-            .maybeSingle()
+        clientQuery = applyOrgScope(clientQuery, scope.orgId)
+        const { data: client } = await clientQuery.maybeSingle()
 
         if (!client) return { error: 'Alumno no encontrado.' }
     }
@@ -121,11 +143,13 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
         if (finalProgramId) {
             // Obtener estado actual del programa para validaciones
-            const { data: currentProgram } = await adminDb
-                .from('workout_programs')
-                .select('name, client_id')
-                .eq('id', finalProgramId)
-                .single()
+                let currentProgramQuery = adminDb
+                    .from('workout_programs')
+                    .select('name, client_id')
+                    .eq('id', finalProgramId)
+                    .eq('coach_id', user.id)
+                currentProgramQuery = applyOrgScope(currentProgramQuery, scope.orgId)
+                const { data: currentProgram } = await currentProgramQuery.single()
 
             if (currentProgram) {
                 // 1. Validar que no se cambie el nombre si ya está asignado
@@ -135,14 +159,15 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
                 // 2. Validar unicidad de nombre si es una plantilla (ahora o antes)
                 if (!clientId) {
-                    const { data: existingName } = await adminDb
+                    let existingNameQuery = adminDb
                         .from('workout_programs')
                         .select('id')
                         .eq('coach_id', user.id)
                         .eq('name', programName)
                         .is('client_id', null)
                         .neq('id', finalProgramId)
-                        .maybeSingle()
+                    existingNameQuery = applyOrgScope(existingNameQuery, scope.orgId)
+                    const { data: existingName } = await existingNameQuery.maybeSingle()
 
                     if (existingName) {
                         return { error: `Ya tienes una plantilla guardada con el nombre "${programName}".` }
@@ -151,7 +176,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
             }
 
             // Actualizar programa existente
-            const { error: updateError } = await adminDb
+            let updateProgramQuery = adminDb
                 .from('workout_programs')
                 .update({
                     name: programName,
@@ -171,6 +196,8 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                 })
                 .eq('id', finalProgramId)
                 .eq('coach_id', user.id)
+            updateProgramQuery = applyOrgScope(updateProgramQuery, scope.orgId)
+            const { error: updateError } = await updateProgramQuery
 
             if (updateError) throw new Error('Error al actualizar el programa.')
 
@@ -191,13 +218,14 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
             // Validar unicidad de nombre si es una nueva plantilla
             if (!clientId) {
-                const { data: existingName } = await adminDb
+                let existingNameQuery = adminDb
                     .from('workout_programs')
                     .select('id')
                     .eq('coach_id', user.id)
                     .eq('name', programName)
                     .is('client_id', null)
-                    .maybeSingle()
+                existingNameQuery = applyOrgScope(existingNameQuery, scope.orgId)
+                const { data: existingName } = await existingNameQuery.maybeSingle()
 
                 if (existingName) {
                     return { error: `Ya tienes una plantilla guardada con el nombre "${programName}".` }
@@ -210,6 +238,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                 .insert({
                     client_id: clientId || null,
                     coach_id: user.id,
+                    org_id: scope.orgId,
                     name: programName,
                     weeks_to_repeat: weeksToRepeat,
                     start_date: startDateToUse,
@@ -302,13 +331,17 @@ export async function deleteWorkoutProgramAction(programId: string, clientId: st
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
-    const { error } = await adminDb
+    let deleteQuery = adminDb
         .from('workout_programs')
         .delete()
         .eq('id', programId)
         .eq('coach_id', user.id)
+    deleteQuery = applyOrgScope(deleteQuery, scope.orgId)
+    const { error } = await deleteQuery
 
     if (error) return { error: error.message }
 
@@ -327,8 +360,22 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
+    const { data: plan } = await adminDb
+        .from('workout_plans')
+        .select('id, program_id, workout_programs(org_id)')
+        .eq('id', planId)
+        .eq('coach_id', user.id)
+        .maybeSingle()
+
+    const planProgram = plan?.workout_programs as { org_id?: string | null } | null
+    if (!plan || (planProgram?.org_id ?? null) !== scope.orgId) {
+        return { error: 'Plan no encontrado.' }
+    }
+
     const { error } = await adminDb
         .from('workout_plans')
         .delete()
@@ -371,12 +418,14 @@ export async function duplicateWorkoutProgramAction(
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
 
     try {
         // 1. Obtener el programa original
-        const { data: original, error: originalError } = await adminDb
+        let originalQuery = adminDb
             .from('workout_programs')
             .select(`
                 *,
@@ -388,17 +437,19 @@ export async function duplicateWorkoutProgramAction(
             `)
             .eq('id', programId)
             .eq('coach_id', user.id)
-            .single()
+        originalQuery = applyOrgScope(originalQuery, scope.orgId)
+        const { data: original, error: originalError } = await originalQuery.single()
 
         if (originalError || !original) throw new Error('Programa no encontrado.')
 
-        const { data: existingName } = await adminDb
+        let existingNameQuery = adminDb
             .from('workout_programs')
             .select('id')
             .eq('coach_id', user.id)
             .eq('name', finalName)
             .is('client_id', null)
-            .maybeSingle()
+        existingNameQuery = applyOrgScope(existingNameQuery, scope.orgId)
+        const { data: existingName } = await existingNameQuery.maybeSingle()
 
         if (existingName) {
             return { error: `Ya tienes una plantilla guardada con el nombre "${finalName}".` }
@@ -410,6 +461,7 @@ export async function duplicateWorkoutProgramAction(
             .insert({
                 coach_id: user.id,
                 client_id: null, // Siempre como plantilla al duplicar manualmente
+                org_id: scope.orgId,
                 name: finalName,
                 weeks_to_repeat: original.weeks_to_repeat,
                 start_date: null,
@@ -505,6 +557,8 @@ export async function assignProgramToClientsAction(
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     if (!clientIds.length) return { error: 'Selecciona al menos un alumno.' }
 
@@ -518,7 +572,7 @@ export async function assignProgramToClientsAction(
 
     try {
         // 1. Obtener plantilla
-        const { data: template, error: templateError } = await adminDb
+        let templateQuery = adminDb
             .from('workout_programs')
             .select(`
                 *,
@@ -529,15 +583,19 @@ export async function assignProgramToClientsAction(
             `)
             .eq('id', templateId)
             .eq('coach_id', user.id)
-            .single()
+            .is('client_id', null)
+        templateQuery = applyOrgScope(templateQuery, scope.orgId)
+        const { data: template, error: templateError } = await templateQuery.single()
 
         if (templateError || !template) throw new Error('Plantilla no encontrada.')
 
-        const { data: ownedClients, error: ownedClientsError } = await adminDb
+        let ownedClientsQuery = adminDb
             .from('clients')
             .select('id, full_name, email')
             .eq('coach_id', user.id)
             .in('id', clientIds)
+        ownedClientsQuery = applyOrgScope(ownedClientsQuery, scope.orgId)
+        const { data: ownedClients, error: ownedClientsError } = await ownedClientsQuery
 
         if (ownedClientsError) throw new Error('No se pudo validar los alumnos seleccionados.')
 
@@ -606,6 +664,7 @@ export async function assignProgramToClientsAction(
                     .insert({
                         client_id: clientId,
                         coach_id: user.id,
+                        org_id: scope.orgId,
                         name: template.name,
                         weeks_to_repeat: weeksToRepeat,
                         start_date: dateToUse,
@@ -781,15 +840,19 @@ export async function getTemplatesForBuilderAction(): Promise<{
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
-    const { data, error } = await adminDb
+    let templatesQuery = adminDb
         .from('workout_programs')
         .select('id, name, weeks_to_repeat, duration_type, workout_plans(count)')
         .eq('coach_id', user.id)
         .is('client_id', null)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
+    templatesQuery = applyOrgScope(templatesQuery, scope.orgId)
+    const { data, error } = await templatesQuery
 
     if (error) return { error: error.message }
 
@@ -814,9 +877,11 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
-    const { data, error } = await adminDb
+    let templateQuery = adminDb
         .from('workout_programs')
         .select(`
             id, name, weeks_to_repeat, duration_type, duration_days,
@@ -833,7 +898,9 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
         `)
         .eq('id', templateId)
         .eq('coach_id', user.id)
-        .single()
+        .is('client_id', null)
+    templateQuery = applyOrgScope(templateQuery, scope.orgId)
+    const { data, error } = await templateQuery.single()
 
     if (error || !data) return { error: 'Plantilla no encontrada.' }
     return { data }
@@ -889,14 +956,17 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
-    const { data: program, error: pErr } = await adminDb
+    let programQuery = adminDb
         .from('workout_programs')
         .select('*, workout_plans ( *, workout_blocks ( * ) )')
         .eq('id', programId)
         .eq('coach_id', user.id)
-        .single()
+    programQuery = applyOrgScope(programQuery, scope.orgId)
+    const { data: program, error: pErr } = await programQuery.single()
 
     if (pErr || !program) return { error: 'Programa no encontrado.' }
     if (!program.client_id) return { error: 'Solo programas de cliente pueden sincronizarse con una plantilla.' }
@@ -904,13 +974,14 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
     const templateId = program.source_template_id
     if (!templateId) return { error: 'Este programa no tiene plantilla base vinculada.' }
 
-    const { data: template, error: tErr } = await adminDb
+    let templateQuery = adminDb
         .from('workout_programs')
         .select('*, workout_plans ( *, workout_blocks ( * ) )')
         .eq('id', templateId)
         .eq('coach_id', user.id)
         .is('client_id', null)
-        .maybeSingle()
+    templateQuery = applyOrgScope(templateQuery, scope.orgId)
+    const { data: template, error: tErr } = await templateQuery.maybeSingle()
 
     if (tErr || !template) return { error: 'La plantilla base no existe o ya no está disponible.' }
 
@@ -974,13 +1045,17 @@ export async function getCoachClientsAction(): Promise<{
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
-    const { data, error } = await adminDb
+    let clientsQuery = adminDb
         .from('clients')
         .select('id, full_name')
         .eq('coach_id', user.id)
         .order('full_name', { ascending: true })
+    clientsQuery = applyOrgScope(clientsQuery, scope.orgId)
+    const { data, error } = await clientsQuery
 
     if (error) return { error: error.message }
     return {

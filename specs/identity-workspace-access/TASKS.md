@@ -61,6 +61,7 @@
 - [ ] Server action guards.
 - [ ] Repository filters for standalone vs enterprise across all coach domains.
 - [x] Repository/action filters for `/coach/clients`. Completed 2026-05-24 18:34:11 -04:00.
+- [x] Repository/action filters for workout library and builder mutations. Completed 2026-05-24 18:48:30 -04:00.
 - [ ] Storage policy checks.
 - [ ] Export/report guards.
 
