@@ -54,6 +54,7 @@
 
 ## Phase 5 - Guards
 
+- [x] Route matrix helper before middleware/proxy integration.
 - [ ] Route matrix in middleware/proxy.
 - [ ] Server action guards.
 - [ ] Repository filters for standalone vs enterprise.

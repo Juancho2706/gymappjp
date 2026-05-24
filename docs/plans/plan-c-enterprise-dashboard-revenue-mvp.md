@@ -1602,7 +1602,7 @@ Prioridad P1.5 - Identity & Workspace antes de seguir P2:
 - [x] Definir `ActiveWorkspace` compartible web/mobile en `packages/types` o domain layer. Completado el 2026-05-24 15:55:59 -04:00. Archivo: `apps/web/src/domain/auth/types.ts`, exportado via `@eva/types`.
 - [x] Crear resolver server-side de workspaces disponibles por usuario. Completado el 2026-05-24 15:55:59 -04:00. Archivos: `apps/web/src/infrastructure/db/workspace.repository.ts`, `apps/web/src/services/auth/workspace.service.ts`. No conectado aun a login/middleware.
 - [x] Crear resolver server-side de branding por workspace. Completado el 2026-05-24 15:59:30 -04:00. Archivo: `apps/web/src/services/auth/workspace-brand.service.ts`. No conectado aun a middleware para evitar cambios visibles prematuros.
-- [ ] Crear guard central para no mezclar `coach_standalone`, `enterprise_coach`, `enterprise_staff`, `student_standalone`, `student_enterprise`.
+- [x] Crear guard central para no mezclar `coach_standalone`, `enterprise_coach`, `enterprise_staff`, `student_standalone`, `student_enterprise`. Completado el 2026-05-24 16:00:21 -04:00. Archivo: `apps/web/src/services/auth/workspace-route-guard.service.ts`. Matriz creada pero aun no conectada al middleware.
 - [ ] Login web/PWA: agregar opcion `Coach Enterprise` con codigo, sin romper login coach standalone.
 - [ ] Login alumno: mantener entrada directa si hay un solo contexto; selector si hay varios.
 - [ ] Login enterprise staff: mantener `/org/login`, sin mostrarlo a standalone salvo link explicito.
