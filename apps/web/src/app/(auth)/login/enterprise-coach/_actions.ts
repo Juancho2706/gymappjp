@@ -170,5 +170,5 @@ export async function enterpriseCoachLoginAction(
         memberId,
     })
 
-    redirect('/coach/dashboard')
+    redirect('/workspace/select')
 }

@@ -47,8 +47,8 @@
 ## Phase 4 - Login And Workspace UX
 
 - [x] Add `Coach Enterprise` code entry without breaking coach standalone login.
-- [ ] Add workspace selector for 2+ workspaces.
-- [ ] Preserve direct redirect for one workspace.
+- [x] Add workspace selector for 2+ workspaces. Completed 2026-05-24 18:17:52 -04:00.
+- [x] Preserve direct redirect for one workspace. Completed 2026-05-24 18:17:52 -04:00.
 - [ ] Add enterprise staff route isolation.
 - [ ] Keep student login direct unless multiple student contexts exist.
 

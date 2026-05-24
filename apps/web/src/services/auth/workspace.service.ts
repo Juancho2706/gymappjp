@@ -68,6 +68,7 @@ export async function listUserWorkspaces(db: DB, userId: string): Promise<Worksp
 
     if (client?.org_id) {
         const org = orgById.get(client.org_id)
+        const clientCoach = client.coach_id ? coachById.get(client.coach_id) : null
         workspaces.push({
             type: 'student_enterprise',
             userId,
@@ -76,7 +77,7 @@ export async function listUserWorkspaces(db: DB, userId: string): Promise<Worksp
             coachId: client.coach_id,
             label: org ? `Entrenar con ${org.name}` : 'Alumno enterprise',
             brandName: org?.name ?? null,
-            slug: org?.slug ?? null,
+            slug: clientCoach?.slug ?? null,
         })
     } else if (client?.coach_id) {
         const clientCoach = coachById.get(client.coach_id)

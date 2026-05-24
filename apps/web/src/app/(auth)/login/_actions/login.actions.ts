@@ -9,6 +9,7 @@ import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
 import { jitter } from '@/lib/auth/timing'
 import { readFailCount, incrementFailCount, clearFailCount, CAPTCHA_THRESHOLD } from '@/lib/auth/fail-counter'
 import { verifyTurnstile } from '@/lib/auth/turnstile'
+import { listUserWorkspaces } from '@/services/auth/workspace.service'
 
 export type LoginState = {
     error?: string
@@ -78,6 +79,11 @@ export async function loginAction(
     }
 
     await clearFailCount('coach')
+
+    const workspaces = await listUserWorkspaces(supabase, user.id)
+    if (workspaces.length > 1) {
+        redirect('/workspace/select')
+    }
 
     const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
 
