@@ -1269,6 +1269,133 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ## Fases
 
+### Auditoria Estado Actual Enterprise Dashboard
+
+**Actualizado:** 2026-05-24 12:50:25 -04:00
+
+Estado real revisado en codigo:
+
+- Layout enterprise actual: `apps/web/src/app/org/[slug]/layout.tsx`.
+- Menus actuales: Dashboard, Coaches, Alumnos, Asignaciones, Brand Center, Reportes, Pagos alumnos, Novedades, Nutricion, Team & Access, Settings, Audit Log.
+- Rutas reales: `announcements`, `assignments`, `audit`, `brand`, `clients`, `coaches`, `nutrition`, `onboarding`, `payments`, `reports`, `settings`, `setup-mfa`, `team`.
+- Menus con rework fuerte: Dashboard, Brand Center/Studio, Team & Access preview, Asignaciones preview, Pagos alumnos funcional inicial, Reportes preview, Audit Log, Onboarding workspace.
+- Menus con deuda visual/UX/IA: Coaches, Alumnos, Settings, Novedades, Nutricion.
+- Menus con solapamiento: Coaches + Team & Access; Alumnos + Asignaciones; Settings + Brand Center + Billing; Reportes + Audit Log + Exports; Novedades + Nutricion como "Herramientas".
+
+Hallazgo central:
+
+- Hay demasiados items top-level para un dashboard B2B. El owner no necesita 12 entradas principales.
+- La navegacion actual mezcla objetos de negocio, operaciones, herramientas, seguridad y settings en el mismo nivel.
+- Mobile queda con scroll horizontal largo y baja orientacion.
+- Desktop tampoco marca active state ni agrupa por job-to-be-done.
+
+Research IA/Dashboard 2026:
+
+- Dashboards B2B deben funcionar como decision environment: estado rapido, problema, causa, accion.
+- SaaS escalable recomienda 4-6 secciones top-level, no un menu por feature.
+- Role-based navigation reduce friccion durante pilotos enterprise.
+- Onboarding/CS dashboards modernos centralizan progreso, riesgos y proximas acciones.
+
+Fuentes:
+
+- https://dardesign.io/blog/b2b-dashboard-information-architecture-2026
+- https://www.brandson.digital/insights/saas-dashboard-design
+- https://whatifdesign.co/feeds/blog/saassolar-branding-ui-guidelines
+- https://www.velaris.io/articles/include-on-customer-onboarding-dashboard
+
+### IA v2 - Consolidacion de Menus Enterprise
+
+Objetivo:
+
+- Pasar de 12 menus top-level a 6 secciones maximo.
+- Mantener URLs existentes para no romper deep links, pero mover navegacion visible a grupos.
+- Preparar misma arquitectura mental para futura app EVA Enterprise React Native.
+
+Propuesta top-level:
+
+1. **Command Center**
+   - Ruta principal: `/org/[slug]`.
+   - Incluye: dashboard, action queue, health score, risks, coach load, shortcuts.
+   - Subrutas relacionadas: `/reports` como "Insights" dentro de Command Center.
+
+2. **Operaciones**
+   - Incluye: Alumnos + Asignaciones + Pagos alumnos.
+   - Rutas actuales: `/clients`, `/assignments`, `/payments`.
+   - Razon: son workflows diarios del owner/ops sobre alumnos.
+
+3. **Equipo**
+   - Incluye: Coaches + Team & Access.
+   - Rutas actuales: `/coaches`, `/team`.
+   - Razon: separar tabs internas "Coaches operativos" y "Staff enterprise".
+
+4. **Marca**
+   - Incluye: Brand Studio + settings publicos de marca.
+   - Rutas actuales: `/brand`, parte de `/settings`.
+   - Razon: white-label es un producto, no un formulario de settings.
+
+5. **Herramientas**
+   - Incluye: Novedades + Nutricion.
+   - Rutas actuales: `/announcements`, `/nutrition`.
+   - Futuro: templates de entrenamiento, recursos, automatizaciones.
+
+6. **Seguridad y Admin**
+   - Incluye: Settings, Audit Log, MFA, Billing enterprise interno.
+   - Rutas actuales: `/settings`, `/audit`, `/setup-mfa`.
+   - Razon: todo lo sensible/administrativo queda agrupado.
+
+Reglas de implementacion:
+
+- Mantener rutas existentes.
+- Cambiar solo shell/nav visible y titulos/contexto.
+- Desktop: sidebar agrupado con labels compactos y active state.
+- Mobile: tabs primarias 6 maximo + subnav contextual por seccion.
+- No usar nueva libreria paga.
+- No agregar estado global.
+- Compatible con futura app React Native: groups pueden mapear a bottom tabs + stack screens.
+
+### Backlog Rework Antes de E2E
+
+Prioridad P0 - arreglar arquitectura de navegacion:
+
+- [ ] Rework shell enterprise con nav agrupada IA v2.
+- [ ] Active state desktop/mobile.
+- [ ] Subnav contextual para Operaciones, Equipo, Marca, Herramientas, Seguridad.
+- [ ] Renombrar labels visibles: `Brand Center` -> `Marca`; `Team & Access` -> `Equipo`; `Audit Log` -> `Auditoria`; `Settings` -> `Admin`.
+- [ ] Reemplazar `<img>` del logo en enterprise layout por `next/image`.
+- [ ] Revisar mobile nav: no depender de scroll horizontal largo para encontrar funciones.
+
+Prioridad P1 - menus sin rework suficiente:
+
+- [ ] Rework `/org/[slug]/coaches` como "Equipo > Coaches": header profesional, stats, capacidad, health, acciones, filtros, tabla responsive.
+- [ ] Rework `/org/[slug]/clients` como "Operaciones > Alumnos": KPIs, filtros claros, bulk actions seguros, estado pago/asignacion, import visible pero no dominante.
+- [ ] Rework `/org/[slug]/settings` como "Seguridad y Admin > Admin": separar datos org, billing enterprise, seats, contacto, MFA/security, peligro.
+- [ ] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": calendario/estado, audience preview, expiracion, impacto esperado.
+- [ ] Rework `/org/[slug]/nutrition` como "Herramientas > Nutricion": biblioteca de templates, tags, macro summary, usage by coaches.
+
+Prioridad P2 - completar features que ya existen pero siguen incompletas:
+
+- [ ] Asignaciones: pasar de preview a cockpit accionable para asignar/reasignar desde `/assignments`, no solo desde alumnos/coaches.
+- [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
+- [ ] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event.
+- [ ] Audit: filtros por action/actor/date y checksum generation job local/manual.
+- [ ] Brand Studio: modelo `organization_branding` con draft/published/versionado/rollback.
+- [ ] Team: permisos granulares por feature, no solo `org_owner/org_admin/coach`.
+
+Prioridad P3 - diferenciadores futuros sin costo externo:
+
+- [ ] "Proof Pack" exportable para ventas/CSM: brand preview, roles, audit, alumnos asignados, reporte semanal.
+- [ ] Capacity Autopilot manual: sugerencias de reasignacion por carga/riesgo, con aprobacion humana.
+- [ ] Trust Center Lite: permisos, MFA, audit, retention, exports en una vista.
+- [ ] Role home: owner, ops/admin, brand manager y analyst ven landing interna distinta.
+- [ ] Mobile parity matrix por menu: Web/PWA, RN, native-only.
+
+No hacer todavia:
+
+- No integrar pasarela de pago para alumnos.
+- No comprar herramientas de analytics/CSM.
+- No crear BI builder complejo.
+- No hacer app RN todavia; solo dejar arquitectura portable.
+
 ### Fase 0 - Discovery y Spec Lock
 
 **Estado:** COMPLETADA parcialmente para primer slice.  
@@ -1686,6 +1813,264 @@ Mejoras futuras:
 - Capacity Autopilot: sugerencias de reasignacion por carga y riesgo, con aprobacion humana.
 - Client Revenue Ops: estado pagado/pendiente/vencido, promesas de pago y recordatorios manuales sin cobrar in-app.
 - Mobile-native roadmap: pasos, HealthKit/Google Fit, smartwatch, widgets y notificaciones nativas, estudiadas aparte.
+
+---
+
+## Auditoria por Menu Enterprise
+
+**Actualizado:** 2026-05-24 12:50:25 -04:00
+
+### Dashboard / Command Center
+
+Estado:
+
+- Buen primer impacto visual.
+- Ya muestra health, action queue, riesgos y carga de coaches.
+
+Falta:
+
+- Activity feed persistente.
+- Jerarquia mas ejecutiva para owner: "que paso", "que requiere accion", "que cambio esta semana".
+- Drill-down consistente hacia Alumnos, Coaches, Pagos y Reportes.
+- Mobile: cards deben priorizar accion, no solo metricas.
+
+Roles:
+
+- PM/Sales: la demo story funciona, pero falta "proof" semanal.
+- Data: risk score debe versionarse.
+- SRE/Backend: evitar metricas caras sin cache si escala.
+
+### Operaciones / Alumnos
+
+Estado:
+
+- CRUD/import basico existe.
+- Filtros simples y asignacion individual desde lista.
+
+Falta:
+
+- Rework visual completo.
+- Bulk selection con acciones seguras.
+- Columnas de estado: coach, pago, actividad, onboarding, riesgo.
+- Drawer/perfil rapido sin salir de la lista.
+- Estados de import: errores, duplicados, rollback parcial.
+- Mobile: lista debe parecer operational inbox, no tabla comprimida.
+
+Roles:
+
+- UX: hoy es utilitario pero no enterprise.
+- Backend/SecOps: validar limites por org y audit para bulk operations.
+- CSM: necesita detectar quien esta sin coach/onboarding en segundos.
+
+### Operaciones / Asignaciones
+
+Estado:
+
+- Cockpit read-only bueno para entender problema.
+- Bulk reassignment sensible ahora es transaccional en RPC.
+
+Falta:
+
+- Acciones reales desde esta pantalla: assign, reassign, preview impacto, confirmar.
+- Filtros por coach, riesgo, inactivo, sin pago.
+- Historial de reasignaciones visible.
+- Capacidad configurable por coach.
+- Mobile: flujo wizard de reasignacion.
+
+Roles:
+
+- Architect: esta debe ser la pantalla source-of-truth para movimientos.
+- QA: necesita pruebas de atomicidad y rollback.
+- CSM: herramienta clave de implementacion inicial.
+
+### Operaciones / Pagos Alumnos
+
+Estado:
+
+- Registro manual externo existe usando `client_payments`.
+- Audit event `client_payment.recorded`.
+- Texto legal correcto: no cobra, no factura, no contabilidad.
+
+Falta:
+
+- Filtros por estado/vencimiento/coach.
+- Promesa de pago / nota de cobranza manual.
+- Export CSV auditado.
+- Dashboard alerts para vencidos.
+- Comprobante adjunto futuro, con Storage y limites.
+
+Roles:
+
+- Legal Chile: mantener copy explicito.
+- Fintech: no integrar cobro hasta validar demanda.
+- Sales: feature vendible como "control operacional", no "facturacion".
+
+### Equipo / Coaches
+
+Estado:
+
+- Crear coach enterprise funciona.
+- Crear `org_admin` ahora no crea fila coach.
+- Lista activa con QR/invite code y acciones.
+
+Falta:
+
+- Rework visual profesional.
+- Separar tabs: Coaches operativos / Staff enterprise.
+- Stats: alumnos asignados, riesgo, carga, actividad, invite status.
+- Filtros y search.
+- Estado de acceso: org_managed, ultimo login, MFA si aplica.
+- Acciones con confirmation sheets coherentes.
+
+Roles:
+
+- Product: aqui se vende control del negocio.
+- Security: evitar que admins no-owner cambien roles sensibles.
+- Mobile: cards por coach con drilldown.
+
+### Equipo / Team & Access
+
+Estado:
+
+- Buen preview visual de roles y matriz.
+- Staff enterprise separado conceptualmente.
+
+Falta:
+
+- Permisos reales por feature.
+- Usuarios enterprise desde esta pantalla, no desde Coaches.
+- Access review: ultimo login, status, MFA, owner/admin.
+- Role templates: Owner, Admin, Ops, Analyst, Brand Manager.
+- Revocar/suspender staff no-coach.
+
+Roles:
+
+- SecOps/Legal: esta es pantalla critica.
+- PM: debe explicar roles sin documentacion externa.
+- QA: pruebas owner/admin/coach/staff.
+
+### Marca / Brand Studio
+
+Estado:
+
+- Diferenciador fuerte: score, QA, propagation map, previews, publish.
+
+Falta:
+
+- `organization_branding` con draft/published/versionado.
+- Rollback y preview antes/despues.
+- Tokens exportables web/RN.
+- Presets por tipo de negocio.
+- QA de contraste mas estricto WCAG.
+- Loader/manifest/app icon con validacion de asset.
+
+Roles:
+
+- UX/Sales: gran feature para B2B.
+- Mobile: tokens deben mapear a RN.
+- Architect: evitar custom CSS inseguro por tenant.
+
+### Herramientas / Novedades
+
+Estado:
+
+- Crear/listar anuncios existe.
+
+Falta:
+
+- Rework visual.
+- Audience preview: todos, por coach, por alumnos sin pago, por grupo futuro.
+- Expiracion clara y estado activo/inactivo.
+- Vista de impacto: cuantos alumnos veran el mensaje.
+- Historial y audit visible.
+
+Roles:
+
+- CSM: util para comunicacion masiva.
+- Legal: evitar mensajes sensibles sin consentimiento.
+- Mobile: push/native futuro queda separado.
+
+### Herramientas / Nutricion
+
+Estado:
+
+- Templates org existen y coaches pueden usarlos.
+
+Falta:
+
+- Rework biblioteca profesional.
+- Tags/goal filters.
+- Uso por coach/alumnos.
+- Duplicar template y versionar.
+- Bloqueo por permisos.
+- Relacion con futuras plantillas de entrenamiento.
+
+Roles:
+
+- Product: herramienta B2B real si reduce trabajo repetitivo.
+- Data: medir adopcion de templates.
+- Mobile: templates son admin web; consumo por coach/alumno sigue separado.
+
+### Seguridad y Admin / Settings
+
+Estado:
+
+- Muestra info org, branding basico y billing manual.
+
+Falta:
+
+- Rework completo.
+- Mover branding fuerte a Brand Studio.
+- Billing enterprise separado de pagos alumnos.
+- Seats y plan con historial.
+- MFA/security posture.
+- Zona de peligro: suspender org/exportar/borrar futuro.
+- Contacto soporte y datos legales.
+
+Roles:
+
+- DevOps/SRE: configuracion debe ser auditable.
+- Legal Chile: terminos, privacidad, datos empresa.
+- FinOps: costos por seats/storage/export.
+
+### Seguridad y Admin / Audit Log
+
+Estado:
+
+- Timeline real y export CSV owner-only.
+
+Falta:
+
+- Filtros actor/action/date.
+- Export con filtros.
+- Checksums periodicos.
+- Retention policy visible.
+- Alertas de eventos sensibles.
+
+Roles:
+
+- Security: pieza fuerte para confianza B2B.
+- Sales: Trust Center Lite vendible.
+- QA: verificar permisos y fail-closed.
+
+### Reportes
+
+Estado:
+
+- Weekly brief read-only.
+
+Falta:
+
+- Export CSV/PDF auditado.
+- Filtros por periodo/coach.
+- Snapshot "esta semana vs anterior".
+- Report pack para owner/CSM.
+
+Roles:
+
+- Data: evitar claims falsos.
+- Sales/CSM: clave para retencion.
+- Mobile: vista ejecutiva resumida.
 
 ---
 
