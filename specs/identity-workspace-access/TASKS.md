@@ -59,7 +59,8 @@
 - [ ] Route matrix in middleware/proxy for org/student routes.
 - [x] Route matrix in middleware/proxy for coach routes. Completed 2026-05-24 18:24:45 -04:00.
 - [ ] Server action guards.
-- [ ] Repository filters for standalone vs enterprise.
+- [ ] Repository filters for standalone vs enterprise across all coach domains.
+- [x] Repository/action filters for `/coach/clients`. Completed 2026-05-24 18:34:11 -04:00.
 - [ ] Storage policy checks.
 - [ ] Export/report guards.
 

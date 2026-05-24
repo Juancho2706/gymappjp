@@ -19,6 +19,7 @@ import {
     sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 export type CreateClientState = {
     error?: string
@@ -29,6 +30,31 @@ export type CreateClientState = {
     clientName?: string
     upgradeRequired?: boolean
     currentLimit?: number
+}
+
+type CoachClientScope =
+    | { ok: true; orgId: string | null; isEnterprise: boolean }
+    | { ok: false; error: string }
+
+async function getCoachClientScope(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    userId: string
+): Promise<CoachClientScope> {
+    const workspace = await resolvePreferredWorkspace(supabase, userId)
+    if (!workspace || workspace.type === 'coach_standalone') {
+        return { ok: true, orgId: null, isEnterprise: false }
+    }
+    if (workspace.type === 'enterprise_coach') {
+        return { ok: true, orgId: workspace.orgId, isEnterprise: true }
+    }
+    return { ok: false, error: 'Workspace invalido para gestionar alumnos.' }
+}
+
+function applyClientScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    orgId: string | null
+): T {
+    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
 }
 
 export async function createClientAction(
@@ -52,6 +78,8 @@ export async function createClientAction(
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
     const { data: rawCoachData } = await supabase
         .from('coaches')
@@ -65,16 +93,18 @@ export async function createClientAction(
 
     const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const maxClients = coach.max_clients ?? getTierMaxClients(tier)
-    const { count: activeClientsCount, error: countError } = await supabase
+    let activeClientsQuery = supabase
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
+    activeClientsQuery = applyClientScope(activeClientsQuery, scope.orgId)
+    const { count: activeClientsCount, error: countError } = await activeClientsQuery
 
     if (countError) {
         return { error: 'No pudimos validar el límite de alumnos de tu plan.' }
     }
-    if ((activeClientsCount ?? 0) >= maxClients) {
+    if (!scope.isEnterprise && (activeClientsCount ?? 0) >= maxClients) {
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
         const { subject, html } = buildUpgradeRequiredEmail({
             coachName: coach.full_name ?? 'Coach',
@@ -120,7 +150,7 @@ export async function createClientAction(
         subscription_start_date: parsed.data.subscription_start_date || null,
         force_password_change: true,
         age_confirmed_at: new Date().toISOString(),
-        ...(coach.active_org_id ? { org_id: coach.active_org_id } : {}),
+        org_id: scope.orgId,
     })
 
     if (dbError) {
@@ -131,9 +161,9 @@ export async function createClientAction(
         return { error: 'Error al guardar el alumno en la base de datos.' }
     }
 
-    if (coach.active_org_id) {
+    if (scope.orgId) {
         const { error: assignErr } = await admin.from('coach_client_assignments').insert({
-            org_id: coach.active_org_id,
+            org_id: scope.orgId,
             coach_id: coach.id,
             client_id: newAuthUser.user.id,
             assigned_by: coachUser.id,
@@ -188,13 +218,16 @@ export async function getClientIntakeAction(clientId: string): Promise<{ data?: 
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
-    const { data: client } = await supabase
+    let clientQuery = supabase
         .from('clients')
         .select('full_name, phone, coach_id, client_intake(weight_kg, height_cm, goals, experience_level, availability, injuries, medical_conditions)')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-        .maybeSingle()
+    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
@@ -246,8 +279,10 @@ export async function updateClientDataAction(
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
-    const { error: clientErr } = await supabase
+    let updateClientQuery = supabase
         .from('clients')
         .update({
             full_name: parsed.data.full_name,
@@ -255,6 +290,8 @@ export async function updateClientDataAction(
         })
         .eq('id', parsed.data.client_id)
         .eq('coach_id', coachUser.id)
+    updateClientQuery = applyClientScope(updateClientQuery, scope.orgId)
+    const { error: clientErr } = await updateClientQuery
 
     if (clientErr) return { error: 'Error al actualizar datos del alumno.' }
 
@@ -284,13 +321,16 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
-    const { data: client } = await supabase
+    let clientQuery = supabase
         .from('clients')
         .select('id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-        .maybeSingle()
+    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
@@ -299,11 +339,13 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
     const { data: coachProfile } = await admin.from('coaches').select('id').eq('id', clientId).maybeSingle()
 
     if (coachProfile) {
-        const { error: delErr } = await admin
+        let deleteQuery = admin
             .from('clients')
             .delete()
             .eq('id', clientId)
             .eq('coach_id', coachUser.id)
+        deleteQuery = applyClientScope(deleteQuery, scope.orgId)
+        const { error: delErr } = await deleteQuery
         if (delErr) return { error: delErr.message }
     } else {
         const { error } = await admin.auth.admin.deleteUser(clientId)
@@ -318,13 +360,16 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
-    const { data: client } = await supabase
+    let clientQuery = supabase
         .from('clients')
         .select('id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-        .maybeSingle()
+    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
@@ -337,10 +382,12 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
 
     if (authError) return { error: `Error al actualizar: ${authError.message}` }
 
-    const { error: dbError } = await supabase
+    let resetQuery = supabase
         .from('clients')
         .update({ force_password_change: true })
         .eq('id', clientId)
+    resetQuery = applyClientScope(resetQuery, scope.orgId)
+    const { error: dbError } = await resetQuery
 
     if (dbError) return { error: 'Error al actualizar base de datos.' }
 
@@ -352,22 +399,27 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
-    const { data: client } = await supabase
+    let clientQuery = supabase
         .from('clients')
         .select('id, full_name, email, coach_id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-        .maybeSingle()
+    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
     const admin = await createRawAdminClient()
-    const { error } = await admin
+    let archiveQuery = admin
         .from('clients')
         .update({ is_archived: true })
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
+    archiveQuery = applyClientScope(archiveQuery, scope.orgId)
+    const { error } = await archiveQuery
 
     if (error) return { error: error.message }
 
@@ -397,13 +449,16 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
-    const { data: client } = await supabase
+    let clientQuery = supabase
         .from('clients')
         .select('id, full_name, email, coach_id')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
-        .maybeSingle()
+    clientQuery = applyClientScope(clientQuery, scope.orgId)
+    const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
@@ -416,22 +471,26 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
     if (!coach) return { error: 'Coach no encontrado.' }
 
     const maxClients = coach.max_clients ?? getTierMaxClients((coach.subscription_tier ?? 'starter') as SubscriptionTier)
-    const { count: activeCount } = await supabase
+    let activeCountQuery = supabase
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coachUser.id)
         .eq('is_archived', false)
+    activeCountQuery = applyClientScope(activeCountQuery, scope.orgId)
+    const { count: activeCount } = await activeCountQuery
 
-    if ((activeCount ?? 0) >= maxClients) {
+    if (!scope.isEnterprise && (activeCount ?? 0) >= maxClients) {
         return { error: `Alcanzaste el límite de ${maxClients} alumnos activos. Archiva otro alumno antes de reactivar este.` }
     }
 
     const admin = await createRawAdminClient()
-    const { error } = await admin
+    let unarchiveQuery = admin
         .from('clients')
         .update({ is_archived: false })
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
+    unarchiveQuery = applyClientScope(unarchiveQuery, scope.orgId)
+    const { error } = await unarchiveQuery
 
     if (error) return { error: error.message }
 
@@ -460,14 +519,18 @@ export async function toggleClientStatusAction(clientId: string, isActive: boole
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
 
     const admin = await createRawAdminClient()
 
-    const { error } = await admin
+    let statusQuery = admin
         .from('clients')
         .update({ is_active: isActive })
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
+    statusQuery = applyClientScope(statusQuery, scope.orgId)
+    const { error } = await statusQuery
 
     if (error) {
         return { error: `Error al actualizar el estado: ${error.message}` }

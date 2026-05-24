@@ -9,7 +9,10 @@ import { DashboardService, type DirectoryPulseRow } from '@/services/dashboard.s
 export const DIRECTORY_PULSE_CACHE_TAG = 'directory-pulse'
 
 /** Una sola carga de pulse por request (dashboard stats + directorio). */
-export const getCachedDirectoryPulse = cache(async (coachId: string): Promise<DirectoryPulseRow[]> => {
+export const getCachedDirectoryPulse = cache(async (
+    coachId: string,
+    orgId?: string | null
+): Promise<DirectoryPulseRow[]> => {
     const supabase = await createClient()
-    return new DashboardService(supabase).getDirectoryPulse(coachId)
+    return new DashboardService(supabase).getDirectoryPulse(coachId, orgId)
 })

@@ -4,6 +4,8 @@ import { CoachClientsShell } from './CoachClientsShell'
 import type { Metadata } from 'next'
 import { getCoach } from '@/lib/coach/get-coach'
 import { getCoachClientsWithPrograms, getCoachClientsPulse } from './_data/clients.queries'
+import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 export const metadata: Metadata = {
     title: 'Alumnos | EVA',
@@ -13,10 +15,14 @@ export default async function CoachClientsPage() {
     const coachSession = await getCoach()
     if (!coachSession) redirect('/login')
 
+    const supabase = await createClient()
+    const workspace = await resolvePreferredWorkspace(supabase, coachSession.id)
+    const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+
     const [clients, headersList, pulse] = await Promise.all([
-        getCoachClientsWithPrograms(coachSession.id),
+        getCoachClientsWithPrograms(coachSession.id, orgId),
         headers(),
-        getCoachClientsPulse(coachSession.id),
+        getCoachClientsPulse(coachSession.id, orgId),
     ])
 
     const coach = { slug: coachSession.slug, invite_code: coachSession.invite_code }

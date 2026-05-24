@@ -281,17 +281,23 @@ export class DashboardService {
      * Full per-client metrics for coach directory + attention score.
      * Use React.cache in actions when pairing with getAdherenceStats/getNutritionStats.
      */
-    async getDirectoryPulse(coachId: string): Promise<DirectoryPulseRow[]> {
+    async getDirectoryPulse(coachId: string, orgId?: string | null): Promise<DirectoryPulseRow[]> {
         return measureServer(`getDirectoryPulse coach=${coachId.slice(0, 8)}`, async () =>
-            this.getDirectoryPulseInner(coachId)
+            this.getDirectoryPulseInner(coachId, orgId)
         );
     }
 
-    private async getDirectoryPulseInner(coachId: string): Promise<DirectoryPulseRow[]> {
-        const { data: clients, error: clientsError } = await this.supabase
+    private async getDirectoryPulseInner(coachId: string, orgId?: string | null): Promise<DirectoryPulseRow[]> {
+        let clientsQuery = this.supabase
             .from('clients')
             .select('id, full_name')
-            .eq('coach_id', coachId);
+            .eq('coach_id', coachId)
+
+        if (orgId !== undefined) {
+            clientsQuery = orgId ? clientsQuery.eq('org_id', orgId) : clientsQuery.is('org_id', null)
+        }
+
+        const { data: clients, error: clientsError } = await clientsQuery;
 
         if (clientsError || !clients?.length) return [];
 
