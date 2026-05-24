@@ -1367,7 +1367,7 @@ Prioridad P0 - arreglar arquitectura de navegacion:
 Prioridad P1 - menus sin rework suficiente:
 
 - [x] Rework `/org/[slug]/coaches` como "Equipo > Coaches": header profesional, stats, capacidad, health, acciones, tabla responsive. Completado el 2026-05-24 14:37:37 -04:00.
-- [ ] Rework `/org/[slug]/clients` como "Operaciones > Alumnos": KPIs, filtros claros, bulk actions seguros, estado pago/asignacion, import visible pero no dominante.
+- [x] Rework `/org/[slug]/clients` como "Operaciones > Alumnos": KPIs, filtros claros, estado pago/asignacion, import visible pero no dominante. Completado el 2026-05-24 14:46:46 -04:00. Nota: bulk actions seguros quedan P2 para no tocar mutations compartidas sin auditoria adicional.
 - [ ] Rework `/org/[slug]/settings` como "Seguridad y Admin > Admin": separar datos org, billing enterprise, seats, contacto, MFA/security, peligro.
 - [ ] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": calendario/estado, audience preview, expiracion, impacto esperado.
 - [ ] Rework `/org/[slug]/nutrition` como "Herramientas > Nutricion": biblioteca de templates, tags, macro summary, usage by coaches.
@@ -1375,6 +1375,7 @@ Prioridad P1 - menus sin rework suficiente:
 Prioridad P2 - completar features que ya existen pero siguen incompletas:
 
 - [ ] Asignaciones: pasar de preview a cockpit accionable para asignar/reasignar desde `/assignments`, no solo desde alumnos/coaches.
+- [ ] Alumnos: bulk actions seguros con preview, confirmacion, audit event y compatibilidad enterprise-coach-alumno sin afectar coach standalone.
 - [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
 - [ ] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event.
 - [ ] Audit: filtros por action/actor/date y checksum generation job local/manual.
