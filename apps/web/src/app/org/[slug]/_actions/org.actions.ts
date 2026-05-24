@@ -607,27 +607,18 @@ export async function bulkReassignClientsAction(
         .maybeSingle()
     if (!toMember) return { error: 'Coach destino no pertenece a la organización' }
 
-    const { data: count, error: rpcError } = await admin.rpc('bulk_reassign_clients', {
+    const { data: count, error: rpcError } = await admin.rpc('bulk_reassign_clients_with_audit', {
         p_from_coach_id: fromCoachId,
         p_to_coach_id: toCoachId,
         p_org_id: org.id,
+        p_actor_id: user.id,
+        p_member_id: memberId,
     })
     if (rpcError) return { error: rpcError.message }
 
-    await admin.from('organization_members')
-        .update({ deleted_at: new Date().toISOString(), status: 'suspended' })
-        .eq('id', memberId)
-
-    await writeOrgAuditEvent(admin, {
-        orgId: org.id,
-        actorId: user.id,
-        action: 'clients.bulk_reassigned',
-        targetType: 'coach',
-        targetId: fromCoachId,
-        metadata: { to_coach_id: toCoachId, clients_moved: count ?? 0 },
-    })
-
     revalidatePath(`/org/${orgSlug}/coaches`)
+    revalidatePath(`/org/${orgSlug}/assignments`)
     revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true, count: count ?? 0 }
 }

@@ -84,6 +84,8 @@
 - [x] Connect nutrition template mutations to audit helper.
 - [x] Connect enterprise coach/staff mutations to audit helper.
 - [x] Connect client assignment/import/create mutations to audit helper.
+- [x] Add transactional RPC for sensitive bulk reassignment + member suspension + audit.
+- [x] Apply transactional audit migration locally.
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 

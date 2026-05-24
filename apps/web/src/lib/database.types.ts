@@ -2650,6 +2650,16 @@ export type Database = {
         }
         Returns: number
       }
+      bulk_reassign_clients_with_audit: {
+        Args: {
+          p_actor_id: string
+          p_from_coach_id: string
+          p_member_id: string
+          p_org_id: string
+          p_to_coach_id: string
+        }
+        Returns: number
+      }
       check_platform_email_availability: {
         Args: { p_email: string }
         Returns: Json
@@ -3000,4 +3010,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

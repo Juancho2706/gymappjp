@@ -1400,9 +1400,9 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 ### Fase 7B - Audit Event Helper
 
-- **Estado:** INICIADA con cobertura mayoritaria.
-- **Completado parcial:** 2026-05-23 21:59:56 -04:00
-- **Notas:** Se agrego `writeOrgAuditEvent()` en `services/org/org.service.ts` y se conecto a mutations reales de announcements, nutrition templates, enterprise coaches, clientes y bulk reassignment. Sin migrations porque `org_audit_logs` ya existe. Falta decidir si la escritura de audit debe ser fail-closed via RPC/transaccion para operaciones sensibles.
+- **Estado:** COMPLETADA para MVP.
+- **Completado:** 2026-05-23 22:53:33 -04:00
+- **Notas:** Se agrego `writeOrgAuditEvent()` en `services/org/org.service.ts` y se conecto a mutations reales de announcements, nutrition templates, enterprise coaches, clientes y onboarding. `bulkReassignClientsAction` ahora usa RPC transaccional `bulk_reassign_clients_with_audit`: mueve alumnos, actualiza assignments, suspende miembro y escribe audit log en una sola funcion PostgreSQL. Export CSV usa politica fail-closed si falla audit event.
 
 - [x] Helper central en service layer.
 - [x] Taxonomia inicial `resource.action`.
@@ -1410,7 +1410,24 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 - [x] Audit events para nutrition templates.
 - [x] Migrar staff/coaches/client actions al helper.
 - [x] Definir politica fail-open vs fail-closed para exports: fail-closed si falla audit event.
-- [ ] RPC transaccional para mutations sensibles.
+- [x] RPC transaccional para mutation sensible de bulk reassignment. Migracion local aplicada el 2026-05-23 22:53:33 -04:00.
+
+### Research Update Transactional Audit/RPC 2026
+
+**Actualizado:** 2026-05-23 22:53:33 -04:00
+
+Hallazgos aplicables:
+
+- Mutations sensibles enterprise deben evitar estados partidos: data cambiada sin audit, o audit escrito sin data final.
+- En Supabase/Postgres, PL/pgSQL permite atomicidad real para operaciones multi-tabla sin pagar servicios externos.
+- `SECURITY DEFINER` es util pero riesgoso: limitar `search_path`, revocar `PUBLIC` y conceder solo a `service_role`.
+- Mantener validaciones de rol en server action y validaciones de pertenencia dentro de la RPC.
+
+Decision EVA:
+
+- Usar RPC transaccional solo para operaciones con riesgo multi-tabla real.
+- Mantener CRUD simple en Server Actions mientras no necesite atomicidad cross-table.
+- Para futuras mutations sensibles: `operation + audit` debe vivir en una RPC o fallar cerrado.
 
 ### Fase 8 - Sales/Implementation Layer
 
