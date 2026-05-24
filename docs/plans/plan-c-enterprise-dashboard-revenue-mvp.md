@@ -1325,7 +1325,7 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 **Estado:** INICIADA con controles funcionales sobre modelo existente.
 **Completado parcial:** 2026-05-23 22:34:08 -04:00
-**Notas:** `/org/[slug]/brand` ya permite guardar nombre/color, subir logo a `org-assets`, publicar marca a coaches enterprise activos, ver Brand score, QA visual, propagation map y web/mobile parity. Sin nuevas dependencias y sin migrations porque ya existen `organizations` + campos de branding en `coaches`. Queda pendiente modelo dedicado `organization_branding` para versionado/rollback/publish avanzado.
+**Notas:** `/org/[slug]/brand` ya permite guardar nombre/color, subir logo a `org-assets`, publicar marca a coaches enterprise activos, ver Brand score, QA visual, propagation map y web/mobile parity. Coaches con `subscription_status = org_managed` no ven `Mi Marca` ni `Suscripcion`, y middleware bloquea acceso directo a esas rutas. Sin nuevas dependencias y sin migrations porque ya existen `organizations` + campos de branding en `coaches`. Queda pendiente modelo dedicado `organization_branding` para versionado/rollback/publish avanzado.
 
 - [x] Brand Center preview.
 - [x] Upload/seleccion logo.
@@ -1337,7 +1337,7 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 - [x] Propagation map.
 - [x] Web + React Native parity notes.
 - [x] Publicar brand config inicial a coaches enterprise.
-- [ ] Ocultar `Mi marca` y `Billing` en coaches enterprise.
+- [x] Ocultar `Mi marca` y `Billing` en coaches enterprise. Verificado en sidebar + middleware el 2026-05-23 22:36:52 -04:00.
 - [x] Aplicar branding enterprise en alumnos via coaches enterprise actualizados.
 - [x] Audit events de cambios de marca.
 
