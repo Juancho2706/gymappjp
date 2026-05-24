@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { writeOrgAuditEvent } from '@/services/org/org.service'
 
 const AssignClientSchema = z.object({
     clientId: z.string().uuid(),
@@ -56,12 +57,12 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
 
     await admin.from('clients').update({ coach_id: coachId }).eq('id', clientId).eq('org_id', org.id)
 
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'assign_client',
-        target_type: 'client',
-        target_id: clientId,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.assigned',
+        targetType: 'client',
+        targetId: clientId,
         metadata: { coach_id: coachId },
     })
 
@@ -158,12 +159,12 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         })
     }
 
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'add_client',
-        target_type: 'client',
-        target_id: client.id,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.created',
+        targetType: 'client',
+        targetId: client.id,
         metadata: { email: parsed.data.email },
     })
 
@@ -283,12 +284,12 @@ export async function importClientsFromCSVAction(
             } catch { /* best-effort */ }
         }
 
-        await admin.from('org_audit_logs').insert({
-            org_id: org.id,
-            actor_id: user.id,
-            action: 'add_client',
-            target_type: 'client',
-            target_id: client.id,
+        await writeOrgAuditEvent(admin, {
+            orgId: org.id,
+            actorId: user.id,
+            action: 'client.created',
+            targetType: 'client',
+            targetId: client.id,
             metadata: { email: parsed.data.email, source: 'csv_import' },
         })
 

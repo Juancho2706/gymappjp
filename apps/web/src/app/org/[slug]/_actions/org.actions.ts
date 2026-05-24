@@ -8,7 +8,7 @@ import { rateLimitOrgCreation } from '@/lib/rate-limit'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 import { generateUniqueInviteCode } from '@/services/coach/coach.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { generateTempPassword, generateUniqueCoachSlug, getOrgAdminContext } from '@/services/org/org.service'
+import { generateTempPassword, generateUniqueCoachSlug, getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 
 const ALLOWED_LOGO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_LOGO_BYTES = 2 * 1024 * 1024 // 2 MB
@@ -204,12 +204,12 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
         return { error: memberError.message }
     }
 
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'create_enterprise_coach',
-        target_type: 'coach',
-        target_id: authData.user.id,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_coach.created',
+        targetType: 'coach',
+        targetId: authData.user.id,
         metadata: { email, role: parsed.data.role, invite_code: inviteCode },
     })
 
@@ -305,12 +305,12 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
     if (insertError) return { error: insertError.message }
 
     // Audit log
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'link_existing_coach',
-        target_type: 'coach',
-        target_id: targetCoach.id,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_coach.linked',
+        targetType: 'coach',
+        targetId: targetCoach.id,
         metadata: { email: parsed.data.email, role: parsed.data.role },
     })
 
@@ -362,12 +362,12 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
 
     if (error) return { error: error.message }
 
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'remove_coach',
-        target_type: 'coach',
-        target_id: target.coach_id,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_coach.removed',
+        targetType: 'coach',
+        targetId: target.coach_id,
         metadata: {},
     })
 
@@ -396,12 +396,12 @@ export async function resetEnterpriseCoachPasswordAction(orgSlug: string, coachI
     const { error } = await admin.auth.admin.updateUserById(coachId, { password: tempPassword })
     if (error) return { error: error.message }
 
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'reset_enterprise_coach_password',
-        target_type: 'coach',
-        target_id: coachId,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_coach.password_reset',
+        targetType: 'coach',
+        targetId: coachId,
         metadata: {},
     })
 
@@ -431,12 +431,12 @@ export async function updateEnterpriseCoachRoleAction(orgSlug: string, memberId:
         .eq('id', memberId)
     if (error) return { error: error.message }
 
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'update_enterprise_coach_role',
-        target_type: 'coach',
-        target_id: target.coach_id,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_coach.role_updated',
+        targetType: 'coach',
+        targetId: target.coach_id,
         metadata: { role },
     })
 
@@ -537,12 +537,12 @@ export async function bulkReassignClientsAction(
         .update({ deleted_at: new Date().toISOString(), status: 'suspended' })
         .eq('id', memberId)
 
-    await admin.from('org_audit_logs').insert({
-        org_id: org.id,
-        actor_id: user.id,
-        action: 'bulk_reassign_clients',
-        target_type: 'coach',
-        target_id: fromCoachId,
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'clients.bulk_reassigned',
+        targetType: 'coach',
+        targetId: fromCoachId,
         metadata: { to_coach_id: toCoachId, clients_moved: count ?? 0 },
     })
 
