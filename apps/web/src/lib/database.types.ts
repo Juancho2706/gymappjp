@@ -1362,6 +1362,7 @@ export type Database = {
           instructions: string | null
           is_favorite: boolean | null
           name: string
+          org_id: string | null
           protein_g: number | null
           tags: string[] | null
           updated_at: string
@@ -1378,6 +1379,7 @@ export type Database = {
           instructions?: string | null
           is_favorite?: boolean | null
           name: string
+          org_id?: string | null
           protein_g?: number | null
           tags?: string[] | null
           updated_at?: string
@@ -1394,6 +1396,7 @@ export type Database = {
           instructions?: string | null
           is_favorite?: boolean | null
           name?: string
+          org_id?: string | null
           protein_g?: number | null
           tags?: string[] | null
           updated_at?: string
@@ -1421,6 +1424,7 @@ export type Database = {
           is_active: boolean
           is_custom: boolean | null
           name: string
+          org_id: string | null
           protein_g: number | null
           template_id: string | null
           template_version_id: string | null
@@ -1438,6 +1442,7 @@ export type Database = {
           is_active?: boolean
           is_custom?: boolean | null
           name: string
+          org_id?: string | null
           protein_g?: number | null
           template_id?: string | null
           template_version_id?: string | null
@@ -1455,6 +1460,7 @@ export type Database = {
           is_active?: boolean
           is_custom?: boolean | null
           name?: string
+          org_id?: string | null
           protein_g?: number | null
           template_id?: string | null
           template_version_id?: string | null

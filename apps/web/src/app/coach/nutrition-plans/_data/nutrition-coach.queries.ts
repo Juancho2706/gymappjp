@@ -12,14 +12,21 @@ import {
 
 const DEFAULT_FOOD_PAGE_SIZE = 50
 
+function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+  query: T,
+  orgId: string | null
+): T {
+  return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
 /**
  * Plantillas del coach con comidas anidadas y clientes asignados (planes activos).
  * Misma forma que consume el hub (`NutritionHub` / `TemplateLibrary`).
  */
 /** Una plantilla por id (valida `coach_id`). */
-export const getCoachTemplateById = cache(async (coachId: string, templateId: string) => {
+export const getCoachTemplateById = cache(async (coachId: string, templateId: string, orgId: string | null = null) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  let query = supabase
     .from('nutrition_plan_templates')
     .select(
       `
@@ -50,13 +57,14 @@ export const getCoachTemplateById = cache(async (coachId: string, templateId: st
     )
     .eq('id', templateId)
     .eq('coach_id', coachId)
-    .maybeSingle()
+  query = applyOrgScope(query, orgId)
+  const { data } = await query.maybeSingle()
   return data
 })
 
-export const getCoachTemplates = cache(async (coachId: string) => {
+export const getCoachTemplates = cache(async (coachId: string, orgId: string | null = null) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  let query = supabase
     .from('nutrition_plan_templates')
     .select(
       `
@@ -91,6 +99,8 @@ export const getCoachTemplates = cache(async (coachId: string) => {
     .eq('coach_id', coachId)
     .order('created_at', { ascending: false })
     .order('order_index', { referencedTable: 'template_meals', ascending: true })
+  query = applyOrgScope(query, orgId)
+  const { data } = await query
 
   const rows = data ?? []
   return rows.map((t) => ({
@@ -105,9 +115,9 @@ export const getCoachTemplates = cache(async (coachId: string) => {
 /**
  * Planes nutricionales activos por coach (board / hub).
  */
-export const getActiveClientPlans = cache(async (coachId: string) => {
+export const getActiveClientPlans = cache(async (coachId: string, orgId: string | null = null) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  let query = supabase
     .from('nutrition_plans')
     .select(
       `
@@ -119,6 +129,8 @@ export const getActiveClientPlans = cache(async (coachId: string) => {
     .eq('coach_id', coachId)
     .eq('is_active', true)
     .order('updated_at', { ascending: false })
+  query = applyOrgScope(query, orgId)
+  const { data } = await query
   return data ?? []
 })
 
@@ -139,8 +151,8 @@ export type ActivePlanBoardRow = {
 /**
  * Planes activos del coach + mini-serie 7d de adherencia y kcal de hoy (zona Santiago).
  */
-export const getActivePlansBoardData = cache(async (coachId: string): Promise<ActivePlanBoardRow[]> => {
-  const plans = await getActiveClientPlans(coachId)
+export const getActivePlansBoardData = cache(async (coachId: string, orgId: string | null = null): Promise<ActivePlanBoardRow[]> => {
+  const plans = await getActiveClientPlans(coachId, orgId)
   if (plans.length === 0) return []
 
   const supabase = await createClient()
@@ -308,9 +320,9 @@ export const getFoodLibrary = cache(async (coachId: string, options: FoodLibrary
 /**
  * Plan activo de un alumno (validado por coach).
  */
-export const getClientNutritionPlan = cache(async (clientId: string, coachId: string) => {
+export const getClientNutritionPlan = cache(async (clientId: string, coachId: string, orgId: string | null = null) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  let query = supabase
     .from('nutrition_plans')
     .select(
       `
@@ -329,7 +341,8 @@ export const getClientNutritionPlan = cache(async (clientId: string, coachId: st
     .eq('coach_id', coachId)
     .eq('is_active', true)
     .order('order_index', { referencedTable: 'nutrition_meals', ascending: true })
-    .maybeSingle()
+  query = applyOrgScope(query, orgId)
+  const { data } = await query.maybeSingle()
   return data
 })
 
@@ -359,9 +372,9 @@ export const getClientAdherence = cache(async (clientId: string, planId: string)
 /**
  * Todos los clientes del coach con sus planes (activos o no), para asignación.
  */
-export const getCoachClients = cache(async (coachId: string) => {
+export const getCoachClients = cache(async (coachId: string, orgId: string | null = null) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  let query = supabase
     .from('clients')
     .select(
       `
@@ -371,13 +384,15 @@ export const getCoachClients = cache(async (coachId: string) => {
     )
     .eq('coach_id', coachId)
     .order('full_name')
+  query = orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+  const { data } = await query
   return data ?? []
 })
 
 /** Clientes activos con plan activo — mismo criterio que la página `nutrition-plans`. */
-export const getActiveClientsWithNutritionPlan = cache(async (coachId: string) => {
+export const getActiveClientsWithNutritionPlan = cache(async (coachId: string, orgId: string | null = null) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  let query = supabase
     .from('clients')
     .select(
       `
@@ -390,6 +405,8 @@ export const getActiveClientsWithNutritionPlan = cache(async (coachId: string) =
     .eq('is_active', true)
     .eq('active_plans.is_active', true)
     .order('full_name')
+  query = orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+  const { data } = await query
 
   return (data ?? []).map((c) => ({
     id: c.id,

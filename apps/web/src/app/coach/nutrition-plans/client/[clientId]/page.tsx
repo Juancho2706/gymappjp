@@ -13,12 +13,12 @@ interface Props {
 
 export default async function CoachClientNutritionPlanPage({ params }: Props) {
   const { clientId } = await params
-  const { user, client, intake } = await getClientNutritionPlanPageAuthData(clientId)
+  const { user, client, intake, orgId } = await getClientNutritionPlanPageAuthData(clientId)
   if (!user) redirect('/login')
 
   if (!client || client.coach_id !== user.id) notFound()
 
-  const plan = await getClientNutritionPlan(clientId, user.id)
+  const plan = await getClientNutritionPlan(clientId, user.id, orgId ?? null)
   const initialData = plan ? mapClientPlanRowToInitialData(plan) : null
 
   const adherence =

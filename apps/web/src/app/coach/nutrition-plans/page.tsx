@@ -11,6 +11,8 @@ import { Check, Salad } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_data/nutrition-page.queries'
 import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
+import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 type NutritionPlanRow = { id: string; name: string; is_active: boolean | null }
 
@@ -125,11 +127,13 @@ export default async function NutritionPlansPage() {
     )
   }
 
-  const orgId = coach?.active_org_id ?? null
+  const supabase = await createClient()
+  const workspace = await resolvePreferredWorkspace(supabase, coachId)
+  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
   const [templates, activePlans, coachClientsRaw, foodLib, orgTemplates] = await Promise.all([
-    getCoachTemplates(coachId),
-    getActivePlansBoardData(coachId),
-    getCoachClients(coachId),
+    getCoachTemplates(coachId, orgId),
+    getActivePlansBoardData(coachId, orgId),
+    getCoachClients(coachId, orgId),
     getFoodLibrary(coachId, { page: 0, pageSize: 120 }),
     orgId ? getCoachOrgNutritionTemplates(orgId) : Promise.resolve([]),
   ])
