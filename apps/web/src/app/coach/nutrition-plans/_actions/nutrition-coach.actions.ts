@@ -15,6 +15,7 @@ import {
   nutritionPlanCycleUpsertSchema,
   type NutritionPlanCycleUpsertInput,
 } from '@/lib/nutrition-plan-cycle-schema'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 // ─── Tipos públicos (usados por componentes del builder) ───────────────────────
 
@@ -97,6 +98,26 @@ async function requireCoachSession(coachId: string) {
   return { supabase, error: null as null }
 }
 
+type CoachNutritionScope =
+  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>>; orgId: string | null }
+  | { ok: false; error: string }
+
+async function requireCoachNutritionScope(coachId: string): Promise<CoachNutritionScope> {
+  const { supabase, error } = await requireCoachSession(coachId)
+  if (!supabase) return { ok: false, error: error ?? 'No autorizado.' }
+  const workspace = await resolvePreferredWorkspace(supabase, coachId)
+  if (!workspace || workspace.type === 'coach_standalone') return { ok: true, supabase, orgId: null }
+  if (workspace.type === 'enterprise_coach') return { ok: true, supabase, orgId: workspace.orgId }
+  return { ok: false, error: 'Workspace invalido para gestionar nutricion.' }
+}
+
+function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+  query: T,
+  orgId: string | null
+): T {
+  return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
 async function revalidateClientNutritionPaths(coachId: string, clientId: string) {
   const supabase = await createClient()
   const { data: coach } = await supabase.from('coaches').select('slug').eq('id', coachId).maybeSingle()
@@ -120,8 +141,9 @@ export async function upsertCoachNutritionTemplate(
   coachId: string,
   data: CoachTemplateUpsertPayload
 ): Promise<{ success: boolean; templateId?: string; error?: string }> {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { success: false, error: scope.error }
+  const { supabase, orgId } = scope
 
   const parsed = TemplateUpsertSchema.safeParse(data)
   if (!parsed.success) {
@@ -140,6 +162,7 @@ export async function upsertCoachNutritionTemplate(
       fats_g,
       instructions: instructions ?? null,
       coach_id: coachId,
+      org_id: orgId,
       goal_type: goal_type ?? null,
       tags: tags ?? null,
       is_favorite: is_favorite ?? null,
@@ -154,7 +177,8 @@ export async function upsertCoachNutritionTemplate(
     await service.propagateTemplateChanges(
       templateId,
       coachId,
-      JSON.stringify(propagateClientIds ?? [])
+      JSON.stringify(propagateClientIds ?? []),
+      orgId
     )
 
     revalidatePath('/coach/nutrition-plans')
@@ -175,13 +199,14 @@ export async function assignTemplateToClientIds(
   templateId: string,
   clientIds: string[]
 ): Promise<{ success: boolean; error?: string }> {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { success: false, error: scope.error }
+  const { supabase, orgId } = scope
 
   try {
     if (clientIds.length === 0) return { success: true }
     const service = new NutritionService(supabase)
-    await service.propagateTemplateChanges(templateId, coachId, JSON.stringify(clientIds))
+    await service.propagateTemplateChanges(templateId, coachId, JSON.stringify(clientIds), orgId)
     revalidatePath('/coach/nutrition-plans')
     revalidatePath('/coach/clients')
     return { success: true }
@@ -201,8 +226,9 @@ export async function upsertClientNutritionPlanJson(
   clientId: string,
   data: CoachClientPlanUpsertPayload
 ): Promise<{ success: boolean; planId?: string; error?: string }> {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { success: false, error: scope.error }
+  const { supabase, orgId } = scope
 
   const parsed = ClientPlanSchema.safeParse(data)
   if (!parsed.success) {
@@ -212,9 +238,19 @@ export async function upsertClientNutritionPlanJson(
   const { id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, meals } = parsed.data
 
   try {
+    let clientQuery = supabase
+      .from('clients')
+      .select('id')
+      .eq('id', clientId)
+      .eq('coach_id', coachId)
+    clientQuery = applyOrgScope(clientQuery, orgId)
+    const { data: client } = await clientQuery.maybeSingle()
+    if (!client) return { success: false, error: 'Alumno no encontrado.' }
+
     const planData = {
       client_id: clientId,
       coach_id: coachId,
+      org_id: orgId,
       name,
       daily_calories,
       protein_g,
@@ -244,11 +280,13 @@ export async function upsertClientNutritionPlanJson(
         if (histErr) console.warn('[nutrition_plan_history]', histErr)
       }
 
-      const { error: updateError } = await supabase
+      let updatePlanQuery = supabase
         .from('nutrition_plans')
         .update(planData)
         .eq('id', currentPlanId)
         .eq('coach_id', coachId)
+      updatePlanQuery = applyOrgScope(updatePlanQuery, orgId)
+      const { error: updateError } = await updatePlanQuery
 
       if (updateError) throw updateError
 
@@ -326,7 +364,9 @@ export async function upsertClientNutritionPlanJson(
         }
       }
     } else {
-      await supabase.from('nutrition_plans').update({ is_active: false }).eq('client_id', clientId)
+      let deactivateQuery = supabase.from('nutrition_plans').update({ is_active: false }).eq('client_id', clientId)
+      deactivateQuery = applyOrgScope(deactivateQuery, orgId)
+      await deactivateQuery
 
       const { data: newPlan, error: planError } = await supabase
         .from('nutrition_plans')
@@ -541,14 +581,17 @@ export async function saveNutritionTemplate(
 }
 
 export async function deleteNutritionTemplate(templateId: string, coachId: string) {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { error: scope.error }
+  const { supabase, orgId } = scope
 
-  const { error } = await supabase
+  let deleteQuery = supabase
     .from('nutrition_plan_templates')
     .delete()
     .eq('id', templateId)
     .eq('coach_id', coachId)
+  deleteQuery = applyOrgScope(deleteQuery, orgId)
+  const { error } = await deleteQuery
 
   if (error) return { error: 'No se pudo eliminar la plantilla.' }
   revalidatePath('/coach/nutrition-plans')
@@ -556,13 +599,14 @@ export async function deleteNutritionTemplate(templateId: string, coachId: strin
 }
 
 export async function duplicateNutritionTemplate(templateId: string, coachId: string) {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { error: scope.error }
+  const { supabase, orgId } = scope
 
   const nutritionService = new NutritionService(supabase)
 
   try {
-    await nutritionService.duplicateTemplate(templateId, coachId)
+    await nutritionService.duplicateTemplate(templateId, coachId, orgId)
     revalidatePath('/coach/nutrition-plans')
     return { success: true }
   } catch (err: unknown) {
@@ -573,22 +617,26 @@ export async function duplicateNutritionTemplate(templateId: string, coachId: st
 }
 
 export async function unassignNutritionPlan(coachId: string, clientId: string, planId: string) {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { error: scope.error }
+  const { supabase, orgId } = scope
 
   try {
-    const { data: row, error: findErr } = await supabase
+    let findQuery = supabase
       .from('nutrition_plans')
       .select('id')
       .eq('id', planId)
       .eq('client_id', clientId)
       .eq('coach_id', coachId)
-      .maybeSingle()
+    findQuery = applyOrgScope(findQuery, orgId)
+    const { data: row, error: findErr } = await findQuery.maybeSingle()
 
     if (findErr) throw findErr
     if (!row) return { error: 'Plan no encontrado o no pertenece a tu cuenta.' }
 
-    const { error } = await supabase.from('nutrition_plans').update({ is_active: false }).eq('id', planId)
+    let updateQuery = supabase.from('nutrition_plans').update({ is_active: false }).eq('id', planId)
+    updateQuery = applyOrgScope(updateQuery, orgId)
+    const { error } = await updateQuery
 
     if (error) throw error
 
@@ -612,11 +660,15 @@ export async function getCoachClientsLite(
 ): Promise<{ id: string; full_name: string }[]> {
   const { supabase, error: authErr } = await requireCoachSession(coachId)
   if (!supabase || authErr) return []
-  const { data } = await supabase
+  const workspace = await resolvePreferredWorkspace(supabase, coachId)
+  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+  let query = supabase
     .from('clients')
     .select('id, full_name')
     .eq('coach_id', coachId)
     .order('full_name')
+  query = orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+  const { data } = await query
   return (data ?? []).map((c) => ({ id: c.id as string, full_name: c.full_name as string }))
 }
 
@@ -693,17 +745,28 @@ export async function duplicatePlanToClient(
   sourcePlanId: string,
   targetClientId: string
 ): Promise<{ success: boolean; planId?: string; error?: string }> {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { success: false, error: scope.error }
+  const { supabase, orgId } = scope
 
   try {
+    let targetClientQuery = supabase
+      .from('clients')
+      .select('id')
+      .eq('id', targetClientId)
+      .eq('coach_id', coachId)
+    targetClientQuery = applyOrgScope(targetClientQuery, orgId)
+    const { data: targetClient } = await targetClientQuery.maybeSingle()
+    if (!targetClient) return { success: false, error: 'Alumno destino no encontrado.' }
+
     // 1. Fetch source plan — verify it belongs to this coach
-    const { data: sourcePlan, error: srcErr } = await supabase
+    let sourcePlanQuery = supabase
       .from('nutrition_plans')
       .select('id, name, daily_calories, protein_g, carbs_g, fats_g, instructions')
       .eq('id', sourcePlanId)
       .eq('coach_id', coachId)
-      .maybeSingle()
+    sourcePlanQuery = applyOrgScope(sourcePlanQuery, orgId)
+    const { data: sourcePlan, error: srcErr } = await sourcePlanQuery.maybeSingle()
 
     if (srcErr) throw srcErr
     if (!sourcePlan) return { success: false, error: 'Plan origen no encontrado.' }
@@ -774,12 +837,14 @@ export async function duplicatePlanToClient(
     }
 
     // 3. Deactivate any current active plan for the target (keeps logs intact)
-    await supabase
+    let deactivateQuery = supabase
       .from('nutrition_plans')
       .update({ is_active: false })
       .eq('client_id', targetClientId)
       .eq('coach_id', coachId)
       .eq('is_active', true)
+    deactivateQuery = applyOrgScope(deactivateQuery, orgId)
+    await deactivateQuery
 
     // 4. Create new plan as CUSTOM for target
     const { data: newPlan, error: planErr } = await supabase
@@ -787,6 +852,7 @@ export async function duplicatePlanToClient(
       .insert({
         client_id: targetClientId,
         coach_id: coachId,
+        org_id: orgId,
         name: sourcePlan.name as string,
         daily_calories: sourcePlan.daily_calories as number,
         protein_g: sourcePlan.protein_g as number,

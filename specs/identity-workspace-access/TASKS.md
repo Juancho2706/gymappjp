@@ -63,6 +63,8 @@
 - [x] Repository/action filters for `/coach/clients`. Completed 2026-05-24 18:34:11 -04:00.
 - [x] Repository/action filters for workout library and builder mutations. Completed 2026-05-24 18:48:30 -04:00.
 - [x] DB/read filters for nutrition plans/templates. Completed 2026-05-24 18:53:54 -04:00.
+- [x] Action filters for primary nutrition template/plan mutations. Completed 2026-05-24 18:59:44 -04:00.
+- [ ] Action filters for nutrition cycles/history edge cases.
 - [ ] Storage policy checks.
 - [ ] Export/report guards.
 

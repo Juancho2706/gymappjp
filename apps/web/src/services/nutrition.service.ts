@@ -9,6 +9,7 @@ type TemplateData = {
     fats_g: number | null;
     instructions: string | null;
     coach_id: string;
+    org_id?: string | null;
     goal_type?: string | null;
     tags?: string[] | null;
     is_favorite?: boolean | null;
@@ -71,6 +72,13 @@ type TemplateMealWithGroups = {
 export class NutritionService {
     constructor(private supabase: SupabaseClient<Database>) {}
 
+    private applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+        query: T,
+        orgId: string | null
+    ): T {
+        return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+    }
+
     private getTemplateMealItems(templateMeal: TemplateMealWithGroups): TemplateSavedMealItem[] {
         const groups = templateMeal.template_meal_groups ?? []
         const flatItems: TemplateSavedMealItem[] = []
@@ -103,11 +111,13 @@ export class NutritionService {
         let currentTemplateId = templateId;
 
         if (templateId) {
-            const { error: updateError } = await this.supabase
+            let updateQuery = this.supabase
                 .from('nutrition_plan_templates')
                 .update(templateData)
                 .eq('id', templateId)
-                .eq('coach_id', templateData.coach_id);
+                .eq('coach_id', templateData.coach_id)
+            updateQuery = this.applyOrgScope(updateQuery, templateData.org_id ?? null)
+            const { error: updateError } = await updateQuery;
 
             if (updateError) throw updateError;
 
@@ -190,18 +200,21 @@ export class NutritionService {
     async propagateTemplateChanges(
         templateId: string,
         coachId: string,
-        selectedClientsStr: string
+        selectedClientsStr: string,
+        orgId: string | null = null
     ) {
         const selectedClients: string[] = selectedClientsStr
             ? JSON.parse(selectedClientsStr)
             : [];
 
-        const { data: existingClients } = await this.supabase
+        let existingClientsQuery = this.supabase
             .from('nutrition_plans')
             .select('client_id')
             .eq('template_id', templateId)
             .eq('is_active', true)
-            .eq('is_custom', false) as any;
+            .eq('is_custom', false)
+        existingClientsQuery = this.applyOrgScope(existingClientsQuery, orgId)
+        const { data: existingClients } = await existingClientsQuery as any;
 
         const allClientIds = new Set([
             ...selectedClients,
@@ -210,7 +223,7 @@ export class NutritionService {
 
         if (allClientIds.size === 0) return;
 
-        const { data: template } = await this.supabase
+        let templateQuery = this.supabase
             .from('nutrition_plan_templates')
             .select(
                 `
@@ -227,7 +240,9 @@ export class NutritionService {
             `
             )
             .eq('id', templateId)
-            .single() as any;
+            .eq('coach_id', coachId)
+        templateQuery = this.applyOrgScope(templateQuery, orgId)
+        const { data: template } = await templateQuery.single() as any;
 
         if (!template) throw new Error('Plantilla no encontrada');
 
@@ -235,14 +250,15 @@ export class NutritionService {
 
         for (const clientId of allClientIds) {
             // Buscar plan SYNCED existente para este cliente+plantilla
-            const { data: existingPlan } = await this.supabase
+            let existingPlanQuery = this.supabase
                 .from('nutrition_plans')
                 .select('id')
                 .eq('client_id', clientId)
                 .eq('template_id', templateId)
                 .eq('is_active', true)
                 .eq('is_custom', false)
-                .maybeSingle() as any;
+            existingPlanQuery = this.applyOrgScope(existingPlanQuery, orgId)
+            const { data: existingPlan } = await existingPlanQuery.maybeSingle() as any;
 
             let planId: string;
 
@@ -258,7 +274,8 @@ export class NutritionService {
                         fats_g: template.fats_g,
                         instructions: template.instructions,
                     } as any)
-                    .eq('id', existingPlan.id);
+                    .eq('id', existingPlan.id)
+                    .eq('coach_id', coachId);
 
                 planId = existingPlan.id;
 
@@ -342,17 +359,21 @@ export class NutritionService {
             } else {
                 // Cliente nuevo para esta plantilla: crear plan fresco
                 // (no hay logs históricos todavía → crear nuevo plan_id es seguro)
-                await this.supabase
+                let deactivateQuery = this.supabase
                     .from('nutrition_plans')
                     .update({ is_active: false } as any)
                     .eq('client_id', clientId)
-                    .eq('is_active', true);
+                    .eq('coach_id', coachId)
+                    .eq('is_active', true)
+                deactivateQuery = this.applyOrgScope(deactivateQuery, orgId)
+                await deactivateQuery;
 
                 const { data: newPlan } = await this.supabase
                     .from('nutrition_plans')
                     .insert({
                         client_id: clientId,
                         coach_id: coachId,
+                        org_id: orgId,
                         template_id: templateId,
                         name: template.name,
                         daily_calories: template.daily_calories,
@@ -402,8 +423,8 @@ export class NutritionService {
         }
     }
 
-    async duplicateTemplate(templateId: string, coachId: string) {
-        const { data: template, error: fetchError } = await this.supabase
+    async duplicateTemplate(templateId: string, coachId: string, orgId: string | null = null) {
+        let templateQuery = this.supabase
             .from('nutrition_plan_templates')
             .select(
                 `
@@ -421,7 +442,8 @@ export class NutritionService {
             )
             .eq('id', templateId)
             .eq('coach_id', coachId)
-            .single() as any;
+        templateQuery = this.applyOrgScope(templateQuery, orgId)
+        const { data: template, error: fetchError } = await templateQuery.single() as any;
 
         if (fetchError || !template) throw new Error('Plantilla no encontrada');
 
@@ -437,6 +459,7 @@ export class NutritionService {
                 fats_g: template.fats_g,
                 instructions: template.instructions,
                 coach_id: coachId,
+                org_id: orgId,
             })
             .select('id')
             .single();
