@@ -152,13 +152,13 @@ export type OrgAuditLog = {
     created_at: string | null
 }
 
-export async function findOrgAuditLogs(db: DB, orgId: string): Promise<OrgAuditLog[]> {
+export async function findOrgAuditLogs(db: DB, orgId: string, limit = 50): Promise<OrgAuditLog[]> {
     const { data } = await db
         .from('org_audit_logs')
         .select('id, org_id, actor_id, action, target_id, target_type, metadata, created_at')
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(limit)
 
     return (data ?? []) as OrgAuditLog[]
 }

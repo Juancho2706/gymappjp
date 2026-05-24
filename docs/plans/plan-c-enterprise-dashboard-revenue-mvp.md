@@ -1375,28 +1375,28 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 
 - **Estado:** INICIADA con preview read-only.
 - **Completado parcial:** 2026-05-23 22:04:56 -04:00
-- **Notas:** `/org/[slug]/reports` ya muestra weekly brief, KPIs conservadores, coach performance por carga, findings, exports bloqueados y formula status. Sin CSV/PDF real, sin mutations y sin DB changes.
+- **Notas:** `/org/[slug]/reports` ya muestra weekly brief, KPIs conservadores, coach performance por carga, findings, exports bloqueados y formula status. Audit Log ya tiene CSV real owner-only con audit event. Reportes CSV/PDF siguen pendientes.
 
 - [x] Reporte semanal read-only.
 - [x] Coach performance por carga actual.
 - [x] Student risk basico por sin coach/inactivos.
 - [x] Pagos enterprise operacional via invoices pendientes.
-- CSV export.
+- [x] CSV export audit con permiso dedicado `org.audit.export`.
 - PDF después.
 
 ### Fase 7A - Audit Log Read-Only
 
 - **Estado:** COMPLETADA para preview real read-only.
 - **Completado:** 2026-05-23 18:09:24 -04:00
-- **Notas:** `/org/[slug]/audit` ya lee `org_audit_logs` existente via repository/query layer y muestra timeline, actores, target types, guardrails y filtros futuros. Sin migrations, sin mutations, sin export y sin DB changes.
+- **Notas:** `/org/[slug]/audit` ya lee `org_audit_logs` existente via repository/query layer y muestra timeline, actores, target types, guardrails, export CSV owner-only y politica fail-closed para audit export. Sin migrations ni dependencias.
 
 - [x] Reusar tabla `org_audit_logs` existente.
 - [x] Timeline read-only de eventos.
 - [x] Estado del modelo y RLS visible.
 - [x] Guardrails para export y helper central futuro.
-- [ ] Helper central para escribir audit events.
-- [ ] Normalizar taxonomia de acciones.
-- [ ] Export CSV con permiso dedicado.
+- [x] Helper central para escribir audit events.
+- [x] Normalizar taxonomia de acciones.
+- [x] Export CSV con permiso dedicado. Completado el 2026-05-23 22:36:52 -04:00.
 
 ### Fase 7B - Audit Event Helper
 
@@ -1409,7 +1409,7 @@ Si `clients.coach_id` es source of truth actual, mantenerlo y agregar historial 
 - [x] Audit events para announcements.
 - [x] Audit events para nutrition templates.
 - [x] Migrar staff/coaches/client actions al helper.
-- [ ] Definir politica fail-open vs fail-closed.
+- [x] Definir politica fail-open vs fail-closed para exports: fail-closed si falla audit event.
 - [ ] RPC transaccional para mutations sensibles.
 
 ### Fase 8 - Sales/Implementation Layer

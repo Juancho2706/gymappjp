@@ -12,6 +12,7 @@ import {
     Search,
     ShieldCheck,
 } from 'lucide-react'
+import { orgRoleCan } from '@/domain/org/permissions'
 import { getOrgAuditLogs, getOrgBySlug } from '../_data/org.queries'
 
 export const metadata: Metadata = { title: 'Audit Log' }
@@ -51,6 +52,7 @@ export default async function OrgAuditPage({ params }: Props) {
     const uniqueActors = new Set(auditLogs.map((log) => log.actor_id)).size
     const targetTypes = [...new Set(auditLogs.map((log) => log.target_type).filter(Boolean))]
     const lastEventAt = auditLogs[0]?.created_at ?? null
+    const canExportAudit = orgRoleCan(org.myRole, 'org.audit.export')
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -72,6 +74,19 @@ export default async function OrgAuditPage({ params }: Props) {
                             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Historial read-only de acciones enterprise sensibles. Sirve para soporte, seguridad, compliance y confianza B2B.
                             </p>
+                            {canExportAudit ? (
+                                <a
+                                    href={`/org/${slug}/audit/export`}
+                                    className="mt-5 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-400 px-4 text-sm font-black text-zinc-950 transition hover:bg-rose-300"
+                                >
+                                    <Download className="h-4 w-4" aria-hidden="true" />
+                                    Export CSV
+                                </a>
+                            ) : (
+                                <p className="mt-5 inline-flex min-h-10 items-center rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm font-bold text-zinc-500">
+                                    Export requiere permiso `org.audit.export`
+                                </p>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/75 p-3 md:grid-cols-4">
@@ -79,7 +94,7 @@ export default async function OrgAuditPage({ params }: Props) {
                                 ['Eventos', auditLogs.length],
                                 ['Actores', uniqueActors],
                                 ['Targets', targetTypes.length],
-                                ['Export', 'No'],
+                                ['Export', canExportAudit ? 'CSV' : 'No'],
                             ].map(([label, value]) => (
                                 <div key={label} className="rounded-xl bg-zinc-900 p-3 text-center">
                                     <p className="text-2xl font-black text-white">{value}</p>
@@ -177,7 +192,7 @@ export default async function OrgAuditPage({ params }: Props) {
                                 ))}
                             </div>
                             <p className="mt-4 text-sm leading-6 text-zinc-500">
-                                Primero se necesita normalizar nombres de acciones y metadata antes de habilitar busqueda/export.
+                                Busqueda avanzada queda pendiente. Export CSV ya exige permiso dedicado y escribe `audit.exported`.
                             </p>
                         </section>
                     </aside>
@@ -202,9 +217,9 @@ export default async function OrgAuditPage({ params }: Props) {
                     <div className="flex gap-3">
                         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" aria-hidden="true" />
                         <div>
-                            <h2 className="text-sm font-black text-white">Pendiente antes de mutations nuevas</h2>
+                            <h2 className="text-sm font-black text-white">Politica de export</h2>
                             <p className="mt-2 text-sm leading-6 text-amber-100/80">
-                                Crear helper central de escritura de audit events y hacerlo obligatorio para staff, brand, assignments, payments, exports y settings.
+                                CSV es owner-only por `org.audit.export`. La descarga es fail-closed: si no se puede escribir `audit.exported`, no se entrega el archivo.
                             </p>
                         </div>
                     </div>

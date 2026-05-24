@@ -87,7 +87,16 @@
 - [x] Document partial completion timestamp in plan.
 - [x] Run `npm run typecheck`.
 
-## Phase 7C - Reports Preview
+## Phase 7C - Audit CSV Export
+
+- [x] Add dedicated `org.audit.export` permission helper.
+- [x] Add owner-only audit CSV route.
+- [x] Write `audit.exported` before delivering CSV.
+- [x] Use fail-closed policy when export audit event fails.
+- [x] Document completion timestamp in plan.
+- [x] Run `npm run typecheck`.
+
+## Phase 7D - Reports Preview
 
 - [x] Research 2026 reporting/dashboard UX patterns before implementation.
 - [x] Replace Reports placeholder with read-only weekly brief.
