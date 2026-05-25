@@ -51,7 +51,7 @@
 - [x] Add workspace selector for 2+ workspaces. Completed 2026-05-24 18:17:52 -04:00.
 - [x] Preserve direct redirect for one workspace. Completed 2026-05-24 18:17:52 -04:00.
 - [ ] Add enterprise staff route isolation.
-- [ ] Keep student login direct unless multiple student contexts exist.
+- [x] Keep student login direct unless multiple student contexts exist. Completed 2026-05-25 18:23:07 -04:00. Current DB supports one client row per auth user; future multi-student contexts need a client identity model migration.
 
 ## Phase 5 - Guards
 

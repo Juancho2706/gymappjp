@@ -5,6 +5,8 @@ import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { redirect } from 'next/navigation'
 import { ClientLoginSchema, ChangePasswordSchema } from '@eva/schemas'
 import type { Tables } from '@/lib/database.types'
+import type { WorkspaceSummary } from '@/domain/auth/types'
+import { setLastWorkspace } from '@/services/auth/workspace.service'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
@@ -79,20 +81,54 @@ export async function clientLoginAction(
     const rawClient = clientData as ClientRow | null
 
     let client: Pick<Client, 'id' | 'force_password_change' | 'is_active'> | null = null
+    let matchedWorkspace: WorkspaceSummary | null = null
 
     if (rawClient) {
         if (rawClient.coach_id === coach.id) {
             client = rawClient
+            matchedWorkspace = rawClient.org_id
+                ? {
+                    type: 'student_enterprise',
+                    userId: user.id,
+                    clientId: rawClient.id,
+                    orgId: rawClient.org_id,
+                    coachId: rawClient.coach_id,
+                    label: 'Alumno enterprise',
+                    brandName: null,
+                    slug: coach_slug,
+                }
+                : {
+                    type: 'student_standalone',
+                    userId: user.id,
+                    clientId: rawClient.id,
+                    coachId: rawClient.coach_id,
+                    label: 'Alumno',
+                    brandName: null,
+                    slug: coach_slug,
+                }
         } else if (rawClient.org_id) {
             const { data: orgMember } = await rawAdmin
                 .from('organization_members')
-                .select('id')
+                .select('id, organizations(name)')
                 .eq('org_id', rawClient.org_id)
                 .eq('coach_id', coach.id)
                 .eq('status', 'active')
                 .is('deleted_at', null)
                 .maybeSingle()
-            if (orgMember) client = rawClient
+            if (orgMember) {
+                client = rawClient
+                const org = Array.isArray(orgMember.organizations) ? orgMember.organizations[0] : orgMember.organizations
+                matchedWorkspace = {
+                    type: 'student_enterprise',
+                    userId: user.id,
+                    clientId: rawClient.id,
+                    orgId: rawClient.org_id,
+                    coachId: coach.id,
+                    label: org?.name ? `Entrenar con ${org.name}` : 'Alumno enterprise',
+                    brandName: org?.name ?? null,
+                    slug: coach_slug,
+                }
+            }
         }
     }
 
@@ -104,6 +140,10 @@ export async function clientLoginAction(
     if (client.is_active === false) {
         await supabase.auth.signOut()
         return { error: 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.' }
+    }
+
+    if (matchedWorkspace) {
+        await setLastWorkspace(supabase, matchedWorkspace)
     }
 
     const redirectUrl = client.force_password_change
