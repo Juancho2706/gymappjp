@@ -1,8 +1,18 @@
 import { getPostLoginRedirect } from '@/lib/auth/post-login-redirect'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import { defaultWorkspaceHome } from '@/services/auth/workspace-route-guard.service'
+import { listUserWorkspaces, resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 
 export async function resolvePostLoginRedirect(supabase: SupabaseClient<Database>, userId: string): Promise<string> {
+    const preferredWorkspace = await resolvePreferredWorkspace(supabase, userId)
+    if (preferredWorkspace) return defaultWorkspaceHome(preferredWorkspace)
+
+    const workspaces = await listUserWorkspaces(supabase, userId)
+    if (workspaces.length > 1) return '/workspace/select'
+    if (workspaces.length === 1) return defaultWorkspaceHome(workspaces[0])
+
     const [{ data: coach }, { data: client }] = await Promise.all([
         supabase
             .from('coaches')
@@ -49,7 +59,7 @@ export async function resolvePostLoginRedirect(supabase: SupabaseClient<Database
             .select('role, org_id')
             .eq('user_id', userId)
             .eq('status', 'active')
-            .in('role', ['org_owner', 'org_admin'])
+            .in('role', ENTERPRISE_STAFF_ROLES)
             .is('deleted_at', null)
             .limit(1)
             .maybeSingle()
@@ -73,7 +83,7 @@ export async function resolvePostLoginRedirect(supabase: SupabaseClient<Database
             .eq('user_id', userId)
             .is('coach_id', null)
             .eq('status', 'active')
-            .in('role', ['org_owner', 'org_admin'])
+            .in('role', ENTERPRISE_STAFF_ROLES)
             .is('deleted_at', null)
             .limit(1)
             .maybeSingle()

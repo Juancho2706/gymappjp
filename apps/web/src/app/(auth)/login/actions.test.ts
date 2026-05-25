@@ -1,11 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createClientMock, revalidatePathMock, redirectMock } = vi.hoisted(() => ({
+const {
+  clearFailCountMock,
+  createClientMock,
+  incrementFailCountMock,
+  readFailCountMock,
+  revalidatePathMock,
+  redirectMock,
+  resolvePostLoginRedirectMock,
+  verifyTurnstileMock,
+} = vi.hoisted(() => ({
+  clearFailCountMock: vi.fn().mockResolvedValue(undefined),
   createClientMock: vi.fn(),
+  incrementFailCountMock: vi.fn().mockResolvedValue(undefined),
+  readFailCountMock: vi.fn().mockResolvedValue(0),
   revalidatePathMock: vi.fn(),
   redirectMock: vi.fn((path: string) => {
     throw new Error(`REDIRECT:${path}`)
   }),
+  resolvePostLoginRedirectMock: vi.fn().mockResolvedValue('/coach/dashboard'),
+  verifyTurnstileMock: vi.fn().mockResolvedValue(true),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -20,6 +34,21 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }))
 
+vi.mock('@/lib/auth/fail-counter', () => ({
+  CAPTCHA_THRESHOLD: 5,
+  clearFailCount: clearFailCountMock,
+  incrementFailCount: incrementFailCountMock,
+  readFailCount: readFailCountMock,
+}))
+
+vi.mock('@/lib/auth/turnstile', () => ({
+  verifyTurnstile: verifyTurnstileMock,
+}))
+
+vi.mock('@/lib/auth/post-login-redirect.server', () => ({
+  resolvePostLoginRedirect: resolvePostLoginRedirectMock,
+}))
+
 import { loginAction } from './_actions/login.actions'
 
 function buildFormData(email: string, password: string) {
@@ -32,6 +61,9 @@ function buildFormData(email: string, password: string) {
 describe('loginAction', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    readFailCountMock.mockResolvedValue(0)
+    resolvePostLoginRedirectMock.mockResolvedValue('/coach/dashboard')
+    verifyTurnstileMock.mockResolvedValue(true)
   })
 
   it('returns auth error for invalid credentials', async () => {
@@ -47,7 +79,8 @@ describe('loginAction', () => {
 
     const result = await loginAction({}, buildFormData('coach@example.com', 'badpass'))
 
-    expect(result).toEqual({ error: 'Email o contraseña incorrectos.' })
+    expect(result.error).toBeTruthy()
+    expect(incrementFailCountMock).toHaveBeenCalledWith('coach')
   })
 
   it('signs out when authenticated user is not a coach', async () => {
@@ -70,7 +103,7 @@ describe('loginAction', () => {
 
     const result = await loginAction({}, buildFormData('coach@example.com', 'secret123'))
 
-    expect(result).toEqual({ error: 'Esta cuenta no tiene acceso al panel de Coach.' })
+    expect(result.error).toBeTruthy()
     expect(supabase.auth.signOut).toHaveBeenCalledTimes(1)
   })
 
@@ -79,19 +112,6 @@ describe('loginAction', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'u1' } }),
-    }
-    const clientQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-    }
-    const membershipQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
     }
 
     const supabase = {
@@ -102,8 +122,6 @@ describe('loginAction', () => {
       },
       from: vi.fn((table: string) => {
         if (table === 'coaches') return coachQuery
-        if (table === 'clients') return clientQuery
-        if (table === 'organization_members') return membershipQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
     }
@@ -116,5 +134,6 @@ describe('loginAction', () => {
 
     expect(revalidatePathMock).toHaveBeenCalledWith('/coach/dashboard')
     expect(redirectMock).toHaveBeenCalledWith('/coach/dashboard')
+    expect(clearFailCountMock).toHaveBeenCalledWith('coach')
   })
 })

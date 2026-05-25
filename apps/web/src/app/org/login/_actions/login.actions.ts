@@ -7,6 +7,9 @@ import { OrgLoginSchema } from '@eva/schemas'
 import { jitter } from '@/lib/auth/timing'
 import { readFailCount, incrementFailCount, clearFailCount, CAPTCHA_THRESHOLD } from '@/lib/auth/fail-counter'
 import { verifyTurnstile } from '@/lib/auth/turnstile'
+import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
+import { setLastWorkspace } from '@/services/auth/workspace.service'
+import type { EnterpriseStaffRole } from '@/domain/auth/types'
 
 export type OrgLoginState = {
     error?: string
@@ -63,9 +66,9 @@ export async function loginOrgAction(
 
     const { data: membership } = await supabase
         .from('organization_members')
-        .select('role, org_id')
+        .select('id, role, org_id')
         .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
+        .in('role', ENTERPRISE_STAFF_ROLES)
         .eq('status', 'active')
         .is('deleted_at', null)
         .limit(1)
@@ -91,6 +94,13 @@ export async function loginOrgAction(
     }
 
     await clearFailCount('org')
+    await setLastWorkspace(supabase, {
+        type: 'enterprise_staff',
+        userId: user.id,
+        orgId: membership.org_id,
+        memberId: membership.id,
+        role: membership.role as EnterpriseStaffRole,
+    })
 
     redirect(`/org/${org.slug}`)
 }

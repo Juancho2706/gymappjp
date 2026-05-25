@@ -18,7 +18,7 @@
 - [x] Audit current RLS policies table by table. Completed 2026-05-25 18:12:17 -04:00.
 - [x] Audit route/middleware guards. Completed 2026-05-25 18:35:14 -04:00. Found and closed `/org/*` broad membership gap: enterprise coaches no longer qualify for org dashboard routes.
 - [x] Audit storage buckets and paths. Completed 2026-05-25 18:14:16 -04:00.
-- [ ] Audit login redirects and local cache usage.
+- [x] Audit login redirects and local cache usage. Completed 2026-05-25 18:40:56 -04:00. Post-login redirects now prefer server-side `workspace_preferences`; no auth/workspace permission relies on `localStorage`.
 
 ## Phase 1 - Contracts
 
