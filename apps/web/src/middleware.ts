@@ -352,24 +352,27 @@ export async function middleware(request: NextRequest) {
         requestHeaders.set('x-coach-loader-icon-mode', (coach as any).loader_icon_mode || 'eva')
         requestHeaders.set('x-coach-subscription-tier', (coach as any).subscription_tier ?? 'starter')
 
-        const response = NextResponse.next({ request: { headers: requestHeaders } })
+        const buildClientRouteResponse = () => {
+            const response = NextResponse.next({ request: { headers: requestHeaders } })
 
-        // Copy all cookies from supabaseResponse
-        supabaseResponse.cookies.getAll().forEach(cookie => {
-            response.cookies.set(cookie.name, cookie.value)
-        })
+            // Copy all cookies from supabaseResponse
+            supabaseResponse.cookies.getAll().forEach(cookie => {
+                response.cookies.set(cookie.name, cookie.value)
+            })
 
-        // Also set on response for backwards compatibility with any response-header consumers
-        response.headers.set('x-coach-id', coach.id)
-        response.headers.set('x-coach-slug', coach.slug)
-        response.headers.set('x-coach-brand-name', coach.brand_name)
-        response.headers.set('x-coach-primary-color', resolvedColor)
-        response.headers.set('x-coach-logo-url', coach.logo_url?.trim() || BRAND_APP_ICON)
-        response.headers.set('x-coach-loader-text', (coach as any).loader_text?.trim() || '')
-        response.headers.set('x-coach-use-custom-loader', String((coach as any).use_custom_loader ?? false))
-        response.headers.set('x-coach-loader-text-color', (coach as any).loader_text_color?.trim() || '')
-        response.headers.set('x-coach-loader-icon-mode', (coach as any).loader_icon_mode || 'eva')
-        response.headers.set('x-coach-subscription-tier', (coach as any).subscription_tier ?? 'starter')
+            // Also set on response for backwards compatibility with any response-header consumers
+            response.headers.set('x-coach-id', requestHeaders.get('x-coach-id') ?? coach.id)
+            response.headers.set('x-coach-slug', requestHeaders.get('x-coach-slug') ?? coach.slug)
+            response.headers.set('x-coach-brand-name', requestHeaders.get('x-coach-brand-name') ?? coach.brand_name)
+            response.headers.set('x-coach-primary-color', requestHeaders.get('x-coach-primary-color') ?? resolvedColor)
+            response.headers.set('x-coach-logo-url', requestHeaders.get('x-coach-logo-url') ?? coach.logo_url?.trim() ?? BRAND_APP_ICON)
+            response.headers.set('x-coach-loader-text', requestHeaders.get('x-coach-loader-text') ?? '')
+            response.headers.set('x-coach-use-custom-loader', requestHeaders.get('x-coach-use-custom-loader') ?? 'false')
+            response.headers.set('x-coach-loader-text-color', requestHeaders.get('x-coach-loader-text-color') ?? '')
+            response.headers.set('x-coach-loader-icon-mode', requestHeaders.get('x-coach-loader-icon-mode') ?? 'eva')
+            response.headers.set('x-coach-subscription-tier', requestHeaders.get('x-coach-subscription-tier') ?? 'starter')
+            return response
+        }
 
         // Check if client is authenticated for protected /c/* routes (not login page)
         const isLoginPage = pathname.endsWith('/login')
@@ -408,7 +411,7 @@ export async function middleware(request: NextRequest) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/login`
                 const redirect = NextResponse.redirect(redirectUrl)
-                response.cookies.getAll().forEach(cookie => {
+                supabaseResponse.cookies.getAll().forEach(cookie => {
                     redirect.cookies.set(cookie.name, cookie.value)
                 })
                 return redirect
@@ -446,13 +449,30 @@ export async function middleware(request: NextRequest) {
                 return NextResponse.redirect(redirectUrl)
             }
 
+            if (client.org_id) {
+                const { data: orgBrand } = await supabase
+                    .from('organizations')
+                    .select('name, primary_color, logo_url')
+                    .eq('id', client.org_id)
+                    .maybeSingle()
+
+                if (orgBrand) {
+                    requestHeaders.set('x-coach-brand-name', orgBrand.name ?? coach.brand_name)
+                    requestHeaders.set('x-coach-primary-color', orgBrand.primary_color || resolvedColor)
+                    requestHeaders.set('x-coach-logo-url', orgBrand.logo_url?.trim() || coach.logo_url?.trim() || BRAND_APP_ICON)
+                    requestHeaders.set('x-workspace-brand-source', 'organization')
+                }
+            }
+
             // Default behavior if columns are missing or false
             const useBrandColors = client.use_coach_brand_colors ?? true
-            response.headers.set('x-client-use-brand-colors', String(useBrandColors))
+            requestHeaders.set('x-client-use-brand-colors', String(useBrandColors))
 
-            if (!useBrandColors) {
-                response.headers.set('x-coach-primary-color', SYSTEM_PRIMARY_COLOR)
+            if (!client.org_id && !useBrandColors) {
+                requestHeaders.set('x-coach-primary-color', SYSTEM_PRIMARY_COLOR)
             }
+
+            const response = buildClientRouteResponse()
 
             // Suspend access if archived or inactive
             const isBlocked = client.is_archived === true || client.is_active === false
@@ -477,7 +497,7 @@ export async function middleware(request: NextRequest) {
             }
         }
 
-        return response
+        return buildClientRouteResponse()
     }
 
     // ============================================================

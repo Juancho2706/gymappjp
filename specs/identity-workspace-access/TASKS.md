@@ -77,6 +77,6 @@
 - [ ] Negative tests org A vs org B.
 - [ ] Standalone coach unaffected.
 - [ ] Enterprise coach no billing/brand.
-- [ ] Student enterprise gets org brand.
+- [x] Student enterprise gets org brand. Completed 2026-05-25 18:17:31 -04:00.
 - [ ] Student standalone gets coach brand.
 - [ ] Revoked workspace cannot re-enter.
