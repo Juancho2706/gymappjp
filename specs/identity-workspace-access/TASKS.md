@@ -15,7 +15,7 @@
 - [x] Create TASKS.
 - [x] Audit existing enterprise identity tables at planning level.
 - [x] Confirm current partial model: `organization_members.user_id`, nullable `coach_id`, `organization_invites.token_hash`, `clients.org_id`, `coaches.active_org_id`, `org_managed`.
-- [ ] Audit current RLS policies table by table.
+- [x] Audit current RLS policies table by table. Completed 2026-05-25 18:12:17 -04:00.
 - [ ] Audit route/middleware guards.
 - [ ] Audit storage buckets and paths.
 - [ ] Audit login redirects and local cache usage.
@@ -59,7 +59,7 @@
 - [ ] Route matrix in middleware/proxy for org/student routes.
 - [x] Route matrix in middleware/proxy for coach routes. Completed 2026-05-24 18:24:45 -04:00.
 - [ ] Server action guards.
-- [ ] Repository filters for standalone vs enterprise across all coach domains.
+- [x] Repository filters for standalone vs enterprise across high-risk coach domains. Completed 2026-05-25 18:12:17 -04:00.
 - [x] Repository/action filters for `/coach/clients`. Completed 2026-05-24 18:34:11 -04:00.
 - [x] Repository/action filters for workout library and builder mutations. Completed 2026-05-24 18:48:30 -04:00.
 - [x] DB/read filters for nutrition plans/templates. Completed 2026-05-24 18:53:54 -04:00.
@@ -67,6 +67,7 @@
 - [x] Action filters for nutrition cycles/history edge cases. Completed 2026-05-25 17:50:22 -04:00.
 - [x] Coach dashboard data/API filters for active workspace. Completed 2026-05-25 17:58:56 -04:00.
 - [x] Mobile coach API filters for active workspace. Completed 2026-05-25 17:58:56 -04:00.
+- [x] RLS guards for sensitive workspace tables. Completed 2026-05-25 18:12:17 -04:00.
 - [ ] Storage policy checks.
 - [ ] Export/report guards.
 
