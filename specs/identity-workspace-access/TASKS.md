@@ -17,7 +17,7 @@
 - [x] Confirm current partial model: `organization_members.user_id`, nullable `coach_id`, `organization_invites.token_hash`, `clients.org_id`, `coaches.active_org_id`, `org_managed`.
 - [x] Audit current RLS policies table by table. Completed 2026-05-25 18:12:17 -04:00.
 - [ ] Audit route/middleware guards.
-- [ ] Audit storage buckets and paths.
+- [x] Audit storage buckets and paths. Completed 2026-05-25 18:14:16 -04:00.
 - [ ] Audit login redirects and local cache usage.
 
 ## Phase 1 - Contracts
@@ -68,7 +68,7 @@
 - [x] Coach dashboard data/API filters for active workspace. Completed 2026-05-25 17:58:56 -04:00.
 - [x] Mobile coach API filters for active workspace. Completed 2026-05-25 17:58:56 -04:00.
 - [x] RLS guards for sensitive workspace tables. Completed 2026-05-25 18:12:17 -04:00.
-- [ ] Storage policy checks.
+- [x] Storage policy checks. Completed 2026-05-25 18:14:16 -04:00.
 - [ ] Export/report guards.
 
 ## Phase 6 - QA
