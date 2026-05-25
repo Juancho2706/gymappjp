@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ActiveWorkspace, EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import type { Database } from '@/lib/database.types'
+import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 import {
     findWorkspaceIdentityRows,
     findWorkspacePreference,
@@ -11,10 +12,10 @@ import { writeOrgAuditEvent } from '@/services/org/org.service'
 
 type DB = SupabaseClient<Database>
 
-const ENTERPRISE_STAFF_ROLES = new Set(['org_owner', 'org_admin', 'ops', 'analyst', 'brand_manager'])
+const ENTERPRISE_STAFF_ROLE_SET = new Set<string>(ENTERPRISE_STAFF_ROLES)
 
 function asEnterpriseStaffRole(role: string): EnterpriseStaffRole {
-    if (ENTERPRISE_STAFF_ROLES.has(role)) return role as EnterpriseStaffRole
+    if (ENTERPRISE_STAFF_ROLE_SET.has(role)) return role as EnterpriseStaffRole
     return 'org_admin'
 }
 
@@ -53,7 +54,7 @@ export async function listUserWorkspaces(db: DB, userId: string): Promise<Worksp
                 slug: org.slug,
             })
             if (!memberCoach) continue
-        } else if (ENTERPRISE_STAFF_ROLES.has(member.role)) {
+        } else if (ENTERPRISE_STAFF_ROLE_SET.has(member.role)) {
             workspaces.push({
                 type: 'enterprise_staff',
                 userId,

@@ -16,7 +16,7 @@
 - [x] Audit existing enterprise identity tables at planning level.
 - [x] Confirm current partial model: `organization_members.user_id`, nullable `coach_id`, `organization_invites.token_hash`, `clients.org_id`, `coaches.active_org_id`, `org_managed`.
 - [x] Audit current RLS policies table by table. Completed 2026-05-25 18:12:17 -04:00.
-- [ ] Audit route/middleware guards.
+- [x] Audit route/middleware guards. Completed 2026-05-25 18:35:14 -04:00. Found and closed `/org/*` broad membership gap: enterprise coaches no longer qualify for org dashboard routes.
 - [x] Audit storage buckets and paths. Completed 2026-05-25 18:14:16 -04:00.
 - [ ] Audit login redirects and local cache usage.
 
@@ -50,13 +50,13 @@
 - [x] Add `Coach Enterprise` code entry without breaking coach standalone login.
 - [x] Add workspace selector for 2+ workspaces. Completed 2026-05-24 18:17:52 -04:00.
 - [x] Preserve direct redirect for one workspace. Completed 2026-05-24 18:17:52 -04:00.
-- [ ] Add enterprise staff route isolation.
+- [x] Add enterprise staff route isolation. Completed 2026-05-25 18:35:14 -04:00. `/org/*` is limited to `org_owner`, `org_admin`, and future staff roles; `role=coach` stays in `/coach/*`.
 - [x] Keep student login direct unless multiple student contexts exist. Completed 2026-05-25 18:23:07 -04:00. Current DB supports one client row per auth user; future multi-student contexts need a client identity model migration.
 
 ## Phase 5 - Guards
 
 - [x] Route matrix helper before middleware/proxy integration.
-- [ ] Route matrix in middleware/proxy for org/student routes.
+- [x] Route matrix in middleware/proxy for org/student routes. Completed 2026-05-25 18:35:14 -04:00. Org route middleware validates staff membership by slug; student routes already validate direct client or org client + active coach membership.
 - [x] Route matrix in middleware/proxy for coach routes. Completed 2026-05-24 18:24:45 -04:00.
 - [ ] Server action guards.
 - [x] Repository filters for standalone vs enterprise across high-risk coach domains. Completed 2026-05-25 18:12:17 -04:00.

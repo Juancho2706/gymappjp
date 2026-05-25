@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import { ENTERPRISE_STAFF_ROLES, isEnterpriseStaffRole, type OrgRole } from '@/domain/org/permissions'
 
 type DB = SupabaseClient<Database>
 
@@ -18,14 +19,14 @@ export type OrgWithMembership = {
     created_at: string | null
     onboarding_step: number | null
     last_health_score: number | null
-    myRole: 'org_owner' | 'org_admin' | 'coach'
+    myRole: Exclude<OrgRole, 'coach'>
 }
 
 export type OrgMember = {
     id: string
     user_id: string
     coach_id: string | null
-    role: 'org_owner' | 'org_admin' | 'coach'
+    role: OrgRole
     status: string
     invited_at: string | null
     joined_at: string | null
@@ -93,13 +94,15 @@ export async function findOrgBySlug(
         .select('role')
         .eq('org_id', org.id)
         .eq('user_id', userId)
+        .in('role', ENTERPRISE_STAFF_ROLES)
         .eq('status', 'active')
         .is('deleted_at', null)
         .maybeSingle()
 
     if (!membership) return null
+    if (!isEnterpriseStaffRole(membership.role)) return null
 
-    return { ...org, myRole: membership.role as OrgWithMembership['myRole'] }
+    return { ...org, myRole: membership.role }
 }
 
 export async function findOrgMembers(db: DB, orgId: string): Promise<OrgMember[]> {

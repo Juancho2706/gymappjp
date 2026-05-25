@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
-import type { WorkspaceSummary } from '@/domain/auth/types'
+import type { EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
 import { listUserWorkspaces, resolvePreferredWorkspace } from '@/services/auth/workspace.service'
@@ -17,6 +17,7 @@ import {
     rateLimitAdmin,
 } from '@/lib/rate-limit'
 import { getEnterpriseDomain, getEnterpriseUrl } from '@/lib/enterprise/domain'
+import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
@@ -219,6 +220,17 @@ export async function middleware(request: NextRequest) {
                 redirectUrl.pathname = `/org/${slug}/setup-mfa`
                 return NextResponse.redirect(redirectUrl)
             }
+        }
+
+        const orgWorkspace = await resolveOrgRouteWorkspace(supabase, user.id, pathname)
+        if (!orgWorkspace) {
+            const fallback = await resolveCoachRouteWorkspace(supabase, user.id)
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = fallback && fallback !== 'select'
+                ? defaultWorkspaceHome(fallback)
+                : '/workspace/select'
+            redirectUrl.searchParams.set('reason', 'org_routes_require_enterprise_staff')
+            return NextResponse.redirect(redirectUrl)
         }
 
         return supabaseResponse
@@ -553,4 +565,43 @@ async function resolveCoachRouteWorkspace(
     const workspaces = await listUserWorkspaces(supabase, userId)
     if (workspaces.length > 1) return 'select'
     return workspaces[0] ?? null
+}
+
+async function resolveOrgRouteWorkspace(
+    supabase: SupabaseClient<Database>,
+    userId: string,
+    pathname: string
+): Promise<WorkspaceSummary | null> {
+    const slug = pathname.match(/^\/org\/([^/]+)/)?.[1]
+    if (!slug) return null
+
+    const { data: org } = await supabase
+        .from('organizations')
+        .select('id, slug, name')
+        .eq('slug', slug)
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!org) return null
+
+    const { data: member } = await supabase
+        .from('organization_members')
+        .select('id, role')
+        .eq('org_id', org.id)
+        .eq('user_id', userId)
+        .in('role', ENTERPRISE_STAFF_ROLES)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!member) return null
+
+    return {
+        type: 'enterprise_staff',
+        userId,
+        orgId: org.id,
+        memberId: member.id,
+        role: member.role as EnterpriseStaffRole,
+        label: `${org.name} - Admin`,
+        brandName: org.name,
+        slug: org.slug,
+    }
 }
