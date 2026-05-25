@@ -299,6 +299,20 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
         metadata: { email, role: parsed.data.role, invite_code: inviteCode },
     })
 
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'invite.created',
+        targetType: parsed.data.role === 'coach' ? 'coach' : 'organization_member',
+        targetId: authData.user.id,
+        metadata: {
+            email,
+            role: parsed.data.role,
+            delivery: 'direct_account_created',
+            invite_code: inviteCode,
+        },
+    })
+
     const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     sendTransactionalEmail({
         to: email,
@@ -402,6 +416,19 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
         metadata: { email: parsed.data.email, role: parsed.data.role },
     })
 
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'invite.created',
+        targetType: 'coach',
+        targetId: targetCoach.id,
+        metadata: {
+            email: parsed.data.email,
+            role: parsed.data.role,
+            delivery: 'existing_coach_linked',
+        },
+    })
+
     revalidatePath(`/org/${orgSlug}/coaches`)
     return { success: true }
 }
@@ -436,7 +463,7 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
 
     const { data: target } = await admin
         .from('organization_members')
-        .select('id, coach_id, role, user_id')
+        .select('id, coach_id, role, status, user_id')
         .eq('id', memberId)
         .eq('org_id', org.id)
         .maybeSingle()
@@ -461,19 +488,22 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
     await writeOrgAuditEvent(admin, {
         orgId: org.id,
         actorId: user.id,
-        action: 'membership.revoked',
-        targetType: 'coach',
-        targetId: target.coach_id,
+        action: target.status === 'invited' ? 'invite.revoked' : 'membership.revoked',
+        targetType: target.role === 'coach' ? 'coach' : 'organization_member',
+        targetId: target.coach_id ?? target.user_id,
         metadata: {
             member_id: memberId,
             user_id: target.user_id,
             previous_role: target.role,
+            previous_status: target.status,
             previous_action: 'enterprise_coach.removed',
             cleared_workspace_preference: true,
         },
     })
 
     revalidatePath(`/org/${orgSlug}/coaches`)
+    revalidatePath(`/org/${orgSlug}/team`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
 

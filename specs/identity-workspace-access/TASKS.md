@@ -42,7 +42,7 @@
 - [x] Add last workspace persistence service.
 - [x] Add branding resolver.
 - [x] Add permission helper.
-- [ ] Add audit events for revocation and invite creation. Partial: membership revocation completed 2026-05-25 18:27:32 -04:00.
+- [x] Add audit events for revocation and invite creation. Completed 2026-05-25 18:30:08 -04:00.
 - [x] Add audit events for activation/switch. Completed 2026-05-24 18:22:42 -04:00.
 
 ## Phase 4 - Login And Workspace UX
