@@ -436,7 +436,7 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
 
     const { data: target } = await admin
         .from('organization_members')
-        .select('id, coach_id, role')
+        .select('id, coach_id, role, user_id')
         .eq('id', memberId)
         .eq('org_id', org.id)
         .maybeSingle()
@@ -445,18 +445,32 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
 
     const { error } = await admin
         .from('organization_members')
-        .update({ deleted_at: new Date().toISOString(), status: 'suspended' })
+        .update({ deleted_at: new Date().toISOString(), status: 'revoked' })
         .eq('id', memberId)
 
     if (error) return { error: error.message }
 
+    if (target.user_id) {
+        await admin
+            .from('workspace_preferences')
+            .delete()
+            .eq('user_id', target.user_id)
+            .eq('last_org_id', org.id)
+    }
+
     await writeOrgAuditEvent(admin, {
         orgId: org.id,
         actorId: user.id,
-        action: 'enterprise_coach.removed',
+        action: 'membership.revoked',
         targetType: 'coach',
         targetId: target.coach_id,
-        metadata: {},
+        metadata: {
+            member_id: memberId,
+            user_id: target.user_id,
+            previous_role: target.role,
+            previous_action: 'enterprise_coach.removed',
+            cleared_workspace_preference: true,
+        },
     })
 
     revalidatePath(`/org/${orgSlug}/coaches`)

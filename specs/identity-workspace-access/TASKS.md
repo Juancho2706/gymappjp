@@ -42,7 +42,7 @@
 - [x] Add last workspace persistence service.
 - [x] Add branding resolver.
 - [x] Add permission helper.
-- [ ] Add audit events for revocation and invite creation.
+- [ ] Add audit events for revocation and invite creation. Partial: membership revocation completed 2026-05-25 18:27:32 -04:00.
 - [x] Add audit events for activation/switch. Completed 2026-05-24 18:22:42 -04:00.
 
 ## Phase 4 - Login And Workspace UX
@@ -79,4 +79,4 @@
 - [ ] Enterprise coach no billing/brand.
 - [x] Student enterprise gets org brand. Completed 2026-05-25 18:17:31 -04:00.
 - [ ] Student standalone gets coach brand.
-- [ ] Revoked workspace cannot re-enter.
+- [x] Revoked workspace cannot re-enter. Completed 2026-05-25 18:27:32 -04:00 for enterprise coach removal path.

@@ -1620,7 +1620,7 @@ Prioridad P1.5 - Identity & Workspace antes de seguir P2:
 - [ ] Login enterprise staff: mantener `/org/login`, sin mostrarlo a standalone salvo link explicito.
 - [x] Workspace switcher: solo visible para usuarios con 2+ contextos. Completado el 2026-05-24 18:17:52 -04:00. Archivos: `/workspace/select`, `login.actions.ts`, `workspace.service.ts`. Login coach standalone con un solo contexto mantiene redirect directo; usuarios multi-workspace pasan por selector y persisten `last_workspace`.
 - [x] Persistir `last_workspace` de forma segura y portable a React Native. Completado el 2026-05-24 16:01:32 -04:00. Archivos: `workspace_preferences` migration, `workspace.repository.ts`, `workspace.service.ts`. Server-side preference lista; localStorage queda solo como cache futura.
-- [ ] Auditoria completa: `invite.created`, `invite.revoked`, `membership.revoked`.
+- [ ] Auditoria completa: `invite.created`, `invite.revoked`, `membership.revoked`. Parcial el 2026-05-25 18:27:32 -04:00: `removeCoachAction` ahora escribe `membership.revoked`, marca membership como `revoked`, limpia `workspace_preferences` del usuario removido para esa org y mantiene intacto cualquier flujo standalone. Pendiente: `invite.created`, `invite.revoked`, revocacion staff enterprise y UI de preview de impacto.
 - [x] Auditoria parcial de activacion/cambio workspace. Completado el 2026-05-24 18:22:42 -04:00. `invite.redeemed` se escribe al usar codigo enterprise; `setLastWorkspace` escribe `workspace.activated` o `workspace.switched` solo para workspaces enterprise con `orgId`, sin bloquear login si el audit no aplica por RLS.
 - [x] RLS: validar membership dinamica por `org_id`, no solo UI. Completado parcialmente el 2026-05-25 18:12:17 -04:00 para tablas sensibles coach/enterprise: `clients`, `workout_programs`, `nutrition_plans`, `nutrition_plan_templates`, `client_payments`. Pendiente: ampliar auditoria a tablas hijas/logs/storage/exports antes de live.
 - [ ] Documentar flujo coach standalone que se suma a enterprise sin duplicar correo.
@@ -1847,8 +1847,8 @@ Solucion propuesta:
 
 Fases futuras:
 
-- [ ] Auditar schema actual de revocacion.
-- [ ] Definir estados canonicos `active`, `invited`, `revoked`, `suspended`.
+- [x] Auditar schema actual de revocacion. Completado parcialmente el 2026-05-25 18:27:32 -04:00 para `organization_members` y flujo `removeCoachAction`.
+- [x] Definir estados canonicos `active`, `invited`, `revoked`, `suspended`. Completado el 2026-05-25 18:27:32 -04:00. Migration local `20260525182500_org_member_revoked_status.sql` permite `revoked` sin cambiar checks activos existentes.
 - [ ] Crear action segura para revocar staff/coach enterprise.
 - [ ] Agregar UI de revocacion con preview de impacto.
 - [ ] Agregar prueba: coach revocado no entra enterprise pero mantiene standalone.
