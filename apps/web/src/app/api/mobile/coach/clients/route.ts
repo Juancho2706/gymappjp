@@ -14,11 +14,19 @@ import {
     sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
     if (!auth?.startsWith('Bearer ')) return null
     return auth.slice('Bearer '.length).trim() || null
+}
+
+function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    orgId: string | null
+): T {
+    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
 }
 
 export async function POST(request: NextRequest) {
@@ -74,13 +82,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Coach no encontrado.', code: 'COACH_NOT_FOUND' }, { status: 404 })
     }
 
+    const workspace = await resolvePreferredWorkspace(admin, coachUser.id)
+    if (!workspace || (workspace.type !== 'coach_standalone' && workspace.type !== 'enterprise_coach')) {
+        return NextResponse.json({ error: 'Workspace no autorizado para crear alumnos.', code: 'WORKSPACE_NOT_ALLOWED' }, { status: 403 })
+    }
+    const orgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
+
     const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const maxClients = coach.max_clients ?? getTierMaxClients(tier)
-    const { count: activeClientsCount, error: countError } = await admin
+    let countQuery = admin
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
+    countQuery = applyOrgScope(countQuery, orgId)
+    const { count: activeClientsCount, error: countError } = await countQuery
 
     if (countError) {
         return NextResponse.json(
@@ -89,7 +105,7 @@ export async function POST(request: NextRequest) {
         )
     }
 
-    if ((activeClientsCount ?? 0) >= maxClients) {
+    if (workspace.type === 'coach_standalone' && (activeClientsCount ?? 0) >= maxClients) {
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
         const { subject, html } = buildUpgradeRequiredEmail({
             coachName: coach.full_name ?? 'Coach',
@@ -145,7 +161,7 @@ export async function POST(request: NextRequest) {
         subscription_start_date: parsed.data.subscription_start_date || null,
         force_password_change: true,
         age_confirmed_at: new Date().toISOString(),
-        ...(coach.active_org_id ? { org_id: coach.active_org_id } : {}),
+        org_id: orgId,
     })
 
     if (dbError) {
@@ -162,9 +178,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Error al guardar el alumno en la base de datos.', code: 'CLIENT_INSERT_FAILED' }, { status: 500 })
     }
 
-    if (coach.active_org_id) {
+    if (orgId) {
         const { error: assignErr } = await admin.from('coach_client_assignments').insert({
-            org_id: coach.active_org_id,
+            org_id: orgId,
             coach_id: coach.id,
             client_id: newAuthUser.user.id,
             assigned_by: coachUser.id,

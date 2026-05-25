@@ -4,6 +4,7 @@ import { getCoachDashboardDataV2WithClient } from '@/app/coach/dashboard/_data/d
 import type { SubscriptionTier } from '@/lib/constants'
 import { isValidInviteCode } from '@/lib/coach/invite-code'
 import type { Json } from '@/lib/database.types'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -45,7 +46,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Coach no encontrado.', code: 'COACH_NOT_FOUND' }, { status: 404 })
     }
 
-    const dashboard = await getCoachDashboardDataV2WithClient(user.id, admin)
+    const workspace = await resolvePreferredWorkspace(admin, user.id)
+    if (!workspace || (workspace.type !== 'coach_standalone' && workspace.type !== 'enterprise_coach')) {
+        return NextResponse.json({ error: 'Workspace no autorizado para dashboard coach.', code: 'WORKSPACE_NOT_ALLOWED' }, { status: 403 })
+    }
+    const orgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
+
+    const dashboard = await getCoachDashboardDataV2WithClient(user.id, admin, orgId)
     const onboardingGuide =
         coach.onboarding_guide != null &&
         typeof coach.onboarding_guide === 'object' &&
@@ -71,9 +78,13 @@ export async function GET(request: NextRequest) {
             maxClients: coach.max_clients,
             hasCoachLogo: Boolean(coach.logo_url?.trim()),
         },
+        workspace: {
+            type: workspace.type,
+            orgId,
+        },
         publicCode: {
             inviteCode,
-            shouldConfirm: shouldConfirmPublicCode,
+            shouldConfirm: workspace.type === 'coach_standalone' && shouldConfirmPublicCode,
         },
         onboardingGuide,
         dashboard,
@@ -101,6 +112,14 @@ export async function POST(request: NextRequest) {
 
     if (userError || !user) {
         return NextResponse.json({ error: 'Unauthorized', code: 'INVALID_TOKEN' }, { status: 401 })
+    }
+
+    const workspace = await resolvePreferredWorkspace(admin, user.id)
+    if (!workspace || (workspace.type !== 'coach_standalone' && workspace.type !== 'enterprise_coach')) {
+        return NextResponse.json({ error: 'Workspace no autorizado para dashboard coach.', code: 'WORKSPACE_NOT_ALLOWED' }, { status: 403 })
+    }
+    if (workspace.type === 'enterprise_coach') {
+        return NextResponse.json({ error: 'Accion administrada por la empresa.', code: 'WORKSPACE_ACTION_NOT_ALLOWED' }, { status: 403 })
     }
 
     const { data: coach } = await admin

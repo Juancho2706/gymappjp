@@ -51,31 +51,43 @@ export async function findCoachByInviteCode(db: DB, code: string): Promise<Coach
     return data as CoachRow | null
 }
 
-export async function countCoachClients(db: DB, coachId: string): Promise<number> {
-    const { count } = await db
+function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    orgId: string | null | undefined
+): T {
+    if (orgId === undefined) return query
+    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
+export async function countCoachClients(db: DB, coachId: string, orgId?: string | null): Promise<number> {
+    let query = db
         .from('clients')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', coachId)
+    query = applyOrgScope(query, orgId)
+    const { count } = await query
 
     return count ?? 0
 }
 
-export async function findCoachRecentClients(db: DB, coachId: string, limit = 5) {
-    const { data } = await db
+export async function findCoachRecentClients(db: DB, coachId: string, limit = 5, orgId?: string | null) {
+    let query = db
         .from('clients')
         .select('id, full_name, email, created_at, onboarding_completed')
         .eq('coach_id', coachId)
-        .order('created_at', { ascending: false })
-        .limit(limit)
+    query = applyOrgScope(query, orgId)
+    const { data } = await query.order('created_at', { ascending: false }).limit(limit)
 
     return data ?? []
 }
 
-export async function findCoachClientSignupDates(db: DB, coachId: string) {
-    const { data } = await db
+export async function findCoachClientSignupDates(db: DB, coachId: string, orgId?: string | null) {
+    let query = db
         .from('clients')
         .select('created_at')
         .eq('coach_id', coachId)
+    query = applyOrgScope(query, orgId)
+    const { data } = await query
 
     return data ?? []
 }
