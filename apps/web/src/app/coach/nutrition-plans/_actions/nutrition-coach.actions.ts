@@ -913,8 +913,14 @@ export async function restoreClientNutritionPlanFromHistory(
   clientId: string,
   historyId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { success: false, error: scope.error }
+  const { supabase, orgId } = scope
+
+  let clientQuery = supabase.from('clients').select('id').eq('id', clientId).eq('coach_id', coachId)
+  clientQuery = applyOrgScope(clientQuery, orgId)
+  const { data: client } = await clientQuery.maybeSingle()
+  if (!client) return { success: false, error: 'Cliente no pertenece al workspace activo.' }
 
   const { data: row, error: fetchErr } = await supabase
     .from('nutrition_plan_history')
@@ -925,6 +931,16 @@ export async function restoreClientNutritionPlanFromHistory(
     .maybeSingle()
 
   if (fetchErr || !row) return { success: false, error: 'Versión no encontrada.' }
+
+  let planQuery = supabase
+    .from('nutrition_plans')
+    .select('id')
+    .eq('id', row.nutrition_plan_id)
+    .eq('coach_id', coachId)
+    .eq('client_id', clientId)
+  planQuery = applyOrgScope(planQuery, orgId)
+  const { data: plan } = await planQuery.maybeSingle()
+  if (!plan) return { success: false, error: 'Plan no pertenece al workspace activo.' }
 
   const parsed = ClientPlanSchema.safeParse(row.snapshot)
   if (!parsed.success) {
@@ -959,8 +975,9 @@ export async function upsertNutritionPlanCycle(
   clientId: string,
   data: NutritionPlanCycleUpsertInput
 ): Promise<{ success: boolean; error?: string; cycleId?: string }> {
-  const { supabase, error: authErr } = await requireCoachSession(coachId)
-  if (!supabase) return { success: false, error: authErr ?? 'No autorizado.' }
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { success: false, error: scope.error }
+  const { supabase, orgId } = scope
 
   const parsed = nutritionPlanCycleUpsertSchema.safeParse(data)
   if (!parsed.success) {
@@ -971,6 +988,11 @@ export async function upsertNutritionPlanCycle(
   const now = new Date().toISOString()
 
   try {
+    let clientQuery = supabase.from('clients').select('id').eq('id', clientId).eq('coach_id', coachId)
+    clientQuery = applyOrgScope(clientQuery, orgId)
+    const { data: client } = await clientQuery.maybeSingle()
+    if (!client) return { success: false, error: 'Cliente no pertenece al workspace activo.' }
+
     if (is_active) {
       await supabase
         .from('nutrition_plan_cycles')
@@ -995,6 +1017,7 @@ export async function upsertNutritionPlanCycle(
         .update(base)
         .eq('id', id)
         .eq('coach_id', coachId)
+        .eq('client_id', clientId)
         .select('id')
         .single()
       if (error) throw error
