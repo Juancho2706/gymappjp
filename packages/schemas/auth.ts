@@ -12,6 +12,13 @@ export type CoachLoginInput = z.infer<typeof CoachLoginSchema>
 export const OrgLoginSchema = baseLogin
 export type OrgLoginInput = z.infer<typeof OrgLoginSchema>
 
+export const EnterpriseCoachLoginSchema = z.object({
+    code: z.string().trim().min(6).max(120),
+    email: z.string().trim().toLowerCase().email('Email invÃ¡lido'),
+    password: z.string().min(1, 'La contraseÃ±a es requerida'),
+})
+export type EnterpriseCoachLoginInput = z.infer<typeof EnterpriseCoachLoginSchema>
+
 export const PASSWORD_MIN_CLIENT = 8
 
 /** @deprecated Use CoachLoginSchema. Kept for backwards compatibility. */

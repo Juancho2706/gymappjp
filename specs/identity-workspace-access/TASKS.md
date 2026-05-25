@@ -26,7 +26,7 @@
 - [x] Define `WorkspaceSummary`.
 - [x] Define `WorkspaceBrand`.
 - [x] Define workspace permissions.
-- [ ] Add shared Zod schemas if needed.
+- [x] Add shared Zod schemas if needed. Completed 2026-05-25 18:40:56 -04:00. `EnterpriseCoachLoginSchema` moved to `@eva/schemas` for web/PWA and future React Native parity.
 
 ## Phase 2 - Supabase Local Migrations
 

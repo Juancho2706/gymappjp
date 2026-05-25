@@ -2,17 +2,11 @@
 
 import { createHash } from 'crypto'
 import { redirect } from 'next/navigation'
-import { z } from 'zod/v4'
+import { EnterpriseCoachLoginSchema } from '@eva/schemas'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { writeOrgAuditEvent } from '@/services/org/org.service'
 import { setLastWorkspace } from '@/services/auth/workspace.service'
-
-const EnterpriseCoachLoginSchema = z.object({
-    code: z.string().min(6).max(120),
-    email: z.string().email(),
-    password: z.string().min(1),
-})
 
 export type EnterpriseCoachLoginState = {
     error?: string
