@@ -24,6 +24,7 @@ import { MotiView } from 'moti'
 import { supabase } from '../lib/supabase'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
+import { EvaSplash } from '../components/EvaSplash'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -115,6 +116,7 @@ export default function RootLayout() {
     Montserrat_700Bold,
     Montserrat_800ExtraBold,
   })
+  const [splashDone, setSplashDone] = useState(false)
 
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync()
@@ -126,15 +128,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <BottomSheetModalProvider>
         <ThemeProvider>
-          <StatusBar style="auto" />
+          <StatusBar style="light" />
           <MotiView
             from={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ type: 'timing', duration: 260 }}
+            animate={{ opacity: splashDone ? 1 : 0 }}
+            transition={{ type: 'timing', duration: 300 }}
             style={{ flex: 1 }}
           >
             <RootLayoutNav />
           </MotiView>
+          {!splashDone && <EvaSplash onFinish={() => setSplashDone(true)} />}
         </ThemeProvider>
       </BottomSheetModalProvider>
     </GestureHandlerRootView>

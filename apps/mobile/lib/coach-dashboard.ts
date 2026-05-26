@@ -17,6 +17,7 @@ export type MobileRiskAlertItem = {
   clientName: string
   attentionScore: number
   label: string
+  flags?: string[]
 }
 
 export type MobileAgendaItem = {
@@ -42,6 +43,7 @@ export type MobileActivityItem = {
   subtitle: string
   date: string
   clientId?: string | null
+  photoUrl?: string | null
 }
 
 export type MobileClientPaymentSummary = {
@@ -61,6 +63,17 @@ export type MobileClientStats = {
   nutritionPct: number
   adherenceHint: string
   nutritionHint: string
+  adherenceHistory4w: number[]
+  weightHistory30d: { date: string; value: number }[]
+  currentWeight: number | null
+  weightDelta7d: number | null
+  oneRMDelta: number | null
+  streak: number
+  latestEnergyLevel: number | null
+  planDaysRemaining: number | null
+  planCurrentWeek: number | null
+  planTotalWeeks: number | null
+  attentionScore: number
 }
 
 export type MobileChartPoint = {
@@ -237,8 +250,38 @@ function buildClientPaymentSummary(payments: ClientPaymentRow[], clients: Client
     })
     .sort((a, b) => {
       if (a.hasRecentPayment === b.hasRecentPayment) return 0
+      // vencido/sin pago primero — igual que web
       return a.hasRecentPayment ? 1 : -1
     })
+}
+
+type RichAdherenceStat = {
+  clientId: string
+  clientName: string
+  percentage: number
+  completedSets: number
+  totalSets: number
+  lastPlan: string
+  adherenceHistory4w?: number[]
+  weightHistory30d?: { date: string; value: number }[]
+  currentWeight?: number | null
+  weightDelta7d?: number | null
+  oneRMDelta?: number | null
+  streak?: number
+  latestEnergyLevel?: number | null
+  planDaysRemaining?: number | null
+  planCurrentWeek?: number | null
+  planTotalWeeks?: number | null
+  attentionScore?: number
+}
+
+type RichNutritionStat = {
+  clientId: string
+  clientName: string
+  percentage: number
+  consumed: { cal: number; prot?: number; carb?: number; fat?: number }
+  target: { cal: number; prot?: number; carb?: number; fat?: number }
+  lastPlan: string
 }
 
 type MobileDashboardApiResponse = {
@@ -251,26 +294,21 @@ type MobileDashboardApiResponse = {
     hasStudentSignal30d: boolean
     clientList: Array<{ id: string; name: string }>
     clientPaymentSummary: MobileClientPaymentSummary[]
-    adherenceStats: Array<{
-      clientId: string
-      clientName: string
-      percentage: number
-      completedSets: number
-      totalSets: number
-      lastPlan: string
-    }>
-    nutritionStats: Array<{
-      clientId: string
-      clientName: string
-      percentage: number
-      consumed: { cal: number }
-      target: { cal: number }
-      lastPlan: string
-    }>
+    adherenceStats: RichAdherenceStat[]
+    nutritionStats: RichNutritionStat[]
     topRiskClients: MobileRiskAlertItem[]
     agenda: MobileAgendaItem[]
     expiringPrograms: MobileExpiringProgramItem[]
-    recentActivities: MobileActivityItem[]
+    recentActivities: Array<{
+      id: string
+      type: 'nuevo alumno' | 'check-in' | 'workout'
+      title: string
+      subtitle: string
+      date: string
+      href: string
+      photoUrl?: string | null
+      clientId?: string | null
+    }>
     areaData: MobileChartPoint[]
     barData: MobileChartPoint[]
   }
@@ -278,6 +316,7 @@ type MobileDashboardApiResponse = {
 
 function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardData {
   const nutritionByClient = new Map(payload.dashboard.nutritionStats.map((stat) => [stat.clientId, stat]))
+
   const clientStats: MobileClientStats[] = payload.dashboard.adherenceStats.map((stat) => {
     const nutrition = nutritionByClient.get(stat.clientId)
     return {
@@ -289,8 +328,29 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
       nutritionHint: nutrition
         ? `${Math.round(nutrition.consumed.cal)} / ${Math.round(nutrition.target.cal)} kcal`
         : 'Sin datos de nutricion',
+      adherenceHistory4w: stat.adherenceHistory4w ?? [],
+      weightHistory30d: stat.weightHistory30d ?? [],
+      currentWeight: stat.currentWeight ?? null,
+      weightDelta7d: stat.weightDelta7d ?? null,
+      oneRMDelta: stat.oneRMDelta ?? null,
+      streak: stat.streak ?? 0,
+      latestEnergyLevel: stat.latestEnergyLevel ?? null,
+      planDaysRemaining: stat.planDaysRemaining ?? null,
+      planCurrentWeek: stat.planCurrentWeek ?? null,
+      planTotalWeeks: stat.planTotalWeeks ?? null,
+      attentionScore: stat.attentionScore ?? 0,
     }
   })
+
+  const recentActivities: MobileActivityItem[] = payload.dashboard.recentActivities.map((item) => ({
+    id: item.id,
+    type: item.type,
+    title: item.title,
+    subtitle: item.subtitle,
+    date: item.date,
+    clientId: item.clientId ?? null,
+    photoUrl: item.photoUrl ?? null,
+  }))
 
   return {
     coach: payload.coach,
@@ -307,8 +367,49 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
     topRiskClients: payload.dashboard.topRiskClients,
     agenda: payload.dashboard.agenda,
     expiringPrograms: payload.dashboard.expiringPrograms,
-    recentActivities: payload.dashboard.recentActivities,
+    recentActivities,
   }
+}
+
+function buildAreaData(workoutLogs: WorkoutLogRow[]): MobileChartPoint[] {
+  const countByDay = new Map<string, number>()
+  const now = new Date()
+  // últimos 30 días
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    countByDay.set(key, 0)
+  }
+  for (const log of workoutLogs) {
+    const day = log.logged_at.slice(0, 10)
+    if (countByDay.has(day)) {
+      countByDay.set(day, (countByDay.get(day) ?? 0) + 1)
+    }
+  }
+  return Array.from(countByDay.entries()).map(([dateStr, count]) => {
+    const [, month, day] = dateStr.split('-')
+    return { name: `${day}/${month}`, fullName: dateStr, sesiones: count }
+  })
+}
+
+function buildBarData(clients: ClientRow[]): MobileChartPoint[] {
+  const MONTH_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const now = new Date()
+  const countByMonth = new Map<string, { label: string; count: number }>()
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    countByMonth.set(key, { label: MONTH_ABBR[d.getMonth()], count: 0 })
+  }
+  for (const client of clients) {
+    const month = client.created_at.slice(0, 7)
+    if (countByMonth.has(month)) {
+      const entry = countByMonth.get(month)!
+      entry.count += 1
+    }
+  }
+  return Array.from(countByMonth.values()).map(({ label, count }) => ({ name: label, alumnos: count }))
 }
 
 async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData | null> {
@@ -393,6 +494,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
         clientName: client.full_name,
         attentionScore: noWorkout7d ? 95 : 85,
         label: 'Adherencia critica - sin check-in en 1 mes',
+        flags: noWorkout7d ? ['SIN_CHECKIN_1M', 'SIN_EJERCICIO_7D'] : ['SIN_CHECKIN_1M'],
       })
     } else if (noWorkout7d) {
       riskItems.push({
@@ -400,6 +502,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
         clientName: client.full_name,
         attentionScore: 75,
         label: 'Adherencia critica - sin ejercicio en 7 dias',
+        flags: ['SIN_EJERCICIO_7D'],
       })
     }
   }
@@ -472,7 +575,6 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
 
   const clientsWithWorkout30d = new Set(workoutLogs.map((row) => row.client_id)).size
   const avgAdherence = clients.length > 0 ? Math.round((clientsWithWorkout30d / clients.length) * 100) : 0
-  const avgNutrition = 0
 
   const clientStats: MobileClientStats[] = clients.map((client) => {
     const latestWorkoutRow = latestWorkout.get(client.id)
@@ -490,7 +592,18 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       adherencePct,
       nutritionPct: 0,
       adherenceHint: latestWorkoutRow ? `Ultimo entreno: ${latestWorkoutRow.logged_at.slice(0, 10)}` : 'Sin entrenos en 30 dias',
-      nutritionHint: 'Sin datos de nutricion mobile aun',
+      nutritionHint: 'Sin datos de nutricion',
+      adherenceHistory4w: [],
+      weightHistory30d: [],
+      currentWeight: null,
+      weightDelta7d: null,
+      oneRMDelta: null,
+      streak: 0,
+      latestEnergyLevel: null,
+      planDaysRemaining: null,
+      planCurrentWeek: null,
+      planTotalWeeks: null,
+      attentionScore: 0,
     }
   })
 
@@ -503,6 +616,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       subtitle: client.onboarding_completed ? 'Onboarding completado' : 'Pendiente de onboarding',
       date: client.created_at,
       clientId: client.id,
+      photoUrl: null,
     })
   })
   checkIns.slice(0, 5).forEach((checkIn) => {
@@ -515,6 +629,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       subtitle: 'Revisa su progreso semanal',
       date: checkIn.created_at,
       clientId: client.id,
+      photoUrl: null,
     })
   })
 
@@ -533,6 +648,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       subtitle: 'Workout registrado',
       date: workout.logged_at,
       clientId: client.id,
+      photoUrl: null,
     })
   })
 
@@ -547,8 +663,8 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     clientList: clients.map((client) => ({ id: client.id, name: client.full_name })),
     clientPaymentSummary: buildClientPaymentSummary(payments, clients),
     clientStats,
-    areaData: [],
-    barData: [],
+    areaData: buildAreaData(workoutLogs),
+    barData: buildBarData(clients),
     kpi: {
       mrrCurrentMonth,
       mrrPreviousMonth,
@@ -556,7 +672,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       totalClients: clients.length,
       riskCount: topRiskClients.length,
       avgAdherence,
-      avgNutrition,
+      avgNutrition: 0,
     },
     topRiskClients,
     agenda,

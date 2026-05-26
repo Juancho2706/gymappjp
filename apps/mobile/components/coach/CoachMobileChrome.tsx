@@ -13,17 +13,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Apple,
   Bell,
-  CheckCircle,
+  ClipboardList,
   CreditCard,
   ChevronLeft,
   ChevronRight,
   Dumbbell,
   HelpCircle,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   Moon,
+  Settings,
   Sun,
-  User,
   Users,
   type LucideIcon,
 } from 'lucide-react-native'
@@ -57,6 +58,11 @@ const NAV_META: Record<string, NavMeta> = {
   builder: {
     label: 'Programas',
     shortLabel: 'Planes',
+    icon: ClipboardList,
+  },
+  ejercicios: {
+    label: 'Ejercicios',
+    shortLabel: 'Ejer.',
     icon: Dumbbell,
   },
   nutricion: {
@@ -64,44 +70,22 @@ const NAV_META: Record<string, NavMeta> = {
     shortLabel: 'Nutri',
     icon: Apple,
   },
-  'check-ins': {
-    label: 'Check-ins',
-    shortLabel: 'Check-ins',
-    icon: CheckCircle,
-  },
-  perfil: {
-    label: 'Perfil',
-    shortLabel: 'Perfil',
-    icon: User,
-  },
-  exercises_placeholder: {
-    label: 'Ejercicios',
-    shortLabel: 'Ejer.',
-    icon: Dumbbell,
-  },
-  brand_placeholder: {
+  settings: {
     label: 'Mi Marca',
     shortLabel: 'Marca',
-    icon: User,
+    icon: Settings,
   },
-  subscription_placeholder: {
+  subscription: {
     label: 'Suscripcion',
     shortLabel: 'Plan',
     icon: CreditCard,
   },
-  support_placeholder: {
+  support: {
     label: 'Soporte',
     shortLabel: 'Ayuda',
-    icon: HelpCircle,
+    icon: LifeBuoy,
   },
 }
-
-const DISABLED_WEB_PARITY_ITEMS: TabRoute[] = [
-  { key: 'disabled-exercises', name: 'exercises_placeholder' },
-  { key: 'disabled-brand', name: 'brand_placeholder' },
-  { key: 'disabled-subscription', name: 'subscription_placeholder' },
-  { key: 'disabled-support', name: 'support_placeholder' },
-]
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -220,7 +204,7 @@ export function CoachMobileTabBar({
 
   const canScrollLeft = scrollX > 4
   const canScrollRight = scrollX + viewportWidth < contentWidth - 4
-  const routes = [...state.routes, ...DISABLED_WEB_PARITY_ITEMS]
+  const routes = state.routes
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -305,7 +289,6 @@ export function CoachMobileTabBar({
       >
         {routes.map((route, index) => {
           const focused = state.index === index
-          const disabled = route.key.startsWith('disabled-')
           const meta = NAV_META[route.name] ?? {
             label: descriptors[route.key]?.options?.title ?? route.name,
             shortLabel: descriptors[route.key]?.options?.tabBarLabel ?? route.name,
@@ -314,7 +297,6 @@ export function CoachMobileTabBar({
           const Icon = meta.icon
 
           function onPress() {
-            if (disabled) return
             const event = navigation.emit({
               type: 'tabPress',
               target: route.key,
@@ -331,11 +313,9 @@ export function CoachMobileTabBar({
               activeOpacity={0.82}
               accessibilityRole="button"
               accessibilityState={focused ? { selected: true } : {}}
-              accessibilityHint={disabled ? 'Disponible proximamente' : undefined}
               accessibilityLabel={meta.label}
               onPress={onPress}
-              disabled={disabled}
-              style={[styles.tabPressable, disabled && styles.tabPressableDisabled]}
+              style={styles.tabPressable}
             >
               <MotiView
                 animate={{ scale: focused ? 1 : 0.98 }}
@@ -354,9 +334,6 @@ export function CoachMobileTabBar({
                         borderColor: 'transparent',
                         backgroundColor: 'transparent',
                       },
-                  disabled && {
-                    opacity: 0.48,
-                  },
                 ]}
               >
                 <Icon
@@ -451,9 +428,6 @@ const styles = StyleSheet.create({
     minWidth: 58,
     maxWidth: 84,
     flexShrink: 0,
-  },
-  tabPressableDisabled: {
-    pointerEvents: 'none',
   },
   tabItem: {
     minHeight: 54,

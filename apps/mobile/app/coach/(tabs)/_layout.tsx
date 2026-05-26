@@ -18,9 +18,11 @@ export default function CoachTabsLayout() {
         <Tabs.Screen name="home" options={{ title: 'Dashboard' }} />
         <Tabs.Screen name="clientes" options={{ title: 'Alumnos' }} />
         <Tabs.Screen name="builder" options={{ title: 'Programas' }} />
+        <Tabs.Screen name="ejercicios" options={{ title: 'Ejercicios' }} />
         <Tabs.Screen name="nutricion" options={{ title: 'Nutricion' }} />
-        <Tabs.Screen name="check-ins" options={{ title: 'Check-ins' }} />
-        <Tabs.Screen name="perfil" options={{ title: 'Perfil' }} />
+        <Tabs.Screen name="settings" options={{ title: 'Mi Marca' }} />
+        <Tabs.Screen name="subscription" options={{ title: 'Suscripcion' }} />
+        <Tabs.Screen name="support" options={{ title: 'Soporte' }} />
       </Tabs>
     </View>
   )

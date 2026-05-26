@@ -2,17 +2,20 @@ import type { ReactNode } from 'react'
 import { Linking, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
+import { Image } from 'expo-image'
 import {
   Activity,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   CalendarClock,
+  Camera,
   CheckCircle2,
   ChevronRight,
   Clock,
   Copy,
   CreditCard,
+  Dumbbell,
   ExternalLink,
   Layers,
   LockKeyhole,
@@ -33,7 +36,9 @@ import {
   type LucideIcon,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg'
+import Svg, { Rect } from 'react-native-svg'
+import { CartesianChart, Area, Line, Bar } from 'victory-native'
+import { useFont } from '@shopify/react-native-skia'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
@@ -263,6 +268,12 @@ function MobileBanner({
       </View>
     </TouchableOpacity>
   )
+}
+
+function formatDateES(isoDate: string): string {
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+  const d = new Date(isoDate)
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
 }
 
 function timeAgo(iso: string): string {
@@ -733,7 +744,7 @@ export function MobileOnboardingChecklist({
       {!allDone ? <MobileOnboardingLoopStrip /> : null}
       <MobileOnboardingTwinPanels
         studentPath={studentPath}
-        onOpenPreview={() => router.push('/coach/(tabs)/perfil')}
+        onOpenPreview={() => router.push('/coach/(tabs)/settings')}
         onOpenStudentApp={() => Linking.openURL(`${getApiBaseUrl()}${studentPath}`).catch(() => null)}
       />
 
@@ -757,7 +768,7 @@ export function MobileOnboardingChecklist({
             </>
           ) : (
             <>
-              <Button label="Ir a Mi Marca" size="sm" onPress={() => router.push('/coach/(tabs)/perfil')} style={styles.stepButton} />
+              <Button label="Ir a Mi Marca" size="sm" onPress={() => router.push('/coach/(tabs)/settings')} style={styles.stepButton} />
               <Button label={completed.profile_branding ? 'Desmarcar paso' : 'Ya lo deje listo'} variant="ghost" size="sm" onPress={toggleBrandStep} style={styles.stepButton} />
             </>
           )}
@@ -1447,6 +1458,7 @@ export function MobileKpiStrip({
   onMrrPress?: () => void
   onAdherencePress?: () => void
 }) {
+  const router = useRouter()
   return (
     <View style={styles.kpiGrid}>
       <MobileKpiTile
@@ -1457,12 +1469,18 @@ export function MobileKpiStrip({
         deltaPct={kpi.mrrDeltaPct}
         onPress={onMrrPress}
       />
-      <MobileKpiTile label="Alumnos activos" value={String(kpi.totalClients)} icon={Users} />
+      <MobileKpiTile
+        label="Alumnos activos"
+        value={String(kpi.totalClients)}
+        icon={Users}
+        onPress={() => router.push('/coach/(tabs)/clientes')}
+      />
       <MobileKpiTile
         label="En riesgo"
         value={String(kpi.riskCount)}
         hint={kpi.riskCount > 0 ? 'Requieren atencion inmediata' : 'Todos al dia'}
         icon={TriangleAlert}
+        onPress={onAdherencePress}
       />
       <MobileKpiTile
         label="Adherencia"
@@ -1500,7 +1518,7 @@ function MobileKpiTile({
       from={{ opacity: 0, translateY: 14 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 320 }}
-      style={[styles.kpiCard, glass, { borderRadius: theme.radius['2xl'], width: onPress ? '100%' : '48.5%' }]}
+      style={[styles.kpiCard, glass, { borderRadius: theme.radius['2xl'] }]}
     >
       <View style={styles.kpiTop}>
         <Text style={[styles.kpiLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]} numberOfLines={2}>
@@ -1528,10 +1546,17 @@ function MobileKpiTile({
           {hint}
         </Text>
       ) : null}
+      {onPress ? (
+        <Text style={[styles.kpiDetailCta, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+          Ver detalle →
+        </Text>
+      ) : null}
     </MotiView>
   )
 
-  if (!onPress) return body
+  if (!onPress) {
+    return <View style={styles.kpiTouch}>{body}</View>
+  }
 
   return (
     <TouchableOpacity activeOpacity={0.84} onPress={onPress} style={styles.kpiTouch}>
@@ -1554,9 +1579,11 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
             Focus list
           </Text>
         </View>
-        <Text style={[styles.panelAction, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
-          VER TODOS
-        </Text>
+        <TouchableOpacity activeOpacity={0.72} onPress={() => router.push('/coach/(tabs)/clientes')}>
+          <Text style={[styles.panelAction, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+            VER TODOS
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {items.length === 0 ? (
@@ -1579,8 +1606,23 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
                 </Text>
               </View>
               <View style={styles.rowRight}>
-                <View style={styles.scorePill}>
-                  <Text style={[styles.scoreText, { fontFamily: 'Inter_700Bold' }]}>{item.attentionScore}</Text>
+                <View style={[
+                  styles.scorePill,
+                  {
+                    backgroundColor: item.attentionScore >= 50
+                      ? 'rgba(239,68,68,0.15)'
+                      : item.attentionScore >= 25
+                        ? 'rgba(245,158,11,0.15)'
+                        : 'rgba(16,185,129,0.15)',
+                  },
+                ]}>
+                  <Text style={[
+                    styles.scoreText,
+                    {
+                      fontFamily: 'Inter_700Bold',
+                      color: item.attentionScore >= 50 ? '#EF4444' : item.attentionScore >= 25 ? '#F59E0B' : '#10B981',
+                    },
+                  ]}>{item.attentionScore}</Text>
                 </View>
                 <ChevronRight size={18} color={theme.mutedForeground} />
               </View>
@@ -1769,9 +1811,13 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
               onPress={() => router.push(`/coach/cliente/${item.clientId}`)}
               style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
             >
-              <Text style={styles.kindIcon}>
-                {item.kind === 'programa_vence' ? 'H' : item.kind === 'checkin_pendiente' ? 'C' : 'W'}
-              </Text>
+              <View style={[styles.agendaIconWrap, { backgroundColor: hexToRgba(theme.primary, 0.1) }]}>
+                {item.kind === 'programa_vence'
+                  ? <Clock size={15} color={theme.primary} />
+                  : item.kind === 'checkin_pendiente'
+                    ? <Camera size={15} color={theme.primary} />
+                    : <Dumbbell size={15} color={theme.primary} />}
+              </View>
               <View style={styles.rowCopy}>
                 <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
                   {item.clientName}
@@ -1790,6 +1836,7 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
 }
 
 export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgramItem[] }) {
+  const router = useRouter()
   const { theme } = useTheme()
   const glass = useGlassStyle()
 
@@ -1807,8 +1854,15 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
         </Text>
       ) : (
         <View style={styles.rows}>
-          {items.slice(0, 4).map((item, index) => (
-            <View key={item.id} style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+          {items.map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.78}
+              onPress={() => item.clientId
+                ? router.push(`/coach/cliente/${item.clientId}`)
+                : router.push('/coach/(tabs)/builder')}
+              style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+            >
               <View style={styles.rowCopy}>
                 <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
                   {item.clientName}
@@ -1817,17 +1871,26 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
                   {item.name}
                 </Text>
               </View>
-              <View style={[styles.duePill, { backgroundColor: item.daysLeft <= 0 ? 'rgba(244,63,94,0.15)' : 'rgba(245,158,11,0.15)' }]}>
-                <Text style={[styles.dueText, { color: item.daysLeft <= 0 ? '#F43F5E' : '#F59E0B', fontFamily: 'Inter_700Bold' }]}>
-                  {item.daysLeft <= 0 ? 'Vencido' : `${item.daysLeft}d`}
-                </Text>
+              <View style={styles.rowRight}>
+                <View style={[styles.duePill, { backgroundColor: item.daysLeft <= 0 ? 'rgba(244,63,94,0.15)' : 'rgba(245,158,11,0.15)' }]}>
+                  <Text style={[styles.dueText, { color: item.daysLeft <= 0 ? '#F43F5E' : '#F59E0B', fontFamily: 'Inter_700Bold' }]}>
+                    {item.daysLeft <= 0 ? 'Vencido' : `${item.daysLeft}d`}
+                  </Text>
+                </View>
+                <ChevronRight size={16} color={theme.mutedForeground} />
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       )}
     </View>
   )
+}
+
+function ActivityTypeIcon({ type, size, color }: { type: MobileActivityItem['type']; size: number; color: string }) {
+  if (type === 'nuevo alumno') return <UserPlus size={size} color={color} />
+  if (type === 'check-in') return <Camera size={size} color={color} />
+  return <Dumbbell size={size} color={color} />
 }
 
 export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
@@ -1849,30 +1912,42 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
         </Text>
       ) : (
         <View style={styles.rows}>
-          {items.map((item, index) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.78}
-              disabled={!item.clientId}
-              onPress={() => item.clientId && router.push(`/coach/cliente/${item.clientId}`)}
-              style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-            >
-              <View style={[styles.activityIcon, { backgroundColor: hexToRgba(theme.primary, 0.11) }]}>
-                <Activity size={16} color={theme.primary} />
-              </View>
-              <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>
-                  {item.title}
+          {items.map((item, index) => {
+            const iconColor = item.type === 'nuevo alumno' ? '#10B981' : item.type === 'check-in' ? '#3B82F6' : theme.primary
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.78}
+                disabled={!item.clientId}
+                onPress={() => item.clientId && router.push(`/coach/cliente/${item.clientId}`)}
+                style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+              >
+                {item.type === 'check-in' && item.photoUrl ? (
+                  <Image
+                    source={{ uri: item.photoUrl }}
+                    style={[styles.activityPhoto, { borderRadius: theme.radius.lg }]}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <View style={[styles.activityIcon, { backgroundColor: hexToRgba(iconColor, 0.11) }]}>
+                    <ActivityTypeIcon type={item.type} size={16} color={iconColor} />
+                  </View>
+                )}
+                <View style={styles.rowCopy}>
+                  <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+                    {item.subtitle}
+                  </Text>
+                </View>
+                <Text style={[styles.timeText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  {timeAgo(item.date)}
                 </Text>
-                <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                  {item.subtitle}
-                </Text>
-              </View>
-              <Text style={[styles.timeText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {timeAgo(item.date)}
-              </Text>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            )
+          })}
         </View>
       )}
     </View>
@@ -1888,25 +1963,14 @@ export function MobileDashboardCharts({ areaData, barData }: { areaData: MobileC
   )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const INTER_FONT = require('@expo-google-fonts/inter/Inter_400Regular.ttf')
+
 function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
   const { theme } = useTheme()
   const glass = useGlassStyle()
-  const width = 320
-  const height = 190
-  const chartTop = 22
-  const chartBottom = 154
-  const chartLeft = 18
-  const chartRight = 302
-  const max = Math.max(1, ...data.map((p) => p.sesiones ?? 0))
-  const points = data.map((p, index) => {
-    const x = data.length <= 1 ? (chartLeft + chartRight) / 2 : chartLeft + (index / (data.length - 1)) * (chartRight - chartLeft)
-    const y = chartBottom - ((p.sesiones ?? 0) / max) * (chartBottom - chartTop)
-    return { x, y }
-  })
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-  const areaPath = points.length > 0
-    ? `${linePath} L ${points[points.length - 1].x} ${chartBottom} L ${points[0].x} ${chartBottom} Z`
-    : ''
+  const font = useFont(INTER_FONT, 9)
+  const chartData = data.length > 0 ? data : [{ name: '-', sesiones: 0 }]
 
   return (
     <View style={[styles.chartCard, glass, { borderRadius: theme.radius['2xl'] }]}>
@@ -1927,28 +1991,31 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
             </Text>
           </View>
         ) : (
-          <Svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
-            <Defs>
-              <LinearGradient id="sessionsFill" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor="#3B82F6" stopOpacity="0.32" />
-                <Stop offset="1" stopColor="#3B82F6" stopOpacity="0" />
-              </LinearGradient>
-            </Defs>
-            {[0, 1, 2].map((i) => (
-              <Path
-                key={i}
-                d={`M ${chartLeft} ${chartTop + i * 44} L ${chartRight} ${chartTop + i * 44}`}
-                stroke={theme.mutedForeground}
-                strokeOpacity={0.08}
-                strokeWidth={1}
-              />
-            ))}
-            <Path d={areaPath} fill="url(#sessionsFill)" />
-            <Path d={linePath} fill="none" stroke="#3B82F6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((point, index) => (
-              <Circle key={index} cx={point.x} cy={point.y} r={3.8} fill="#3B82F6" stroke="#FFFFFF" strokeWidth={1.5} />
-            ))}
-          </Svg>
+          <CartesianChart
+            data={chartData}
+            xKey="name"
+            yKeys={['sesiones']}
+            domainPadding={{ left: 10, right: 10, top: 20 }}
+            axisOptions={{ font, tickCount: 4, labelColor: theme.mutedForeground }}
+          >
+            {({ points, chartBounds }) => (
+              <>
+                <Area
+                  points={points.sesiones}
+                  y0={chartBounds.bottom}
+                  color="#3B82F6"
+                  opacity={0.22}
+                  animate={{ type: 'timing', duration: 400 }}
+                />
+                <Line
+                  points={points.sesiones}
+                  color="#3B82F6"
+                  strokeWidth={2.5}
+                  animate={{ type: 'timing', duration: 400 }}
+                />
+              </>
+            )}
+          </CartesianChart>
         )}
       </View>
     </View>
@@ -1958,15 +2025,8 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
 function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
   const { theme } = useTheme()
   const glass = useGlassStyle()
-  const width = 320
-  const height = 190
-  const chartTop = 22
-  const chartBottom = 154
-  const chartLeft = 20
-  const chartRight = 300
-  const max = Math.max(1, ...data.map((p) => p.alumnos ?? 0))
-  const gap = 12
-  const barWidth = data.length > 0 ? Math.max(18, (chartRight - chartLeft - gap * (data.length - 1)) / data.length) : 22
+  const font = useFont(INTER_FONT, 9)
+  const chartData = data.length > 0 ? data : [{ name: '-', alumnos: 0 }]
 
   return (
     <View style={[styles.chartCard, glass, { borderRadius: theme.radius['2xl'] }]}>
@@ -1979,34 +2039,32 @@ function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
         </Text>
       </View>
       <View style={styles.chartCanvas}>
-        <Svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
-          {[0, 1, 2].map((i) => (
-            <Path
-              key={i}
-              d={`M ${chartLeft} ${chartTop + i * 44} L ${chartRight} ${chartTop + i * 44}`}
-              stroke={theme.mutedForeground}
-              strokeOpacity={0.08}
-              strokeWidth={1}
-            />
-          ))}
-          {data.map((point, index) => {
-            const value = point.alumnos ?? 0
-            const barHeight = Math.max(value > 0 ? 4 : 0, (value / max) * (chartBottom - chartTop))
-            const x = chartLeft + index * (barWidth + gap)
-            const y = chartBottom - barHeight
-            return (
-              <Rect
-                key={`${point.name}-${index}`}
-                x={x}
-                y={y}
-                width={barWidth}
-                height={barHeight}
-                rx={5}
-                fill="#22D3EE"
+        {data.length === 0 ? (
+          <View style={styles.chartEmpty}>
+            <Activity size={30} color={theme.mutedForeground} opacity={0.25} />
+            <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Sin datos de crecimiento registrados
+            </Text>
+          </View>
+        ) : (
+          <CartesianChart
+            data={chartData}
+            xKey="name"
+            yKeys={['alumnos']}
+            domainPadding={{ left: 14, right: 14, top: 20 }}
+            axisOptions={{ font, tickCount: 6, labelColor: theme.mutedForeground }}
+          >
+            {({ points, chartBounds }) => (
+              <Bar
+                points={points.alumnos}
+                chartBounds={chartBounds}
+                color="#22D3EE"
+                roundedCorners={{ topLeft: 5, topRight: 5 }}
+                animate={{ type: 'timing', duration: 400 }}
               />
-            )
-          })}
-        </Svg>
+            )}
+          </CartesianChart>
+        )}
       </View>
     </View>
   )
@@ -2078,9 +2136,9 @@ export function MobileRevenueSheet({
                   </View>
                   <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>
                     {client.lastPaymentDate
-                      ? `Ultimo pago: ${client.lastPaymentDate}${client.lastPaymentAmount != null ? ` - ${formatCurrency(client.lastPaymentAmount)}` : ''}`
+                      ? `Ultimo pago: ${formatDateES(client.lastPaymentDate)}${client.lastPaymentAmount != null ? ` · ${formatCurrency(client.lastPaymentAmount)}` : ''}`
                       : 'Sin pagos registrados'}
-                    {client.nextRenewalDate ? ` - Renovacion: ${client.nextRenewalDate}` : ''}
+                    {client.nextRenewalDate ? ` · Renovacion: ${formatDateES(client.nextRenewalDate)}` : ''}
                   </Text>
                 </View>
                 <PaymentStatusBadge hasRecentPayment={client.hasRecentPayment} hasAnyPayment={client.lastPaymentDate != null} />
@@ -2090,6 +2148,33 @@ export function MobileRevenueSheet({
         )}
       </View>
     </NativeDialog>
+  )
+}
+
+function MiniSparkline({ values, color }: { values: number[]; color: string }) {
+  const max = Math.max(1, ...values)
+  const barW = 8
+  const barGap = 3
+  const h = 22
+  const totalW = values.length * barW + (values.length - 1) * barGap
+  return (
+    <Svg width={totalW} height={h}>
+      {values.map((v, i) => {
+        const barH = Math.max(2, (v / max) * h)
+        return (
+          <Rect
+            key={i}
+            x={i * (barW + barGap)}
+            y={h - barH}
+            width={barW}
+            height={barH}
+            rx={2}
+            fill={color}
+            opacity={0.3 + (v / max) * 0.7}
+          />
+        )
+      })}
+    </Svg>
   )
 }
 
@@ -2130,6 +2215,9 @@ export function MobileClientStatsSheet({
             {sorted.map((client) => {
               const pct = tab === 'adherence' ? client.adherencePct : client.nutritionPct
               const hint = tab === 'adherence' ? client.adherenceHint : client.nutritionHint
+              const sparkValues = tab === 'adherence' ? client.adherenceHistory4w : []
+              const hasDelta = client.weightDelta7d !== null
+              const deltaUp = hasDelta && (client.weightDelta7d ?? 0) >= 0
               return (
                 <TouchableOpacity
                   key={client.clientId}
@@ -2161,6 +2249,58 @@ export function MobileClientStatsSheet({
                   <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
                     {hint}
                   </Text>
+                  {(sparkValues.length > 0 || hasDelta || client.streak > 0 || client.latestEnergyLevel !== null) ? (
+                    <View style={styles.statsExtras}>
+                      {sparkValues.length > 0 && (
+                        <MiniSparkline values={sparkValues} color={theme.primary} />
+                      )}
+                      {hasDelta && (
+                        <View style={[styles.statsDeltaBadge, { backgroundColor: deltaUp ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)' }]}>
+                          {deltaUp
+                            ? <ArrowUpRight size={11} color="#10B981" />
+                            : <ArrowDownRight size={11} color="#F43F5E" />}
+                          <Text style={[styles.statsDeltaText, { color: deltaUp ? '#10B981' : '#F43F5E', fontFamily: 'Inter_700Bold' }]}>
+                            {Math.abs(client.weightDelta7d ?? 0).toFixed(1)}kg 7d
+                          </Text>
+                        </View>
+                      )}
+                      {client.streak > 0 && (
+                        <View style={[styles.statsChip, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+                          <Zap size={11} color="#F59E0B" />
+                          <Text style={[styles.statsChipText, { color: '#F59E0B', fontFamily: 'Inter_700Bold' }]}>
+                            {client.streak}d racha
+                          </Text>
+                        </View>
+                      )}
+                      {client.latestEnergyLevel !== null && (
+                        <View style={[styles.statsChip, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
+                          <Text style={[styles.statsChipText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+                            ⚡ {client.latestEnergyLevel}/10
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : null}
+                  {(client.planCurrentWeek !== null || client.oneRMDelta !== null) ? (
+                    <View style={styles.statsExtras}>
+                      {client.planCurrentWeek !== null && client.planTotalWeeks !== null && (
+                        <Text style={[styles.statsPlanText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                          Semana {client.planCurrentWeek}/{client.planTotalWeeks}
+                          {client.planDaysRemaining ? ` · ${client.planDaysRemaining}d restantes` : ''}
+                        </Text>
+                      )}
+                      {client.oneRMDelta !== null && (
+                        <View style={[styles.statsDeltaBadge, { backgroundColor: client.oneRMDelta >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)' }]}>
+                          {client.oneRMDelta >= 0
+                            ? <TrendingUp size={11} color="#10B981" />
+                            : <TrendingDown size={11} color="#F43F5E" />}
+                          <Text style={[styles.statsDeltaText, { color: client.oneRMDelta >= 0 ? '#10B981' : '#F43F5E', fontFamily: 'Inter_700Bold' }]}>
+                            {client.oneRMDelta > 0 ? '+' : ''}{client.oneRMDelta.toFixed(1)}% fuerza 7d
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
               )
             })}
@@ -2820,7 +2960,7 @@ const styles = StyleSheet.create({
     width: '48.5%',
   },
   kpiCard: {
-    width: '48.5%',
+    flex: 1,
     minHeight: 142,
     borderWidth: 1,
     padding: 16,
@@ -2953,11 +3093,6 @@ const styles = StyleSheet.create({
   ctaText: {
     color: '#FFFFFF',
     fontSize: 13,
-  },
-  kindIcon: {
-    width: 24,
-    fontSize: 16,
-    textAlign: 'center',
   },
   duePill: {
     borderRadius: 999,
@@ -3127,5 +3262,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     textAlign: 'center',
+  },
+  kpiDetailCta: {
+    fontSize: 10,
+    marginTop: 'auto',
+    letterSpacing: 0.3,
+  },
+  agendaIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityPhoto: {
+    width: 38,
+    height: 38,
+  },
+  statsExtras: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statsDeltaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  statsDeltaText: {
+    fontSize: 10,
+  },
+  statsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  statsChipText: {
+    fontSize: 10,
+  },
+  statsPlanText: {
+    fontSize: 11,
+    lineHeight: 15,
   },
 })
