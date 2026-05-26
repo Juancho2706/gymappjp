@@ -14,9 +14,8 @@ const ALLOWED_LOGO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'ima
 const MAX_LOGO_BYTES = 2 * 1024 * 1024 // 2 MB
 
 export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
 
     const file = formData.get('logo')
     if (!(file instanceof File)) return { error: 'Archivo requerido' }
@@ -40,24 +39,7 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
     }
 
     const admin = createServiceRoleClient()
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos de administrador' }
+    const { org, user } = context
 
     const ext = file.type.split('/')[1].replace('jpeg', 'jpg')
     const path = `orgs/${org.id}/logo.${ext}`
@@ -91,33 +73,15 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
 }
 
 export async function updateOrgAction(orgSlug: string, formData: FormData) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
-
     const parsed = UpdateOrgSchema.safeParse({
         name: formData.get('name'),
         primary_color: formData.get('primary_color') || undefined,
     })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
 
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos de administrador' }
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const { org, user, supabase } = context
 
     const updateData: Record<string, string> = { name: parsed.data.name }
     if (parsed.data.primary_color) updateData.primary_color = parsed.data.primary_color
@@ -334,34 +298,16 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
 }
 
 export async function inviteCoachAction(orgSlug: string, formData: FormData) {
-    const supabase = await createClient()
-    const admin = createServiceRoleClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
-
     const parsed = InviteCoachSchema.safeParse({
         email: formData.get('email'),
         role: formData.get('role') ?? 'coach',
     })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
 
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id, name, seats_included')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos de administrador' }
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user, supabase } = context
 
     // Check seat limit
     const { count } = await supabase
@@ -438,28 +384,10 @@ export async function inviteCoachFormAction(orgSlug: string, _prevState: unknown
 }
 
 export async function removeCoachAction(orgSlug: string, memberId: string) {
-    const supabase = await createClient()
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
     const admin = createServiceRoleClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' }
-
-    const { data: myMembership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!myMembership) return { error: 'Sin permisos de administrador' }
+    const { org, user } = context
 
     const { data: target } = await admin
         .from('organization_members')
@@ -625,28 +553,10 @@ export async function bulkReassignClientsAction(
     toCoachId: string,
     memberId: string,
 ) {
-    const supabase = await createClient()
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
     const admin = createServiceRoleClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' }
-
-    const { data: myMembership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!myMembership) return { error: 'Sin permisos de administrador' }
+    const { org, user } = context
 
     const { data: toMember } = await admin
         .from('organization_members')

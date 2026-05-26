@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Owner:** EVA
-**Last updated:** 2026-05-24
+**Last updated:** 2026-05-26
 **Spec:** `specs/identity-workspace-access/SPEC.md`
 **Plan:** `specs/identity-workspace-access/PLAN.md`
 
@@ -59,6 +59,8 @@
 - [x] Route matrix in middleware/proxy for org/student routes. Completed 2026-05-25 18:35:14 -04:00. Org route middleware validates staff membership by slug; student routes already validate direct client or org client + active coach membership.
 - [x] Route matrix in middleware/proxy for coach routes. Completed 2026-05-24 18:24:45 -04:00.
 - [ ] Server action guards.
+  - [x] Guard pass 1 for org/client enterprise mutations. Completed 2026-05-26 19:55:20 -04:00. Covered brand/org updates, coach invites/removal/reassignment, client create/import/assign. Verification: `npm run typecheck`.
+  - [ ] Guard pass 2 for announcements, nutrition templates, payments, onboarding, exports/reports.
 - [x] Repository filters for standalone vs enterprise across high-risk coach domains. Completed 2026-05-25 18:12:17 -04:00.
 - [x] Repository/action filters for `/coach/clients`. Completed 2026-05-24 18:34:11 -04:00.
 - [x] Repository/action filters for workout library and builder mutations. Completed 2026-05-24 18:48:30 -04:00.

@@ -307,7 +307,7 @@ export type Database = {
       clients: {
         Row: {
           age_confirmed_at: string | null
-          coach_id: string
+          coach_id: string | null
           created_at: string
           email: string
           force_password_change: boolean
@@ -325,7 +325,7 @@ export type Database = {
         }
         Insert: {
           age_confirmed_at?: string | null
-          coach_id: string
+          coach_id?: string | null
           created_at?: string
           email: string
           force_password_change?: boolean
@@ -343,7 +343,7 @@ export type Database = {
         }
         Update: {
           age_confirmed_at?: string | null
-          coach_id?: string
+          coach_id?: string | null
           created_at?: string
           email?: string
           force_password_change?: boolean

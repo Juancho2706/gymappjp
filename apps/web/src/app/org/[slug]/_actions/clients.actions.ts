@@ -4,52 +4,77 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { writeOrgAuditEvent } from '@/services/org/org.service'
+import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 
 const AssignClientSchema = z.object({
     clientId: z.string().uuid(),
     coachId: z.string().uuid(),
 })
 
-export async function assignClientToCoach(orgSlug: string, clientId: string, coachId: string) {
+const AddClientToOrgSchema = z.object({
+    full_name: z.string().min(1).max(120),
+    email: z.email(),
+    phone: z.string().max(30).optional().or(z.literal('')),
+    coach_id: z.string().uuid().optional().or(z.literal('')),
+    age_confirmed: z.literal('on'),
+})
+
+const ImportRowSchema = z.object({
+    full_name: z.string().min(1),
+    email: z.email(),
+    phone: z.string().optional(),
+    coach_id: z.uuid().optional(),
+})
+
+export type ImportClientRow = {
+    full_name: string
+    email: string
+    phone?: string
+    coach_id?: string
+}
+
+export type ImportClientResult = {
+    email: string
+    success: boolean
+    error?: string
+}
+
+async function resolveOrgAdminContext(orgSlug: string) {
     const supabase = await createClient()
-    const admin = createServiceRoleClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
+    if (!user) return { error: 'No autenticado' as const }
+    return getOrgAdminContext(supabase, user.id, orgSlug)
+}
 
-    const parsed = AssignClientSchema.safeParse({ clientId, coachId })
-    if (!parsed.success) return { error: 'Datos inválidos' }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' }
-
-    const { data: myMembership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!myMembership) return { error: 'Sin permisos de administrador' }
-
-    // Verify target coach is in org
-    const { data: coachMembership } = await admin
+async function assertCoachInOrg(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    orgId: string,
+    coachId: string
+) {
+    const { data } = await admin
         .from('organization_members')
         .select('id')
-        .eq('org_id', org.id)
+        .eq('org_id', orgId)
         .eq('coach_id', coachId)
         .eq('status', 'active')
         .is('deleted_at', null)
         .maybeSingle()
-    if (!coachMembership) return { error: 'El coach no pertenece a esta organización' }
 
-    // Upsert assignment + update client.coach_id
+    return Boolean(data)
+}
+
+export async function assignClientToCoach(orgSlug: string, clientId: string, coachId: string) {
+    const parsed = AssignClientSchema.safeParse({ clientId, coachId })
+    if (!parsed.success) return { error: 'Datos invalidos' }
+
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+    const coachInOrg = await assertCoachInOrg(admin, org.id, coachId)
+    if (!coachInOrg) return { error: 'El coach no pertenece a esta organizacion' }
+
     const { error: upsertErr } = await admin
         .from('coach_client_assignments')
         .upsert({ org_id: org.id, client_id: clientId, coach_id: coachId }, { onConflict: 'org_id,client_id' })
@@ -70,20 +95,7 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
     return { success: true }
 }
 
-const AddClientToOrgSchema = z.object({
-    full_name: z.string().min(1).max(120),
-    email: z.email(),
-    phone: z.string().max(30).optional().or(z.literal('')),
-    coach_id: z.string().uuid().optional().or(z.literal('')),
-    age_confirmed: z.literal('on'),
-})
-
 export async function addClientToOrgAction(orgSlug: string, formData: FormData) {
-    const supabase = await createClient()
-    const admin = createServiceRoleClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
-
     const parsed = AddClientToOrgSchema.safeParse({
         full_name: formData.get('full_name'),
         email: formData.get('email'),
@@ -91,38 +103,28 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         coach_id: formData.get('coach_id') || undefined,
         age_confirmed: formData.get('age_confirmed'),
     })
-    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos invalidos' }
 
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' }
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
 
-    const { data: myMembership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!myMembership) return { error: 'Sin permisos de administrador' }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
 
-    // Check email uniqueness within org
     const { data: existing } = await admin
         .from('clients')
         .select('id')
         .eq('org_id', org.id)
         .eq('email', parsed.data.email)
         .maybeSingle()
-    if (existing) return { error: 'Ya existe un cliente con ese email en la organización' }
+    if (existing) return { error: 'Ya existe un cliente con ese email en la organizacion' }
 
-    const coachId = parsed.data.coach_id || user.id
+    const coachId = parsed.data.coach_id || null
+    if (coachId) {
+        const coachInOrg = await assertCoachInOrg(admin, org.id, coachId)
+        if (!coachInOrg) return { error: 'El coach no pertenece a esta organizacion' }
+    }
 
-    // Create auth user — clients.id = auth.uid
     const tempPassword = Math.random().toString(36).slice(-10) + 'Aa1!'
     const { data: newAuthUser, error: authErr } = await admin.auth.admin.createUser({
         email: parsed.data.email,
@@ -151,11 +153,11 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         return { error: insertErr.message }
     }
 
-    if (parsed.data.coach_id) {
+    if (coachId) {
         await admin.from('coach_client_assignments').insert({
             org_id: org.id,
             client_id: client.id,
-            coach_id: parsed.data.coach_id,
+            coach_id: coachId,
         })
     }
 
@@ -165,66 +167,28 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         action: 'client.created',
         targetType: 'client',
         targetId: client.id,
-        metadata: { email: parsed.data.email },
+        metadata: { email: parsed.data.email, coach_id: coachId },
     })
 
     revalidatePath(`/org/${orgSlug}/clients`)
     return { success: true, clientId: client.id }
 }
 
-export type ImportClientRow = {
-    full_name: string
-    email: string
-    phone?: string
-    coach_id?: string
-}
-
-export type ImportClientResult = {
-    email: string
-    success: boolean
-    error?: string
-}
-
-const ImportRowSchema = z.object({
-    full_name: z.string().min(1),
-    email: z.email(),
-    phone: z.string().optional(),
-    coach_id: z.uuid().optional(),
-})
-
 export async function importClientsFromCSVAction(
     orgSlug: string,
     rows: ImportClientRow[]
 ): Promise<{ results: ImportClientResult[] }> {
-    const supabase = await createClient()
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { results: [] }
+
     const admin = createServiceRoleClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { results: [] }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { results: [] }
-
-    const { data: myMembership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!myMembership) return { results: [] }
-
+    const { org, user } = context
     const results: ImportClientResult[] = []
 
     for (const row of rows) {
         const parsed = ImportRowSchema.safeParse(row)
         if (!parsed.success) {
-            results.push({ email: row.email, success: false, error: parsed.error.issues[0]?.message ?? 'Datos inválidos' })
+            results.push({ email: row.email, success: false, error: parsed.error.issues[0]?.message ?? 'Datos invalidos' })
             continue
         }
 
@@ -239,6 +203,15 @@ export async function importClientsFromCSVAction(
             continue
         }
 
+        const coachIdForInsert = parsed.data.coach_id ?? null
+        if (coachIdForInsert) {
+            const coachInOrg = await assertCoachInOrg(admin, org.id, coachIdForInsert)
+            if (!coachInOrg) {
+                results.push({ email: parsed.data.email, success: false, error: 'Coach no pertenece a la org' })
+                continue
+            }
+        }
+
         const tempPassword = Math.random().toString(36).slice(-10) + 'Aa1!'
         const { data: newAuthUser, error: authErr } = await admin.auth.admin.createUser({
             email: parsed.data.email,
@@ -249,8 +222,6 @@ export async function importClientsFromCSVAction(
             results.push({ email: parsed.data.email, success: false, error: authErr.message })
             continue
         }
-
-        const coachIdForInsert = parsed.data.coach_id ?? user.id
 
         const { data: client, error: insertErr } = await admin
             .from('clients')
@@ -274,12 +245,12 @@ export async function importClientsFromCSVAction(
             continue
         }
 
-        if (parsed.data.coach_id) {
+        if (coachIdForInsert) {
             try {
                 await admin.from('coach_client_assignments').insert({
                     org_id: org.id,
                     client_id: client.id,
-                    coach_id: parsed.data.coach_id,
+                    coach_id: coachIdForInsert,
                 })
             } catch { /* best-effort */ }
         }
@@ -290,7 +261,7 @@ export async function importClientsFromCSVAction(
             action: 'client.created',
             targetType: 'client',
             targetId: client.id,
-            metadata: { email: parsed.data.email, source: 'csv_import' },
+            metadata: { email: parsed.data.email, source: 'csv_import', coach_id: coachIdForInsert },
         })
 
         results.push({ email: parsed.data.email, success: true })
