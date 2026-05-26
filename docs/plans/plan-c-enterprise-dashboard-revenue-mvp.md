@@ -1576,56 +1576,56 @@ Reglas de implementacion:
 
 ### Backlog Rework Antes de E2E
 
-Prioridad P0 - arreglar arquitectura de navegacion:
+### Bitacora Compacta de Trabajo Completado
 
-- [x] Rework shell enterprise con nav agrupada IA v2. Completado el 2026-05-24 13:11:31 -04:00.
-- [x] Active state desktop/mobile.
-- [x] Subnav contextual para Operaciones, Equipo, Marca, Herramientas, Seguridad.
-- [x] Renombrar labels visibles: `Brand Center` -> `Marca`; `Team & Access` -> `Equipo`; `Audit Log` -> `Auditoria`; `Settings` -> `Admin`.
-- [x] Reemplazar `<img>` del logo en enterprise layout por `next/image`.
-- [x] Revisar mobile nav: no depender de scroll horizontal largo para encontrar funciones.
+**Compactado el 2026-05-26.** Esta seccion reemplaza la lista larga de checks ya cerrados para dejar el plan legible. Los detalles finos viven en commits y en `specs/identity-workspace-access/TASKS.md`.
 
-Prioridad P1 - menus sin rework suficiente:
+**P0 navegacion enterprise completado:**
 
-- [x] Rework `/org/[slug]/coaches` como "Equipo > Coaches": header profesional, stats, capacidad, health, acciones, tabla responsive. Completado el 2026-05-24 14:37:37 -04:00.
-- [x] Rework `/org/[slug]/clients` como "Operaciones > Alumnos": KPIs, filtros claros, estado pago/asignacion, import visible pero no dominante. Completado el 2026-05-24 14:46:46 -04:00. Nota: bulk actions seguros quedan P2 para no tocar mutations compartidas sin auditoria adicional.
-- [x] Rework `/org/[slug]/settings` como "Seguridad y Admin > Admin": separar datos org, billing enterprise manual, seats, accesos, auditoria y guardrails enterprise-coach-alumno. Completado el 2026-05-24 14:52:19 -04:00. Nota: automatizacion de seats/billing queda fuera hasta definir reglas comerciales.
-- [x] Rework `/org/[slug]/announcements` como "Herramientas > Novedades": estado, audience preview, expiracion, impacto esperado y preview alumno enterprise. Completado el 2026-05-24 14:57:32 -04:00. Nota: canal actual sigue siendo solo alumnos enterprise; entrega a coaches queda como decision futura.
-- [x] Rework `/org/[slug]/nutrition` como "Herramientas > Nutricion": biblioteca de templates, coverage por objetivo, macro summary, meals y acceso para coaches enterprise. Completado el 2026-05-24 15:03:22 -04:00. Nota: usage real por coach queda P2 porque requiere instrumentar aplicacion de template.
+- Shell `/org/[slug]` con sidebar desktop agrupado y nav mobile primaria.
+- Active state y subnav contextual para Command Center, Operaciones, Equipo, Marca, Herramientas, Seguridad/Admin.
+- Labels visibles normalizados: Marca, Equipo, Auditoria, Admin.
+- Logo enterprise usa `next/image`.
 
-Prioridad P1.5 - Identity & Workspace antes de seguir P2:
+**P1 rework visual base completado:**
 
-- [x] Auditar tablas actuales `auth.users`, `coaches`, `clients`, `organizations`, `organization_members` y cualquier RPC/email uniqueness para confirmar el modelo real. Completado el 2026-05-24 15:52:13 -04:00. Notas: existen `organization_members.user_id`, `organization_invites.token_hash`, `clients.org_id`, `coaches.active_org_id`, `org_managed`, `check_platform_email_availability`; faltan `workspace_preferences`, contrato `ActiveWorkspace` y resolver canonico.
-- [x] Definir SPEC/PLAN/TASKS de `identity-workspace-access` antes de migrations. Completado el 2026-05-24 15:52:13 -04:00. Archivos: `specs/identity-workspace-access/{SPEC,PLAN,TASKS}.md`.
-- [x] Disenar migration local para `workspace_preferences` si no existe. Completado el 2026-05-24 15:55:59 -04:00. Archivos: `supabase/migrations/20260524155213_workspace_preferences.sql`, `apps/web/src/lib/database.types.ts`. Migration aditiva local: no modifica datos existentes ni cambia comportamiento live actual.
-- [x] Disenar migration local para `enterprise_invites`/codigos hasheados si no existe modelo equivalente. Completado el 2026-05-24 15:57:27 -04:00. Actualizado el 2026-05-24 18:11:29 -04:00. Decision: usar/recrear `organization_invites` en vez de duplicar tabla; soporta DB local donde la tabla fue dropeada. Archivo: `supabase/migrations/20260524155600_extend_organization_invites_workspace.sql`. Migration aditiva: crea tabla si falta, agrega `status`, `redeemed_by`, `redeemed_at`, `max_attempts`, `attempt_count`, `last_attempt_at`, indices, constraints y RLS basica.
-- [x] Definir `ActiveWorkspace` compartible web/mobile en `packages/types` o domain layer. Completado el 2026-05-24 15:55:59 -04:00. Archivo: `apps/web/src/domain/auth/types.ts`, exportado via `@eva/types`.
-- [x] Crear resolver server-side de workspaces disponibles por usuario. Completado el 2026-05-24 15:55:59 -04:00. Archivos: `apps/web/src/infrastructure/db/workspace.repository.ts`, `apps/web/src/services/auth/workspace.service.ts`. No conectado aun a login/middleware.
-- [x] Crear resolver server-side de branding por workspace. Completado el 2026-05-24 15:59:30 -04:00. Archivo: `apps/web/src/services/auth/workspace-brand.service.ts`. No conectado aun a middleware para evitar cambios visibles prematuros.
-- [x] Aplicar branding enterprise basico al layout coach cuando el workspace activo es `enterprise_coach`. Completado el 2026-05-24 18:27:44 -04:00. Archivos: `apps/web/src/app/coach/layout.tsx`, `apps/web/src/app/coach/_data/layout.queries.ts`. Sidebar usa nombre/color de organizacion y trata el contexto como `org_managed`, ocultando `Mi Marca`/`Suscripcion`; standalone conserva branding propio.
-- [x] Crear guard central para no mezclar `coach_standalone`, `enterprise_coach`, `enterprise_staff`, `student_standalone`, `student_enterprise`. Completado el 2026-05-24 16:00:21 -04:00. Actualizado el 2026-05-25 18:35:14 -04:00. Archivo: `apps/web/src/services/auth/workspace-route-guard.service.ts`, `apps/web/src/middleware.ts`. Matriz conectada a `/coach/*`, `/org/*` y `/c/*`: usuarios multi-workspace sin preferencia van a selector; `enterprise_coach` no puede entrar a billing/settings de coach standalone ni al dashboard enterprise; `/org/*` requiere staff enterprise activo.
-- [x] Login web/PWA: agregar opcion `Coach Enterprise` con codigo, sin romper login coach standalone. Completado el 2026-05-24 18:11:29 -04:00. Archivos: `/login/enterprise-coach`, `CoachLoginForm.tsx`. Flujo: email/password + codigo hasheado contra `organization_invites`, activa/vincula membership coach, guarda `last_workspace`, audita `invite.redeemed`. Login coach standalone queda intacto.
-- [x] Compartir schema de login Coach Enterprise para web/mobile. Completado el 2026-05-25 18:40:56 -04:00. `EnterpriseCoachLoginSchema` vive en `@eva/schemas` y evita que la futura app RN implemente otro contrato para codigo + email + password.
-- [x] Aislar `/coach/clients` por workspace activo. Completado el 2026-05-24 18:34:11 -04:00. Archivos: `apps/web/src/app/coach/clients/page.tsx`, `_data/clients.queries.ts`, `_actions/clients.actions.ts`, `DashboardService`, `directory-pulse-cache`. Regla: standalone lee/escribe `clients.org_id IS NULL`; enterprise coach lee/escribe `clients.org_id = activeWorkspace.orgId`. Creacion enterprise omite limite de plan individual y crea `coach_client_assignments`; standalone conserva limite/billing actual.
-- [x] Aislar entrada directa a `/coach/clients/[clientId]` por workspace activo. Completado el 2026-05-24 18:35:57 -04:00. Archivo: `apps/web/src/services/client/client-detail.service.ts`. El perfil solo carga si el cliente pertenece al `coach_id` y al scope correcto (`org_id` enterprise o `NULL` standalone).
-- [x] Aislar lectura inicial de `/coach/workout-programs` por workspace activo. Completado el 2026-05-24 18:38:03 -04:00. Archivos: `apps/web/src/app/coach/workout-programs/page.tsx`, `_data/workout-programs.queries.ts`. Programas y alumnos disponibles se filtran por `org_id = activeWorkspace.orgId` en enterprise o `org_id IS NULL` en standalone.
-- [x] Aislar mutations principales de workout/builder por workspace activo. Completado el 2026-05-24 18:48:30 -04:00. Archivo: `apps/web/src/services/workout/workout.service.ts`. `saveWorkoutProgramAction`, `assignProgramToClientsAction`, delete/duplicate/sync templates y listas ligeras validan scope; programas enterprise se crean con `org_id`, standalone con `NULL`.
-- [x] Agregar scope enterprise a modelo/lectura de nutricion. Completado el 2026-05-24 18:53:54 -04:00. Archivos: `supabase/migrations/20260524185102_add_org_scope_to_nutrition.sql`, `database.types.ts`, `nutrition-coach.queries.ts`, `nutrition-plans/page.tsx`, `nutrition-plans/client/[clientId]`. Migration local aditiva agrega `org_id` nullable a `nutrition_plans` y `nutrition_plan_templates`, backfill desde `clients.org_id`, e indices por coach/org; lecturas usan `org_id = activeWorkspace.orgId` o `NULL` standalone.
-- [x] Aislar mutations principales de nutricion por workspace activo. Completado el 2026-05-24 18:59:44 -04:00. Archivos: `apps/web/src/app/coach/nutrition-plans/_actions/nutrition-coach.actions.ts`, `apps/web/src/services/nutrition.service.ts`. Templates/planes se crean y actualizan con `org_id`; propagate/assign/delete/duplicate validan scope.
-- [x] Cerrar edge cases de nutricion: historial y ciclos por workspace activo. Completado el 2026-05-25 17:50:22 -04:00. Archivo: `apps/web/src/app/coach/nutrition-plans/_actions/nutrition-coach.actions.ts`. `restoreClientNutritionPlanFromHistory` valida cliente y plan contra el workspace activo antes de restaurar; `upsertNutritionPlanCycle` valida cliente antes de crear/activar/editar y evita editar ciclos de otro alumno del mismo coach. Sin migracion nueva: `nutrition_plan_cycles` y `nutrition_plan_history` ya se atan por `client_id`/`coach_id`; el aislamiento se resuelve con validacion server-side del ownership del cliente y del plan.
-- [x] Aislar dashboard coach y APIs mobile coach por workspace activo. Completado el 2026-05-25 17:58:56 -04:00. Archivos: `apps/web/src/app/coach/dashboard/_data/dashboard.queries.ts`, `apps/web/src/infrastructure/db/coach.repository.ts`, `apps/web/src/app/api/mobile/coach/{dashboard,clients,payments}/route.ts`. Dashboard web y endpoint mobile usan `last_workspace`: standalone filtra `clients.org_id IS NULL`; enterprise coach filtra `clients.org_id = orgId`. Mobile `clients` crea alumnos enterprise con `org_id` y assignment; standalone mantiene limite de plan. Mobile `dashboard` expone `workspace.type/orgId` y bloquea acciones de branding/onboarding del coach si la empresa administra ese contexto. Mobile `payments` valida alumno por workspace antes de registrar pago manual.
-- [x] Reforzar RLS local en tablas sensibles de workspace. Completado el 2026-05-25 18:12:17 -04:00. Archivo: `supabase/migrations/20260525180500_workspace_rls_sensitive_tables.sql`. Reemplaza policies amplias basadas solo en `coach_id = auth.uid()` para `clients`, `workout_programs`, `nutrition_plans`, `nutrition_plan_templates` y `client_payments`; agrega helpers `is_org_admin_member`, `is_org_coach_member`, `is_org_coach_assigned_to_client`. Standalone queda limitado a `org_id IS NULL`; enterprise usa membership activa + assignment. Validado con `npx supabase db lint --local`, `npx supabase db push --local` y consulta a `pg_policies` en `supabase_db_gymappjp`. No tocar remoto todavia.
-- [x] Reforzar storage policies por bucket/path. Completado el 2026-05-25 18:14:16 -04:00. Archivo: `supabase/migrations/20260525181500_storage_workspace_policies.sql`. Mantiene buckets publicos para no romper URLs existentes, pero agrega policies de `storage.objects` para escrituras/listado por path: `logos/{userId}`, `org-assets/orgs/{orgId}` solo owner/admin activo, `checkins/{clientId}` solo alumno propietario. Validado con `npx supabase db lint --local`, `npx supabase db push --local` y consulta a `pg_policies`. Nota futuro: evaluar check-ins privados con signed URLs cuando se haga la fase legal/privacidad, porque cambiarlo hoy rompe URLs publicas guardadas.
-- [x] Aplicar white-label enterprise al alumno autenticado. Completado el 2026-05-25 18:17:31 -04:00. Archivos: `apps/web/src/middleware.ts`, `apps/web/src/app/api/manifest/[coach_slug]/route.ts`, `apps/web/src/app/c/[coach_slug]/manifest.webmanifest/route.ts`. En rutas protegidas `/c/*`, si el alumno tiene `org_id` y el coach pertenece activo a esa organizacion, los headers de marca pasan a usar `organizations.name/logo_url/primary_color`; standalone conserva marca del coach y el toggle `use_coach_brand_colors`. Los manifests PWA tambien intentan resolver marca org para alumno enterprise autenticado. Nota UX/white-label 2026: mantener consistencia en portal, manifest, iconos y nombre visible evita que el alumno enterprise vea rastros de marca del coach individual donde manda la empresa.
-- [x] Login alumno: mantener entrada directa si hay un solo contexto; selector si hay varios. Completado parcialmente el 2026-05-25 18:23:07 -04:00. Archivo: `apps/web/src/app/c/[coach_slug]/login/_actions/login.actions.ts`. El login `/c/[coach_slug]/login` ahora persiste `last_workspace` como `student_standalone` o `student_enterprise` segun el portal y membership del coach, sin forzar selector si el alumno eligio explicitamente una app de coach/empresa. Nota de producto/arquitectura: el schema actual permite una sola fila `clients` por `auth.users.id`; multiples contextos reales de alumno con el mismo email requieren fase futura con `client_identities`/`client_memberships` o separacion `client_profile` vs `auth user`.
-- [x] Login enterprise staff: mantener `/org/login`, sin mostrarlo a standalone salvo link explicito. Validado y reforzado el 2026-05-25 18:35:14 -04:00. `/org/login` sigue separado del login coach normal; el dashboard `/org/*` ahora valida staff enterprise por slug en middleware y en `findOrgBySlug`.
-- [x] Aislar dashboard enterprise de coaches enterprise. Completado el 2026-05-25 18:35:14 -04:00. Investigacion aplicada: middleware sirve para redireccion/cookies, pero la autorizacion real debe repetirse cerca del dato con `getUser()`/server checks; se cerro la brecha donde `organization_members.role='coach'` podia cargar `/org/[slug]` por membership activa. Archivos: `apps/web/src/middleware.ts`, `apps/web/src/infrastructure/db/org.repository.ts`, `apps/web/src/domain/org/permissions.ts`, `apps/web/src/services/auth/workspace.service.ts`. Regla: `org_owner/org_admin/ops/analyst/brand_manager` son staff enterprise; `coach` queda limitado a `/coach/*` con permisos enterprise.
-- [x] Workspace switcher: solo visible para usuarios con 2+ contextos. Completado el 2026-05-24 18:17:52 -04:00. Archivos: `/workspace/select`, `login.actions.ts`, `workspace.service.ts`. Login coach standalone con un solo contexto mantiene redirect directo; usuarios multi-workspace pasan por selector y persisten `last_workspace`.
-- [x] Persistir `last_workspace` de forma segura y portable a React Native. Completado el 2026-05-24 16:01:32 -04:00. Archivos: `workspace_preferences` migration, `workspace.repository.ts`, `workspace.service.ts`. Server-side preference lista; localStorage queda solo como cache futura.
-- [x] Auditar redirects/login/cache para multi-workspace. Completado el 2026-05-25 18:40:56 -04:00. Investigacion aplicada: Supabase SSR recomienda cookies para sesion server-side; OWASP advierte no confiar secretos/permisos a Web Storage. EVA queda asi: `localStorage` solo guarda preferencias visuales/offline no autoritativas; `resolvePostLoginRedirect` usa `workspace_preferences` server-side, valida que el workspace siga activo y cae a `/workspace/select` si hay varios contextos sin preferencia valida. `/org/login` persiste `enterprise_staff`; `Coach Enterprise` con codigo persiste `enterprise_coach` y entra directo a `/coach/dashboard` en contexto empresa.
-- [x] Auditoria completa base: `invite.created`, `invite.revoked`, `membership.revoked`. Completado el 2026-05-25 18:30:08 -04:00. `createEnterpriseCoachAction` e `inviteCoachAction` escriben `invite.created`; `removeCoachAction` escribe `invite.revoked` si el miembro estaba invitado o `membership.revoked` si ya estaba activo, marca membership como `revoked`, limpia `workspace_preferences` del usuario removido para esa org y mantiene intacto cualquier flujo standalone. Pendiente P2: UI de preview de impacto y revocacion staff con pantalla propia en Team.
-- [x] Auditoria parcial de activacion/cambio workspace. Completado el 2026-05-24 18:22:42 -04:00. `invite.redeemed` se escribe al usar codigo enterprise; `setLastWorkspace` escribe `workspace.activated` o `workspace.switched` solo para workspaces enterprise con `orgId`, sin bloquear login si el audit no aplica por RLS.
-- [x] RLS: validar membership dinamica por `org_id`, no solo UI. Completado parcialmente el 2026-05-25 18:12:17 -04:00 para tablas sensibles coach/enterprise: `clients`, `workout_programs`, `nutrition_plans`, `nutrition_plan_templates`, `client_payments`. Pendiente: ampliar auditoria a tablas hijas/logs/storage/exports antes de live.
+- `/coaches`: Equipo > Coaches con stats, capacidad, health y acciones.
+- `/clients`: Operaciones > Alumnos con KPIs, filtros, pagos/asignacion e import CSV.
+- `/settings`: Seguridad/Admin con datos org, billing manual, seats y guardrails.
+- `/announcements`: Novedades con audience preview, expiracion y estado.
+- `/nutrition`: templates de nutricion enterprise con macros/meals y biblioteca visual.
+- `/brand`: Brand Studio inicial con preview, upload, publish a coaches enterprise y brand score.
+- `/audit`: timeline read-only y export CSV owner-only con audit `audit.exported`.
+- `/payments`: registro manual de pagos externos, sin cobro in-app.
+- `/reports`: snapshot read-only de reportes operacionales.
+- `/assignments`: vista read-only de carga/asignaciones.
+
+**P1.5 Identity & Workspace completado hasta ahora:**
+
+- SPEC/PLAN/TASKS de `identity-workspace-access`.
+- Migraciones locales aditivas para `workspace_preferences`, `organization_invites`, nutricion con `org_id`, RLS workspace y storage policies.
+- Contratos `ActiveWorkspace`, `WorkspaceSummary`, `WorkspaceBrand`, permisos workspace y `EnterpriseCoachLoginSchema` compartible web/mobile.
+- Resolver server-side de workspaces, last workspace, branding y guards de ruta.
+- Login `Coach Enterprise` por codigo hasheado, sin romper coach standalone.
+- `/org/login` separado para staff enterprise.
+- Coach enterprise sin `Mi Marca` ni `Billing`; dashboard coach usa marca org en contexto enterprise.
+- Alumno enterprise autenticado ve white-label de la empresa en portal y manifests PWA; standalone conserva marca coach.
+- Aislamiento de `/coach/clients`, cliente directo, workout programs/builder, nutricion, dashboard coach y APIs mobile coach por workspace activo.
+- RLS local reforzado para `clients`, `workout_programs`, `nutrition_plans`, `nutrition_plan_templates`, `client_payments`.
+- Storage policy por path para logos, org-assets y checkins.
+- Auditoria base: `invite.created`, `invite.redeemed`, `invite.revoked`, `membership.revoked`, `workspace.activated`, `workspace.switched`.
+- Redirect/login/cache: autorizacion decide server-side; `localStorage` queda solo para preferencias visuales/offline.
+
+**Verificaciones ya corridas en fases cerradas:**
+
+- `npm run typecheck`.
+- `npm run build`.
+- Vitest focalizado login/post-login.
+- `npx supabase db push --local`.
+- `npx supabase db lint --local`.
+- Consultas locales a `pg_policies` en `supabase_db_gymappjp`.
+
+### P1.5 Pendiente Antes de P2 Funcional
 - [ ] Documentar flujo coach standalone que se suma a enterprise sin duplicar correo.
 - [ ] Documentar flujo owner/staff que tambien es coach/alumno sin mezclar permisos.
 - [ ] FUTURO DB: modelo multi-contexto de alumno por email. Problema actual: `clients.id = auth.users.id` impide que el mismo correo tenga varios perfiles de alumno en distintas empresas/coaches sin duplicar auth. Propuesta: crear `client_profiles` o mantener `clients` como perfil y agregar `client_auth_id`, migrar login a buscar memberships por `auth.uid()`, y preservar compatibility con filas existentes. No ejecutar antes de cerrar P1.5 porque toca muchas rutas alumno.
@@ -2427,6 +2427,225 @@ Traduccion EVA:
 - El onboarding puede vivir dentro de EVA sin pagar Customer Success tools.
 - Cada avance relevante debe auditarse.
 - La demo org queda pendiente hasta tener seed local controlado.
+
+---
+
+## Auditoria Menu por Menu del Dashboard Enterprise
+
+**Fecha:** 2026-05-26  
+**Estado:** auditoria agregada al plan; no es fase de pruebas todavia.  
+**Criterio:** revisar utilidad real, flujo enterprise-coachenterprise-alumnoenterprise, aislamiento contra coach standalone y responsive web/PWA mobile.
+
+### Hallazgo transversal: responsive enterprise mobile
+
+El dashboard enterprise tiene layout responsive basico, pero en celular se siente pesado y poco operativo. El problema no es solo CSS: muchas pantallas fueron pensadas como dashboard desktop y luego apiladas. En mobile hay demasiadas cards grandes, headers altos, tablas convertidas en bloques largos y formularios dentro de filas.
+
+Pendiente:
+
+- [ ] Crear fase `Enterprise Responsive/PWA Rework` antes de E2E: shell mobile, nav sticky, subnav contextual, cards compactas, sheets para acciones y safe areas.
+- [ ] Convertir heroes grandes en headers compactos para pantallas internas en mobile.
+- [ ] Evitar tablas apiladas largas: usar list items + details sheet/modal.
+- [ ] Revisar cada menu en viewport 390x844 y 430x932 antes de considerar listo.
+- [ ] Documentar equivalente futuro React Native por pantalla.
+
+### Shell y navegacion global
+
+Estado actual:
+
+- Desktop sidebar agrupada funciona.
+- Mobile tiene nav primaria en grilla, pero ocupa demasiado y no muestra submenus claros.
+
+Pendiente:
+
+- [ ] Bottom/tab nav enterprise mobile con 5-6 destinos maximos.
+- [ ] Subnav por grupo visible solo dentro del grupo.
+- [ ] Acciones globales: cambiar workspace, cerrar sesion, alertas, soporte.
+- [ ] Validar `pb-safe`, `pt-safe`, `min-h-dvh` y no scroll horizontal.
+
+### Command Center `/org/[slug]`
+
+Estado actual:
+
+- Dashboard home sirve como snapshot.
+- KPIs/action queue son utiles pero todavia no accionables.
+
+Pendiente:
+
+- [ ] Activity feed persistente.
+- [ ] Action queue con acciones reales: asignar coach, registrar pago, invitar coach, publicar brand.
+- [ ] Health score explicado por componentes.
+- [ ] Version mobile: resumen ejecutivo compacto + acciones prioritarias.
+
+### Operaciones / Alumnos `/clients`
+
+Estado actual:
+
+- Alta individual e import CSV existen.
+- Filtros y busqueda existen.
+- Asignacion individual existe desde select.
+
+Pendiente:
+
+- [ ] Bulk actions seguros con preview: asignar, pausar/reactivar, cambiar pago, exportar seleccion.
+- [ ] Server action guards para cada mutation: org, rol, recurso y audit.
+- [ ] Mejorar mobile: list item compacto y details sheet para editar/asignar.
+- [ ] Resolver futuro modelo multi-contexto alumno por email antes de soportar mismo alumno en varios negocios.
+
+### Operaciones / Asignaciones `/assignments`
+
+Estado actual:
+
+- Principalmente read-only: cola, capacidad, sobrecarga y sugerencias.
+
+Pendiente:
+
+- [ ] Convertir en cockpit accionable para asignar/reasignar.
+- [ ] Bulk assign con preview antes/despues.
+- [ ] Historial de reasignaciones por alumno/coach.
+- [ ] Rollback de ultima reasignacion.
+- [ ] Configurar capacidad objetivo por empresa.
+- [ ] Mobile: cards por coach + sheet de alumnos, no grids anchas.
+
+### Operaciones / Pagos alumnos `/payments`
+
+Estado actual:
+
+- Registro manual de pago externo funciona.
+- Mantiene alcance correcto: no cobro in-app, no boleta/factura, no contabilidad.
+
+Pendiente:
+
+- [ ] Filtros por pagado/pendiente/vencido/becado/pausado.
+- [ ] Vencimientos/proximo pago por alumno.
+- [ ] Export CSV auditado.
+- [ ] Alertas en dashboard por vencidos/sin registro.
+- [ ] Mobile: mover formulario de `details` a sheet/modal por alumno.
+
+### Equipo / Coaches `/coaches`
+
+Estado actual:
+
+- Rework visual hecho.
+- Creacion coach/staff base y revocacion coach enterprise existen.
+
+Pendiente:
+
+- [ ] Preview de impacto antes de revocar: alumnos afectados, reasignacion sugerida, standalone intacto.
+- [ ] Reset password/cambio rol con audit y feedback claro.
+- [ ] Separar mejor coaches operativos vs staff admin para evitar confusion de permisos.
+- [ ] Mobile: cards accionables con menu contextual.
+
+### Equipo / Staff & Access `/team`
+
+Estado actual:
+
+- Mayormente read-only/preview: lista staff, role templates y posture.
+
+Pendiente:
+
+- [ ] CRUD staff real: crear, revocar, cambiar rol, reset password.
+- [ ] Permisos granulares por feature: owner/admin/ops/analyst/brand_manager.
+- [ ] MFA policy real y first-login reset.
+- [ ] Tests multi-role.
+- [ ] Mobile: role matrix como accordion/cards.
+
+### Marca / Brand Studio `/brand`
+
+Estado actual:
+
+- Guarda nombre/color/logo.
+- Publish inicial a coaches enterprise.
+- Alumno enterprise autenticado ya recibe marca org.
+
+Pendiente:
+
+- [ ] Modelo `organization_branding`: draft/published/versionado/rollback.
+- [ ] Loader custom real por org: logo loader, texto, icon mode, contraste y preview PWA.
+- [ ] Inventario de superficies: login, manifests, loaders, emails, reports, QR, PDFs, error pages.
+- [ ] Tests: alumno enterprise ve org brand; alumno standalone ve coach brand.
+- [ ] Mobile: previews en tabs/swipe, no paneles largos.
+
+### Herramientas / Novedades `/announcements`
+
+Estado actual:
+
+- Crear/toggle/delete anuncios para alumnos enterprise.
+- Preview y expiracion existen.
+
+Pendiente:
+
+- [ ] Audiences: alumnos, coaches enterprise, staff o todos.
+- [ ] Programar publicacion y expiracion con estados visibles.
+- [ ] Read receipts/delivery status futuro.
+- [ ] Mobile: composer como sheet/modal.
+
+### Herramientas / Nutricion `/nutrition`
+
+Estado actual:
+
+- Templates org con macros/meals.
+- Coaches enterprise pueden usar templates desde flujo coach.
+
+Pendiente:
+
+- [ ] Tracking de uso por template/coach/alumno.
+- [ ] Filtros por objetivo cuando exista volumen.
+- [ ] Flujo claro para aplicar template desde enterprise o coach enterprise.
+- [ ] Mobile: editor por steps/tabs, no formulario largo.
+
+### Seguridad/Admin `/settings`
+
+Estado actual:
+
+- Datos org, billing enterprise manual, invoices y guardrails.
+
+Pendiente:
+
+- [ ] Flujo comercial para seats, cambio de plan y contacto legal/finanzas sin cobro in-app.
+- [ ] Separar settings administrativos de billing/contrato.
+- [ ] Centralizar `canViewBilling(workspace)`.
+- [ ] Mobile: lista de secciones con drill-down.
+
+### Seguridad/Admin / Auditoria `/audit`
+
+Estado actual:
+
+- Timeline real.
+- Export CSV owner-only con audit fail-closed.
+
+Pendiente:
+
+- [ ] Filtros por action/actor/date/target.
+- [ ] Checksum generation job local/manual.
+- [ ] Export audit con checksum.
+- [ ] Detectar mutations sensibles sin audit.
+- [ ] Mobile: timeline compacta con filtros sticky.
+
+### Insights / Reportes `/reports`
+
+Estado actual:
+
+- Weekly brief read-only con formulas conservadoras.
+
+Pendiente:
+
+- [ ] CSV de weekly brief con permission + audit `report.exported`.
+- [ ] PDF ejecutivo despues del CSV.
+- [ ] Rango de fechas y comparacion historica.
+- [ ] No vender como analytics avanzado hasta normalizar adherencia/check-ins/pagos.
+- [ ] Mobile: resumen ejecutivo vertical con tabs.
+
+### Onboarding `/onboarding`
+
+Estado actual:
+
+- Implementation workspace con readiness score y CSM notes.
+
+Pendiente:
+
+- [ ] Medir time-to-value real: primer coach activo, primeros alumnos asignados, primer reporte exportado.
+- [ ] Checklist por owner/admin/CSM.
+- [ ] Mobile: wizard paso a paso.
 
 ---
 
