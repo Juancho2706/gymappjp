@@ -1656,6 +1656,11 @@ Checklist anti-regresion:
   - Cambio: `getClientProfileData`, `getWeeklyCompliance`, `getDynamicMetrics`, historial nutricion/workout por fecha, activity dates y habits usan `assertCoachClientReadAccess`.
   - Resultado: coach standalone solo lee alumnos `org_id IS NULL`; coach enterprise solo lee alumnos del `org_id` activo.
   - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
+- [x] Auditar builder/workout coach por workspace para no mezclar programas entre standalone y enterprise. Completado el 2026-05-26 21:58:08 -04:00.
+  - Cambio: builder `/coach/builder/[clientId]` filtra cliente y programa inicial por `org_id` del workspace activo.
+  - Cambio: `deactivateActiveProgramsForClient` desactiva solo programas del workspace activo.
+  - Cambio: historial de ejercicio valida acceso al alumno antes de leer `workout_logs`.
+  - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
 - [ ] Negative tests: coach standalone no ve alumnos enterprise aunque tenga mismo `user.id`.
 - [ ] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org.
 - [ ] Negative tests: alumno standalone conserva coach brand y portal `/c/[coach_slug]`.

@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { WorkoutBlockSchema, WorkoutDaySchema, WorkoutProgramSchema, type WorkoutBlockInput, type WorkoutDayInput, type WorkoutProgramInput } from '@eva/schemas'
+import { WorkoutProgramSchema, type WorkoutBlockInput, type WorkoutDayInput, type WorkoutProgramInput } from '@eva/schemas'
 import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-programs-library'
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
@@ -34,14 +34,6 @@ export type AssignProgramOptions = {
 
 // --- ACTIONS ---
 
-async function deactivateActiveProgramsForClient(adminDb: any, clientId: string) {
-    return adminDb
-        .from('workout_programs')
-        .update({ is_active: false })
-        .eq('client_id', clientId)
-        .eq('is_active', true)
-}
-
 type CoachWorkoutScope =
     | { ok: true; orgId: string | null }
     | { ok: false; error: string }
@@ -58,6 +50,33 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
     orgId: string | null
 ): T {
     return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
+async function assertCoachCanManageWorkoutClient(
+    db: Awaited<ReturnType<typeof createClient>>,
+    coachId: string,
+    clientId: string,
+    orgId: string | null
+) {
+    let clientQuery = db
+        .from('clients')
+        .select('id')
+        .eq('id', clientId)
+        .eq('coach_id', coachId)
+    clientQuery = applyOrgScope(clientQuery, orgId)
+    const { data: client, error } = await clientQuery.maybeSingle()
+    if (error) throw new Error('No se pudo validar el alumno.')
+    if (!client) throw new Error('Alumno no encontrado.')
+}
+
+async function deactivateActiveProgramsForClient(adminDb: any, clientId: string, orgId: string | null) {
+    let query = adminDb
+        .from('workout_programs')
+        .update({ is_active: false })
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+    query = applyOrgScope(query, orgId)
+    return query
 }
 
 /**
@@ -210,7 +229,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
             if (deleteError) throw new Error('Error al limpiar planes antiguos.')
         } else {
             if (clientId) {
-                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId)
+                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId, scope.orgId)
                 if (deactivateError) {
                     throw new Error('No se pudo desactivar el programa activo actual del alumno.')
                 }
@@ -655,7 +674,7 @@ export async function assignProgramToClientsAction(
         for (const clientId of validClientIds) {
             try {
                 // 2.a Desactivar programas anteriores del cliente sin borrar historial.
-                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId)
+                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId, scope.orgId)
                 if (deactivateError) throw new Error('No se pudo desactivar el plan activo previo.')
 
                 // 2.b Duplicar programa para el cliente
@@ -791,6 +810,14 @@ export async function getExerciseHistoryAction(clientId: string, exerciseId: str
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+    const scope = await getCoachWorkoutScope(supabase, user.id)
+    if (!scope.ok) return { error: scope.error }
+
+    try {
+        await assertCoachCanManageWorkoutClient(supabase, user.id, clientId, scope.orgId)
+    } catch {
+        return { data: [] }
+    }
 
     const adminDb = await createRawAdminClient()
 
