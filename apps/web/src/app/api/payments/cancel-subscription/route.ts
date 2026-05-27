@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
 function isAlreadyCanceledError(message: string) {
     return /already|cancelled|canceled|cancelado|invalid status|not authorized|cannot be modified/i.test(message)
@@ -17,6 +19,11 @@ export async function POST(request: Request) {
 
         if (!user) {
             return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+        }
+
+        const workspace = await resolvePreferredWorkspace(supabase, user.id)
+        if (!canViewBilling(workspace)) {
+            return NextResponse.json({ error: 'Billing disponible solo para coach independiente.' }, { status: 403 })
         }
 
         let reason = ''

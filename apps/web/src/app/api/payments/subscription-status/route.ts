@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
 export async function GET() {
     const supabase = await createClient()
@@ -9,6 +11,11 @@ export async function GET() {
 
     if (!user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const workspace = await resolvePreferredWorkspace(supabase, user.id)
+    if (!canViewBilling(workspace)) {
+        return NextResponse.json({ error: 'Billing disponible solo para coach independiente.' }, { status: 403 })
     }
 
     const { data: coach, error } = await supabase

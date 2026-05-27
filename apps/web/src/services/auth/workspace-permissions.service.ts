@@ -28,6 +28,10 @@ export function workspaceCan(workspace: ActiveWorkspace, permission: WorkspacePe
     return workspacePermissions(workspace).includes(permission)
 }
 
+export function canViewBilling(workspace: ActiveWorkspace | null): boolean {
+    return workspace?.type === 'coach_standalone'
+}
+
 export function workspacePermissions(workspace: ActiveWorkspace): WorkspacePermission[] {
     if (workspace.type === 'enterprise_staff') return ENTERPRISE_STAFF_PERMISSIONS
     if (workspace.type === 'enterprise_coach') return ENTERPRISE_COACH_PERMISSIONS

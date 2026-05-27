@@ -13,6 +13,8 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
 const schema = z.object({
     preapprovalId: z.string().min(1).optional(),
@@ -28,6 +30,11 @@ export async function POST(request: Request) {
 
         if (!user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const workspace = await resolvePreferredWorkspace(supabase, user.id)
+        if (!canViewBilling(workspace)) {
+            return NextResponse.json({ error: 'Billing disponible solo para coach independiente.' }, { status: 403 })
         }
 
         let body: unknown = {}

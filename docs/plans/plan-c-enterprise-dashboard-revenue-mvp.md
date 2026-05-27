@@ -2042,8 +2042,11 @@ Solucion propuesta:
 Fases futuras:
 
 - [ ] Auditar rutas billing.
-- [ ] Centralizar `canViewBilling(workspace)`.
-- [ ] Bloquear direct access server-side.
+- [x] Centralizar `canViewBilling(workspace)`. Completado el 2026-05-26 22:01:57 -04:00 en `workspace-permissions.service.ts`.
+- [x] Bloquear direct access server-side. Completado el 2026-05-26 22:01:57 -04:00 para APIs `/api/payments/subscription-status`, `create-preference`, `confirm-subscription`, `cancel-subscription` y `activate-free`.
+  - Cambio: billing EVA solo responde si el workspace activo es `coach_standalone`.
+  - Cambio: `activate-free` cuenta solo alumnos standalone con `org_id IS NULL`.
+  - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
 - [ ] Mostrar mensaje claro a coach enterprise.
 - [ ] Test coach enterprise no accede subscription.
 

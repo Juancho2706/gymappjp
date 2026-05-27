@@ -11,6 +11,8 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
 const schema = z.object({
     tier: z.enum(['starter', 'pro', 'elite', 'growth', 'scale']),
@@ -26,6 +28,11 @@ export async function POST(request: Request) {
 
         if (!user?.id || !user.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const workspace = await resolvePreferredWorkspace(supabase, user.id)
+        if (!canViewBilling(workspace)) {
+            return NextResponse.json({ error: 'Billing disponible solo para coach independiente.' }, { status: 403 })
         }
 
         const parsed = schema.safeParse(await request.json())

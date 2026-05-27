@@ -5,6 +5,8 @@ import type { Json, TablesInsert } from '@/lib/database.types'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { getTierMaxClients } from '@/lib/constants'
 import type { SubscriptionTier } from '@/lib/constants'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
 function isAlreadyCanceledError(message: string) {
     return /already|cancelled|canceled|cancelado|invalid status|not authorized|cannot be modified/i.test(
@@ -21,6 +23,11 @@ export async function POST() {
 
         if (!user) {
             return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+        }
+
+        const workspace = await resolvePreferredWorkspace(supabase, user.id)
+        if (!canViewBilling(workspace)) {
+            return NextResponse.json({ error: 'Billing disponible solo para coach independiente.' }, { status: 403 })
         }
 
         const admin = createServiceRoleClient()
@@ -46,6 +53,7 @@ export async function POST() {
             .from('clients')
             .select('id', { count: 'exact', head: true })
             .eq('coach_id', user.id)
+            .is('org_id', null)
             .eq('is_archived', false)
 
         const activeCount = count ?? 0
