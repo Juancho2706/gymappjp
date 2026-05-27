@@ -1618,6 +1618,9 @@ Reglas de implementacion:
 - Redirect/login/cache: autorizacion decide server-side; `localStorage` queda solo para preferencias visuales/offline.
 - Guard pass server actions Enterprise iniciado el 2026-05-26 19:55:20 -04:00: `org.actions.ts` centraliza contexto admin en marca/org/invites/revocacion/reasignacion; `clients.actions.ts` valida org/admin/coach por mutation y evita fallback de alumnos enterprise sin coach a `user.id`.
 - Migration local preparada el 2026-05-26 19:55:20 -04:00: `20260526103000_clients_nullable_coach_for_enterprise.sql` permite `clients.coach_id IS NULL` para alumnos enterprise sin asignar; standalone conserva `org_id IS NULL + coach_id NOT NULL` por flujo de app.
+- Migration local aplicada el 2026-05-26 20:39:12 -04:00 con `npx supabase db push --local`; verificado `clients.coach_id IS NULL` permitido y `npx supabase db lint --local` sin errores.
+- Guard pass server actions Enterprise completado en menus secundarios el 2026-05-26 20:39:12 -04:00: anuncios, templates de nutricion, pagos manuales y onboarding usan `getOrgAdminContext`, validan UUIDs antes de `service_role` y conservan audit/revalidate.
+- Export audit avanzado completado el 2026-05-26 20:39:12 -04:00: `/org/[slug]/audit/export` soporta filtros server-side por action/actor/target/date, limita filas, calcula SHA-256 del CSV y registra `row_count`, filtros y checksum en `audit.exported` antes de entregar el archivo.
 
 **Verificaciones ya corridas en fases cerradas:**
 
@@ -1806,6 +1809,7 @@ Restricciones:
 - [ ] Lista de rutas afectadas web.
 - [ ] Lista de contratos compartibles mobile.
 - [x] Migrations locales necesarias para alumnos enterprise sin coach. Completado el 2026-05-26 19:55:20 -04:00. Migration: `supabase/migrations/20260526103000_clients_nullable_coach_for_enterprise.sql`; pendiente aplicarla cuando Supabase local este levantado.
+- [x] Aplicar migration local y verificar DB. Completado el 2026-05-26 20:39:12 -04:00. Verificacion: `npx supabase migration list --local`, consulta `information_schema.columns` para `clients.coach_id`, `npx supabase db lint --local`.
 - [ ] Plan rollback local/live.
 - [ ] Criterios QA web/mobile.
 
@@ -2491,7 +2495,9 @@ Pendiente:
 
 - [ ] Bulk actions seguros con preview: asignar, pausar/reactivar, cambiar pago, exportar seleccion.
 - [x] Server action guards para alta/import/asignacion de alumnos: org, rol, coach activo de la empresa y audit. Completado el 2026-05-26 19:55:20 -04:00. Verificacion: `npm run typecheck`. Supabase local no estaba levantado, migracion pendiente de aplicar.
-- [ ] Server action guards restantes de menus enterprise no auditados aun.
+- [x] Server action guards restantes de menus enterprise no auditados aun. Completado el 2026-05-26 20:39:12 -04:00 para anuncios, nutricion, pagos y onboarding. Verificacion: `npm run typecheck`, ESLint focalizado.
+- [x] Export/report guards avanzados para audit CSV: filtros, checksum/export hash y audit metadata. Completado el 2026-05-26 20:39:12 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado.
+- [ ] Pruebas negativas export org A vs org B.
 - [ ] Mejorar mobile: list item compacto y details sheet para editar/asignar.
 - [ ] Resolver futuro modelo multi-contexto alumno por email antes de soportar mismo alumno en varios negocios.
 
@@ -2621,7 +2627,7 @@ Pendiente:
 
 - [ ] Filtros por action/actor/date/target.
 - [ ] Checksum generation job local/manual.
-- [ ] Export audit con checksum.
+- [x] Export audit con checksum. Completado el 2026-05-26 20:39:12 -04:00. Header `X-Content-SHA256` y metadata `checksum_sha256` en `audit.exported`.
 - [ ] Detectar mutations sensibles sin audit.
 - [ ] Mobile: timeline compacta con filtros sticky.
 

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { createClient } from '@/lib/supabase/server'
-import { writeOrgAuditEvent } from '@/services/org/org.service'
+import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 
 const PaymentStatusSchema = z.enum(['paid', 'pending', 'overdue', 'scholarship', 'paused'])
 
@@ -16,12 +16,14 @@ const RecordEnterprisePaymentSchema = z.object({
     service_description: z.string().max(120).optional().or(z.literal('')),
 })
 
-export async function recordEnterpriseClientPaymentAction(orgSlug: string, formData: FormData) {
+async function resolveAdminContext(orgSlug: string) {
     const supabase = await createClient()
-    const admin = createServiceRoleClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' }
+    if (!user) return { error: 'No autenticado' as const }
+    return getOrgAdminContext(supabase, user.id, orgSlug)
+}
 
+export async function recordEnterpriseClientPaymentAction(orgSlug: string, formData: FormData) {
     const parsed = RecordEnterprisePaymentSchema.safeParse({
         client_id: formData.get('client_id'),
         amount: formData.get('amount'),
@@ -31,33 +33,28 @@ export async function recordEnterpriseClientPaymentAction(orgSlug: string, formD
     })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos invalidos' }
 
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!org) return { error: 'Organizacion no encontrada' }
+    const ctx = await resolveAdminContext(orgSlug)
+    if ('error' in ctx) return { error: ctx.error }
 
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos de administrador' }
-
+    const admin = createServiceRoleClient()
     const { data: client } = await admin
         .from('clients')
         .select('id, coach_id, full_name')
         .eq('id', parsed.data.client_id)
-        .eq('org_id', org.id)
+        .eq('org_id', ctx.org.id)
         .maybeSingle()
     if (!client) return { error: 'Alumno no encontrado en esta empresa' }
     if (!client.coach_id) return { error: 'Asigna un coach antes de registrar pagos' }
+
+    const { data: coachMembership } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('org_id', ctx.org.id)
+        .eq('coach_id', client.coach_id)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!coachMembership) return { error: 'El coach asignado no esta activo en esta empresa' }
 
     const description = parsed.data.service_description?.trim() || 'Registro operacional enterprise'
     const { data: payment, error } = await admin
@@ -77,8 +74,8 @@ export async function recordEnterpriseClientPaymentAction(orgSlug: string, formD
     if (error) return { error: error.message }
 
     await writeOrgAuditEvent(admin, {
-        orgId: org.id,
-        actorId: user.id,
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
         action: 'client_payment.recorded',
         targetType: 'client_payment',
         targetId: payment.id,

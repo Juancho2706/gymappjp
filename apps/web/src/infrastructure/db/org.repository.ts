@@ -214,13 +214,34 @@ export type OrgAuditLog = {
     created_at: string | null
 }
 
-export async function findOrgAuditLogs(db: DB, orgId: string, limit = 50): Promise<OrgAuditLog[]> {
-    const { data } = await db
+export type OrgAuditLogFilters = {
+    action?: string
+    actorId?: string
+    targetType?: string
+    from?: string
+    to?: string
+}
+
+export async function findOrgAuditLogs(
+    db: DB,
+    orgId: string,
+    limit = 50,
+    filters: OrgAuditLogFilters = {}
+): Promise<OrgAuditLog[]> {
+    let query = db
         .from('org_audit_logs')
         .select('id, org_id, actor_id, action, target_id, target_type, metadata, created_at')
         .eq('org_id', orgId)
+
+    if (filters.action) query = query.eq('action', filters.action)
+    if (filters.actorId) query = query.eq('actor_id', filters.actorId)
+    if (filters.targetType) query = query.eq('target_type', filters.targetType)
+    if (filters.from) query = query.gte('created_at', filters.from)
+    if (filters.to) query = query.lte('created_at', filters.to)
+
+    const { data } = await query
         .order('created_at', { ascending: false })
-        .limit(limit)
+        .limit(Math.min(Math.max(limit, 1), 1000))
 
     return (data ?? []) as OrgAuditLog[]
 }

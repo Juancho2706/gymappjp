@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { writeOrgAuditEvent } from '@/services/org/org.service'
+import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 
 const MealNameSchema = z.object({
     name: z.string().min(1).max(80),
@@ -24,30 +24,13 @@ const CreateOrgNutritionTemplateSchema = z.object({
     meal_names: z.array(MealNameSchema).default([]),
 })
 
+const TemplateIdSchema = z.uuid()
+
 async function resolveAdminContext(orgSlug: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado' as const }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' as const }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos de administrador' as const }
-
-    return { user, org, supabase }
+    return getOrgAdminContext(supabase, user.id, orgSlug)
 }
 
 export async function createOrgNutritionTemplateAction(orgSlug: string, payload: unknown) {
@@ -55,7 +38,7 @@ export async function createOrgNutritionTemplateAction(orgSlug: string, payload:
     if ('error' in ctx) return { error: ctx.error }
 
     const parsed = CreateOrgNutritionTemplateSchema.safeParse(payload)
-    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos invalidos' }
 
     const admin = createServiceRoleClient()
     const { data: template, error } = await admin.from('org_nutrition_templates').insert({
@@ -94,11 +77,14 @@ export async function deleteOrgNutritionTemplateAction(orgSlug: string, id: stri
     const ctx = await resolveAdminContext(orgSlug)
     if ('error' in ctx) return { error: ctx.error }
 
+    const parsedId = TemplateIdSchema.safeParse(id)
+    if (!parsedId.success) return { error: 'Template invalido' }
+
     const admin = createServiceRoleClient()
     const { error } = await admin
         .from('org_nutrition_templates')
         .delete()
-        .eq('id', id)
+        .eq('id', parsedId.data)
         .eq('org_id', ctx.org.id)
 
     if (error) return { error: error.message }
@@ -107,7 +93,7 @@ export async function deleteOrgNutritionTemplateAction(orgSlug: string, id: stri
         actorId: ctx.user.id,
         action: 'org_nutrition_template.deleted',
         targetType: 'org_nutrition_template',
-        targetId: id,
+        targetId: parsedId.data,
         metadata: {},
     })
     revalidatePath(`/org/${orgSlug}/nutrition`)

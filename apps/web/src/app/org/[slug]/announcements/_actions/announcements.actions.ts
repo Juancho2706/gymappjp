@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { writeOrgAuditEvent } from '@/services/org/org.service'
+import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 
 const CreateAnnouncementSchema = z.object({
     title: z.string().min(1).max(120),
@@ -12,30 +12,13 @@ const CreateAnnouncementSchema = z.object({
     active_until: z.string().optional(),
 })
 
+const AnnouncementIdSchema = z.uuid()
+
 async function resolveAdminContext(orgSlug: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado' as const }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' as const }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos de administrador' as const }
-
-    return { user, org, supabase }
+    return getOrgAdminContext(supabase, user.id, orgSlug)
 }
 
 export async function createAnnouncementAction(orgSlug: string, _prev: unknown, formData: FormData) {
@@ -47,7 +30,7 @@ export async function createAnnouncementAction(orgSlug: string, _prev: unknown, 
         body: formData.get('body'),
         active_until: formData.get('active_until') || undefined,
     })
-    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos invalidos' }
 
     const admin = createServiceRoleClient()
     const { data: announcement, error } = await admin.from('org_announcements').insert({
@@ -76,11 +59,14 @@ export async function toggleAnnouncementAction(orgSlug: string, id: string, isAc
     const ctx = await resolveAdminContext(orgSlug)
     if ('error' in ctx) return { error: ctx.error }
 
+    const parsedId = AnnouncementIdSchema.safeParse(id)
+    if (!parsedId.success) return { error: 'Anuncio invalido' }
+
     const admin = createServiceRoleClient()
     const { error } = await admin
         .from('org_announcements')
         .update({ is_active: isActive })
-        .eq('id', id)
+        .eq('id', parsedId.data)
         .eq('org_id', ctx.org.id)
 
     if (error) return { error: error.message }
@@ -89,7 +75,7 @@ export async function toggleAnnouncementAction(orgSlug: string, id: string, isAc
         actorId: ctx.user.id,
         action: isActive ? 'org_announcement.activated' : 'org_announcement.deactivated',
         targetType: 'org_announcement',
-        targetId: id,
+        targetId: parsedId.data,
         metadata: { is_active: isActive },
     })
     revalidatePath(`/org/${orgSlug}/announcements`)
@@ -101,11 +87,14 @@ export async function deleteAnnouncementAction(orgSlug: string, id: string) {
     const ctx = await resolveAdminContext(orgSlug)
     if ('error' in ctx) return { error: ctx.error }
 
+    const parsedId = AnnouncementIdSchema.safeParse(id)
+    if (!parsedId.success) return { error: 'Anuncio invalido' }
+
     const admin = createServiceRoleClient()
     const { error } = await admin
         .from('org_announcements')
         .delete()
-        .eq('id', id)
+        .eq('id', parsedId.data)
         .eq('org_id', ctx.org.id)
 
     if (error) return { error: error.message }
@@ -114,7 +103,7 @@ export async function deleteAnnouncementAction(orgSlug: string, id: string) {
         actorId: ctx.user.id,
         action: 'org_announcement.deleted',
         targetType: 'org_announcement',
-        targetId: id,
+        targetId: parsedId.data,
         metadata: {},
     })
     revalidatePath(`/org/${orgSlug}/announcements`)

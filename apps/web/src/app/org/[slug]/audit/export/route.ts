@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { createHash } from 'node:crypto'
+import { z } from 'zod/v4'
 import { orgRoleCan } from '@/domain/org/permissions'
 import { findOrgAuditLogs } from '@/infrastructure/db/org.repository'
 import { createClient } from '@/lib/supabase/server'
@@ -32,7 +34,28 @@ function csvFilename(slug: string) {
     return `eva-${slug}-audit-${stamp}.csv`
 }
 
-export async function GET(_request: NextRequest, { params }: Params) {
+const ExportFiltersSchema = z.object({
+    action: z.string().min(1).max(120).optional(),
+    actor_id: z.uuid().optional(),
+    target_type: z.string().min(1).max(80).optional(),
+    from: z.iso.datetime().optional(),
+    to: z.iso.datetime().optional(),
+    limit: z.coerce.number().int().min(1).max(1000).default(1000),
+})
+
+function readFilters(request: NextRequest) {
+    const searchParams = request.nextUrl.searchParams
+    return ExportFiltersSchema.safeParse({
+        action: searchParams.get('action') || undefined,
+        actor_id: searchParams.get('actor_id') || undefined,
+        target_type: searchParams.get('target_type') || undefined,
+        from: searchParams.get('from') || undefined,
+        to: searchParams.get('to') || undefined,
+        limit: searchParams.get('limit') || undefined,
+    })
+}
+
+export async function GET(request: NextRequest, { params }: Params) {
     const { slug } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -50,6 +73,22 @@ export async function GET(_request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'Missing permission: org.audit.export' }, { status: 403 })
     }
 
+    const parsedFilters = readFilters(request)
+    if (!parsedFilters.success) {
+        return NextResponse.json({ error: 'Invalid export filters' }, { status: 400 })
+    }
+
+    const filters = {
+        action: parsedFilters.data.action,
+        actorId: parsedFilters.data.actor_id,
+        targetType: parsedFilters.data.target_type,
+        from: parsedFilters.data.from,
+        to: parsedFilters.data.to,
+    }
+    const logs = await findOrgAuditLogs(supabase, context.org.id, parsedFilters.data.limit, filters)
+    const csv = buildCsv(logs)
+    const checksum = createHash('sha256').update(csv, 'utf8').digest('hex')
+
     const auditResult = await writeOrgAuditEvent(supabase, {
         orgId: context.org.id,
         actorId: user.id,
@@ -59,7 +98,10 @@ export async function GET(_request: NextRequest, { params }: Params) {
         metadata: {
             format: 'csv',
             permission: 'org.audit.export',
-            scope: 'latest_1000_events',
+            scope: 'filtered_events',
+            filters,
+            row_count: logs.length,
+            checksum_sha256: checksum,
         },
     })
 
@@ -67,14 +109,12 @@ export async function GET(_request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'Audit export blocked: audit event failed' }, { status: 500 })
     }
 
-    const logs = await findOrgAuditLogs(supabase, context.org.id, 1000)
-    const csv = buildCsv(logs)
-
     return new NextResponse(csv, {
         headers: {
             'Content-Type': 'text/csv; charset=utf-8',
             'Content-Disposition': `attachment; filename="${csvFilename(slug)}"`,
             'Cache-Control': 'no-store',
+            'X-Content-SHA256': checksum,
         },
     })
 }

@@ -2,53 +2,40 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { writeOrgAuditEvent } from '@/services/org/org.service'
+import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
+
+const OnboardingStepSchema = z.number().int().min(1).max(5)
 
 async function getOrgAndVerifyAdmin(orgSlug: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado' as const, org: null, supabase: null, user: null }
-
-    const { data: org } = await supabase
-        .from('organizations')
-        .select('id, slug, onboarding_step')
-        .eq('slug', orgSlug)
-        .maybeSingle()
-    if (!org) return { error: 'Organización no encontrada' as const, org: null, supabase: null, user: null }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('org_id', org.id)
-        .eq('user_id', user.id)
-        .in('role', ['org_owner', 'org_admin'])
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!membership) return { error: 'Sin permisos' as const, org: null, supabase: null, user: null }
-
-    return { error: null, org, supabase, user }
+    if (!user) return { error: 'No autenticado' as const }
+    return getOrgAdminContext(supabase, user.id, orgSlug)
 }
 
 export async function advanceOnboardingStep(orgSlug: string, nextStep: number) {
-    const { error, org, user } = await getOrgAndVerifyAdmin(orgSlug)
-    if (error || !org || !user) return { error: error ?? 'Error' }
+    const parsedStep = OnboardingStepSchema.safeParse(nextStep)
+    if (!parsedStep.success) return { error: 'Paso de onboarding invalido' }
+
+    const ctx = await getOrgAndVerifyAdmin(orgSlug)
+    if ('error' in ctx) return { error: ctx.error }
 
     const admin = createServiceRoleClient()
 
-    if (nextStep >= 5) {
+    if (parsedStep.data >= 5) {
         await admin
             .from('organizations')
             .update({ onboarding_step: 5 })
-            .eq('id', org.id)
+            .eq('id', ctx.org.id)
         await writeOrgAuditEvent(admin, {
-            orgId: org.id,
-            actorId: user.id,
+            orgId: ctx.org.id,
+            actorId: ctx.user.id,
             action: 'onboarding.completed',
             targetType: 'organization',
-            targetId: org.id,
+            targetId: ctx.org.id,
             metadata: { step: 5 },
         })
         revalidatePath(`/org/${orgSlug}`)
@@ -58,16 +45,16 @@ export async function advanceOnboardingStep(orgSlug: string, nextStep: number) {
 
     await admin
         .from('organizations')
-        .update({ onboarding_step: nextStep })
-        .eq('id', org.id)
+        .update({ onboarding_step: parsedStep.data })
+        .eq('id', ctx.org.id)
 
     await writeOrgAuditEvent(admin, {
-        orgId: org.id,
-        actorId: user.id,
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
         action: 'onboarding.step_advanced',
         targetType: 'organization',
-        targetId: org.id,
-        metadata: { step: nextStep },
+        targetId: ctx.org.id,
+        metadata: { step: parsedStep.data },
     })
 
     revalidatePath(`/org/${orgSlug}/onboarding`)
@@ -76,8 +63,8 @@ export async function advanceOnboardingStep(orgSlug: string, nextStep: number) {
 }
 
 export async function updateOrgBrandingAction(orgSlug: string, formData: FormData) {
-    const { error, org, user } = await getOrgAndVerifyAdmin(orgSlug)
-    if (error || !org || !user) return { error: error ?? 'Error' }
+    const ctx = await getOrgAndVerifyAdmin(orgSlug)
+    if ('error' in ctx) return { error: ctx.error }
 
     const name = String(formData.get('name') ?? '').trim()
     const primary_color = String(formData.get('primary_color') ?? '').trim()
@@ -88,15 +75,15 @@ export async function updateOrgBrandingAction(orgSlug: string, formData: FormDat
     const validPrimaryColor = /^#[0-9a-fA-F]{6}$/.test(primary_color) ? primary_color : null
     if (validPrimaryColor) updateData.primary_color = validPrimaryColor
 
-    const { error: dbErr } = await admin.from('organizations').update(updateData).eq('id', org.id)
+    const { error: dbErr } = await admin.from('organizations').update(updateData).eq('id', ctx.org.id)
     if (dbErr) return { error: dbErr.message }
 
     await writeOrgAuditEvent(admin, {
-        orgId: org.id,
-        actorId: user.id,
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
         action: 'onboarding.branding_updated',
         targetType: 'organization',
-        targetId: org.id,
+        targetId: ctx.org.id,
         metadata: { name, primary_color: validPrimaryColor },
     })
 

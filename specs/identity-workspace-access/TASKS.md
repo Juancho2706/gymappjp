@@ -60,7 +60,9 @@
 - [x] Route matrix in middleware/proxy for coach routes. Completed 2026-05-24 18:24:45 -04:00.
 - [ ] Server action guards.
   - [x] Guard pass 1 for org/client enterprise mutations. Completed 2026-05-26 19:55:20 -04:00. Covered brand/org updates, coach invites/removal/reassignment, client create/import/assign. Verification: `npm run typecheck`.
-  - [ ] Guard pass 2 for announcements, nutrition templates, payments, onboarding, exports/reports.
+  - [x] Guard pass 2 for announcements, nutrition templates, payments, onboarding. Completed 2026-05-26 20:39:12 -04:00. Verification: `npm run typecheck`, focused ESLint.
+  - [x] Guard pass 3 for audit export filters/checksum. Completed 2026-05-26 20:39:12 -04:00. Verification: `npm run typecheck`, focused ESLint.
+  - [ ] Negative export tests and weekly report export.
 - [x] Repository filters for standalone vs enterprise across high-risk coach domains. Completed 2026-05-25 18:12:17 -04:00.
 - [x] Repository/action filters for `/coach/clients`. Completed 2026-05-24 18:34:11 -04:00.
 - [x] Repository/action filters for workout library and builder mutations. Completed 2026-05-24 18:48:30 -04:00.
@@ -72,6 +74,9 @@
 - [x] RLS guards for sensitive workspace tables. Completed 2026-05-25 18:12:17 -04:00.
 - [x] Storage policy checks. Completed 2026-05-25 18:14:16 -04:00.
 - [ ] Export/report guards.
+  - [x] Audit CSV export is owner/admin gated and fail-closed on audit write. Completed before this pass.
+  - [x] Add audit export filters/checksum. Completed 2026-05-26 20:39:12 -04:00.
+  - [ ] Add negative export tests and weekly report export.
 
 ## Phase 6 - QA
 
