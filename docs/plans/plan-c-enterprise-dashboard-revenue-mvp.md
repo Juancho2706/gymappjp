@@ -1599,7 +1599,7 @@ Reglas de implementacion:
 - `/audit`: timeline read-only y export CSV owner-only con audit `audit.exported`.
 - `/payments`: registro manual de pagos externos, sin cobro in-app.
 - `/reports`: snapshot read-only de reportes operacionales.
-- `/assignments`: vista read-only de carga/asignaciones.
+- `/assignments`: cockpit de carga/asignaciones con cola sin coach, capacidad por coach y asignacion rapida auditada.
 
 **P1.5 Identity & Workspace completado hasta ahora:**
 
@@ -1641,6 +1641,7 @@ Prioridad P2 - completar features que ya existen pero siguen incompletas:
 
 - [ ] BLOQUEADO hasta cerrar P1.5 Identity & Workspace: no avanzar bulk actions, pagos/reportes profundos ni features que toquen coach/alumno.
 - [ ] Asignaciones: pasar de preview a cockpit accionable para asignar/reasignar desde `/assignments`, no solo desde alumnos/coaches.
+  - [x] Primer slice accionable: asignacion individual desde `/assignments` con preview de carga, guard org/client/coach y audit `client.assigned`. Completado el 2026-05-26 21:11:37 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado.
 - [ ] Alumnos: bulk actions seguros con preview, confirmacion, audit event y compatibilidad enterprise-coach-alumno sin afectar coach standalone.
 - [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
 - [ ] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event.
@@ -2312,9 +2313,10 @@ Fases futuras:
 
 - **Estado:** INICIADA con preview read-only.
 - **Completado parcial:** 2026-05-23 18:02:03 -04:00
-- **Notas:** `/org/[slug]/assignments` ya muestra queue de alumnos sin coach, capacidad por coach, sobrecarga, cupos sugeridos y reglas para el flujo editable. Sin drag-and-drop, sin mutations, sin audit writes y sin DB changes.
+- **Notas:** `/org/[slug]/assignments` ya muestra queue de alumnos sin coach, capacidad por coach, sobrecarga, cupos sugeridos y reglas. Desde 2026-05-26 tiene asignacion individual accionable con preview de carga, guard server-side y audit. Sin drag-and-drop ni bulk assign todavia.
 
 - [x] Queue alumnos sin coach read-only.
+- [x] Asignacion individual desde cockpit `/assignments`. Completado el 2026-05-26 21:11:37 -04:00.
 - [x] Capacidad por coach read-only.
 - [x] Warning visual por sobrecarga.
 - [x] Reglas de bulk assign seguro.
@@ -2510,6 +2512,7 @@ Estado actual:
 Pendiente:
 
 - [ ] Convertir en cockpit accionable para asignar/reasignar.
+- [x] Cockpit accionable slice 1: asignar alumno sin coach a coach activo de la empresa. Completado el 2026-05-26 21:11:37 -04:00.
 - [ ] Bulk assign con preview antes/despues.
 - [ ] Historial de reasignaciones por alumno/coach.
 - [ ] Rollback de ultima reasignacion.

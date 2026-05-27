@@ -75,23 +75,46 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
     const coachInOrg = await assertCoachInOrg(admin, org.id, coachId)
     if (!coachInOrg) return { error: 'El coach no pertenece a esta organizacion' }
 
+    const { data: client } = await admin
+        .from('clients')
+        .select('id, coach_id')
+        .eq('id', clientId)
+        .eq('org_id', org.id)
+        .maybeSingle()
+    if (!client) return { error: 'Alumno no encontrado en esta empresa' }
+
     const { error: upsertErr } = await admin
         .from('coach_client_assignments')
-        .upsert({ org_id: org.id, client_id: clientId, coach_id: coachId }, { onConflict: 'org_id,client_id' })
+        .upsert({
+            org_id: org.id,
+            client_id: client.id,
+            coach_id: coachId,
+            assigned_by: user.id,
+            assigned_at: new Date().toISOString(),
+            deleted_at: null,
+        }, { onConflict: 'org_id,client_id' })
     if (upsertErr) return { error: upsertErr.message }
 
-    await admin.from('clients').update({ coach_id: coachId }).eq('id', clientId).eq('org_id', org.id)
+    const { error: updateError } = await admin
+        .from('clients')
+        .update({ coach_id: coachId })
+        .eq('id', client.id)
+        .eq('org_id', org.id)
+    if (updateError) return { error: updateError.message }
 
     await writeOrgAuditEvent(admin, {
         orgId: org.id,
         actorId: user.id,
         action: 'client.assigned',
         targetType: 'client',
-        targetId: clientId,
-        metadata: { coach_id: coachId },
+        targetId: client.id,
+        metadata: { coach_id: coachId, previous_coach_id: client.coach_id },
     })
 
     revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/assignments`)
+    revalidatePath(`/org/${orgSlug}/reports`)
+    revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
 

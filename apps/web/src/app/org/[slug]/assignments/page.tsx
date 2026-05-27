@@ -13,6 +13,7 @@ import {
     Users,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
+import { AssignmentQuickAssignPanel } from './_components/AssignmentQuickAssignPanel'
 
 export const metadata: Metadata = { title: 'Asignaciones' }
 
@@ -110,6 +111,23 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                         </div>
                     </div>
                 </section>
+
+                <AssignmentQuickAssignPanel
+                    orgSlug={slug}
+                    clients={unassignedClients.map((client) => ({
+                        id: client.id,
+                        full_name: client.full_name,
+                        email: client.email,
+                    }))}
+                    coaches={coachRows.map((coach) => ({
+                        id: coach.id,
+                        name: coach.name,
+                        count: coach.count,
+                        available: coach.available,
+                        load: coach.load,
+                    }))}
+                    targetClientsPerCoach={TARGET_CLIENTS_PER_COACH}
+                />
 
                 <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
