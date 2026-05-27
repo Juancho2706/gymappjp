@@ -41,12 +41,31 @@ async function getCoachClientScope(supabase: Awaited<ReturnType<typeof createCli
     throw new Error('Workspace not allowed for coach client operations')
 }
 
+async function assertCoachClientReadAccess(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+    clientId: string
+) {
+    const scope = await getCoachClientScope(supabase, userId)
+    let clientQuery = supabase
+        .from('clients')
+        .select('id')
+        .eq('id', clientId)
+        .eq('coach_id', userId)
+    clientQuery = scope.orgId ? clientQuery.eq('org_id', scope.orgId) : clientQuery.is('org_id', null)
+
+    const { data: client, error } = await clientQuery.maybeSingle()
+    if (error) throw new Error('Client access check failed')
+    if (!client) throw new Error('Client not found')
+    return scope
+}
+
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error("Unauthorized")
-    const { orgId } = await getCoachClientScope(supabase, user.id)
+    const { orgId } = await assertCoachClientReadAccess(supabase, user.id, clientId)
 
     // Fetch client base data
     let clientQuery = supabase
@@ -695,6 +714,7 @@ export async function getWeeklyCompliance(clientId: string) {
 
     if (!user) throw new Error("Unauthorized")
 
+    await assertCoachClientReadAccess(supabase, user.id, clientId)
     return getWeeklyComplianceForClient(supabase, clientId)
 }
 
@@ -703,6 +723,8 @@ export async function getDynamicMetrics(clientId: string) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error("Unauthorized")
+
+    await assertCoachClientReadAccess(supabase, user.id, clientId)
 
     // Fetch latest check-ins (only columns that exist in the schema)
     const { data: latestCheckIns } = await supabase
@@ -734,6 +756,8 @@ export async function getClientNutritionForDate(clientId: string, date: string) 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
+
+    await assertCoachClientReadAccess(supabase, user.id, clientId)
 
     const { data } = await supabase
         .from('daily_nutrition_logs')
@@ -768,6 +792,8 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
+
+    await assertCoachClientReadAccess(supabase, user.id, clientId)
 
     const { startIso, endIso } = getSantiagoUtcBoundsForDay(date)
     const { data } = await supabase
@@ -804,6 +830,12 @@ export async function getClientWorkoutActivityDates(clientId: string): Promise<s
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []
 
+    try {
+        await assertCoachClientReadAccess(supabase, user.id, clientId)
+    } catch {
+        return []
+    }
+
     const from = new Date()
     from.setDate(from.getDate() - 90)
     const fromIso = from.toISOString().slice(0, 10)
@@ -837,6 +869,12 @@ export async function getClientHabitsForDate(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
+  try {
+    await assertCoachClientReadAccess(supabase, user.id, clientId)
+  } catch {
+    return null
+  }
+
   const { data } = await supabase
     .from('daily_habits')
     .select('water_ml, steps, sleep_hours, fasting_hours, supplements, notes')
@@ -852,6 +890,12 @@ export async function getClientNutritionActivityDates(clientId: string): Promise
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []
+
+    try {
+        await assertCoachClientReadAccess(supabase, user.id, clientId)
+    } catch {
+        return []
+    }
 
     const from = new Date()
     from.setDate(from.getDate() - 90)

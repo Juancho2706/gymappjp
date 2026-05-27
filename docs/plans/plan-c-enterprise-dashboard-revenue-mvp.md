@@ -1652,7 +1652,10 @@ Checklist anti-regresion:
   - Cambio: `addPaymentForCoach`, `deletePaymentForCoach` y `updateClientGoalWeightForCoach` ahora reciben scope del workspace activo y validan `clients.org_id` antes de escribir.
   - Cambio: API mobile `/api/mobile/coach/payments` pasa `orgId` resuelto server-side, preservando coach standalone como `org_id IS NULL`.
   - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
-- [ ] Continuar auditoria de lecturas por `client_id` en perfil de alumno: nutricion por fecha, workout por fecha, habits y activity dates deben validar pertenencia al workspace antes de devolver datos.
+- [x] Continuar auditoria de lecturas por `client_id` en perfil de alumno: nutricion por fecha, workout por fecha, habits y activity dates deben validar pertenencia al workspace antes de devolver datos. Completado el 2026-05-26 21:53:09 -04:00.
+  - Cambio: `getClientProfileData`, `getWeeklyCompliance`, `getDynamicMetrics`, historial nutricion/workout por fecha, activity dates y habits usan `assertCoachClientReadAccess`.
+  - Resultado: coach standalone solo lee alumnos `org_id IS NULL`; coach enterprise solo lee alumnos del `org_id` activo.
+  - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
 - [ ] Negative tests: coach standalone no ve alumnos enterprise aunque tenga mismo `user.id`.
 - [ ] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org.
 - [ ] Negative tests: alumno standalone conserva coach brand y portal `/c/[coach_slug]`.
