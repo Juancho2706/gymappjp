@@ -211,6 +211,7 @@ export class NutritionService {
             .from('nutrition_plans')
             .select('client_id')
             .eq('template_id', templateId)
+            .eq('coach_id', coachId)
             .eq('is_active', true)
             .eq('is_custom', false)
         existingClientsQuery = this.applyOrgScope(existingClientsQuery, orgId)
@@ -248,6 +249,20 @@ export class NutritionService {
 
         this.assertTemplateMealsAreComplete(template.template_meals as TemplateMealWithGroups[])
 
+        let allowedClientsQuery = this.supabase
+            .from('clients')
+            .select('id')
+            .eq('coach_id', coachId)
+            .in('id', [...allClientIds])
+        allowedClientsQuery = this.applyOrgScope(allowedClientsQuery, orgId)
+        const { data: allowedClients, error: allowedClientsError } = await allowedClientsQuery;
+        if (allowedClientsError) throw allowedClientsError;
+
+        const allowedClientIds = new Set((allowedClients ?? []).map((client) => client.id as string));
+        if (allowedClientIds.size !== allClientIds.size) {
+            throw new Error('Uno o mas alumnos no pertenecen al workspace activo.');
+        }
+
         for (const clientId of allClientIds) {
             // Buscar plan SYNCED existente para este cliente+plantilla
             let existingPlanQuery = this.supabase
@@ -264,7 +279,7 @@ export class NutritionService {
 
             if (existingPlan) {
                 // UPDATE in-place: el plan_id NO cambia → daily_nutrition_logs siguen válidos
-                await this.supabase
+                let updatePlanQuery = this.supabase
                     .from('nutrition_plans')
                     .update({
                         name: template.name,
@@ -275,7 +290,9 @@ export class NutritionService {
                         instructions: template.instructions,
                     } as any)
                     .eq('id', existingPlan.id)
-                    .eq('coach_id', coachId);
+                    .eq('coach_id', coachId)
+                updatePlanQuery = this.applyOrgScope(updatePlanQuery, orgId)
+                await updatePlanQuery;
 
                 planId = existingPlan.id;
 

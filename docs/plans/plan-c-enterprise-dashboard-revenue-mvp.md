@@ -1661,6 +1661,11 @@ Checklist anti-regresion:
   - Cambio: `deactivateActiveProgramsForClient` desactiva solo programas del workspace activo.
   - Cambio: historial de ejercicio valida acceso al alumno antes de leer `workout_logs`.
   - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
+- [x] Auditar propagacion de nutricion coach por workspace. Completado el 2026-05-26 21:59:53 -04:00.
+  - Cambio: `NutritionService.propagateTemplateChanges` valida todos los `clientIds` contra `clients.coach_id + org_id` antes de crear/desactivar planes.
+  - Cambio: planes existentes propagados filtran `coach_id` y updates vuelven a aplicar `org_id`.
+  - Cambio: pagina `/coach/nutrition-plans/client/[clientId]` valida `coach_id` en la query inicial, no solo en el page guard.
+  - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
 - [ ] Negative tests: coach standalone no ve alumnos enterprise aunque tenga mismo `user.id`.
 - [ ] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org.
 - [ ] Negative tests: alumno standalone conserva coach brand y portal `/c/[coach_slug]`.

@@ -13,6 +13,7 @@ export const getClientNutritionPlanPageAuthData = cache(async (clientId: string)
         .from('clients')
         .select('id, full_name, coach_id, org_id')
         .eq('id', clientId)
+        .eq('coach_id', user.id)
     clientQuery = orgId ? clientQuery.eq('org_id', orgId) : clientQuery.is('org_id', null)
 
     const [{ data: client }, { data: intake }] = await Promise.all([
