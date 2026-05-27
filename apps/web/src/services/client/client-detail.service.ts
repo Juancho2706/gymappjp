@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { revalidatePath } from 'next/cache'
-import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns'
+import { format, parseISO, subDays } from 'date-fns'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import {
     calculateConsumedMacrosWithCompletionFallback,
@@ -30,13 +30,23 @@ import {
 } from '@/lib/workout/programWeekVariant'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
+async function getCoachClientScope(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+    const workspace = await resolvePreferredWorkspace(supabase, userId)
+    if (!workspace || workspace.type === 'coach_standalone') {
+        return { orgId: null }
+    }
+    if (workspace.type === 'enterprise_coach') {
+        return { orgId: workspace.orgId }
+    }
+    throw new Error('Workspace not allowed for coach client operations')
+}
+
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error("Unauthorized")
-    const workspace = await resolvePreferredWorkspace(supabase, user.id)
-    const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+    const { orgId } = await getCoachClientScope(supabase, user.id)
 
     // Fetch client base data
     let clientQuery = supabase
@@ -128,7 +138,6 @@ export const getClientProfileData = cache(async (clientId: string) => {
 
     // Current Date details for compliance
     const today = new Date()
-    const todayStr = today.toISOString().split('T')[0]
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - 7)
     const startDateStr = startDate.toISOString().split('T')[0]
@@ -297,7 +306,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
 
     // 3. Progreso del Plan de Ejercicios
     let currentWeek = 0;
-    let totalWeeks = activeProgram?.weeks_to_repeat || 1;
+    const totalWeeks = activeProgram?.weeks_to_repeat || 1;
     let daysRemaining = 0;
 
     if (activeProgram?.start_date && activeProgram?.end_date) {
@@ -662,7 +671,8 @@ export async function addPayment(data: {
 
     if (!user) throw new Error("Unauthorized")
 
-    await addPaymentForCoach(supabase, user.id, data)
+    const scope = await getCoachClientScope(supabase, user.id)
+    await addPaymentForCoach(supabase, user.id, data, scope)
 
     revalidatePath(`/coach/clients/${data.client_id}`)
 }
@@ -673,7 +683,8 @@ export async function deletePayment(paymentId: string, clientId: string) {
 
     if (!user) throw new Error("Unauthorized")
 
-    await deletePaymentForCoach(supabase, user.id, paymentId)
+    const scope = await getCoachClientScope(supabase, user.id)
+    await deletePaymentForCoach(supabase, user.id, paymentId, scope)
 
     revalidatePath(`/coach/clients/${clientId}`)
 }
@@ -783,7 +794,8 @@ export async function updateClientGoalWeight(clientId: string, goalWeightKg: num
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'Unauthorized' }
 
-    return updateClientGoalWeightForCoach(supabase, user.id, clientId, goalWeightKg)
+    const scope = await getCoachClientScope(supabase, user.id)
+    return updateClientGoalWeightForCoach(supabase, user.id, clientId, goalWeightKg, scope)
 }
 
 /** Días (YYYY-MM-DD) con workout_logs para el cliente en los últimos 90 días. */

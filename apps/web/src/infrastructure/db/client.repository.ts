@@ -36,6 +36,13 @@ export type DashboardClientRow = Pick<ClientRow, 'id' | 'full_name' | 'coach_id'
     }[] | null
 }
 
+function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    orgId: string | null
+): T {
+    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
 export async function findClientById(db: DB, clientId: string): Promise<ClientRow | null> {
     const { data } = await db
         .from('clients')
@@ -54,11 +61,13 @@ export async function findDashboardClientById(db: DB, clientId: string): Promise
     return data as DashboardClientRow | null
 }
 
-export async function findClientsByCoach(db: DB, coachId: string): Promise<ClientRow[]> {
-    const { data } = await db
+export async function findClientsByCoach(db: DB, coachId: string, orgId: string | null = null): Promise<ClientRow[]> {
+    let query = db
         .from('clients')
         .select('id, full_name, email, phone, coach_id, org_id, is_active, created_at')
         .eq('coach_id', coachId)
         .order('full_name', { ascending: true })
+    query = applyOrgScope(query, orgId)
+    const { data } = await query
     return (data ?? []) as ClientRow[]
 }

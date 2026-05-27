@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
             service_description: parsed.data.serviceDescription,
             period_months: parsed.data.periodMonths ?? undefined,
             status: 'paid',
-        })
+        }, { orgId })
     } catch {
         return NextResponse.json({ error: 'No se pudo registrar el pago.', code: 'PAYMENT_CREATE_FAILED' }, { status: 500 })
     }

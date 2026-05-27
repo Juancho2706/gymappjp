@@ -14,7 +14,40 @@ export type AddPaymentInput = {
     status?: string
 }
 
-export async function addPaymentForCoach(db: DB, coachId: string, data: AddPaymentInput) {
+type CoachClientScope = {
+    orgId: string | null
+}
+
+function applyClientScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+    query: T,
+    orgId: string | null
+): T {
+    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
+async function assertCoachCanManageClient(db: DB, coachId: string, clientId: string, scope: CoachClientScope) {
+    let clientQuery = db
+        .from('clients')
+        .select('id')
+        .eq('id', clientId)
+        .eq('coach_id', coachId)
+        .eq('is_active', true)
+    clientQuery = applyClientScope(clientQuery, scope.orgId)
+
+    const { data: client, error } = await clientQuery.maybeSingle()
+
+    if (error) {
+        console.error('Error validating client workspace access:', error)
+        throw new Error('Failed to validate client access')
+    }
+    if (!client) {
+        throw new Error('Client not found in active workspace')
+    }
+}
+
+export async function addPaymentForCoach(db: DB, coachId: string, data: AddPaymentInput, scope: CoachClientScope) {
+    await assertCoachCanManageClient(db, coachId, data.client_id, scope)
+
     const { error } = await db
         .from('client_payments')
         .insert([{
@@ -28,7 +61,24 @@ export async function addPaymentForCoach(db: DB, coachId: string, data: AddPayme
     }
 }
 
-export async function deletePaymentForCoach(db: DB, coachId: string, paymentId: string) {
+export async function deletePaymentForCoach(db: DB, coachId: string, paymentId: string, scope: CoachClientScope) {
+    const { data: payment, error: paymentError } = await db
+        .from('client_payments')
+        .select('id, client_id')
+        .eq('id', paymentId)
+        .eq('coach_id', coachId)
+        .maybeSingle()
+
+    if (paymentError) {
+        console.error('Error finding payment:', paymentError)
+        throw new Error('Failed to find payment')
+    }
+    if (!payment) {
+        throw new Error('Payment not found')
+    }
+
+    await assertCoachCanManageClient(db, coachId, payment.client_id, scope)
+
     const { error } = await db
         .from('client_payments')
         .delete()
@@ -45,13 +95,16 @@ export async function updateClientGoalWeightForCoach(
     db: DB,
     coachId: string,
     clientId: string,
-    goalWeightKg: number | null
+    goalWeightKg: number | null,
+    scope: CoachClientScope
 ) {
-    const { error } = await db
+    let updateQuery = db
         .from('clients')
         .update({ goal_weight_kg: goalWeightKg })
         .eq('id', clientId)
         .eq('coach_id', coachId)
+    updateQuery = applyClientScope(updateQuery, scope.orgId)
+    const { error } = await updateQuery
 
     if (error) return { error: error.message }
     return { ok: true }
