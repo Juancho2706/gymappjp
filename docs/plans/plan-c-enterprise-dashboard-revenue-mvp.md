@@ -1637,6 +1637,24 @@ Reglas de implementacion:
 - [ ] FUTURO DB: modelo multi-contexto de alumno por email. Problema actual: `clients.id = auth.users.id` impide que el mismo correo tenga varios perfiles de alumno en distintas empresas/coaches sin duplicar auth. Propuesta: crear `client_profiles` o mantener `clients` como perfil y agregar `client_auth_id`, migrar login a buscar memberships por `auth.uid()`, y preservar compatibility con filas existentes. No ejecutar antes de cerrar P1.5 porque toca muchas rutas alumno.
 - [ ] Plan de migracion local primero, live despues con backup/rollback.
 
+#### Riesgos Criticos Standalone vs Enterprise Detectados 2026-05-26
+
+Investigacion 2026 revisada despues del slice `/payments`:
+
+- Multi-tenant moderno exige tenant/workspace context en cada decision, no solo `user.id`.
+- El riesgo principal en EVA no es UI, es que una query vieja use solo `coach_id` y mezcle alumnos standalone con enterprise.
+- La arquitectura debe tratar standalone como workspace propio: `org_id IS NULL`, billing propio, brand coach, permisos coach completos.
+- Enterprise debe tratarse como workspace org: `org_id = active_org_id`, billing/brand gestionados por empresa, coach limitado.
+
+Checklist anti-regresion:
+
+- [ ] Buscar y auditar queries/mutations que usen `coach_id` sin `org_id`.
+- [ ] Negative tests: coach standalone no ve alumnos enterprise aunque tenga mismo `user.id`.
+- [ ] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org.
+- [ ] Negative tests: alumno standalone conserva coach brand y portal `/c/[coach_slug]`.
+- [ ] Negative tests: alumno enterprise conserva org brand y no cae a brand del coach.
+- [ ] Exports/reportes nunca deben derivar tenant solo desde parametros URL; deben resolver workspace server-side.
+
 Prioridad P2 - completar features que ya existen pero siguen incompletas:
 
 - [ ] BLOQUEADO hasta cerrar P1.5 Identity & Workspace: no avanzar bulk actions, pagos/reportes profundos ni features que toquen coach/alumno.
@@ -1645,6 +1663,7 @@ Prioridad P2 - completar features que ya existen pero siguen incompletas:
   - [x] Segundo slice accionable: bulk assign seguro desde `/assignments` con seleccion explicita, contador, preview de carga, limite 50, guard server-side por lote y audit `client.bulk_assigned`. Completado el 2026-05-26 21:32:49 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado, screenshots Playwright desktop/mobile sin overflow horizontal.
 - [ ] Alumnos: bulk actions seguros con preview, confirmacion, audit event y compatibilidad enterprise-coach-alumno sin afectar coach standalone.
 - [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
+  - [x] Filtros por estado y CSV auditado para pagos operacionales. Completado el 2026-05-26 21:44:53 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado, screenshots Playwright desktop/mobile sin overflow horizontal, descarga CSV con header valido.
 - [ ] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event.
 - [ ] Audit: filtros por action/actor/date y checksum generation job local/manual.
 - [ ] Brand Studio: modelo `organization_branding` con draft/published/versionado/rollback.
@@ -2532,8 +2551,10 @@ Estado actual:
 Pendiente:
 
 - [ ] Filtros por pagado/pendiente/vencido/becado/pausado.
+- [x] Filtros por pagado/pendiente/vencido/becado/pausado/sin registro. Completado el 2026-05-26 21:44:53 -04:00. UI responsive verificada en 390px y 1440px.
 - [ ] Vencimientos/proximo pago por alumno.
 - [ ] Export CSV auditado.
+- [x] Export CSV auditado de pagos operacionales. Completado el 2026-05-26 21:44:53 -04:00. Incluye permiso `org.payments.export`, metadata `client_payments.exported`, checksum SHA-256, filtro de status y proteccion basica contra CSV formula injection.
 - [ ] Alertas en dashboard por vencidos/sin registro.
 - [ ] Mobile: mover formulario de `details` a sheet/modal por alumno.
 

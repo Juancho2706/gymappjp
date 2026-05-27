@@ -1,10 +1,10 @@
 export type OrgRole = 'org_owner' | 'org_admin' | 'ops' | 'analyst' | 'brand_manager' | 'coach'
 
-export type OrgPermission = 'org.audit.export'
+export type OrgPermission = 'org.audit.export' | 'org.payments.export'
 
 const ROLE_PERMISSIONS: Record<OrgRole, readonly OrgPermission[]> = {
-    org_owner: ['org.audit.export'],
-    org_admin: [],
+    org_owner: ['org.audit.export', 'org.payments.export'],
+    org_admin: ['org.payments.export'],
     ops: [],
     analyst: [],
     brand_manager: [],

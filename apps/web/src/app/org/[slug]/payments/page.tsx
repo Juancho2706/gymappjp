@@ -21,6 +21,7 @@ export const metadata: Metadata = { title: 'Pagos alumnos' }
 
 interface Props {
     params: Promise<{ slug: string }>
+    searchParams?: Promise<{ status?: string }>
 }
 
 const PAYMENT_STATES = [
@@ -39,6 +40,22 @@ const PAYMENT_STATUS_OPTIONS = [
     ['paused', 'Pausado'],
 ] as const
 
+const PAYMENT_FILTERS = [
+    ['all', 'Todos'],
+    ['paid', 'Pagado'],
+    ['pending', 'Pendiente'],
+    ['overdue', 'Vencido'],
+    ['scholarship', 'Becado'],
+    ['paused', 'Pausado'],
+    ['missing', 'Sin registro'],
+] as const
+
+type PaymentFilter = typeof PAYMENT_FILTERS[number][0]
+
+function isPaymentFilter(value: string | undefined): value is PaymentFilter {
+    return PAYMENT_FILTERS.some(([filter]) => filter === value)
+}
+
 function paymentStateForStatus(status: string | null | undefined) {
     if (status === 'paid') return PAYMENT_STATES[0]
     if (status === 'pending') return PAYMENT_STATES[1]
@@ -56,8 +73,10 @@ function formatCLP(amount: number) {
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(amount)
 }
 
-export default async function OrgPaymentsPage({ params }: Props) {
+export default async function OrgPaymentsPage({ params, searchParams }: Props) {
     const { slug } = await params
+    const resolvedSearchParams = await searchParams
+    const statusFilter = isPaymentFilter(resolvedSearchParams?.status) ? resolvedSearchParams.status : 'all'
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
@@ -77,6 +96,13 @@ export default async function OrgPaymentsPage({ params }: Props) {
     const missingPaymentStatus = activeClients.length - trackedPayments
     const coverage = activeClients.length > 0 ? Math.round((trackedPayments / activeClients.length) * 100) : 0
     const today = new Date().toISOString().slice(0, 10)
+    const filteredClients = clients.filter((client) => {
+        const latestPayment = latestPaymentByClient.get(client.id)
+        if (statusFilter === 'all') return true
+        if (statusFilter === 'missing') return client.is_active !== false && !latestPayment
+        if (statusFilter === 'paused') return client.is_active === false || latestPayment?.status === 'paused'
+        return latestPayment?.status === statusFilter
+    })
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -116,6 +142,38 @@ export default async function OrgPaymentsPage({ params }: Props) {
                     </div>
                 </section>
 
+                <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h2 className="text-sm font-black text-white">Filtros operacionales</h2>
+                            <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                Filtra el ledger antes de revisar o exportar. El CSV exporta solo el estado filtrado actual.
+                            </p>
+                        </div>
+                        <a
+                            href={`/org/${slug}/payments/export?status=${statusFilter}`}
+                            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-sky-300 px-4 text-sm font-black text-zinc-950 transition hover:bg-sky-200 sm:w-fit"
+                        >
+                            <Download className="h-4 w-4" aria-hidden="true" />
+                            Export CSV
+                        </a>
+                    </div>
+                    <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                        {PAYMENT_FILTERS.map(([value, label]) => (
+                            <a
+                                key={value}
+                                href={value === 'all' ? `/org/${slug}/payments` : `/org/${slug}/payments?status=${value}`}
+                                className={value === statusFilter
+                                    ? 'inline-flex min-h-9 shrink-0 items-center rounded-full border border-sky-300/40 bg-sky-300/15 px-3 text-xs font-black text-sky-100'
+                                    : 'inline-flex min-h-9 shrink-0 items-center rounded-full border border-zinc-800 bg-zinc-950 px-3 text-xs font-bold text-zinc-400 transition hover:text-zinc-100'
+                                }
+                            >
+                                {label}
+                            </a>
+                        ))}
+                    </div>
+                </section>
+
                 <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                         <div className="flex items-center gap-2">
@@ -127,8 +185,8 @@ export default async function OrgPaymentsPage({ params }: Props) {
                         </p>
 
                         <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
-                            {clients.length > 0 ? (
-                                clients.slice(0, 10).map((client) => {
+                            {filteredClients.length > 0 ? (
+                                filteredClients.slice(0, 30).map((client) => {
                                     const latestPayment = latestPaymentByClient.get(client.id)
                                     const state = client.is_active === false
                                         ? PAYMENT_STATES[4]
@@ -210,7 +268,7 @@ export default async function OrgPaymentsPage({ params }: Props) {
                                     )
                                 })
                             ) : (
-                                <div className="p-6 text-sm text-zinc-500">No hay alumnos para controlar pagos.</div>
+                                <div className="p-6 text-sm text-zinc-500">No hay alumnos para el filtro seleccionado.</div>
                             )}
                         </div>
                     </div>
