@@ -29,7 +29,7 @@ export default async function OrgAdminLayout({ children, params }: Props) {
     }
 
     return (
-        <div className="flex min-h-dvh bg-zinc-950 text-zinc-100">
+        <div className="flex min-h-dvh flex-col bg-zinc-950 text-zinc-100 md:flex-row">
             <OrgEnterpriseNav
                 slug={slug}
                 org={{
@@ -44,7 +44,7 @@ export default async function OrgAdminLayout({ children, params }: Props) {
 
             <div className="flex min-w-0 flex-1 flex-col">
                 {org.myRole === 'org_owner' && <MfaBanner orgSlug={slug} />}
-                <main className="flex-1 overflow-auto">
+                <main className="flex-1 overflow-x-clip overflow-y-auto">
                     {children}
                 </main>
             </div>

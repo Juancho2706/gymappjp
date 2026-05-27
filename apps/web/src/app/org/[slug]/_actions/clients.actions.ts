@@ -11,6 +11,11 @@ const AssignClientSchema = z.object({
     coachId: z.string().uuid(),
 })
 
+const BulkAssignClientsSchema = z.object({
+    clientIds: z.array(z.string().uuid()).min(1).max(50),
+    coachId: z.string().uuid(),
+})
+
 const AddClientToOrgSchema = z.object({
     full_name: z.string().min(1).max(120),
     email: z.email(),
@@ -116,6 +121,75 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
     revalidatePath(`/org/${orgSlug}/reports`)
     revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
+}
+
+export async function bulkAssignUnassignedClientsAction(orgSlug: string, clientIds: string[], coachId: string) {
+    const parsed = BulkAssignClientsSchema.safeParse({ clientIds, coachId })
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos invalidos' }
+
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+    const uniqueClientIds = [...new Set(parsed.data.clientIds)]
+
+    const coachInOrg = await assertCoachInOrg(admin, org.id, parsed.data.coachId)
+    if (!coachInOrg) return { error: 'El coach no pertenece a esta organizacion' }
+
+    const { data: clients, error: clientsError } = await admin
+        .from('clients')
+        .select('id, coach_id, is_active')
+        .eq('org_id', org.id)
+        .in('id', uniqueClientIds)
+    if (clientsError) return { error: clientsError.message }
+    if ((clients ?? []).length !== uniqueClientIds.length) return { error: 'Uno o mas alumnos no pertenecen a esta empresa' }
+
+    const invalidClients = (clients ?? []).filter((client) => client.coach_id || client.is_active === false)
+    if (invalidClients.length > 0) {
+        return { error: 'El lote solo puede incluir alumnos activos sin coach' }
+    }
+
+    const assignedAt = new Date().toISOString()
+    const assignmentRows = uniqueClientIds.map((clientId) => ({
+        org_id: org.id,
+        client_id: clientId,
+        coach_id: parsed.data.coachId,
+        assigned_by: user.id,
+        assigned_at: assignedAt,
+        deleted_at: null,
+    }))
+
+    const { error: upsertErr } = await admin
+        .from('coach_client_assignments')
+        .upsert(assignmentRows, { onConflict: 'org_id,client_id' })
+    if (upsertErr) return { error: upsertErr.message }
+
+    const { error: updateError } = await admin
+        .from('clients')
+        .update({ coach_id: parsed.data.coachId })
+        .eq('org_id', org.id)
+        .in('id', uniqueClientIds)
+    if (updateError) return { error: updateError.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.bulk_assigned',
+        targetType: 'client',
+        targetId: parsed.data.coachId,
+        metadata: {
+            coach_id: parsed.data.coachId,
+            client_count: uniqueClientIds.length,
+            client_ids: uniqueClientIds,
+        },
+    })
+
+    revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/assignments`)
+    revalidatePath(`/org/${orgSlug}/reports`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, count: uniqueClientIds.length }
 }
 
 export async function addClientToOrgAction(orgSlug: string, formData: FormData) {

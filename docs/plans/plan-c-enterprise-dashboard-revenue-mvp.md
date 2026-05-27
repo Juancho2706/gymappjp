@@ -1642,6 +1642,7 @@ Prioridad P2 - completar features que ya existen pero siguen incompletas:
 - [ ] BLOQUEADO hasta cerrar P1.5 Identity & Workspace: no avanzar bulk actions, pagos/reportes profundos ni features que toquen coach/alumno.
 - [ ] Asignaciones: pasar de preview a cockpit accionable para asignar/reasignar desde `/assignments`, no solo desde alumnos/coaches.
   - [x] Primer slice accionable: asignacion individual desde `/assignments` con preview de carga, guard org/client/coach y audit `client.assigned`. Completado el 2026-05-26 21:11:37 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado.
+  - [x] Segundo slice accionable: bulk assign seguro desde `/assignments` con seleccion explicita, contador, preview de carga, limite 50, guard server-side por lote y audit `client.bulk_assigned`. Completado el 2026-05-26 21:32:49 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado, screenshots Playwright desktop/mobile sin overflow horizontal.
 - [ ] Alumnos: bulk actions seguros con preview, confirmacion, audit event y compatibilidad enterprise-coach-alumno sin afectar coach standalone.
 - [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
 - [ ] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event.
@@ -2317,6 +2318,7 @@ Fases futuras:
 
 - [x] Queue alumnos sin coach read-only.
 - [x] Asignacion individual desde cockpit `/assignments`. Completado el 2026-05-26 21:11:37 -04:00.
+- [x] Bulk assign seguro desde cockpit `/assignments`. Completado el 2026-05-26 21:32:49 -04:00.
 - [x] Capacidad por coach read-only.
 - [x] Warning visual por sobrecarga.
 - [x] Reglas de bulk assign seguro.
@@ -2452,6 +2454,7 @@ El dashboard enterprise tiene layout responsive basico, pero en celular se sient
 Pendiente:
 
 - [ ] Crear fase `Enterprise Responsive/PWA Rework` antes de E2E: shell mobile, nav sticky, subnav contextual, cards compactas, sheets para acciones y safe areas.
+  - [x] Fix transversal shell mobile: layout Enterprise cambia a `flex-col md:flex-row` y main usa `overflow-x-clip`. Completado el 2026-05-26 21:32:49 -04:00. Verificado en `/assignments` mobile 390px sin overflow horizontal.
 - [ ] Convertir heroes grandes en headers compactos para pantallas internas en mobile.
 - [ ] Evitar tablas apiladas largas: usar list items + details sheet/modal.
 - [ ] Revisar cada menu en viewport 390x844 y 430x932 antes de considerar listo.
@@ -2513,7 +2516,7 @@ Pendiente:
 
 - [ ] Convertir en cockpit accionable para asignar/reasignar.
 - [x] Cockpit accionable slice 1: asignar alumno sin coach a coach activo de la empresa. Completado el 2026-05-26 21:11:37 -04:00.
-- [ ] Bulk assign con preview antes/despues.
+- [x] Bulk assign con preview antes/despues. Completado el 2026-05-26 21:32:49 -04:00. UI responsive: mobile 390px y desktop 1440px verificados con Playwright, sin overflow horizontal.
 - [ ] Historial de reasignaciones por alumno/coach.
 - [ ] Rollback de ultima reasignacion.
 - [ ] Configurar capacidad objetivo por empresa.

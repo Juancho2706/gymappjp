@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { AssignmentQuickAssignPanel } from './_components/AssignmentQuickAssignPanel'
+import { BulkAssignPanel } from './_components/BulkAssignPanel'
 
 export const metadata: Metadata = { title: 'Asignaciones' }
 
@@ -113,6 +114,23 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                 </section>
 
                 <AssignmentQuickAssignPanel
+                    orgSlug={slug}
+                    clients={unassignedClients.map((client) => ({
+                        id: client.id,
+                        full_name: client.full_name,
+                        email: client.email,
+                    }))}
+                    coaches={coachRows.map((coach) => ({
+                        id: coach.id,
+                        name: coach.name,
+                        count: coach.count,
+                        available: coach.available,
+                        load: coach.load,
+                    }))}
+                    targetClientsPerCoach={TARGET_CLIENTS_PER_COACH}
+                />
+
+                <BulkAssignPanel
                     orgSlug={slug}
                     clients={unassignedClients.map((client) => ({
                         id: client.id,
