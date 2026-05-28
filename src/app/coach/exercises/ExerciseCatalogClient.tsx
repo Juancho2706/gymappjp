@@ -432,8 +432,9 @@ function ExercisePreviewModal({
     const hasSecondary = exercise.secondary_muscles && exercise.secondary_muscles.length > 0
 
     const directMedia = exercise.gif_url ?? exercise.image_url ?? null
-    // video_url is stored as nocookie embed URL — match broadly on 'youtu'
     const ytId = !directMedia && exercise.video_url ? extractYouTubeId(exercise.video_url) : null
+    // System EVA exercises (ExerciseDB) store raw GIF URLs in video_url, not YouTube
+    const rawVideoUrl = !directMedia && !ytId && exercise.video_url ? exercise.video_url : null
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -451,10 +452,10 @@ function ExercisePreviewModal({
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
                         />
-                    ) : directMedia ? (
+                    ) : directMedia || rawVideoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                            src={directMedia}
+                            src={(directMedia || rawVideoUrl)!}
                             alt={`Demostración: ${exercise.name}`}
                             className="w-full h-full object-contain"
                         />
