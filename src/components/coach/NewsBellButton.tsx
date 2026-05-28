@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import Image from 'next/image'
 import { Bell, Newspaper, Pin } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,59 @@ const TYPE_LABEL: Record<string, string> = {
   improvement: 'Mejora',
   fix: 'Corrección',
   announcement: 'Anuncio',
+}
+
+// ─── Lightweight markdown renderer (no deps) ─────────────────────────────────
+
+function inlineMd(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  if (parts.length === 1) return text
+  return parts.map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>
+      : part
+  )
+}
+
+function MarkdownContent({ text }: { text: string }) {
+  const lines = text.split('\n')
+  const nodes: React.ReactNode[] = []
+  let bullets: string[] = []
+  let k = 0
+
+  const flushBullets = () => {
+    if (!bullets.length) return
+    nodes.push(
+      <ul key={k++} className="my-1 ml-4 space-y-0.5 list-disc">
+        {bullets.map((b, i) => (
+          <li key={i} className="text-xs text-muted-foreground">{inlineMd(b)}</li>
+        ))}
+      </ul>
+    )
+    bullets = []
+  }
+
+  for (const line of lines) {
+    if (line.startsWith('- ')) {
+      bullets.push(line.slice(2))
+    } else {
+      flushBullets()
+      if (line.startsWith('## ')) {
+        nodes.push(<h2 key={k++} className="text-sm font-bold text-foreground mt-3 mb-1">{inlineMd(line.slice(3))}</h2>)
+      } else if (line.startsWith('### ')) {
+        nodes.push(<h3 key={k++} className="text-[11px] font-bold text-foreground mt-2 mb-0.5 uppercase tracking-wide">{inlineMd(line.slice(4))}</h3>)
+      } else if (line === '---') {
+        nodes.push(<hr key={k++} className="border-border my-3" />)
+      } else if (line.trim() === '') {
+        nodes.push(<div key={k++} className="h-1" />)
+      } else {
+        nodes.push(<p key={k++} className="text-xs text-muted-foreground leading-relaxed">{inlineMd(line)}</p>)
+      }
+    }
+  }
+  flushBullets()
+
+  return <div className="space-y-0.5">{nodes}</div>
 }
 
 function relativeDate(dateStr: string | null): string {
@@ -85,9 +138,7 @@ function NewsFeedList({ onNavigate }: { onNavigate?: () => void }) {
           <h3 className="text-sm font-bold text-foreground leading-snug mb-1">
             {item.title}
           </h3>
-          <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
-            {item.content}
-          </p>
+          <MarkdownContent text={item.content} />
           {item.image_url && (
             <Image
               src={item.image_url}
