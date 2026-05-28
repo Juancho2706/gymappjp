@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { usePostHog } from 'posthog-js/react'
 import type { SubscriptionTier } from '@/lib/constants'
 
-type Gate = 'nutrition' | 'branding' | 'client_limit'
+type Gate = 'nutrition' | 'branding' | 'client_limit' | 'custom_exercises' | 'client_import'
 
 interface Props {
     gate: Gate

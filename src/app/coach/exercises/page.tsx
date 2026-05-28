@@ -2,11 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
 import type { Tables } from '@/lib/database.types'
-import { EXERCISE_CATALOG_COLUMNS } from '@/lib/exercises/exercise-catalog-select'
 import { getCoach } from '@/lib/coach/get-coach'
+import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
+import { getMyAndSystemExercises } from './_data/exercises.queries'
+import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
+import type { Metadata } from 'next'
 
 type Exercise = Tables<'exercises'>
-import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Ejercicios | EVA' }
 
@@ -15,26 +17,11 @@ export default async function CoachExercisesPage() {
     const coach = await getCoach()
     if (!coach) redirect('/login')
 
-    let exercisesQuery = await supabase
-        .from('exercises')
-        .select(EXERCISE_CATALOG_COLUMNS)
-        .or(`coach_id.is.null,coach_id.eq.${coach.id}`)
-        .order('muscle_group')
-        .order('name')
+    const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+    const caps = getTierCapabilities(tier)
 
-    // Compat fallback: if a newer explicit column is missing in DB,
-    // avoid leaving the exercise library empty.
-    if (exercisesQuery.error) {
-        exercisesQuery = await supabase
-            .from('exercises')
-            .select('*')
-            .or(`coach_id.is.null,coach_id.eq.${coach.id}`)
-            .order('muscle_group')
-            .order('name')
-    }
+    const allExercises = (await getMyAndSystemExercises(coach.id)) as Exercise[]
 
-    const allExercises = (exercisesQuery.data ?? []) as Exercise[]
-    
     const globalExercises = allExercises.filter(ex => ex.coach_id === null)
     const customExercises = allExercises.filter(ex => ex.coach_id === coach.id)
 
@@ -55,6 +42,7 @@ export default async function CoachExercisesPage() {
                         {globalExercises.length + customExercises.length} ejercicios disponibles
                     </p>
                 </div>
+                {caps.canCreateCustomExercises && <ExerciseCreateButton />}
             </div>
 
             <div className="grid grid-cols-1 gap-6">

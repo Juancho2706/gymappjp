@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import Link from 'next/link'
 import {
     Search,
     SlidersHorizontal,
@@ -8,6 +9,7 @@ import {
     LayoutGrid,
     Table2,
     X,
+    Upload,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { glassButtonVariants } from '@/components/ui/glass-button'
@@ -200,6 +202,16 @@ export function DirectoryActionBar({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                        href="/coach/clients/import"
+                        className={cn(
+                            glassButtonVariants({ variant: 'outline', size: 'default' }),
+                            'h-11 gap-2 rounded-xl px-4 text-[10px] font-black tracking-widest'
+                        )}
+                    >
+                        <Upload className="h-4 w-4" />
+                        Importar
+                    </Link>
                     <DropdownMenu modal={false}>
                         <DropdownMenuTrigger
                             type="button"

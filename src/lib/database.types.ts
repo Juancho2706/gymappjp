@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -155,6 +155,56 @@ export type Database = {
             columns: ["food_id"]
             isOneToOne: false
             referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_imports: {
+        Row: {
+          coach_id: string
+          completed_at: string | null
+          consent_confirmed_at: string | null
+          created_at: string
+          error_count: number
+          errors: Json
+          filename: string
+          id: string
+          status: string
+          success_count: number
+          total_rows: number
+        }
+        Insert: {
+          coach_id: string
+          completed_at?: string | null
+          consent_confirmed_at?: string | null
+          created_at?: string
+          error_count?: number
+          errors?: Json
+          filename: string
+          id?: string
+          status?: string
+          success_count?: number
+          total_rows?: number
+        }
+        Update: {
+          coach_id?: string
+          completed_at?: string | null
+          consent_confirmed_at?: string | null
+          created_at?: string
+          error_count?: number
+          errors?: Json
+          filename?: string
+          id?: string
+          status?: string
+          success_count?: number
+          total_rows?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_imports_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
             referencedColumns: ["id"]
           },
         ]
@@ -408,6 +458,7 @@ export type Database = {
           full_name: string
           health_data_consent_at: string | null
           id: string
+          last_active_at: string | null
           loader_icon_mode: string
           loader_show_icon: boolean
           loader_text: string | null
@@ -448,6 +499,7 @@ export type Database = {
           full_name: string
           health_data_consent_at?: string | null
           id: string
+          last_active_at?: string | null
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
@@ -488,6 +540,7 @@ export type Database = {
           full_name?: string
           health_data_consent_at?: string | null
           id?: string
+          last_active_at?: string | null
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
@@ -630,6 +683,7 @@ export type Database = {
           body_part: string | null
           coach_id: string | null
           created_at: string
+          deleted_at: string | null
           difficulty: string | null
           equipment: string | null
           gender_focus: string | null
@@ -639,12 +693,14 @@ export type Database = {
           muscle_group: string
           name: string
           secondary_muscles: string[] | null
+          source: string | null
           video_url: string | null
         }
         Insert: {
           body_part?: string | null
           coach_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           difficulty?: string | null
           equipment?: string | null
           gender_focus?: string | null
@@ -654,12 +710,14 @@ export type Database = {
           muscle_group: string
           name: string
           secondary_muscles?: string[] | null
+          source?: string | null
           video_url?: string | null
         }
         Update: {
           body_part?: string | null
           coach_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           difficulty?: string | null
           equipment?: string | null
           gender_focus?: string | null
@@ -669,6 +727,7 @@ export type Database = {
           muscle_group?: string
           name?: string
           secondary_muscles?: string[] | null
+          source?: string | null
           video_url?: string | null
         }
         Relationships: [
@@ -2237,6 +2296,13 @@ export type Database = {
           ym: string
         }[]
       }
+      get_platform_trial_conversion_rate: {
+        Args: never
+        Returns: {
+          converted: number
+          total_trials: number
+        }[]
+      }
       get_platform_workout_sessions_30d: {
         Args: never
         Returns: {
@@ -2410,3 +2476,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
