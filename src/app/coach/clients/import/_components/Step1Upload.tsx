@@ -123,8 +123,20 @@ export function Step1Upload({ onComplete }: Props) {
                 </p>
             )}
 
-            <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-                <p className="text-sm font-semibold">¿Qué columnas necesito?</p>
+            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">¿Qué columnas necesito?</p>
+                    <a
+                        href="/templates/import-alumnos.xlsx"
+                        download
+                        className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+                    >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Descargar template
+                    </a>
+                </div>
                 <ul className="space-y-1 text-sm text-muted-foreground">
                     <li><span className="font-medium text-foreground">Nombre completo</span> — requerido</li>
                     <li><span className="font-medium text-foreground">Email</span> — requerido</li>
