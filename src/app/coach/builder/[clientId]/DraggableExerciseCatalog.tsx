@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Search, Dumbbell, Filter, Eye, Activity, Plus } from 'lucide-react'
+import { Search, Dumbbell, Filter, Eye, Plus, Activity } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -11,6 +11,7 @@ import { MUSCLE_GROUPS } from '@/lib/constants'
 import { filterExercises, cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
 import { getMuscleColor } from './muscle-colors'
+import { ExerciseThumb } from '@/components/exercise/ExerciseThumb'
 
 type Exercise = Tables<'exercises'>
 
@@ -48,21 +49,7 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
             )}
         >
             <div className="flex min-w-0 items-center gap-3">
-                <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center border border-border overflow-hidden shrink-0 group-hover:shadow-md transition-all relative"
-                    style={{ backgroundColor: `color-mix(in srgb, ${getMuscleColor(exercise.muscle_group)} 15%, transparent)` }}
-                >
-                    {exercise.gif_url || (exercise.video_url && !exercise.video_url.includes('youtube') && !exercise.video_url.includes('youtu.be')) ? (
-                        <img
-                            src={exercise.gif_url || exercise.video_url!}
-                            alt={exercise.name}
-                            loading="lazy"
-                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal"
-                        />
-                    ) : (
-                        <Activity className="w-5 h-5 opacity-50" style={{ color: getMuscleColor(exercise.muscle_group) }} />
-                    )}
-                </div>
+                <ExerciseThumb exercise={exercise} size="xs" />
                 <div className="flex-1 min-w-0 pr-8">
                     <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors truncate">{exercise.name}</p>
                     <div className="flex items-center gap-2 mt-1">

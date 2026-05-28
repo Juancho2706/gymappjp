@@ -50,6 +50,9 @@ export default async function CoachExercisesPage() {
                     globalExercises={globalExercises}
                     customExercises={customExercises}
                     byMuscle={byMuscle}
+                    myCoachId={coach.id}
+                    coachLogoUrl={coach.logo_url}
+                    canEdit={caps.canCreateCustomExercises}
                 />
             </div>
         </div>

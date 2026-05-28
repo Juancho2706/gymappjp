@@ -689,6 +689,7 @@ export type Database = {
           gender_focus: string | null
           gif_url: string | null
           id: string
+          image_url: string | null
           instructions: string[] | null
           muscle_group: string
           name: string
@@ -706,6 +707,7 @@ export type Database = {
           gender_focus?: string | null
           gif_url?: string | null
           id?: string
+          image_url?: string | null
           instructions?: string[] | null
           muscle_group: string
           name: string
@@ -723,6 +725,7 @@ export type Database = {
           gender_focus?: string | null
           gif_url?: string | null
           id?: string
+          image_url?: string | null
           instructions?: string[] | null
           muscle_group?: string
           name?: string

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import {
     Dialog,
@@ -9,7 +10,24 @@ import {
     DialogTitle,
     DialogClose,
 } from '@/components/ui/dialog'
-import { Dumbbell, Globe, User, ExternalLink, Play, Zap, Target, Wrench, Search, Filter, X, Copy, ChevronDown, ChevronUp } from 'lucide-react'
+import {
+    Dumbbell,
+    Globe,
+    User,
+    ChevronDown,
+    ChevronUp,
+    Filter,
+    Pencil,
+    Search,
+    Sparkles,
+    Target,
+    Trash2,
+    UserCircle,
+    Wrench,
+    X,
+    Zap,
+} from 'lucide-react'
+import { toast } from 'sonner'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
@@ -17,58 +35,135 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { filterExercises } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ExerciseThumb } from '@/components/exercise/ExerciseThumb'
+import { ExerciseFormModal } from './_components/ExerciseFormModal'
+import {
+    restoreExerciseAction,
+    softDeleteExerciseAction,
+} from './_actions/exercise.actions'
 
 type Exercise = Tables<'exercises'>
+
+type Origin = 'all' | 'system' | 'mine'
 
 interface ExerciseCatalogClientProps {
     globalExercises: Exercise[]
     customExercises: Exercise[]
     byMuscle: Record<string, Exercise[]>
+    myCoachId: string
+    coachLogoUrl: string | null
+    canEdit: boolean
 }
 
-export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle }: ExerciseCatalogClientProps) {
+export function ExerciseCatalogClient({
+    globalExercises,
+    customExercises,
+    myCoachId,
+    coachLogoUrl,
+    canEdit,
+}: ExerciseCatalogClientProps) {
+    const router = useRouter()
     const [selected, setSelected] = useState<Exercise | null>(null)
+    const [editing, setEditing] = useState<Exercise | null>(null)
     const [search, setSearch] = useState('')
     const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
+    const [originFilter, setOriginFilter] = useState<Origin>('all')
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
     const toggleGroup = (muscle: string) => {
-        setCollapsedGroups(prev => ({
-            ...prev,
-            [muscle]: !prev[muscle]
-        }))
+        setCollapsedGroups((prev) => ({ ...prev, [muscle]: !prev[muscle] }))
     }
 
-    const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
+    const allExercises = useMemo(
+        () => [...globalExercises, ...customExercises],
+        [globalExercises, customExercises]
+    )
 
-    const filteredExercises = useMemo(() => {
-        return filterExercises(allExercises, search, muscleFilter)
-    }, [allExercises, search, muscleFilter])
+    const byOrigin = useMemo(() => {
+        if (originFilter === 'system') return globalExercises
+        if (originFilter === 'mine') return customExercises
+        return allExercises
+    }, [originFilter, allExercises, globalExercises, customExercises])
+
+    const filteredExercises = useMemo(
+        () => filterExercises(byOrigin, search, muscleFilter),
+        [byOrigin, search, muscleFilter]
+    )
 
     const groupedByMuscle = useMemo(() => {
         const groups: Record<string, Exercise[]> = {}
-        
-        // Use the master list to define order and ensure important groups appear
-        MUSCLE_GROUPS.forEach(m => {
+        MUSCLE_GROUPS.forEach((m) => {
             groups[m] = []
         })
-
-        filteredExercises.forEach(ex => {
+        filteredExercises.forEach((ex) => {
             const muscle = ex.muscle_group || 'Otro'
             if (!groups[muscle]) groups[muscle] = []
             groups[muscle].push(ex)
         })
+        return Object.fromEntries(Object.entries(groups).filter(([, list]) => list.length > 0))
+    }, [filteredExercises])
 
-        // Remove empty groups unless it's a filtered view
-        if (search || muscleFilter !== 'Todos') {
-            return Object.fromEntries(Object.entries(groups).filter(([_, list]) => list.length > 0))
+    const handleDelete = async (ex: Exercise) => {
+        const ok = window.confirm(`¿Eliminar "${ex.name}"? Los planes que ya lo usan no se afectan.`)
+        if (!ok) return
+        setSelected(null)
+        const res = await softDeleteExerciseAction(ex.id)
+        if (res.error) {
+            toast.error(res.error)
+            return
         }
-        
-        return Object.fromEntries(Object.entries(groups).filter(([_, list]) => list.length > 0))
-    }, [filteredExercises, search, muscleFilter])
+        toast.success('Ejercicio eliminado', {
+            action: {
+                label: 'Deshacer',
+                onClick: async () => {
+                    const restored = await restoreExerciseAction(ex.id)
+                    if (restored.error) {
+                        toast.error(restored.error)
+                        return
+                    }
+                    router.refresh()
+                },
+            },
+            duration: 8000,
+        })
+        router.refresh()
+    }
+
+    const handleEdit = (ex: Exercise) => {
+        setSelected(null)
+        setEditing(ex)
+    }
 
     return (
         <div className="space-y-6">
+            {/* Origin chips */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+                <OriginChip
+                    active={originFilter === 'all'}
+                    onClick={() => setOriginFilter('all')}
+                    icon={Globe}
+                    count={allExercises.length}
+                >
+                    Todos
+                </OriginChip>
+                <OriginChip
+                    active={originFilter === 'system'}
+                    onClick={() => setOriginFilter('system')}
+                    icon={Sparkles}
+                    count={globalExercises.length}
+                >
+                    Sistema EVA
+                </OriginChip>
+                <OriginChip
+                    active={originFilter === 'mine'}
+                    onClick={() => setOriginFilter('mine')}
+                    icon={UserCircle}
+                    count={customExercises.length}
+                >
+                    Míos
+                </OriginChip>
+            </div>
+
             {/* Filters Section */}
             <div className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
@@ -88,7 +183,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="Todos">Todos</SelectItem>
-                            {MUSCLE_GROUPS.map(m => (
+                            {MUSCLE_GROUPS.map((m) => (
                                 <SelectItem key={m} value={m}>{m}</SelectItem>
                             ))}
                         </SelectContent>
@@ -96,12 +191,12 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                 </div>
             </div>
 
-            {/* Right: global catalog by muscle group */}
-            <div className="lg:col-span-2 space-y-4">
+            {/* Catalog */}
+            <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                         <Globe className="w-4 h-4" />
-                        Catálogo de ejercicios
+                        Catálogo
                         <Badge variant="secondary" className="ml-2 font-mono">
                             {filteredExercises.length}
                         </Badge>
@@ -112,8 +207,11 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                     Object.entries(groupedByMuscle).map(([muscle, exList]) => {
                         const isCollapsed = collapsedGroups[muscle]
                         return (
-                            <div key={muscle} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md">
-                                <button 
+                            <div
+                                key={muscle}
+                                className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md"
+                            >
+                                <button
                                     onClick={() => toggleGroup(muscle)}
                                     className="w-full px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2 cursor-pointer hover:bg-muted/50 transition-colors"
                                 >
@@ -132,25 +230,51 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                                 </button>
                                 <AnimatePresence initial={false}>
                                     {!isCollapsed && (
-                                        <motion.div 
+                                        <motion.div
                                             initial={{ height: 0, opacity: 0 }}
-                                            animate={{ height: "auto", opacity: 1 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
                                             exit={{ height: 0, opacity: 0 }}
                                             transition={{ duration: 0.2 }}
-                                            className="px-5 py-4 flex flex-wrap gap-2"
+                                            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4"
                                         >
-                                            {exList.map(ex => (
-                                                <button
-                                                    key={ex.id}
-                                                    onClick={() => setSelected(ex)}
-                                                    className="group inline-flex items-center px-4 py-2 rounded-xl text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
-                                                >
-                                                    {(ex.video_url || ex.gif_url) && (
-                                                        <div className="mr-2 w-2 h-2 rounded-full bg-primary animate-pulse group-hover:animate-none" />
-                                                    )}
-                                                    {ex.name}
-                                                </button>
-                                            ))}
+                                            {exList.map((ex) => {
+                                                const isMine = ex.coach_id === myCoachId
+                                                return (
+                                                    <button
+                                                        key={ex.id}
+                                                        onClick={() => setSelected(ex)}
+                                                        className="group flex flex-col items-stretch text-left rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                                    >
+                                                        <ExerciseThumb
+                                                            exercise={ex}
+                                                            coachLogoUrl={isMine ? coachLogoUrl : null}
+                                                            size="lg"
+                                                            className="rounded-none"
+                                                        />
+                                                        <div className="p-3 space-y-1">
+                                                            <p className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">
+                                                                {ex.name}
+                                                            </p>
+                                                            <div className="flex items-center gap-1.5">
+                                                                {isMine ? (
+                                                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary">
+                                                                        <UserCircle className="w-3 h-3" /> Mío
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                                                                        <Sparkles className="w-3 h-3" /> EVA
+                                                                    </span>
+                                                                )}
+                                                                {ex.equipment && (
+                                                                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 truncate">
+                                                                        · {ex.equipment}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                )
+                                            })}
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
@@ -158,101 +282,191 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         )
                     })
                 ) : (
-                    <div className="py-20 text-center bg-card border border-dashed border-border rounded-2xl">
-                        <Dumbbell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-                        <p className="text-muted-foreground font-medium">No se encontraron ejercicios</p>
-                        <button 
-                            onClick={() => { setSearch(''); setMuscleFilter('Todos'); }}
-                            className="mt-4 text-xs text-primary hover:underline font-bold"
-                        >
-                            Limpiar filtros
-                        </button>
-                    </div>
+                    <EmptyState
+                        origin={originFilter}
+                        hasSearch={!!search || muscleFilter !== 'Todos'}
+                        canEdit={canEdit}
+                        onClear={() => {
+                            setSearch('')
+                            setMuscleFilter('Todos')
+                        }}
+                    />
                 )}
             </div>
 
             {/* Exercise Preview Modal */}
             <ExercisePreviewModal
                 exercise={selected}
+                myCoachId={myCoachId}
+                coachLogoUrl={coachLogoUrl}
+                canEdit={canEdit}
                 open={!!selected}
                 onClose={() => setSelected(null)}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
             />
+
+            {/* Edit Form Modal */}
+            {editing && (
+                <ExerciseFormModal
+                    open={!!editing}
+                    onClose={() => {
+                        setEditing(null)
+                        router.refresh()
+                    }}
+                    exercise={editing}
+                />
+            )}
         </div>
     )
 }
 
+// ─── Origin chip ─────────────────────────────────────────────────────────────
+
+function OriginChip({
+    active,
+    onClick,
+    icon: Icon,
+    count,
+    children,
+}: {
+    active: boolean
+    onClick: () => void
+    icon: typeof Globe
+    count: number
+    children: React.ReactNode
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={active}
+            className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                active
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-foreground hover:bg-muted/70'
+            }`}
+        >
+            <Icon className="w-3.5 h-3.5" />
+            {children}
+            <span
+                className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+                    active ? 'bg-primary-foreground/20' : 'bg-background/60'
+                }`}
+            >
+                {count}
+            </span>
+        </button>
+    )
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+
+function EmptyState({
+    origin,
+    hasSearch,
+    canEdit,
+    onClear,
+}: {
+    origin: Origin
+    hasSearch: boolean
+    canEdit: boolean
+    onClear: () => void
+}) {
+    if (origin === 'mine' && !hasSearch) {
+        return (
+            <div className="py-16 text-center bg-card border border-dashed border-border rounded-2xl">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <UserCircle className="w-8 h-8 text-primary" />
+                </div>
+                <p className="text-foreground font-semibold">Aún no creaste ejercicios propios</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                    {canEdit
+                        ? 'Empezá tu biblioteca con un ejercicio + GIF o video.'
+                        : 'Disponible al subir a un plan Starter o superior.'}
+                </p>
+            </div>
+        )
+    }
+    return (
+        <div className="py-20 text-center bg-card border border-dashed border-border rounded-2xl">
+            <Dumbbell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
+            <p className="text-muted-foreground font-medium">No se encontraron ejercicios</p>
+            {hasSearch && (
+                <button
+                    onClick={onClear}
+                    className="mt-4 text-xs text-primary hover:underline font-bold"
+                >
+                    Limpiar filtros
+                </button>
+            )}
+        </div>
+    )
+}
+
+// ─── Preview Modal ────────────────────────────────────────────────────────────
+
 function ExercisePreviewModal({
     exercise,
+    myCoachId,
+    coachLogoUrl,
+    canEdit,
     open,
     onClose,
+    onEdit,
+    onDelete,
 }: {
     exercise: Exercise | null
+    myCoachId: string
+    coachLogoUrl: string | null
+    canEdit: boolean
     open: boolean
     onClose: () => void
+    onEdit: (ex: Exercise) => void
+    onDelete: (ex: Exercise) => void
 }) {
     if (!exercise) return null
 
-    const displayVideo = exercise.video_url || exercise.gif_url
-    const isYouTube = displayVideo?.includes('youtube.com') || displayVideo?.includes('youtu.be')
+    const isMine = exercise.coach_id === myCoachId
     const hasInstructions = exercise.instructions && exercise.instructions.length > 0
     const hasEquipment = !!exercise.equipment
     const hasSecondary = exercise.secondary_muscles && exercise.secondary_muscles.length > 0
 
-    // Extract YouTube ID
-    const getYouTubeId = (url: string) => {
-        const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)
-        return match ? match[1] : null
-    }
-    const ytId = isYouTube ? getYouTubeId(displayVideo!) : null
-    
-    // Check if it's a direct GIF or image from our bucket/ExerciseDB
-    const isGif = !!exercise.gif_url || (exercise.video_url && (exercise.video_url.toLowerCase().endsWith('.gif') || exercise.video_url.includes('supabase')))
-    const gifSource = exercise.gif_url || exercise.video_url
+    const isYouTube =
+        !exercise.gif_url &&
+        !exercise.image_url &&
+        !!exercise.video_url &&
+        (exercise.video_url.includes('youtube.com') || exercise.video_url.includes('youtu.be'))
 
-    // Build YouTube embed URL with trimming parameters
-    const getEmbedUrl = () => {
-        if (!ytId) return ''
-        let url = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`
-        
-        // Add start time if present (assuming video_start_time is in seconds)
-        if ((exercise as any).video_start_time) {
-            url += `&start=${(exercise as any).video_start_time}`
-        }
-
-        // Add end time if present
-        if ((exercise as any).video_end_time) {
-            url += `&end=${(exercise as any).video_end_time}`
-        }
-        
-        return url
-    }
+    const ytId = isYouTube && exercise.video_url ? extractYouTubeId(exercise.video_url) : null
+    const directMedia = exercise.gif_url ?? exercise.image_url ?? null
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-            <DialogContent 
+            <DialogContent
                 showCloseButton={false}
                 className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-y-auto custom-scrollbar max-h-[85vh] focus:outline-none"
             >
-                {/* Media demonstration area */}
-                <div className="sticky top-0 relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-10">
-                    {isYouTube && ytId ? (
+                {/* Media demo area */}
+                <div className="sticky top-0 relative w-full bg-black flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-10">
+                    {ytId ? (
                         <iframe
                             className="w-full h-full"
-                            src={getEmbedUrl()}
+                            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&controls=1`}
                             title={exercise.name}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
                         />
-                    ) : isGif && gifSource ? (
+                    ) : directMedia ? (
                         <Image
-                            src={gifSource}
+                            src={directMedia}
                             alt={`Demostración: ${exercise.name}`}
                             fill
                             className="object-contain"
                             unoptimized
                         />
                     ) : (
-                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
+                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-50">
                             <Dumbbell className="w-12 h-12" />
                             <p className="text-xs font-medium">Sin previsualización</p>
                         </div>
@@ -271,7 +485,6 @@ function ExercisePreviewModal({
                         </div>
                     </DialogHeader>
 
-                    {/* Badges row */}
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
                             <Target className="w-3 h-3" />
@@ -283,14 +496,17 @@ function ExercisePreviewModal({
                                 {exercise.equipment}
                             </span>
                         )}
-                        {hasSecondary && exercise.secondary_muscles!.map(m => (
-                            <span key={m} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs text-muted-foreground bg-muted/60 border border-border">
-                                {m}
-                            </span>
-                        ))}
+                        {hasSecondary &&
+                            exercise.secondary_muscles!.map((m) => (
+                                <span
+                                    key={m}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs text-muted-foreground bg-muted/60 border border-border"
+                                >
+                                    {m}
+                                </span>
+                            ))}
                     </div>
 
-                    {/* Instructions */}
                     {hasInstructions && (
                         <div className="space-y-3">
                             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -299,7 +515,6 @@ function ExercisePreviewModal({
                             </h3>
                             <ol className="space-y-2">
                                 {exercise.instructions!.map((step, i) => {
-                                    // Strip "Step:N " prefix from ExerciseDB data
                                     const cleanStep = step.replace(/^Step:\d+\s*/i, '')
                                     return (
                                         <li key={i} className="flex gap-3 text-sm text-muted-foreground">
@@ -314,38 +529,18 @@ function ExercisePreviewModal({
                         </div>
                     )}
 
-                    {/* Vista del alumno preview */}
+                    {/* Vista del alumno */}
                     <div className="bg-muted/50 border border-border rounded-xl p-4">
                         <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
                             Vista del alumno
                         </p>
                         <div className="bg-card border border-border rounded-xl p-4">
                             <div className="flex items-center gap-3">
-                                {isYouTube && ytId ? (
-                                    <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
-                                        <Image
-                                            src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-                                            alt={exercise.name}
-                                            fill
-                                            className="object-cover"
-                                            unoptimized
-                                        />
-                                    </div>
-                                ) : isGif && gifSource ? (
-                                    <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
-                                        <Image
-                                            src={gifSource}
-                                            alt={exercise.name}
-                                            fill
-                                            className="object-cover"
-                                            unoptimized
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="w-14 h-14 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
-                                        <Dumbbell className="w-6 h-6 text-primary" />
-                                    </div>
-                                )}
+                                <ExerciseThumb
+                                    exercise={exercise}
+                                    coachLogoUrl={isMine ? coachLogoUrl : null}
+                                    size="sm"
+                                />
                                 <div>
                                     <p className="text-sm font-semibold text-foreground">{exercise.name}</p>
                                     <p className="text-xs text-muted-foreground">{exercise.muscle_group}</p>
@@ -357,7 +552,7 @@ function ExercisePreviewModal({
                         </div>
                     </div>
 
-                    {/* Source badge */}
+                    {/* Source */}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
                         {exercise.coach_id ? (
                             <>
@@ -371,8 +566,33 @@ function ExercisePreviewModal({
                             </>
                         )}
                     </div>
+
+                    {/* Actions (solo para el dueño y si puede editar) */}
+                    {isMine && canEdit && (
+                        <div className="flex gap-2 pt-3 border-t border-border">
+                            <button
+                                type="button"
+                                onClick={() => onEdit(exercise)}
+                                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors"
+                            >
+                                <Pencil className="w-4 h-4" /> Editar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onDelete(exercise)}
+                                className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-destructive/30 text-destructive py-2.5 text-sm font-semibold hover:bg-destructive/10 transition-colors"
+                            >
+                                <Trash2 className="w-4 h-4" /> Eliminar
+                            </button>
+                        </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
     )
+}
+
+function extractYouTubeId(url: string): string | null {
+    const match = url.match(/(?:v=|\/(?:embed|shorts|live|v)\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+    return match ? match[1] : null
 }

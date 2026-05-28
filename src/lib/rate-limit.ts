@@ -17,6 +17,8 @@ let recipesRatelimit: Ratelimit | null | undefined
 let adminRatelimit: Ratelimit | null | undefined
 let coachOnboardingEventsRatelimit: Ratelimit | null | undefined
 let supportRatelimit: Ratelimit | null | undefined
+let exerciseMediaUploadRatelimit: Ratelimit | null | undefined
+let exerciseMediaUploadIpRatelimit: Ratelimit | null | undefined
 
 function getAuthRatelimit(): Ratelimit | null {
     if (authRatelimit !== undefined) return authRatelimit
@@ -213,6 +215,62 @@ export async function rateLimitSupport(
     const limiter = getSupportRatelimit()
     if (!limiter) return { ok: true }
     const res = await limiter.limit(`support:${identifier}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+function getExerciseMediaUploadRatelimit(): Ratelimit | null {
+    if (exerciseMediaUploadRatelimit !== undefined) return exerciseMediaUploadRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        exerciseMediaUploadRatelimit = null
+        return null
+    }
+    exerciseMediaUploadRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(30, '1 h'),
+        prefix: 'ratelimit:exercise-media-upload',
+    })
+    return exerciseMediaUploadRatelimit
+}
+
+function getExerciseMediaUploadIpRatelimit(): Ratelimit | null {
+    if (exerciseMediaUploadIpRatelimit !== undefined) return exerciseMediaUploadIpRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        exerciseMediaUploadIpRatelimit = null
+        return null
+    }
+    exerciseMediaUploadIpRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(100, '1 h'),
+        prefix: 'ratelimit:exercise-media-upload-ip',
+    })
+    return exerciseMediaUploadIpRatelimit
+}
+
+/** 30 uploads/hora por coach. */
+export async function rateLimitExerciseMediaUpload(
+    coachId: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getExerciseMediaUploadRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`exercise-media:${coachId}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+/** 100 uploads/hora por IP (defensa contra múltiples cuentas detrás de un mismo NAT). */
+export async function rateLimitExerciseMediaUploadByIp(
+    ip: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getExerciseMediaUploadIpRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`exercise-media-ip:${ip}`)
     await res.pending.catch(() => undefined)
     if (res.success) return { ok: true }
     const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))

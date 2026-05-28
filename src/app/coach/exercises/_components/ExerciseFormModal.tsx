@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useTransition, useState } from 'react'
+import { useActionState, useEffect, useState, useTransition } from 'react'
 import {
     Dialog,
     DialogContent,
@@ -17,9 +17,13 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { MUSCLE_GROUPS } from '@/lib/constants'
-import { createExerciseAction, updateExerciseAction, type ExerciseActionState } from '../_actions/exercise.actions'
-import { getYoutubeThumbnailUrl, normalizeYoutubeEmbedUrl } from '@/lib/youtube'
+import {
+    createExerciseAction,
+    updateExerciseAction,
+    type ExerciseActionState,
+} from '../_actions/exercise.actions'
 import type { ExerciseCatalogRow } from '../_data/exercises.queries'
+import { ExerciseMediaPicker, type MediaValue } from './ExerciseMediaPicker'
 
 const EQUIPMENT_OPTIONS = [
     'Peso libre',
@@ -45,9 +49,21 @@ interface Props {
 
 const initialState: ExerciseActionState = {}
 
+function initialMedia(exercise: ExerciseCatalogRow | undefined): MediaValue {
+    if (!exercise) return { kind: 'youtube', value: '' }
+    if (exercise.gif_url) return { kind: 'gif', value: exercise.gif_url }
+    if (exercise.image_url) return { kind: 'image', value: exercise.image_url }
+    if (exercise.video_url) return { kind: 'youtube', value: exercise.video_url }
+    return { kind: 'youtube', value: '' }
+}
+
 export function ExerciseFormModal({ open, onClose, exercise }: Props) {
     const [isPending, startTransition] = useTransition()
-    const [videoUrlInput, setVideoUrlInput] = useState(exercise?.video_url ?? '')
+    const [media, setMedia] = useState<MediaValue>(() => initialMedia(exercise))
+
+    useEffect(() => {
+        setMedia(initialMedia(exercise))
+    }, [exercise])
 
     const action = exercise
         ? updateExerciseAction.bind(null, exercise.id)
@@ -55,18 +71,22 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
     const [state, formAction] = useActionState(action, initialState)
 
-    const thumbnailUrl = getYoutubeThumbnailUrl(videoUrlInput)
-    const embedUrl = normalizeYoutubeEmbedUrl(videoUrlInput)
-
     const handleSubmit = (formData: FormData) => {
+        // Inyectar media en el formData según el tipo elegido
+        formData.set('media_kind', media.value ? media.kind : 'none')
+        formData.set('video_url', media.kind === 'youtube' ? media.value : '')
+        formData.set('gif_url', media.kind === 'gif' ? media.value : '')
+        formData.set('image_url', media.kind === 'image' ? media.value : '')
         startTransition(() => {
             formAction(formData)
         })
     }
 
-    if (state.success) {
-        onClose()
-    }
+    useEffect(() => {
+        if (state.success) {
+            onClose()
+        }
+    }, [state.success, onClose])
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -144,39 +164,18 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         </div>
                     </div>
 
-                    {/* URL YouTube */}
+                    {/* Media picker (YouTube / GIF / Imagen) */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Video YouTube (unlisted)</label>
-                        <Input
-                            name="video_url"
-                            value={videoUrlInput}
-                            onChange={(e) => setVideoUrlInput(e.target.value)}
-                            placeholder="https://youtu.be/..."
-                            type="url"
+                        <label className="text-sm font-medium">Demostración visual</label>
+                        <ExerciseMediaPicker
+                            value={media}
+                            onChange={setMedia}
+                            error={
+                                state.fieldErrors?.video_url?.[0] ??
+                                state.fieldErrors?.gif_url?.[0] ??
+                                state.fieldErrors?.image_url?.[0]
+                            }
                         />
-                        <p className="text-xs text-muted-foreground">
-                            Pegá el link del video. Asegurate que sea Unlisted o Público en YouTube.
-                        </p>
-                        {state.fieldErrors?.video_url && (
-                            <p className="text-xs text-destructive">{state.fieldErrors.video_url[0]}</p>
-                        )}
-                        {/* Live preview */}
-                        {embedUrl && (
-                            <div className="mt-2 rounded-xl overflow-hidden border border-border aspect-video">
-                                <iframe
-                                    src={embedUrl}
-                                    className="w-full h-full"
-                                    sandbox="allow-scripts allow-same-origin allow-presentation"
-                                    loading="lazy"
-                                    referrerPolicy="strict-origin-when-cross-origin"
-                                    allow="encrypted-media; picture-in-picture"
-                                    title="Preview del video"
-                                />
-                            </div>
-                        )}
-                        {!embedUrl && thumbnailUrl && (
-                            <p className="text-xs text-amber-500">URL parcial — completá el link para ver el preview.</p>
-                        )}
                     </div>
 
                     {/* Músculos secundarios */}
