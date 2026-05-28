@@ -1,0 +1,222 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+import { getTierCapabilities, getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
+import { createClientInternal } from '../../_lib/create-client-internal'
+import { sanitizeCell } from '@/lib/import/csv-injection'
+
+const importRowSchema = z.object({
+    full_name: z.string().min(2, 'Nombre muy corto').max(100),
+    email: z.string().email('Email inválido'),
+    phone: z.string().optional().nullable(),
+    subscription_start_date: z.string().optional().nullable(),
+})
+
+export type ImportRow = {
+    full_name: string
+    email: string
+    phone?: string | null
+    subscription_start_date?: string | null
+}
+
+export type ImportRowError = {
+    row: number
+    email: string
+    full_name: string
+    error: string
+}
+
+export type ImportClientsState = {
+    error?: string
+    success?: boolean
+    importId?: string
+    summary?: {
+        total: number
+        succeeded: number
+        failed: number
+        skipped: number
+    }
+    rowErrors?: ImportRowError[]
+}
+
+function generateTempPassword(): string {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+    return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
+export async function importClientsAction(
+    rows: ImportRow[],
+    filename: string,
+    consentConfirmed: boolean
+): Promise<ImportClientsState> {
+    if (!consentConfirmed) {
+        return { error: 'Debes confirmar el consentimiento de protección de datos (Ley 19.628) para continuar.' }
+    }
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado.' }
+
+    const { data: rawCoach } = await supabase
+        .from('coaches')
+        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    if (!rawCoach) return { error: 'Coach no encontrado.' }
+
+    const tier = (rawCoach.subscription_tier ?? 'free') as SubscriptionTier
+    const caps = getTierCapabilities(tier)
+    if (!caps.canImportClients) return { error: 'upgrade_required' }
+
+    if (!rows.length) return { error: 'No hay filas para importar.' }
+    if (rows.length > 1000) return { error: 'El archivo supera el límite de 1.000 filas. Dividilo en partes.' }
+
+    const maxClients = rawCoach.max_clients ?? getTierMaxClients(tier)
+    const { count: activeCount } = await supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', rawCoach.id)
+        .eq('is_archived', false)
+
+    if ((activeCount ?? 0) + rows.length > maxClients) {
+        return {
+            error: `Tu plan permite ${maxClients} alumnos activos. Tenés ${activeCount ?? 0} y querés importar ${rows.length}. Actualizá tu plan o reducí la cantidad de filas.`,
+        }
+    }
+
+    // Create import audit record
+    const { data: importRecord, error: importInsertError } = await supabase
+        .from('client_imports')
+        .insert({
+            coach_id: rawCoach.id,
+            filename,
+            total_rows: rows.length,
+            status: 'processing',
+            consent_confirmed_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+
+    if (importInsertError || !importRecord) {
+        console.error('client_imports insert error:', importInsertError)
+        return { error: 'Error al registrar el import.' }
+    }
+
+    // Fetch existing emails to detect duplicates vs DB
+    const emailsToCheck = rows.map((r) => r.email.toLowerCase().trim())
+    const { data: existingClients } = await supabase
+        .from('clients')
+        .select('email')
+        .eq('coach_id', rawCoach.id)
+        .in('email', emailsToCheck)
+
+    const existingEmails = new Set((existingClients ?? []).map((c) => c.email.toLowerCase()))
+
+    const admin = await createRawAdminClient()
+    const rowErrors: ImportRowError[] = []
+    let succeeded = 0
+    let skipped = 0
+
+    // Track emails seen within this import batch (deduplicate)
+    const seenInBatch = new Set<string>()
+
+    // Process in chunks of 10
+    const CHUNK_SIZE = 10
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE)
+        await Promise.allSettled(
+            chunk.map(async (rawRow, chunkIdx) => {
+                const rowNum = i + chunkIdx + 1
+                const emailKey = rawRow.email?.toLowerCase().trim()
+
+                // Sanitize cell values (CSV injection)
+                const sanitizedName = sanitizeCell(rawRow.full_name).value
+                const sanitizedEmail = sanitizeCell(rawRow.email).value
+                const sanitizedPhone = rawRow.phone ? sanitizeCell(rawRow.phone).value : null
+
+                const parsed = importRowSchema.safeParse({
+                    full_name: sanitizedName,
+                    email: sanitizedEmail,
+                    phone: sanitizedPhone || null,
+                    subscription_start_date: rawRow.subscription_start_date || null,
+                })
+
+                if (!parsed.success) {
+                    rowErrors.push({
+                        row: rowNum,
+                        email: rawRow.email ?? '',
+                        full_name: rawRow.full_name ?? '',
+                        error: Object.values(parsed.error.flatten().fieldErrors).flat().join(', '),
+                    })
+                    return
+                }
+
+                if (existingEmails.has(emailKey)) {
+                    skipped++
+                    return
+                }
+
+                if (seenInBatch.has(emailKey)) {
+                    skipped++
+                    return
+                }
+                seenInBatch.add(emailKey)
+
+                const result = await createClientInternal(admin, rawCoach, {
+                    full_name: parsed.data.full_name,
+                    email: parsed.data.email,
+                    phone: parsed.data.phone,
+                    subscription_start_date: parsed.data.subscription_start_date,
+                    temp_password: generateTempPassword(),
+                })
+
+                if (result.ok) {
+                    succeeded++
+                } else {
+                    rowErrors.push({
+                        row: rowNum,
+                        email: parsed.data.email,
+                        full_name: parsed.data.full_name,
+                        error: result.error,
+                    })
+                }
+            })
+        )
+
+        // Update progress after each chunk
+        await supabase
+            .from('client_imports')
+            .update({ success_count: succeeded, error_count: rowErrors.length })
+            .eq('id', importRecord.id)
+    }
+
+    // Finalize import record
+    await supabase
+        .from('client_imports')
+        .update({
+            status: rowErrors.length === rows.length ? 'failed' : 'completed',
+            success_count: succeeded,
+            error_count: rowErrors.length,
+            errors: rowErrors as unknown as import('@/lib/database.types').Json,
+            completed_at: new Date().toISOString(),
+        })
+        .eq('id', importRecord.id)
+
+    revalidatePath('/coach/clients')
+
+    return {
+        success: true,
+        importId: importRecord.id,
+        summary: {
+            total: rows.length,
+            succeeded,
+            failed: rowErrors.length,
+            skipped,
+        },
+        rowErrors,
+    }
+}

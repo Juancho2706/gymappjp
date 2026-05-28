@@ -130,6 +130,8 @@ export type TierCapabilities = {
     canUseNutrition: boolean
     canUseBranding: boolean
     canUseAdvancedReports: boolean
+    canCreateCustomExercises: boolean
+    canImportClients: boolean
 }
 
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
@@ -137,31 +139,43 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         canUseNutrition: false,
         canUseBranding: false,
         canUseAdvancedReports: false,
+        canCreateCustomExercises: false,
+        canImportClients: false,
     },
     starter: {
         canUseNutrition: false,
         canUseBranding: true,
         canUseAdvancedReports: true,
+        canCreateCustomExercises: true,
+        canImportClients: true,
     },
     pro: {
         canUseNutrition: true,
         canUseBranding: true,
         canUseAdvancedReports: true,
+        canCreateCustomExercises: true,
+        canImportClients: true,
     },
     elite: {
         canUseNutrition: true,
         canUseBranding: true,
         canUseAdvancedReports: true,
+        canCreateCustomExercises: true,
+        canImportClients: true,
     },
     growth: {
         canUseNutrition: true,
         canUseBranding: true,
         canUseAdvancedReports: true,
+        canCreateCustomExercises: true,
+        canImportClients: true,
     },
     scale: {
         canUseNutrition: true,
         canUseBranding: true,
         canUseAdvancedReports: true,
+        canCreateCustomExercises: true,
+        canImportClients: true,
     },
 }
 

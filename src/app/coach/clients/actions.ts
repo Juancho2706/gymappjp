@@ -8,16 +8,11 @@ import { z } from 'zod'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
-    buildClientWelcomeEmail,
     buildUpgradeRequiredEmail,
     buildClientArchivedEmail,
     buildClientUnarchivedEmail,
 } from '@/lib/email/transactional-templates'
-import {
-    assertPlatformEmailAvailable,
-    isAuthDuplicateEmailMessage,
-    sanitizePlatformEmail,
-} from '@/lib/auth/platform-email'
+import { createClientInternal } from './_lib/create-client-internal'
 
 // ────────────────────────────────────────────────────────────────
 // Create Client Action
@@ -106,72 +101,26 @@ export async function createClientAction(
     }
 
     const admin = await createRawAdminClient()
-    const emailSan = sanitizePlatformEmail(parsed.data.email)
-    const availability = await assertPlatformEmailAvailable(admin, parsed.data.email)
-    if (!availability.ok) {
-        return { error: availability.error }
-    }
-
-    // Create the auth user with Admin API (does NOT sign out the coach)
-    const { data: newAuthUser, error: authError } = await admin.auth.admin.createUser({
-        email: emailSan,
-        password: parsed.data.temp_password,
-        email_confirm: true, // auto-confirm so client can log in immediately
-    })
-
-    if (authError) {
-        if (isAuthDuplicateEmailMessage(authError.message)) {
-            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
-        }
-        console.error('Admin createUser error:', authError)
-        return { error: `Error al crear el usuario: ${authError.message}` }
-    }
-
-    // Insert the client record in public.clients
-    const { error: dbError } = await admin.from('clients').insert({
-        id: newAuthUser.user.id,
-        coach_id: coach.id,
+    const result = await createClientInternal(admin, coach, {
         full_name: parsed.data.full_name,
-        email: emailSan,
+        email: parsed.data.email,
         phone: parsed.data.phone || null,
         subscription_start_date: parsed.data.subscription_start_date || null,
-        force_password_change: true,
+        temp_password: parsed.data.temp_password,
     })
 
-    if (dbError) {
-        // Rollback: delete the auth user we just created
-        await admin.auth.admin.deleteUser(newAuthUser.user.id)
-        console.error('DB insert client error:', dbError)
-        if (dbError.code === '23505') {
-            return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
+    if (!result.ok) {
+        if (result.code === 'duplicate_email') {
+            return { error: 'Este correo ya está registrado en la plataforma. Usá otro correo o iniciá sesión si ya tenés cuenta.' }
         }
-        return { error: 'Error al guardar el alumno en la base de datos.' }
-    }
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
-    const loginUrl = appUrl ? `${appUrl}/c/${coach.slug}/login` : `https://app.tu-dominio.com/c/${coach.slug}/login`
-    const welcomeEmail = buildClientWelcomeEmail({
-        brandName: coach.brand_name,
-        coachName: coach.full_name,
-        clientName: parsed.data.full_name,
-        loginUrl,
-        tempPassword: parsed.data.temp_password,
-        welcomeMessage: coach.welcome_message,
-    })
-    const emailResult = await sendTransactionalEmail({
-        to: emailSan,
-        subject: welcomeEmail.subject,
-        html: welcomeEmail.html,
-    })
-    if (!emailResult.ok) {
-        console.error('Welcome email delivery error:', emailResult.error)
+        return { error: result.error }
     }
 
     revalidatePath('/coach/clients')
     return {
         success: true,
         newClientPhone: parsed.data.phone || undefined,
-        loginUrl,
+        loginUrl: result.loginUrl,
         clientName: parsed.data.full_name,
     }
 }

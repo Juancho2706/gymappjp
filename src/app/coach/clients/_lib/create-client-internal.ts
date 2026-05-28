@@ -1,0 +1,101 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
+import {
+    assertPlatformEmailAvailable,
+    isAuthDuplicateEmailMessage,
+    sanitizePlatformEmail,
+} from '@/lib/auth/platform-email'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
+
+type AdminClient = SupabaseClient<Database>
+
+export type CreateClientData = {
+    full_name: string
+    email: string
+    phone?: string | null
+    subscription_start_date?: string | null
+    temp_password: string
+}
+
+type CoachContext = {
+    id: string
+    slug: string
+    full_name: string
+    brand_name: string
+    welcome_message: string | null
+}
+
+export type CreateClientResult =
+    | { ok: true; clientId: string; loginUrl: string }
+    | { ok: false; error: string; code?: 'duplicate_email' | 'db_error' | 'auth_error' }
+
+export async function createClientInternal(
+    admin: AdminClient,
+    coach: CoachContext,
+    data: CreateClientData,
+    options: { sendEmail?: boolean } = { sendEmail: true }
+): Promise<CreateClientResult> {
+    const emailSan = sanitizePlatformEmail(data.email)
+
+    const availability = await assertPlatformEmailAvailable(admin, data.email)
+    if (!availability.ok) {
+        return { ok: false, error: availability.error, code: 'duplicate_email' }
+    }
+
+    const { data: newAuthUser, error: authError } = await admin.auth.admin.createUser({
+        email: emailSan,
+        password: data.temp_password,
+        email_confirm: true,
+    })
+
+    if (authError) {
+        if (isAuthDuplicateEmailMessage(authError.message)) {
+            return { ok: false, error: 'Email ya registrado en la plataforma.', code: 'duplicate_email' }
+        }
+        console.error('createClientInternal auth error:', authError)
+        return { ok: false, error: `Error al crear usuario: ${authError.message}`, code: 'auth_error' }
+    }
+
+    const { error: dbError } = await admin.from('clients').insert({
+        id: newAuthUser.user.id,
+        coach_id: coach.id,
+        full_name: data.full_name,
+        email: emailSan,
+        phone: data.phone ?? null,
+        subscription_start_date: data.subscription_start_date ?? null,
+        force_password_change: true,
+    })
+
+    if (dbError) {
+        await admin.auth.admin.deleteUser(newAuthUser.user.id)
+        console.error('createClientInternal db error:', dbError)
+        if (dbError.code === '23505') {
+            return { ok: false, error: 'Email ya registrado en la plataforma.', code: 'duplicate_email' }
+        }
+        return { ok: false, error: 'Error al guardar alumno en base de datos.', code: 'db_error' }
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
+    const loginUrl = appUrl
+        ? `${appUrl}/c/${coach.slug}/login`
+        : `https://app.tu-dominio.com/c/${coach.slug}/login`
+
+    if (options.sendEmail !== false) {
+        const welcomeEmail = buildClientWelcomeEmail({
+            brandName: coach.brand_name,
+            coachName: coach.full_name,
+            clientName: data.full_name,
+            loginUrl,
+            tempPassword: data.temp_password,
+            welcomeMessage: coach.welcome_message,
+        })
+        sendTransactionalEmail({
+            to: emailSan,
+            subject: welcomeEmail.subject,
+            html: welcomeEmail.html,
+        }).catch((e) => console.error('Welcome email error:', e))
+    }
+
+    return { ok: true, clientId: newAuthUser.user.id, loginUrl }
+}
