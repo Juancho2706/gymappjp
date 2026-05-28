@@ -7,10 +7,10 @@ import {
     EXERCISE_MEDIA_LIMITS,
     EXERCISE_MEDIA_MIME,
     KIND_TO_EXT,
-    validateImageDimensions,
     validateImageMagicBytes,
     type ExerciseMediaKind,
 } from '@/lib/uploads/image-validation'
+import { validateImageDimensions } from '@/lib/uploads/image-validation.server'
 import {
     rateLimitExerciseMediaUpload,
     rateLimitExerciseMediaUploadByIp,

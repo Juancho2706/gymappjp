@@ -13,6 +13,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['sharp'],
   async headers() {
     return [
       {
