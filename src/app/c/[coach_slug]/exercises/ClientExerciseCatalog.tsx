@@ -195,7 +195,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 if (isYouTube) {
                   const ytId = getYouTubeId(url!);
                   const ex = selectedExercise as any
-                  const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1${
+                  const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=0${
                     ex.video_start_time ? `&start=${ex.video_start_time}` : ''
                   }${
                     ex.video_end_time ? `&end=${ex.video_end_time}` : ''

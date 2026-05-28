@@ -432,14 +432,9 @@ function ExercisePreviewModal({
     const hasEquipment = !!exercise.equipment
     const hasSecondary = exercise.secondary_muscles && exercise.secondary_muscles.length > 0
 
-    const isYouTube =
-        !exercise.gif_url &&
-        !exercise.image_url &&
-        !!exercise.video_url &&
-        (exercise.video_url.includes('youtube.com') || exercise.video_url.includes('youtu.be'))
-
-    const ytId = isYouTube && exercise.video_url ? extractYouTubeId(exercise.video_url) : null
     const directMedia = exercise.gif_url ?? exercise.image_url ?? null
+    // video_url is stored as nocookie embed URL — match broadly on 'youtu'
+    const ytId = !directMedia && exercise.video_url ? extractYouTubeId(exercise.video_url) : null
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -452,7 +447,7 @@ function ExercisePreviewModal({
                     {ytId ? (
                         <iframe
                             className="w-full h-full"
-                            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&controls=1`}
+                            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&controls=0`}
                             title={exercise.name}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
