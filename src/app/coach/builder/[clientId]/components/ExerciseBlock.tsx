@@ -7,6 +7,7 @@ import { GripVertical, X, Minus, Plus, CircleHelp } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
+import { ExerciseThumb } from '@/components/exercise/ExerciseThumb'
 import type { BuilderBlock, BuilderSection } from '../types'
 
 function blockSection(b: BuilderBlock): BuilderSection {
@@ -128,21 +129,17 @@ function ExerciseBlockInner({
                     <GripVertical className="w-4 h-4" />
                 </button>
 
-                <div
-                    className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center overflow-hidden bg-muted relative border border-border"
-                    style={{ backgroundColor: `color-mix(in srgb, ${muscleColor} 15%, transparent)` }}
-                >
-                    {block.gif_url || (block.video_url && !block.video_url.includes('youtube') && !block.video_url.includes('youtu.be')) ? (
-                        <img
-                            src={block.gif_url || block.video_url!}
-                            alt={block.exercise_name}
-                            loading="lazy"
-                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-screen opacity-90 group-hover:opacity-100 transition-opacity"
-                        />
-                    ) : (
-                        <div className="w-full h-full opacity-20 bg-current"></div>
-                    )}
-                </div>
+                <ExerciseThumb
+                    exercise={{
+                        name: block.exercise_name,
+                        gif_url: block.gif_url ?? null,
+                        image_url: block.image_url ?? null,
+                        video_url: block.video_url ?? null,
+                    }}
+                    size="xs"
+                    showPlay={false}
+                />
+
 
                 <div
                     className="min-w-0 flex-1 cursor-pointer py-1"

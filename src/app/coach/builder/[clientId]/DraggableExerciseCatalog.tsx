@@ -12,6 +12,7 @@ import { filterExercises, cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
 import { getMuscleColor } from './muscle-colors'
 import { ExerciseThumb } from '@/components/exercise/ExerciseThumb'
+import { extractYoutubeVideoId } from '@/lib/youtube'
 
 type Exercise = Tables<'exercises'>
 
@@ -283,29 +284,41 @@ export function DraggableExerciseCatalog({
                             {previewExercise?.muscle_group}
                         </p>
                     </DialogHeader>
-                    {previewExercise?.gif_url || (previewExercise?.video_url && !previewExercise.video_url.includes('youtube') && !previewExercise.video_url.includes('youtu.be')) ? (
-                        <div className="aspect-video relative rounded-xl overflow-hidden bg-white mt-4 border border-border flex items-center justify-center">
-                            <img
-                                src={previewExercise.gif_url || previewExercise.video_url!}
-                                alt={previewExercise.name}
-                                className="w-full h-full object-contain"
-                            />
-                        </div>
-                    ) : previewExercise?.video_url && (previewExercise.video_url.includes('youtube') || previewExercise.video_url.includes('youtu.be')) ? (
-                        <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border flex items-center justify-center">
-                            <iframe
-                                className="w-full h-full"
-                                src={`https://www.youtube-nocookie.com/embed/${previewExercise.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}?autoplay=1&mute=1&loop=1&playlist=${previewExercise.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}&modestbranding=1&rel=0&showinfo=0&controls=0`}
-                                title={previewExercise.name}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                allowFullScreen
-                            />
-                        </div>
-                    ) : (
-                        <div className="aspect-video flex items-center justify-center rounded-xl bg-muted mt-4 border border-border">
-                            <Dumbbell className="w-12 h-12 text-muted-foreground opacity-20" />
-                        </div>
-                    )}
+                    {(() => {
+                        if (!previewExercise) return null
+                        const direct = previewExercise.gif_url || previewExercise.image_url || null
+                        const ytId = !direct && previewExercise.video_url ? extractYoutubeVideoId(previewExercise.video_url) : null
+                        if (direct) {
+                            return (
+                                <div className="aspect-video relative rounded-xl overflow-hidden bg-white mt-4 border border-border flex items-center justify-center">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={direct}
+                                        alt={previewExercise.name}
+                                        className="w-full h-full object-contain"
+                                    />
+                                </div>
+                            )
+                        }
+                        if (ytId) {
+                            return (
+                                <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border flex items-center justify-center">
+                                    <iframe
+                                        className="w-full h-full"
+                                        src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=0`}
+                                        title={previewExercise.name}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allowFullScreen
+                                    />
+                                </div>
+                            )
+                        }
+                        return (
+                            <div className="aspect-video flex items-center justify-center rounded-xl bg-muted mt-4 border border-border">
+                                <Dumbbell className="w-12 h-12 text-muted-foreground opacity-20" />
+                            </div>
+                        )
+                    })()}
                 </DialogContent>
             </Dialog>
         </div>

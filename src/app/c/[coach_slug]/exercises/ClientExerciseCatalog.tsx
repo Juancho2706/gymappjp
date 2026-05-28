@@ -12,6 +12,7 @@ import {
 import { Dumbbell, Search, Play, X, Info } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
+import { extractYoutubeVideoId } from "@/lib/youtube";
 
 type Exercise = Tables<"exercises">;
 
@@ -84,11 +85,11 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
           >
             <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
               {(() => {
-                // If it has a gif, show it immediately without checking youtube logic
-                if (ex.gif_url) {
+                const direct = ex.gif_url || ex.image_url;
+                if (direct) {
                   return (
                     <Image
-                      src={ex.gif_url}
+                      src={direct}
                       alt={ex.name}
                       fill
                       className="object-cover group-hover:scale-110 transition-transform duration-500"
@@ -96,31 +97,11 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                     />
                   );
                 }
-
-                const url = ex.video_url;
-                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                const getYouTubeId = (u: string) => {
-                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                  return match ? match[1] : null;
-                };
-
-                if (isYouTube) {
-                  const ytId = getYouTubeId(url!);
-                  return ytId ? (
-                    <Image
-                      src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-                      alt={ex.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                  ) : <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
-                }
-
-                if (url) {
+                const ytId = ex.video_url ? extractYoutubeVideoId(ex.video_url) : null;
+                if (ytId) {
                   return (
                     <Image
-                      src={url}
+                      src={`https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`}
                       alt={ex.name}
                       fill
                       className="object-cover group-hover:scale-110 transition-transform duration-500"
@@ -128,7 +109,6 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                     />
                   );
                 }
-
                 return <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
               })()}
             </div>
@@ -171,37 +151,30 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
           {selectedExercise && (
             <>
               {(() => {
-                if (selectedExercise.gif_url) {
+                const direct = selectedExercise.gif_url || selectedExercise.image_url;
+                if (direct) {
                   return (
                     <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
-                      <Image
-                        src={selectedExercise.gif_url}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={direct}
                         alt={selectedExercise.name}
-                        fill
-                        className="object-contain"
-                        unoptimized
+                        className="w-full h-full object-contain"
                       />
                     </div>
                   );
                 }
 
-                const url = selectedExercise.video_url;
-                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                const getYouTubeId = (u: string) => {
-                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                  return match ? match[1] : null;
-                };
-
-                if (isYouTube) {
-                  const ytId = getYouTubeId(url!);
+                const ytId = selectedExercise.video_url ? extractYoutubeVideoId(selectedExercise.video_url) : null;
+                if (ytId) {
                   const ex = selectedExercise as any
-                  const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=0${
+                  const embedUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=0${
                     ex.video_start_time ? `&start=${ex.video_start_time}` : ''
                   }${
                     ex.video_end_time ? `&end=${ex.video_end_time}` : ''
-                  }` : '';
+                  }`;
 
-                  return ytId ? (
+                  return (
                     <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border/50">
                       <iframe
                         className="w-full h-full"
@@ -211,7 +184,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                         allowFullScreen
                       />
                     </div>
-                  ) : null;
+                  );
                 }
 
                 if (selectedExercise.video_url) {

@@ -16,6 +16,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
+import { extractYoutubeVideoId } from '@/lib/youtube'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import {
@@ -31,6 +32,7 @@ interface ExerciseType {
     muscle_group: string
     video_url: string | null
     gif_url: string | null
+    image_url: string | null
     instructions: string[] | null
 }
 
@@ -436,7 +438,7 @@ export function WorkoutExecutionClient({
                                                                     <h3 className="text-lg font-bold">{exercise.name}</h3>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    {(exercise.gif_url || exercise.video_url) && (
+                                                                    {(exercise.gif_url || exercise.image_url || exercise.video_url) && (
                                                                         <button onClick={() => openTechnique(exercise)} aria-label="Ver técnica del ejercicio" className="h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground">
                                                                             <Info className="w-4 h-4" />
                                                                         </button>
@@ -569,16 +571,10 @@ export function WorkoutExecutionClient({
                         {(() => {
                             const exercise = selectedExercise
                             if (!exercise) return null
-                            const isYouTube = exercise.video_url?.includes('youtube.com') || exercise.video_url?.includes('youtu.be');
-                            
-                            const getYouTubeId = (url: string) => {
-                                const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                                return match ? match[1] : null;
-                            };
-                            
-                            const ytId = isYouTube && exercise.video_url ? getYouTubeId(exercise.video_url) : null;
-                            
-                            if (isYouTube && ytId) {
+                            const direct = exercise.gif_url || exercise.image_url
+                            const ytId = !direct && exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null;
+
+                            if (ytId) {
                                 return (
                                     <div className="relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center">
                                         <iframe
@@ -591,21 +587,20 @@ export function WorkoutExecutionClient({
                                     </div>
                                 );
                             }
-                            
-                            if (exercise.gif_url) {
+
+                            if (direct) {
                                 return (
                                     <div className="relative w-full h-48 md:h-64 shrink-0 bg-muted flex items-center justify-center">
-                                        <Image 
-                                            src={exercise.gif_url} 
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={direct}
                                             alt={exercise.name}
-                                            fill
-                                            className="object-contain p-4"
-                                            unoptimized
+                                            className="w-full h-full object-contain p-4"
                                         />
                                     </div>
                                 );
                             }
-                            
+
                             if (exercise.video_url) {
                                 const urlLower = exercise.video_url.toLowerCase();
                                 const isMp4 = urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.webm') || (urlLower.includes('supabase.co/storage') && !urlLower.includes('.gif') && !urlLower.includes('.jpg') && !urlLower.includes('.png'));

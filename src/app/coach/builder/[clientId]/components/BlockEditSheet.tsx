@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { ExerciseThumb } from '@/components/exercise/ExerciseThumb'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Input } from '@/components/ui/input'
@@ -123,19 +124,17 @@ export function BlockEditSheet({ block, clientId, onClose, onUpdate, onChange }:
             <SheetContent side="right" className="w-full max-w-full bg-background/95 p-0 shadow-2xl backdrop-blur-2xl sm:w-[540px] sm:max-w-[540px] border-l border-border">
                 <SheetHeader className="border-b border-border bg-muted/20 pb-6 pl-6 pr-14 pt-[max(1.5rem,env(safe-area-inset-top))]">
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0">
-                            {block.gif_url || (block.video_url && !block.video_url.includes('youtube') && !block.video_url.includes('youtu.be')) ? (
-                                <img
-                                    src={block.gif_url || block.video_url!}
-                                    alt={block.exercise_name}
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <span className="text-primary font-bold text-2xl">
-                                    {block.exercise_name.charAt(0)}
-                                </span>
-                            )}
-                        </div>
+                        <ExerciseThumb
+                            exercise={{
+                                name: block.exercise_name,
+                                gif_url: block.gif_url ?? null,
+                                image_url: block.image_url ?? null,
+                                video_url: block.video_url ?? null,
+                            }}
+                            size="md"
+                            showPlay={false}
+                            className="shrink-0"
+                        />
                         <div className="min-w-0 flex-1">
                             <SheetTitle className="text-lg font-display uppercase tracking-widest text-foreground leading-tight break-words">
                                 {block.exercise_name}

@@ -942,7 +942,7 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
                     exercise_id, sets, reps, target_weight_kg,
                     tempo, rir, rest_time, notes, order_index, superset_group,
                     progression_type, progression_value, section, is_override,
-                    exercises ( name, muscle_group, gif_url, video_url )
+                    exercises ( name, muscle_group, gif_url, video_url, image_url )
                 )
             )
         `)

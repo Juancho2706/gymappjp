@@ -547,6 +547,62 @@ body.immersive-workout-mode main {
   .coach-layout-container {
     display: block !important;
   }
+
+  @page {
+    margin: 12mm;
+    background: #0b0b0e;
+  }
+
+  /* Force browsers to honor backgrounds + colors instead of stripping ink */
+  html, body, *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force dark palette regardless of user theme */
+  :root, .dark, html, body {
+    --background: #0b0b0e !important;
+    --foreground: #f5f5f5 !important;
+    --card: #16161a !important;
+    --card-foreground: #f5f5f5 !important;
+    --popover: #16161a !important;
+    --popover-foreground: #f5f5f5 !important;
+    --secondary: #1f1f24 !important;
+    --secondary-foreground: #f5f5f5 !important;
+    --muted: #1f1f24 !important;
+    --muted-foreground: #c7c7cc !important;
+    --accent: #1f1f24 !important;
+    --accent-foreground: #f5f5f5 !important;
+    --border: rgba(255, 255, 255, 0.18) !important;
+    --input: rgba(255, 255, 255, 0.08) !important;
+    background: #0b0b0e !important;
+    color: #f5f5f5 !important;
+  }
+
+  body {
+    background: #0b0b0e !important;
+    color: #f5f5f5 !important;
+  }
+
+  /* Cards / surfaces que vienen con bg-white duro: forzar a oscuro */
+  .bg-white, .bg-background, [class*="bg-card"] {
+    background-color: #16161a !important;
+    color: #f5f5f5 !important;
+  }
+
+  /* Texto que viene oscuro hardcodeado: invertir a claro */
+  .text-black, .text-foreground, .text-gray-900, .text-gray-800, .text-gray-700, .text-slate-900, .text-slate-800 {
+    color: #f5f5f5 !important;
+  }
+  .text-gray-600, .text-gray-500, .text-slate-600, .text-slate-500 {
+    color: #c7c7cc !important;
+  }
+
+  /* Mantener acentos legibles */
+  .text-primary { color: #4da3ff !important; }
+
+  /* Imágenes / charts: respetar como vienen */
+  img, svg, canvas { filter: none !important; }
 }
 
 /* ============================================================

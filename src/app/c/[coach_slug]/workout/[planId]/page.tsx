@@ -24,6 +24,7 @@ export default async function WorkoutExecutionPage({ params }: Props) {
         muscle_group: string
         video_url: string | null
         gif_url: string | null
+        image_url: string | null
         instructions: string[] | null
     }
 
@@ -72,7 +73,7 @@ export default async function WorkoutExecutionPage({ params }: Props) {
             id, title, assigned_date, day_of_week, week_variant, program_id,
             workout_blocks (
                 id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, superset_group, progression_type, progression_value, is_override,
-                exercises ( id, name, muscle_group, video_url, gif_url, instructions )
+                exercises ( id, name, muscle_group, video_url, gif_url, image_url, instructions )
             )
         `)
         .eq('id', planId)
