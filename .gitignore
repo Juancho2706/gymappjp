@@ -93,6 +93,7 @@ vertex.json
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+/.playwright-mcp/
 scripts/rls-policies.sql
 lint_errors_utf8.txt
 lint_errors.txt

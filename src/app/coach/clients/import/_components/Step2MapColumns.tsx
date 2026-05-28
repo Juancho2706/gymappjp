@@ -11,6 +11,31 @@ interface Props {
     onComplete: (mapping: ColumnMapping, rows: MappedRow[]) => void
 }
 
+/** Normalize a raw cell value to ISO YYYY-MM-DD for subscription_start_date.
+ *  Handles: JS Date (from SheetJS cellDates:true), DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD.
+ *  Returns null for unparseable input so the DB never receives a stringified Date. */
+function normalizeImportDate(val: unknown): string | null {
+    if (!val) return null
+    if (val instanceof Date) {
+        // Extract local parts — avoids UTC→local shift (BUG-02)
+        const y = val.getFullYear()
+        const m = String(val.getMonth() + 1).padStart(2, '0')
+        const d = String(val.getDate()).padStart(2, '0')
+        return `${y}-${m}-${d}`
+    }
+    const s = String(val).trim()
+    if (!s) return null
+    // DD/MM/YYYY (Chilean format as documented in the importer)
+    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
+    // DD-MM-YYYY
+    const dmyDash = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+    if (dmyDash) return `${dmyDash[3]}-${dmyDash[2].padStart(2, '0')}-${dmyDash[1].padStart(2, '0')}`
+    // YYYY-MM-DD already ISO — pass through as-is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    return null
+}
+
 const FIELD_OPTIONS: { value: ImportField | 'ignore'; label: string }[] = [
     { value: 'ignore', label: '-- No importar --' },
     { value: 'full_name', label: 'Nombre completo' },
@@ -43,7 +68,10 @@ export function Step2MapColumns({ sheet, initialMapping, onBack, onComplete }: P
             Object.entries(mapping).forEach(([colIdx, field]) => {
                 if (!field) return
                 const val = row[Number(colIdx)]
-                ;(mapped as Record<string, unknown>)[field] = val != null ? String(val).trim() : null
+                const strVal = field === 'subscription_start_date'
+                    ? normalizeImportDate(val)
+                    : val != null ? String(val).trim() : null
+                ;(mapped as Record<string, unknown>)[field] = strVal
             })
             return mapped as MappedRow
         })

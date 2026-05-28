@@ -16,7 +16,7 @@ export function ExerciseCreateButton() {
                 <Plus className="h-4 w-4" />
                 Crear ejercicio
             </button>
-            <ExerciseFormModal open={open} onClose={() => setOpen(false)} />
+            {open && <ExerciseFormModal open={open} onClose={() => setOpen(false)} />}
         </>
     )
 }

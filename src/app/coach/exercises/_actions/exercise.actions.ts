@@ -112,6 +112,16 @@ export async function createExerciseAction(
         return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
     }
 
+    const { count: nameCount } = await supabase
+        .from('exercises')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', coach.id)
+        .ilike('name', parsed.data.name)
+
+    if ((nameCount ?? 0) > 0) {
+        return { fieldErrors: { name: ['Ya existe un ejercicio tuyo con ese nombre.'] } }
+    }
+
     const media = resolveMediaFields(parsed.data)
 
     const { data: exercise, error } = await supabase
@@ -166,6 +176,17 @@ export async function updateExerciseAction(
     const parsed = exerciseSchema.safeParse(raw)
     if (!parsed.success) {
         return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+    }
+
+    const { count: nameCount } = await supabase
+        .from('exercises')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', coach.id)
+        .ilike('name', parsed.data.name)
+        .neq('id', exerciseId)
+
+    if ((nameCount ?? 0) > 0) {
+        return { fieldErrors: { name: ['Ya existe un ejercicio tuyo con ese nombre.'] } }
     }
 
     // Cargar URLs viejas para detectar cleanup de storage

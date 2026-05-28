@@ -60,9 +60,15 @@ function initialMedia(exercise: ExerciseCatalogRow | undefined): MediaValue {
 export function ExerciseFormModal({ open, onClose, exercise }: Props) {
     const [isPending, startTransition] = useTransition()
     const [media, setMedia] = useState<MediaValue>(() => initialMedia(exercise))
+    const [name, setName] = useState(exercise?.name ?? '')
+    const [secondaryMuscles, setSecondaryMuscles] = useState(exercise?.secondary_muscles?.join(', ') ?? '')
+    const [instructions, setInstructions] = useState(exercise?.instructions?.join('\n') ?? '')
 
     useEffect(() => {
         setMedia(initialMedia(exercise))
+        setName(exercise?.name ?? '')
+        setSecondaryMuscles(exercise?.secondary_muscles?.join(', ') ?? '')
+        setInstructions(exercise?.instructions?.join('\n') ?? '')
     }, [exercise])
 
     const action = exercise
@@ -107,7 +113,8 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <label className="text-sm font-medium text-foreground">Nombre *</label>
                         <Input
                             name="name"
-                            defaultValue={exercise?.name ?? ''}
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
                             placeholder="Ej: Press banca inclinado"
                             required
                         />
@@ -183,7 +190,8 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <label className="text-sm font-medium text-foreground">Músculos secundarios</label>
                         <Input
                             name="secondary_muscles"
-                            defaultValue={exercise?.secondary_muscles?.join(', ') ?? ''}
+                            value={secondaryMuscles}
+                            onChange={(e) => setSecondaryMuscles(e.target.value)}
                             placeholder="Ej: Tríceps, Deltoides (separados por coma)"
                         />
                     </div>
@@ -193,7 +201,8 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <label className="text-sm font-medium text-foreground">Instrucciones</label>
                         <Textarea
                             name="instructions"
-                            defaultValue={exercise?.instructions?.join('\n') ?? ''}
+                            value={instructions}
+                            onChange={(e) => setInstructions(e.target.value)}
                             placeholder="Una instrucción por línea..."
                             rows={4}
                         />

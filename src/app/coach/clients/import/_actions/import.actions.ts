@@ -42,6 +42,26 @@ export type ImportClientsState = {
     rowErrors?: ImportRowError[]
 }
 
+function normalizeImportDate(raw: string | null | undefined): string | null {
+    if (!raw) return null
+    const s = raw.trim()
+    if (!s) return null
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
+    const dmyDash = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+    if (dmyDash) return `${dmyDash[3]}-${dmyDash[2].padStart(2, '0')}-${dmyDash[1].padStart(2, '0')}`
+    // Fallback: Date.toString() string that slipped past client normalization
+    const d = new Date(s)
+    if (!isNaN(d.getTime())) {
+        const y = d.getUTCFullYear()
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+        const day = String(d.getUTCDate()).padStart(2, '0')
+        return `${y}-${m}-${day}`
+    }
+    return null
+}
+
 function generateTempPassword(): string {
     const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
     return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
@@ -170,7 +190,7 @@ export async function importClientsAction(
                     full_name: parsed.data.full_name,
                     email: parsed.data.email,
                     phone: parsed.data.phone,
-                    subscription_start_date: parsed.data.subscription_start_date,
+                    subscription_start_date: normalizeImportDate(parsed.data.subscription_start_date),
                     temp_password: generateTempPassword(),
                 })
 
