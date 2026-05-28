@@ -6,7 +6,10 @@ import { toast } from 'sonner'
 import { FileImage, Image as ImageIcon, Loader2, Play, Upload, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { normalizeYoutubeEmbedUrl } from '@/lib/youtube'
-import { uploadExerciseMediaAction } from '../_actions/exercise-media.actions'
+import {
+    getSignedUploadUrlAction,
+    confirmExerciseMediaUploadAction,
+} from '../_actions/exercise-media.actions'
 import { EXERCISE_MEDIA_LIMITS } from '@/lib/uploads/image-validation'
 
 export type MediaKind = 'youtube' | 'gif' | 'image'
@@ -227,20 +230,42 @@ function FileUploadPanel({ kind, value, onChange }: FileUploadProps) {
                     toUpload = new File([compressed], 'compressed.webp', { type: 'image/webp' })
                 }
 
-                const fd = new FormData()
-                fd.append('file', toUpload)
-                const res = await uploadExerciseMediaAction(fd)
-
-                if (!res.success) {
-                    toast.error(res.error)
+                // Paso 1: servidor valida auth/tier/rate-limit/quota/tamaño → signed URL
+                const urlRes = await getSignedUploadUrlAction({
+                    contentType: toUpload.type,
+                    size: toUpload.size,
+                })
+                if (!urlRes.success) {
+                    toast.error(urlRes.error)
                     setLocalPreview(null)
                     URL.revokeObjectURL(previewUrl)
                     return
                 }
 
-                onChange(res.url)
+                // Paso 2: subir directo a Supabase (bypasea límite de 4.5MB de Vercel)
+                const uploadRes = await fetch(urlRes.signedUrl, {
+                    method: 'PUT',
+                    body: toUpload,
+                    headers: { 'Content-Type': toUpload.type },
+                })
+                if (!uploadRes.ok) {
+                    toast.error('Error al subir el archivo. Intentá de nuevo.')
+                    setLocalPreview(null)
+                    URL.revokeObjectURL(previewUrl)
+                    return
+                }
+
+                // Paso 3: servidor valida magic-bytes + dimensiones, registra audit
+                const confirmRes = await confirmExerciseMediaUploadAction(urlRes.path)
+                if (!confirmRes.success) {
+                    toast.error(confirmRes.error)
+                    setLocalPreview(null)
+                    URL.revokeObjectURL(previewUrl)
+                    return
+                }
+
+                onChange(urlRes.publicUrl)
                 toast.success('Medio subido correctamente.')
-                // Reemplazar preview local con URL subida (libera blob)
                 URL.revokeObjectURL(previewUrl)
                 setLocalPreview(null)
             } catch (err) {
