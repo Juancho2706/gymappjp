@@ -288,12 +288,14 @@ export function DraggableExerciseCatalog({
                         if (!previewExercise) return null
                         const direct = previewExercise.gif_url || previewExercise.image_url || null
                         const ytId = !direct && previewExercise.video_url ? extractYoutubeVideoId(previewExercise.video_url) : null
-                        if (direct) {
+                        // System exercises (ExerciseDB) store raw GIF URLs in video_url
+                        const rawVideoUrl = !direct && !ytId && previewExercise.video_url ? previewExercise.video_url : null
+                        if (direct || rawVideoUrl) {
                             return (
                                 <div className="aspect-video relative rounded-xl overflow-hidden bg-white mt-4 border border-border flex items-center justify-center">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
-                                        src={direct}
+                                        src={(direct || rawVideoUrl)!}
                                         alt={previewExercise.name}
                                         className="w-full h-full object-contain"
                                     />

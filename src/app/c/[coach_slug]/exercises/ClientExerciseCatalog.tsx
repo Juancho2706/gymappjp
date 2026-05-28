@@ -86,10 +86,13 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
             <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
               {(() => {
                 const direct = ex.gif_url || ex.image_url;
-                if (direct) {
+                const ytId = !direct && ex.video_url ? extractYoutubeVideoId(ex.video_url) : null;
+                const rawVideoUrl = !direct && !ytId && ex.video_url ? ex.video_url : null;
+                const displaySrc = direct || rawVideoUrl;
+                if (displaySrc) {
                   return (
                     <Image
-                      src={direct}
+                      src={displaySrc}
                       alt={ex.name}
                       fill
                       className="object-cover group-hover:scale-110 transition-transform duration-500"
@@ -97,7 +100,6 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                     />
                   );
                 }
-                const ytId = ex.video_url ? extractYoutubeVideoId(ex.video_url) : null;
                 if (ytId) {
                   return (
                     <Image

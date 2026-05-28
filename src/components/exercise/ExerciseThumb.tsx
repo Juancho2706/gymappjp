@@ -55,15 +55,17 @@ export function ExerciseThumb({
     const ytId =
         !media && exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null
     const ytThumb = ytId ? `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg` : null
-    const isGif = !!exercise.gif_url
+    // System exercises (ExerciseDB) store raw GIF/image URLs in video_url (not YouTube)
+    const rawVideoUrl = !media && !ytId && exercise.video_url ? exercise.video_url : null
+    const isGif = !!exercise.gif_url || !!rawVideoUrl
 
     return (
         <div
             className={`relative ${SIZE_MAP[size]} rounded-xl overflow-hidden bg-gradient-to-br from-muted to-muted/40 ${className}`}
         >
-            {media ? (
+            {media || rawVideoUrl ? (
                 <Image
-                    src={media}
+                    src={(media || rawVideoUrl)!}
                     alt={exercise.name}
                     fill
                     sizes={size === 'lg' ? '320px' : '80px'}
