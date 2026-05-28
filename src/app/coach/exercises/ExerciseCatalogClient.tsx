@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import {
     Dialog,
     DialogContent,
@@ -235,43 +234,43 @@ export function ExerciseCatalogClient({
                                             animate={{ height: 'auto', opacity: 1 }}
                                             exit={{ height: 0, opacity: 0 }}
                                             transition={{ duration: 0.2 }}
-                                            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4"
+                                            className="divide-y divide-border"
                                         >
                                             {exList.map((ex) => {
                                                 const isMine = ex.coach_id === myCoachId
+                                                const hasMedia = !!(ex.gif_url || ex.image_url || ex.video_url)
                                                 return (
                                                     <button
                                                         key={ex.id}
                                                         onClick={() => setSelected(ex)}
-                                                        className="group flex flex-col items-stretch text-left rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:bg-muted/40 group"
                                                     >
-                                                        <ExerciseThumb
-                                                            exercise={ex}
-                                                            coachLogoUrl={isMine ? coachLogoUrl : null}
-                                                            size="lg"
-                                                            className="rounded-none"
-                                                        />
-                                                        <div className="p-3 space-y-1">
-                                                            <p className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
                                                                 {ex.name}
                                                             </p>
-                                                            <div className="flex items-center gap-1.5">
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
                                                                 {isMine ? (
                                                                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary">
                                                                         <UserCircle className="w-3 h-3" /> Mío
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                                                                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                                                                         <Sparkles className="w-3 h-3" /> EVA
                                                                     </span>
                                                                 )}
                                                                 {ex.equipment && (
-                                                                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 truncate">
+                                                                    <span className="text-[10px] text-muted-foreground/60 truncate">
                                                                         · {ex.equipment}
                                                                     </span>
                                                                 )}
                                                             </div>
                                                         </div>
+                                                        {hasMedia && (
+                                                            <div className="shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                                                                <Zap className="w-3 h-3 text-primary" />
+                                                            </div>
+                                                        )}
                                                     </button>
                                                 )
                                             })}
@@ -453,12 +452,11 @@ function ExercisePreviewModal({
                             allowFullScreen
                         />
                     ) : directMedia ? (
-                        <Image
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
                             src={directMedia}
                             alt={`Demostración: ${exercise.name}`}
-                            fill
-                            className="object-contain"
-                            unoptimized
+                            className="w-full h-full object-contain"
                         />
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-50">
