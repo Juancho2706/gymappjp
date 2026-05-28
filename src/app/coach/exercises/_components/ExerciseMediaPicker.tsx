@@ -55,7 +55,7 @@ export function ExerciseMediaPicker({ value, onChange, error }: Props) {
 
     return (
         <div className="space-y-3">
-            <div className="flex gap-1.5 p-1 bg-muted/50 rounded-xl border border-border">
+            <div className="flex gap-1.5 p-1 bg-muted rounded-xl border border-border">
                 {TABS.map(({ kind, label, icon: Icon }) => {
                     const active = activeTab === kind
                     return (
@@ -65,8 +65,8 @@ export function ExerciseMediaPicker({ value, onChange, error }: Props) {
                             onClick={() => handleTabChange(kind)}
                             className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
                                 active
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                    ? 'bg-background dark:bg-card text-foreground shadow-sm ring-1 ring-border/40'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-background/50 dark:hover:bg-card/50'
                             }`}
                             aria-pressed={active}
                         >
@@ -144,7 +144,7 @@ function YoutubePanel({ value, onChange }: { value: string; onChange: (v: string
                 </div>
             )}
             {value && !embedUrl && (
-                <p className="text-xs text-amber-500">
+                <p className="text-xs text-amber-600 dark:text-amber-400">
                     URL inválida. Usá un link de youtube.com o youtu.be.
                 </p>
             )}

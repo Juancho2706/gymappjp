@@ -104,7 +104,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                     {/* Nombre */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Nombre *</label>
+                        <label className="text-sm font-medium text-foreground">Nombre *</label>
                         <Input
                             name="name"
                             defaultValue={exercise?.name ?? ''}
@@ -118,7 +118,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                     {/* Grupo muscular */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Grupo muscular *</label>
+                        <label className="text-sm font-medium text-foreground">Grupo muscular *</label>
                         <Select name="muscle_group" defaultValue={exercise?.muscle_group ?? ''} required>
                             <SelectTrigger>
                                 <SelectValue placeholder="Seleccioná un grupo" />
@@ -137,7 +137,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                     {/* Equipo + Dificultad */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Equipo</label>
+                            <label className="text-sm font-medium text-foreground">Equipo</label>
                             <Select name="equipment" defaultValue={exercise?.equipment ?? ''}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Seleccioná equipo" />
@@ -150,7 +150,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Dificultad</label>
+                            <label className="text-sm font-medium text-foreground">Dificultad</label>
                             <Select name="difficulty" defaultValue={exercise?.difficulty ?? ''}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Seleccioná dificultad" />
@@ -166,7 +166,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                     {/* Media picker (YouTube / GIF / Imagen) */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Demostración visual</label>
+                        <label className="text-sm font-medium text-foreground">Demostración visual</label>
                         <ExerciseMediaPicker
                             value={media}
                             onChange={setMedia}
@@ -180,7 +180,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                     {/* Músculos secundarios */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Músculos secundarios</label>
+                        <label className="text-sm font-medium text-foreground">Músculos secundarios</label>
                         <Input
                             name="secondary_muscles"
                             defaultValue={exercise?.secondary_muscles?.join(', ') ?? ''}
@@ -190,7 +190,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                     {/* Instrucciones */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Instrucciones</label>
+                        <label className="text-sm font-medium text-foreground">Instrucciones</label>
                         <Textarea
                             name="instructions"
                             defaultValue={exercise?.instructions?.join('\n') ?? ''}
