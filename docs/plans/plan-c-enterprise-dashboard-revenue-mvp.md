@@ -1897,8 +1897,8 @@ Fases futuras:
 
 - [x] Auditar schema actual de revocacion. Completado parcialmente el 2026-05-25 18:27:32 -04:00 para `organization_members` y flujo `removeCoachAction`.
 - [x] Definir estados canonicos `active`, `invited`, `revoked`, `suspended`. Completado el 2026-05-25 18:27:32 -04:00. Migration local `20260525182500_org_member_revoked_status.sql` permite `revoked` sin cambiar checks activos existentes.
-- [ ] Crear action segura para revocar staff/coach enterprise.
-- [ ] Agregar UI de revocacion con preview de impacto.
+- [x] Crear action segura para revocar staff/coach enterprise. Completado el 2026-05-29. `revokeStaffAction` en `org.actions.ts`: revoca membership, limpia workspace_preferences, audit `membership.revoked`. Guard: owner no revocable, coach redirige a panel coaches, ya-revocado bloqueado.
+- [x] Agregar UI de revocacion con preview de impacto. Completado el 2026-05-29. `RevokeStaffButton` en `team/_components/`: dialog con lista de consecuencias, error inline, botón solo para non-owner non-revoked staff. Team page actualizado con columna de acción + status coloreado.
 - [ ] Agregar prueba: coach revocado no entra enterprise pero mantiene standalone.
 
 ##### 2. RLS y Tenant Isolation
@@ -2494,8 +2494,9 @@ Pendiente:
 
 - [ ] Crear fase `Enterprise Responsive/PWA Rework` antes de E2E: shell mobile, nav sticky, subnav contextual, cards compactas, sheets para acciones y safe areas.
   - [x] Fix transversal shell mobile: layout Enterprise cambia a `flex-col md:flex-row` y main usa `overflow-x-clip`. Completado el 2026-05-26 21:32:49 -04:00. Verificado en `/assignments` mobile 390px sin overflow horizontal.
-- [ ] Convertir heroes grandes en headers compactos para pantallas internas en mobile.
-- [ ] Evitar tablas apiladas largas: usar list items + details sheet/modal.
+  - [x] Hero compression global (13 páginas org): título text-xl sm:text-3xl md:text-5xl; descripción hidden sm:block. Completado el 2026-05-29. Ahorra ~60px en 390px.
+  - [x] Rows compactas en mobile: coaches y clients usan flex single-line con stats inline bajo el nombre; columnas separadas solo en lg+/xl+. Completado el 2026-05-29.
+- [ ] Evitar tablas apiladas largas en más páginas: assignments, payments. Usar list items + details sheet/modal.
 - [ ] Revisar cada menu en viewport 390x844 y 430x932 antes de considerar listo.
 - [ ] Documentar equivalente futuro React Native por pantalla.
 
