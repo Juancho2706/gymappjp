@@ -3379,7 +3379,7 @@ Inputs usados para el bloque `Identity, Workspace y Acceso`:
 ### Backlog consolidado nuevo
 
 SEGURIDAD/BLOQUEANTE (antes de vender o prod):
-- [ ] 🔴 Mover `sharp` de devDependencies a dependencies (validación image-bomb es NO-OP en Vercel runtime hoy). (DevOps/Security)
+- [x] Mover `sharp` a dependencies + fail-closed en validateImageDimensions. Completado 2026-05-30 (commit e032a24).
 - [ ] MFA obligatorio para `org_owner`/`org_admin`, enforcement real. (Security)
 - [ ] Checklist RLS tabla-por-tabla + negative test por tabla: `workout_programs/plans/logs`, `nutrition_plans/meals/logs`, `client_payments`, `check_ins`. (Security/QA)
 - [ ] Inventario buckets storage + policies por prefix `orgs/{org_id}/`, `coaches/{coach_id}/`, `clients/{client_id}/` + test org A no lee assets org B. (Security)
