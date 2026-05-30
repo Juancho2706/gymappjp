@@ -117,6 +117,39 @@ export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
     return { subject, html }
 }
 
+// ── Coach signup email confirmation (free tier) ─────────────────────────────
+
+type CoachEmailConfirmationContext = {
+    coachName: string
+    confirmUrl: string
+}
+
+export function buildCoachEmailConfirmationEmail(ctx: CoachEmailConfirmationContext) {
+    const subject = 'Confirmá tu correo para activar tu cuenta EVA'
+
+    const body = `
+<h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+  Hola ${ctx.coachName}, confirmá tu email
+</h1>
+<p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+  Para activar tu cuenta gratuita de coach en EVA, hacé click en el botón de abajo. El enlace vence en 24 horas.
+</p>
+<div style="margin-bottom:24px;">
+  ${ctaButton('Confirmar mi correo →', ctx.confirmUrl)}
+</div>
+<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+  Si no creaste esta cuenta, ignorá este mensaje. ¿No ves el botón? Copiá este enlace en el navegador:<br />
+  <a href="${ctx.confirmUrl}" style="color:#10B981;word-break:break-all;">${ctx.confirmUrl}</a>
+</p>`
+
+    const html = wrapEmailLayout(body, {
+        previewText: 'Confirmá tu correo para activar tu plan gratuito en EVA.',
+        headerTitle: 'Confirmá tu cuenta',
+    })
+
+    return { subject, html }
+}
+
 // ── Free Coach Welcome ────────────────────────────────────────────────────────
 
 type FreeCoachWelcomeContext = {

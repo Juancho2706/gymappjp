@@ -22,6 +22,7 @@ import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
 import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
 import { clientIpFromRequest } from '@/lib/rate-limit'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
+import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
 
 export type RegisterState = {
     error?: string
@@ -184,7 +185,9 @@ export async function registerAction(
             slug,
             invite_code: inviteCode,
             primary_color: '#10B981',
-            subscription_status: isFreeTier ? 'pending_email' : 'pending_payment',
+            // Free tier: mark active immediately. Auth remains unconfirmed until email link
+            // is clicked, so this does not grant an active session early.
+            subscription_status: isFreeTier ? 'active' : 'pending_payment',
             subscription_tier: selectedTier,
             billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
             payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
@@ -202,7 +205,17 @@ export async function registerAction(
     }
 
     if (isFreeTier) {
-        // Free tier: email unconfirmed — do NOT sign in yet; Supabase sends confirmation email.
+        // admin.createUser does not trigger Supabase auth emails — send manually via Resend.
+        const emailSent = await sendCoachSignupConfirmationEmail({
+            email: emailSan,
+            password,
+            coachName: fullName,
+        })
+        if (!emailSent.ok) {
+            await adminDb.from('coaches').delete().eq('id', authData.user.id)
+            await adminDb.auth.admin.deleteUser(authData.user.id)
+            return { error: 'No pudimos enviar el correo de confirmación. Revisá el email e intentá de nuevo.' }
+        }
         // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
         redirect(`/verify-email?email=${encodeURIComponent(emailSan)}`)
     }
