@@ -26,6 +26,8 @@ export type TierCapabilities = {
     canUseNutrition: boolean
     canUseBranding: boolean
     canUseAdvancedReports: boolean
+    canCreateCustomExercises: boolean
+    canImportClients: boolean
 }
 
 export type CoachOrgContext = {
