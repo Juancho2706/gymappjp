@@ -180,22 +180,39 @@ BEGIN
   ON CONFLICT DO NOTHING;
 
   -- ============================================================
-  -- 9. Workout plan for client-a1 (E2E fixtures)
+  -- 9. Exercises — RLS isolation fixtures
+  -- exercise_coach_a1: coach-scoped (coach_a1, org_id=null) — only coach_a1 can see
+  -- exercise_org_a:    org-scoped   (org_id=org_a, coach_id=null) — all org_a members
+  -- exercise_solo:     standalone   (coach_solo, org_id=null) — only coach_solo
   -- ============================================================
   INSERT INTO exercises (
-    id, name, muscle_group, coach_id, instructions, equipment, body_part, difficulty, gender_focus
+    id, name, muscle_group, coach_id, org_id, source, instructions, equipment, body_part, difficulty, gender_focus
   )
-  VALUES (
-    '00000000-0000-0000-0007-000000000001',
-    'Sentadilla Goblet E2E',
-    'Piernas',
-    coach_a1,
-    ARRAY['Sostén la carga frente al pecho.', 'Baja controlado.', 'Sube empujando el piso.'],
-    'Mancuerna',
-    'Piernas',
-    'Principiante',
-    'Neutro'
-  )
+  VALUES
+    (
+      '00000000-0000-0000-0007-000000000001',
+      'Sentadilla Goblet E2E',
+      'Piernas',
+      coach_a1, NULL, 'coach',
+      ARRAY['Sostén la carga frente al pecho.', 'Baja controlado.', 'Sube empujando el piso.'],
+      'Mancuerna', 'Piernas', 'Principiante', 'Neutro'
+    ),
+    (
+      '00000000-0000-0000-0007-000000000002',
+      'Remo Org A E2E',
+      'Espalda',
+      NULL, org_a, 'org',
+      ARRAY['Activa espalda.', 'Codo atrás.'],
+      'Mancuerna', 'Espalda', 'Intermedio', 'Neutro'
+    ),
+    (
+      '00000000-0000-0000-0007-000000000003',
+      'Press Solo E2E',
+      'Pecho',
+      coach_solo, NULL, 'coach',
+      ARRAY['Empuja hacia arriba.'],
+      'Barra', 'Pecho', 'Intermedio', 'Neutro'
+    )
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO workout_programs (

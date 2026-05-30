@@ -26,6 +26,12 @@ const TEST_PASSWORD = 'TestPass123!'
 const ORG_A_ID = '00000000-0000-0000-0002-000000000001'
 const ORG_B_ID = '00000000-0000-0000-0002-000000000002'
 
+const EXERCISES = {
+  coachA1Scoped: '00000000-0000-0000-0007-000000000001', // coach_a1 personal (coach_id=coach_a1, org_id=null)
+  orgAScoped:    '00000000-0000-0000-0007-000000000002', // org exercise (org_id=org_a, coach_id=null)
+  soloScoped:    '00000000-0000-0000-0007-000000000003', // standalone coach_solo (coach_id=solo, org_id=null)
+}
+
 const USERS = {
   ownerA:     'coach-owner-a@eva-test.cl',
   coachA1:    'coach-member-a1@eva-test.cl',
@@ -222,5 +228,140 @@ test.describe('Audit log immutability', () => {
       .eq('org_id', ORG_A_ID)
 
     expect(error?.code).not.toBe('PGRST000')
+  })
+})
+
+// ============================================================
+// GRUPO 5 — Exercises RLS isolation
+// ============================================================
+
+test.describe('Exercises isolation', () => {
+  test('coach standalone NO ve exercises de org_a', async () => {
+    const sb = await signIn(USERS.standalone)
+    const { data } = await sb
+      .from('exercises')
+      .select('id')
+      .eq('id', EXERCISES.orgAScoped)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach standalone SÍ ve su propio exercise', async () => {
+    const sb = await signIn(USERS.standalone)
+    const { data } = await sb
+      .from('exercises')
+      .select('id')
+      .eq('id', EXERCISES.soloScoped)
+    expect(data ?? []).toHaveLength(1)
+  })
+
+  test('coach_a1 SÍ ve exercise org_a (org member)', async () => {
+    const sb = await signIn(USERS.coachA1)
+    const { data } = await sb
+      .from('exercises')
+      .select('id')
+      .eq('id', EXERCISES.orgAScoped)
+    expect(data ?? []).toHaveLength(1)
+  })
+
+  test('coach_a1 NO ve exercise standalone de coach_solo', async () => {
+    const sb = await signIn(USERS.coachA1)
+    const { data } = await sb
+      .from('exercises')
+      .select('id')
+      .eq('id', EXERCISES.soloScoped)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach_b1 NO ve exercise org_a', async () => {
+    const sb = await signIn(USERS.coachB1)
+    const { data } = await sb
+      .from('exercises')
+      .select('id')
+      .eq('id', EXERCISES.orgAScoped)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach standalone NO puede INSERT exercise con org_id', async () => {
+    const sb = await signIn(USERS.standalone)
+    const { error } = await sb
+      .from('exercises')
+      .insert({
+        name: 'Attack Exercise',
+        muscle_group: 'Pecho',
+        org_id: ORG_A_ID,
+        coach_id: null,
+        source: 'org',
+      })
+    // RLS debe bloquear
+    expect(error).not.toBeNull()
+  })
+
+  test('coach_a1 NO puede INSERT exercise en org_b', async () => {
+    const sb = await signIn(USERS.coachA1)
+    const { error } = await sb
+      .from('exercises')
+      .insert({
+        name: 'CrossOrg Attack',
+        muscle_group: 'Espalda',
+        org_id: ORG_B_ID,
+        coach_id: null,
+        source: 'org',
+      })
+    expect(error).not.toBeNull()
+  })
+})
+
+// ============================================================
+// GRUPO 6 — Enterprise coach no ve datos standalone
+// ============================================================
+
+test.describe('Enterprise coach isolation from standalone', () => {
+  test('coach_a1 (org_managed) NO ve clientes standalone (org_id IS NULL de otros coaches)', async () => {
+    const sb = await signIn(USERS.coachA1)
+    // Standalone clients have coach_id=coach_solo, org_id=null
+    // coach_a1 should NOT see them — RLS only allows coach_id=auth.uid() for standalone
+    const { data } = await sb
+      .from('clients')
+      .select('id, org_id')
+      .is('org_id', null)
+    // coach_a1 has no standalone clients in seed
+    const foreignStandalone = (data ?? []).filter(c => c.org_id === null)
+    // All returned rows must belong to coach_a1's own standalone (none in seed)
+    expect(foreignStandalone).toHaveLength(0)
+  })
+
+  test('coach standalone NO puede ver workout_programs de org_a', async () => {
+    const sb = await signIn(USERS.standalone)
+    const { data } = await sb
+      .from('workout_programs')
+      .select('id, org_id')
+      .eq('org_id', ORG_A_ID)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach_a1 NO puede ver workout_programs de org_b', async () => {
+    const sb = await signIn(USERS.coachA1)
+    const { data } = await sb
+      .from('workout_programs')
+      .select('id, org_id')
+      .eq('org_id', ORG_B_ID)
+    expect(data ?? []).toHaveLength(0)
+  })
+})
+
+// ============================================================
+// GRUPO 7 — workspace_preferences isolation
+// ============================================================
+
+test.describe('Workspace preferences isolation', () => {
+  test('coach standalone NO ve workspace_preferences de otro usuario', async () => {
+    const sb = await signIn(USERS.standalone)
+    // workspace_preferences should only return own rows
+    const { data } = await sb
+      .from('workspace_preferences')
+      .select('user_id')
+    const uniqueUsers = [...new Set((data ?? []).map(r => r.user_id))]
+    // All returned rows must be own user_id (RLS enforced)
+    expect(uniqueUsers.length).toBeLessThanOrEqual(1)
   })
 })
