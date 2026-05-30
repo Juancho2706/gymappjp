@@ -1,0 +1,20 @@
+# Normalize line endings to LF on commit; check out as-is.
+# Fixes spurious CRLF/LF churn on Windows (autocrlf) that produced
+# noisy "modified" diffs with zero content change.
+* text=auto eol=lf
+
+# Binary assets — never normalize
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.mp4 binary
+*.webm binary
+*.xlsx binary
