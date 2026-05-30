@@ -89,10 +89,10 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                                 <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
                                 Assignment control
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Asignaciones alumno-coach
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Vista operacional para decidir que alumno necesita coach, que coach tiene capacidad y que cambios deben quedar auditados antes de permitir mutations.
                             </p>
                         </div>

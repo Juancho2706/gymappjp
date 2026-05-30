@@ -128,7 +128,7 @@ export function OnboardingWizard({
                             <h1 className="text-3xl font-black tracking-tight text-white md:text-5xl">
                                 Activar {orgName}
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Setup guiado para llegar a valor real: marca lista, coaches activos, alumnos cargados y asignaciones iniciales.
                             </p>
                         </div>

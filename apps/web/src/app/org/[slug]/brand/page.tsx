@@ -101,10 +101,10 @@ export default async function OrgBrandPage({ params }: Props) {
                                 <Palette className="h-3.5 w-3.5" aria-hidden="true" />
                                 White-label command
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Brand Center
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Define la marca que veran el owner, staff enterprise, coaches creados por la empresa y alumnos. Guarda un draft y publicalo a coaches enterprise sin herramientas externas.
                             </p>
                         </div>

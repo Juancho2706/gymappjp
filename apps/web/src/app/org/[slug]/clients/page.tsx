@@ -110,10 +110,10 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
                                 <Users className="h-3.5 w-3.5" aria-hidden="true" />
                                 Operaciones / Alumnos
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Alumnos, asignacion y estado operacional
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Inbox operativo para ver quien esta sin coach, quien no tiene registro de pago y que alumnos requieren accion antes de que el negocio pierda control.
                             </p>
                             <div className="mt-5 flex flex-wrap gap-2">
@@ -253,9 +253,9 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
                                 const riskCount = (client.coach_id ? 0 : 1) + (!latestPayment && client.is_active !== false ? 1 : 0) + (paymentStatus === 'overdue' ? 1 : 0)
 
                                 return (
-                                    <div key={client.id} className="grid gap-4 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 xl:grid-cols-[1fr_180px_150px_180px] xl:items-center">
-                                        <div className="flex min-w-0 items-center gap-3">
-                                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
+                                    <div key={client.id} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/50 p-3 last:border-b-0 xl:grid xl:gap-4 xl:grid-cols-[1fr_180px_150px_180px] xl:items-center xl:p-4">
+                                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black xl:h-11 xl:w-11 ${
                                                 client.is_active === false
                                                     ? 'bg-zinc-800 text-zinc-500'
                                                     : riskCount > 0
@@ -266,37 +266,39 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
                                             </div>
                                             <div className="min-w-0">
                                                 <p className="truncate text-sm font-black text-white">{client.full_name ?? 'Alumno sin nombre'}</p>
-                                                <p className="mt-1 truncate text-xs text-zinc-500">{client.email ?? client.phone ?? 'Sin contacto'}</p>
+                                                {/* Mobile: coach + payment inline */}
+                                                <p className="xl:hidden mt-0.5 truncate text-xs text-zinc-500">
+                                                    {client.assignedCoach?.full_name ?? 'Sin coach'}
+                                                    {' · '}
+                                                    <span className={paymentStatus === 'paid' ? 'text-emerald-400' : paymentStatus === 'overdue' ? 'text-red-400' : 'text-zinc-400'}>
+                                                        {paymentLabel(paymentStatus)}
+                                                    </span>
+                                                </p>
+                                                <p className="hidden xl:block mt-1 truncate text-xs text-zinc-500">{client.email ?? client.phone ?? 'Sin contacto'}</p>
                                             </div>
                                         </div>
 
-                                        <div>
+                                        <div className="hidden xl:block">
                                             <p className="text-xs text-zinc-500">Coach</p>
                                             <p className="mt-1 truncate text-sm font-bold text-zinc-100">{client.assignedCoach?.full_name ?? 'Sin coach'}</p>
                                         </div>
 
-                                        <div>
+                                        <div className="hidden xl:block">
                                             <p className="text-xs text-zinc-500">Pago</p>
                                             <span className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${paymentTone(paymentStatus)}`}>
                                                 {paymentLabel(paymentStatus)}
                                             </span>
                                         </div>
 
-                                        <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
+                                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 xl:justify-end">
                                             <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-bold ${
                                                 client.is_active === false
                                                     ? 'border-zinc-700 bg-zinc-900 text-zinc-400'
                                                     : 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
                                             }`}>
                                                 {client.is_active === false ? <UserX className="h-3 w-3" aria-hidden="true" /> : <CheckCircle2 className="h-3 w-3" aria-hidden="true" />}
-                                                {client.is_active === false ? 'Inactivo' : 'Activo'}
+                                                <span className="hidden sm:inline">{client.is_active === false ? 'Inactivo' : 'Activo'}</span>
                                             </span>
-                                            {latestPayment && (
-                                                <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
-                                                    <CalendarClock className="h-3 w-3" aria-hidden="true" />
-                                                    {latestPayment.payment_date}
-                                                </span>
-                                            )}
                                             {isAdmin && (
                                                 <AssignClientSelect
                                                     orgSlug={slug}

@@ -102,10 +102,10 @@ export default async function OrgCoachesPage({ params }: Props) {
                                 <Users className="h-3.5 w-3.5" aria-hidden="true" />
                                 Equipo enterprise
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Coaches, staff y capacidad
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Controla quien opera con alumnos, quien administra la plataforma y donde se esta cargando de mas el equipo.
                             </p>
                             <div className="mt-5 flex flex-wrap gap-2">
@@ -218,9 +218,9 @@ export default async function OrgCoachesPage({ params }: Props) {
                                         .map(item => ({ id: item.coach_id!, name: item.coach?.full_name ?? 'Coach' }))
 
                                     return (
-                                        <div key={member.id} className="grid gap-4 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 lg:grid-cols-[1fr_110px_110px_1.1fr] lg:items-center">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-sm font-black text-violet-300">
+                                        <div key={member.id} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/50 p-3 last:border-b-0 lg:grid lg:gap-4 lg:grid-cols-[1fr_110px_110px_1.1fr] lg:items-center lg:p-4">
+                                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-sm font-black text-violet-300 lg:h-11 lg:w-11">
                                                     {initials(member.coach?.full_name)}
                                                 </div>
                                                 <div className="min-w-0">
@@ -230,25 +230,33 @@ export default async function OrgCoachesPage({ params }: Props) {
                                                     >
                                                         {member.coach?.full_name ?? 'Coach sin nombre'}
                                                     </Link>
-                                                    <p className="mt-1 truncate text-xs text-zinc-500">{member.coach?.slug ?? 'Sin slug'}</p>
+                                                    {/* Mobile: inline stats */}
+                                                    <p className="lg:hidden mt-0.5 truncate text-xs text-zinc-500">
+                                                        <span className={loadTone(assigned, targetLoad).includes('emerald') ? 'text-emerald-400' : loadTone(assigned, targetLoad).includes('amber') ? 'text-amber-400' : 'text-red-400'}>
+                                                            {assigned} alumnos
+                                                        </span>
+                                                        {' · '}
+                                                        <span>{member.last_health_score != null ? `${member.last_health_score}%` : 'N/D'}</span>
+                                                    </p>
+                                                    <p className="hidden lg:block mt-1 truncate text-xs text-zinc-500">{member.coach?.slug ?? 'Sin slug'}</p>
                                                 </div>
                                             </div>
 
-                                            <div>
+                                            <div className="hidden lg:block">
                                                 <p className="text-xs text-zinc-500">Alumnos</p>
                                                 <span className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-black ${loadTone(assigned, targetLoad)}`}>
                                                     {assigned}
                                                 </span>
                                             </div>
 
-                                            <div>
+                                            <div className="hidden lg:block">
                                                 <p className="text-xs text-zinc-500">Health</p>
                                                 <span className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-black ${healthTone(member.last_health_score)}`}>
                                                     {member.last_health_score != null ? `${member.last_health_score}%` : 'N/D'}
                                                 </span>
                                             </div>
 
-                                            <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+                                            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 lg:justify-end">
                                                 <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
                                                     <RoleIcon className="h-3 w-3" aria-hidden="true" />
                                                     {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] ?? member.role}

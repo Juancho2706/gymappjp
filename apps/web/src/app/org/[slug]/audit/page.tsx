@@ -68,10 +68,10 @@ export default async function OrgAuditPage({ params }: Props) {
                                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                                 Security evidence
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Audit Log
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Historial read-only de acciones enterprise sensibles. Sirve para soporte, seguridad, compliance y confianza B2B.
                             </p>
                             {canExportAudit ? (

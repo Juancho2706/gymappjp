@@ -89,10 +89,10 @@ export default async function OrgReportsPage({ params }: Props) {
                                 <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
                                 Decision intelligence
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Reportes operacionales
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Paquete semanal para owners: carga de coaches, salud de alumnos, riesgos y exports futuros sin mezclarlo con cobro in-app.
                             </p>
                         </div>

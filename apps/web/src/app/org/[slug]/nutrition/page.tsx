@@ -89,10 +89,10 @@ export default async function OrgNutritionPage({ params }: Props) {
                                 <Salad className="h-3.5 w-3.5" aria-hidden="true" />
                                 Herramientas / Nutricion
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Biblioteca nutricional enterprise
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Plantillas base para que coaches enterprise creen planes mas rapido, con macros consistentes y meal structure reutilizable.
                             </p>
                             <div className="mt-5 flex flex-wrap gap-2">

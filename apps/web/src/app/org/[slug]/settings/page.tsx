@@ -80,10 +80,10 @@ export default async function OrgSettingsPage({ params }: Props) {
                                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                                 Seguridad y Admin
                             </span>
-                            <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-white md:text-5xl">
+                            <h1 className="mt-3 max-w-3xl text-xl font-black tracking-tight text-white sm:text-3xl md:text-5xl">
                                 Admin center enterprise
                             </h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                            <p className="hidden sm:block mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
                                 Datos de negocio, seats, billing manual y controles que protegen el flujo enterprise sin mezclarlo con coach standalone.
                             </p>
                             <div className="mt-5 flex flex-wrap gap-2">
