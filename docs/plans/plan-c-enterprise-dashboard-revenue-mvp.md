@@ -1678,10 +1678,10 @@ Prioridad P2 - completar features que ya existen pero siguen incompletas:
 - [ ] Asignaciones: pasar de preview a cockpit accionable para asignar/reasignar desde `/assignments`, no solo desde alumnos/coaches.
   - [x] Primer slice accionable: asignacion individual desde `/assignments` con preview de carga, guard org/client/coach y audit `client.assigned`. Completado el 2026-05-26 21:11:37 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado.
   - [x] Segundo slice accionable: bulk assign seguro desde `/assignments` con seleccion explicita, contador, preview de carga, limite 50, guard server-side por lote y audit `client.bulk_assigned`. Completado el 2026-05-26 21:32:49 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado, screenshots Playwright desktop/mobile sin overflow horizontal.
-- [ ] Alumnos: bulk actions seguros con preview, confirmacion, audit event y compatibilidad enterprise-coach-alumno sin afectar coach standalone.
+- [x] Alumnos: bulk actions seguros. Completado el 2026-05-30. bulkAssignSelectedClientsAction + bulkArchiveClientsAction. ClientsListClient con checkboxes + floating bar. Guards cross-tenant en server action.
 - [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
   - [x] Filtros por estado y CSV auditado para pagos operacionales. Completado el 2026-05-26 21:44:53 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado, screenshots Playwright desktop/mobile sin overflow horizontal, descarga CSV con header valido.
-- [ ] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event.
+- [x] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event. Completado el 2026-05-30. Route /org/[slug]/reports/export, fail-closed audit, metadata header.
 - [ ] Audit: filtros por action/actor/date y checksum generation job local/manual.
 - [ ] Brand Studio: modelo `organization_branding` con draft/published/versionado/rollback.
 - [ ] Team: permisos granulares por feature, no solo `org_owner/org_admin/coach`.
