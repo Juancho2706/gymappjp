@@ -1666,8 +1666,8 @@ Checklist anti-regresion:
   - Cambio: planes existentes propagados filtran `coach_id` y updates vuelven a aplicar `org_id`.
   - Cambio: pagina `/coach/nutrition-plans/client/[clientId]` valida `coach_id` en la query inicial, no solo en el page guard.
   - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
-- [ ] Negative tests: coach standalone no ve alumnos enterprise aunque tenga mismo `user.id`.
-- [ ] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org.
+- [x] Negative tests: coach standalone no ve alumnos enterprise aunque tenga mismo `user.id`. Completado el 2026-05-30. 24/24 tests passing en rls-isolation.spec.ts.
+- [x] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org. Completado el 2026-05-30.
 - [ ] Negative tests: alumno standalone conserva coach brand y portal `/c/[coach_slug]`.
 - [ ] Negative tests: alumno enterprise conserva org brand y no cae a brand del coach.
 - [ ] Exports/reportes nunca deben derivar tenant solo desde parametros URL; deben resolver workspace server-side.
