@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { filterExercises } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
 
 type Exercise = Tables<'exercises'>
 
@@ -24,9 +25,10 @@ interface ExerciseCatalogClientProps {
     globalExercises: Exercise[]
     customExercises: Exercise[]
     byMuscle: Record<string, Exercise[]>
+    canCreateExercises?: boolean
 }
 
-export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle }: ExerciseCatalogClientProps) {
+export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle, canCreateExercises = false }: ExerciseCatalogClientProps) {
     const [selected, setSelected] = useState<Exercise | null>(null)
     const [search, setSearch] = useState('')
     const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
@@ -106,6 +108,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                             {filteredExercises.length}
                         </Badge>
                     </h2>
+                    {canCreateExercises && <ExerciseCreateButton />}
                 </div>
 
                 {Object.keys(groupedByMuscle).length > 0 ? (
@@ -192,39 +195,26 @@ function ExercisePreviewModal({
 }) {
     if (!exercise) return null
 
-    const displayVideo = exercise.video_url || exercise.gif_url
-    const isYouTube = displayVideo?.includes('youtube.com') || displayVideo?.includes('youtu.be')
     const hasInstructions = exercise.instructions && exercise.instructions.length > 0
     const hasEquipment = !!exercise.equipment
     const hasSecondary = exercise.secondary_muscles && exercise.secondary_muscles.length > 0
 
-    // Extract YouTube ID
+    // gif_url / image_url = direct media (no YouTube parsing needed)
+    const directMedia = (exercise as Record<string, unknown>).gif_url as string | null
+        ?? (exercise as Record<string, unknown>).image_url as string | null
+        ?? null
+    // ytId only if no direct media
     const getYouTubeId = (url: string) => {
         const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)
         return match ? match[1] : null
     }
-    const ytId = isYouTube ? getYouTubeId(displayVideo!) : null
-    
-    // Check if it's a direct GIF or image from our bucket/ExerciseDB
-    const isGif = !!exercise.gif_url || (exercise.video_url && (exercise.video_url.toLowerCase().endsWith('.gif') || exercise.video_url.includes('supabase')))
-    const gifSource = exercise.gif_url || exercise.video_url
+    const ytId = !directMedia && exercise.video_url ? getYouTubeId(exercise.video_url) : null
+    // rawVideoUrl: video_url that is not YouTube (e.g. ExerciseDB GIF URLs)
+    const rawVideoUrl = !directMedia && !ytId && exercise.video_url ? exercise.video_url : null
 
-    // Build YouTube embed URL with trimming parameters
     const getEmbedUrl = () => {
         if (!ytId) return ''
-        let url = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`
-        
-        // Add start time if present (assuming video_start_time is in seconds)
-        if ((exercise as any).video_start_time) {
-            url += `&start=${(exercise as any).video_start_time}`
-        }
-
-        // Add end time if present
-        if ((exercise as any).video_end_time) {
-            url += `&end=${(exercise as any).video_end_time}`
-        }
-        
-        return url
+        return `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`
     }
 
     return (
@@ -235,7 +225,7 @@ function ExercisePreviewModal({
             >
                 {/* Media demonstration area */}
                 <div className="sticky top-0 relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-10">
-                    {isYouTube && ytId ? (
+                    {ytId ? (
                         <iframe
                             className="w-full h-full"
                             src={getEmbedUrl()}
@@ -243,13 +233,12 @@ function ExercisePreviewModal({
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
                         />
-                    ) : isGif && gifSource ? (
-                        <Image
-                            src={gifSource}
+                    ) : (directMedia || rawVideoUrl) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                            src={(directMedia || rawVideoUrl)!}
                             alt={`Demostración: ${exercise.name}`}
-                            fill
-                            className="object-contain"
-                            unoptimized
+                            className="w-full h-full object-contain"
                         />
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
@@ -321,7 +310,7 @@ function ExercisePreviewModal({
                         </p>
                         <div className="bg-card border border-border rounded-xl p-4">
                             <div className="flex items-center gap-3">
-                                {isYouTube && ytId ? (
+                                {ytId ? (
                                     <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
                                         <Image
                                             src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
@@ -331,14 +320,13 @@ function ExercisePreviewModal({
                                             unoptimized
                                         />
                                     </div>
-                                ) : isGif && gifSource ? (
+                                ) : (directMedia || rawVideoUrl) ? (
                                     <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
-                                        <Image
-                                            src={gifSource}
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={(directMedia || rawVideoUrl)!}
                                             alt={exercise.name}
-                                            fill
-                                            className="object-cover"
-                                            unoptimized
+                                            className="w-full h-full object-cover"
                                         />
                                     </div>
                                 ) : (

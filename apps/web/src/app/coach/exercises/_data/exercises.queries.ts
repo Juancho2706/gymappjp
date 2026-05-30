@@ -5,34 +5,51 @@ import type { Tables } from '@/lib/database.types'
 
 type Exercise = Tables<'exercises'>
 
+export type ExerciseCatalogRow = Exercise
+
 export interface ExerciseCatalog {
     globalExercises: Exercise[]
     customExercises: Exercise[]
     byMuscle: Record<string, Exercise[]>
 }
 
-export const getExerciseCatalog = cache(async (coachId: string): Promise<ExerciseCatalog> => {
+export const getExerciseCatalog = cache(async (
+    coachId: string,
+    orgId?: string | null
+): Promise<ExerciseCatalog> => {
     const supabase = await createClient()
+
+    // Build filter: system exercises always visible; owner exercises by coach_id or org_id
+    let filterStr: string
+    if (orgId) {
+        // Org context: system (coach_id IS NULL AND org_id IS NULL) OR org exercises
+        filterStr = `and(coach_id.is.null,org_id.is.null),org_id.eq.${orgId}`
+    } else {
+        // Standalone coach: system OR own exercises
+        filterStr = `and(coach_id.is.null,org_id.is.null),coach_id.eq.${coachId}`
+    }
 
     let exercisesQuery = await supabase
         .from('exercises')
         .select(EXERCISE_CATALOG_COLUMNS)
-        .or(`coach_id.is.null,coach_id.eq.${coachId}`)
+        .or(filterStr)
+        .is('deleted_at', null)
         .order('muscle_group')
         .order('name')
 
     if (exercisesQuery.error) {
+        // Fallback if new columns not yet present (e.g. before migration)
         exercisesQuery = await supabase
             .from('exercises')
             .select('*')
-            .or(`coach_id.is.null,coach_id.eq.${coachId}`)
+            .or(filterStr)
             .order('muscle_group')
             .order('name')
     }
 
     const allExercises = (exercisesQuery.data ?? []) as Exercise[]
-    const globalExercises = allExercises.filter(ex => ex.coach_id === null)
-    const customExercises = allExercises.filter(ex => ex.coach_id === coachId)
+    const globalExercises = allExercises.filter(ex => ex.coach_id === null && (ex as Record<string, unknown>).org_id == null)
+    const customExercises = allExercises.filter(ex => ex.coach_id === coachId || (orgId && (ex as Record<string, unknown>).org_id === orgId))
     const byMuscle = globalExercises.reduce<Record<string, Exercise[]>>((acc, ex) => {
         if (!acc[ex.muscle_group]) acc[ex.muscle_group] = []
         acc[ex.muscle_group].push(ex)

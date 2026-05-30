@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
 import { getCoach } from '@/lib/coach/get-coach'
+import { getCoachOrgContext } from '@/lib/coach-context'
 import { getExerciseCatalog } from './_data/exercises.queries'
 import type { Metadata } from 'next'
 
@@ -10,7 +11,12 @@ export default async function CoachExercisesPage() {
     const coach = await getCoach()
     if (!coach) redirect('/login')
 
-    const { globalExercises, customExercises, byMuscle } = await getExerciseCatalog(coach.id)
+    const ctx = await getCoachOrgContext()
+    const orgId = ctx?.orgId ?? null
+    // Enterprise coach (role='coach' within org) cannot create exercises
+    const canCreateExercises = !ctx?.isOrgUser || ctx.isOrgAdmin
+
+    const { globalExercises, customExercises, byMuscle } = await getExerciseCatalog(coach.id, orgId)
 
     return (
         <div className="p-4 md:p-8 max-w-6xl mx-auto animate-fade-in">
@@ -30,6 +36,7 @@ export default async function CoachExercisesPage() {
                     globalExercises={globalExercises}
                     customExercises={customExercises}
                     byMuscle={byMuscle}
+                    canCreateExercises={canCreateExercises}
                 />
             </div>
         </div>
