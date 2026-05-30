@@ -3276,3 +3276,137 @@ Inputs usados para el bloque `Identity, Workspace y Acceso`:
 - TokenIDP 2026 - Designing Multi-Tenant Identity: tenants/clientes como entidades de primer nivel.
 - Techstack 2026 - SaaS Auth Providers: Supabase viable sin costo, pero requiere disciplina manual en organizaciones/RLS.
 - Reddit Supabase/Next.js 2026: usuarios pueden pertenecer a multiples organizaciones; tenant/membership no debe vivir solo en UI.
+
+---
+
+## Auditoría Multi-Rol — 2026-05-30
+
+**Objetivo:** validar que el flujo `enterprise → coach enterprise → alumno enterprise` y el flujo `coach standalone → alumno standalone` coexisten sin mezcla de datos, marca ni permisos. Auditoría por 14 roles sobre estado REAL del código (verificado en archivos, no asumido).
+
+### Estado verificado (qué SÍ existe)
+
+- Identidad/workspace: `domain/auth/types.ts`, `services/auth/workspace.service.ts`, `workspace-permissions.service.ts`, `workspace-route-guard.service.ts`, `workspace-brand.service.ts`, `infrastructure/db/workspace.repository.ts`.
+- Selector post-login: `/workspace/select` (page + `workspace-home.ts`).
+- Invites: tabla `organization_invites` con hash + campos workspace. Redeem en `/join/[invite_code]` **con rate-limit** (`rateLimitInviteAccept` por IP — verificado).
+- Billing EVA bloqueado a coach enterprise (server + APIs, `canViewBilling`).
+- RLS workspace + 24 negative tests pasando; fix de policies conflictivas en `exercises` (migración `20260530100000`).
+- Features coach scoped: exercise creator, client importer, reports CSV export auditado, bulk student actions, revoke staff.
+- Mobile responsive parcial (hero compression + rows compactas coaches/clients).
+
+### Hallazgos por rol
+
+**1. Software Architect**
+- 🔴 NO existe switcher de workspace persistente in-app (solo `/workspace/select` post-login). Cambiar contexto exige re-login/volver al selector. Falta dropdown en account menu.
+- 🟡 Deuda crítica: `clients.id = auth.users.id` impide mismo email como alumno en 2 contextos. Sin plan de ejecución fechado.
+- 🟡 Falta doc único "matriz de capabilities por workspace" (hoy disperso en services).
+- ✅ Clean Architecture respetada en features nuevas.
+
+**2. Backend Engineer**
+- 🟡 `bulkAssignSelectedClientsAction` hace UPDATE + upsert en 2 pasos sin transacción → estado partido posible. Migrar a RPC transaccional.
+- 🟡 Falta helper central `assertOrgClientOwnership(ids, orgId)` reutilizable.
+- 🟡 Reports export arma CSV en memoria con service role, sin cap de filas/streaming. OK <1k, agregar límite.
+- ✅ Guards server-side correctos; service role solo en actions con contexto admin.
+
+**3. Frontend Engineer**
+- 🟡 `BulkClientActions.tsx` quedó huérfano (reemplazado por `ClientsListClient.tsx`). Eliminar.
+- 🟡 Floating bar usa `md:left-72` hardcoded (ancho sidebar). Tokenizar.
+- 🟡 Falta estado optimista en bulk actions.
+- ✅ Patrón RSC→client component correcto.
+
+**4. Mobile Engineer (iOS/Android)**
+- 🔴 App RN (`apps/mobile`) NO tiene pantallas enterprise/workspace (solo `lib/org.ts`). Alumno enterprise en RN no resuelve marca org.
+- 🟡 Contratos `ActiveWorkspace`/`WorkspaceBrand` viven en `apps/web/src`, no en `packages/`. Mover para paridad RN.
+- 🟡 Deep links sin schema `{workspace_type, org_id, target}`.
+- ✅ Login schema enterprise coach ya en `@eva/schemas`.
+
+**5. DevOps Engineer**
+- 🟡 Migraciones locales (`20260527*`, `20260530100000`) NO aplicadas a prod. Falta runbook bulk apply + orden + rollback antes de merge a master/live.
+- 🟡 Sin CI que corra `rls-isolation.spec.ts` por PR.
+- 🔴 `sharp` está en **devDependencies** (`^0.34.5`), NO en dependencies. En Vercel runtime puede no estar disponible → `image-validation.server.ts` cae al catch que retorna `{ok:true}` y la validación de dimensiones (defensa image-bomb) se vuelve NO-OP. Mover a dependencies.
+- ✅ Supabase local como fuente de verdad.
+
+**6. QA Automation (Web & Mobile)**
+- 🔴 Faltan negative tests: branding resolver, cache de workspace revocado, storage cross-org, exports cross-tenant.
+- 🟡 Sin test revoke→no-reingreso.
+- 🟡 Sin E2E happy path enterprise completo.
+- 🟡 Seed sin logos/colores distintos por org para tests de branding.
+- ✅ 24 tests RLS de aislamiento pasando.
+
+**7. Security Engineer**
+- 🔴 MFA "policy layer preparada" pero NO enforced para owner/admin.
+- 🟡 Falta checklist RLS tabla-por-tabla: `workout_*`, `nutrition_*`, `client_payments`, `check_ins`, `storage.objects`. Solo `exercises` auditado a fondo.
+- 🟡 Storage: sin inventario de buckets/paths ni policies por prefix verificadas (riesgo fuga fotos/logos/exports entre orgs).
+- ✅ Invite redeem CON rate-limit (verificado). Codes hasheados, billing aislado, service role server-only.
+
+**8. Product Manager**
+- 🟡 Sin "momento de valor 30s" instrumentado (onboarding al primer outcome).
+- 🟡 Falta línea de corte "ya se puede cobrar" vs nice-to-have.
+- 🟡 Sin métricas de activación enterprise (eventos propios, sin servicio pago).
+- ✅ Posicionamiento/comprador bien definidos.
+
+**9. UX/UI Designer (Web & Mobile)**
+- 🟡 Tablas apiladas aún en `/assignments` y `/payments` mobile.
+- 🟡 Acciones usan modales custom en vez de bottom sheets (inconsistente con thumb-zone 2026).
+- 🟡 Sin empty states ilustrados por contexto.
+- 🟡 Contraste AA dark mode no verificado sistemáticamente.
+- ✅ Hero compression + densidad operacional aplicada.
+
+**10. Head of Sales (B2B Enterprise)**
+- 🟡 Falta "Proof Pack" exportable (PDF) para demo en sales call.
+- 🟡 Sin demo org pública sin cuenta.
+- 🟡 Falta PDF ejecutivo de reportes (CSV ya existe).
+
+**11. SDR**
+- 🟡 Sin trial enterprise autoservicio (crear org es manual).
+- 🟡 Sin landing enterprise para captar leads.
+- 🟡 Invite code sin tracking de origen.
+
+**12. Customer Success Manager**
+- 🟡 Onboarding existe pero sin triggers de email condicionales.
+- 🟡 Falta health score org-level (existe coach health) para detectar churn.
+- ✅ Readiness checklist orientado a outcomes.
+
+**13. Legal & Compliance (Chile)**
+- 🔴 Ley 21.719 vigente 2026-12-01. Faltan derechos ARCO/portabilidad/borrado. Datos de salud son sensibles.
+- 🟡 Falta definir responsable de datos por contexto: empresa (mandante) vs EVA (procesador) vs coach.
+- 🟡 Importador registra consentimiento ✅; falta data map + retention.
+
+**14. Fintech / Integrations**
+- ✅ Enterprise NO cobra in-app (registro operacional manual). Sin riesgo regulatorio.
+- 🟡 `/payments`: faltan vencimientos + alertas dashboard.
+- 🟡 Separar conceptualmente billing-de-org (suscripción enterprise) de payments-de-alumno (control gym).
+
+### Backlog consolidado nuevo
+
+SEGURIDAD/BLOQUEANTE (antes de vender o prod):
+- [ ] 🔴 Mover `sharp` de devDependencies a dependencies (validación image-bomb es NO-OP en Vercel runtime hoy). (DevOps/Security)
+- [ ] MFA obligatorio para `org_owner`/`org_admin`, enforcement real. (Security)
+- [ ] Checklist RLS tabla-por-tabla + negative test por tabla: `workout_programs/plans/logs`, `nutrition_plans/meals/logs`, `client_payments`, `check_ins`. (Security/QA)
+- [ ] Inventario buckets storage + policies por prefix `orgs/{org_id}/`, `coaches/{coach_id}/`, `clients/{client_id}/` + test org A no lee assets org B. (Security)
+- [ ] Negative tests: branding resolver, workspace revocado por cache, exports cross-tenant. (QA)
+- [ ] Test revoke→no-reingreso enterprise, conserva standalone. (QA)
+- [ ] E2E happy path enterprise (Playwright). (QA)
+
+PRODUCTO (flujo usable end-to-end):
+- [ ] Workspace switcher persistente in-app (account menu) con labels humanos, sin re-login. (Architect/Frontend)
+- [ ] Mover contratos `ActiveWorkspace`/`WorkspaceBrand` a `packages/`. (Mobile/Architect)
+- [ ] `bulkAssignSelectedClientsAction` → RPC transaccional + helper `assertOrgClientOwnership`. (Backend)
+- [ ] Eliminar `BulkClientActions.tsx` huérfano; tokenizar `md:left-72`. (Frontend)
+- [ ] Org-level health score para CSM. (Product/CSM)
+- [ ] Plan ejecutable fechado para `clients.id = auth.users.id` (multi-contexto alumno). (Architect)
+
+UX/MOBILE:
+- [ ] `/assignments` y `/payments`: rows compactas + bottom sheets mobile. (UX)
+- [ ] Migrar modales destructivos a bottom sheets en <md. (UX)
+- [ ] Empty states ilustrados por contexto. (UX)
+- [ ] Pasada contraste AA dark mode enterprise. (UX)
+
+VENTAS/LEGAL (al buscar cobrar):
+- [ ] Proof Pack exportable (PDF) + PDF ejecutivo de reportes. (Sales)
+- [ ] Derechos ARCO + data map + retention; checklist Ley 21.719 antes de 2026-12-01. (Legal)
+- [ ] Definir responsable de datos por contexto en TOS enterprise. (Legal)
+- [ ] Runbook DevOps: bulk apply migraciones local→prod con orden + rollback + backup. (DevOps)
+- [ ] CI que corre `rls-isolation.spec.ts` por PR. (DevOps)
+
+### Línea de corte "Enterprise vendible"
+MVP cobrable = features actuales (✅) + bloque SEGURIDAD completo + workspace switcher + org health score + runbook deploy. El resto (Proof Pack PDF, multi-contexto alumno, paridad RN) es post-primer-cliente.
