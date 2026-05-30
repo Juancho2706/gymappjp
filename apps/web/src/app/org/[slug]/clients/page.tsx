@@ -5,19 +5,16 @@ import {
     AlertTriangle,
     ArrowRight,
     BadgeCheck,
-    CalendarClock,
-    CheckCircle2,
     Search,
     Upload,
     UserCheck,
     UserPlus,
-    UserX,
     Users,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClientPayments, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { AddClientForm } from './_components/AddClientForm'
-import { AssignClientSelect } from './_components/AssignClientSelect'
 import { ImportClientsModal } from './_components/ImportClientsModal'
+import { ClientsListClient, type ClientDisplayRow, type ActiveCoachOption } from './_components/ClientsListClient'
 
 export const metadata: Metadata = { title: 'Alumnos' }
 
@@ -26,27 +23,6 @@ interface Props {
     searchParams: Promise<{ q?: string; view?: string }>
 }
 
-function initials(name: string | null | undefined) {
-    return (name?.trim()?.charAt(0) || '?').toUpperCase()
-}
-
-function paymentTone(status: string | null | undefined) {
-    if (status === 'paid') return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
-    if (status === 'pending') return 'border-amber-400/25 bg-amber-400/10 text-amber-300'
-    if (status === 'overdue') return 'border-red-400/25 bg-red-400/10 text-red-300'
-    if (status === 'scholarship') return 'border-sky-400/25 bg-sky-400/10 text-sky-300'
-    if (status === 'paused') return 'border-zinc-700 bg-zinc-900 text-zinc-400'
-    return 'border-zinc-700 bg-zinc-900 text-zinc-400'
-}
-
-function paymentLabel(status: string | null | undefined) {
-    if (status === 'paid') return 'Pagado'
-    if (status === 'pending') return 'Pendiente'
-    if (status === 'overdue') return 'Vencido'
-    if (status === 'scholarship') return 'Becado'
-    if (status === 'paused') return 'Pausado'
-    return 'Sin pago'
-}
 
 export default async function OrgClientsPage({ params, searchParams }: Props) {
     const { slug } = await params
@@ -245,81 +221,31 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
                         ))}
                     </div>
 
-                    <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
-                        {filteredClients.length > 0 ? (
-                            filteredClients.map(client => {
-                                const latestPayment = latestPaymentByClient.get(client.id)
-                                const paymentStatus = latestPayment?.status ?? null
-                                const riskCount = (client.coach_id ? 0 : 1) + (!latestPayment && client.is_active !== false ? 1 : 0) + (paymentStatus === 'overdue' ? 1 : 0)
-
-                                return (
-                                    <div key={client.id} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/50 p-3 last:border-b-0 xl:grid xl:gap-4 xl:grid-cols-[1fr_180px_150px_180px] xl:items-center xl:p-4">
-                                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black xl:h-11 xl:w-11 ${
-                                                client.is_active === false
-                                                    ? 'bg-zinc-800 text-zinc-500'
-                                                    : riskCount > 0
-                                                        ? 'bg-amber-400/10 text-amber-300'
-                                                        : 'bg-emerald-400/10 text-emerald-300'
-                                            }`}>
-                                                {initials(client.full_name)}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-black text-white">{client.full_name ?? 'Alumno sin nombre'}</p>
-                                                {/* Mobile: coach + payment inline */}
-                                                <p className="xl:hidden mt-0.5 truncate text-xs text-zinc-500">
-                                                    {client.assignedCoach?.full_name ?? 'Sin coach'}
-                                                    {' · '}
-                                                    <span className={paymentStatus === 'paid' ? 'text-emerald-400' : paymentStatus === 'overdue' ? 'text-red-400' : 'text-zinc-400'}>
-                                                        {paymentLabel(paymentStatus)}
-                                                    </span>
-                                                </p>
-                                                <p className="hidden xl:block mt-1 truncate text-xs text-zinc-500">{client.email ?? client.phone ?? 'Sin contacto'}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="hidden xl:block">
-                                            <p className="text-xs text-zinc-500">Coach</p>
-                                            <p className="mt-1 truncate text-sm font-bold text-zinc-100">{client.assignedCoach?.full_name ?? 'Sin coach'}</p>
-                                        </div>
-
-                                        <div className="hidden xl:block">
-                                            <p className="text-xs text-zinc-500">Pago</p>
-                                            <span className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${paymentTone(paymentStatus)}`}>
-                                                {paymentLabel(paymentStatus)}
-                                            </span>
-                                        </div>
-
-                                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 xl:justify-end">
-                                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-bold ${
-                                                client.is_active === false
-                                                    ? 'border-zinc-700 bg-zinc-900 text-zinc-400'
-                                                    : 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
-                                            }`}>
-                                                {client.is_active === false ? <UserX className="h-3 w-3" aria-hidden="true" /> : <CheckCircle2 className="h-3 w-3" aria-hidden="true" />}
-                                                <span className="hidden sm:inline">{client.is_active === false ? 'Inactivo' : 'Activo'}</span>
-                                            </span>
-                                            {isAdmin && (
-                                                <AssignClientSelect
-                                                    orgSlug={slug}
-                                                    clientId={client.id}
-                                                    currentCoachId={client.coach_id ?? undefined}
-                                                    coaches={activeCoaches}
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
-                                )
-                            })
-                        ) : (
-                            <div className="p-8 text-center">
-                                <p className="text-sm font-bold text-zinc-300">{q ? 'Sin resultados' : 'Sin alumnos en esta vista'}</p>
-                                <p className="mt-2 text-sm text-zinc-500">
-                                    {q ? 'Prueba otro nombre o email.' : 'Usa alta individual o import CSV para comenzar.'}
-                                </p>
-                            </div>
-                        )}
-                    </div>
+                    <ClientsListClient
+                        orgSlug={slug}
+                        isAdmin={isAdmin}
+                        coaches={activeCoaches.map<ActiveCoachOption>(c => ({
+                            id: c.id,
+                            name: c.full_name ?? 'Coach',
+                            slug: c.slug,
+                        }))}
+                        clients={filteredClients.map<ClientDisplayRow>(client => {
+                            const latestPayment = latestPaymentByClient.get(client.id)
+                            const paymentStatus = latestPayment?.status ?? null
+                            const riskCount = (client.coach_id ? 0 : 1) + (!latestPayment && client.is_active !== false ? 1 : 0) + (paymentStatus === 'overdue' ? 1 : 0)
+                            return {
+                                id: client.id,
+                                name: client.full_name,
+                                email: client.email,
+                                phone: client.phone,
+                                isActive: client.is_active !== false,
+                                coachId: client.coach_id,
+                                coachName: client.assignedCoach?.full_name ?? null,
+                                paymentStatus,
+                                riskCount,
+                            }
+                        })}
+                    />
                 </section>
             </div>
         </div>

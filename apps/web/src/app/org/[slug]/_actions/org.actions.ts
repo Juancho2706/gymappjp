@@ -585,6 +585,128 @@ export async function bulkReassignClientsAction(
 }
 
 /**
+ * Assigns a specific selection of clients to a coach (bulk, by client ID list).
+ * Guards: org membership, coach belongs to org, all clients belong to org.
+ * Max 50 clients per call.
+ */
+export async function bulkAssignSelectedClientsAction(
+    orgSlug: string,
+    clientIds: string[],
+    toCoachId: string,
+): Promise<{ success?: boolean; count?: number; error?: string }> {
+    if (!clientIds.length) return { error: 'No hay alumnos seleccionados.' }
+    if (clientIds.length > 50) return { error: 'Máximo 50 alumnos por operación.' }
+
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    // Verify coach belongs to org
+    const { data: toMember } = await admin
+        .from('organization_members')
+        .select('id, coach_id')
+        .eq('org_id', org.id)
+        .eq('coach_id', toCoachId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!toMember) return { error: 'Coach no pertenece a la organización.' }
+
+    // Verify all clients belong to this org (prevents cross-tenant attack)
+    const { data: orgClients } = await admin
+        .from('clients')
+        .select('id')
+        .eq('org_id', org.id)
+        .in('id', clientIds)
+    const validIds = new Set((orgClients ?? []).map(c => c.id))
+    const invalid = clientIds.filter(id => !validIds.has(id))
+    if (invalid.length) return { error: `${invalid.length} alumnos no pertenecen a la organización.` }
+
+    // Assign each client to coach
+    const { error: updateError } = await admin
+        .from('clients')
+        .update({ coach_id: toCoachId })
+        .eq('org_id', org.id)
+        .in('id', clientIds)
+    if (updateError) return { error: updateError.message }
+
+    // Upsert assignments
+    const now = new Date().toISOString()
+    const assignRows = clientIds.map(clientId => ({
+        org_id: org.id,
+        client_id: clientId,
+        coach_id: toCoachId,
+        assigned_at: now,
+        assigned_by: user.id,
+    }))
+    await admin.from('coach_client_assignments')
+        .upsert(assignRows, { onConflict: 'org_id,client_id,coach_id' })
+        .then(undefined, () => undefined) // best-effort, don't block
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.bulk_assigned',
+        targetType: 'coach',
+        targetId: toCoachId,
+        metadata: { client_ids: clientIds, count: clientIds.length, coach_id: toCoachId },
+    })
+
+    revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/assignments`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, count: clientIds.length }
+}
+
+/**
+ * Archives a selection of clients (sets is_active=false).
+ * Guards: all clients must belong to the org.
+ */
+export async function bulkArchiveClientsAction(
+    orgSlug: string,
+    clientIds: string[],
+): Promise<{ success?: boolean; count?: number; error?: string }> {
+    if (!clientIds.length) return { error: 'No hay alumnos seleccionados.' }
+    if (clientIds.length > 50) return { error: 'Máximo 50 alumnos por operación.' }
+
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    // Verify clients belong to org
+    const { data: orgClients } = await admin
+        .from('clients')
+        .select('id')
+        .eq('org_id', org.id)
+        .in('id', clientIds)
+    const validIds = new Set((orgClients ?? []).map(c => c.id))
+    const invalid = clientIds.filter(id => !validIds.has(id))
+    if (invalid.length) return { error: `${invalid.length} alumnos no pertenecen a la organización.` }
+
+    const { error } = await admin
+        .from('clients')
+        .update({ is_active: false })
+        .eq('org_id', org.id)
+        .in('id', clientIds)
+    if (error) return { error: error.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.bulk_archived',
+        targetType: 'client',
+        targetId: org.id,
+        metadata: { client_ids: clientIds, count: clientIds.length },
+    })
+
+    revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, count: clientIds.length }
+}
+
+/**
  * Revokes enterprise staff access (non-coach roles: org_admin, ops, analyst, etc.)
  * - Sets status='revoked', deleted_at=now()
  * - Clears workspace_preferences for that org

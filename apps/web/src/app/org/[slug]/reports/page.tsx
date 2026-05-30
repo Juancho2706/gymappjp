@@ -205,30 +205,44 @@ export default async function OrgReportsPage({ params }: Props) {
                             </div>
                         </section>
 
-                        <section className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-5">
-                            <div className="flex items-center gap-2">
-                                <LockKeyhole className="h-4 w-4 text-amber-200" aria-hidden="true" />
-                                <h2 className="text-lg font-black text-white">Exports bloqueados</h2>
+                        <section className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-5">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <FileSpreadsheet className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                                    <h2 className="text-lg font-black text-white">Export CSV</h2>
+                                </div>
                             </div>
-                            <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                                CSV/PDF deben exigir permiso `org.export_reports` y escribir audit log antes de entregar archivos.
+                            <p className="mt-2 text-sm leading-6 text-emerald-100/80">
+                                Reporte semanal operacional: KPIs, rendimiento por coach, alumnos en riesgo y listado completo. Se registra en Audit Log.
                             </p>
+                            <a
+                                href={`/org/${slug}/reports/export`}
+                                download
+                                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-400 transition-colors"
+                            >
+                                <Download className="h-4 w-4" aria-hidden="true" />
+                                Descargar reporte
+                            </a>
                         </section>
                     </aside>
                 </section>
 
                 <section className="grid gap-3 md:grid-cols-3">
-                    {[
-                        [FileSpreadsheet, 'CSV operativo', 'Primero para planillas: coaches, alumnos, pagos operacionales y riesgos.'],
-                        [Download, 'PDF ejecutivo', 'Despues: resumen semanal listo para socios y reuniones internas.'],
-                        [LockKeyhole, 'Audit trail', 'Cada export futuro debe registrar actor, reporte, filtros y timestamp.'],
-                    ].map(([Icon, title, detail]) => (
-                        <div key={title as string} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-                            <Icon className="h-5 w-5 text-sky-300" aria-hidden="true" />
-                            <h3 className="mt-4 text-sm font-black text-white">{title as string}</h3>
-                            <p className="mt-2 text-xs leading-5 text-zinc-500">{detail as string}</p>
-                        </div>
-                    ))}
+                    <div className="rounded-2xl border border-emerald-400/20 bg-zinc-900/70 p-4">
+                        <FileSpreadsheet className="h-5 w-5 text-emerald-300" aria-hidden="true" />
+                        <h3 className="mt-4 text-sm font-black text-white">CSV operativo</h3>
+                        <p className="mt-2 text-xs leading-5 text-zinc-400">Disponible. KPIs, coaches, alumnos en riesgo y listado completo. Auditado.</p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-700 bg-zinc-900/70 p-4 opacity-60">
+                        <Download className="h-5 w-5 text-zinc-500" aria-hidden="true" />
+                        <h3 className="mt-4 text-sm font-black text-zinc-400">PDF ejecutivo</h3>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">Próximamente. Resumen listo para socios y reuniones internas.</p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                        <LockKeyhole className="h-5 w-5 text-sky-300" aria-hidden="true" />
+                        <h3 className="mt-4 text-sm font-black text-white">Audit trail</h3>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">Cada export registra actor, tipo, filtros y timestamp en el Audit Log.</p>
+                    </div>
                 </section>
 
                 <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
