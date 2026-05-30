@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import { RevokeStaffButton } from './_components/RevokeStaffButton'
 import {
     Activity,
     CheckCircle2,
@@ -126,33 +127,51 @@ export default async function OrgTeamPage({ params }: Props) {
                             {enterpriseUsers.length > 0 ? (
                                 enterpriseUsers.map((member) => {
                                     const displayName = member.coach?.full_name ?? (member.role === 'org_owner' ? 'Owner enterprise' : 'Admin enterprise')
+                                    const isRevokable = member.role !== 'org_owner' && member.status !== 'revoked'
+                                    const statusColor =
+                                        member.status === 'active' ? 'text-emerald-300' :
+                                        member.status === 'revoked' ? 'text-red-400' :
+                                        'text-amber-300'
                                     return (
-                                        <div key={member.id} className="grid gap-4 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 lg:grid-cols-[1fr_130px_150px_110px] lg:items-center">
+                                        <div key={member.id} className="grid gap-3 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center lg:grid-cols-[1fr_120px_130px_auto] lg:items-center">
                                             <div className="flex min-w-0 items-center gap-3">
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400/10 text-sm font-black text-amber-300">
+                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400/10 text-sm font-black text-amber-300">
                                                     {initials(displayName)}
                                                 </div>
                                                 <div className="min-w-0">
                                                     <p className="truncate text-sm font-bold text-zinc-100">{displayName}</p>
-                                                    <p className="flex items-center gap-1.5 truncate text-xs text-zinc-500">
-                                                        <Mail className="h-3 w-3" aria-hidden="true" />
-                                                        {member.user_id.slice(0, 8)}...
+                                                    <p className="truncate text-xs text-zinc-500">
+                                                        {roleLabel(member.role)} · id {member.user_id.slice(0, 8)}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <p className="text-xs text-zinc-500">Rol</p>
-                                                <p className="text-sm font-bold text-zinc-100">{roleLabel(member.role)}</p>
-                                            </div>
-                                            <div>
+                                            <div className="hidden lg:block">
                                                 <p className="text-xs text-zinc-500">Estado</p>
-                                                <p className={member.status === 'active' ? 'text-sm font-bold text-emerald-300' : 'text-sm font-bold text-amber-300'}>
-                                                    {member.status}
+                                                <p className={`text-sm font-semibold ${statusColor}`}>
+                                                    {member.status === 'active' ? 'Activo' :
+                                                     member.status === 'revoked' ? 'Revocado' :
+                                                     member.status === 'invited' ? 'Invitado' : member.status}
                                                 </p>
                                             </div>
-                                            <div className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
+                                            <div className="hidden lg:flex items-center gap-1.5 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400 w-fit">
                                                 <KeyRound className="h-3 w-3" aria-hidden="true" />
                                                 MFA policy
+                                            </div>
+                                            <div className="flex items-center justify-end gap-2 sm:col-start-2 lg:col-start-auto">
+                                                {/* Mobile-only status badge */}
+                                                <span className={`lg:hidden text-xs font-semibold ${statusColor}`}>
+                                                    {member.status === 'active' ? 'Activo' :
+                                                     member.status === 'revoked' ? 'Revocado' :
+                                                     member.status === 'invited' ? 'Invitado' : member.status}
+                                                </span>
+                                                {isRevokable && (
+                                                    <RevokeStaffButton
+                                                        orgSlug={slug}
+                                                        memberId={member.id}
+                                                        memberName={displayName}
+                                                        memberRole={roleLabel(member.role)}
+                                                    />
+                                                )}
                                             </div>
                                         </div>
                                     )

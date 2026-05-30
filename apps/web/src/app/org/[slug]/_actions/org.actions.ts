@@ -583,3 +583,64 @@ export async function bulkReassignClientsAction(
     revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true, count: count ?? 0 }
 }
+
+/**
+ * Revokes enterprise staff access (non-coach roles: org_admin, ops, analyst, etc.)
+ * - Sets status='revoked', deleted_at=now()
+ * - Clears workspace_preferences for that org
+ * - Writes membership.revoked audit event
+ * Owner cannot be revoked; only org_owner can revoke another admin.
+ */
+export async function revokeStaffAction(orgSlug: string, memberId: string) {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: target } = await admin
+        .from('organization_members')
+        .select('id, user_id, role, status, coach_id')
+        .eq('id', memberId)
+        .eq('org_id', org.id)
+        .is('deleted_at', null)
+        .maybeSingle()
+
+    if (!target) return { error: 'Miembro no encontrado.' }
+    if (target.role === 'org_owner') return { error: 'No se puede revocar al propietario.' }
+    if (target.role === 'coach') return { error: 'Usá "Remover coach" desde el panel de coaches.' }
+    if (target.status === 'revoked') return { error: 'Ya está revocado.' }
+
+    const { error } = await admin
+        .from('organization_members')
+        .update({ status: 'revoked', deleted_at: new Date().toISOString() })
+        .eq('id', memberId)
+
+    if (error) return { error: error.message }
+
+    // Clear cached workspace preference so next login doesn't re-enter this org
+    if (target.user_id) {
+        await admin
+            .from('workspace_preferences')
+            .delete()
+            .eq('user_id', target.user_id)
+            .eq('last_org_id', org.id)
+    }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: target.status === 'invited' ? 'invite.revoked' : 'membership.revoked',
+        targetType: 'organization_member',
+        targetId: target.user_id ?? memberId,
+        metadata: {
+            member_id: memberId,
+            previous_role: target.role,
+            previous_status: target.status,
+            cleared_workspace_preference: !!target.user_id,
+        },
+    })
+
+    revalidatePath(`/org/${orgSlug}/team`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true }
+}
