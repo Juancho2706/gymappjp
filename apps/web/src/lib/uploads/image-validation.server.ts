@@ -14,8 +14,11 @@ export async function validateImageDimensions(buffer: Buffer): Promise<Dimension
     try {
         const mod = await import('sharp')
         sharpFn = (mod as unknown as { default: typeof sharpFn }).default
-    } catch {
-        return { ok: true, width: 0, height: 0 }
+    } catch (err) {
+        // FAIL-CLOSED: sharp es dependency obligatoria. Si no carga, NO dejamos pasar
+        // la imagen sin validar dimensiones (defensa image-bomb). Rechazar.
+        console.error('[image-validation] sharp no disponible — rechazando upload por seguridad:', err)
+        return { ok: false, reason: 'No se pudo validar la imagen en el servidor. Intentá de nuevo.' }
     }
     try {
         const meta = await sharpFn(buffer, { limitInputPixels: EXERCISE_MEDIA_LIMITS.maxPixels }).metadata()
