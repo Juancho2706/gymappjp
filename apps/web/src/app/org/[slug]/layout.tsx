@@ -50,7 +50,7 @@ export default async function OrgAdminLayout({ children, params }: Props) {
             />
 
             <div className="flex min-w-0 flex-1 flex-col">
-                {org.myRole === 'org_owner' && <MfaBanner orgSlug={slug} />}
+                {(org.myRole === 'org_owner' || org.myRole === 'org_admin') && <MfaBanner orgSlug={slug} />}
                 <main className="flex-1 overflow-x-clip overflow-y-auto">
                     {children}
                 </main>

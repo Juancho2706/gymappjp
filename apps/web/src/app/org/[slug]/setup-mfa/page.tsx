@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ShieldCheck, Loader2, CheckCircle2 } from 'lucide-react'
 import Image from 'next/image'
+import { clearMfaRequirementAction } from './mfa.actions'
 
 interface Props {
     params: Promise<{ slug: string }>
@@ -63,6 +64,9 @@ export default function SetupMfaPage({ params }: Props) {
                 setError('Código incorrecto. Verifica la hora de tu app.')
                 return
             }
+
+            // Clear the requires_mfa_setup flag so middleware stops blocking
+            await clearMfaRequirementAction()
 
             setDone(true)
             setTimeout(() => router.push(`/org/${slug}`), 1500)

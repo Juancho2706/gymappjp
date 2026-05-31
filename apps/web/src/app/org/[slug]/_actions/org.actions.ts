@@ -202,11 +202,16 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
     if (!availability.ok) return { error: availability.error }
 
     const tempPassword = parsed.data.temp_password || generateTempPassword()
+    // org_admin/org_owner get the MFA requirement flag — middleware redirects them to
+    // setup-mfa until they enroll TOTP. Enterprise coaches don't access /org/* dashboard.
+    // Only org_admin gets MFA enforcement (org_owner is not created via this form)
+    const requiresMfa = parsed.data.role === 'org_admin'
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
         email,
         password: tempPassword,
         email_confirm: true,
         user_metadata: { full_name: parsed.data.full_name, org_id: org.id, org_role: parsed.data.role },
+        app_metadata: requiresMfa ? { requires_mfa_setup: true } : {},
     })
     if (authError || !authData.user) return { error: authError?.message ?? 'No se pudo crear el usuario' }
 
