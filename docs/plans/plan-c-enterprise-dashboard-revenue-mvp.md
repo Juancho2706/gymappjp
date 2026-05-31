@@ -2446,9 +2446,9 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Activity feed persistente.
-- [ ] Action queue con acciones reales: asignar coach, registrar pago, invitar coach, publicar brand.
-- [ ] Health score explicado por componentes.
+- [x] Activity feed persistente. Completado 2026-05-30 (commit beaf7a6). Últimos 8 org_audit_logs en dashboard, coloreados por tipo, link a /audit.
+- [x] Action queue con acciones reales. Ya completado: usa unassignedClients.length, inactiveClients.length, pendingMembers.length de datos reales.
+- [x] Health score explicado por componentes. Completado: OrgHealthScoreRefresher muestra adherencia7d/asignados/activos/programas como breakdown al cargar.
 - [ ] Version mobile: resumen ejecutivo compacto + acciones prioritarias.
 
 ### Operaciones / Alumnos `/clients`
