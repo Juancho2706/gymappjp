@@ -4,15 +4,18 @@ import {
     AlertTriangle,
     ArrowRight,
     BadgeCheck,
+    Briefcase,
     Building2,
     CheckCircle2,
     Clock3,
     Dumbbell,
+    Eye,
     Palette,
     ShieldCheck,
     TrendingUp,
     UserCheck,
     Users,
+    type LucideIcon,
 } from 'lucide-react'
 import type { OrgAuditLog, OrgClient, OrgMember, OrgWithMembership } from '../../_data/org.queries'
 import { OrgHealthScoreRefresher } from './OrgHealthScoreRefresher'
@@ -102,38 +105,58 @@ export function EnterpriseDashboardHome({
         .sort((a, b) => b.assigned - a.assigned)
         .slice(0, 5)
 
-    const actions = [
+    const allActions = [
         {
             label: 'Asignar alumnos sin coach',
             detail: `${unassignedClients.length} alumnos esperan responsable`,
             href: `/org/${slug}/clients?view=unassigned`,
             severity: unassignedClients.length > 0 ? 'amber' : 'ok',
+            roles: ['org_owner', 'org_admin', 'ops'],
         },
         {
             label: 'Revisar alumnos inactivos',
             detail: `${inactiveClients.length} alumnos marcados como inactivos`,
             href: `/org/${slug}/clients?view=inactive`,
             severity: inactiveClients.length > 0 ? 'rose' : 'ok',
+            roles: ['org_owner', 'org_admin', 'ops'],
         },
         {
             label: 'Completar invitaciones pendientes',
             detail: `${pendingMembers.length} miembros todavia no ingresan`,
             href: `/org/${slug}/coaches`,
             severity: pendingMembers.length > 0 ? 'amber' : 'ok',
+            roles: ['org_owner', 'org_admin', 'ops'],
         },
         {
             label: 'Revisar pagos alumnos',
             detail: `${paymentAlerts.overdue} vencidos · ${paymentAlerts.dueSoon} por vencer · ${paymentAlerts.missing} sin registro`,
             href: `/org/${slug}/payments`,
             severity: paymentAlerts.overdue > 0 ? 'rose' : paymentRiskCount > 0 ? 'amber' : 'ok',
+            roles: ['org_owner', 'org_admin', 'ops', 'analyst'],
         },
         {
             label: 'Configurar white-label enterprise',
             detail: 'Prepara logo, colores y loader para coaches y alumnos',
             href: `/org/${slug}/brand`,
             severity: org.logo_url ? 'ok' : 'amber',
+            roles: ['org_owner', 'org_admin', 'brand_manager'],
+        },
+        {
+            label: 'Revisar reportes operacionales',
+            detail: 'Performance, adherencia y alumnos en riesgo',
+            href: `/org/${slug}/reports`,
+            severity: 'ok' as const,
+            roles: ['analyst'],
+        },
+        {
+            label: 'Ver audit log',
+            detail: 'Historial de acciones y exportacion de evidencia',
+            href: `/org/${slug}/audit`,
+            severity: 'ok' as const,
+            roles: ['analyst'],
         },
     ]
+    const actions = allActions.filter(a => a.roles.includes(org.myRole))
     const mobilePriorityActions = actions
         .filter((action) => action.severity !== 'ok')
         .slice(0, 3)
@@ -183,6 +206,99 @@ export function EnterpriseDashboardHome({
                         </div>
                     </div>
                 </section>
+
+                {/* Role focus banner — only for non-owners; owners see full dashboard */}
+                {org.myRole !== 'org_owner' && (() => {
+                    const roleConfigs: Record<string, {
+                        label: string
+                        description: string
+                        icon: LucideIcon
+                        color: string
+                        links: { label: string; href: string }[]
+                        readOnly?: boolean
+                    }> = {
+                        org_admin: {
+                            label: 'Admin enterprise',
+                            description: 'Gestión completa de coaches, alumnos, team y reportes.',
+                            icon: Briefcase,
+                            color: 'text-amber-300 border-amber-400/30 bg-amber-400/10',
+                            links: [
+                                { label: 'Coaches', href: `/org/${slug}/coaches` },
+                                { label: 'Alumnos', href: `/org/${slug}/clients` },
+                                { label: 'Asignaciones', href: `/org/${slug}/assignments` },
+                                { label: 'Reportes', href: `/org/${slug}/reports` },
+                            ],
+                        },
+                        ops: {
+                            label: 'Operaciones',
+                            description: 'Asignaciones, alumnos y carga de coaches. Sin acceso a billing ni team.',
+                            icon: UserCheck,
+                            color: 'text-sky-300 border-sky-400/30 bg-sky-400/10',
+                            links: [
+                                { label: 'Asignaciones', href: `/org/${slug}/assignments` },
+                                { label: 'Alumnos', href: `/org/${slug}/clients` },
+                                { label: 'Coaches', href: `/org/${slug}/coaches` },
+                                { label: 'Pagos', href: `/org/${slug}/payments` },
+                            ],
+                        },
+                        brand_manager: {
+                            label: 'Marca',
+                            description: 'Brand Studio y white-label enterprise. Sin acceso a operaciones ni alumnos.',
+                            icon: Palette,
+                            color: 'text-violet-300 border-violet-400/30 bg-violet-400/10',
+                            links: [
+                                { label: 'Brand Studio', href: `/org/${slug}/brand` },
+                                { label: 'Trust Center', href: `/org/${slug}/trust` },
+                            ],
+                        },
+                        analyst: {
+                            label: 'Analista — solo lectura',
+                            description: 'Reportes, métricas y audit. Sin acceso a mutaciones.',
+                            icon: Eye,
+                            color: 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10',
+                            links: [
+                                { label: 'Reportes', href: `/org/${slug}/reports` },
+                                { label: 'Audit Log', href: `/org/${slug}/audit` },
+                                { label: 'Trust Center', href: `/org/${slug}/trust` },
+                            ],
+                            readOnly: true,
+                        },
+                    }
+                    const config = roleConfigs[org.myRole]
+                    if (!config) return null
+                    const Icon = config.icon
+                    return (
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="flex items-start gap-3">
+                                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${config.color}`}>
+                                        <Icon className="h-3 w-3" aria-hidden="true" />
+                                        {config.label}
+                                    </span>
+                                    {config.readOnly && (
+                                        <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-500">
+                                            <Eye className="h-3 w-3" />
+                                            Solo lectura
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-zinc-500 max-w-lg">{config.description}</p>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {config.links.map(link => (
+                                    <Link
+                                        key={link.href}
+                                        href={link.href}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-colors"
+                                    >
+                                        {link.label}
+                                        <ArrowRight className="h-3 w-3" />
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )
+                })()}
 
                 <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 md:hidden">
                     <div className="grid grid-cols-3 gap-2">
