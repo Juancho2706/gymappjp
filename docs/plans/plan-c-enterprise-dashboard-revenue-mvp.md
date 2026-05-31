@@ -1838,20 +1838,17 @@ Enterprise owner/admin crea y supervisa via:
 
 ##### Fase P2.5-B — Overview pages owner/admin `/org/[slug]/programs` (sin migration)
 
-- [ ] Nueva ruta `apps/web/src/app/org/[slug]/programs/page.tsx` (RSC).
-  - Guard: `resolveOrgAdminContext(slug)` — owner/admin/ops.
-  - Seccion 1: Templates org — lista `workout_programs WHERE org_id = orgId AND status = 'template'`.
-  - Seccion 2: Cobertura — `% de alumnos enterprise con programa activo` calculado desde `workout_programs WHERE org_id = orgId AND status = 'active'`.
-  - Seccion 3: Alumnos sin programa asignado — link rapido a `/assignments`.
-  - Seccion 4: Programas activos por coach — tabla coach / alumnos / adherencia promedio.
-- [ ] Query `findOrgWorkoutProgramOverview(db, orgId)` en `infrastructure/db/org.repository.ts`.
-  - No `SELECT *` — columnas explicitas.
-  - `React.cache` en `_data/org.queries.ts`.
-- [ ] Link desde `/org/[slug]/coaches/[coachId]` → "Abrir builder" → `/coach/workout-programs` (solo visible para coaches enterprise activos con workspace disponible).
-- [ ] Link desde `/org/[slug]/clients/[clientId]` → "Ver programa" → `/coach/builder/[clientId]` (solo si hay coach asignado y ese coach tiene workspace enterprise).
-- [ ] Nav: agregar "Programas" al grupo Herramientas en `OrgEnterpriseNav`.
-- [ ] Mobile: cards compactas + link-out al builder (no builder embedded en mobile).
-- [ ] Verificacion: `npm run typecheck` + mobile audit 390px.
+**Estado: COMPLETADO 2026-05-31.**
+
+- [x] Nueva ruta `apps/web/src/app/org/[slug]/programs/page.tsx` (RSC). Guard `orgRoleCan(org.myRole, 'org.dashboard.view')`.
+- [x] Secciones: cobertura %, KPIs (con/sin programa/templates), barra cobertura, per-coach breakdown, templates list.
+- [x] `findOrgWorkoutProgramOverview(db, orgId)` en `infrastructure/db/org.repository.ts`: templates (client_id IS NULL) + active programs (is_active=true) + coach breakdown via organization_members.
+- [x] `getOrgWorkoutProgramOverview` con `React.cache` en `_data/org.queries.ts`.
+- [x] Nav: "Programas" en grupo Herramientas en `OrgEnterpriseNav` (Dumbbell icon).
+- [x] Mobile: layout responsive, barra cobertura, per-coach compact, link a /assignments si hay sin programa.
+- [x] Verificacion: `pnpm run typecheck` pasa.
+- [ ] Link desde `/coaches/[coachId]` → "Abrir builder" → `/coach/workout-programs` (pendiente, detalle coach).
+- [ ] Link desde `/clients/[clientId]` → "Ver programa" → `/coach/builder/[clientId]` (pendiente, detalle cliente).
 
 ##### Fase P2.5-C — Org workout template creator para owner/admin (requiere migration)
 
