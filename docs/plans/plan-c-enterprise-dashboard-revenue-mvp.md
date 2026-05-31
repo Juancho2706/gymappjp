@@ -919,31 +919,21 @@ Permisos:
 
 ## Área Check-ins
 
-Ruta:
+Ruta: `/org/[slug]/check-ins`
 
-```text
-/org/[slug]/check-ins
-```
+**Estado: MVP completado 2026-06-01.**
 
-Propósito:
+Implementado read-only sin campo `reviewed_at` (no existe en `check_ins` schema actual):
+- Participación 7d: % alumnos con check-in reciente.
+- Banner at-risk: alumnos sin check-in en 14+ días.
+- Por coach: barra de progreso + rate alumnos activos 7d.
+- Recientes: últimos 10 check-ins con alumno + coach.
+- Nav: Herramientas > Check-ins (ClipboardList).
 
-Seguimiento operacional de check-ins.
-
-Vistas:
-
-- pendientes;
-- atrasados;
-- revisados/no revisados;
-- por coach;
-- por riesgo;
-- calendario.
-
-Métricas:
-
-- completion rate;
-- response time coach;
-- alumnos con progreso crítico;
-- volumen semanal.
+Pendiente futuro:
+- `reviewed_at` o tabla `coach_check_in_reviews` para ver response time del coach.
+- Calendario visual por semana.
+- Filtros por coach / estado / fecha.
 
 ---
 
