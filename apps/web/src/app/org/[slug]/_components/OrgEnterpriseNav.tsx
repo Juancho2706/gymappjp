@@ -14,6 +14,7 @@ import {
     Fingerprint,
     LayoutDashboard,
     Megaphone,
+    Package,
     Palette,
     Salad,
     Settings,
@@ -109,6 +110,7 @@ const NAV_GROUPS: NavGroup[] = [
         children: [
             { href: '/settings', label: 'Admin', icon: Settings },
             { href: '/trust', label: 'Trust Center', shortLabel: 'Trust', icon: Fingerprint },
+            { href: '/proof', label: 'Proof Pack', shortLabel: 'Proof', icon: Package },
             { href: '/audit', label: 'Auditoria', shortLabel: 'Audit', icon: FileText },
         ],
     },
