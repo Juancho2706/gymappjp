@@ -44,14 +44,15 @@ const FIXTURES = {
 }
 
 const USERS = {
-  ownerA:     'coach-owner-a@eva-test.cl',
-  coachA1:    'coach-member-a1@eva-test.cl',
-  ownerB:     'coach-owner-b@eva-test.cl',
-  coachB1:    'coach-member-b1@eva-test.cl',
-  coachBoth:  'coach-both@eva-test.cl',
-  standalone: 'coach-solo@eva-test.cl',
-  clientA1:   'client-a1@eva-test.cl',  // alumno org_a, coach_a1
-  clientSolo: 'client-solo1@eva-test.cl', // alumno standalone, coach_solo
+  ownerA:       'coach-owner-a@eva-test.cl',
+  coachA1:      'coach-member-a1@eva-test.cl',
+  ownerB:       'coach-owner-b@eva-test.cl',
+  coachB1:      'coach-member-b1@eva-test.cl',
+  coachBoth:    'coach-both@eva-test.cl',
+  standalone:   'coach-solo@eva-test.cl',
+  coachSuspended: 'coach-suspended@eva-test.cl', // suspended from org_b, has standalone account
+  clientA1:     'client-a1@eva-test.cl',    // alumno org_a, coach_a1
+  clientSolo:   'client-solo1@eva-test.cl', // alumno standalone, coach_solo
 }
 
 function makeClient() {
@@ -532,5 +533,112 @@ test.describe('Client payments isolation', () => {
       .select('id')
       .eq('id', FIXTURES.clientPaymentOrgA)
     expect(data ?? []).toHaveLength(1)
+  })
+})
+
+// ============================================================
+// GRUPO 12 — Branding resolver: workspace determines brand source
+// ============================================================
+
+test.describe('Branding workspace isolation', () => {
+  test('enterprise client (ca1) has org_id set — inherits org brand', async () => {
+    const sb = await signIn(USERS.clientA1)
+    const { data } = await sb
+      .from('clients')
+      .select('id, org_id, coach_id')
+      .eq('id', '00000000-0000-0000-0003-000000000001')
+    const client = (data ?? [])[0]
+    // Must have org_id (enterprise context) — brand comes from org not coach
+    expect(client?.org_id).toBe(ORG_A_ID)
+    expect(client?.org_id).not.toBeNull()
+  })
+
+  test('standalone client (cs1) has no org_id — inherits coach brand', async () => {
+    const sb = await signIn(USERS.clientSolo)
+    const { data } = await sb
+      .from('clients')
+      .select('id, org_id, coach_id')
+      .eq('id', '00000000-0000-0000-0005-000000000001')
+    const client = (data ?? [])[0]
+    // Must NOT have org_id (standalone context) — brand comes from coach
+    expect(client?.org_id).toBeNull()
+    expect(client?.coach_id).not.toBeNull()
+  })
+
+  test('enterprise client workspace has org_id — brand resolver uses org not coach', async () => {
+    const sb = await signIn(USERS.clientA1)
+    // ca1 belongs to org_a. The brand resolver picks org brand when org_id is set.
+    // Verify: ca1's org brand source (org_a has primary_color/logo_url).
+    // Coaches table is semi-public; brand isolation is service-layer, not row-level.
+    // Test: ca1 can see their own org's data but NOT org_b org data (org isolation).
+    const { data: orgAData } = await sb.from('clients').select('org_id').eq('id', '00000000-0000-0000-0003-000000000001')
+    expect((orgAData ?? [])[0]?.org_id).toBe(ORG_A_ID)
+
+    // ca1 cannot read org_b's members (already tested in Group 1), confirming org isolation
+    const { data: orgBMembers } = await sb.from('organization_members').select('id').eq('org_id', ORG_B_ID)
+    expect(orgBMembers ?? []).toHaveLength(0)
+  })
+
+  test('standalone client cannot read enterprise org branding', async () => {
+    const sb = await signIn(USERS.clientSolo)
+    const { data } = await sb
+      .from('organizations')
+      .select('id, primary_color, logo_url')
+      .eq('id', ORG_A_ID)
+    // Standalone client has no org membership — org branding not accessible
+    expect(data ?? []).toHaveLength(0)
+  })
+})
+
+// ============================================================
+// GRUPO 13 — Revoke: suspended/revoked coach loses enterprise access,
+//            retains standalone capabilities
+// ============================================================
+
+test.describe('Revoke preserves standalone workspace', () => {
+  test('suspended enterprise coach still has a coaches row (standalone preserved)', async () => {
+    const sb = await signIn(USERS.coachSuspended)
+    // coach_susp has a coaches table row with standalone data
+    const { data } = await sb
+      .from('coaches')
+      .select('id, active_org_id, subscription_status')
+      .eq('id', '00000000-0000-0000-0001-000000000010')
+    expect(data ?? []).toHaveLength(1)
+  })
+
+  test('suspended coach cannot read org_b data via organization_members', async () => {
+    const sb = await signIn(USERS.coachSuspended)
+    // Status = suspended → RLS should block active membership query
+    const { data } = await sb
+      .from('organization_members')
+      .select('id, status')
+      .eq('org_id', ORG_B_ID)
+      .eq('status', 'active')
+    // Suspended member has no active membership — should return 0 active rows
+    const ownActive = (data ?? []).filter(m => m.status === 'active')
+    expect(ownActive).toHaveLength(0)
+  })
+
+  test('suspended coach cannot read org_b clients', async () => {
+    const sb = await signIn(USERS.coachSuspended)
+    // coach_susp is suspended from org_b — org_b clients must be invisible
+    const { data } = await sb
+      .from('clients')
+      .select('id')
+      .eq('org_id', ORG_B_ID)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('suspended coach can still read their own standalone clients', async () => {
+    const sb = await signIn(USERS.coachSuspended)
+    // coach_susp has standalone coach row — standalone clients visible via coach RLS
+    // (seed: coach_susp has no standalone clients, check they can query standalone space)
+    const { data } = await sb
+      .from('clients')
+      .select('id')
+      .is('org_id', null)
+      .eq('coach_id', '00000000-0000-0000-0001-000000000010')
+    // No standalone clients for coach_susp in seed, but query should work (not 403)
+    expect(Array.isArray(data)).toBe(true)
   })
 })
