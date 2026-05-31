@@ -699,3 +699,78 @@ export async function computeOrgHealthScore(db: DB, orgId: string): Promise<OrgH
 
     return { score, adherence7d, assignmentRate, activeRate, programRate, totalClients, activeClients, tier }
 }
+
+export type OrgWorkoutProgramOverview = {
+    templates: { id: string; name: string; coachId: string; coachName: string; coachSlug: string }[]
+    totalClients: number
+    clientsWithProgram: number
+    coveragePct: number
+    byCoach: { coachId: string; coachName: string; coachSlug: string; activePrograms: number }[]
+}
+
+/**
+ * Org-level workout program overview for /programs page.
+ * Templates = programs where client_id IS NULL (not yet assigned).
+ * Active = programs where is_active = true AND client_id IS NOT NULL.
+ * Coaches resolved via organization_members for the org.
+ */
+export async function findOrgWorkoutProgramOverview(db: DB, orgId: string): Promise<OrgWorkoutProgramOverview> {
+    const [templatesRes, activeRes, clientsRes, membersRes] = await Promise.all([
+        db.from('workout_programs')
+            .select('id, name, coach_id')
+            .eq('org_id', orgId)
+            .is('client_id', null)
+            .order('name'),
+        db.from('workout_programs')
+            .select('client_id, coach_id')
+            .eq('org_id', orgId)
+            .eq('is_active', true)
+            .not('client_id', 'is', null),
+        db.from('clients')
+            .select('id')
+            .eq('org_id', orgId),
+        db.from('organization_members')
+            .select('coach_id, coach:coaches(id, full_name, slug)')
+            .eq('org_id', orgId)
+            .eq('role', 'coach')
+            .eq('status', 'active')
+            .is('deleted_at', null),
+    ])
+
+    // Build coach lookup map
+    const coachMap = new Map<string, { name: string; slug: string }>()
+    for (const m of membersRes.data ?? []) {
+        if (m.coach_id && m.coach && !Array.isArray(m.coach)) {
+            coachMap.set(m.coach_id, { name: (m.coach as { full_name: string | null; slug: string }).full_name ?? 'Coach', slug: (m.coach as { slug: string }).slug })
+        }
+    }
+
+    const templates = (templatesRes.data ?? []).map(t => ({
+        id: t.id,
+        name: t.name,
+        coachId: t.coach_id,
+        coachName: coachMap.get(t.coach_id)?.name ?? 'Coach',
+        coachSlug: coachMap.get(t.coach_id)?.slug ?? '',
+    }))
+
+    const totalClients = clientsRes.data?.length ?? 0
+    const clientsWithProgram = new Set((activeRes.data ?? []).map(p => p.client_id)).size
+    const coveragePct = totalClients > 0 ? Math.round((clientsWithProgram / totalClients) * 100) : 0
+
+    // Per-coach active program count
+    const coachProgramCount = new Map<string, number>()
+    for (const p of activeRes.data ?? []) {
+        coachProgramCount.set(p.coach_id, (coachProgramCount.get(p.coach_id) ?? 0) + 1)
+    }
+
+    const byCoach = Array.from(coachProgramCount.entries())
+        .map(([coachId, activePrograms]) => ({
+            coachId,
+            coachName: coachMap.get(coachId)?.name ?? 'Coach',
+            coachSlug: coachMap.get(coachId)?.slug ?? '',
+            activePrograms,
+        }))
+        .sort((a, b) => b.activePrograms - a.activePrograms)
+
+    return { templates, totalClients, clientsWithProgram, coveragePct, byCoach }
+}

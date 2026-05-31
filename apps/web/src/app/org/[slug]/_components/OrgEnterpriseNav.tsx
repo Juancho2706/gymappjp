@@ -8,6 +8,7 @@ import {
     BarChart3,
     Building2,
     ClipboardCheck,
+    Dumbbell,
     FileText,
     Fingerprint,
     LayoutDashboard,
@@ -94,6 +95,7 @@ const NAV_GROUPS: NavGroup[] = [
         children: [
             { href: '/announcements', label: 'Novedades', shortLabel: 'News', icon: Megaphone },
             { href: '/nutrition', label: 'Nutricion', shortLabel: 'Nutri', icon: Salad },
+            { href: '/programs', label: 'Programas', shortLabel: 'Prog', icon: Dumbbell },
         ],
     },
     {
