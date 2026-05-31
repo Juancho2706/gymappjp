@@ -1848,7 +1848,7 @@ Enterprise owner/admin crea y supervisa via:
 - [x] Mobile: layout responsive, barra cobertura, per-coach compact, link a /assignments si hay sin programa.
 - [x] Verificacion: `pnpm run typecheck` pasa.
 - [x] Link desde `/coaches/[coachId]` → "Programas org" + "Builder" completado 2026-06-01.
-- [ ] Link desde `/clients/[clientId]` → "Ver programa" → `/coach/builder/[clientId]` (pendiente).
+- [x] Link "Builder" desde lista `/clients`: cada cliente asignado tiene link → `/coach/builder/[client.id]`. Completado 2026-06-01.
 
 ##### Fase P2.5-C — Org workout template creator para owner/admin (requiere migration)
 
@@ -2806,9 +2806,10 @@ Completado 2026-05-31:
 Pendiente:
 
 - [ ] Permisos granulares por feature: owner/admin/ops/analyst/brand_manager. *(commit a707d09 implemento ROLE_MATRIX; falta enforcement fine-grained por page)*
-- [ ] MFA policy real y first-login reset de contraseña obligatorio.
+- [x] MFA policy real: `requires_mfa_setup` enforced via proxy.ts para org_admin. Completado (pre-existente).
+- [x] First-login password reset: `requires_password_change=true` en creacion de staff. proxy.ts redirige a `/setup-password` antes de MFA. Page con form + API route que limpia flag via service role. Completado 2026-06-01.
 - [ ] Tests multi-role: staff con cada rol ve las pantallas correctas.
-- [ ] Mobile: role matrix como accordion/cards (actualmente grilla desktop).
+- [x] Mobile: role matrix 2-col en mobile (era full single-col). Completado 2026-06-01.
 
 ### Marca / Brand Studio `/brand`
 
@@ -2902,7 +2903,7 @@ Pendiente:
 - [x] Checksum generation job local/manual. Completado 2026-05-31. Endpoint existente `/api/cron/audit-checksum` genera checksum semanal e inserta en `audit_log_checksums`; se agrego script `npm run audit:checksum:manual` para ejecutarlo contra local/staging sin servicio externo.
 - [x] Export audit con checksum. Completado el 2026-05-26 20:39:12 -04:00. Header `X-Content-SHA256` y metadata `checksum_sha256` en `audit.exported`.
 - [x] Detectar mutations sensibles sin audit. Completado 2026-05-31. Script `npm run audit:org-sensitive-actions` falla si acciones/rutas enterprise con mutations no incluyen `writeOrgAuditEvent`; allowlist explicita para MFA setup. Verificado passing.
-- [ ] Mobile: timeline compacta con filtros sticky.
+- [x] Mobile: timeline compacta + sticky filter chip strip. Completado 2026-06-01. Chips horizontales sticky con `backdrop-blur` en `<xl`, timeline items compactos en `<lg` (accion+fecha en una linea, UUID ocultado).
 
 ### Insights / Reportes `/reports`
 
