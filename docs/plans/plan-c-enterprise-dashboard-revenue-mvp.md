@@ -1852,70 +1852,32 @@ Enterprise owner/admin crea y supervisa via:
 
 ##### Fase P2.5-C — Org workout template creator para owner/admin (requiere migration)
 
-**Motivacion:** owner quiere definir plantillas estandar de entrenamiento que todos los coaches de la org puedan usar. Hoy `workout_programs.coach_id` es NOT NULL, impide crear templates sin coach.
+**Estado: COMPLETADO 2026-06-01.**
 
-**Migration local:** `supabase/migrations/20260601XXXXXX_workout_programs_nullable_coach_org_templates.sql`
-
-```sql
--- Permitir coach_id NULL para templates org
-ALTER TABLE workout_programs ALTER COLUMN coach_id DROP NOT NULL;
--- Guardrail: todo programa debe tener coach O org, nunca ninguno
-ALTER TABLE workout_programs ADD CONSTRAINT chk_workout_owner
-  CHECK (coach_id IS NOT NULL OR org_id IS NOT NULL);
--- RLS: coaches enterprise de la org pueden leer templates org (coach_id=null, org_id=orgId)
--- (agregar policy en misma migration)
-```
-
-- [ ] Migration local escrita y aplicada con `npx supabase db reset`.
-- [ ] `npx supabase gen types typescript --local > src/lib/database.types.ts`.
-- [ ] `npx supabase db lint --local` sin errores.
-- [ ] Server action `createOrgWorkoutTemplateAction` en `apps/web/src/app/org/[slug]/programs/_actions/org-programs.actions.ts`:
-  - `resolveOrgAdminContext(slug, ['org_owner', 'org_admin'])`.
-  - Crea `workout_program` con `org_id = orgId, coach_id = null, status = 'template'`.
-  - Zod schema: `OrgWorkoutTemplateSchema` — nombre, descripcion, semanas, bloques.
-  - Audit `workout_template.created` via `writeOrgAuditEvent`.
-  - `revalidatePath('/org/[slug]/programs')`.
-- [ ] Ruta `apps/web/src/app/org/[slug]/programs/new/page.tsx`:
-  - Reutilizar `WeeklyPlanBuilder` con prop `mode='org_template'`.
-  - En `mode='org_template'`: deshabilitar "Asignar a alumno", mostrar badge "Template de la organizacion".
-  - Server action diferente al de coach builder (sin `coach_id` en payload).
-- [ ] Action `assignOrgWorkoutTemplateToCoach(orgSlug, templateId, coachId)`:
-  - Guard `resolveOrgAdminContext`.
-  - Copia template a `workout_programs` con `coach_id = coachId, org_id = orgId, status = 'template'`.
-  - Coach puede editarla como base para sus alumnos.
-  - Audit `workout_template.assigned_to_coach`.
-- [ ] Mobile: form simple, no builder DnD completo en mobile — link a desktop para editing.
-- [ ] Verificacion: migration local + `npm run typecheck` + test unitario org template CRUD.
+- [x] Migration `supabase/migrations/20260601000000_workout_programs_nullable_coach_org_templates.sql`: `coach_id DROP NOT NULL` + constraint `chk_workout_owner` + RLS policy coaches leen org templates.
+- [x] Types regenerados: `workout_programs.coach_id: string | null`.
+- [x] `createOrgWorkoutTemplateAction` en `org.actions.ts`: guard owner/admin, inserta `coach_id = null`, audit `workout_template.created`.
+- [x] `/programs/new` (client component): form nombre/notas/semanas. Los coaches abren en su builder para agregar ejercicios.
+- [x] `/programs`: boton "Crear template"; templates org con badge violeta "Template org".
+- [x] `pnpm run typecheck` + `pnpm run audit:org-sensitive-actions` pasan.
+- [ ] `assignOrgWorkoutTemplateToCoach` (futuro): copia template a coach especifico. No prioritario MVP.
+- [ ] Full `WeeklyPlanBuilder` con `mode='org_template'` (futuro): coaches usan su builder standalone mientras tanto.
 
 ##### Fase P2.5-D — Nutrition plans enterprise full creator (migration menor o sin migration)
 
-**Estado actual:** `/org/[slug]/nutrition` muestra templates en uso y adherencia. Tiene `CreateOrgNutritionTemplateForm` que solo guarda macros/nombre.
+**Estado: COMPLETADO MVP 2026-06-01.**
 
-**Decision de schema:**
-Opcion A (preferida): reutilizar `nutrition_plan_templates` con `coach_id = null, org_id = orgId` — mismo patron que workout. Requiere alter `nutrition_plan_templates.coach_id DROP NOT NULL` + guardrail.
-Opcion B: continuar usando `org_nutrition_templates` y agregar columna `meals_json jsonb` para persistir comidas reales.
-Opcion A es mas limpia — reutiliza toda la logica de `NutritionService.createOrUpdateTemplateFromJson()`.
+Opcion A implementada: `nutrition_plan_templates` con `coach_id = null`.
 
-- [ ] Migration: `supabase/migrations/20260601XXXXXX_nutrition_plan_templates_nullable_coach_org.sql`
-  - `ALTER TABLE nutrition_plan_templates ALTER COLUMN coach_id DROP NOT NULL;`
-  - `ALTER TABLE nutrition_plan_templates ADD CONSTRAINT chk_nutrition_owner CHECK (coach_id IS NOT NULL OR org_id IS NOT NULL);`
-  - RLS: coaches enterprise leen templates donde `org_id = active_org`.
-- [ ] Expandir ruta existente `/org/[slug]/nutrition`:
-  - Agregar tab/seccion "Templates org" con full template library (meals reales, no solo macros).
-  - Agregar tab/seccion "Planes activos" — todos los `nutrition_plans` donde `org_id = orgId`.
-  - Mantener tabs actuales de uso/adherencia.
-- [ ] Ruta `/org/[slug]/nutrition/new/page.tsx`:
-  - Reutilizar `PlanBuilder` component con prop `mode='org_template'`.
-  - Server action `createOrgNutritionTemplateAction`:
-    - `resolveOrgAdminContext(slug, ['org_owner', 'org_admin'])`.
-    - Llama `NutritionService.createOrUpdateTemplateFromJson()` con `coachId = null, orgId`.
-    - Audit `nutrition_template.created`.
-- [ ] Action `assignOrgNutritionTemplateToCoachClients(orgSlug, templateId, coachId, clientIds[])`:
-  - Guard `resolveOrgAdminContext`.
-  - Llama `NutritionService.propagateTemplateChanges(templateId, null, clientIds, orgId)`.
-  - Audit `nutrition_template.assigned`.
-- [ ] Mobile: lista de templates con macros + button "Asignar" — no PlanBuilder completo en mobile.
-- [ ] Verificacion: migration local + `npm run typecheck` + test nutrition template por org owner.
+- [x] Migration `supabase/migrations/20260601000100_nutrition_plan_templates_nullable_coach_org.sql`: `coach_id DROP NOT NULL` + `chk_nutrition_template_owner` + RLS policy coaches leen org templates.
+- [x] Types regenerados: `nutrition_plan_templates.coach_id: string | null`.
+- [x] `createOrgNutritionPlanTemplateAction` en `nutrition-templates.actions.ts`: guard admin, inserta `coach_id = null`, audit `nutrition_template.created`. Campos: nombre, objetivo, macros (kcal/proteina/carbos/grasas), descripcion.
+- [x] `/nutrition/new` (client component): form con macro targets + goal selector. Los coaches abren en su builder de nutricion para agregar comidas.
+- [x] `/nutrition`: boton "Crear template" → `/nutrition/new`.
+- [x] `pnpm run typecheck` + `pnpm run audit:org-sensitive-actions` pasan.
+- [ ] `assignOrgNutritionTemplateToCoachClients` (futuro): propagar template org a clientes via `NutritionService.propagateTemplateChanges`. No prioritario MVP.
+- [ ] Full PlanBuilder integration con `mode='org_template'` (futuro): coaches usan su builder standalone mientras tanto.
+- [ ] Tab "Planes activos" en `/nutrition` con todos los `nutrition_plans WHERE org_id = orgId` (futuro).
 
 **Criterios done globales Fase P2.5:**
 
@@ -1942,7 +1904,7 @@ Prioridad P3 - diferenciadores futuros sin costo externo:
 - [ ] "Proof Pack" exportable para ventas/CSM: brand preview, roles, audit, alumnos asignados, reporte semanal.
 - [ ] Capacity Autopilot manual: sugerencias de reasignacion por carga/riesgo, con aprobacion humana.
 - [x] Trust Center Lite: permisos, MFA, audit, retention, exports en una vista. Completado 2026-05-31. Nueva ruta `/org/[slug]/trust` y nav en Seguridad/Admin; read-only, sin servicios pagos.
-- [ ] Role home: owner, ops/admin, brand manager y analyst ven landing interna distinta.
+- [x] Role home: owner, ops/admin, brand manager y analyst ven landing interna distinta. Completado 2026-06-01. `EnterpriseDashboardHome` muestra role focus banner para roles no-owner con quick links contextuales; action queue filtrado por permisos del rol; `org_owner` ve dashboard completo sin cambios.
 - [x] Mobile parity matrix por menu: Web/PWA, RN, native-only. Documentado 2026-05-31 en seccion responsive: define equivalentes RN/native-only por pantalla sin crear app RN todavia.
 
 No hacer todavia:

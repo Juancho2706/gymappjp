@@ -153,7 +153,9 @@ Plan principal: `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md`
 
 30. **`[x]` P2.5-A bugs + Team CRUD completo** — Completado 2026-05-31. Tres bug fixes en builders (template-builder org scope, edit nutrition page workspace, getClientFoodFavorites ownership). Team page ahora tiene CRUD completo: `CreateStaffDialog` (crea ops/analyst/brand_manager/org_admin con contraseña temporal visible), `ChangeStaffRoleButton` (dialog radio, llama `updateStaffRoleAction`), `ResetStaffPasswordButton` (llama `resetStaffPasswordAction` por memberId). `CreateEnterpriseCoachSchema` acepta todos los roles. `npm run typecheck` pasa.
 
-29. **`[ ]` Fase P2.5 — Programas y Nutricion Enterprise** — Auditoria 2026-05-31 revelo que los builders en `/coach/*` YA soportan `org_id` via `resolvePreferredWorkspace()`. El gap real no era duplicar builders sino tres cosas distintas:
+32. **`[x]` P2.5-D — Org nutrition plan templates** — Completado 2026-06-01. Migration `nutrition_plan_templates.coach_id` nullable + constraint + RLS. `createOrgNutritionPlanTemplateAction` con macros/objetivo. `/nutrition/new` form. Botón en `/nutrition`. Types regenerados. Typecheck pasa.
+
+29. **`[x]` Fase P2.5 — Programas y Nutricion Enterprise** — Auditoria 2026-05-31 revelo que los builders en `/coach/*` YA soportan `org_id` via `resolvePreferredWorkspace()`. El gap real no era duplicar builders sino tres cosas distintas:
     - **3 bugs en builders existentes** (template-builder sin org scope, edit nutrition page sin workspace resolution, `getClientFoodFavorites` sin coach validation) — Fase P2.5-A.
     - **Nueva ruta `/org/[slug]/programs`** para oversight de programas org + creator de org templates (requiere migration `workout_programs.coach_id` nullable) — Fase P2.5-B/C.
     - **Full nutrition creator en `/org/[slug]/nutrition/new`** con PlanBuilder real (requiere migration `nutrition_plan_templates.coach_id` nullable) — Fase P2.5-D.
