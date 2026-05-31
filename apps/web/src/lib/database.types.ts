@@ -1586,6 +1586,7 @@ export type Database = {
       org_announcements: {
         Row: {
           active_until: string | null
+          audience: string
           body: string
           created_at: string | null
           created_by: string | null
@@ -1596,6 +1597,7 @@ export type Database = {
         }
         Insert: {
           active_until?: string | null
+          audience?: string
           body: string
           created_at?: string | null
           created_by?: string | null
@@ -1606,6 +1608,7 @@ export type Database = {
         }
         Update: {
           active_until?: string | null
+          audience?: string
           body?: string
           created_at?: string | null
           created_by?: string | null

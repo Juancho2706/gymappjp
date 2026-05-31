@@ -70,6 +70,26 @@ export function CreateAnnouncementForm({ orgSlug, audienceCount }: Props) {
                         placeholder="Mensaje para alumnos enterprise..."
                     />
                 </div>
+                {/* Audience selector */}
+                <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Destinatarios</label>
+                    <div className="grid grid-cols-3 gap-2">
+                        {([
+                            { value: 'all', label: 'Todos', desc: 'Coaches + alumnos' },
+                            { value: 'coaches', label: 'Coaches', desc: 'Solo coaches enterprise' },
+                            { value: 'clients', label: 'Alumnos', desc: 'Solo alumnos org' },
+                        ] as const).map(opt => (
+                            <label key={opt.value} className="cursor-pointer">
+                                <input type="radio" name="audience" value={opt.value} defaultChecked={opt.value === 'all'} className="peer sr-only" />
+                                <div className="rounded-xl border border-zinc-700 p-2.5 text-center transition peer-checked:border-cyan-400/50 peer-checked:bg-cyan-400/10">
+                                    <p className="text-xs font-bold text-zinc-200 peer-checked:text-cyan-300">{opt.label}</p>
+                                    <p className="mt-0.5 text-[10px] text-zinc-500">{opt.desc}</p>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
                 <div>
                     <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Activo hasta</label>
                     <div className="relative">

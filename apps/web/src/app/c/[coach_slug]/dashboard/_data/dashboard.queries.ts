@@ -92,6 +92,7 @@ export const getActiveProgram = cache(async (clientId: string) => {
         )
         .eq('client_id', clientId)
         .eq('is_active', true)
+        .in('audience', ['all', 'clients'])
         .maybeSingle()
     return (data as ActiveProgramRow | null) ?? null
 })
@@ -211,6 +212,7 @@ export const getActiveNutritionPlan = cache(async (clientId: string) => {
         .select('id, name, daily_calories, protein_g, carbs_g, fats_g')
         .eq('client_id', clientId)
         .eq('is_active', true)
+        .in('audience', ['all', 'clients'])
         .maybeSingle()
     return data
 })
@@ -336,9 +338,10 @@ export const getActiveOrgAnnouncements = cache(async (orgId: string): Promise<Or
     const supabase = await createClient()
     const { data } = await supabase
         .from('org_announcements')
-        .select('id, title, body, active_until, created_at')
+        .select('id, title, body, active_until, created_at, audience')
         .eq('org_id', orgId)
         .eq('is_active', true)
+        .in('audience', ['all', 'clients'])
         .or('active_until.is.null,active_until.gt.' + new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(5)

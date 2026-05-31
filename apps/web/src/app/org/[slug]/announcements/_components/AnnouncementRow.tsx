@@ -4,6 +4,17 @@ import { useTransition } from 'react'
 import { CalendarClock, CheckCircle2, EyeOff, Loader2, Power, Trash2 } from 'lucide-react'
 import { deleteAnnouncementAction, toggleAnnouncementAction } from '../_actions/announcements.actions'
 
+const AUDIENCE_LABEL: Record<string, string> = {
+    all: 'Coaches + Alumnos',
+    coaches: 'Solo coaches',
+    clients: 'Solo alumnos',
+}
+const AUDIENCE_COLOR: Record<string, string> = {
+    all: 'border-zinc-700 text-zinc-400',
+    coaches: 'border-violet-400/30 bg-violet-400/10 text-violet-300',
+    clients: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+}
+
 interface Props {
     orgSlug: string
     announcement: {
@@ -13,6 +24,7 @@ interface Props {
         is_active: boolean
         active_until: string | null
         created_at: string
+        audience?: string
     }
 }
 
@@ -50,6 +62,11 @@ export function AnnouncementRow({ orgSlug, announcement }: Props) {
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-black text-white">{announcement.title}</p>
+                        {announcement.audience && announcement.audience !== 'all' && (
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${AUDIENCE_COLOR[announcement.audience] ?? AUDIENCE_COLOR.all}`}>
+                                {AUDIENCE_LABEL[announcement.audience]}
+                            </span>
+                        )}
                         {isLive && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-xs font-bold text-emerald-300">
                                 <CheckCircle2 className="h-3 w-3" aria-hidden="true" />

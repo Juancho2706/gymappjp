@@ -10,6 +10,7 @@ const CreateAnnouncementSchema = z.object({
     title: z.string().min(1).max(120),
     body: z.string().min(1).max(1000),
     active_until: z.string().optional(),
+    audience: z.enum(['all', 'coaches', 'clients']).default('all'),
 })
 
 const AnnouncementIdSchema = z.uuid()
@@ -29,6 +30,7 @@ export async function createAnnouncementAction(orgSlug: string, _prev: unknown, 
         title: formData.get('title'),
         body: formData.get('body'),
         active_until: formData.get('active_until') || undefined,
+        audience: formData.get('audience') || 'all',
     })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos invalidos' }
 
@@ -38,6 +40,7 @@ export async function createAnnouncementAction(orgSlug: string, _prev: unknown, 
         title: parsed.data.title,
         body: parsed.data.body,
         active_until: parsed.data.active_until ? new Date(parsed.data.active_until).toISOString() : null,
+        audience: parsed.data.audience,
         created_by: ctx.user.id,
     }).select('id').single()
 
