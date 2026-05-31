@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import {
+    Activity,
     AlertTriangle,
     ArrowRight,
     BadgeCheck,
@@ -13,7 +14,7 @@ import {
     UserCheck,
     Users,
 } from 'lucide-react'
-import type { OrgClient, OrgMember, OrgWithMembership } from '../../_data/org.queries'
+import type { OrgAuditLog, OrgClient, OrgMember, OrgWithMembership } from '../../_data/org.queries'
 import { OrgHealthScoreRefresher } from './OrgHealthScoreRefresher'
 
 type OrgStats = {
@@ -29,6 +30,7 @@ interface EnterpriseDashboardHomeProps {
     stats: OrgStats | null
     members: OrgMember[]
     clients: OrgClient[]
+    recentActivity?: OrgAuditLog[]
 }
 
 function percentage(value: number, total: number) {
@@ -40,12 +42,37 @@ function initials(name: string | null | undefined) {
     return (name?.trim()?.charAt(0) || '?').toUpperCase()
 }
 
+function actionTone(action: string) {
+    if (action.includes('delete') || action.includes('remove') || action.includes('revok') || action.includes('archive')) return 'text-red-400'
+    if (action.includes('assign') || action.includes('create') || action.includes('invite') || action.includes('publish')) return 'text-emerald-400'
+    if (action.includes('brand') || action.includes('publish')) return 'text-sky-400'
+    return 'text-zinc-400'
+}
+
+function activityLabel(action: string) {
+    const map: Record<string, string> = {
+        'client.assigned': 'Alumno asignado',
+        'client.bulk_assigned': 'Bulk asignación',
+        'client.bulk_archived': 'Alumnos archivados',
+        'client.reassigned': 'Alumno reasignado',
+        'membership.revoked': 'Acceso revocado',
+        'enterprise_coach.created': 'Coach creado',
+        'brand.published': 'Marca publicada',
+        'report.exported': 'Reporte exportado',
+        'audit.exported': 'Audit exportado',
+        'org_announcement.created': 'Novedad publicada',
+        'org_announcement.deactivated': 'Novedad desactivada',
+    }
+    return map[action] ?? action.replace(/[._]/g, ' ')
+}
+
 export function EnterpriseDashboardHome({
     org,
     slug,
     stats,
     members,
     clients,
+    recentActivity = [],
 }: EnterpriseDashboardHomeProps) {
     const activeMembers = members.filter((member) => member.status === 'active')
     const pendingMembers = members.filter((member) => member.status === 'invited')
@@ -315,6 +342,38 @@ export function EnterpriseDashboardHome({
                         )}
                     </div>
                 </section>
+
+                {/* Activity feed */}
+                {recentActivity.length > 0 && (
+                    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <Activity className="h-4 w-4 text-sky-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Actividad reciente</h2>
+                            </div>
+                            <Link href={`/org/${slug}/audit`} className="text-xs text-sky-400 hover:text-sky-300 transition-colors">
+                                Ver todo →
+                            </Link>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                            {recentActivity.map((event) => (
+                                <div key={event.id} className="flex items-start gap-3">
+                                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-600" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-semibold ${actionTone(event.action)}`}>
+                                            {activityLabel(event.action)}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] text-zinc-500">
+                                            {event.created_at
+                                                ? new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(event.created_at))
+                                                : '—'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
             </div>
         </div>
     )

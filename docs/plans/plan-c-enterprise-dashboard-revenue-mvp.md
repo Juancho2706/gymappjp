@@ -3318,7 +3318,7 @@ SEGURIDAD/BLOQUEANTE (antes de vender o prod):
 
 PRODUCTO (flujo usable end-to-end):
 - [x] Workspace switcher persistente in-app. Completado 2026-05-30 (commit fb87cbd). WorkspaceSwitcher en sidebar footer desktop + mobile header. Usa listUserWorkspaces() + selectWorkspaceAction existentes. Solo visible con 2+ workspaces. (Architect/Frontend)
-- [ ] Mover contratos `ActiveWorkspace`/`WorkspaceBrand` a `packages/`. (Mobile/Architect)
+- [x] Contratos `ActiveWorkspace`/`WorkspaceBrand` ya en `packages/types/index.ts` vía re-export de `domain/auth/types`. `@eva/types` disponible para mobile. Verificado 2026-05-30.
 - [x] `bulkAssignSelectedClientsAction` → RPC transaccional. Completado 2026-05-30 (commit b1ca26a). Migración `bulk_assign_selected_clients` atómica: clients + assignments + audit en una transacción. Cross-tenant guard interno. SECURITY DEFINER, solo service_role. (Backend)
 - [x] Eliminar `BulkClientActions.tsx` huérfano; comentario JSX inválido removido. Completado 2026-05-30. (Frontend)
 - [x] Org-level health score para CSM. Completado 2026-05-30 (commit 782e673). Fórmula real: adherencia7d×0.40+asignación×0.25+activos×0.20+programas×0.15. Tiers green≥70/amber≥50/red<50. Persiste en organizations.last_health_score. Dashboard muestra breakdown 4-métrica. Admin /orgs muestra columna Health con color-coding. (Product/CSM)

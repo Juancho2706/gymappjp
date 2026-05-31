@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { getOrgBySlug, getOrgClients, getOrgMembers, getOrgStats } from './_data/org.queries'
+import { getOrgAuditLogs, getOrgBySlug, getOrgClients, getOrgMembers, getOrgStats } from './_data/org.queries'
 import { EnterpriseDashboardHome } from './_components/dashboard/EnterpriseDashboardHome'
 
 interface Props {
@@ -15,10 +15,11 @@ export default async function OrgDashboardPage({ params }: Props) {
 
     if (!org) redirect('/coach/dashboard')
 
-    const [stats, members, clients] = await Promise.all([
+    const [stats, members, clients, recentActivity] = await Promise.all([
         getOrgStats(org.id),
         getOrgMembers(org.id),
         getOrgClients(org.id),
+        getOrgAuditLogs(org.id, {}, 8),
     ])
 
     return (
@@ -28,7 +29,7 @@ export default async function OrgDashboardPage({ params }: Props) {
             stats={stats}
             members={members}
             clients={clients}
+            recentActivity={recentActivity}
         />
     )
 }
-
