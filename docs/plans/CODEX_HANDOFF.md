@@ -76,6 +76,17 @@ Plan principal: `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md`
 | `uncommitted 2026-05-31` | Next 16 proxy migration: `src/middleware.ts` -> `src/proxy.ts`, export `proxy(request)`; route guard Playwright passing |
 | `uncommitted 2026-05-31` | Sentry deprecated options fixed: `webpack.treeshake.removeDebugLogging`, `webpack.automaticVercelMonitors`, router transition hook exported; warnings gone in Playwright |
 | `uncommitted 2026-05-31` | Student `/c` QA cleanup: `HabitsTracker` evita `button` anidado, `NutritionShell` evita mismatch online/offline SSR, charts de peso miden ancho con `ResizeObserver`, logos fijan dimensiones; nutrition smoke passing |
+| `4d63686` | Commit de todo lo anterior: hardening Revenue MVP enterprise, tests y docs |
+| `uncommitted 2026-05-31` | Nutrition usage por coach: breakdown de templates org por coach, alumnos, planes, logs 7d y adherencia; sin migracion |
+| `uncommitted 2026-05-31` | Audit filters completos: URL params `action`, `actor_id`, `target_type`, `from`, `to`; export CSV respeta filtros/prefix; typecheck + Playwright passing |
+| `uncommitted 2026-05-31` | Reports CSV verificado/cerrado: `org.reports.export`, `report.exported`, checksum SHA-256 header/metadata; typecheck passing |
+| `uncommitted 2026-05-31` | Audit checksum manual: script `npm run audit:checksum:manual` reutiliza endpoint existente `/api/cron/audit-checksum` |
+| `uncommitted 2026-05-31` | Detector statico de mutations enterprise sin audit: `npm run audit:org-sensitive-actions`; passing |
+| `uncommitted 2026-05-31` | CI RLS isolation: script `npm run test:e2e:enterprise-rls` y step dedicado en `.github/workflows/ci.yml`; local 46/46 passing |
+| `uncommitted 2026-05-31` | Trust Center Lite real: nueva ruta `/org/[slug]/trust`, nav Seguridad/Admin, exports controlados, posture y datos sensibles; mobile audit passing |
+| `uncommitted 2026-05-31` | P1.5 flujos multi-contexto documentados: coach standalone -> enterprise, owner/staff tambien coach/alumno, runbook `client_auth_id` local/live |
+| `uncommitted 2026-05-31` | Mobile parity matrix Web/PWA/RN/native-only documentada por menu; bottom nav/subnav/safe-area marcados done segun implementacion existente |
+| `uncommitted 2026-05-31` | Gap creadores enterprise 1:1 documentado: faltan workout builder y nutrition builder completos dentro de `/org`; plan define rutas destino y guard/contexto |
 
 ### Pendiente ejecutable ahora (en orden de impacto)
 
@@ -120,7 +131,41 @@ Plan principal: `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md`
 
 ---
 
+20. **`[x]` Nutricion usage por coach** — Completado 2026-05-31. `findOrgNutritionTemplateUsage()` ahora agrega `coach_usage` por template org usando planes activos matcheados por nombre+macros: coach, alumnos activos, planes activos, logs 7d y adherencia. `/org/[slug]/nutrition` muestra top coaches y badges por template. Sin migracion.
+
+21. **`[x]` Audit filters accionables** — Completado 2026-05-31. `/org/[slug]/audit` agrega filtros por actor y target type ademas de categoria/fecha, todos via URL search params. `/audit/export` acepta `action_prefix`, `actor_id`, `target_type`, `from`, `to` y registra esos filtros en `audit.exported`. Verificado con `npm run typecheck`, `npx playwright test tests/enterprise/export-cross-tenant.spec.ts --workers=1`, `npx playwright test tests/enterprise/happy-path-enterprise.spec.ts --workers=1` y `npx playwright test tests/enterprise/mobile-visual-audit.spec.ts --workers=1`. Nota: primer intento paralelo de Playwright fallo por doble `next dev`; re-run serial paso.
+
+22. **`[x]` Reports CSV permission + audit** — Verificado/cerrado 2026-05-31. `/org/[slug]/reports/export` ya existia; se ajusto a permiso granular `org.reports.export`, roles permitidos por RBAC (`owner/admin/ops/analyst` segun `orgRoleCan`), audit fail-closed `report.exported` y checksum SHA-256 en header `X-Content-SHA256` + metadata.
+
+23. **`[x]` Audit checksum manual/local** — Completado 2026-05-31. El endpoint existente `/api/cron/audit-checksum` ya genera e inserta checksum semanal en `audit_log_checksums`; se agrego `scripts/run-audit-checksum-manual.mjs` y script `npm run audit:checksum:manual` para ejecutarlo contra local/staging sin servicio pago. No se ejecuto contra prod.
+
+24. **`[x]` Detector de mutations sensibles sin audit** — Completado 2026-05-31. `scripts/check-org-sensitive-actions-audit.mjs` revisa acciones/rutas enterprise con `insert/update/upsert/delete/rpc/updateUserById` y falla si falta `writeOrgAuditEvent`, con allowlist explicita para MFA setup. Verificado con `npm run audit:org-sensitive-actions`.
+
+25. **`[x]` CI RLS isolation por PR** — Completado 2026-05-31. `package.json` agrega `test:e2e:enterprise-rls`; `.github/workflows/ci.yml` agrega step dedicado `Enterprise RLS isolation` antes del Playwright completo. Verificado local con `npm run test:e2e:enterprise-rls` (46/46 passing).
+
+26. **`[x]` Trust Center Lite** — Completado 2026-05-31. Nueva ruta `/org/[slug]/trust`, agregada al nav Seguridad/Admin. Consolida permisos/export controlado, posture, datos sensibles, audit y billing manual usando queries existentes. Verificado con `npm run typecheck` y `npx playwright test tests/enterprise/mobile-visual-audit.spec.ts --workers=1` incluyendo `/trust`.
+
+27. **`[x]` P1.5 multi-contexto documentado** — Completado 2026-05-31. Plan documenta coach standalone que entra a enterprise sin duplicar correo, owner/staff que tambien es coach/alumno y runbook live obligatorio para `clients.client_auth_id`. No se ejecuto SQL.
+
+28. **`[x]` Mobile parity matrix** — Completado 2026-05-31. Plan agrega matriz por menu Web/PWA -> RN -> native-only -> contrato compartible. Tambien se marcaron bottom nav, subnav, workspace/signout y safe-area como done porque ya existen y fueron verificados.
+
+31. **`[x]` Migración npm → pnpm** — Completado 2026-05-31. `pnpm import` convirtió `package-lock.json` → `pnpm-lock.yaml`. `pnpm-workspace.yaml` con `allowBuilds` explícito (supply chain defense). `.npmrc` con `shamefully-hoist=false`. CI actualizado: `pnpm/action-setup@v4` + `pnpm install --frozen-lockfile --ignore-scripts`. `package.json` scripts usan `pnpm --filter`. CLAUDE.md regla: usar pnpm, nunca npm. Typecheck pasa.
+
+30. **`[x]` P2.5-A bugs + Team CRUD completo** — Completado 2026-05-31. Tres bug fixes en builders (template-builder org scope, edit nutrition page workspace, getClientFoodFavorites ownership). Team page ahora tiene CRUD completo: `CreateStaffDialog` (crea ops/analyst/brand_manager/org_admin con contraseña temporal visible), `ChangeStaffRoleButton` (dialog radio, llama `updateStaffRoleAction`), `ResetStaffPasswordButton` (llama `resetStaffPasswordAction` por memberId). `CreateEnterpriseCoachSchema` acepta todos los roles. `npm run typecheck` pasa.
+
+29. **`[ ]` Fase P2.5 — Programas y Nutricion Enterprise** — Auditoria 2026-05-31 revelo que los builders en `/coach/*` YA soportan `org_id` via `resolvePreferredWorkspace()`. El gap real no era duplicar builders sino tres cosas distintas:
+    - **3 bugs en builders existentes** (template-builder sin org scope, edit nutrition page sin workspace resolution, `getClientFoodFavorites` sin coach validation) — Fase P2.5-A.
+    - **Nueva ruta `/org/[slug]/programs`** para oversight de programas org + creator de org templates (requiere migration `workout_programs.coach_id` nullable) — Fase P2.5-B/C.
+    - **Full nutrition creator en `/org/[slug]/nutrition/new`** con PlanBuilder real (requiere migration `nutrition_plan_templates.coach_id` nullable) — Fase P2.5-D.
+    - Enterprise coach YA usa builders en `/coach/*`; lo que falta son links desde org dashboard hacia esos builders.
+    - Ver secciones `Fase P2.5-A/B/C/D` en plan principal para tasks detalladas.
+
 ## Reglas que NO debes romper
+
+### Package Manager
+- Usar **pnpm** siempre. Nunca `npm install`, `npm run`, `yarn`.
+- Comandos: `pnpm install`, `pnpm dev`, `pnpm typecheck`, `pnpm build`
+- Si un paquete nuevo necesita postinstall scripts, agregarlo a `allowBuilds` en `pnpm-workspace.yaml` con comentario.
 
 ### Datos
 - Standalone = `org_id IS NULL`. Enterprise = `org_id != NULL`. NUNCA mezclar.

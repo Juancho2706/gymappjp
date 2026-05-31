@@ -1632,10 +1632,28 @@ Reglas de implementacion:
 - Consultas locales a `pg_policies` en `supabase_db_gymappjp`.
 
 ### P1.5 Pendiente Antes de P2 Funcional
-- [ ] Documentar flujo coach standalone que se suma a enterprise sin duplicar correo.
-- [ ] Documentar flujo owner/staff que tambien es coach/alumno sin mezclar permisos.
+- [x] Documentar flujo coach standalone que se suma a enterprise sin duplicar correo. Completado 2026-05-31: ver "Flujos multi-contexto identidad/persona" abajo.
+- [x] Documentar flujo owner/staff que tambien es coach/alumno sin mezclar permisos. Completado 2026-05-31: ver "Flujos multi-contexto identidad/persona" abajo.
 - [x] FUTURO DB: modelo multi-contexto de alumno por email. Plan ejecutable fechado 2026-05-31 documentado abajo. Problema actual: `clients.id = auth.users.id` impide que el mismo correo tenga varios perfiles de alumno en distintas empresas/coaches sin duplicar auth. Decision: mantener `clients` como perfil operativo y agregar `client_auth_id` para identidad; no crear `client_profiles` separado en primera migracion para reducir blast radius.
-- [ ] Plan de migracion local primero, live despues con backup/rollback.
+- [x] Plan de migracion local primero, live despues con backup/rollback. Completado 2026-05-31: fases y rollback documentados para `client_auth_id`; no ejecutar live sin runbook deploy separado.
+
+#### Flujos multi-contexto identidad/persona — fechado 2026-05-31
+
+**Coach standalone que se suma a enterprise sin duplicar correo**
+- Identidad global: mismo `auth.users.id` y mismo email.
+- Perfil coach existente: `coaches.id` se mantiene; si el coach ya tiene `org_id IS NULL`, no se sobrescribe ni se migra destructivamente.
+- Membresia enterprise: `organization_members.user_id = auth.users.id`, `coach_id = coaches.id`, `role = coach`, `status = active/invited`.
+- Contexto activo: `ActiveWorkspace` decide `coach_standalone` o `coach_enterprise`; `workspace_preferences` recuerda ultimo contexto.
+- Guard obligatorio: rutas `/coach/*` siguen resolviendo standalone salvo cuando el usuario elige workspace enterprise; rutas `/org/*` solo para staff enterprise, no para role `coach`.
+- Baja enterprise: revocar membresia no borra `coaches` ni alumnos standalone; tests `revoke preserves standalone` cubren este principio.
+
+**Owner/staff que tambien es coach/alumno**
+- Owner/staff usa `organization_members.role in org_owner/org_admin/ops/analyst/brand_manager` para `/org/*`.
+- Si tambien es coach, el acceso coach vive en `coaches.id` y se entra por `/coach/*` con contexto separado.
+- Si tambien es alumno, el futuro modelo usa `clients.client_auth_id = auth.users.id`; `clients.id` sigue siendo perfil alumno/contexto.
+- Nunca derivar permisos enterprise desde `coaches` ni permisos coach desde `organization_members` sin resolver workspace.
+- UI esperada: selector de workspace muestra roles separados: "Empresa / Staff", "Coach standalone", "Alumno".
+- Audit: cada cambio de contexto sensible debe escribir `workspace.switched` o equivalente cuando afecte soporte/compliance.
 
 #### Plan ejecutable `clients.id = auth.users.id` / alumno multi-contexto — fechado 2026-05-31
 
@@ -1696,6 +1714,13 @@ unique(client_auth_id, org_id, coach_id) parcial segun contexto
 - Antes de dropear FK vieja: backup de `clients`, `workspace_preferences`, tablas alumno principales.
 - No hacer live sin runbook, backup y ventana de mantenimiento.
 
+**Runbook live obligatorio antes de deploy**
+- Snapshot DB antes de migracion: `clients`, `coaches`, `organization_members`, `workspace_preferences`, `workout_logs`, `nutrition_plans`, `client_payments`, `check_ins`.
+- Migrar primero local con `supabase db reset`, luego staging, luego live.
+- Activar doble lectura por feature flag/config hasta completar QA.
+- Validar rollback: login coach standalone, login owner/staff, login alumno standalone, login alumno enterprise, exports cross-tenant.
+- No remover FK vieja en el mismo release que agrega `client_auth_id`.
+
 **Criterio done antes de implementar live:**
 - `npm run typecheck`.
 - `npx playwright test tests/enterprise/rls-isolation.spec.ts --workers=1`.
@@ -1752,13 +1777,176 @@ Prioridad P2 — completar features (P1.5 desbloqueado):
 - [x] Nutricion: tracking de uso por template/alumno. Completado 2026-05-31. `/org/[slug]/nutrition` muestra templates en uso, alumnos activos por template, logs 7d y adherencia 7d usando `nutrition_plans` + `daily_nutrition_logs`.
 - [ ] Nutricion: breakdown por coach y filtros por objetivo cuando exista volumen suficiente de datos.
 
+#### Fase P2.5 — Programas y Nutricion Enterprise (Builders + Oversight)
+
+**Auditoria realizada 2026-05-31.** Los builders standalone YA soportan `org_id` de forma completa. No es necesario duplicar UI. El gap real es diferente segun el rol:
+
+**Estado actual descubierto:**
+
+- `resolvePreferredWorkspace()` + workspace `enterprise_coach` aplica `org_id` automaticamente en queries y mutations.
+- Queries principales filtran por `(coach_id, org_id)` o `(coach_id, org_id IS NULL)`.
+- Un enterprise coach que entra a `/coach/workout-programs` o `/coach/nutrition-plans` ya opera en contexto enterprise con `org_id` correcto.
+- Tres bugs menores en builders existentes causan scope leaks potenciales (ver Fase A).
+
+**Gap real por rol:**
+
+```
+Enterprise coach:
+  - Builders /coach/* ya funcionan con workspace enterprise_coach activo.
+  - Falta: entrada clara desde /org/[slug] hacia sus builders.
+  - Falta: ver templates org disponibles para usar con sus alumnos.
+
+Enterprise owner/admin/ops:
+  - No tiene identidad de coach; /coach/* les esta bloqueado.
+  - Falta: pagina oversight /org/[slug]/programs con templates org + cobertura.
+  - Falta: crear templates org de workout (hoy no existe para workout).
+  - Falta: crear templates org de nutricion completos (hoy solo form basico).
+  - Falta: ver planes/programas activos de todos los coaches de la org.
+```
+
+**Arquitectura decidida — sin duplicar builders:**
+
+```
+Enterprise coach accede sus builders via:
+  /coach/workout-programs        (workspace enterprise_coach = org_id aplicado)
+  /coach/builder/[clientId]      (workspace enterprise_coach = org_id aplicado)
+  /coach/nutrition-plans         (workspace enterprise_coach = org_id aplicado)
+  Links de entrada desde /org/[slug]/coaches/[coachId] y /clients/[clientId]
+
+Enterprise owner/admin crea y supervisa via:
+  /org/[slug]/programs           (RSC overview: templates org + cobertura + alumnos sin programa)
+  /org/[slug]/programs/new       (form/builder para crear template org; reutiliza WeeklyPlanBuilder)
+  /org/[slug]/nutrition          (ya existe, ampliar con full template creator)
+  /org/[slug]/nutrition/new      (form/builder para crear template org completo; reutiliza PlanBuilder)
+```
+
+**Reglas de acceso:**
+
+- `/org/[slug]/programs*`: `resolveOrgAdminContext` — owner/admin/ops.
+- `/coach/*` para enterprise coaches: `resolvePreferredWorkspace` devuelve `enterprise_coach` con org_id.
+- Org template con `coach_id = null`: solo lectura para coaches enterprise de la org; edicion solo owner/admin.
+- Standalone coach: nunca ve ni puede editar org templates.
+
+##### Fase P2.5-A — Bug fixes builders existentes (sin migration, P0 calidad)
+
+**Estado: COMPLETADO 2026-05-31.**
+
+- [x] Fix `apps/web/src/app/coach/workout-programs/builder/_data/template-builder.queries.ts`: agrega `resolvePreferredWorkspace()` y filtra `workout_programs` por `org_id` (o `IS NULL` para standalone).
+- [x] Fix `apps/web/src/app/coach/nutrition-plans/[templateId]/edit/page.tsx`: resuelve workspace, pasa `orgId` a `getCoachTemplateById(user.id, templateId, orgId)`.
+- [x] Fix `getClientFoodFavorites(clientId)` en `nutrition-coach.actions.ts`: valida que `client_id` pertenece al coach autenticado bajo el workspace activo antes de devolver preferencias.
+- [x] Verificacion: `npm run typecheck` pasa.
+
+##### Fase P2.5-B — Overview pages owner/admin `/org/[slug]/programs` (sin migration)
+
+- [ ] Nueva ruta `apps/web/src/app/org/[slug]/programs/page.tsx` (RSC).
+  - Guard: `resolveOrgAdminContext(slug)` — owner/admin/ops.
+  - Seccion 1: Templates org — lista `workout_programs WHERE org_id = orgId AND status = 'template'`.
+  - Seccion 2: Cobertura — `% de alumnos enterprise con programa activo` calculado desde `workout_programs WHERE org_id = orgId AND status = 'active'`.
+  - Seccion 3: Alumnos sin programa asignado — link rapido a `/assignments`.
+  - Seccion 4: Programas activos por coach — tabla coach / alumnos / adherencia promedio.
+- [ ] Query `findOrgWorkoutProgramOverview(db, orgId)` en `infrastructure/db/org.repository.ts`.
+  - No `SELECT *` — columnas explicitas.
+  - `React.cache` en `_data/org.queries.ts`.
+- [ ] Link desde `/org/[slug]/coaches/[coachId]` → "Abrir builder" → `/coach/workout-programs` (solo visible para coaches enterprise activos con workspace disponible).
+- [ ] Link desde `/org/[slug]/clients/[clientId]` → "Ver programa" → `/coach/builder/[clientId]` (solo si hay coach asignado y ese coach tiene workspace enterprise).
+- [ ] Nav: agregar "Programas" al grupo Herramientas en `OrgEnterpriseNav`.
+- [ ] Mobile: cards compactas + link-out al builder (no builder embedded en mobile).
+- [ ] Verificacion: `npm run typecheck` + mobile audit 390px.
+
+##### Fase P2.5-C — Org workout template creator para owner/admin (requiere migration)
+
+**Motivacion:** owner quiere definir plantillas estandar de entrenamiento que todos los coaches de la org puedan usar. Hoy `workout_programs.coach_id` es NOT NULL, impide crear templates sin coach.
+
+**Migration local:** `supabase/migrations/20260601XXXXXX_workout_programs_nullable_coach_org_templates.sql`
+
+```sql
+-- Permitir coach_id NULL para templates org
+ALTER TABLE workout_programs ALTER COLUMN coach_id DROP NOT NULL;
+-- Guardrail: todo programa debe tener coach O org, nunca ninguno
+ALTER TABLE workout_programs ADD CONSTRAINT chk_workout_owner
+  CHECK (coach_id IS NOT NULL OR org_id IS NOT NULL);
+-- RLS: coaches enterprise de la org pueden leer templates org (coach_id=null, org_id=orgId)
+-- (agregar policy en misma migration)
+```
+
+- [ ] Migration local escrita y aplicada con `npx supabase db reset`.
+- [ ] `npx supabase gen types typescript --local > src/lib/database.types.ts`.
+- [ ] `npx supabase db lint --local` sin errores.
+- [ ] Server action `createOrgWorkoutTemplateAction` en `apps/web/src/app/org/[slug]/programs/_actions/org-programs.actions.ts`:
+  - `resolveOrgAdminContext(slug, ['org_owner', 'org_admin'])`.
+  - Crea `workout_program` con `org_id = orgId, coach_id = null, status = 'template'`.
+  - Zod schema: `OrgWorkoutTemplateSchema` — nombre, descripcion, semanas, bloques.
+  - Audit `workout_template.created` via `writeOrgAuditEvent`.
+  - `revalidatePath('/org/[slug]/programs')`.
+- [ ] Ruta `apps/web/src/app/org/[slug]/programs/new/page.tsx`:
+  - Reutilizar `WeeklyPlanBuilder` con prop `mode='org_template'`.
+  - En `mode='org_template'`: deshabilitar "Asignar a alumno", mostrar badge "Template de la organizacion".
+  - Server action diferente al de coach builder (sin `coach_id` en payload).
+- [ ] Action `assignOrgWorkoutTemplateToCoach(orgSlug, templateId, coachId)`:
+  - Guard `resolveOrgAdminContext`.
+  - Copia template a `workout_programs` con `coach_id = coachId, org_id = orgId, status = 'template'`.
+  - Coach puede editarla como base para sus alumnos.
+  - Audit `workout_template.assigned_to_coach`.
+- [ ] Mobile: form simple, no builder DnD completo en mobile — link a desktop para editing.
+- [ ] Verificacion: migration local + `npm run typecheck` + test unitario org template CRUD.
+
+##### Fase P2.5-D — Nutrition plans enterprise full creator (migration menor o sin migration)
+
+**Estado actual:** `/org/[slug]/nutrition` muestra templates en uso y adherencia. Tiene `CreateOrgNutritionTemplateForm` que solo guarda macros/nombre.
+
+**Decision de schema:**
+Opcion A (preferida): reutilizar `nutrition_plan_templates` con `coach_id = null, org_id = orgId` — mismo patron que workout. Requiere alter `nutrition_plan_templates.coach_id DROP NOT NULL` + guardrail.
+Opcion B: continuar usando `org_nutrition_templates` y agregar columna `meals_json jsonb` para persistir comidas reales.
+Opcion A es mas limpia — reutiliza toda la logica de `NutritionService.createOrUpdateTemplateFromJson()`.
+
+- [ ] Migration: `supabase/migrations/20260601XXXXXX_nutrition_plan_templates_nullable_coach_org.sql`
+  - `ALTER TABLE nutrition_plan_templates ALTER COLUMN coach_id DROP NOT NULL;`
+  - `ALTER TABLE nutrition_plan_templates ADD CONSTRAINT chk_nutrition_owner CHECK (coach_id IS NOT NULL OR org_id IS NOT NULL);`
+  - RLS: coaches enterprise leen templates donde `org_id = active_org`.
+- [ ] Expandir ruta existente `/org/[slug]/nutrition`:
+  - Agregar tab/seccion "Templates org" con full template library (meals reales, no solo macros).
+  - Agregar tab/seccion "Planes activos" — todos los `nutrition_plans` donde `org_id = orgId`.
+  - Mantener tabs actuales de uso/adherencia.
+- [ ] Ruta `/org/[slug]/nutrition/new/page.tsx`:
+  - Reutilizar `PlanBuilder` component con prop `mode='org_template'`.
+  - Server action `createOrgNutritionTemplateAction`:
+    - `resolveOrgAdminContext(slug, ['org_owner', 'org_admin'])`.
+    - Llama `NutritionService.createOrUpdateTemplateFromJson()` con `coachId = null, orgId`.
+    - Audit `nutrition_template.created`.
+- [ ] Action `assignOrgNutritionTemplateToCoachClients(orgSlug, templateId, coachId, clientIds[])`:
+  - Guard `resolveOrgAdminContext`.
+  - Llama `NutritionService.propagateTemplateChanges(templateId, null, clientIds, orgId)`.
+  - Audit `nutrition_template.assigned`.
+- [ ] Mobile: lista de templates con macros + button "Asignar" — no PlanBuilder completo en mobile.
+- [ ] Verificacion: migration local + `npm run typecheck` + test nutrition template por org owner.
+
+**Criterios done globales Fase P2.5:**
+
+```
+- npm run typecheck pasa.
+- npm run audit:org-sensitive-actions pasa (nuevas actions auditadas).
+- npx supabase db lint --local sin errores.
+- npx playwright test tests/enterprise/rls-isolation.spec.ts --workers=1 sin regressions.
+- Mobile audit 390px pasa para /programs y /nutrition/new.
+- Test: standalone coach no puede leer org templates de otra org.
+- Test: enterprise coach puede leer org templates de su org.
+- Test: owner crea template org y aparece en lista; coach enterprise lo puede usar.
+```
+
+**No hacer en esta fase:**
+
+- No duplicar `WeeklyPlanBuilder` ni `PlanBuilder` — reutilizar componentes existentes.
+- No crear drag-and-drop separado para enterprise.
+- No permitir que coaches standalone vean org templates.
+- No hacer live migration sin runbook + backup (solo local hasta merge).
+
 Prioridad P3 - diferenciadores futuros sin costo externo:
 
 - [ ] "Proof Pack" exportable para ventas/CSM: brand preview, roles, audit, alumnos asignados, reporte semanal.
 - [ ] Capacity Autopilot manual: sugerencias de reasignacion por carga/riesgo, con aprobacion humana.
-- [ ] Trust Center Lite: permisos, MFA, audit, retention, exports en una vista.
+- [x] Trust Center Lite: permisos, MFA, audit, retention, exports en una vista. Completado 2026-05-31. Nueva ruta `/org/[slug]/trust` y nav en Seguridad/Admin; read-only, sin servicios pagos.
 - [ ] Role home: owner, ops/admin, brand manager y analyst ven landing interna distinta.
-- [ ] Mobile parity matrix por menu: Web/PWA, RN, native-only.
+- [x] Mobile parity matrix por menu: Web/PWA, RN, native-only. Documentado 2026-05-31 en seccion responsive: define equivalentes RN/native-only por pantalla sin crear app RN todavia.
 
 No hacer todavia:
 
@@ -2377,7 +2565,7 @@ Estado 2026-05-30: ✅ MAYORMENTE COMPLETADO. Seed tiene org_a/org_b/standalone 
 
 - **Estado:** INICIADA con preview read-only.
 - **Completado parcial:** 2026-05-23 22:04:56 -04:00
-- **Notas:** `/org/[slug]/reports` ya muestra weekly brief, KPIs conservadores, coach performance por carga, findings, exports bloqueados y formula status. Audit Log ya tiene CSV real owner-only con audit event. Reportes CSV/PDF siguen pendientes.
+- **Notas:** `/org/[slug]/reports` ya muestra weekly brief, KPIs conservadores, coach performance por carga, findings, CSV auditado y formula status. Audit Log ya tiene CSV real owner-only con audit event. PDF ejecutivo sigue pendiente.
 
 - [x] Reporte semanal read-only.
 - [x] Coach performance por carga actual.
@@ -2489,7 +2677,58 @@ Pendiente:
 - [x] Rows compactas mobile: assignments + payments. Completado 2026-05-30 (commit 04542bc). Flex single-line con stats inline, stacking eliminado en 390px.
 - [x] Revisar cada menu en viewport 390x844 y 430x932 antes de considerar listo. Completado 2026-05-31 con `tests/enterprise/mobile-visual-audit.spec.ts`: 12 menus enterprise, bottom nav visible, screenshots por viewport y sin overflow horizontal.
 - [x] Resolver warnings de hidratacion detectados en Playwright mobile: inputs aparecen con diff `style={{caret-color:"transparent"}}` en dev/hydration logs. Completado 2026-05-31: causa era Playwright screenshot con caret oculto mutando inputs antes/durante hydration; `tests/enterprise/mobile-visual-audit.spec.ts` ahora usa `caret: 'initial'` en screenshots. Audit mobile 4/4 passing sin ese warning.
-- [ ] Documentar equivalente futuro React Native por pantalla.
+- [x] Documentar equivalente futuro React Native por pantalla. Completado 2026-05-31; ver matriz Web/PWA/RN/native-only abajo.
+
+#### Matriz mobile parity Web/PWA/RN — fechado 2026-05-31
+
+| Menu web/PWA | RN futuro | Native-only | Contrato compartible |
+|---|---|---|---|
+| `/org/[slug]` Dashboard | Home enterprise con KPIs/action queue | Push de alertas criticas | `ActiveWorkspace`, org health, action queue |
+| `/clients` Alumnos | Lista/cards + busqueda + sheets | Contact picker opcional futuro | `OrgClient`, bulk actions schema |
+| `/assignments` Asignaciones | Cards por coach + reasignacion aprobada | Notificaciones de sobrecarga | assignment/capacity DTO |
+| `/payments` Pagos manuales | Registro manual + vencimientos | Recordatorios locales | payment status/due date DTO |
+| `/coaches` Coaches | Cards accionables + invite/revoke | QR/share invite nativo | coach member DTO |
+| `/team` Staff | Role matrix accordion + revoke | MFA/passkey nativo futuro | org role/permission matrix |
+| `/brand` Marca | Preview tabs/swipe + publish | Image picker nativo | brand draft/published DTO |
+| `/announcements` Novedades | Composer sheet + audience | Push notifications | announcement schema |
+| `/nutrition` Templates org | Biblioteca + uso por coach | Scanner alimentos futuro no-MVP | nutrition template schema |
+| `/reports` Reportes | Weekly brief vertical + export/share | Share sheet | report summary DTO |
+| `/settings` Admin | Drill-down sections | Billing docs share | org settings/billing DTO |
+| `/audit` Audit | Timeline compacta + filtros sticky | Export/share evidence | audit event/filter schema |
+| `/trust` Trust Center | Checklist/security evidence | Device MFA status | trust posture DTO |
+
+Regla: no crear una UI RN separada con logica propia. Primero mover contratos Zod/tipos a `packages/schemas`/`packages/types`; luego RN consume los mismos DTOs.
+
+#### pnpm + React Native — configuracion obligatoria antes de crear app mobile
+
+Metro bundler (React Native) asume `node_modules` plano. pnpm por defecto crea symlinks estrictos que Metro no sigue. Sin fix, imports de dependencias transitivas fallan en runtime.
+
+**Si `apps/mobile/` en este monorepo:**
+
+Crear `apps/mobile/.npmrc`:
+```ini
+node-linker=hoisted
+```
+
+Agregar paquetes nativos a `allowBuilds` en `pnpm-workspace.yaml` raiz a medida que se agregan:
+```yaml
+allowBuilds:
+  expo: true
+  react-native: true
+  expo-modules-core: true
+  # agregar cada paquete nativo con postinstall
+```
+
+NO tocar el `.npmrc` raiz — web sigue con strict isolation.
+
+**Si repo separado `eva-mobile/`:**
+
+```bash
+echo "node-linker=hoisted" >> .npmrc
+pnpm install
+```
+
+**EAS Build:** detecta `pnpm-lock.yaml` automaticamente. No requiere config extra.
 
 ### Shell y navegacion global
 
@@ -2500,10 +2739,10 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Bottom/tab nav enterprise mobile con 5-6 destinos maximos.
-- [ ] Subnav por grupo visible solo dentro del grupo.
-- [ ] Acciones globales: cambiar workspace, cerrar sesion, alertas, soporte.
-- [ ] Validar `pb-safe`, `pt-safe`, `min-h-dvh` y no scroll horizontal.
+- [x] Bottom/tab nav enterprise mobile con 5-6 destinos maximos. Completado 2026-05-31: `OrgEnterpriseNav` usa 6 destinos maximos en bottom tab.
+- [x] Subnav por grupo visible solo dentro del grupo. Completado 2026-05-31: chips del grupo activo en mobile header.
+- [x] Acciones globales: cambiar workspace, cerrar sesion, alertas, soporte. Parcial/cerrado para MVP 2026-05-31: workspace switcher + sign out estan visibles; alertas viven en dashboard/action queue; soporte queda mail/manual.
+- [x] Validar `pb-safe`, `pt-safe`, `min-h-dvh` y no scroll horizontal. Completado 2026-05-31 con audit visual mobile 390x844/430x932 y safe-area pass.
 
 ### Command Center `/org/[slug]`
 
@@ -2587,15 +2826,30 @@ Pendiente:
 
 Estado actual:
 
-- Mayormente read-only/preview: lista staff, role templates y posture.
+- Lista staff enterprise con roles y estado.
+- Crear usuario enterprise con contraseña temporal (todos los roles no-coach).
+- Revocar staff con preview de impacto.
+- Cambiar rol de staff activo (org_admin/ops/analyst/brand_manager).
+- Reset password con generacion de contraseña temporal visible.
+- Escalacion a org_admin activa flag MFA en cuenta.
+- Audit events para cada operacion.
+
+Completado 2026-05-31:
+- [x] Crear staff con `CreateStaffDialog`: form con rol selector (org_admin/ops/analyst/brand_manager), muestra contraseña temporal en modal copiable. `createEnterpriseCoachAction` ahora acepta todos los roles.
+- [x] Cambiar rol con `ChangeStaffRoleButton`: dialog radio select, llama `updateStaffRoleAction`, solo para staff activo no-owner.
+- [x] Reset password con `ResetStaffPasswordButton`: dialog con advertencia, llama `resetStaffPasswordAction` (usa `memberId` → `user_id`, no solo coaches), muestra contraseña en campo copiable.
+- [x] `packages/schemas/org.ts`: `CreateEnterpriseCoachSchema.role` acepta todos los roles.
+- [x] P2.5-A Fix 1: `template-builder.queries.ts` aplica org scope via `resolvePreferredWorkspace`.
+- [x] P2.5-A Fix 2: `nutrition-plans/[templateId]/edit/page.tsx` resuelve workspace y pasa `orgId` a `getCoachTemplateById`.
+- [x] P2.5-A Fix 3: `getClientFoodFavorites` valida ownership del coach antes de devolver preferencias.
+- Verificado: `npm run typecheck` pasa.
 
 Pendiente:
 
-- [ ] CRUD staff real: crear, revocar, cambiar rol, reset password.
-- [ ] Permisos granulares por feature: owner/admin/ops/analyst/brand_manager.
-- [ ] MFA policy real y first-login reset.
-- [ ] Tests multi-role.
-- [ ] Mobile: role matrix como accordion/cards.
+- [ ] Permisos granulares por feature: owner/admin/ops/analyst/brand_manager. *(commit a707d09 implemento ROLE_MATRIX; falta enforcement fine-grained por page)*
+- [ ] MFA policy real y first-login reset de contraseña obligatorio.
+- [ ] Tests multi-role: staff con cada rol ve las pantallas correctas.
+- [ ] Mobile: role matrix como accordion/cards (actualmente grilla desktop).
 
 ### Marca / Brand Studio `/brand`
 
@@ -2627,20 +2881,40 @@ Pendiente:
 - [ ] Read receipts/delivery status futuro.
 - [ ] Mobile: composer como sheet/modal.
 
+### Herramientas / Programas `/programs` (NUEVA RUTA — P2.5-B/C)
+
+Estado actual:
+
+- No existe ruta `/org/[slug]/programs`.
+- Workout builder en `/coach/workout-programs` YA funciona para enterprise coaches (workspace enterprise_coach aplica org_id automaticamente).
+- Owner/admin no tiene oversight de programas ni puede crear org templates.
+
+Pendiente:
+
+- [ ] Ruta `/org/[slug]/programs`: overview templates org + cobertura alumnos + alumnos sin programa. Ver Fase P2.5-B.
+- [ ] Creator org template workout en `/org/[slug]/programs/new`. Ver Fase P2.5-C (requiere migration `workout_programs.coach_id` nullable).
+- [ ] Links desde `/coaches/[coachId]` y `/clients/[clientId]` al builder coach en contexto enterprise.
+- [ ] Nav: agregar "Programas" al grupo Herramientas en `OrgEnterpriseNav`.
+- [ ] Mobile: overview compacto + link a builder (no builder embebido en mobile).
+
 ### Herramientas / Nutricion `/nutrition`
 
 Estado actual:
 
-- Templates org con macros/meals.
-- Coaches enterprise pueden usar templates desde flujo coach.
+- Templates org con macros/meals (solo form basico de macros, sin meals reales).
+- Templates en uso, alumnos activos, adherencia 7d, uso por coach: implementado 2026-05-31.
+- Nutrition builder en `/coach/nutrition-plans` YA funciona para enterprise coaches (workspace enterprise_coach aplica org_id).
+- Owner/admin puede ver stats pero no puede crear templates con meals completas.
 
 Pendiente:
 
 - [x] Tracking de uso por template/alumno. Completado 2026-05-31. MVP sin migracion: matchea planes activos por nombre + macros contra `org_nutrition_templates`, cuenta alumnos activos y adherencia 7d desde `daily_nutrition_logs`.
-- [ ] Tracking de uso por coach. Requiere agrupar los planes matcheados por `coach_id` y mostrar adopcion por equipo.
-- [ ] Filtros por objetivo cuando exista volumen.
-- [ ] Flujo claro para aplicar template desde enterprise o coach enterprise.
-- [ ] Mobile: editor por steps/tabs, no formulario largo.
+- [x] Tracking de uso por coach. Completado 2026-05-31. Sin migracion: agrupa los planes activos matcheados por `coach_id`, muestra alumnos activos, planes activos, logs 7d y adherencia por coach en `/org/[slug]/nutrition`.
+- [ ] Full template creator en `/org/[slug]/nutrition/new` con PlanBuilder real (meals + foods). Ver Fase P2.5-D (requiere migration `nutrition_plan_templates.coach_id` nullable).
+- [ ] Tab "Planes activos" en `/nutrition`: todos los `nutrition_plans` donde `org_id = orgId` con adherencia por coach.
+- [ ] Assign org template a coach/clientes via action auditada.
+- [ ] Filtros por objetivo cuando exista volumen suficiente de datos.
+- [ ] Mobile: lista templates + button asignar; builder completo queda en desktop.
 
 ### Seguridad/Admin `/settings`
 
@@ -2664,10 +2938,10 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Filtros por action/actor/date/target.
-- [ ] Checksum generation job local/manual.
+- [x] Filtros por action/actor/date/target. Completado 2026-05-31. `/org/[slug]/audit` usa URL params `action`, `actor_id`, `target_type`, `from`, `to`; `audit/export` acepta `action_prefix` y filtros exactos, fail-closed con audit `audit.exported`.
+- [x] Checksum generation job local/manual. Completado 2026-05-31. Endpoint existente `/api/cron/audit-checksum` genera checksum semanal e inserta en `audit_log_checksums`; se agrego script `npm run audit:checksum:manual` para ejecutarlo contra local/staging sin servicio externo.
 - [x] Export audit con checksum. Completado el 2026-05-26 20:39:12 -04:00. Header `X-Content-SHA256` y metadata `checksum_sha256` en `audit.exported`.
-- [ ] Detectar mutations sensibles sin audit.
+- [x] Detectar mutations sensibles sin audit. Completado 2026-05-31. Script `npm run audit:org-sensitive-actions` falla si acciones/rutas enterprise con mutations no incluyen `writeOrgAuditEvent`; allowlist explicita para MFA setup. Verificado passing.
 - [ ] Mobile: timeline compacta con filtros sticky.
 
 ### Insights / Reportes `/reports`
@@ -2678,7 +2952,7 @@ Estado actual:
 
 Pendiente:
 
-- [ ] CSV de weekly brief con permission + audit `report.exported`.
+- [x] CSV de weekly brief con permission + audit `report.exported`. Verificado/cerrado 2026-05-31. `/reports/export` usa `org.reports.export`, audit fail-closed `report.exported`, checksum SHA-256 en header/metadata y CSV operacional.
 - [ ] PDF ejecutivo despues del CSV.
 - [ ] Rango de fechas y comparacion historica.
 - [ ] No vender como analytics avanzado hasta normalizar adherencia/check-ins/pagos.
@@ -3405,13 +3679,15 @@ UX/MOBILE:
 - [x] Warning Next 16 `middleware` deprecated -> `proxy`. Completado 2026-05-31 siguiendo docs oficiales Next: `apps/web/src/middleware.ts` fue renombrado a `apps/web/src/proxy.ts` y exporta `proxy(request)`, conservando matcher y comportamiento. Verificado con `npm run typecheck`, storage cross-tenant y browser route guard `coach suspendido`. (QA/Platform)
 - [x] Warnings Sentry deprecated. Completado 2026-05-31. `disableLogger` -> `webpack.treeshake.removeDebugLogging`, `automaticVercelMonitors` -> `webpack.automaticVercelMonitors`, e `instrumentation-client.ts` exporta `onRouterTransitionStart = Sentry.captureRouterTransitionStart`. Warning no reaparece en Playwright. (QA/Platform)
 - [x] Warnings alumno `/c`: hydration, HTML invalido, Recharts e imagen. Completado 2026-05-31. `HabitsTracker` evita `button` anidado con tooltip; `NutritionShell` no usa `navigator.onLine` en el primer render SSR; charts de peso alumno miden ancho via `ResizeObserver` antes de renderizar Recharts; loaders/prompts fijan ancho/alto de logo. Verificado con `npm run typecheck` y `npx playwright test tests/nutrition-student-smoke.spec.ts --workers=1` (2/2 passing). (QA/UX)
+- [x] Mobile parity matrix Web/PWA/RN/native-only. Completado 2026-05-31. Matriz por menu documentada en seccion responsive; no se crea RN todavia. (Mobile)
 
 VENTAS/LEGAL (al buscar cobrar):
 - [ ] Proof Pack exportable (PDF) + PDF ejecutivo de reportes. (Sales)
+- [x] Trust Center Lite. Completado 2026-05-31. `/org/[slug]/trust` consolida permisos, MFA posture, audit, exports, retention/data risks y datos sensibles sin servicio externo. (Sales/Security)
 - [ ] Derechos ARCO + data map + retention; checklist Ley 21.719 antes de 2026-12-01. (Legal)
 - [ ] Definir responsable de datos por contexto en TOS enterprise. (Legal)
 - [ ] Runbook DevOps: bulk apply migraciones local→prod con orden + rollback + backup. (DevOps)
-- [ ] CI que corre `rls-isolation.spec.ts` por PR. (DevOps)
+- [x] CI que corre `rls-isolation.spec.ts` por PR. Completado 2026-05-31. `npm run test:e2e:enterprise-rls` y step dedicado `Enterprise RLS isolation` en `.github/workflows/ci.yml`; verificado local 46/46 passing. (DevOps)
 
 ### Línea de corte "Enterprise vendible"
 MVP cobrable = features actuales (✅) + bloque SEGURIDAD completo + workspace switcher + org health score + runbook deploy. El resto (Proof Pack PDF, multi-contexto alumno, paridad RN) es post-primer-cliente.
