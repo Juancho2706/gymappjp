@@ -5,6 +5,8 @@ import { PlanBuilder } from '../../_components/PlanBuilder'
 import { getCoachTemplateById } from '../../_data/nutrition-coach.queries'
 import { mapTemplateRowToInitialData } from '../../_data/plan-builder-mappers'
 import { getEditNutritionTemplateUser } from './_data/edit-template.queries'
+import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 interface Props {
   params: Promise<{ templateId: string }>
@@ -15,7 +17,12 @@ export default async function EditNutritionTemplatePage({ params }: Props) {
   const user = await getEditNutritionTemplateUser()
   if (!user) redirect('/login')
 
-  const row = await getCoachTemplateById(user.id, templateId)
+  // Resolve workspace so org-scoped coach can only edit their org's templates
+  const supabase = await createClient()
+  const workspace = await resolvePreferredWorkspace(supabase, user.id)
+  const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+
+  const row = await getCoachTemplateById(user.id, templateId, orgId)
   if (!row) notFound()
 
   const initialData = mapTemplateRowToInitialData(row)

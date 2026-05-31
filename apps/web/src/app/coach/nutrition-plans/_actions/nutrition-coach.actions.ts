@@ -1042,10 +1042,28 @@ export async function upsertNutritionPlanCycle(
 
 /**
  * Returns the set of food_ids a client has marked as 'favorite'.
- * Coach can read their own clients' preferences via RLS policy.
+ * Validates coach owns the client before returning data.
  */
 export async function getClientFoodFavorites(clientId: string): Promise<string[]> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // Verify this client belongs to the authed coach under their active workspace
+  const workspace = await resolvePreferredWorkspace(supabase, user.id)
+  let clientQuery = supabase
+    .from('clients')
+    .select('id')
+    .eq('id', clientId)
+    .eq('coach_id', user.id)
+  if (workspace?.type === 'enterprise_coach') {
+    clientQuery = clientQuery.eq('org_id', workspace.orgId)
+  } else {
+    clientQuery = clientQuery.is('org_id', null)
+  }
+  const { data: clientRow } = await clientQuery.maybeSingle()
+  if (!clientRow) return []
+
   const { data } = await supabase
     .from('client_food_preferences')
     .select('food_id')
