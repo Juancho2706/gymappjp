@@ -1668,8 +1668,8 @@ Checklist anti-regresion:
   - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
 - [x] Negative tests: coach standalone no ve alumnos enterprise aunque tenga mismo `user.id`. Completado el 2026-05-30. 24/24 tests passing en rls-isolation.spec.ts.
 - [x] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org. Completado el 2026-05-30.
-- [ ] Negative tests: alumno standalone conserva coach brand y portal `/c/[coach_slug]`.
-- [ ] Negative tests: alumno enterprise conserva org brand y no cae a brand del coach.
+- [x] Negative tests: branding workspace. Completado 2026-05-30 (commit 6e0500b). 46/46 tests pasando. Enterprise student tiene org_id → org brand. Standalone tiene org_id=null → coach brand.
+- [x] Test: coach revocado/suspendido pierde org access, conserva standalone. Completado 2026-05-30.
 - [x] Exports/reportes resuelven workspace server-side via `getOrgAdminContext` (no URL params solos). Verificado en audit export route.
 
 Prioridad P2 — completar features (P1.5 desbloqueado):
@@ -1680,7 +1680,7 @@ Prioridad P2 — completar features (P1.5 desbloqueado):
 - [x] Reportes: CSV weekly brief con `report.exported` + fail-closed audit. Completado 2026-05-30.
 - [x] Audit: filtros por action category (chips) + date range UI. Completado 2026-05-30 (commit b1ca26a). URL searchParams, client-side prefix match, "Limpiar" link.
 - [x] Brand Studio: draft/published. Completado 2026-05-30 (commit be0e3a2). Columnas brand_draft(jsonb)/brand_published_at en organizations. saveBrandDraftAction (sin impacto live) + discardBrandDraftAction + publishEnterpriseBrandAction (promueve draft → live → coaches). Banner ámbar cuando hay borrador. Fecha última publicación visible.
-- [ ] Team: permisos granulares por feature, no solo `org_owner/org_admin/coach`.
+- [x] Team: permisos granulares. Completado 2026-05-30 (commit a707d09). 22 OrgPermissions en matriz por rol (ops/analyst/brand_manager habilitados). resolveOrgAdminContext incluye ops. Pages usan orgRoleCan() en vez de hardcode owner/admin. ROLE_MATRIX en Team page actualizada.
 - [ ] Admin: definir flujo comercial para aumentar seats, cambiar plan y registrar contacto legal/finanzas sin cobro in-app.
 - [ ] Novedades: evaluar canal separado para coaches enterprise con audience/permissions propios antes de tocar el flujo coach normal.
 - [ ] Nutricion: tracking de uso por template/coach y filtros por objetivo cuando exista volumen suficiente de datos.
