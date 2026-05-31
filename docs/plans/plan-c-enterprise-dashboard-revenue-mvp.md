@@ -2878,7 +2878,7 @@ Pendiente:
 - [ ] Flujo comercial para seats, cambio de plan y contacto legal/finanzas sin cobro in-app.
 - [ ] Separar settings administrativos de billing/contrato.
 - [ ] Centralizar `canViewBilling(workspace)`.
-- [ ] Mobile: lista de secciones con drill-down.
+- [x] Mobile: accordion por seccion. Completado 2026-06-01. `SettingsAccordion` client component: tap-to-expand en mobile, siempre visible en desktop.
 
 ### Seguridad/Admin / Auditoria `/audit`
 
@@ -2904,7 +2904,7 @@ Estado actual:
 Pendiente:
 
 - [x] CSV de weekly brief con permission + audit `report.exported`. Verificado/cerrado 2026-05-31. `/reports/export` usa `org.reports.export`, audit fail-closed `report.exported`, checksum SHA-256 en header/metadata y CSV operacional.
-- [ ] PDF ejecutivo despues del CSV.
+- [x] PDF ejecutivo completado 2026-06-01. `ReportsPdfButton` client-side con jspdf: metricas, alumnos, coaches, branding amber. Descarga reporte-[slug]-[date].pdf.
 - [ ] Rango de fechas y comparacion historica.
 - [ ] No vender como analytics avanzado hasta normalizar adherencia/check-ins/pagos.
 - [ ] Mobile: resumen ejecutivo vertical con tabs.
