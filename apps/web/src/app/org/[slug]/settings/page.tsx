@@ -233,6 +233,56 @@ export default async function OrgSettingsPage({ params }: Props) {
 
                         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                             <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Seats y plan</h2>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-center">
+                                    <p className="text-2xl font-black text-white">{usedSeats}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">Usados</p>
+                                </div>
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-center">
+                                    <p className="text-2xl font-black text-white">{org.seats_included}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">Incluidos</p>
+                                </div>
+                                <div className={`rounded-xl border p-3 text-center col-span-2 sm:col-span-1 ${
+                                    Math.max(0, org.seats_included - usedSeats) === 0
+                                        ? 'border-red-400/25 bg-red-400/10'
+                                        : seatUsage >= 80
+                                            ? 'border-amber-400/25 bg-amber-400/10'
+                                            : 'border-emerald-400/25 bg-emerald-400/10'
+                                }`}>
+                                    <p className={`text-2xl font-black ${
+                                        Math.max(0, org.seats_included - usedSeats) === 0 ? 'text-red-300' :
+                                        seatUsage >= 80 ? 'text-amber-300' : 'text-emerald-300'
+                                    }`}>{Math.max(0, org.seats_included - usedSeats)}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">Disponibles</p>
+                                </div>
+                            </div>
+
+                            {/* No in-app billing — contact flow */}
+                            <div className="mt-4 rounded-xl border border-zinc-700 bg-zinc-950/60 p-4">
+                                <p className="text-sm font-semibold text-zinc-200">¿Necesitás más seats o cambiar de plan?</p>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    El billing enterprise es manual. Contactá a EVA para ajustar tu plan sin interrumpir el servicio.
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <a
+                                        href="mailto:hola@eva-app.cl?subject=Cambio%20de%20plan%20enterprise%20-%20{org.name}&body=Organización%3A%20{org.slug}%0APlan%20actual%3A%20{org.plan}%0ASeats%20actuales%3A%20{org.seats_included}%0ASolicitud%3A%20"
+                                        className="inline-flex items-center gap-2 rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-amber-300 transition-colors"
+                                    >
+                                        Contactar por email
+                                    </a>
+                                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-400">
+                                        Plan actual: <span className="capitalize text-zinc-200">{org.plan}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <div className="flex items-center gap-2">
                                 <LockKeyhole className="h-4 w-4 text-sky-300" aria-hidden="true" />
                                 <h2 className="text-lg font-black text-white">Guardrails</h2>
                             </div>

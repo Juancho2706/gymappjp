@@ -161,23 +161,20 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                         <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
                             {unassignedClients.length > 0 ? (
                                 unassignedClients.slice(0, 8).map((client, index) => (
-                                    <div key={client.id} className="grid gap-3 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 md:grid-cols-[1fr_140px_150px] md:items-center">
-                                        <div className="flex min-w-0 items-center gap-3">
-                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 text-sm font-black text-emerald-300">
-                                                {initials(client.full_name)}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-bold text-zinc-100">{client.full_name ?? 'Alumno sin nombre'}</p>
-                                                <p className="truncate text-xs text-zinc-500">{client.email ?? client.phone ?? 'Sin contacto registrado'}</p>
-                                            </div>
+                                    <div key={client.id} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/50 p-3 last:border-b-0">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-400/10 text-xs font-black text-emerald-300">
+                                            {initials(client.full_name)}
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-zinc-500">Prioridad sugerida</p>
-                                            <p className="text-sm font-bold text-zinc-100">P{Math.min(index + 1, 5)}</p>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-semibold text-zinc-100">{client.full_name ?? 'Alumno sin nombre'}</p>
+                                            <p className="truncate text-[11px] text-zinc-500">{client.email ?? client.phone ?? 'Sin contacto'}</p>
                                         </div>
-                                        <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-xs font-semibold text-emerald-300">
-                                            <Route className="h-3 w-3" aria-hidden="true" />
-                                            Listo para asignar
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            <span className="text-[10px] font-bold text-zinc-500">P{Math.min(index + 1, 5)}</span>
+                                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[10px] font-bold text-emerald-300">
+                                                <Route className="h-2.5 w-2.5" aria-hidden="true" />
+                                                Sin coach
+                                            </span>
                                         </div>
                                     </div>
                                 ))

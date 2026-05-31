@@ -194,28 +194,26 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                                             ? paymentStateForStatus(latestPayment.status)
                                             : { label: 'Sin registro', tone: 'border-zinc-700 bg-zinc-900 text-zinc-400' }
                                     return (
-                                        <div key={client.id} className="grid gap-3 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 xl:grid-cols-[1fr_130px_125px_150px] xl:items-center">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-400/10 text-sm font-black text-sky-300">
+                                        <div key={client.id} className="border-b border-zinc-800 bg-zinc-950/50 last:border-b-0">
+                                            {/* Mobile: compact single-line + expandable form */}
+                                            <div className="flex items-center gap-3 p-3">
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-400/10 text-xs font-black text-sky-300">
                                                     {initials(client.full_name)}
                                                 </div>
-                                                <div className="min-w-0">
-                                                    <p className="truncate text-sm font-bold text-zinc-100">{client.full_name ?? 'Alumno sin nombre'}</p>
-                                                    <p className="truncate text-xs text-zinc-500">{client.email ?? client.phone ?? 'Sin contacto registrado'}</p>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-sm font-semibold text-zinc-100">{client.full_name ?? 'Alumno sin nombre'}</p>
+                                                    <p className="truncate text-[11px] text-zinc-500">
+                                                        {client.assignedCoach?.full_name ?? 'Sin coach'}
+                                                        {latestPayment ? ` · ${latestPayment.payment_date}` : ''}
+                                                    </p>
+                                                </div>
+                                                <div className="flex shrink-0 items-center gap-1.5">
+                                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${state.tone}`}>
+                                                        {state.label}
+                                                    </span>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <p className="text-xs text-zinc-500">Coach</p>
-                                                <p className="truncate text-sm font-bold text-zinc-100">{client.assignedCoach?.full_name ?? 'Sin coach'}</p>
-                                            </div>
-                                            <span className={`inline-flex w-fit rounded-full border px-2 py-1 text-xs font-bold ${state.tone}`}>
-                                                {state.label}
-                                            </span>
-                                            <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
-                                                <CalendarClock className="h-3 w-3" aria-hidden="true" />
-                                                {latestPayment ? latestPayment.payment_date : 'Sin fecha'}
-                                            </div>
-                                            <details className="xl:col-span-4">
+                                            <details className="px-3 pb-3 -mt-1">
                                                 <summary className="cursor-pointer text-xs font-bold text-sky-300">
                                                     {latestPayment ? `Ultimo: ${formatCLP(Number(latestPayment.amount))}` : 'Registrar pago externo'}
                                                 </summary>
