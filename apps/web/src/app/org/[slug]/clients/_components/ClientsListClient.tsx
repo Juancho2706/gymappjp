@@ -6,6 +6,7 @@ import {
     CheckCircle2,
     CheckSquare2,
     ChevronDown,
+    ExternalLink,
     Loader2,
     Square,
     UserX,
@@ -208,6 +209,16 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
                                 {!client.isActive ? <UserX className="h-3 w-3" aria-hidden="true" /> : <CheckCircle2 className="h-3 w-3" aria-hidden="true" />}
                                 <span className="hidden sm:inline">{!client.isActive ? 'Inactivo' : 'Activo'}</span>
                             </span>
+                            {client.coachId && (
+                                <a
+                                    href={`/coach/builder/${client.id}`}
+                                    className="hidden sm:flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                                    title="Abrir en builder del coach asignado (requiere workspace enterprise_coach activo)"
+                                >
+                                    <ExternalLink className="h-3 w-3" />
+                                    Builder
+                                </a>
+                            )}
                             {isAdmin && (
                                 <AssignClientSelect
                                     orgSlug={orgSlug}

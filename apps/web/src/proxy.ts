@@ -209,17 +209,22 @@ export async function proxy(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
+        const appMeta = user.app_metadata as { requires_mfa_setup?: boolean; requires_password_change?: boolean }
+        const slugMatch = pathname.match(/^\/org\/([^/]+)/)
+        const slug = slugMatch?.[1]
+
+        // First-login password change: any staff created with temp password must change it first
+        if (appMeta?.requires_password_change && slug && !pathname.includes('/setup-password')) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = `/org/${slug}/setup-password`
+            return NextResponse.redirect(redirectUrl)
+        }
+
         // MFA enforcement: org_owner/org_admin must enroll TOTP before accessing org
-        const appMeta = user.app_metadata as { requires_mfa_setup?: boolean }
-        if (appMeta?.requires_mfa_setup) {
-            // Extract slug from /org/[slug]/...
-            const slugMatch = pathname.match(/^\/org\/([^/]+)/)
-            const slug = slugMatch?.[1]
-            if (slug && !pathname.includes('/setup-mfa')) {
-                const redirectUrl = request.nextUrl.clone()
-                redirectUrl.pathname = `/org/${slug}/setup-mfa`
-                return NextResponse.redirect(redirectUrl)
-            }
+        if (appMeta?.requires_mfa_setup && slug && !pathname.includes('/setup-mfa')) {
+            const redirectUrl = request.nextUrl.clone()
+            redirectUrl.pathname = `/org/${slug}/setup-mfa`
+            return NextResponse.redirect(redirectUrl)
         }
 
         const orgWorkspace = await resolveOrgRouteWorkspace(supabase, user.id, pathname)
