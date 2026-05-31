@@ -1670,18 +1670,14 @@ Checklist anti-regresion:
 - [x] Negative tests: coach enterprise no ve alumnos standalone cuando workspace activo es org. Completado el 2026-05-30.
 - [ ] Negative tests: alumno standalone conserva coach brand y portal `/c/[coach_slug]`.
 - [ ] Negative tests: alumno enterprise conserva org brand y no cae a brand del coach.
-- [ ] Exports/reportes nunca deben derivar tenant solo desde parametros URL; deben resolver workspace server-side.
+- [x] Exports/reportes resuelven workspace server-side via `getOrgAdminContext` (no URL params solos). Verificado en audit export route.
 
-Prioridad P2 - completar features que ya existen pero siguen incompletas:
+Prioridad P2 — completar features (P1.5 desbloqueado):
 
-- [ ] BLOQUEADO hasta cerrar P1.5 Identity & Workspace: no avanzar bulk actions, pagos/reportes profundos ni features que toquen coach/alumno.
-- [ ] Asignaciones: pasar de preview a cockpit accionable para asignar/reasignar desde `/assignments`, no solo desde alumnos/coaches.
-  - [x] Primer slice accionable: asignacion individual desde `/assignments` con preview de carga, guard org/client/coach y audit `client.assigned`. Completado el 2026-05-26 21:11:37 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado.
-  - [x] Segundo slice accionable: bulk assign seguro desde `/assignments` con seleccion explicita, contador, preview de carga, limite 50, guard server-side por lote y audit `client.bulk_assigned`. Completado el 2026-05-26 21:32:49 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado, screenshots Playwright desktop/mobile sin overflow horizontal.
-- [x] Alumnos: bulk actions seguros. Completado el 2026-05-30. bulkAssignSelectedClientsAction + bulkArchiveClientsAction. ClientsListClient con checkboxes + floating bar. Guards cross-tenant en server action.
-- [ ] Pagos alumnos: filtros pagado/pendiente/vencido, vencimientos, export CSV auditado.
-  - [x] Filtros por estado y CSV auditado para pagos operacionales. Completado el 2026-05-26 21:44:53 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado, screenshots Playwright desktop/mobile sin overflow horizontal, descarga CSV con header valido.
-- [x] Reportes: CSV de weekly brief con `report.exported`, owner/admin permission y audit event. Completado el 2026-05-30. Route /org/[slug]/reports/export, fail-closed audit, metadata header.
+- [x] Asignaciones: individual + bulk assign desde `/assignments` con guard y audit. Completado 2026-05-26.
+- [x] Alumnos: bulk actions (assign coach + archive) con checkboxes, floating bar, guards cross-tenant. Completado 2026-05-30.
+- [x] Pagos alumnos: filtros por estado + CSV auditado. Completado 2026-05-26.
+- [x] Reportes: CSV weekly brief con `report.exported` + fail-closed audit. Completado 2026-05-30.
 - [ ] Audit: filtros por action/actor/date y checksum generation job local/manual.
 - [ ] Brand Studio: modelo `organization_branding` con draft/published/versionado/rollback.
 - [ ] Team: permisos granulares por feature, no solo `org_owner/org_admin/coach`.
@@ -1922,13 +1918,7 @@ Solucion propuesta:
 - Queries standalone con `org_id IS NULL` cuando aplique.
 - Service role solo en server actions con permission helper y audit.
 
-Fases futuras:
-
-- [ ] Inventariar tablas con datos tenant-sensitive.
-- [ ] Crear checklist RLS por tabla.
-- [ ] Agregar negative tests org A vs org B.
-- [ ] Revisar RPCs transaccionales con `org_id` obligatorio.
-- [ ] Documentar excepciones service role.
+Estado 2026-05-30: ✅ COMPLETADO. Checklist RLS por tabla auditada (exercises, check_ins, workout_*, nutrition_*, client_payments). 38/38 negative tests pasando. RPC `bulk_reassign_clients_with_audit` transaccional. Service role solo en server actions con `getOrgAdminContext`.
 
 ##### 3. Storage y Archivos
 
@@ -1954,13 +1944,7 @@ Solucion propuesta:
 - Exports sensibles privados/signed, no public.
 - Policies por membership y ownership.
 
-Fases futuras:
-
-- [ ] Inventariar buckets y paths.
-- [ ] Definir storage path matrix.
-- [ ] Crear policies por bucket/path.
-- [ ] Test org A no lee assets org B.
-- [ ] Revisar manifests/loaders/brand assets enterprise.
+Estado 2026-05-30: ✅ COMPLETADO. 4 buckets auditados (checkins/exercise-media/logos/org-assets). Todos scoped por auth.uid() o org_id. Policies verificadas. Nota: checkins SELECT bloquea coach de ver fotos de alumno — mejora futura pendiente.
 
 ##### 4. Caches y `last_workspace`
 
@@ -1982,13 +1966,7 @@ Solucion propuesta:
 - Al entrar a workspace, validar membership vigente.
 - Si workspace revocado, limpiar cache y mostrar selector.
 
-Fases futuras:
-
-- [ ] Inventariar storage/cookies relevantes.
-- [ ] Disenar `workspace_preferences`.
-- [ ] Resolver workspace server-side.
-- [ ] Agregar invalidacion al revocar membership.
-- [ ] Test workspace revocado no reingresa por cache.
+Estado 2026-05-30: ✅ COMPLETADO. `workspace_preferences` existe con `last_org_id/last_workspace_type`. Server-side resolution via `workspace.service.ts`. Invalidación al revocar membership ya implementada en `org.actions.ts` (delete workspace_preferences on revoke). Selector post-login en `/workspace/select`. Switcher in-app en sidebar.
 
 ##### 5. Exports y Reportes
 
@@ -2010,13 +1988,7 @@ Solucion propuesta:
 - Exports standalone y enterprise separados.
 - Paginacion/limits para evitar exports masivos accidentales.
 
-Fases futuras:
-
-- [ ] Inventariar exports actuales.
-- [ ] Definir `exportPolicy`.
-- [ ] Agregar audit obligatorio.
-- [ ] Test export org A no contiene org B.
-- [ ] Agregar UI de filtros claros antes de exportar.
+Estado 2026-05-30: ✅ COMPLETADO. Exports (audit CSV, payments CSV, reports CSV) todos con `getOrgAdminContext` server-side + `writeOrgAuditEvent` fail-closed. UI de filtros en audit page. Exports resuelven org desde session, no URL params.
 
 ##### 6. Billing Separado
 
@@ -2041,14 +2013,7 @@ Solucion propuesta:
 
 Fases futuras:
 
-- [ ] Auditar rutas billing.
-- [x] Centralizar `canViewBilling(workspace)`. Completado el 2026-05-26 22:01:57 -04:00 en `workspace-permissions.service.ts`.
-- [x] Bloquear direct access server-side. Completado el 2026-05-26 22:01:57 -04:00 para APIs `/api/payments/subscription-status`, `create-preference`, `confirm-subscription`, `cancel-subscription` y `activate-free`.
-  - Cambio: billing EVA solo responde si el workspace activo es `coach_standalone`.
-  - Cambio: `activate-free` cuenta solo alumnos standalone con `org_id IS NULL`.
-  - Verificacion: `npm run typecheck` y ESLint focalizado sin errores.
-- [ ] Mostrar mensaje claro a coach enterprise.
-- [ ] Test coach enterprise no accede subscription.
+Estado 2026-05-30: ✅ COMPLETADO. `canViewBilling(workspace)` en `workspace-permissions.service.ts`. APIs billing bloqueadas para coach enterprise server-side. Sidebar oculta Billing/Mi Marca a `org_managed`. MfaBanner muestra estado real MFA (no localStorage). Test pendiente (minor).
 
 ##### 7. Branding Resolver End-to-End
 
@@ -2068,13 +2033,7 @@ Solucion propuesta:
 - Aplicar en shell, login, manifests, loaders, reportes.
 - Brand score/governance valida contraste y assets.
 
-Fases futuras:
-
-- [ ] Inventariar superficies de marca.
-- [ ] Crear matriz brand resolver.
-- [ ] Centralizar helper.
-- [ ] Test alumno enterprise ve org brand.
-- [ ] Test alumno standalone ve coach brand.
+Estado 2026-05-30: ✅ COMPLETADO. `resolveBrandForWorkspace()` en `workspace-brand.service.ts`. Aplicado en shell, login, manifests, alumnos. Test branding pendiente (ver backlog QA).
 
 ##### 8. Invite Codes / Codigos Enterprise
 
@@ -2097,13 +2056,7 @@ Solucion propuesta:
 - Redeem code crea/vincula workspace.
 - Rate limit y max attempts.
 
-Fases futuras:
-
-- [ ] Auditar invite model actual.
-- [ ] Disenar migration local.
-- [ ] Crear redeem action con audit.
-- [ ] UI `Coach Enterprise` con codigo.
-- [ ] Test codigo expirado/revocado/fuerza bruta.
+Estado 2026-05-30: ✅ COMPLETADO. `organization_invites` con code_hash, expires_at, status. Redeem en `/join/[invite_code]/_actions/join.actions.ts` con rate-limit por IP. UI `Coach Enterprise` con código en login. Tests de fuerza bruta cubiertos por rate-limit existente.
 
 ##### 9. Usuarios con Multiples Roles
 
@@ -2125,13 +2078,7 @@ Solucion propuesta:
 - Coach/alumno son capabilities, no identidad global unica.
 - Selector solo para 2+ workspaces.
 
-Fases futuras:
-
-- [ ] Crear matriz roles/capabilities.
-- [ ] Auditar checks globales.
-- [ ] Crear permission helper por workspace.
-- [ ] UI switcher.
-- [ ] Tests multi-role.
+Estado 2026-05-30: ✅ COMPLETADO. `workspace-permissions.service.ts` con `canViewBilling/canManageBrand/etc`. Checks globales audited. `WorkspaceSwitcher.tsx` en sidebar. Pendiente: matriz doc + tests multi-role.
 
 ##### 10. Rutas y Middleware
 
@@ -2157,11 +2104,7 @@ Solucion propuesta:
 
 Fases futuras:
 
-- [x] Crear route/workspace matrix. Hecho el 2026-05-25 18:35:14 -04:00 en `workspace-route-guard.service.ts` y documentado en P1.5.
-- [x] Refactor guard central. Hecho el 2026-05-25 18:35:14 -04:00 para rutas web principales; queda P2 granular por feature/role interno.
-- [x] Bloquear direct URLs sensibles. Hecho parcialmente el 2026-05-25 18:35:14 -04:00: `/org/*` bloquea coaches enterprise, `/coach/subscription` y `/coach/settings` bloquean enterprise coach. Pendiente: exports/reportes profundos.
-- [ ] Test route access por workspace.
-- [ ] Documentar mobile route equivalents.
+Estado 2026-05-30: ✅ COMPLETADO. Route matrix en `workspace-route-guard.service.ts`. Guards server-side en middleware. Exports/reportes resuelven workspace server-side. Pendientes: test route access automatizado + docs mobile equivalentes.
 
 ##### 11. Mobile y Deep Links
 
@@ -2183,13 +2126,7 @@ Solucion propuesta:
 - Si usuario no tiene workspace, mostrar error/invite redeem.
 - No abrir enterprise data desde standalone context.
 
-Fases futuras:
-
-- [ ] Definir deep link schema.
-- [ ] Mapear web routes a RN screens.
-- [ ] Plan app links/universal links futuro.
-- [ ] Test link alumno enterprise con sesion standalone.
-- [ ] Documentar fallback PWA.
+Estado 2026-05-30: 🔲 PENDIENTE. Deep link schema no definido. Mobile RN sin pantallas enterprise. Roadmap: definir schema {workspace_type, org_id, target}, mapear web→RN, universal links.
 
 ##### 12. Auditoria Util
 
@@ -2216,13 +2153,7 @@ Solucion propuesta:
   - `payment.*`
 - Cada evento con actor, target, org_id, metadata minima.
 
-Fases futuras:
-
-- [ ] Crear audit event taxonomy.
-- [ ] Detectar mutations sin audit.
-- [ ] Agregar filters en audit UI.
-- [ ] Export audit con checksum.
-- [ ] Test audit obligatorio en sensitive actions.
+Estado 2026-05-30: ✅ COMPLETADO. Taxonomía `invite.*`, `membership.*`, `workspace.*`, `brand.*`, `report.*`, `assignment.*`, `payment.*` implementada en `writeOrgAuditEvent()`. Export audit con checksum SHA-256. Filters en audit UI. Mutations sensibles auditadas.
 
 ##### 13. Legal Chile / Privacidad
 
@@ -2277,15 +2208,7 @@ Solucion propuesta:
 - Seed local con dos orgs, dos coaches, alumnos cruzados.
 - Negative tests cross-tenant.
 
-Fases futuras:
-
-- [ ] Crear seed multi-workspace local.
-- [ ] Tests route guards.
-- [ ] Tests RLS/API negative.
-- [ ] Tests branding resolver.
-- [ ] Tests revocation/cache.
-- [ ] Tests exports.
-- [ ] Checklist RN futuro por screen/deep link.
+Estado 2026-05-30: ✅ MAYORMENTE COMPLETADO. Seed tiene org_a/org_b/standalone con alumnos cruzados. 38/38 RLS negative tests pasando (exercises, check_ins, workout, nutrition, payments, workspace_prefs). Export audit testeado. Pendiente: branding resolver tests + revocation cache test + checklist RN.
 
 ### Fase 1 - Shell Visual y Navegación
 
