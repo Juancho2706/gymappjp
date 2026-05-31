@@ -679,50 +679,25 @@ export async function bulkAssignSelectedClientsAction(
         .maybeSingle()
     if (!toMember) return { error: 'Coach no pertenece a la organización.' }
 
-    // Verify all clients belong to this org (prevents cross-tenant attack)
-    const { data: orgClients } = await admin
-        .from('clients')
-        .select('id')
-        .eq('org_id', org.id)
-        .in('id', clientIds)
-    const validIds = new Set((orgClients ?? []).map(c => c.id))
-    const invalid = clientIds.filter(id => !validIds.has(id))
-    if (invalid.length) return { error: `${invalid.length} alumnos no pertenecen a la organización.` }
-
-    // Assign each client to coach
-    const { error: updateError } = await admin
-        .from('clients')
-        .update({ coach_id: toCoachId })
-        .eq('org_id', org.id)
-        .in('id', clientIds)
-    if (updateError) return { error: updateError.message }
-
-    // Upsert assignments
-    const now = new Date().toISOString()
-    const assignRows = clientIds.map(clientId => ({
-        org_id: org.id,
-        client_id: clientId,
-        coach_id: toCoachId,
-        assigned_at: now,
-        assigned_by: user.id,
-    }))
-    await admin.from('coach_client_assignments')
-        .upsert(assignRows, { onConflict: 'org_id,client_id,coach_id' })
-        .then(undefined, () => undefined) // best-effort, don't block
-
-    await writeOrgAuditEvent(admin, {
-        orgId: org.id,
-        actorId: user.id,
-        action: 'client.bulk_assigned',
-        targetType: 'coach',
-        targetId: toCoachId,
-        metadata: { client_ids: clientIds, count: clientIds.length, coach_id: toCoachId },
+    // Single transactional RPC: validates org membership, assigns, upserts assignments, writes audit.
+    // Replaces the previous 3-step approach that had race-condition risk.
+    const { data: count, error: rpcError } = await admin.rpc('bulk_assign_selected_clients', {
+        p_org_id: org.id,
+        p_client_ids: clientIds,
+        p_coach_id: toCoachId,
+        p_actor_id: user.id,
     })
+    if (rpcError) {
+        if (rpcError.message?.includes('client_not_in_org')) {
+            return { error: 'Uno o más alumnos no pertenecen a esta organización.' }
+        }
+        return { error: rpcError.message }
+    }
 
     revalidatePath(`/org/${orgSlug}/clients`)
     revalidatePath(`/org/${orgSlug}/assignments`)
     revalidatePath(`/org/${orgSlug}/audit`)
-    return { success: true, count: clientIds.length }
+    return { success: true, count: Number(count ?? clientIds.length) }
 }
 
 /**

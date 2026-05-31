@@ -57,9 +57,13 @@ export const getOrgClientPayments = cache(async (orgId: string) => {
     return findOrgClientPayments(supabase, orgId)
 })
 
-export const getOrgAuditLogs = cache(async (orgId: string) => {
+export const getOrgAuditLogs = cache(async (
+    orgId: string,
+    filters?: import('@/infrastructure/db/org.repository').OrgAuditLogFilters,
+    limit = 100,
+) => {
     const supabase = await createClient()
-    return findOrgAuditLogs(supabase, orgId)
+    return findOrgAuditLogs(supabase, orgId, limit, filters)
 })
 
 export const getCoachPerformance = cache(async (coachId: string, orgId: string) => {

@@ -2869,6 +2869,15 @@ export type Database = {
         }
         Returns: number
       }
+      bulk_assign_selected_clients: {
+        Args: {
+          p_org_id: string
+          p_client_ids: string[]
+          p_coach_id: string
+          p_actor_id: string
+        }
+        Returns: number
+      }
       bulk_reassign_clients_with_audit: {
         Args: {
           p_actor_id: string

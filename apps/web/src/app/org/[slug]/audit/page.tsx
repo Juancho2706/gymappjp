@@ -17,8 +17,21 @@ import { getOrgAuditLogs, getOrgBySlug } from '../_data/org.queries'
 
 export const metadata: Metadata = { title: 'Audit Log' }
 
+// Action category prefixes for filter chips
+const ACTION_CATEGORIES = [
+    { label: 'Todo', value: '' },
+    { label: 'Asignaciones', value: 'client.' },
+    { label: 'Membresías', value: 'membership.' },
+    { label: 'Marca', value: 'brand.' },
+    { label: 'Invites', value: 'invite.' },
+    { label: 'Reportes', value: 'report.' },
+    { label: 'Pagos', value: 'payment.' },
+    { label: 'Staff', value: 'enterprise_' },
+]
+
 interface Props {
     params: Promise<{ slug: string }>
+    searchParams: Promise<{ action?: string; from?: string; to?: string }>
 }
 
 function formatDate(value: string | null) {
@@ -43,16 +56,31 @@ function metadataSummary(metadata: unknown) {
     return keys.slice(0, 4).join(', ')
 }
 
-export default async function OrgAuditPage({ params }: Props) {
+export default async function OrgAuditPage({ params, searchParams }: Props) {
     const { slug } = await params
+    const { action: actionFilter, from, to } = await searchParams
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
-    const auditLogs = await getOrgAuditLogs(org.id)
+    // Build filters from URL params
+    const filters = {
+        // prefix-based category: filter with 'ilike' via action prefix
+        action: actionFilter ? undefined : undefined, // handled below
+        from: from ?? undefined,
+        to: to ? `${to}T23:59:59` : undefined,
+    }
+
+    // Fetch all logs then filter client-side by prefix (avoids ilike which needs service role)
+    const allLogs = await getOrgAuditLogs(org.id, { from: filters.from, to: filters.to }, 200)
+    const auditLogs = actionFilter
+        ? allLogs.filter(l => l.action.startsWith(actionFilter))
+        : allLogs
+
     const uniqueActors = new Set(auditLogs.map((log) => log.actor_id)).size
     const targetTypes = [...new Set(auditLogs.map((log) => log.target_type).filter(Boolean))]
     const lastEventAt = auditLogs[0]?.created_at ?? null
     const canExportAudit = orgRoleCan(org.myRole, 'org.audit.export')
+    const baseUrl = `/org/${slug}/audit`
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -182,18 +210,61 @@ export default async function OrgAuditPage({ params }: Props) {
                         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                             <div className="flex items-center gap-2">
                                 <Search className="h-4 w-4 text-sky-300" aria-hidden="true" />
-                                <h2 className="text-lg font-black text-white">Filtros futuros</h2>
+                                <h2 className="text-lg font-black text-white">Filtros</h2>
                             </div>
-                            <div className="mt-4 flex flex-wrap gap-2">
-                                {['Actor', 'Action', 'Target', 'Fecha', 'Export'].map((filter) => (
-                                    <span key={filter} className="rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
-                                        {filter}
-                                    </span>
-                                ))}
+
+                            {/* Action category chips */}
+                            <div className="mt-4 flex flex-wrap gap-1.5">
+                                {ACTION_CATEGORIES.map(cat => {
+                                    const isActive = (actionFilter ?? '') === cat.value
+                                    const href = cat.value
+                                        ? `${baseUrl}?action=${encodeURIComponent(cat.value)}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`
+                                        : `${baseUrl}${from ? `?from=${from}` : ''}${to ? `${from ? '&' : '?'}to=${to}` : ''}`
+                                    return (
+                                        <a key={cat.value} href={href}
+                                            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                                                isActive
+                                                    ? 'border-sky-400/40 bg-sky-400/15 text-sky-300'
+                                                    : 'border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                            }`}>
+                                            {cat.label}
+                                        </a>
+                                    )
+                                })}
                             </div>
-                            <p className="mt-4 text-sm leading-6 text-zinc-500">
-                                Busqueda avanzada queda pendiente. Export CSV ya exige permiso dedicado y escribe `audit.exported`.
-                            </p>
+
+                            {/* Date range */}
+                            <form method="GET" action={baseUrl} className="mt-4 flex flex-col gap-2">
+                                {actionFilter && <input type="hidden" name="action" value={actionFilter} />}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.1em]">Desde</span>
+                                        <input type="date" name="from" defaultValue={from ?? ''}
+                                            className="mt-1 h-8 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-sky-400" />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.1em]">Hasta</span>
+                                        <input type="date" name="to" defaultValue={to ?? ''}
+                                            className="mt-1 h-8 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-200 outline-none focus:border-sky-400" />
+                                    </label>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button type="submit" className="flex-1 rounded-lg bg-zinc-800 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-700 transition-colors">
+                                        Filtrar
+                                    </button>
+                                    {(actionFilter || from || to) && (
+                                        <a href={baseUrl} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-zinc-200 transition-colors">
+                                            Limpiar
+                                        </a>
+                                    )}
+                                </div>
+                            </form>
+
+                            {(actionFilter || from || to) && (
+                                <p className="mt-3 text-xs text-sky-300">
+                                    {auditLogs.length} eventos filtrados
+                                </p>
+                            )}
                         </section>
                     </aside>
                 </section>
