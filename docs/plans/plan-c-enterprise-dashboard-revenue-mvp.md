@@ -1681,7 +1681,7 @@ Prioridad P2 — completar features (P1.5 desbloqueado):
 - [x] Audit: filtros por action category (chips) + date range UI. Completado 2026-05-30 (commit b1ca26a). URL searchParams, client-side prefix match, "Limpiar" link.
 - [x] Brand Studio: draft/published. Completado 2026-05-30 (commit be0e3a2). Columnas brand_draft(jsonb)/brand_published_at en organizations. saveBrandDraftAction (sin impacto live) + discardBrandDraftAction + publishEnterpriseBrandAction (promueve draft → live → coaches). Banner ámbar cuando hay borrador. Fecha última publicación visible.
 - [x] Team: permisos granulares. Completado 2026-05-30 (commit a707d09). 22 OrgPermissions en matriz por rol (ops/analyst/brand_manager habilitados). resolveOrgAdminContext incluye ops. Pages usan orgRoleCan() en vez de hardcode owner/admin. ROLE_MATRIX en Team page actualizada.
-- [ ] Admin: definir flujo comercial para aumentar seats, cambiar plan y registrar contacto legal/finanzas sin cobro in-app.
+- [x] Admin: flujo seats/plan sin cobro in-app. Completado 2026-05-30 (commit 04542bc). KPIs used/included/available color-coded. mailto: pre-filled. "Plan actual" badge. Sin gateway de pago.
 - [ ] Novedades: evaluar canal separado para coaches enterprise con audience/permissions propios antes de tocar el flujo coach normal.
 - [ ] Nutricion: tracking de uso por template/coach y filtros por objetivo cuando exista volumen suficiente de datos.
 
@@ -2419,7 +2419,7 @@ Pendiente:
   - [x] Fix transversal shell mobile: layout Enterprise cambia a `flex-col md:flex-row` y main usa `overflow-x-clip`. Completado el 2026-05-26 21:32:49 -04:00. Verificado en `/assignments` mobile 390px sin overflow horizontal.
   - [x] Hero compression global (13 páginas org): título text-xl sm:text-3xl md:text-5xl; descripción hidden sm:block. Completado el 2026-05-29. Ahorra ~60px en 390px.
   - [x] Rows compactas en mobile: coaches y clients usan flex single-line con stats inline bajo el nombre; columnas separadas solo en lg+/xl+. Completado el 2026-05-29.
-- [ ] Evitar tablas apiladas largas en más páginas: assignments, payments. Usar list items + details sheet/modal.
+- [x] Rows compactas mobile: assignments + payments. Completado 2026-05-30 (commit 04542bc). Flex single-line con stats inline, stacking eliminado en 390px.
 - [ ] Revisar cada menu en viewport 390x844 y 430x932 antes de considerar listo.
 - [ ] Documentar equivalente futuro React Native por pantalla.
 
