@@ -3381,7 +3381,13 @@ Inputs usados para el bloque `Identity, Workspace y Acceso`:
 SEGURIDAD/BLOQUEANTE (antes de vender o prod):
 - [x] Mover `sharp` a dependencies + fail-closed en validateImageDimensions. Completado 2026-05-30 (commit e032a24).
 - [ ] MFA obligatorio para `org_owner`/`org_admin`, enforcement real. (Security)
-- [ ] Checklist RLS tabla-por-tabla + negative test por tabla: `workout_programs/plans/logs`, `nutrition_plans/meals/logs`, `client_payments`, `check_ins`. (Security/QA)
+- [~] Checklist RLS tabla-por-tabla + negative test por tabla. (Security/QA)
+  - [x] `check_ins` — FUGA ENCONTRADA Y CERRADA 2026-05-30 (commit 0184742). Policy `qual=true` para `authenticated` permitía leer TODOS los check-ins (datos de salud). Migración `20260530170000` + 5 negative tests. 29/29 passing.
+  - [x] `exercises` — auditado y fixed (migración `20260530100000`, sesión previa).
+  - [ ] `workout_programs/plans/logs` — `*_workspace_manage` con org scoping OK; quedan policies duplicadas redundantes (higiene). Agregar negative tests.
+  - [ ] `nutrition_plans/meals/meal_logs` — workspace scoping OK; duplicados redundantes. Agregar negative tests.
+  - [ ] `client_payments` — `client_payments_workspace_manage` OK. Agregar negative test.
+  - [ ] `storage.objects` — inventario buckets + policies por prefix (ver ítem siguiente).
 - [ ] Inventario buckets storage + policies por prefix `orgs/{org_id}/`, `coaches/{coach_id}/`, `clients/{client_id}/` + test org A no lee assets org B. (Security)
 - [ ] Negative tests: branding resolver, workspace revocado por cache, exports cross-tenant. (QA)
 - [ ] Test revoke→no-reingreso enterprise, conserva standalone. (QA)
