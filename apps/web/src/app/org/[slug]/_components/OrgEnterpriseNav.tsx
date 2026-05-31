@@ -258,39 +258,20 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
                 </div>
             </aside>
 
+            {/* Mobile: compact top header + fixed bottom tab bar */}
             <header className="border-b border-zinc-800 bg-zinc-950 md:hidden">
-                <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex items-center gap-3 px-4 py-2.5">
                     <OrgAvatar org={org} />
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-white">{org.name}</p>
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-amber-300">Enterprise</p>
+                        <p className="text-[10px] uppercase tracking-[0.12em] text-amber-300">Enterprise</p>
                     </div>
                     <WorkspaceSwitcher currentLabel={org.name} workspaces={workspaces} />
                     <OrgSignOutButton compact />
                 </div>
-                <nav className="grid grid-cols-3 gap-1 px-3 pb-2" aria-label="Enterprise mobile navigation">
-                    {NAV_GROUPS.map((group) => {
-                        const groupActive = activeGroup.id === group.id
-                        const Icon = group.icon
-                        return (
-                            <Link
-                                key={group.id}
-                                href={`${baseHref}${group.href}`}
-                                className={cn(
-                                    'flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl border px-2 text-[10px] font-bold transition-colors',
-                                    groupActive
-                                        ? 'border-amber-400/25 bg-amber-400/10 text-white'
-                                        : 'border-zinc-800 bg-zinc-900/40 text-zinc-500 hover:text-zinc-200'
-                                )}
-                            >
-                                <Icon className={cn('h-4 w-4', groupActive && 'text-amber-300')} aria-hidden="true" />
-                                <span className="max-w-full truncate">{group.shortLabel}</span>
-                            </Link>
-                        )
-                    })}
-                </nav>
+                {/* Sub-navigation chips — only show for active group with children */}
                 {activeGroup.children.length > 0 && (
-                    <nav className="flex gap-1 overflow-x-auto px-3 pb-2" aria-label={`${activeGroup.label} subnavigation`}>
+                    <nav className="flex gap-1 overflow-x-auto px-3 pb-2 pt-1" aria-label={`${activeGroup.label} subnavigation`}>
                         {activeGroup.children.map((child) => {
                             const childActive = isActivePath(pathname, baseHref, child.href)
                             const Icon = child.icon
@@ -299,7 +280,7 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
                                     key={child.href}
                                     href={`${baseHref}${child.href}`}
                                     className={cn(
-                                        'flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors',
+                                        'flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors',
                                         childActive
                                             ? 'border-zinc-600 bg-zinc-800 text-white'
                                             : 'border-zinc-800 bg-zinc-900 text-zinc-400'
@@ -313,6 +294,55 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
                     </nav>
                 )}
             </header>
+
+            {/* Fixed bottom tab bar — 5 primary destinations (thumb zone) */}
+            <nav
+                className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-md pb-safe md:hidden"
+                aria-label="Enterprise primary navigation"
+            >
+                <div className="flex items-center justify-around px-1 py-1">
+                    {NAV_GROUPS.slice(0, 5).map((group) => {
+                        const groupActive = activeGroup.id === group.id
+                        const Icon = group.icon
+                        return (
+                            <Link
+                                key={group.id}
+                                href={`${baseHref}${group.href}`}
+                                className={cn(
+                                    'flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-bold transition-colors',
+                                    groupActive
+                                        ? 'text-amber-300'
+                                        : 'text-zinc-500 hover:text-zinc-200'
+                                )}
+                                aria-current={groupActive ? 'page' : undefined}
+                            >
+                                <Icon className={cn('h-5 w-5', groupActive && 'text-amber-300')} aria-hidden="true" />
+                                <span>{group.shortLabel}</span>
+                            </Link>
+                        )
+                    })}
+                    {/* 6th group → "Más" */}
+                    {NAV_GROUPS[5] && (() => {
+                        const lastGroup = NAV_GROUPS[5]
+                        const lastActive = activeGroup.id === lastGroup.id
+                        const LastIcon = lastGroup.icon
+                        return (
+                            <Link
+                                href={`${baseHref}${lastGroup.href}`}
+                                className={cn(
+                                    'flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-bold transition-colors',
+                                    lastActive ? 'text-amber-300' : 'text-zinc-500 hover:text-zinc-200'
+                                )}
+                            >
+                                <LastIcon className={cn('h-5 w-5', lastActive && 'text-amber-300')} aria-hidden="true" />
+                                <span>Admin</span>
+                            </Link>
+                        )
+                    })()}
+                </div>
+            </nav>
+            {/* Spacer so content doesn't hide behind bottom bar on mobile */}
+            <div className="h-16 md:hidden" aria-hidden="true" />
         </>
     )
 }
