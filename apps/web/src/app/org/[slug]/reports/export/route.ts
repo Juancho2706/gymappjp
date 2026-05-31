@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { createHash } from 'node:crypto'
+import { orgRoleCan } from '@/domain/org/permissions'
 import { createClient } from '@/lib/supabase/server'
 import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
@@ -28,8 +30,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const context = await getOrgAdminContext(supabase, user.id, slug, ['org_owner', 'org_admin'])
+    const context = await getOrgAdminContext(supabase, user.id, slug, ['org_owner', 'org_admin', 'ops', 'analyst'])
     if ('error' in context) return NextResponse.json({ error: context.error }, { status: 403 })
+    if (!orgRoleCan(context.membership.role, 'org.reports.export')) {
+        return NextResponse.json({ error: 'Missing permission: org.reports.export' }, { status: 403 })
+    }
 
     const { org } = context
     const admin = createServiceRoleClient()
@@ -127,6 +132,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     }
 
     const csv = lines.join('\n')
+    const checksum = createHash('sha256').update(csv, 'utf8').digest('hex')
 
     // Audit event (fail-closed: if audit fails, don't deliver export)
     try {
@@ -143,6 +149,8 @@ export async function GET(req: NextRequest, { params }: Params) {
                 at_risk: atRisk.length,
                 adherence_7d: adherence7d,
                 row_count: clients.length,
+                permission: 'org.reports.export',
+                checksum_sha256: checksum,
             },
         })
     } catch {
@@ -155,6 +163,7 @@ export async function GET(req: NextRequest, { params }: Params) {
             'Content-Type': 'text/csv; charset=utf-8',
             'Content-Disposition': `attachment; filename="${reportFilename(slug)}"`,
             'Cache-Control': 'no-store',
+            'X-Content-SHA256': checksum,
         },
     })
 }

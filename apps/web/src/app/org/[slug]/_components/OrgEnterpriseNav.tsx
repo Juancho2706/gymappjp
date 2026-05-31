@@ -9,6 +9,7 @@ import {
     Building2,
     ClipboardCheck,
     FileText,
+    Fingerprint,
     LayoutDashboard,
     Megaphone,
     Palette,
@@ -103,6 +104,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: Settings,
         children: [
             { href: '/settings', label: 'Admin', icon: Settings },
+            { href: '/trust', label: 'Trust Center', shortLabel: 'Trust', icon: Fingerprint },
             { href: '/audit', label: 'Auditoria', shortLabel: 'Audit', icon: FileText },
         ],
     },

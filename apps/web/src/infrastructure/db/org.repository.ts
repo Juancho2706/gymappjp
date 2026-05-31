@@ -92,6 +92,14 @@ export type OrgNutritionTemplateUsage = {
     active_clients: number
     logged_clients_7d: number
     adherence_7d: number
+    coach_usage: {
+        coach_id: string
+        coach_name: string | null
+        active_plans: number
+        active_clients: number
+        logged_clients_7d: number
+        adherence_7d: number
+    }[]
 }
 
 export async function findOrgBySlug(
@@ -176,13 +184,17 @@ export async function findOrgNutritionTemplateUsage(
 
     const { data: plans } = await db
         .from('nutrition_plans')
-        .select('id, client_id, name, daily_calories, protein_g, carbs_g, fats_g')
+        .select('id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g')
         .eq('org_id', orgId)
         .eq('is_active', true)
 
-    const usage = new Map<string, { planIds: Set<string>; clientIds: Set<string> }>()
+    const usage = new Map<string, {
+        planIds: Set<string>
+        clientIds: Set<string>
+        coachBuckets: Map<string, { planIds: Set<string>; clientIds: Set<string> }>
+    }>()
     for (const template of templates) {
-        usage.set(template.id, { planIds: new Set(), clientIds: new Set() })
+        usage.set(template.id, { planIds: new Set(), clientIds: new Set(), coachBuckets: new Map() })
     }
 
     for (const plan of plans ?? []) {
@@ -198,11 +210,21 @@ export async function findOrgNutritionTemplateUsage(
         if (!bucket) continue
         bucket.planIds.add(plan.id)
         bucket.clientIds.add(plan.client_id)
+        if (!bucket.coachBuckets.has(plan.coach_id)) {
+            bucket.coachBuckets.set(plan.coach_id, { planIds: new Set(), clientIds: new Set() })
+        }
+        const coachBucket = bucket.coachBuckets.get(plan.coach_id)!
+        coachBucket.planIds.add(plan.id)
+        coachBucket.clientIds.add(plan.client_id)
     }
 
     const allPlanIds = [...new Set([...usage.values()].flatMap((bucket) => [...bucket.planIds]))]
+    const allCoachIds = [...new Set([...usage.values()].flatMap((bucket) => [...bucket.coachBuckets.keys()]))]
     const loggedPlanIds = new Map<string, Set<string>>()
-    if (allPlanIds.length > 0) {
+    const coachNames = new Map<string, string | null>()
+
+    await Promise.all([
+        allPlanIds.length > 0 ? (async () => {
         const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10)
         const { data: logs } = await db
             .from('daily_nutrition_logs')
@@ -214,21 +236,52 @@ export async function findOrgNutritionTemplateUsage(
             if (!loggedPlanIds.has(log.plan_id)) loggedPlanIds.set(log.plan_id, new Set())
             loggedPlanIds.get(log.plan_id)!.add(log.client_id)
         }
-    }
+        })() : Promise.resolve(),
+        allCoachIds.length > 0 ? (async () => {
+            const { data: coaches } = await db
+                .from('coaches')
+                .select('id, full_name')
+                .in('id', allCoachIds)
+            for (const coach of coaches ?? []) {
+                coachNames.set(coach.id, coach.full_name ?? null)
+            }
+        })() : Promise.resolve(),
+    ])
 
     return templates.map((template) => {
-        const bucket = usage.get(template.id) ?? { planIds: new Set<string>(), clientIds: new Set<string>() }
+        const bucket = usage.get(template.id) ?? {
+            planIds: new Set<string>(),
+            clientIds: new Set<string>(),
+            coachBuckets: new Map<string, { planIds: Set<string>; clientIds: Set<string> }>(),
+        }
         const loggedClients = new Set<string>()
         for (const planId of bucket.planIds) {
             for (const clientId of loggedPlanIds.get(planId) ?? []) loggedClients.add(clientId)
         }
         const activeClients = bucket.clientIds.size
+        const coachUsage = [...bucket.coachBuckets.entries()].map(([coachId, coachBucket]) => {
+            const coachLoggedClients = new Set<string>()
+            for (const planId of coachBucket.planIds) {
+                for (const clientId of loggedPlanIds.get(planId) ?? []) coachLoggedClients.add(clientId)
+            }
+            const coachActiveClients = coachBucket.clientIds.size
+            return {
+                coach_id: coachId,
+                coach_name: coachNames.get(coachId) ?? null,
+                active_plans: coachBucket.planIds.size,
+                active_clients: coachActiveClients,
+                logged_clients_7d: coachLoggedClients.size,
+                adherence_7d: coachActiveClients > 0 ? Math.round((coachLoggedClients.size / coachActiveClients) * 100) : 0,
+            }
+        }).sort((a, b) => b.active_clients - a.active_clients || b.logged_clients_7d - a.logged_clients_7d)
+
         return {
             template_id: template.id,
             active_plans: bucket.planIds.size,
             active_clients: activeClients,
             logged_clients_7d: loggedClients.size,
             adherence_7d: activeClients > 0 ? Math.round((loggedClients.size / activeClients) * 100) : 0,
+            coach_usage: coachUsage,
         }
     })
 }

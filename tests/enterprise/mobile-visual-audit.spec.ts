@@ -21,6 +21,7 @@ const ORG_ROUTES = [
   { name: 'nutrition', path: '/nutrition' },
   { name: 'reports', path: '/reports' },
   { name: 'settings', path: '/settings' },
+  { name: 'trust', path: '/trust' },
   { name: 'audit', path: '/audit' },
 ]
 

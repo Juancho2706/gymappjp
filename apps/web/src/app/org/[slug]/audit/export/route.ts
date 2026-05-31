@@ -36,7 +36,8 @@ function csvFilename(slug: string) {
 
 const ExportFiltersSchema = z.object({
     action: z.string().min(1).max(120).optional(),
-    actor_id: z.uuid().optional(),
+    action_prefix: z.string().min(1).max(120).optional(),
+    actor_id: z.guid().optional(),
     target_type: z.string().min(1).max(80).optional(),
     from: z.iso.datetime().optional(),
     to: z.iso.datetime().optional(),
@@ -47,6 +48,7 @@ function readFilters(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     return ExportFiltersSchema.safeParse({
         action: searchParams.get('action') || undefined,
+        action_prefix: searchParams.get('action_prefix') || undefined,
         actor_id: searchParams.get('actor_id') || undefined,
         target_type: searchParams.get('target_type') || undefined,
         from: searchParams.get('from') || undefined,
@@ -85,7 +87,10 @@ export async function GET(request: NextRequest, { params }: Params) {
         from: parsedFilters.data.from,
         to: parsedFilters.data.to,
     }
-    const logs = await findOrgAuditLogs(supabase, context.org.id, parsedFilters.data.limit, filters)
+    const logsRaw = await findOrgAuditLogs(supabase, context.org.id, parsedFilters.data.limit, filters)
+    const logs = parsedFilters.data.action_prefix
+        ? logsRaw.filter(log => log.action.startsWith(parsedFilters.data.action_prefix!))
+        : logsRaw
     const csv = buildCsv(logs)
     const checksum = createHash('sha256').update(csv, 'utf8').digest('hex')
 
@@ -100,6 +105,7 @@ export async function GET(request: NextRequest, { params }: Params) {
             permission: 'org.audit.export',
             scope: 'filtered_events',
             filters,
+            action_prefix: parsedFilters.data.action_prefix,
             row_count: logs.length,
             checksum_sha256: checksum,
         },

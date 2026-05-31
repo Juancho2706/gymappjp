@@ -108,7 +108,7 @@ export default async function OrgReportsPage({ params }: Props) {
                                 </div>
                             </div>
                             <p className="mt-4 text-sm leading-6 text-zinc-500">
-                                Snapshot read-only. CSV/PDF quedan bloqueados hasta permisos dedicados y audit event `report.exported`.
+                                Snapshot read-only. CSV disponible con permiso `org.reports.export`; PDF queda para fase ejecutiva.
                             </p>
                         </div>
                     </div>

@@ -81,6 +81,14 @@ export default async function OrgNutritionPage({ params }: Props) {
     const adoptionAdherence = activeClientsUsingTemplates > 0
         ? Math.round((loggedClients7d / activeClientsUsingTemplates) * 100)
         : 0
+    const coachUsageRows = templateUsage
+        .flatMap(item => item.coach_usage.map(coach => ({
+            ...coach,
+            template_id: item.template_id,
+            template_name: templates.find(template => template.id === item.template_id)?.name ?? 'Template',
+        })))
+        .sort((a, b) => b.active_clients - a.active_clients || b.logged_clients_7d - a.logged_clients_7d)
+        .slice(0, 8)
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -191,6 +199,46 @@ export default async function OrgNutritionPage({ params }: Props) {
                                 MVP sin migracion: detecta planes activos que conservan mismo nombre y macros del template org.
                             </p>
                         </section>
+
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Uso por coach</h2>
+                            </div>
+                            <div className="mt-4 space-y-2">
+                                {coachUsageRows.length > 0 ? coachUsageRows.map(row => (
+                                    <div key={`${row.template_id}-${row.coach_id}`} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-black text-white">{row.coach_name ?? 'Coach sin nombre'}</p>
+                                                <p className="mt-1 truncate text-xs text-zinc-500">{row.template_name}</p>
+                                            </div>
+                                            <span className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-xs font-black text-emerald-300">
+                                                {row.adherence_7d}%
+                                            </span>
+                                        </div>
+                                        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                                            <div>
+                                                <p className="text-sm font-black text-white">{row.active_clients}</p>
+                                                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-500">Alumnos</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-black text-white">{row.active_plans}</p>
+                                                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-500">Planes</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-black text-white">{row.logged_clients_7d}</p>
+                                                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-500">Logs 7d</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/50 p-4 text-sm leading-6 text-zinc-500">
+                                        Todavia no hay coaches usando templates org con planes activos.
+                                    </p>
+                                )}
+                            </div>
+                        </section>
                     </aside>
 
                     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
@@ -263,6 +311,19 @@ export default async function OrgNutritionPage({ params }: Props) {
                                                         <p className="mt-1 text-lg font-black text-white">{usage && usage.active_clients > 0 ? `${usage.adherence_7d}%` : 'N/D'}</p>
                                                     </div>
                                                 </div>
+
+                                                {usage && usage.coach_usage.length > 0 && (
+                                                    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+                                                        <p className="text-xs font-black uppercase tracking-[0.12em] text-zinc-500">Coaches usando este template</p>
+                                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                                            {usage.coach_usage.slice(0, 4).map(coach => (
+                                                                <span key={coach.coach_id} className="rounded-full border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs font-semibold text-zinc-300">
+                                                                    {coach.coach_name ?? 'Coach'} · {coach.active_clients} alumnos
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">{macroSplit(template)}</p>
 
