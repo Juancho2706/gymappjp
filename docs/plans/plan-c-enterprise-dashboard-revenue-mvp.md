@@ -1847,8 +1847,8 @@ Enterprise owner/admin crea y supervisa via:
 - [x] Nav: "Programas" en grupo Herramientas en `OrgEnterpriseNav` (Dumbbell icon).
 - [x] Mobile: layout responsive, barra cobertura, per-coach compact, link a /assignments si hay sin programa.
 - [x] Verificacion: `pnpm run typecheck` pasa.
-- [ ] Link desde `/coaches/[coachId]` → "Abrir builder" → `/coach/workout-programs` (pendiente, detalle coach).
-- [ ] Link desde `/clients/[clientId]` → "Ver programa" → `/coach/builder/[clientId]` (pendiente, detalle cliente).
+- [x] Link desde `/coaches/[coachId]` → "Programas org" + "Builder" completado 2026-06-01.
+- [ ] Link desde `/clients/[clientId]` → "Ver programa" → `/coach/builder/[clientId]` (pendiente).
 
 ##### Fase P2.5-C — Org workout template creator para owner/admin (requiere migration)
 
@@ -1860,7 +1860,7 @@ Enterprise owner/admin crea y supervisa via:
 - [x] `/programs/new` (client component): form nombre/notas/semanas. Los coaches abren en su builder para agregar ejercicios.
 - [x] `/programs`: boton "Crear template"; templates org con badge violeta "Template org".
 - [x] `pnpm run typecheck` + `pnpm run audit:org-sensitive-actions` pasan.
-- [ ] `assignOrgWorkoutTemplateToCoach` (futuro): copia template a coach especifico. No prioritario MVP.
+- [x] `assignOrgWorkoutTemplateToCoachAction` completado 2026-06-01: copia template org a coach especifico con audit. `AssignTemplateToCoachButton` en `/programs` por cada template org.
 - [ ] Full `WeeklyPlanBuilder` con `mode='org_template'` (futuro): coaches usan su builder standalone mientras tanto.
 
 ##### Fase P2.5-D — Nutrition plans enterprise full creator (migration menor o sin migration)
@@ -2835,10 +2835,11 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Audiences: alumnos, coaches enterprise, staff o todos.
-- [ ] Programar publicacion y expiracion con estados visibles.
+- [x] Audiences: alumnos, coaches enterprise, staff o todos. Completado 2026-05-30 (e29d180).
+- [ ] Programar publicacion futura (requiere columna `published_at` — migration pendiente).
+- [x] Expiracion `active_until` ya existe en el form.
 - [ ] Read receipts/delivery status futuro.
-- [ ] Mobile: composer como sheet/modal.
+- [x] Mobile: composer como sheet/modal. Completado 2026-06-01. `AnnouncementComposerSheet`: desktop inline, mobile FAB + bottom sheet con `pb-safe`.
 
 ### Herramientas / Programas `/programs` (NUEVA RUTA — P2.5-B/C)
 
