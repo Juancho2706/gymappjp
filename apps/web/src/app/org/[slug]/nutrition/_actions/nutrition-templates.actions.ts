@@ -73,6 +73,59 @@ export async function createOrgNutritionTemplateAction(orgSlug: string, payload:
     return { success: true }
 }
 
+/**
+ * Creates an org-level nutrition plan template in nutrition_plan_templates
+ * (coach_id = null, org_id = orgId). Coaches open it in their builder to add meals.
+ * Requires P2.5-D migration: nutrition_plan_templates.coach_id nullable.
+ */
+export async function createOrgNutritionPlanTemplateAction(orgSlug: string, formData: FormData) {
+    const ctx = await resolveAdminContext(orgSlug)
+    if ('error' in ctx) return { error: ctx.error }
+
+    const name = String(formData.get('name') ?? '').trim()
+    const description = String(formData.get('description') ?? '').trim()
+    const goalType = String(formData.get('goal_type') ?? '').trim()
+    const calories = formData.get('daily_calories') ? Number(formData.get('daily_calories')) : null
+    const protein = formData.get('protein_g') ? Number(formData.get('protein_g')) : null
+    const carbs = formData.get('carbs_g') ? Number(formData.get('carbs_g')) : null
+    const fats = formData.get('fats_g') ? Number(formData.get('fats_g')) : null
+
+    if (!name || name.length < 2) return { error: 'El nombre debe tener al menos 2 caracteres' }
+    if (name.length > 120) return { error: 'Nombre demasiado largo' }
+
+    const admin = createServiceRoleClient()
+    const { data: template, error } = await admin
+        .from('nutrition_plan_templates')
+        .insert({
+            org_id: ctx.org.id,
+            coach_id: null,
+            name,
+            description: description || null,
+            goal_type: goalType || null,
+            daily_calories: calories,
+            protein_g: protein,
+            carbs_g: carbs,
+            fats_g: fats,
+        })
+        .select('id')
+        .single()
+
+    if (error) return { error: error.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
+        action: 'nutrition_template.created',
+        targetType: 'nutrition_plan_template',
+        targetId: template.id,
+        metadata: { name, goal_type: goalType || null, daily_calories: calories },
+    })
+
+    revalidatePath(`/org/${orgSlug}/nutrition`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, templateId: template.id }
+}
+
 export async function deleteOrgNutritionTemplateAction(orgSlug: string, id: string) {
     const ctx = await resolveAdminContext(orgSlug)
     if ('error' in ctx) return { error: ctx.error }

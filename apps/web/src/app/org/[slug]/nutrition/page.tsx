@@ -10,6 +10,7 @@ import {
     Flame,
     Gauge,
     Layers3,
+    Plus,
     Salad,
     Scale,
     Sparkles,
@@ -117,6 +118,13 @@ export default async function OrgNutritionPage({ params }: Props) {
                                 >
                                     Coaches que la usan
                                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                                </Link>
+                                <Link
+                                    href={`/org/${slug}/nutrition/new`}
+                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 text-sm font-bold text-emerald-300 transition hover:bg-emerald-400/20"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    Crear template
                                 </Link>
                                 <Link
                                     href={`/org/${slug}/audit`}

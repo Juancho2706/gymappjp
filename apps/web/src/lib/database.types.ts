@@ -1431,7 +1431,7 @@ export type Database = {
       nutrition_plan_templates: {
         Row: {
           carbs_g: number | null
-          coach_id: string
+          coach_id: string | null
           created_at: string
           daily_calories: number | null
           description: string | null
@@ -1448,7 +1448,7 @@ export type Database = {
         }
         Insert: {
           carbs_g?: number | null
-          coach_id: string
+          coach_id?: string | null
           created_at?: string
           daily_calories?: number | null
           description?: string | null
@@ -1465,7 +1465,7 @@ export type Database = {
         }
         Update: {
           carbs_g?: number | null
-          coach_id?: string
+          coach_id?: string | null
           created_at?: string
           daily_calories?: number | null
           description?: string | null
@@ -3251,3 +3251,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
