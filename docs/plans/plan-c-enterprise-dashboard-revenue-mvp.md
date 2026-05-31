@@ -3398,7 +3398,7 @@ PRODUCTO (flujo usable end-to-end):
 - [ ] Mover contratos `ActiveWorkspace`/`WorkspaceBrand` a `packages/`. (Mobile/Architect)
 - [ ] `bulkAssignSelectedClientsAction` → RPC transaccional + helper `assertOrgClientOwnership`. (Backend)
 - [x] Eliminar `BulkClientActions.tsx` huérfano; comentario JSX inválido removido. Completado 2026-05-30. (Frontend)
-- [ ] Org-level health score para CSM. (Product/CSM)
+- [x] Org-level health score para CSM. Completado 2026-05-30 (commit 782e673). Fórmula real: adherencia7d×0.40+asignación×0.25+activos×0.20+programas×0.15. Tiers green≥70/amber≥50/red<50. Persiste en organizations.last_health_score. Dashboard muestra breakdown 4-métrica. Admin /orgs muestra columna Health con color-coding. (Product/CSM)
 - [ ] Plan ejecutable fechado para `clients.id = auth.users.id` (multi-contexto alumno). (Architect)
 
 UX/MOBILE:
