@@ -776,3 +776,106 @@ export async function findOrgWorkoutProgramOverview(db: DB, orgId: string): Prom
 
     return { templates, totalClients, clientsWithProgram, coveragePct, byCoach }
 }
+
+export type OrgCheckInOverview = {
+    total7d: number
+    total30d: number
+    clientsActive7d: number   // unique clients with check-in in last 7 days
+    totalOrgClients: number
+    noCheckIn14d: number      // active clients without check-in in 14+ days
+    byCoach: {
+        coachId: string
+        coachName: string
+        totalClients: number
+        activeClients7d: number  // clients of this coach who submitted in 7d
+    }[]
+    recent: { clientId: string; clientName: string | null; date: string; coachName: string | null }[]
+}
+
+/**
+ * Org-level check-in overview for /check-ins page.
+ * Joins check_ins → clients (org_id = orgId) for all metrics.
+ */
+export async function findOrgCheckInOverview(db: DB, orgId: string): Promise<OrgCheckInOverview> {
+    const now = new Date()
+    const d7 = new Date(now.getTime() - 7 * 86_400_000).toISOString().slice(0, 10)
+    const d14 = new Date(now.getTime() - 14 * 86_400_000).toISOString().slice(0, 10)
+    const d30 = new Date(now.getTime() - 30 * 86_400_000).toISOString().slice(0, 10)
+
+    const [clientsRes, checkInsRes, membersRes] = await Promise.all([
+        db.from('clients')
+            .select('id, full_name, coach_id, is_active')
+            .eq('org_id', orgId),
+        db.from('check_ins')
+            .select('id, client_id, date, created_at')
+            .gte('date', d30)
+            .order('date', { ascending: false })
+            .limit(500),
+        db.from('organization_members')
+            .select('coach_id, coach:coaches(id, full_name)')
+            .eq('org_id', orgId)
+            .eq('role', 'coach')
+            .eq('status', 'active')
+            .is('deleted_at', null),
+    ])
+
+    const clients = clientsRes.data ?? []
+    const orgClientIds = new Set(clients.map(c => c.id))
+    const activeClients = clients.filter(c => c.is_active !== false)
+
+    // Filter check-ins to only org clients
+    const orgCheckIns = (checkInsRes.data ?? []).filter(ci => orgClientIds.has(ci.client_id))
+
+    const total30d = orgCheckIns.length
+    const checkIns7d = orgCheckIns.filter(ci => ci.date >= d7)
+    const total7d = checkIns7d.length
+    const clientsActive7d = new Set(checkIns7d.map(ci => ci.client_id)).size
+
+    // Clients with last check-in older than 14 days (or never)
+    const lastCheckInByClient = new Map<string, string>() // clientId -> date
+    for (const ci of orgCheckIns) {
+        const existing = lastCheckInByClient.get(ci.client_id)
+        if (!existing || ci.date > existing) lastCheckInByClient.set(ci.client_id, ci.date)
+    }
+    const noCheckIn14d = activeClients.filter(c => {
+        const last = lastCheckInByClient.get(c.id)
+        return !last || last < d14
+    }).length
+
+    // Build coach lookup
+    const coachMap = new Map<string, string>()
+    for (const m of membersRes.data ?? []) {
+        if (m.coach_id && m.coach && !Array.isArray(m.coach)) {
+            coachMap.set(m.coach_id, (m.coach as { full_name: string | null }).full_name ?? 'Coach')
+        }
+    }
+
+    // Per-coach stats
+    const coachClientIds = new Map<string, Set<string>>() // coachId -> Set<clientId>
+    for (const c of activeClients) {
+        if (!c.coach_id) continue
+        if (!coachClientIds.has(c.coach_id)) coachClientIds.set(c.coach_id, new Set())
+        coachClientIds.get(c.coach_id)!.add(c.id)
+    }
+    const activeClientIds7d = new Set(checkIns7d.map(ci => ci.client_id))
+    const byCoach = Array.from(coachClientIds.entries()).map(([coachId, clientSet]) => ({
+        coachId,
+        coachName: coachMap.get(coachId) ?? 'Coach',
+        totalClients: clientSet.size,
+        activeClients7d: [...clientSet].filter(id => activeClientIds7d.has(id)).length,
+    })).sort((a, b) => b.totalClients - a.totalClients)
+
+    // Recent 10 check-ins with client + coach name
+    const clientMap = new Map(clients.map(c => [c.id, c]))
+    const recent = orgCheckIns.slice(0, 10).map(ci => {
+        const client = clientMap.get(ci.client_id)
+        return {
+            clientId: ci.client_id,
+            clientName: client?.full_name ?? null,
+            date: ci.date,
+            coachName: client?.coach_id ? (coachMap.get(client.coach_id) ?? null) : null,
+        }
+    })
+
+    return { total7d, total30d, clientsActive7d, totalOrgClients: clients.length, noCheckIn14d, byCoach, recent }
+}

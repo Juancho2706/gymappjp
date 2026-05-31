@@ -14,9 +14,10 @@ import {
     getCoachPerformanceData,
     getOrgStats as _getOrgStats,
     findOrgWorkoutProgramOverview,
+    findOrgCheckInOverview,
 } from '@/infrastructure/db/org.repository'
 
-export type { OrgWithMembership, OrgMember, OrgClient, OrgAnnouncement, OrgNutritionTemplate, OrgNutritionTemplateUsage, OrgInvoice, OrgClientPayment, OrgAssignmentHistoryItem, OrgAuditLog, CoachPerformanceData, OrgWorkoutProgramOverview } from '@/infrastructure/db/org.repository'
+export type { OrgWithMembership, OrgMember, OrgClient, OrgAnnouncement, OrgNutritionTemplate, OrgNutritionTemplateUsage, OrgInvoice, OrgClientPayment, OrgAssignmentHistoryItem, OrgAuditLog, CoachPerformanceData, OrgWorkoutProgramOverview, OrgCheckInOverview } from '@/infrastructure/db/org.repository'
 
 export const getOrgBySlug = cache(async (slug: string) => {
     const supabase = await createClient()
@@ -90,4 +91,9 @@ export const getCoachPerformance = cache(async (coachId: string, orgId: string) 
 export const getOrgWorkoutProgramOverview = cache(async (orgId: string) => {
     const supabase = await createClient()
     return findOrgWorkoutProgramOverview(supabase, orgId)
+})
+
+export const getOrgCheckInOverview = cache(async (orgId: string) => {
+    const supabase = await createClient()
+    return findOrgCheckInOverview(supabase, orgId)
 })
