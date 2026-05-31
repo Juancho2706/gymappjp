@@ -1679,7 +1679,7 @@ Prioridad P2 — completar features (P1.5 desbloqueado):
 - [x] Pagos alumnos: filtros por estado + CSV auditado. Completado 2026-05-26.
 - [x] Reportes: CSV weekly brief con `report.exported` + fail-closed audit. Completado 2026-05-30.
 - [ ] Audit: filtros por action/actor/date y checksum generation job local/manual.
-- [ ] Brand Studio: modelo `organization_branding` con draft/published/versionado/rollback.
+- [x] Brand Studio: draft/published. Completado 2026-05-30 (commit be0e3a2). Columnas brand_draft(jsonb)/brand_published_at en organizations. saveBrandDraftAction (sin impacto live) + discardBrandDraftAction + publishEnterpriseBrandAction (promueve draft → live → coaches). Banner ámbar cuando hay borrador. Fecha última publicación visible.
 - [ ] Team: permisos granulares por feature, no solo `org_owner/org_admin/coach`.
 - [ ] Admin: definir flujo comercial para aumentar seats, cambiar plan y registrar contacto legal/finanzas sin cobro in-app.
 - [ ] Novedades: evaluar canal separado para coaches enterprise con audience/permissions propios antes de tocar el flujo coach normal.
