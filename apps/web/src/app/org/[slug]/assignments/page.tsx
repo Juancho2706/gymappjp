@@ -15,6 +15,7 @@ import {
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { AssignmentQuickAssignPanel } from './_components/AssignmentQuickAssignPanel'
 import { BulkAssignPanel } from './_components/BulkAssignPanel'
+import { ReassignClientSelect } from './_components/ReassignClientSelect'
 
 export const metadata: Metadata = { title: 'Asignaciones' }
 
@@ -285,18 +286,66 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                     </div>
                 </section>
 
-                <section className="grid gap-3 md:grid-cols-3">
-                    {[
-                        [AlertTriangle, 'Riesgo operativo', `${inactiveClients.length} alumnos inactivos deben quedar fuera de bulk assign por defecto.`],
-                        [ArrowRightLeft, 'Reasignacion', 'El flujo editable debe mostrar impacto antes/despues por coach.'],
-                        [Users, 'Workload', `Umbral inicial: ${TARGET_CLIENTS_PER_COACH} alumnos activos por coach.`],
-                    ].map(([Icon, title, detail]) => (
-                        <div key={title as string} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-                            <Icon className="h-5 w-5 text-emerald-300" aria-hidden="true" />
-                            <h3 className="mt-4 text-sm font-black text-white">{title as string}</h3>
-                            <p className="mt-2 text-xs leading-5 text-zinc-500">{detail as string}</p>
+                {/* Reassign already-assigned clients */}
+                <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                    <div className="flex items-center gap-2">
+                        <ArrowRightLeft className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                        <h2 className="text-lg font-black text-white">Reasignar alumnos</h2>
+                        <span className="ml-auto text-xs text-zinc-500">{assignedClients.length} asignados</span>
+                    </div>
+                    <p className="mt-1 hidden sm:block text-xs text-zinc-500">Cambia el coach de alumnos ya asignados. Cada cambio queda en Audit Log.</p>
+
+                    {linkedCoaches.length < 2 ? (
+                        <div className="mt-5 rounded-xl border border-zinc-800 p-6 text-sm text-zinc-500">
+                            Se necesitan al menos 2 coaches activos para reasignar.
                         </div>
-                    ))}
+                    ) : assignedClients.length === 0 ? (
+                        <div className="mt-5 rounded-xl border border-zinc-800 p-6 text-sm text-zinc-500">
+                            No hay alumnos asignados todavía.
+                        </div>
+                    ) : (
+                        <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
+                            {assignedClients.slice(0, 20).map(client => {
+                                const currentCoach = linkedCoaches.find(c => c.id === client.coach_id)
+                                return (
+                                    <div key={client.id} className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/50 px-4 py-3 last:border-b-0">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-xs font-black text-zinc-300">
+                                            {(client.full_name?.charAt(0) ?? '?').toUpperCase()}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-semibold text-zinc-100">{client.full_name ?? 'Sin nombre'}</p>
+                                            <p className="truncate text-[11px] text-zinc-500">{currentCoach?.full_name ?? 'Coach'}</p>
+                                        </div>
+                                        <ReassignClientSelect
+                                            orgSlug={slug}
+                                            clientId={client.id}
+                                            currentCoachId={client.coach_id!}
+                                            coaches={linkedCoaches.map(c => ({ id: c.id, name: c.full_name ?? c.slug ?? 'Coach' }))}
+                                        />
+                                    </div>
+                                )
+                            })}
+                            {assignedClients.length > 20 && (
+                                <div className="border-t border-zinc-800 px-4 py-3 text-center text-xs text-zinc-500">
+                                    +{assignedClients.length - 20} más — ver en{' '}
+                                    <a href={`/org/${slug}/clients`} className="text-amber-400 hover:underline">Alumnos</a>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </section>
+
+                <section className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                        <AlertTriangle className="h-5 w-5 text-amber-300" aria-hidden="true" />
+                        <h3 className="mt-4 text-sm font-black text-white">Riesgo operativo</h3>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">{inactiveClients.length} alumnos inactivos excluidos de asignaciones por defecto.</p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                        <Users className="h-5 w-5 text-sky-300" aria-hidden="true" />
+                        <h3 className="mt-4 text-sm font-black text-white">Workload</h3>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">Umbral: {TARGET_CLIENTS_PER_COACH} alumnos activos por coach. Rojo ≥100%, ámbar ≥80%.</p>
+                    </div>
                 </section>
             </div>
         </div>

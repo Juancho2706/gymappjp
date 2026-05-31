@@ -802,3 +802,79 @@ export async function refreshOrgHealthScoreAction(orgSlug: string) {
 
     return breakdown
 }
+
+/**
+ * Reassigns a single already-assigned client to a different coach.
+ * Guards: org admin, both client and coach belong to org.
+ * Writes audit event `client.reassigned`.
+ */
+export async function reassignClientAction(
+    orgSlug: string,
+    clientId: string,
+    newCoachId: string,
+): Promise<{ success?: boolean; error?: string }> {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    // Verify client belongs to org
+    const { data: client } = await admin
+        .from('clients')
+        .select('id, coach_id, full_name')
+        .eq('id', clientId)
+        .eq('org_id', org.id)
+        .maybeSingle()
+    if (!client) return { error: 'Alumno no pertenece a esta organización.' }
+
+    // Verify new coach belongs to org as active coach member
+    const { data: coachMember } = await admin
+        .from('organization_members')
+        .select('id, coach_id')
+        .eq('org_id', org.id)
+        .eq('coach_id', newCoachId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!coachMember) return { error: 'Coach no pertenece a esta organización.' }
+
+    if (client.coach_id === newCoachId) return { error: 'El alumno ya está asignado a ese coach.' }
+
+    const previousCoachId = client.coach_id
+
+    const { error } = await admin
+        .from('clients')
+        .update({ coach_id: newCoachId })
+        .eq('id', clientId)
+        .eq('org_id', org.id)
+    if (error) return { error: error.message }
+
+    // Update assignment record
+    await admin.from('coach_client_assignments')
+        .upsert({
+            org_id: org.id,
+            client_id: clientId,
+            coach_id: newCoachId,
+            assigned_at: new Date().toISOString(),
+            assigned_by: user.id,
+        }, { onConflict: 'org_id,client_id,coach_id' })
+        .then(undefined, () => undefined)
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.reassigned',
+        targetType: 'client',
+        targetId: clientId,
+        metadata: {
+            from_coach_id: previousCoachId,
+            to_coach_id: newCoachId,
+            client_name: client.full_name,
+        },
+    })
+
+    revalidatePath(`/org/${orgSlug}/assignments`)
+    revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true }
+}
