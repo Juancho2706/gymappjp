@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import { createClient } from '@/lib/supabase/server'
+import { listUserWorkspaces } from '@/services/auth/workspace.service'
 import { getOrgBySlug } from './_data/org.queries'
 import { MfaBanner } from './_components/MfaBanner'
 import { OrgEnterpriseNav } from './_components/OrgEnterpriseNav'
@@ -28,10 +30,15 @@ export default async function OrgAdminLayout({ children, params }: Props) {
         redirect('/coach/dashboard')
     }
 
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const workspaces = user ? await listUserWorkspaces(supabase, user.id) : []
+
     return (
         <div className="flex min-h-dvh flex-col bg-zinc-950 text-zinc-100 md:flex-row">
             <OrgEnterpriseNav
                 slug={slug}
+                workspaces={workspaces}
                 org={{
                     name: org.name,
                     logo_url: org.logo_url,

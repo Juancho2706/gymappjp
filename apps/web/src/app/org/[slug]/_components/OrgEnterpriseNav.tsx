@@ -21,6 +21,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { OrgSignOutButton } from './OrgSignOutButton'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import type { WorkspaceSummary } from '@/domain/auth/types'
 
 type NavChild = {
     href: string
@@ -108,6 +110,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 type OrgNavProps = {
     slug: string
+    workspaces: WorkspaceSummary[]
     org: {
         name: string
         logo_url: string | null
@@ -154,7 +157,7 @@ function OrgAvatar({ org }: Pick<OrgNavProps, 'org'>) {
     )
 }
 
-export function OrgEnterpriseNav({ slug, org }: OrgNavProps) {
+export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
     const pathname = usePathname()
     const baseHref = `/org/${slug}`
     const activeGroup = getActiveGroup(pathname, baseHref)
@@ -246,7 +249,12 @@ export function OrgEnterpriseNav({ slug, org }: OrgNavProps) {
                             {org.status === 'active' ? 'Activo' : org.status}
                         </span>
                     </div>
-                    <OrgSignOutButton />
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                            <WorkspaceSwitcher currentLabel={org.name} workspaces={workspaces} />
+                        </div>
+                        <OrgSignOutButton />
+                    </div>
                 </div>
             </aside>
 
@@ -257,6 +265,7 @@ export function OrgEnterpriseNav({ slug, org }: OrgNavProps) {
                         <p className="truncate text-sm font-semibold text-white">{org.name}</p>
                         <p className="text-[10px] uppercase tracking-[0.14em] text-amber-300">Enterprise</p>
                     </div>
+                    <WorkspaceSwitcher currentLabel={org.name} workspaces={workspaces} />
                     <OrgSignOutButton compact />
                 </div>
                 <nav className="grid grid-cols-3 gap-1 px-3 pb-2" aria-label="Enterprise mobile navigation">
