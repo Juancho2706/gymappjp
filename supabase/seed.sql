@@ -167,6 +167,16 @@ BEGIN
   -- organization_invites removed — superseded by direct organization_members creation
 
   -- ============================================================
+  -- 7a. Client payment for ca1 (RLS isolation fixture)
+  -- ============================================================
+  INSERT INTO client_payments (id, client_id, coach_id, amount, service_description, payment_date, status)
+  VALUES (
+    '00000000-0000-0000-000a-000000000001',
+    ca1, coach_a1, 50000, 'Mensualidad RLS test', current_date, 'paid'
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  -- ============================================================
   -- 7b. Check-ins (RLS isolation fixtures — sensitive health data)
   -- ca1 = org_a/coach_a1; cs1 = standalone coach_solo.
   -- Used to assert no cross-client/cross-coach leak of weight/photos/notes.

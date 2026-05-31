@@ -37,6 +37,12 @@ const CHECKINS = {
   standalone: '00000000-0000-0000-0009-000000000002', // client cs1 (standalone / coach_solo)
 }
 
+const FIXTURES = {
+  nutritionPlanOrgA:  '00000000-0000-0000-0006-000000000001', // ca1/coach_a1/org_a
+  workoutProgramOrgA: '00000000-0000-0000-0008-000000000001', // ca1/coach_a1/org_a
+  clientPaymentOrgA:  '00000000-0000-0000-000a-000000000001', // ca1/coach_a1
+}
+
 const USERS = {
   ownerA:     'coach-owner-a@eva-test.cl',
   coachA1:    'coach-member-a1@eva-test.cl',
@@ -427,5 +433,104 @@ test.describe('Check-ins isolation (health data)', () => {
       .select('id')
       .in('id', [CHECKINS.orgA, CHECKINS.standalone])
     expect(data ?? []).toHaveLength(0)
+  })
+})
+
+// ============================================================
+// GRUPO 9 — workout_programs isolation
+// ============================================================
+
+test.describe('Workout programs isolation', () => {
+  test('coach_b1 NO ve workout_programs de org_a', async () => {
+    const sb = await signIn(USERS.coachB1)
+    const { data } = await sb
+      .from('workout_programs')
+      .select('id')
+      .eq('id', FIXTURES.workoutProgramOrgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('standalone NO ve workout_programs de org_a', async () => {
+    const sb = await signIn(USERS.standalone)
+    const { data } = await sb
+      .from('workout_programs')
+      .select('id')
+      .eq('id', FIXTURES.workoutProgramOrgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach_a1 SÍ ve workout_programs de su propio cliente', async () => {
+    const sb = await signIn(USERS.coachA1)
+    const { data } = await sb
+      .from('workout_programs')
+      .select('id')
+      .eq('id', FIXTURES.workoutProgramOrgA)
+    expect(data ?? []).toHaveLength(1)
+  })
+})
+
+// ============================================================
+// GRUPO 10 — nutrition_plans isolation
+// ============================================================
+
+test.describe('Nutrition plans isolation', () => {
+  test('coach_b1 NO ve nutrition_plans de org_a', async () => {
+    const sb = await signIn(USERS.coachB1)
+    const { data } = await sb
+      .from('nutrition_plans')
+      .select('id')
+      .eq('id', FIXTURES.nutritionPlanOrgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('standalone NO ve nutrition_plans de org_a', async () => {
+    const sb = await signIn(USERS.standalone)
+    const { data } = await sb
+      .from('nutrition_plans')
+      .select('id')
+      .eq('id', FIXTURES.nutritionPlanOrgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach_a1 SÍ ve nutrition_plans de su propio cliente', async () => {
+    const sb = await signIn(USERS.coachA1)
+    const { data } = await sb
+      .from('nutrition_plans')
+      .select('id')
+      .eq('id', FIXTURES.nutritionPlanOrgA)
+    expect(data ?? []).toHaveLength(1)
+  })
+})
+
+// ============================================================
+// GRUPO 11 — client_payments isolation
+// ============================================================
+
+test.describe('Client payments isolation', () => {
+  test('coach_b1 NO ve client_payments de org_a', async () => {
+    const sb = await signIn(USERS.coachB1)
+    const { data } = await sb
+      .from('client_payments')
+      .select('id')
+      .eq('id', FIXTURES.clientPaymentOrgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('standalone NO ve client_payments de org_a', async () => {
+    const sb = await signIn(USERS.standalone)
+    const { data } = await sb
+      .from('client_payments')
+      .select('id')
+      .eq('id', FIXTURES.clientPaymentOrgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach_a1 SÍ ve client_payments de su propio cliente', async () => {
+    const sb = await signIn(USERS.coachA1)
+    const { data } = await sb
+      .from('client_payments')
+      .select('id')
+      .eq('id', FIXTURES.clientPaymentOrgA)
+    expect(data ?? []).toHaveLength(1)
   })
 })
