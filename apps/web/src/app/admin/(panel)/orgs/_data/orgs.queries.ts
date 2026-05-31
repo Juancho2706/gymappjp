@@ -11,6 +11,7 @@ export type OrgRow = {
     created_at: string | null
     trial_ends_at: string | null
     billing_cycle: string | null
+    last_health_score: number | null
     memberCount: number
     clientCount: number
     ownerUserId: string | null
@@ -21,7 +22,7 @@ export async function getOrgs(): Promise<OrgRow[]> {
 
     const { data: orgs } = await admin
         .from('organizations')
-        .select('id, slug, name, status, plan, seats_included, currency, created_at, trial_ends_at, billing_cycle')
+        .select('id, slug, name, status, plan, seats_included, currency, created_at, trial_ends_at, billing_cycle, last_health_score')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
 
@@ -64,6 +65,7 @@ export async function getOrgs(): Promise<OrgRow[]> {
 
     return orgs.map(o => ({
         ...o,
+        last_health_score: (o as typeof o & { last_health_score?: number | null }).last_health_score ?? null,
         memberCount: memberCounts[o.id] ?? 0,
         clientCount: clientCounts[o.id] ?? 0,
         ownerUserId: ownerUserIds[o.id] ?? null,

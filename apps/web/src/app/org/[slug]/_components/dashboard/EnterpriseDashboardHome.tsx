@@ -14,6 +14,7 @@ import {
     Users,
 } from 'lucide-react'
 import type { OrgClient, OrgMember, OrgWithMembership } from '../../_data/org.queries'
+import { OrgHealthScoreRefresher } from './OrgHealthScoreRefresher'
 
 type OrgStats = {
     totalCoaches: number
@@ -122,20 +123,17 @@ export function EnterpriseDashboardHome({
                         </div>
 
                         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-                            <div className="flex items-end justify-between">
-                                <div>
-                                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Health score</p>
-                                    <p className="mt-2 text-5xl font-black text-white">{healthScore}</p>
-                                </div>
-                                <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-emerald-300">
-                                    <TrendingUp className="h-4 w-4" aria-hidden="true" />
+                            <div className="flex items-start justify-between">
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Health score</p>
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
+                                    <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
                                     {activeRate}% activos
                                 </div>
                             </div>
-                            <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-800">
-                                <div
-                                    className="h-full rounded-full bg-gradient-to-r from-amber-500 via-emerald-400 to-sky-400"
-                                    style={{ width: `${Math.min(100, healthScore)}%` }}
+                            <div className="mt-2">
+                                <OrgHealthScoreRefresher
+                                    orgSlug={slug}
+                                    initialScore={org.last_health_score ?? null}
                                 />
                             </div>
                         </div>

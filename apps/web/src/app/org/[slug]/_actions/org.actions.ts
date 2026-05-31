@@ -9,6 +9,7 @@ import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/
 import { generateUniqueInviteCode } from '@/services/coach/coach.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { generateTempPassword, generateUniqueCoachSlug, getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
+import { computeOrgHealthScore } from '@/infrastructure/db/org.repository'
 
 const ALLOWED_LOGO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_LOGO_BYTES = 2 * 1024 * 1024 // 2 MB
@@ -770,4 +771,34 @@ export async function revokeStaffAction(orgSlug: string, memberId: string) {
     revalidatePath(`/org/${orgSlug}/team`)
     revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
+}
+
+/**
+ * Computes and persists org health score to organizations.last_health_score.
+ * Fire-and-forget from dashboard on mount. Returns breakdown for immediate display.
+ * Formula (CSM B2B 2026): adherence7d×0.40 + assignment×0.25 + active_rate×0.20 + program_rate×0.15
+ * Tiers: green≥70, amber≥50, red<50
+ */
+export async function refreshOrgHealthScoreAction(orgSlug: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data: org } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('slug', orgSlug)
+        .maybeSingle()
+    if (!org) return null
+
+    const breakdown = await computeOrgHealthScore(supabase, org.id)
+
+    // Persist best-effort
+    supabase
+        .from('organizations')
+        .update({ last_health_score: breakdown.score })
+        .eq('id', org.id)
+        .then(undefined, () => undefined)
+
+    return breakdown
 }

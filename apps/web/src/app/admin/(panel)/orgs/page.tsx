@@ -45,8 +45,8 @@ export default async function AdminOrgsPage() {
                                     <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">
                                         <UserCheck className="w-3.5 h-3.5 inline mr-0.5" />Clientes
                                     </th>
+                                    <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">Health</th>
                                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Plan</th>
-                                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Moneda</th>
                                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Creada</th>
                                     <th className="px-4 py-2.5" />
                                 </tr>
@@ -78,11 +78,23 @@ export default async function AdminOrgsPage() {
                                         <td className="px-4 py-3 text-center font-semibold">
                                             {org.clientCount}
                                         </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {org.last_health_score !== null ? (
+                                                <span className={`text-sm font-bold ${
+                                                    org.last_health_score >= 70 ? 'text-emerald-500' :
+                                                    org.last_health_score >= 50 ? 'text-amber-500' :
+                                                    'text-red-500'
+                                                }`}>
+                                                    {org.last_health_score}
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">—</span>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-3">
                                             <span className="capitalize text-xs">{org.plan}</span>
                                             <span className="text-[10px] text-muted-foreground block">{org.billing_cycle ?? 'monthly'}</span>
                                         </td>
-                                        <td className="px-4 py-3 text-xs text-muted-foreground">{org.currency}</td>
                                         <td className="px-4 py-3 text-xs text-muted-foreground">
                                             {org.created_at ? new Date(org.created_at).toLocaleDateString('es-CL') : '—'}
                                         </td>

@@ -404,3 +404,76 @@ export async function getOrgStats(db: DB, orgId: string) {
         activeClients: clients.filter(c => c.is_active).length,
     }
 }
+
+export type OrgHealthBreakdown = {
+    score: number          // 0-100
+    adherence7d: number    // % active clients who logged workout last 7d (weight 40%)
+    assignmentRate: number // % clients with coach_id (weight 25%)
+    activeRate: number     // % clients who are is_active (weight 20%)
+    programRate: number    // % active clients with active program (weight 15%)
+    totalClients: number
+    activeClients: number
+    tier: 'green' | 'amber' | 'red'
+}
+
+/**
+ * Computes org-level health score 0-100.
+ * Formula from CSM research 2026:
+ *   score = adherence×0.40 + assignment×0.25 + active_rate×0.20 + program_rate×0.15
+ * Thresholds: green≥70, amber≥50, red<50
+ */
+export async function computeOrgHealthScore(db: DB, orgId: string): Promise<OrgHealthBreakdown> {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+
+    const [clientsRes, logsRes, programsRes] = await Promise.all([
+        db.from('clients')
+            .select('id, is_active, coach_id')
+            .eq('org_id', orgId),
+        db.from('workout_logs')
+            .select('client_id')
+            .gte('logged_at', sevenDaysAgo),
+        db.from('workout_programs')
+            .select('client_id')
+            .eq('org_id', orgId)
+            .eq('is_active', true)
+            .not('client_id', 'is', null),
+    ])
+
+    const clients = clientsRes.data ?? []
+    const totalClients = clients.length
+    const activeClients = clients.filter(c => c.is_active).length
+    const activeClientIds = new Set(clients.filter(c => c.is_active).map(c => c.id))
+
+    if (totalClients === 0) {
+        return { score: 0, adherence7d: 0, assignmentRate: 0, activeRate: 0, programRate: 0, totalClients: 0, activeClients: 0, tier: 'red' }
+    }
+
+    // Adherence: % of active clients who trained last 7d
+    const recentIds = new Set((logsRes.data ?? [])
+        .filter(l => activeClientIds.has(l.client_id))
+        .map(l => l.client_id))
+    const adherence7d = activeClients > 0 ? Math.round((recentIds.size / activeClients) * 100) : 0
+
+    // Assignment rate: % of all clients with a coach
+    const assigned = clients.filter(c => c.coach_id).length
+    const assignmentRate = Math.round((assigned / totalClients) * 100)
+
+    // Active rate: % of all clients who are active
+    const activeRate = Math.round((activeClients / totalClients) * 100)
+
+    // Program rate: % of active clients with an active program
+    const programClientIds = new Set((programsRes.data ?? []).map(p => p.client_id))
+    const withProgram = [...activeClientIds].filter(id => programClientIds.has(id)).length
+    const programRate = activeClients > 0 ? Math.round((withProgram / activeClients) * 100) : 0
+
+    const score = Math.round(
+        adherence7d * 0.40 +
+        assignmentRate * 0.25 +
+        activeRate * 0.20 +
+        programRate * 0.15
+    )
+
+    const tier: OrgHealthBreakdown['tier'] = score >= 70 ? 'green' : score >= 50 ? 'amber' : 'red'
+
+    return { score, adherence7d, assignmentRate, activeRate, programRate, totalClients, activeClients, tier }
+}
