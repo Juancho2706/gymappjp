@@ -1,0 +1,21 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# React 19 peer dep overrides (moved from package.json pnpm.overrides in pnpm v11)
+overrides:
+  react: 19.1.0
+  react-dom: 19.1.0
+
+# Allowlist for packages that need legitimate postinstall scripts (native binaries, CLIs).
+# New packages are blocked by default — supply chain defense (pnpm v10+ behavior).
+allowBuilds:
+  '@sentry/cli': true      # downloads sentry CLI binary
+  core-js: true            # polyfill postinstall message only
+  esbuild: true            # downloads esbuild native binary (required by vite/next)
+  msw: true                # generates service worker via `npx msw init`
+  protobufjs: true         # compiles proto definitions
+  puppeteer: true          # downloads Chromium for E2E tests
+  sharp: true              # native image processing (required by Next.js)
+  supabase: true           # downloads supabase CLI binary
+  unrs-resolver: true      # native Rust resolver binary

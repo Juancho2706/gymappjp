@@ -2,16 +2,13 @@
   "name": "gymappjp",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "packageManager": "pnpm@11.5.0",
   "scripts": {
-    "dev": "npm run dev -w @eva/web",
-    "build": "npm run build -w @eva/web",
-    "start": "npm run start -w @eva/web",
+    "dev": "pnpm --filter @eva/web dev",
+    "build": "pnpm --filter @eva/web build",
+    "start": "pnpm --filter @eva/web start",
     "lint": "eslint apps/web/src tests scripts",
-    "typecheck": "npm run typecheck -w @eva/web",
+    "typecheck": "pnpm --filter @eva/web typecheck",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
@@ -26,7 +23,10 @@
     "audit:nutrition-empty-meals:priority": "node scripts/build-nutrition-remediation-priority.mjs",
     "audit:nutrition-empty-meals:baseline": "node scripts/snapshot-nutrition-audit-baseline.mjs",
     "audit:nutrition-empty-meals:delta": "node scripts/build-nutrition-audit-delta.mjs",
-    "seed:enterprise-demo:local": "node scripts/seed-enterprise-demo-local.mjs"
+    "seed:enterprise-demo:local": "node scripts/seed-enterprise-demo-local.mjs",
+    "audit:org-sensitive-actions": "node scripts/check-org-sensitive-actions-audit.mjs",
+    "audit:checksum:manual": "node scripts/run-audit-checksum-manual.mjs",
+    "test:e2e:enterprise-rls": "playwright test tests/enterprise/rls-isolation.spec.ts --workers=1"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -78,7 +78,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@eva/tokens": "file:packages/tokens",
+    "@eva/tokens": "workspace:*",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
@@ -101,9 +101,5 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
-  },
-  "overrides": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
   }
 }

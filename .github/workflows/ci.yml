@@ -11,16 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
+          cache: pnpm
+      # --ignore-scripts blocks postinstall supply chain attacks (pnpm v10+ protection)
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run lint
+      - run: pnpm run typecheck
       - run: npx vitest run
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high --omit=dev
+      - name: pnpm audit (high+)
+        run: pnpm audit --audit-level=high --prod
         continue-on-error: true
 
   e2e:
@@ -29,12 +33,22 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: npx playwright install --with-deps
+      - name: Enterprise RLS isolation
+        run: pnpm run test:e2e:enterprise-rls
+        env:
+          CI: true
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - run: npx playwright test
         env:
           CI: true
@@ -59,14 +73,17 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: npx playwright install --with-deps
-      - run: npm run e2e:check-env
-      - run: npm run test:e2e:nutrition
+      - run: pnpm run e2e:check-env
+      - run: pnpm run test:e2e:nutrition
         env:
           CI: true
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
