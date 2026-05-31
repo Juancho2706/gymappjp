@@ -1894,6 +1894,9 @@ export type Database = {
         Row: {
           billing_cycle: string | null
           billing_start_date: string | null
+          brand_draft: Json | null
+          brand_published_at: string | null
+          brand_published_by: string | null
           client_limit: number
           created_at: string | null
           currency: string
@@ -1916,6 +1919,9 @@ export type Database = {
         Insert: {
           billing_cycle?: string | null
           billing_start_date?: string | null
+          brand_draft?: Json | null
+          brand_published_at?: string | null
+          brand_published_by?: string | null
           client_limit?: number
           created_at?: string | null
           currency?: string
@@ -1938,6 +1944,9 @@ export type Database = {
         Update: {
           billing_cycle?: string | null
           billing_start_date?: string | null
+          brand_draft?: Json | null
+          brand_published_at?: string | null
+          brand_published_by?: string | null
           client_limit?: number
           created_at?: string | null
           currency?: string

@@ -4,6 +4,12 @@ import { ENTERPRISE_STAFF_ROLES, isEnterpriseStaffRole, type OrgRole } from '@/d
 
 type DB = SupabaseClient<Database>
 
+export type BrandDraft = {
+    name?: string
+    primary_color?: string
+    logo_url?: string | null
+}
+
 export type OrgWithMembership = {
     id: string
     slug: string
@@ -19,6 +25,8 @@ export type OrgWithMembership = {
     created_at: string | null
     onboarding_step: number | null
     last_health_score: number | null
+    brand_draft: BrandDraft | null
+    brand_published_at: string | null
     myRole: Exclude<OrgRole, 'coach'>
 }
 
@@ -82,7 +90,7 @@ export async function findOrgBySlug(
 ): Promise<OrgWithMembership | null> {
     const { data: org } = await db
         .from('organizations')
-        .select('id, slug, name, logo_url, primary_color, plan, status, seats_included, trial_ends_at, billing_cycle, currency, created_at, onboarding_step, last_health_score')
+        .select('id, slug, name, logo_url, primary_color, plan, status, seats_included, trial_ends_at, billing_cycle, currency, created_at, onboarding_step, last_health_score, brand_draft, brand_published_at')
         .eq('slug', slug)
         .is('deleted_at', null)
         .maybeSingle()
@@ -102,7 +110,12 @@ export async function findOrgBySlug(
     if (!membership) return null
     if (!isEnterpriseStaffRole(membership.role)) return null
 
-    return { ...org, myRole: membership.role }
+    return {
+        ...org,
+        brand_draft: (org.brand_draft ?? null) as BrandDraft | null,
+        brand_published_at: (org as Record<string, unknown>).brand_published_at as string | null ?? null,
+        myRole: membership.role,
+    }
 }
 
 export async function findOrgMembers(db: DB, orgId: string): Promise<OrgMember[]> {

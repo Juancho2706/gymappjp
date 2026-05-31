@@ -268,6 +268,8 @@ export default async function OrgBrandPage({ params }: Props) {
                                     defaultName={org.name}
                                     defaultColor={primaryColor}
                                     logoUrl={org.logo_url}
+                                    draft={org.brand_draft as import('@/infrastructure/db/org.repository').BrandDraft | null}
+                                    publishedAt={org.brand_published_at}
                                 />
                             </div>
                         </section>

@@ -109,14 +109,74 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
     return { success: true }
 }
 
+/**
+ * Saves brand changes as a draft (no live impact).
+ * Coaches/students still see the last published values until publish is called.
+ */
+export async function saveBrandDraftAction(
+    orgSlug: string,
+    draft: { name?: string; primary_color?: string; logo_url?: string | null }
+) {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org } = context
+
+    const { error } = await admin
+        .from('organizations')
+        .update({ brand_draft: draft })
+        .eq('id', org.id)
+    if (error) return { error: error.message }
+
+    revalidatePath(`/org/${orgSlug}/brand`)
+    return { success: true }
+}
+
+/**
+ * Discards unpublished draft without affecting live brand.
+ */
+export async function discardBrandDraftAction(orgSlug: string) {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org } = context
+
+    await admin.from('organizations').update({ brand_draft: null }).eq('id', org.id)
+    revalidatePath(`/org/${orgSlug}/brand`)
+    return { success: true }
+}
+
 export async function publishEnterpriseBrandAction(orgSlug: string) {
     const context = await resolveOrgAdminContext(orgSlug)
     if ('error' in context) return { error: context.error }
 
     const admin = createServiceRoleClient()
     const { org, user } = context
-    const primaryColor = org.primary_color ?? '#10B981'
-    const loaderText = org.name
+
+    // Apply draft if it exists, otherwise use current live values
+    const draft = (org as Record<string, unknown>).brand_draft as Record<string, unknown> | null
+    const primaryColor = (draft?.primary_color as string | null) ?? org.primary_color ?? '#10B981'
+    const logoUrl = draft ? (draft.logo_url as string | null | undefined) : org.logo_url
+    const orgName = (draft?.name as string | null) ?? org.name
+
+    // Promote draft to live
+    if (draft) {
+        await admin.from('organizations').update({
+            name: orgName,
+            primary_color: primaryColor,
+            logo_url: logoUrl ?? org.logo_url,
+            brand_draft: null,
+            brand_published_at: new Date().toISOString(),
+            brand_published_by: user.id,
+        }).eq('id', org.id)
+    } else {
+        await admin.from('organizations').update({
+            brand_published_at: new Date().toISOString(),
+            brand_published_by: user.id,
+        }).eq('id', org.id)
+    }
+
+    const loaderText = orgName
         .replace(/[^a-zA-Z0-9]/g, '')
         .slice(0, 10)
         .toUpperCase() || 'APP'
@@ -138,9 +198,9 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
         const { error: coachesError } = await admin
             .from('coaches')
             .update({
-                brand_name: org.name,
+                brand_name: orgName,
                 primary_color: primaryColor,
-                logo_url: org.logo_url,
+                logo_url: logoUrl ?? org.logo_url,
                 use_brand_colors_coach: true,
                 use_custom_loader: true,
                 loader_text: loaderText,
