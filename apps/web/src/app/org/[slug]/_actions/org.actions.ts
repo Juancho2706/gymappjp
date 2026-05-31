@@ -915,3 +915,101 @@ export async function reassignClientAction(
     revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
+
+/**
+ * Resets password for any enterprise staff member (not coach-specific).
+ * Works by membership ID. Guards: org owner or admin only.
+ * Returns temp password on success so caller can display it once.
+ */
+export async function resetStaffPasswordAction(
+    orgSlug: string,
+    memberId: string,
+): Promise<{ success?: boolean; tempPassword?: string; error?: string }> {
+    const context = await resolveOrgAdminContext(orgSlug, ['org_owner', 'org_admin'])
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: target } = await admin
+        .from('organization_members')
+        .select('id, user_id, role, status')
+        .eq('id', memberId)
+        .eq('org_id', org.id)
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!target) return { error: 'Miembro no encontrado' }
+    if (!target.user_id) return { error: 'Sin cuenta de usuario asociada' }
+    if (target.role === 'org_owner') return { error: 'No se puede resetear la contraseña del propietario desde este panel' }
+    if (target.status === 'revoked') return { error: 'Este miembro está revocado' }
+
+    const tempPassword = generateTempPassword()
+    const { error } = await admin.auth.admin.updateUserById(target.user_id, { password: tempPassword })
+    if (error) return { error: error.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_staff.password_reset',
+        targetType: 'organization_member',
+        targetId: target.user_id,
+        metadata: { member_id: memberId, role: target.role },
+    })
+
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, tempPassword }
+}
+
+/**
+ * Changes the role of a non-owner staff member.
+ * Supports all changeable roles: org_admin, ops, analyst, brand_manager.
+ * Guards: org owner or admin only (ops cannot escalate roles).
+ * Promotes new org_admin to MFA-required state.
+ */
+export async function updateStaffRoleAction(
+    orgSlug: string,
+    memberId: string,
+    role: 'org_admin' | 'ops' | 'analyst' | 'brand_manager',
+): Promise<{ success?: boolean; error?: string }> {
+    const context = await resolveOrgAdminContext(orgSlug, ['org_owner', 'org_admin'])
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: target } = await admin
+        .from('organization_members')
+        .select('id, user_id, role, status, coach_id')
+        .eq('id', memberId)
+        .eq('org_id', org.id)
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!target) return { error: 'Miembro no encontrado' }
+    if (target.role === 'org_owner') return { error: 'No se puede cambiar el rol del propietario' }
+    if (target.role === 'coach' || target.coach_id) return { error: 'Para cambiar rol de coach, usar el panel de Coaches' }
+    if (target.status === 'revoked') return { error: 'Este miembro está revocado' }
+
+    const { error } = await admin
+        .from('organization_members')
+        .update({ role })
+        .eq('id', memberId)
+    if (error) return { error: error.message }
+
+    // Flag MFA setup if escalating to org_admin
+    if (role === 'org_admin' && target.user_id) {
+        await admin.auth.admin.updateUserById(target.user_id, {
+            app_metadata: { requires_mfa_setup: true },
+        }).catch(() => null) // non-fatal — MFA can be enforced at next login
+    }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_staff.role_updated',
+        targetType: 'organization_member',
+        targetId: target.user_id ?? memberId,
+        metadata: { member_id: memberId, previous_role: target.role, new_role: role },
+    })
+
+    revalidatePath(`/org/${orgSlug}/team`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true }
+}
