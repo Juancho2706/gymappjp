@@ -1682,7 +1682,7 @@ Prioridad P2 — completar features (P1.5 desbloqueado):
 - [x] Brand Studio: draft/published. Completado 2026-05-30 (commit be0e3a2). Columnas brand_draft(jsonb)/brand_published_at en organizations. saveBrandDraftAction (sin impacto live) + discardBrandDraftAction + publishEnterpriseBrandAction (promueve draft → live → coaches). Banner ámbar cuando hay borrador. Fecha última publicación visible.
 - [x] Team: permisos granulares. Completado 2026-05-30 (commit a707d09). 22 OrgPermissions en matriz por rol (ops/analyst/brand_manager habilitados). resolveOrgAdminContext incluye ops. Pages usan orgRoleCan() en vez de hardcode owner/admin. ROLE_MATRIX en Team page actualizada.
 - [x] Admin: flujo seats/plan sin cobro in-app. Completado 2026-05-30 (commit 04542bc). KPIs used/included/available color-coded. mailto: pre-filled. "Plan actual" badge. Sin gateway de pago.
-- [ ] Novedades: evaluar canal separado para coaches enterprise con audience/permissions propios antes de tocar el flujo coach normal.
+- [x] Novedades: audience targeting. Completado 2026-05-30 (commit e29d180). Campo audience (all/coaches/clients) en org_announcements. Selector en form. Badge de audiencia en AnnouncementRow. Client dashboard filtra .in('audience',['all','clients']). Sin tocar flujo news_items del coach normal.
 - [ ] Nutricion: tracking de uso por template/coach y filtros por objetivo cuando exista volumen suficiente de datos.
 
 Prioridad P3 - diferenciadores futuros sin costo externo:
