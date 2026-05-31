@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { orgRoleCan } from '@/domain/org/permissions'
 import type { Metadata } from 'next'
 import { ArrowLeft, Users, AlertTriangle, TrendingUp, Activity } from 'lucide-react'
 import Link from 'next/link'
@@ -29,7 +30,7 @@ export default async function CoachPerformancePage({ params }: Props) {
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
-    const isAdmin = org.myRole === 'org_owner' || org.myRole === 'org_admin'
+    const isAdmin = orgRoleCan(org.myRole, 'org.coaches.invite')
     if (!isAdmin) redirect(`/org/${slug}`)
 
     const members = await getOrgMembers(org.id)

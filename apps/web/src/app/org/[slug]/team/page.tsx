@@ -15,6 +15,7 @@ import {
     Users,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgMembers } from '../_data/org.queries'
+import { orgRoleLabel } from '@/domain/org/permissions'
 
 export const metadata: Metadata = { title: 'Team & Access' }
 
@@ -25,40 +26,43 @@ interface Props {
 const ROLE_MATRIX = [
     {
         role: 'Owner',
-        description: 'Control total de la organizacion.',
-        permissions: ['Dashboard', 'Staff', 'Brand', 'Pagos', 'Reportes', 'Audit'],
+        description: 'Control total. Billing, settings, team.',
+        permissions: ['Dashboard', 'Coaches', 'Alumnos', 'Pagos', 'Reportes', 'Marca', 'Team', 'Audit', 'Settings'],
         icon: Crown,
     },
     {
         role: 'Admin',
-        description: 'Operacion diaria sin ownership final.',
-        permissions: ['Dashboard', 'Coaches', 'Alumnos', 'Asignaciones', 'Reportes'],
+        description: 'Operación completa sin owner settings.',
+        permissions: ['Dashboard', 'Coaches', 'Alumnos', 'Pagos', 'Reportes', 'Marca (edit)', 'Team (invite)'],
         icon: ShieldCheck,
     },
     {
-        role: 'Operations',
-        description: 'Gestiona carga, alumnos y seguimiento.',
-        permissions: ['Coaches', 'Alumnos', 'Asignaciones', 'Check-ins'],
+        role: 'Operaciones',
+        description: 'Gestiona coaches, alumnos y asignaciones.',
+        permissions: ['Dashboard', 'Coaches (invite/suspend)', 'Alumnos', 'Pagos (ver)', 'Reportes', 'Audit (ver)'],
         icon: Activity,
     },
     {
-        role: 'Brand Manager',
-        description: 'Publica white-label y controla identidad.',
-        permissions: ['Brand', 'Preview', 'Publish'],
+        role: 'Marca',
+        description: 'Publica white-label. Solo Brand Studio.',
+        permissions: ['Dashboard', 'Marca (edit/publish)', 'Settings (ver)'],
         icon: UserCog,
     },
     {
-        role: 'Analyst',
-        description: 'Lee reportes sin modificar operacion.',
-        permissions: ['Dashboard', 'Reportes', 'Export'],
+        role: 'Analista',
+        description: 'Solo lectura: dashboard, reportes, pagos.',
+        permissions: ['Dashboard', 'Alumnos (ver)', 'Pagos (ver)', 'Reportes + Export'],
         icon: Eye,
     },
 ]
 
 function roleLabel(role: string) {
-    if (role === 'org_owner') return 'Owner'
-    if (role === 'org_admin') return 'Admin'
-    if (role === 'coach') return 'Coach linked'
+    if (role === 'org_owner') return orgRoleLabel('org_owner')
+    if (role === 'org_admin') return orgRoleLabel('org_admin')
+    if (role === 'ops') return orgRoleLabel('ops')
+    if (role === 'analyst') return orgRoleLabel('analyst')
+    if (role === 'brand_manager') return orgRoleLabel('brand_manager')
+    if (role === 'coach') return 'Coach vinculado'
     return role
 }
 

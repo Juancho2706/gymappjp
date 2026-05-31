@@ -228,7 +228,9 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
     return { success: true, coachCount: coachIds.length }
 }
 
-async function resolveOrgAdminContext(orgSlug: string, allowedRoles: string[] = ['org_owner', 'org_admin']) {
+// Default: all enterprise staff roles that can perform operational mutations.
+// Sensitive actions (brand publish, team modify, settings) pass explicit allowedRoles.
+async function resolveOrgAdminContext(orgSlug: string, allowedRoles: string[] = ['org_owner', 'org_admin', 'ops']) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado' as const }

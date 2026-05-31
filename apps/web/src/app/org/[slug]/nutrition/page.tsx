@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { orgRoleCan } from '@/domain/org/permissions'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import {
@@ -55,7 +56,7 @@ export default async function OrgNutritionPage({ params }: Props) {
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
-    const isAdmin = org.myRole === 'org_owner' || org.myRole === 'org_admin'
+    const isAdmin = orgRoleCan(org.myRole, 'org.coaches.invite')
     if (!isAdmin) redirect(`/org/${slug}`)
 
     const [templates, members] = await Promise.all([
