@@ -259,7 +259,7 @@ export default async function OrgTeamPage({ params }: Props) {
                         <CircleDashed className="h-4 w-4 text-sky-300" aria-hidden="true" />
                         <h2 className="text-lg font-black text-white">Role templates</h2>
                     </div>
-                    <div className="mt-5 grid gap-3 lg:grid-cols-5">
+                    <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
                         {ROLE_MATRIX.map(({ role, description, permissions, icon: Icon }) => (
                             <div key={role} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
                                 <Icon className="h-5 w-5 text-amber-300" aria-hidden="true" />

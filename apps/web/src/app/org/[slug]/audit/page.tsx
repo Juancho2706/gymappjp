@@ -158,51 +158,101 @@ export default async function OrgAuditPage({ params, searchParams }: Props) {
                     </div>
                 </section>
 
+                {/* Mobile: sticky filter chip strip — appears above timeline on small screens */}
+                <div className="xl:hidden sticky top-0 z-30 -mx-4 bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-2.5">
+                    <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                        {ACTION_CATEGORIES.map(cat => {
+                            const isActive = (actionFilter ?? '') === cat.value
+                            const href = auditHref({ action: cat.value || undefined })
+                            return (
+                                <a key={cat.value} href={href}
+                                    className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                                        isActive
+                                            ? 'border-sky-400/40 bg-sky-400/15 text-sky-300'
+                                            : 'border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                                    }`}>
+                                    {cat.label}
+                                </a>
+                            )
+                        })}
+                        {(actionFilter || actorFilter || targetTypeFilter || from || to) && (
+                            <a href={baseUrl} className="shrink-0 rounded-full border border-zinc-700 px-2.5 py-1 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors">
+                                × Limpiar
+                            </a>
+                        )}
+                    </div>
+                </div>
+
                 <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                         <div className="flex items-center gap-2">
                             <Activity className="h-4 w-4 text-rose-300" aria-hidden="true" />
                             <h2 className="text-lg font-black text-white">Timeline</h2>
+                            {filteredLogs.length > 0 && (
+                                <span className="ml-auto text-xs text-zinc-500">{filteredLogs.length} eventos</span>
+                            )}
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-zinc-500">
-                            Muestra los ultimos eventos guardados en `org_audit_logs`, filtrados por URL para soporte y evidencia.
+                        <p className="mt-2 hidden text-sm leading-6 text-zinc-500 sm:block">
+                            Historial de acciones enterprise filtrado por URL.
                         </p>
 
-                        <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
+                        <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
                             {filteredLogs.length > 0 ? (
                                 filteredLogs.map((log) => (
-                                    <div key={log.id} className="grid gap-3 border-b border-zinc-800 bg-zinc-950/50 p-4 last:border-b-0 lg:grid-cols-[1fr_170px_170px] lg:items-center">
-                                        <div className="min-w-0">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className={`rounded-full border px-2 py-1 text-xs font-bold ${actionTone(log.action)}`}>
-                                                    {log.action}
-                                                </span>
-                                                {log.target_type && (
-                                                    <span className="rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
-                                                        {log.target_type}
+                                    <div key={log.id} className="border-b border-zinc-800 bg-zinc-950/50 last:border-b-0">
+                                        {/* Mobile: compact single layout */}
+                                        <div className="flex items-start gap-3 p-3 lg:hidden">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${actionTone(log.action)}`}>
+                                                        {log.action}
                                                     </span>
-                                                )}
+                                                    {log.target_type && (
+                                                        <span className="rounded-full border border-zinc-800 px-2 py-0.5 text-[11px] text-zinc-500">
+                                                            {log.target_type}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="mt-1.5 truncate text-xs text-zinc-500">
+                                                    {metadataSummary(log.metadata)}
+                                                </p>
                                             </div>
-                                            <p className="mt-3 truncate text-sm font-bold text-zinc-100">
-                                                {log.target_id ?? 'Evento sin target especifico'}
-                                            </p>
-                                            <p className="mt-1 truncate text-xs text-zinc-500">
-                                                Metadata: {metadataSummary(log.metadata)}
-                                            </p>
+                                            <p className="shrink-0 text-[11px] text-zinc-600">{formatDate(log.created_at)}</p>
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-zinc-500">Actor</p>
-                                            <p className="mt-1 truncate font-mono text-xs text-zinc-300">{log.actor_id}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-zinc-500">Fecha</p>
-                                            <p className="mt-1 text-sm font-bold text-zinc-100">{formatDate(log.created_at)}</p>
+                                        {/* Desktop: full 3-column layout */}
+                                        <div className="hidden lg:grid gap-3 lg:grid-cols-[1fr_170px_170px] lg:items-center p-4">
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className={`rounded-full border px-2 py-1 text-xs font-bold ${actionTone(log.action)}`}>
+                                                        {log.action}
+                                                    </span>
+                                                    {log.target_type && (
+                                                        <span className="rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
+                                                            {log.target_type}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="mt-3 truncate text-sm font-bold text-zinc-100">
+                                                    {log.target_id ?? 'Evento sin target especifico'}
+                                                </p>
+                                                <p className="mt-1 truncate text-xs text-zinc-500">
+                                                    Metadata: {metadataSummary(log.metadata)}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-zinc-500">Actor</p>
+                                                <p className="mt-1 truncate font-mono text-xs text-zinc-300">{log.actor_id}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-zinc-500">Fecha</p>
+                                                <p className="mt-1 text-sm font-bold text-zinc-100">{formatDate(log.created_at)}</p>
+                                            </div>
                                         </div>
                                     </div>
                                 ))
                             ) : (
                                 <div className="p-6 text-sm text-zinc-500">
-                                    No hay eventos todavia. Las mutations enterprise futuras deben empezar escribiendo aqui.
+                                    {(actionFilter || actorFilter || targetTypeFilter) ? 'Sin resultados para ese filtro.' : 'No hay eventos todavia.'}
                                 </div>
                             )}
                         </div>
