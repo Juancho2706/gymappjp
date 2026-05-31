@@ -10,8 +10,9 @@ import {
     Plus,
     User,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgWorkoutProgramOverview } from '../_data/org.queries'
+import { getOrgBySlug, getOrgMembers, getOrgWorkoutProgramOverview } from '../_data/org.queries'
 import { orgRoleCan } from '@/domain/org/permissions'
+import { AssignTemplateToCoachButton } from './_components/AssignTemplateToCoachButton'
 
 export const metadata: Metadata = { title: 'Programas' }
 
@@ -26,7 +27,10 @@ export default async function OrgProgramsPage({ params }: Props) {
     // ops, admin, owner — not coaches
     if (!orgRoleCan(org.myRole, 'org.dashboard.view')) redirect(`/org/${slug}`)
 
-    const overview = await getOrgWorkoutProgramOverview(org.id)
+    const [overview, members] = await Promise.all([
+        getOrgWorkoutProgramOverview(org.id),
+        getOrgMembers(org.id),
+    ])
     const {
         templates,
         totalClients,
@@ -34,6 +38,10 @@ export default async function OrgProgramsPage({ params }: Props) {
         coveragePct,
         byCoach,
     } = overview
+
+    const activeCoaches = members
+        .filter(m => m.role === 'coach' && m.status === 'active' && m.coach_id)
+        .map(m => ({ id: m.coach_id!, name: m.coach?.full_name ?? 'Coach' }))
 
     const clientsWithoutProgram = totalClients - clientsWithProgram
 
@@ -184,12 +192,20 @@ export default async function OrgProgramsPage({ params }: Props) {
                                         key={t.id}
                                         className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
                                     >
-                                        <div className="min-w-0">
+                                        <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-bold text-zinc-100">{t.name}</p>
                                             <p className="text-xs text-zinc-500">
                                                 {t.coachId ? t.coachName : <span className="text-violet-400 font-medium">Template org</span>}
                                             </p>
                                         </div>
+                                        {!t.coachId && (
+                                            <AssignTemplateToCoachButton
+                                                orgSlug={slug}
+                                                templateId={t.id}
+                                                templateName={t.name}
+                                                coaches={activeCoaches}
+                                            />
+                                        )}
                                     </div>
                                 ))}
                             </div>

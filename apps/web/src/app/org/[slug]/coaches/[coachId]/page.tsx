@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { orgRoleCan } from '@/domain/org/permissions'
 import type { Metadata } from 'next'
-import { ArrowLeft, Users, AlertTriangle, TrendingUp, Activity } from 'lucide-react'
+import { ArrowLeft, Dumbbell, ExternalLink, Users, AlertTriangle, TrendingUp, Activity } from 'lucide-react'
 import Link from 'next/link'
 import { getOrgBySlug, getOrgMembers, getCoachPerformance } from '../../_data/org.queries'
 
@@ -42,7 +42,7 @@ export default async function CoachPerformancePage({ params }: Props) {
 
     return (
         <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3">
                 <Link
                     href={`/org/${slug}/coaches`}
                     className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -50,6 +50,23 @@ export default async function CoachPerformancePage({ params }: Props) {
                     <ArrowLeft className="w-4 h-4" />
                     Coaches
                 </Link>
+                <div className="flex items-center gap-2">
+                    <Link
+                        href={`/org/${slug}/programs`}
+                        className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                    >
+                        <Dumbbell className="h-3 w-3" />
+                        Programas org
+                    </Link>
+                    <Link
+                        href="/coach/workout-programs"
+                        className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                        title="Solo accesible con workspace enterprise_coach activo"
+                    >
+                        <ExternalLink className="h-3 w-3" />
+                        Builder
+                    </Link>
+                </div>
             </div>
 
             <div className="flex items-center gap-3">

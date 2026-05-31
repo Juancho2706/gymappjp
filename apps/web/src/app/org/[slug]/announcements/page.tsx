@@ -15,7 +15,7 @@ import {
     Users,
 } from 'lucide-react'
 import { getOrgAnnouncements, getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
-import { CreateAnnouncementForm } from './_components/CreateAnnouncementForm'
+import { AnnouncementComposerSheet } from './_components/AnnouncementComposerSheet'
 import { AnnouncementRow } from './_components/AnnouncementRow'
 
 export const metadata: Metadata = { title: 'Novedades' }
@@ -127,7 +127,7 @@ export default async function AnnouncementsPage({ params }: Props) {
 
                 <section className="grid gap-5 xl:grid-cols-[440px_1fr]">
                     <div className="space-y-5">
-                        <CreateAnnouncementForm orgSlug={slug} audienceCount={activeClients.length} />
+                        <AnnouncementComposerSheet orgSlug={slug} audienceCount={activeClients.length} />
 
                         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                             <div className="flex items-center gap-2">

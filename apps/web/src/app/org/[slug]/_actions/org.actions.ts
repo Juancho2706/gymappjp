@@ -1063,3 +1063,64 @@ export async function createOrgWorkoutTemplateAction(
     revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true, templateId: data.id }
 }
+
+/**
+ * Copies an org workout template to a coach's personal library.
+ * Coach can then edit it in their builder and assign to clients.
+ * Guards: owner/admin only. Template must be org-owned (coach_id = null).
+ */
+export async function assignOrgWorkoutTemplateToCoachAction(
+    orgSlug: string,
+    templateId: string,
+    coachId: string,
+): Promise<{ success?: boolean; error?: string }> {
+    const context = await resolveOrgAdminContext(orgSlug, ['org_owner', 'org_admin'])
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const [templateRes, memberRes] = await Promise.all([
+        admin.from('workout_programs')
+            .select('id, name, program_phases, weeks_to_repeat, program_notes')
+            .eq('id', templateId)
+            .eq('org_id', org.id)
+            .is('coach_id', null)
+            .maybeSingle(),
+        admin.from('organization_members')
+            .select('id, coach_id')
+            .eq('org_id', org.id)
+            .eq('coach_id', coachId)
+            .eq('status', 'active')
+            .is('deleted_at', null)
+            .maybeSingle(),
+    ])
+
+    if (!templateRes.data) return { error: 'Template no encontrado o no es un template de organización' }
+    if (!memberRes.data) return { error: 'Coach no pertenece a esta organización o no está activo' }
+
+    const t = templateRes.data
+    const { error } = await admin.from('workout_programs').insert({
+        org_id: org.id,
+        coach_id: coachId,
+        name: t.name,
+        program_phases: t.program_phases,
+        weeks_to_repeat: t.weeks_to_repeat,
+        program_notes: t.program_notes,
+        is_active: false,
+        source_template_id: t.id,
+    })
+    if (error) return { error: error.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'workout_template.assigned_to_coach',
+        targetType: 'workout_program',
+        targetId: templateId,
+        metadata: { template_name: t.name, coach_id: coachId },
+    })
+
+    revalidatePath(`/org/${orgSlug}/programs`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true }
+}
