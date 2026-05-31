@@ -32,6 +32,11 @@ const EXERCISES = {
   soloScoped:    '00000000-0000-0000-0007-000000000003', // standalone coach_solo (coach_id=solo, org_id=null)
 }
 
+const CHECKINS = {
+  orgA:       '00000000-0000-0000-0009-000000000001', // client ca1 (org_a / coach_a1)
+  standalone: '00000000-0000-0000-0009-000000000002', // client cs1 (standalone / coach_solo)
+}
+
 const USERS = {
   ownerA:     'coach-owner-a@eva-test.cl',
   coachA1:    'coach-member-a1@eva-test.cl',
@@ -39,6 +44,8 @@ const USERS = {
   coachB1:    'coach-member-b1@eva-test.cl',
   coachBoth:  'coach-both@eva-test.cl',
   standalone: 'coach-solo@eva-test.cl',
+  clientA1:   'client-a1@eva-test.cl',  // alumno org_a, coach_a1
+  clientSolo: 'client-solo1@eva-test.cl', // alumno standalone, coach_solo
 }
 
 function makeClient() {
@@ -363,5 +370,62 @@ test.describe('Workspace preferences isolation', () => {
     const uniqueUsers = [...new Set((data ?? []).map(r => r.user_id))]
     // All returned rows must be own user_id (RLS enforced)
     expect(uniqueUsers.length).toBeLessThanOrEqual(1)
+  })
+})
+
+// ============================================================
+// GRUPO 8 — check_ins isolation (datos de salud sensibles)
+// Regresión del leak: policy "Enable read access for authenticated users"
+// (qual=true) permitía a cualquier autenticado leer TODOS los check-ins.
+// Fix: migración 20260530170000_fix_checkins_rls_leak.sql
+// ============================================================
+
+test.describe('Check-ins isolation (health data)', () => {
+  test('alumno NO ve check-ins de otro alumno', async () => {
+    const sb = await signIn(USERS.clientSolo)
+    // clientSolo intenta leer el check-in de ca1 (org_a) — debe dar 0 filas
+    const { data } = await sb
+      .from('check_ins')
+      .select('id, weight, notes')
+      .eq('id', CHECKINS.orgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('alumno SÍ ve sus propios check-ins', async () => {
+    const sb = await signIn(USERS.clientSolo)
+    const { data } = await sb
+      .from('check_ins')
+      .select('id')
+      .eq('id', CHECKINS.standalone)
+    expect(data ?? []).toHaveLength(1)
+  })
+
+  test('coach NO ve check-ins de alumnos de otro coach', async () => {
+    const sb = await signIn(USERS.standalone) // coach_solo
+    // coach_solo intenta leer check-in de ca1 (alumno de coach_a1) — 0 filas
+    const { data } = await sb
+      .from('check_ins')
+      .select('id')
+      .eq('id', CHECKINS.orgA)
+    expect(data ?? []).toHaveLength(0)
+  })
+
+  test('coach SÍ ve check-ins de sus propios alumnos', async () => {
+    const sb = await signIn(USERS.standalone) // coach_solo, dueño de cs1
+    const { data } = await sb
+      .from('check_ins')
+      .select('id')
+      .eq('id', CHECKINS.standalone)
+    expect(data ?? []).toHaveLength(1)
+  })
+
+  test('regresión leak: ningún coach puede leer TODOS los check-ins', async () => {
+    const sb = await signIn(USERS.coachB1)
+    // coach_b1 no es dueño de ca1 ni cs1 → no debe ver ninguno de los 2 seed check-ins
+    const { data } = await sb
+      .from('check_ins')
+      .select('id')
+      .in('id', [CHECKINS.orgA, CHECKINS.standalone])
+    expect(data ?? []).toHaveLength(0)
   })
 })

@@ -167,6 +167,17 @@ BEGIN
   -- organization_invites removed — superseded by direct organization_members creation
 
   -- ============================================================
+  -- 7b. Check-ins (RLS isolation fixtures — sensitive health data)
+  -- ca1 = org_a/coach_a1; cs1 = standalone coach_solo.
+  -- Used to assert no cross-client/cross-coach leak of weight/photos/notes.
+  -- ============================================================
+  INSERT INTO check_ins (id, client_id, date, weight, energy_level, notes)
+  VALUES
+    ('00000000-0000-0000-0009-000000000001', ca1, current_date, 80.5, 4, 'Org A check-in privado'),
+    ('00000000-0000-0000-0009-000000000002', cs1, current_date, 72.0, 5, 'Standalone check-in privado')
+  ON CONFLICT (id) DO NOTHING;
+
+  -- ============================================================
   -- 8. Nutrition plan for client-a1 (E2E fixtures)
   -- ============================================================
   INSERT INTO nutrition_plans (id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g, is_active)
