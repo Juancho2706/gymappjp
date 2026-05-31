@@ -28,6 +28,15 @@ Flujo enterprise:  empresa (org) → coach_enterprise → alumno_enterprise
 
 Plan principal: `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md`
 
+### Ordenes persistentes del owner
+
+- Continuar Plan C sin tocar deploy/prod: NO `supabase db push`, NO merge a `master`, NO tareas de despliegue salvo pedido explicito.
+- Priorizar el siguiente pendiente ejecutable no-deploy, con cambios pequenos y verificables.
+- Si se agregan ideas, investigacion, decisiones o pendientes nuevos, registrarlos tambien en `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md`.
+- Cada cosa hecha debe quedar reflejada en este handoff.
+- Preferir soluciones sin costo: usar stack existente, Supabase local, Playwright/Vitest ya instalados, CSS/React propio; no agregar servicios pagos.
+- Si se trabaja UI/UX o una feature existente y conviene actualizar criterio 2026, se puede investigar en internet, pero aterrizarlo en decisiones sin costo.
+
 ### Completado recientemente (no repetir)
 
 | Commit | Qué |
@@ -47,22 +56,67 @@ Plan principal: `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md`
 | `9eba46a` | MFA enforcement org_admin |
 | `782e673` | Org health score fórmula real (adherencia 40%+asignación 25%+activos 20%+programas 15%) |
 | `fb87cbd` | Workspace switcher in-app |
+| `uncommitted 2026-05-31` | Assignments activity timeline desde `coach_client_assignments`; `_data -> repository -> Supabase`; typecheck passing |
+| `uncommitted 2026-05-31` | Dashboard mobile compacto: 3 KPIs, acciones prioritarias y links de detalle en `<md`; typecheck passing |
+| `uncommitted 2026-05-31` | Browser test coach suspendido: bloquea `/org/[slug]`, conserva `/coach/dashboard`; targeted Playwright passing |
+| `uncommitted 2026-05-31` | Safe-area pass enterprise fixed overlays/bars: `pl-safe pr-safe`; typecheck passing |
+| `uncommitted 2026-05-31` | Nutrition template usage: active clients/logs/adherence 7d via `nutrition_plans` + `daily_nutrition_logs`; typecheck passing |
+| `uncommitted 2026-05-31` | Payments due dates + dashboard alerts: `payment_date + period_months`, excluye becados/pausados; typecheck passing |
+| `uncommitted 2026-05-31` | Enterprise mobile visual audit: 12 menus en 390x844/430x932 + screenshots; Playwright passing |
+| `uncommitted 2026-05-31` | Payments mobile bottom sheet: `PaymentRecordSheet` reemplaza `<details>` en `<md`; typecheck + Playwright passing |
+| `uncommitted 2026-05-31` | Assignments mobile cards/sheet: `CoachAssignmentsMobile` con cards por coach y sheet de alumnos; typecheck + Playwright passing |
+| `uncommitted 2026-05-31` | Export cross-tenant negative tests: audit/payments/reports org A vs org B; Playwright passing |
+| `uncommitted 2026-05-31` | Workspace revocation stale cache tests: stale enterprise preference no autoriza coach suspendido; Playwright passing |
+| `uncommitted 2026-05-31` | E2E happy path enterprise verificado: auth user + alumno temporal -> asignacion -> pago mobile sheet -> exports -> cleanup; Playwright passing |
+| `uncommitted 2026-05-31` | Storage cross-tenant test: owner A no puede escribir/listar `org-assets` de Org B; Playwright passing |
+| `uncommitted 2026-05-31` | Recharts dashboard warning mitigation: `DashboardCharts` usa `minWidth/minHeight/initialDimension` y wrapper con min size; typecheck passing |
+| `uncommitted 2026-05-31` | Next scroll behavior warning mitigado: root `<html>` usa `data-scroll-behavior="smooth"`; warning no reaparece en Playwright |
+| `uncommitted 2026-05-31` | Plan ejecutable multi-contexto alumno/auth: `clients.client_auth_id`, fases local-only, doble lectura/escritura, selector y rollback documentados |
+| `uncommitted 2026-05-31` | Hydration warning caret-color resuelto en mobile visual audit: screenshots usan `caret: 'initial'`; Playwright passing |
+| `uncommitted 2026-05-31` | Next 16 proxy migration: `src/middleware.ts` -> `src/proxy.ts`, export `proxy(request)`; route guard Playwright passing |
+| `uncommitted 2026-05-31` | Sentry deprecated options fixed: `webpack.treeshake.removeDebugLogging`, `webpack.automaticVercelMonitors`, router transition hook exported; warnings gone in Playwright |
+| `uncommitted 2026-05-31` | Student `/c` QA cleanup: `HabitsTracker` evita `button` anidado, `NutritionShell` evita mismatch online/offline SSR, charts de peso miden ancho con `ResizeObserver`, logos fijan dimensiones; nutrition smoke passing |
 
 ### Pendiente ejecutable ahora (en orden de impacto)
 
-1. **`[ ]` Revisar cada menú en 390x844 y 430x932** — validar que el bottom nav y subnav chips se ven bien en los viewports más comunes. Playwright screenshot por página.
+1. **`[x]` Revisar cada menú en 390x844 y 430x932** — Completado 2026-05-31 con `tests/enterprise/mobile-visual-audit.spec.ts`. Recorre 12 menus enterprise, valida bottom nav visible, sin overflow horizontal y genera screenshots por viewport en `test-results/`.
 
-2. **`[ ]` Payments: filtros pagado/pendiente/vencido + vencimientos + export CSV auditado** — `/org/[slug]/payments` tiene registro de pagos pero faltan filtros por URL searchParams (igual a como se hizo en `/audit`). El export ya existe en `/payments/export/route.ts` pero falta UI.
+2. **`[x]` Payments: filtros, export CSV, vencimientos y alertas dashboard** — Verificado/completado 2026-05-31. `/org/[slug]/payments` usa `searchParams.status`, UI de export hacia `/payments/export?status=...`, calcula proximo pago como `payment_date + period_months`, excluye `scholarship/paused` de vencimientos y muestra vencidos/proximos 7d. `/org/[slug]` agrega pagos al `riskCount` y a la action queue.
 
-3. **`[ ]` Assignments: historial de reasignaciones por alumno/coach** — agregar query que muestre últimas N reasignaciones de un coach o alumno desde `coach_client_assignments` con `assigned_at/assigned_by`.
+3. **`[x]` Assignments: actividad reciente de asignaciones por alumno/coach** — Completado 2026-05-31. `/org/[slug]/assignments` muestra ultimos registros desde `coach_client_assignments` con `assigned_at/assigned_by`, alumno, coach y link a Audit Log filtrado. Nota tecnica: la tabla hace upsert por `org_id + client_id`, asi que no es historial append-only real; queda pendiente decidir si el historial canonico vive en `org_audit_logs` o en nueva tabla append-only.
 
-4. **`[ ]` Dashboard mobile: resumen ejecutivo compacto** — en mobile 390px el dashboard muestra demasiadas secciones. Crear vista compacta: 3 KPIs top + action queue + link a detalles.
+4. **`[x]` Dashboard mobile: resumen ejecutivo compacto** — Completado 2026-05-31. En `<md`, `/org/[slug]` muestra 3 KPIs top, action queue priorizada y links a detalles; las secciones densas quedan desde `md` para reducir ruido en 390px.
 
-5. **`[ ]` Test: coach revocado no entra enterprise pero mantiene standalone** — agregar a `tests/enterprise/rls-isolation.spec.ts` un test que intenta acceder a `/org/[slug]` como `coach_susp` y verifica redirect, luego accede a `/coach/dashboard` y verifica que puede. Requiere Playwright con browser.
+5. **`[x]` Test: coach revocado no entra enterprise pero mantiene standalone** — Completado 2026-05-31 en `tests/enterprise/journey-e2e.spec.ts` porque requiere navegador. Verifica login de `coach-suspended@eva-test.cl`, redirect/bloqueo al visitar `/org/${ORG_B_SLUG}` y acceso conservado a `/coach/dashboard`. Verificado con `npx playwright test tests/enterprise/journey-e2e.spec.ts -g "coach suspendido" --workers=1`.
 
-6. **`[ ]` Nutrición: tracking de uso por template** — en `/org/[slug]/nutrition`, agregar stats: cuántos clientes tienen activo cada template, adherencia de alumnos con ese template. Query desde `nutrition_plans` + `daily_nutrition_logs`.
 
-7. **`[ ]` Validar pb-safe/pt-safe/min-h-dvh** — revisar que el layout enterprise no usa `h-screen`/`100vh`, usa `dvh`. El nuevo bottom nav ya tiene `pb-safe`.
+6. **`[x]` Nutricion usage implementado** — Completado 2026-05-31. `/org/[slug]/nutrition` muestra templates en uso, alumnos activos por template, logs 7d y adherencia 7d. Query nueva en repository/cache usa `nutrition_plans` + `daily_nutrition_logs`. Nota tecnica: como no existe `org_template_id` persistido cuando el coach usa un template org, el MVP matchea por nombre + macros; queda pendiente vinculo canonico o breakdown por coach.
+
+7. **`[x]` Validar pb-safe/pt-safe/min-h-dvh** — Completado 2026-05-31. Audit por `rg`: no hay `h-screen`, `min-h-screen`, `100vh` ni `overflow-x-hidden` en `/org/[slug]`; layout usa `min-h-dvh`. Se agrego `pl-safe pr-safe` a overlays/barras fixed enterprise (`CoachQRButton`, nutrition template modal, import modal, clients bulk bar/modal/toast, remove coach dialog, revoke staff dialog, bottom nav).
+
+8. **`[x]` Payments mobile sheet** — Completado 2026-05-31. `PaymentRecordSheet` abre bottom sheet en `<md`, usa server action existente `recordEnterpriseClientPaymentAction`, muestra errores inline y deja el formulario inline solo en `md+`.
+
+9. **`[x]` `/assignments` mobile cards + sheet de alumnos** — Completado 2026-05-31. `CoachAssignmentsMobile` muestra cards por coach en `<md`, abre bottom sheet con alumnos asignados y permite reasignar desde el sheet usando `ReassignClientSelect`. Desktop conserva la grilla actual desde `md+`.
+
+11. **`[x]` Negative tests exports cross-tenant** — Completado 2026-05-31. `tests/enterprise/export-cross-tenant.spec.ts` valida que owner A exporta audit/payments/reports de org A y que slug swap hacia org B no entrega CSV ni attachment. Usa `maxRedirects: 0` porque middleware puede redirigir antes del handler.
+
+12. **`[x]` Workspace revocado por cache/session** — Completado 2026-05-31. `tests/enterprise/workspace-revocation-cache.spec.ts` fuerza `workspace_preferences` stale hacia Org B para `coach-suspended`, valida que `/api/mobile/coach/dashboard` resuelve `coach_standalone` con `orgId=null`, y que `/org/box-test-sur` no queda accesible.
+
+13. **Nota QA** — El spec cross-tenant puede imprimir `ECONNRESET` en dev server al abortar redirects con `maxRedirects: 0`; el test pasa y el objetivo es confirmar que no hay CSV/attachment cross-tenant.
+
+14. **`[x]` E2E happy path enterprise** — Completado 2026-05-31 en `tests/enterprise/happy-path-enterprise.spec.ts`. Flujo no destructivo: crea auth user + alumno temporal Org A, login owner, visita dashboard, asigna a coach A1, registra pago via `PaymentRecordSheet`, valida exports payments/reports y limpia `client_payments`, `coach_client_assignments`, audit logs relacionados, `clients` y auth user. Verificado con `npx playwright test tests/enterprise/happy-path-enterprise.spec.ts --workers=1`. Nota tecnica: `clients.id` tiene FK a `auth.users.id`; el test debe crear auth user primero. Se cambio validacion enterprise de asignacion/pagos a `z.guid()` para aceptar IDs deterministas del seed local.
+
+15. **`[x]` Storage cross-tenant** — Completado 2026-05-31 en `tests/enterprise/storage-cross-tenant.spec.ts`. Owner A puede escribir `org-assets/orgs/{ORG_A_ID}` y no puede escribir/listar `org-assets/orgs/{ORG_B_ID}`. Inventario local: buckets `checkins`, `exercise-media`, `logos`, `org-assets`; 16 policies en `storage.objects`. Nota nueva: `checkins` esta `public=true`; aunque RLS bloquea list/select por path, fotos sensibles deberian migrar a bucket privado + signed URLs antes de vender salud/progreso enterprise avanzado.
+
+16. **`[x]` Nota QA Recharts + scroll behavior** — Recharts mitigado en `apps/web/src/components/coach/dashboard/DashboardCharts.tsx` con min size e `initialDimension`; Next warning `missing-data-scroll-behavior` mitigado en `apps/web/src/app/layout.tsx` con `data-scroll-behavior="smooth"`. `npm run typecheck` pasa.
+
+17. **`[x]` Plan multi-contexto alumno/auth** — Completado 2026-05-31 en `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md` P1.5. Decision: mantener `clients` como perfil operativo y agregar futuro `clients.client_auth_id`; fases: SPEC/PLAN/TASKS, migracion aditiva local, doble lectura/escritura, selector contexto alumno, corte de FK vieja y rollback/testing. No se ejecuto SQL.
+
+10. **`[x]` Deuda hydration Playwright mobile** — Resuelta 2026-05-31. Causa: `page.screenshot()` ocultaba carets por defecto y mutaba inputs con `style={{caret-color:"transparent"}}`; `tests/enterprise/mobile-visual-audit.spec.ts` usa `caret: 'initial'`. Verificado con `npx playwright test tests/enterprise/mobile-visual-audit.spec.ts --workers=1` (4/4 passing, sin mismatch caret-color).
+
+18. **`[x]` Next 16 proxy + Sentry warnings** — Completado 2026-05-31. `apps/web/src/middleware.ts` fue renombrado a `apps/web/src/proxy.ts`, con `export async function proxy(request)`. Sentry usa opciones nuevas en `apps/web/next.config.ts` y `apps/web/instrumentation-client.ts` exporta `onRouterTransitionStart`. Verificado con `npm run typecheck`, `npx playwright test tests/enterprise/storage-cross-tenant.spec.ts --workers=1` y `npx playwright test tests/enterprise/journey-e2e.spec.ts -g "coach suspendido" --workers=1`. Nota: primer run del test de browser timed out por compilacion inicial; reintento con servidor caliente paso. Puede aparecer `ECONNRESET` al abortar navegaciones/redirections en dev, no fallo de test.
+
+19. **`[x]` Student `/c` warnings QA** — Completado 2026-05-31. `HabitsTracker` ya no renderiza `button` dentro de `button`; `InfoTooltip` corta propagacion de click; `NutritionShell` inicializa online como SSR-safe y lee `navigator.onLine` post-mount; `WeightSparkline`/`WeightProgressChart` reemplazan `ResponsiveContainer` por medicion con `ResizeObserver`; `EvaRouteLoader`, `InstallPrompt` y transicion del builder fijan dimensiones de logo. Verificado con `npm run typecheck` y `npx playwright test tests/nutrition-student-smoke.spec.ts --workers=1` (2/2 passing, sin warnings de hydration/Recharts/image). Nota: sigue apareciendo `ECONNRESET` al abortar requests durante navegacion/offline en dev, sin fallo de test.
 
 ---
 

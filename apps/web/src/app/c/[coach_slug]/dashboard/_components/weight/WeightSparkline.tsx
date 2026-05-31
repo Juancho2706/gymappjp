@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
-import { Area, AreaChart, ResponsiveContainer } from 'recharts'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Area, AreaChart } from 'recharts'
 
 interface Point {
     iso: string
@@ -10,12 +10,24 @@ interface Point {
 
 export function WeightSparkline({ data }: { data: Point[] }) {
     const chartData = useMemo(() => data.map((d) => ({ ...d, w: d.weight })), [data])
+    const chartRef = useRef<HTMLDivElement>(null)
+    const [chartWidth, setChartWidth] = useState(0)
+
+    useEffect(() => {
+        if (!chartRef.current) return
+        const updateWidth = () => setChartWidth(Math.max(0, Math.floor(chartRef.current?.clientWidth ?? 0)))
+        updateWidth()
+        const observer = new ResizeObserver(updateWidth)
+        observer.observe(chartRef.current)
+        return () => observer.disconnect()
+    }, [])
+
     if (chartData.length === 0) return null
 
     return (
-        <div className="mt-3 h-[72px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+        <div ref={chartRef} className="mt-3 h-[72px] w-full min-w-px">
+            {chartWidth > 0 && (
+                <AreaChart width={chartWidth} height={72} data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                     <defs>
                         <linearGradient id="wGradDash" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="var(--theme-primary)" stopOpacity={0.25} />
@@ -24,7 +36,7 @@ export function WeightSparkline({ data }: { data: Point[] }) {
                     </defs>
                     <Area type="monotone" dataKey="w" stroke="var(--theme-primary)" strokeWidth={2} fill="url(#wGradDash)" dot={false} isAnimationActive />
                 </AreaChart>
-            </ResponsiveContainer>
+            )}
         </div>
     )
 }

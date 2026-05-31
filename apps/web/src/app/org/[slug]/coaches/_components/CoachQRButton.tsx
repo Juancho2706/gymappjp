@@ -33,7 +33,7 @@ export function CoachQRButton({ inviteCode, coachName, siteUrl }: Props) {
             </button>
 
             {open && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setOpen(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 pl-safe pr-safe" onClick={() => setOpen(false)}>
                     <div
                         className="w-full max-w-xs rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl flex flex-col items-center gap-4"
                         onClick={e => e.stopPropagation()}

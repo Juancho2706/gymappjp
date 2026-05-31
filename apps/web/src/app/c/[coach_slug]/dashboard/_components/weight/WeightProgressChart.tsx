@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { useState, useEffect, useRef } from 'react'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { TrendingUp, Scale, Plus } from 'lucide-react'
 import Link from 'next/link'
@@ -19,9 +19,20 @@ interface Props {
 
 export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug }: Props) {
     const [mounted, setMounted] = useState(false)
+    const chartRef = useRef<HTMLDivElement>(null)
+    const [chartWidth, setChartWidth] = useState(0)
 
     useEffect(() => {
         setMounted(true)
+    }, [])
+
+    useEffect(() => {
+        if (!chartRef.current) return
+        const updateWidth = () => setChartWidth(Math.max(0, Math.floor(chartRef.current?.clientWidth ?? 0)))
+        updateWidth()
+        const observer = new ResizeObserver(updateWidth)
+        observer.observe(chartRef.current)
+        return () => observer.disconnect()
     }, [])
 
     if (!mounted) {
@@ -86,9 +97,14 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                 </CardTitle>
             </CardHeader>
             <CardContent className="p-0 sm:p-6 sm:pt-0">
-                <div className="h-64 w-full pr-4 pb-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <div ref={chartRef} className="h-64 w-full min-w-px pr-4 pb-2">
+                    {chartWidth > 0 && (
+                        <AreaChart
+                            width={chartWidth}
+                            height={256}
+                            data={formattedData}
+                            margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                        >
                             <defs>
                                 <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor={primaryColor} stopOpacity={0.3} />
@@ -129,7 +145,7 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                                 fill="url(#colorWeight)"
                             />
                         </AreaChart>
-                    </ResponsiveContainer>
+                    )}
                 </div>
             </CardContent>
         </Card>

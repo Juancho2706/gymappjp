@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useTransition, useEffect } from 'react'
+import type { KeyboardEvent } from 'react'
 import { Droplets, Footprints, Moon, Timer, Pill, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -137,20 +138,31 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
   const hasSupplements = supplements.length > 0
   const filled = [waterMl, steps, sleepHours, fastingHours, hasSupplements || null].filter((v) => v != null).length
   const total = 5
+  const toggleOpen = () => setOpen((v) => !v)
+
+  const handleHeaderKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      toggleOpen()
+    }
+  }
 
   return (
     <div className={cn(
       'rounded-2xl border transition-colors',
       filled > 0 ? 'border-sky-500/20 bg-sky-500/[0.03]' : 'border-border bg-card'
     )}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={toggleOpen}
+        onKeyDown={handleHeaderKeyDown}
         className="flex w-full items-center gap-3 px-4 py-3 select-none"
       >
         <Droplets className={cn('h-4 w-4 shrink-0', filled > 0 ? 'text-sky-500' : 'text-muted-foreground/50')} />
         <div className="flex-1 text-left">
-          <p className={cn(
+          <div className={cn(
             'flex flex-wrap items-center gap-1 text-[10px] font-bold uppercase tracking-widest',
             filled > 0 ? 'text-sky-500' : 'text-muted-foreground/60'
           )}>
@@ -160,7 +172,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
               content="Agua, pasos, sueño, ayuno y suplementos sirven de contexto para tu coach. Son orientativos y no reemplazan valoración clínica."
               className="normal-case tracking-normal"
             />
-          </p>
+          </div>
           {filled > 0 && (
             <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
               {[
@@ -181,7 +193,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
             ? <ChevronUp className="h-4 w-4 text-muted-foreground/40" />
             : <ChevronDown className="h-4 w-4 text-muted-foreground/40" />}
         </div>
-      </button>
+      </div>
 
       <AnimatePresence>
         {open && (

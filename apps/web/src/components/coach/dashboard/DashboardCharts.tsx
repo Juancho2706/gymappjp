@@ -56,14 +56,21 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                             </h2>
                         </div>
                     </div>
-                    <div className="p-6 h-[300px] w-full min-w-0 relative">
+                    <div className="relative h-[300px] min-h-[300px] w-full min-w-[1px] overflow-hidden p-6">
                         {areaData.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
                                 <TrendingUp className="w-8 h-8 opacity-20" />
                                 <p className="text-sm">Sin sesiones registradas en los últimos 30 días</p>
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                            <ResponsiveContainer
+                                width="100%"
+                                height="100%"
+                                minWidth={1}
+                                minHeight={1}
+                                initialDimension={{ width: 1, height: 300 }}
+                                debounce={50}
+                            >
                                 <AreaChart data={areaData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="colorSesiones" x1="0" y1="0" x2="0" y2="1">
@@ -135,8 +142,15 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                             </h2>
                         </div>
                     </div>
-                    <div className="p-6 h-[300px] w-full min-w-0 relative">
-                        <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                    <div className="relative h-[300px] min-h-[300px] w-full min-w-[1px] overflow-hidden p-6">
+                        <ResponsiveContainer
+                            width="100%"
+                            height="100%"
+                            minWidth={1}
+                            minHeight={1}
+                            initialDimension={{ width: 1, height: 300 }}
+                            debounce={50}
+                        >
                             <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="opacity-[0.05] dark:opacity-[0.1]" />
                                 <XAxis

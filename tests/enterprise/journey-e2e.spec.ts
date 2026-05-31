@@ -59,6 +59,28 @@ test.describe('Org dashboard', () => {
     // Should redirect away (not org owner/member)
     await expect(page).not.toHaveURL(new RegExp(`/org/${ORG_A_SLUG}$`))
   })
+
+  test('coach suspendido no entra enterprise pero conserva dashboard standalone', async ({ page }) => {
+    await page.goto('/login')
+    const closeCookies = page.getByRole('button', { name: 'Cerrar' })
+    if (await closeCookies.isVisible().catch(() => false)) {
+      await closeCookies.click()
+    }
+    await page.waitForLoadState('networkidle')
+    await page.fill('input[name="email"]', 'coach-suspended@eva-test.cl')
+    await page.fill('input[name="password"]', TEST_PASSWORD)
+    await Promise.all([
+      page.waitForURL('**/coach/dashboard', { timeout: 30_000 }),
+      page.getByRole('button', { name: /Ingresar al Panel/i }).click(),
+    ])
+
+    await page.goto(`/org/${ORG_B_SLUG}`)
+    await expect(page).not.toHaveURL(new RegExp(`/org/${ORG_B_SLUG}$`))
+
+    await page.goto('/coach/dashboard')
+    await expect(page).toHaveURL(/\/coach\/dashboard/)
+    await expect(page.locator('h1, h2').first()).toBeVisible()
+  })
 })
 
 // ============================================================

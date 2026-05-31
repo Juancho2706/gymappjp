@@ -6,15 +6,18 @@ import {
     CheckCircle2,
     ClipboardCheck,
     Gauge,
+    History,
     Layers3,
     Route,
     Sparkles,
+    UserCheck,
     UserPlus,
     Users,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
+import { getOrgAssignmentHistory, getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { AssignmentQuickAssignPanel } from './_components/AssignmentQuickAssignPanel'
 import { BulkAssignPanel } from './_components/BulkAssignPanel'
+import { CoachAssignmentsMobile } from './_components/CoachAssignmentsMobile'
 import { ReassignClientSelect } from './_components/ReassignClientSelect'
 
 export const metadata: Metadata = { title: 'Asignaciones' }
@@ -35,14 +38,23 @@ function capacityTone(load: number) {
     return 'text-emerald-300 bg-emerald-400/10 border-emerald-400/25'
 }
 
+function formatAssignmentDate(value: string | null) {
+    if (!value) return 'Sin fecha'
+    return new Intl.DateTimeFormat('es-CL', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value))
+}
+
 export default async function OrgAssignmentsPage({ params }: Props) {
     const { slug } = await params
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
-    const [clients, members] = await Promise.all([
+    const [clients, members, assignmentHistory] = await Promise.all([
         getOrgClients(org.id),
         getOrgMembers(org.id),
+        getOrgAssignmentHistory(org.id, 12),
     ])
 
     const linkedCoaches = members
@@ -147,6 +159,70 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                     }))}
                     targetClientsPerCoach={TARGET_CLIENTS_PER_COACH}
                 />
+
+                <CoachAssignmentsMobile
+                    orgSlug={slug}
+                    coaches={coachRows}
+                    assignedClients={assignedClients.map((client) => ({
+                        id: client.id,
+                        full_name: client.full_name,
+                        email: client.email,
+                        coach_id: client.coach_id,
+                    }))}
+                    targetClientsPerCoach={TARGET_CLIENTS_PER_COACH}
+                />
+
+                <section className="hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 md:block">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <History className="h-4 w-4 text-sky-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Actividad reciente de asignaciones</h2>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-zinc-500">
+                                Ultimos cambios guardados en `coach_client_assignments`. La tabla actual conserva el ultimo estado por alumno.
+                            </p>
+                        </div>
+                        <a
+                            href={`/org/${slug}/audit?action=client.`}
+                            className="inline-flex min-h-9 items-center justify-center rounded-xl border border-zinc-700 px-3 text-xs font-bold text-zinc-300 transition hover:border-sky-400/50 hover:text-sky-200"
+                        >
+                            Ver audit log
+                        </a>
+                    </div>
+
+                    <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
+                        {assignmentHistory.length > 0 ? (
+                            assignmentHistory.map((item) => (
+                                <div key={item.id} className="grid gap-3 border-b border-zinc-800 bg-zinc-950/50 p-3 last:border-b-0 md:grid-cols-[1fr_1fr_190px] md:items-center">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-400/10 text-xs font-black text-sky-300">
+                                            {initials(item.client_name)}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-semibold text-zinc-100">{item.client_name ?? 'Alumno sin nombre'}</p>
+                                            <p className="truncate text-[11px] text-zinc-500">{item.client_email ?? item.client_id}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <UserCheck className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-bold text-zinc-100">{item.coach_name ?? 'Coach'}</p>
+                                            <p className="truncate text-[11px] text-zinc-500">
+                                                Por {item.assigned_by_name ?? item.assigned_by_role ?? item.assigned_by?.slice(0, 8) ?? 'sistema'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs font-semibold text-zinc-400 md:text-right">
+                                        {formatAssignmentDate(item.assigned_at)}
+                                    </p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-6 text-sm text-zinc-500">No hay asignaciones registradas todavia.</div>
+                        )}
+                    </div>
+                </section>
 
                 <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">

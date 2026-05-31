@@ -94,6 +94,7 @@ export function EvaRouteLoader({
                             width={iconPx}
                             height={iconPx}
                             className="drop-shadow-md"
+                            style={{ width: iconPx, height: iconPx }}
                             priority={false}
                         />
                     </div>

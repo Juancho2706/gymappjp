@@ -41,7 +41,7 @@ export function RevokeStaffButton({ orgSlug, memberId, memberName, memberRole }:
 
             {open && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 pl-safe pr-safe"
                     onClick={e => { if (e.target === e.currentTarget) setOpen(false) }}
                 >
                     <div className="w-full max-w-sm rounded-xl border border-border bg-background shadow-xl p-5 space-y-4">

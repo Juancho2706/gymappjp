@@ -297,7 +297,7 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
 
             {/* Fixed bottom tab bar — 5 primary destinations (thumb zone) */}
             <nav
-                className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-md pb-safe md:hidden"
+                className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-md pl-safe pr-safe pb-safe md:hidden"
                 aria-label="Enterprise primary navigation"
             >
                 <div className="flex items-center justify-around px-1 py-1">

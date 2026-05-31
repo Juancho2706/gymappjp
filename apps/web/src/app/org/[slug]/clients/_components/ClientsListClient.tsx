@@ -223,7 +223,7 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
 
             {/* Floating bulk bar — appears when rows selected */}
             {someSelected && isAdmin && (
-                <div className="fixed bottom-0 inset-x-0 z-40 border-t border-zinc-700 bg-zinc-900/95 backdrop-blur-md px-4 py-3 md:left-72 pb-safe">
+                <div className="fixed bottom-0 inset-x-0 z-40 border-t border-zinc-700 bg-zinc-900/95 backdrop-blur-md px-4 py-3 pl-safe pr-safe md:left-72 pb-safe">
                     <div className="mx-auto flex max-w-4xl items-center gap-3">
                         <span className="text-sm font-bold text-amber-300 shrink-0">
                             {selected.size} seleccionado{selected.size === 1 ? '' : 's'}
@@ -284,7 +284,7 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
             {/* Archive confirm */}
             {confirmArchive && (
                 <div
-                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4"
+                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4 pl-safe pr-safe"
                     onClick={e => { if (e.target === e.currentTarget) setConfirmArchive(false) }}
                 >
                     <div className="w-full max-w-sm rounded-xl border border-zinc-700 bg-zinc-900 p-5 space-y-4">
@@ -312,7 +312,7 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
 
             {/* Toast */}
             {toast && (
-                <div className={`fixed bottom-20 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold shadow-2xl ${
+                <div className={`fixed bottom-20 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl px-4 py-3 pl-safe pr-safe text-sm font-semibold shadow-2xl ${
                     toast.ok ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
                 }`}>
                     {toast.msg}

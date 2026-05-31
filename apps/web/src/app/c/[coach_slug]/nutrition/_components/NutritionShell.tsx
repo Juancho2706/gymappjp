@@ -115,13 +115,12 @@ export function NutritionShell({
     getClientFoodFavoritesForClient(userId).then((ids) => setFavoriteFoodIds(new Set(ids)))
   }, [userId])
 
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  )
+  const [isOnline, setIsOnline] = useState(true)
   useEffect(() => {
     if (typeof window === 'undefined') return
     const on = () => setIsOnline(true)
     const off = () => setIsOnline(false)
+    setIsOnline(navigator.onLine)
     window.addEventListener('online', on)
     window.addEventListener('offline', off)
     return () => {

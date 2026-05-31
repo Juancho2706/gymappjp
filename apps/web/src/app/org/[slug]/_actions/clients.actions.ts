@@ -7,20 +7,20 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 
 const AssignClientSchema = z.object({
-    clientId: z.string().uuid(),
-    coachId: z.string().uuid(),
+    clientId: z.guid(),
+    coachId: z.guid(),
 })
 
 const BulkAssignClientsSchema = z.object({
-    clientIds: z.array(z.string().uuid()).min(1).max(50),
-    coachId: z.string().uuid(),
+    clientIds: z.array(z.guid()).min(1).max(50),
+    coachId: z.guid(),
 })
 
 const AddClientToOrgSchema = z.object({
     full_name: z.string().min(1).max(120),
     email: z.email(),
     phone: z.string().max(30).optional().or(z.literal('')),
-    coach_id: z.string().uuid().optional().or(z.literal('')),
+    coach_id: z.guid().optional().or(z.literal('')),
     age_confirmed: z.literal('on'),
 })
 
@@ -28,7 +28,7 @@ const ImportRowSchema = z.object({
     full_name: z.string().min(1),
     email: z.email(),
     phone: z.string().optional(),
-    coach_id: z.uuid().optional(),
+    coach_id: z.guid().optional(),
 })
 
 export type ImportClientRow = {

@@ -22,7 +22,7 @@ import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
     const host = request.headers.get('host') ?? ''
 

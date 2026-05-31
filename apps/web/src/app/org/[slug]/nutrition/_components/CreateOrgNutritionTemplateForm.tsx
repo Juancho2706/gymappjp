@@ -89,7 +89,7 @@ export function CreateOrgNutritionTemplateForm({ orgSlug }: Props) {
             )}
 
             {open && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center" onClick={() => setOpen(false)}>
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 pl-safe pr-safe sm:items-center" onClick={() => setOpen(false)}>
                     <div className="flex max-h-[90dvh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl" onClick={event => event.stopPropagation()}>
                         <div>
                             <h3 className="text-lg font-black text-white">Nuevo template nutricional</h3>

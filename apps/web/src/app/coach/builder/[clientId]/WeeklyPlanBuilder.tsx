@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -1700,11 +1701,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     aria-hidden="true"
                 >
                     <div className="flex flex-col items-center gap-6 animate-mode-transition-text">
-                        <img
+                        <Image
                             src="/LOGOS/eva-icon.png"
                             alt=""
+                            width={80}
+                            height={80}
                             className="w-20 h-20 object-contain"
-                            style={{ filter: 'brightness(0) invert(1)' }}
+                            style={{ width: 80, height: 80, filter: 'brightness(0) invert(1)' }}
                         />
                         <span className="text-white text-3xl font-display uppercase tracking-[0.3em]">
                             {modeTransitionLabel}

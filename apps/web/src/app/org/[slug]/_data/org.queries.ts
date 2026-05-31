@@ -6,14 +6,16 @@ import {
     findOrgClients,
     findOrgAnnouncements,
     findOrgNutritionTemplates,
+    findOrgNutritionTemplateUsage,
     findOrgAuditLogs,
     findOrgClientPayments,
+    findOrgAssignmentHistory,
     findOrgInvoices,
     getCoachPerformanceData,
     getOrgStats as _getOrgStats,
 } from '@/infrastructure/db/org.repository'
 
-export type { OrgWithMembership, OrgMember, OrgClient, OrgAnnouncement, OrgNutritionTemplate, OrgInvoice, OrgClientPayment, OrgAuditLog, CoachPerformanceData } from '@/infrastructure/db/org.repository'
+export type { OrgWithMembership, OrgMember, OrgClient, OrgAnnouncement, OrgNutritionTemplate, OrgNutritionTemplateUsage, OrgInvoice, OrgClientPayment, OrgAssignmentHistoryItem, OrgAuditLog, CoachPerformanceData } from '@/infrastructure/db/org.repository'
 
 export const getOrgBySlug = cache(async (slug: string) => {
     const supabase = await createClient()
@@ -42,6 +44,14 @@ export const getOrgNutritionTemplates = cache(async (orgId: string) => {
     return findOrgNutritionTemplates(supabase, orgId)
 })
 
+export const getOrgNutritionTemplateUsage = cache(async (
+    orgId: string,
+    templates: import('@/infrastructure/db/org.repository').OrgNutritionTemplate[],
+) => {
+    const supabase = await createClient()
+    return findOrgNutritionTemplateUsage(supabase, orgId, templates)
+})
+
 export const getOrgStats = cache(async (orgId: string) => {
     const supabase = await createClient()
     return _getOrgStats(supabase, orgId)
@@ -55,6 +65,11 @@ export const getOrgInvoices = cache(async (orgId: string) => {
 export const getOrgClientPayments = cache(async (orgId: string) => {
     const supabase = await createClient()
     return findOrgClientPayments(supabase, orgId)
+})
+
+export const getOrgAssignmentHistory = cache(async (orgId: string, limit = 12) => {
+    const supabase = await createClient()
+    return findOrgAssignmentHistory(supabase, orgId, limit)
 })
 
 export const getOrgAuditLogs = cache(async (

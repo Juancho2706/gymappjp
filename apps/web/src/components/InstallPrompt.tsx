@@ -133,7 +133,14 @@ export function InstallPrompt({
               <div className="flex items-center gap-4 mb-6">
                 {logoUrl ? (
                     <div className="w-12 h-12 rounded-2xl overflow-hidden border border-border shrink-0 bg-background">
-                        <Image src={logoUrl} alt={brandName} width={48} height={48} className="object-contain p-1" />
+                        <Image
+                          src={logoUrl}
+                          alt={brandName}
+                          width={48}
+                          height={48}
+                          className="object-contain p-1"
+                          style={{ width: 48, height: 48 }}
+                        />
                     </div>
                 ) : (
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-lg" style={{ backgroundColor: primaryColor }}>
@@ -175,7 +182,14 @@ export function InstallPrompt({
             >
               {logoUrl ? (
                   <div className="w-12 h-12 rounded-2xl overflow-hidden border border-border shrink-0 bg-background">
-                      <Image src={logoUrl} alt={brandName} width={48} height={48} className="object-contain p-1" />
+                      <Image
+                        src={logoUrl}
+                        alt={brandName}
+                        width={48}
+                        height={48}
+                        className="object-contain p-1"
+                        style={{ width: 48, height: 48 }}
+                      />
                   </div>
               ) : (
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-lg" style={{ backgroundColor: primaryColor }}>

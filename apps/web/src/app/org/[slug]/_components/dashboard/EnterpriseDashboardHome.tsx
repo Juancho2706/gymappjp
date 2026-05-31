@@ -31,6 +31,11 @@ interface EnterpriseDashboardHomeProps {
     members: OrgMember[]
     clients: OrgClient[]
     recentActivity?: OrgAuditLog[]
+    paymentAlerts?: {
+        missing: number
+        overdue: number
+        dueSoon: number
+    }
 }
 
 function percentage(value: number, total: number) {
@@ -73,6 +78,7 @@ export function EnterpriseDashboardHome({
     members,
     clients,
     recentActivity = [],
+    paymentAlerts = { missing: 0, overdue: 0, dueSoon: 0 },
 }: EnterpriseDashboardHomeProps) {
     const activeMembers = members.filter((member) => member.status === 'active')
     const pendingMembers = members.filter((member) => member.status === 'invited')
@@ -84,7 +90,8 @@ export function EnterpriseDashboardHome({
     const activeRate = percentage(activeClients, totalClients)
     const seatRate = percentage(totalCoaches, org.seats_included)
     const healthScore = org.last_health_score ?? Math.max(42, Math.min(96, Math.round((activeRate + Math.min(seatRate, 100)) / 2)))
-    const riskCount = unassignedClients.length + inactiveClients.length + pendingMembers.length
+    const paymentRiskCount = paymentAlerts.missing + paymentAlerts.overdue + paymentAlerts.dueSoon
+    const riskCount = unassignedClients.length + inactiveClients.length + pendingMembers.length + paymentRiskCount
 
     const coachLoad = activeMembers
         .filter((member) => member.coach_id)
@@ -115,12 +122,22 @@ export function EnterpriseDashboardHome({
             severity: pendingMembers.length > 0 ? 'amber' : 'ok',
         },
         {
+            label: 'Revisar pagos alumnos',
+            detail: `${paymentAlerts.overdue} vencidos · ${paymentAlerts.dueSoon} por vencer · ${paymentAlerts.missing} sin registro`,
+            href: `/org/${slug}/payments`,
+            severity: paymentAlerts.overdue > 0 ? 'rose' : paymentRiskCount > 0 ? 'amber' : 'ok',
+        },
+        {
             label: 'Configurar white-label enterprise',
             detail: 'Prepara logo, colores y loader para coaches y alumnos',
             href: `/org/${slug}/brand`,
             severity: org.logo_url ? 'ok' : 'amber',
         },
     ]
+    const mobilePriorityActions = actions
+        .filter((action) => action.severity !== 'ok')
+        .slice(0, 3)
+    const visibleMobileActions = mobilePriorityActions.length > 0 ? mobilePriorityActions : actions.slice(0, 2)
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -167,7 +184,69 @@ export function EnterpriseDashboardHome({
                     </div>
                 </section>
 
-                <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 md:hidden">
+                    <div className="grid grid-cols-3 gap-2">
+                        {[
+                            { label: 'Health', value: healthScore },
+                            { label: 'Activos', value: activeClients },
+                            { label: 'Sin coach', value: unassignedClients.length },
+                        ].map((item) => (
+                            <div key={item.label} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-center">
+                                <p className="text-xl font-black text-white">{item.value}</p>
+                                <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">{item.label}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <h2 className="text-sm font-black text-white">Acciones de hoy</h2>
+                            <Link href={`/org/${slug}/reports`} className="text-xs font-bold text-amber-300">
+                                Detalles
+                            </Link>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                            {visibleMobileActions.map((action) => (
+                                <Link
+                                    key={action.label}
+                                    href={action.href}
+                                    className="flex min-h-14 items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+                                >
+                                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                                        action.severity === 'ok' ? 'bg-emerald-400/10 text-emerald-300' :
+                                        action.severity === 'rose' ? 'bg-rose-400/10 text-rose-300' :
+                                        'bg-amber-400/10 text-amber-300'
+                                    }`}>
+                                        {action.severity === 'ok' ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-bold text-zinc-100">{action.label}</span>
+                                        <span className="block truncate text-[11px] text-zinc-500">{action.detail}</span>
+                                    </span>
+                                    <ArrowRight className="h-4 w-4 shrink-0 text-zinc-600" aria-hidden="true" />
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                        {[
+                            ['Coaches', `/org/${slug}/coaches`],
+                            ['Alumnos', `/org/${slug}/clients`],
+                            ['Pagos', `/org/${slug}/payments`],
+                        ].map(([label, href]) => (
+                            <Link
+                                key={label}
+                                href={href}
+                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/60 px-2 text-xs font-bold text-zinc-300"
+                            >
+                                {label}
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+
+                <section className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-4">
                     {[
                         { label: 'Coaches activos', value: totalCoaches, helper: `${org.seats_included} seats incluidos`, icon: Users },
                         { label: 'Alumnos activos', value: activeClients, helper: `${totalClients} en el pool`, icon: UserCheck },
@@ -189,7 +268,7 @@ export function EnterpriseDashboardHome({
                     ))}
                 </section>
 
-                <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
+                <div className="hidden gap-5 md:grid xl:grid-cols-[1fr_380px]">
                     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>
@@ -294,7 +373,7 @@ export function EnterpriseDashboardHome({
                     </aside>
                 </div>
 
-                <section className="grid gap-4 lg:grid-cols-3">
+                <section className="hidden gap-4 md:grid lg:grid-cols-3">
                     {[
                         { title: 'Pagos alumnos', copy: 'Control operacional de pagado, pendiente y vencido sin checkout in-app.', href: `/org/${slug}/payments`, icon: BadgeCheck },
                         { title: 'Reportes', copy: 'Reportes semanales, performance por coach y alumnos en riesgo.', href: `/org/${slug}/reports`, icon: TrendingUp },
@@ -312,7 +391,7 @@ export function EnterpriseDashboardHome({
                     ))}
                 </section>
 
-                <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                <section className="hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 md:block">
                     <div className="flex items-center gap-2">
                         <Dumbbell className="h-4 w-4 text-emerald-300" aria-hidden="true" />
                         <h2 className="text-lg font-black text-white">Student risk radar</h2>
@@ -345,7 +424,7 @@ export function EnterpriseDashboardHome({
 
                 {/* Activity feed */}
                 {recentActivity.length > 0 && (
-                    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                    <section className="hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 md:block">
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                                 <Activity className="h-4 w-4 text-sky-300" aria-hidden="true" />
@@ -378,4 +457,3 @@ export function EnterpriseDashboardHome({
         </div>
     )
 }
-

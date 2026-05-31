@@ -9,7 +9,7 @@ import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.servi
 const PaymentStatusSchema = z.enum(['paid', 'pending', 'overdue', 'scholarship', 'paused'])
 
 const RecordEnterprisePaymentSchema = z.object({
-    client_id: z.uuid(),
+    client_id: z.guid(),
     amount: z.coerce.number().int().min(0).max(99999999),
     payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     status: PaymentStatusSchema,

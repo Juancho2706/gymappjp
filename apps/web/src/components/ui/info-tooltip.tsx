@@ -23,6 +23,7 @@ export function InfoTooltip({ title, content, className, iconClassName }: InfoTo
     <div
       className={cn("inline-flex items-center justify-center", className)}
       onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >

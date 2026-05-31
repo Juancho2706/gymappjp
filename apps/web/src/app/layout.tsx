@@ -99,7 +99,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className={`${inter.variable} ${montserrat.variable} antialiased`} suppressHydrationWarning>
         <PostHogProvider>
           <ThemeScriptSuppressor />

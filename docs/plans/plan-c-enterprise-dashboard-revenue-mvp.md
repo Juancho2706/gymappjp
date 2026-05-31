@@ -1634,8 +1634,73 @@ Reglas de implementacion:
 ### P1.5 Pendiente Antes de P2 Funcional
 - [ ] Documentar flujo coach standalone que se suma a enterprise sin duplicar correo.
 - [ ] Documentar flujo owner/staff que tambien es coach/alumno sin mezclar permisos.
-- [ ] FUTURO DB: modelo multi-contexto de alumno por email. Problema actual: `clients.id = auth.users.id` impide que el mismo correo tenga varios perfiles de alumno en distintas empresas/coaches sin duplicar auth. Propuesta: crear `client_profiles` o mantener `clients` como perfil y agregar `client_auth_id`, migrar login a buscar memberships por `auth.uid()`, y preservar compatibility con filas existentes. No ejecutar antes de cerrar P1.5 porque toca muchas rutas alumno.
+- [x] FUTURO DB: modelo multi-contexto de alumno por email. Plan ejecutable fechado 2026-05-31 documentado abajo. Problema actual: `clients.id = auth.users.id` impide que el mismo correo tenga varios perfiles de alumno en distintas empresas/coaches sin duplicar auth. Decision: mantener `clients` como perfil operativo y agregar `client_auth_id` para identidad; no crear `client_profiles` separado en primera migracion para reducir blast radius.
 - [ ] Plan de migracion local primero, live despues con backup/rollback.
+
+#### Plan ejecutable `clients.id = auth.users.id` / alumno multi-contexto — fechado 2026-05-31
+
+**Problema validado:** el E2E happy path enterprise tuvo que crear primero un `auth.users` temporal porque `clients.id` referencia `auth.users(id)`. Eso impide que el mismo email tenga dos perfiles de alumno, por ejemplo alumno standalone con Coach A y alumno enterprise en Org B.
+
+**Objetivo:** separar identidad global de perfil de alumno sin romper rutas existentes. `auth.users` sigue siendo identidad unica; `clients` pasa a ser perfil/contexto de alumno.
+
+**Modelo destino MVP sin costo extra:**
+
+```text
+auth.users.id = identidad global
+clients.id = perfil alumno/contexto
+clients.client_auth_id = auth.users.id
+clients.org_id = null | org enterprise
+clients.coach_id = coach responsable, nullable solo enterprise sin asignar
+unique(client_auth_id, org_id, coach_id) parcial segun contexto
+```
+
+**Fase 0 — preparacion local, no prod**
+- Crear SPEC/PLAN/TASKS antes de SQL porque toca login alumno, coach clients, mobile APIs y RLS.
+- Inventariar dependencias de `clients.id = auth.uid()` y joins a `auth.users u ON u.id = c.id`.
+- Agregar tests de regresion:
+  - mismo `auth.users.email` con dos perfiles `clients`;
+  - login alumno resuelve selector de contexto;
+  - coach standalone no lee perfil enterprise;
+  - org owner solo ve perfiles de su org.
+
+**Fase 1 — migracion aditiva local**
+- Agregar `clients.client_auth_id uuid references auth.users(id)`.
+- Backfill local: `client_auth_id = id`.
+- Agregar indices:
+  - `(client_auth_id)`;
+  - `(org_id, client_auth_id)`;
+  - `(coach_id, org_id, client_auth_id)`.
+- Mantener FK vieja `clients.id -> auth.users(id)` temporalmente para compatibilidad.
+- Regenerar `database.types.ts`.
+
+**Fase 2 — doble lectura/doble escritura**
+- Nuevos alumnos escriben `client_auth_id = auth user id`.
+- Rutas antiguas siguen usando `clients.id`; rutas de login/alumno empiezan a resolver perfil por `client_auth_id`.
+- `ActiveWorkspace.student_*` debe guardar `clientId` perfil + `userId` identidad.
+- Mobile/RN futuro consume contratos desde `@eva/types`, no asume `clientId === userId`.
+
+**Fase 3 — selector de contexto alumno**
+- Si `clients` por `client_auth_id` devuelve 1 perfil: entrar directo.
+- Si devuelve 2+ perfiles: selector simple por coach/org.
+- Persistir ultimo contexto en `workspace_preferences.last_client_id`.
+- Fallback fail-closed si `last_client_id` ya no pertenece a `client_auth_id`.
+
+**Fase 4 — cortar dependencia vieja**
+- Migrar queries/RLS que comparen `clients.id = auth.uid()` a `clients.client_auth_id = auth.uid()`.
+- Cambiar joins `auth.users u ON u.id = c.id` a `u.id = c.client_auth_id`.
+- Solo cuando tests web/mobile pasen: quitar FK vieja `clients.id -> auth.users(id)` en migracion separada.
+- No renombrar `clients.id`; queda como id de perfil para no romper relaciones existentes (`workout_logs`, `nutrition_plans`, `client_payments`, check-ins).
+
+**Rollback local/live:**
+- Hasta Fase 2: rollback = ignorar `client_auth_id`, conservar `clients.id`.
+- Antes de dropear FK vieja: backup de `clients`, `workspace_preferences`, tablas alumno principales.
+- No hacer live sin runbook, backup y ventana de mantenimiento.
+
+**Criterio done antes de implementar live:**
+- `npm run typecheck`.
+- `npx playwright test tests/enterprise/rls-isolation.spec.ts --workers=1`.
+- Nuevo spec multi-contexto alumno passing.
+- E2E happy path enterprise sigue passing.
 
 #### Riesgos Criticos Standalone vs Enterprise Detectados 2026-05-26
 
@@ -1677,13 +1742,15 @@ Prioridad P2 — completar features (P1.5 desbloqueado):
 - [x] Asignaciones: individual + bulk assign desde `/assignments` con guard y audit. Completado 2026-05-26.
 - [x] Alumnos: bulk actions (assign coach + archive) con checkboxes, floating bar, guards cross-tenant. Completado 2026-05-30.
 - [x] Pagos alumnos: filtros por estado + CSV auditado. Completado 2026-05-26.
+- [x] Pagos alumnos: vencimientos y alertas dashboard. Completado 2026-05-31. Calcula proximo pago como `payment_date + period_months` para alumnos activos, excluye `scholarship/paused`, muestra vencidos/proximos 7d en `/payments` y action queue del dashboard.
 - [x] Reportes: CSV weekly brief con `report.exported` + fail-closed audit. Completado 2026-05-30.
 - [x] Audit: filtros por action category (chips) + date range UI. Completado 2026-05-30 (commit b1ca26a). URL searchParams, client-side prefix match, "Limpiar" link.
 - [x] Brand Studio: draft/published. Completado 2026-05-30 (commit be0e3a2). Columnas brand_draft(jsonb)/brand_published_at en organizations. saveBrandDraftAction (sin impacto live) + discardBrandDraftAction + publishEnterpriseBrandAction (promueve draft → live → coaches). Banner ámbar cuando hay borrador. Fecha última publicación visible.
 - [x] Team: permisos granulares. Completado 2026-05-30 (commit a707d09). 22 OrgPermissions en matriz por rol (ops/analyst/brand_manager habilitados). resolveOrgAdminContext incluye ops. Pages usan orgRoleCan() en vez de hardcode owner/admin. ROLE_MATRIX en Team page actualizada.
 - [x] Admin: flujo seats/plan sin cobro in-app. Completado 2026-05-30 (commit 04542bc). KPIs used/included/available color-coded. mailto: pre-filled. "Plan actual" badge. Sin gateway de pago.
 - [x] Novedades: audience targeting. Completado 2026-05-30 (commit e29d180). Campo audience (all/coaches/clients) en org_announcements. Selector en form. Badge de audiencia en AnnouncementRow. Client dashboard filtra .in('audience',['all','clients']). Sin tocar flujo news_items del coach normal.
-- [ ] Nutricion: tracking de uso por template/coach y filtros por objetivo cuando exista volumen suficiente de datos.
+- [x] Nutricion: tracking de uso por template/alumno. Completado 2026-05-31. `/org/[slug]/nutrition` muestra templates en uso, alumnos activos por template, logs 7d y adherencia 7d usando `nutrition_plans` + `daily_nutrition_logs`.
+- [ ] Nutricion: breakdown por coach y filtros por objetivo cuando exista volumen suficiente de datos.
 
 Prioridad P3 - diferenciadores futuros sin costo externo:
 
@@ -1895,7 +1962,7 @@ Fases futuras:
 - [x] Definir estados canonicos `active`, `invited`, `revoked`, `suspended`. Completado el 2026-05-25 18:27:32 -04:00. Migration local `20260525182500_org_member_revoked_status.sql` permite `revoked` sin cambiar checks activos existentes.
 - [x] Crear action segura para revocar staff/coach enterprise. Completado el 2026-05-29. `revokeStaffAction` en `org.actions.ts`: revoca membership, limpia workspace_preferences, audit `membership.revoked`. Guard: owner no revocable, coach redirige a panel coaches, ya-revocado bloqueado.
 - [x] Agregar UI de revocacion con preview de impacto. Completado el 2026-05-29. `RevokeStaffButton` en `team/_components/`: dialog con lista de consecuencias, error inline, botón solo para non-owner non-revoked staff. Team page actualizado con columna de acción + status coloreado.
-- [ ] Agregar prueba: coach revocado no entra enterprise pero mantiene standalone.
+- [x] Agregar prueba: coach revocado no entra enterprise pero mantiene standalone. Completado 2026-05-31. `tests/enterprise/journey-e2e.spec.ts` cubre browser login con `coach-suspended@eva-test.cl`, bloqueo de `/org/[slug]` y acceso conservado a `/coach/dashboard`.
 
 ##### 2. RLS y Tenant Isolation
 
@@ -2300,10 +2367,10 @@ Estado 2026-05-30: ✅ MAYORMENTE COMPLETADO. Seed tiene org_a/org_b/standalone 
 - [x] Cobertura real usando `client_payments`.
 - [x] Registrar pago externo por alumno.
 - [x] Audit event para registro de pago.
-- Vencimientos.
+- [x] Vencimientos.
 - Filtros pagado/pendiente/vencido.
 - Export CSV.
-- Alertas en dashboard.
+- [x] Alertas en dashboard.
 - [x] Sin cobro in-app.
 
 ### Fase 7 - Reportes y Exports
@@ -2420,7 +2487,8 @@ Pendiente:
   - [x] Hero compression global (13 páginas org): título text-xl sm:text-3xl md:text-5xl; descripción hidden sm:block. Completado el 2026-05-29. Ahorra ~60px en 390px.
   - [x] Rows compactas en mobile: coaches y clients usan flex single-line con stats inline bajo el nombre; columnas separadas solo en lg+/xl+. Completado el 2026-05-29.
 - [x] Rows compactas mobile: assignments + payments. Completado 2026-05-30 (commit 04542bc). Flex single-line con stats inline, stacking eliminado en 390px.
-- [ ] Revisar cada menu en viewport 390x844 y 430x932 antes de considerar listo.
+- [x] Revisar cada menu en viewport 390x844 y 430x932 antes de considerar listo. Completado 2026-05-31 con `tests/enterprise/mobile-visual-audit.spec.ts`: 12 menus enterprise, bottom nav visible, screenshots por viewport y sin overflow horizontal.
+- [x] Resolver warnings de hidratacion detectados en Playwright mobile: inputs aparecen con diff `style={{caret-color:"transparent"}}` en dev/hydration logs. Completado 2026-05-31: causa era Playwright screenshot con caret oculto mutando inputs antes/durante hydration; `tests/enterprise/mobile-visual-audit.spec.ts` ahora usa `caret: 'initial'` en screenshots. Audit mobile 4/4 passing sin ese warning.
 - [ ] Documentar equivalente futuro React Native por pantalla.
 
 ### Shell y navegacion global
@@ -2449,7 +2517,7 @@ Pendiente:
 - [x] Activity feed persistente. Completado 2026-05-30 (commit beaf7a6). Últimos 8 org_audit_logs en dashboard, coloreados por tipo, link a /audit.
 - [x] Action queue con acciones reales. Ya completado: usa unassignedClients.length, inactiveClients.length, pendingMembers.length de datos reales.
 - [x] Health score explicado por componentes. Completado: OrgHealthScoreRefresher muestra adherencia7d/asignados/activos/programas como breakdown al cargar.
-- [ ] Version mobile: resumen ejecutivo compacto + acciones prioritarias.
+- [x] Version mobile: resumen ejecutivo compacto + acciones prioritarias. Completado 2026-05-31. En <md muestra 3 KPIs, acciones prioritarias y accesos a detalles; oculta secciones densas hasta `md`.
 
 ### Operaciones / Alumnos `/clients`
 
@@ -2465,7 +2533,7 @@ Pendiente:
 - [x] Server action guards para alta/import/asignacion de alumnos: org, rol, coach activo de la empresa y audit. Completado el 2026-05-26 19:55:20 -04:00. Verificacion: `npm run typecheck`. Supabase local no estaba levantado, migracion pendiente de aplicar.
 - [x] Server action guards restantes de menus enterprise no auditados aun. Completado el 2026-05-26 20:39:12 -04:00 para anuncios, nutricion, pagos y onboarding. Verificacion: `npm run typecheck`, ESLint focalizado.
 - [x] Export/report guards avanzados para audit CSV: filtros, checksum/export hash y audit metadata. Completado el 2026-05-26 20:39:12 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado.
-- [ ] Pruebas negativas export org A vs org B.
+- [x] Pruebas negativas export org A vs org B. Completado 2026-05-31. `tests/enterprise/export-cross-tenant.spec.ts` valida audit/payments/reports: owner A exporta CSV de org A y slug swap hacia org B no entrega `text/csv` ni `Content-Disposition: attachment` usando `maxRedirects: 0`.
 - [ ] Mejorar mobile: list item compacto y details sheet para editar/asignar.
 - [ ] Resolver futuro modelo multi-contexto alumno por email antes de soportar mismo alumno en varios negocios.
 
@@ -2480,10 +2548,11 @@ Pendiente:
 - [ ] Convertir en cockpit accionable para asignar/reasignar.
 - [x] Cockpit accionable slice 1: asignar alumno sin coach a coach activo de la empresa. Completado el 2026-05-26 21:11:37 -04:00.
 - [x] Bulk assign con preview antes/despues. Completado el 2026-05-26 21:32:49 -04:00. UI responsive: mobile 390px y desktop 1440px verificados con Playwright, sin overflow horizontal.
-- [ ] Historial de reasignaciones por alumno/coach.
+- [x] Actividad reciente de asignaciones por alumno/coach desde `coach_client_assignments`. Completado el 2026-05-31. Agrega query cacheada `_data -> repository -> Supabase`, timeline compacto en `/org/[slug]/assignments` y link a Audit Log filtrado.
+- [ ] Historial append-only real de reasignaciones por alumno/coach. Deuda detectada 2026-05-31: `coach_client_assignments` usa `UNIQUE(org_id, client_id)` y upsert, por lo que conserva solo el ultimo estado. Para historial completo se requiere usar `org_audit_logs` como fuente canonica o crear tabla append-only futura sin costo extra.
 - [ ] Rollback de ultima reasignacion.
 - [ ] Configurar capacidad objetivo por empresa.
-- [ ] Mobile: cards por coach + sheet de alumnos, no grids anchas.
+- [x] Mobile: cards por coach + sheet de alumnos, no grids anchas. Completado 2026-05-31. `CoachAssignmentsMobile` muestra cards de capacidad en `<md`, abre bottom sheet con alumnos del coach y conserva reasignacion desde el sheet; la grilla de capacidad queda solo en `md+`.
 
 ### Operaciones / Pagos alumnos `/payments`
 
@@ -2494,13 +2563,11 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Filtros por pagado/pendiente/vencido/becado/pausado.
-- [x] Filtros por pagado/pendiente/vencido/becado/pausado/sin registro. Completado el 2026-05-26 21:44:53 -04:00. UI responsive verificada en 390px y 1440px.
-- [ ] Vencimientos/proximo pago por alumno.
-- [ ] Export CSV auditado.
-- [x] Export CSV auditado de pagos operacionales. Completado el 2026-05-26 21:44:53 -04:00. Incluye permiso `org.payments.export`, metadata `client_payments.exported`, checksum SHA-256, filtro de status y proteccion basica contra CSV formula injection.
-- [ ] Alertas en dashboard por vencidos/sin registro.
-- [ ] Mobile: mover formulario de `details` a sheet/modal por alumno.
+- [x] Filtros por pagado/pendiente/vencido/becado/pausado/sin registro. Verificado el 2026-05-31. Implementado con URL `searchParams.status` en `/org/[slug]/payments`, siguiendo el patron de filtros por URL de `/org/[slug]/audit`.
+- [x] Vencimientos/proximo pago por alumno. Completado 2026-05-31. Se calcula desde el ultimo `client_payments` por alumno como `payment_date + period_months` y se muestra en rows mobile/desktop + panel lateral de vencimientos.
+- [x] Export CSV auditado de pagos operacionales. Verificado el 2026-05-31. UI llama `/org/[slug]/payments/export?status=...`; endpoint incluye permiso `org.payments.export`, metadata `client_payments.exported`, checksum SHA-256, filtro de status y proteccion basica contra CSV formula injection.
+- [x] Alertas en dashboard por vencidos/sin registro. Completado 2026-05-31. `/org/[slug]` incluye pagos en `riskCount` y agrega accion priorizada hacia `/payments` con vencidos, proximos 7d y sin registro.
+- [x] Mobile: mover formulario de `details` a sheet/modal por alumno. Completado 2026-05-31. `/payments` usa `PaymentRecordSheet` en `<md`, llama server action existente, muestra error inline y mantiene formulario inline en `md+`.
 
 ### Equipo / Coaches `/coaches`
 
@@ -2569,7 +2636,8 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Tracking de uso por template/coach/alumno.
+- [x] Tracking de uso por template/alumno. Completado 2026-05-31. MVP sin migracion: matchea planes activos por nombre + macros contra `org_nutrition_templates`, cuenta alumnos activos y adherencia 7d desde `daily_nutrition_logs`.
+- [ ] Tracking de uso por coach. Requiere agrupar los planes matcheados por `coach_id` y mostrar adopcion por equipo.
 - [ ] Filtros por objetivo cuando exista volumen.
 - [ ] Flujo claro para aplicar template desde enterprise o coach enterprise.
 - [ ] Mobile: editor por steps/tabs, no formulario largo.
@@ -3310,11 +3378,11 @@ SEGURIDAD/BLOQUEANTE (antes de vender o prod):
   - [x] `workout_programs/plans/logs` — scoping OK. Negative tests agregados 2026-05-30 (commit fbec4be). 38/38 passing.
   - [x] `nutrition_plans/meals/meal_logs` — scoping OK. Negative tests agregados 2026-05-30.
   - [x] `client_payments` — scoping OK. Negative test agregado 2026-05-30.
-  - [ ] `storage.objects` — inventario buckets + policies por prefix (ver ítem siguiente).
-- [x] Inventario buckets storage + policies. Completado 2026-05-30. Auditados 4 buckets (checkins, exercise-media, logos, org-assets) — todos scoped por auth.uid() o org_id. Sin fugas. Nota: checkins SELECT bloquea coach de ver fotos de progreso del alumno (mejora futura). (Security)
-- [ ] Negative tests: branding resolver, workspace revocado por cache, exports cross-tenant. (QA)
-- [ ] Test revoke→no-reingreso enterprise, conserva standalone. (QA)
-- [ ] E2E happy path enterprise (Playwright). (QA)
+  - [x] `storage.objects` — inventario buckets + policies por prefix + negative test org-assets. Verificado 2026-05-31 con consulta local a `storage.buckets`/`pg_policies` y `tests/enterprise/storage-cross-tenant.spec.ts`.
+- [x] Inventario buckets storage + policies. Actualizado 2026-05-31. Auditados 4 buckets (checkins, exercise-media, logos, org-assets) y 16 policies en `storage.objects`. `org-assets` bloquea write/list cross-org con RLS (`tests/enterprise/storage-cross-tenant.spec.ts`). Nota nueva: todos los buckets estan `public=true`; esto es aceptable para logos/media publicos, pero `checkins` contiene fotos sensibles y debe migrarse a bucket privado + signed URLs antes de vender salud/progreso como feature enterprise avanzada. (Security)
+- [x] Negative tests: branding resolver, workspace revocado por cache, exports cross-tenant. Completado 2026-05-31. Branding resolver tiene cobertura parcial en `rls-isolation.spec.ts`; exports cross-tenant en `export-cross-tenant.spec.ts`; stale workspace/revoked cache en `workspace-revocation-cache.spec.ts`. (QA)
+- [x] Test revoke/no-reingreso enterprise, conserva standalone. Completado 2026-05-31. Browser test en `tests/enterprise/journey-e2e.spec.ts`; verificado con `npx playwright test tests/enterprise/journey-e2e.spec.ts -g "coach suspendido" --workers=1`. (QA)
+- [x] E2E happy path enterprise (Playwright). Completado 2026-05-31 en `tests/enterprise/happy-path-enterprise.spec.ts`: crea auth user + alumno temporal Org A, login owner, dashboard, asignacion a coach A1, registro de pago via mobile sheet y exports payments/reports; cleanup borra pago, asignacion, audit logs, client y auth user. Verificado con `npx playwright test tests/enterprise/happy-path-enterprise.spec.ts --workers=1`. Ajuste necesario: server actions enterprise de asignacion/pagos validan IDs con `z.guid()` en vez de `z.uuid()` para soportar UUID deterministico del seed local sin bajar seguridad de formato. (QA)
 
 PRODUCTO (flujo usable end-to-end):
 - [x] Workspace switcher persistente in-app. Completado 2026-05-30 (commit fb87cbd). WorkspaceSwitcher en sidebar footer desktop + mobile header. Usa listUserWorkspaces() + selectWorkspaceAction existentes. Solo visible con 2+ workspaces. (Architect/Frontend)
@@ -3322,13 +3390,21 @@ PRODUCTO (flujo usable end-to-end):
 - [x] `bulkAssignSelectedClientsAction` → RPC transaccional. Completado 2026-05-30 (commit b1ca26a). Migración `bulk_assign_selected_clients` atómica: clients + assignments + audit en una transacción. Cross-tenant guard interno. SECURITY DEFINER, solo service_role. (Backend)
 - [x] Eliminar `BulkClientActions.tsx` huérfano; comentario JSX inválido removido. Completado 2026-05-30. (Frontend)
 - [x] Org-level health score para CSM. Completado 2026-05-30 (commit 782e673). Fórmula real: adherencia7d×0.40+asignación×0.25+activos×0.20+programas×0.15. Tiers green≥70/amber≥50/red<50. Persiste en organizations.last_health_score. Dashboard muestra breakdown 4-métrica. Admin /orgs muestra columna Health con color-coding. (Product/CSM)
-- [ ] Plan ejecutable fechado para `clients.id = auth.users.id` (multi-contexto alumno). (Architect)
+- [x] Dashboard mobile: resumen ejecutivo compacto. Completado 2026-05-31. Mobile muestra 3 KPIs top, acciones prioritarias y links a detalles; secciones densas quedan desde `md` para reducir ruido en 390px sin agregar dependencias ni servicios pagos.
+- [x] Plan ejecutable fechado para `clients.id = auth.users.id` (multi-contexto alumno). Completado 2026-05-31 en seccion P1.5: modelo destino con `clients.client_auth_id`, fases local-only, doble lectura/escritura, selector de contexto alumno, corte de FK vieja y criterios de rollback/testing. (Architect)
 
 UX/MOBILE:
-- [ ] `/assignments` y `/payments`: rows compactas + bottom sheets mobile. (UX)
+- [x] `/assignments` y `/payments`: rows compactas + bottom sheets mobile. Completado 2026-05-31. `/payments` usa `PaymentRecordSheet`; `/assignments` usa `CoachAssignmentsMobile` con cards por coach + sheet de alumnos. (UX)
+- [x] Safe-area pass en overlays/barras fixed enterprise. Completado 2026-05-31. No hay `h-screen`/`100vh` en `/org/[slug]`; se agrego `pl-safe pr-safe` a bottom nav, bulk bar/toast y modales/overlays enterprise (`CoachQRButton`, nutrition template, import clients, archive confirm, remove coach, revoke staff).
 - [ ] Migrar modales destructivos a bottom sheets en <md. (UX)
 - [ ] Empty states ilustrados por contexto. (UX)
 - [ ] Pasada contraste AA dark mode enterprise. (UX)
+- [x] Revisar warnings React hydration en Playwright mobile (`caret-color: transparent` en inputs). Completado 2026-05-31. Causa: `page.screenshot()` ocultaba carets por defecto y agregaba inline style a inputs; el audit visual usa `caret: 'initial'`. Verificado con `npx playwright test tests/enterprise/mobile-visual-audit.spec.ts --workers=1` sin mismatch `caret-color`. (QA/UX)
+- [x] Revisar warning Recharts en dashboard durante Playwright: `width(-1) and height(-1) of chart should be greater than 0`. Fix estatico 2026-05-31 en `DashboardCharts`: `ResponsiveContainer` ahora tiene `minWidth`, `minHeight`, `initialDimension` y wrapper con min size. Typecheck pasa; no reaparecio en runs Playwright posteriores. (QA/UX)
+- [x] Warning Next `missing-data-scroll-behavior`. Completado 2026-05-31. Root `<html>` agrega `data-scroll-behavior="smooth"`; warning desaparecio en run posterior de Playwright. (QA/UX)
+- [x] Warning Next 16 `middleware` deprecated -> `proxy`. Completado 2026-05-31 siguiendo docs oficiales Next: `apps/web/src/middleware.ts` fue renombrado a `apps/web/src/proxy.ts` y exporta `proxy(request)`, conservando matcher y comportamiento. Verificado con `npm run typecheck`, storage cross-tenant y browser route guard `coach suspendido`. (QA/Platform)
+- [x] Warnings Sentry deprecated. Completado 2026-05-31. `disableLogger` -> `webpack.treeshake.removeDebugLogging`, `automaticVercelMonitors` -> `webpack.automaticVercelMonitors`, e `instrumentation-client.ts` exporta `onRouterTransitionStart = Sentry.captureRouterTransitionStart`. Warning no reaparece en Playwright. (QA/Platform)
+- [x] Warnings alumno `/c`: hydration, HTML invalido, Recharts e imagen. Completado 2026-05-31. `HabitsTracker` evita `button` anidado con tooltip; `NutritionShell` no usa `navigator.onLine` en el primer render SSR; charts de peso alumno miden ancho via `ResizeObserver` antes de renderizar Recharts; loaders/prompts fijan ancho/alto de logo. Verificado con `npm run typecheck` y `npx playwright test tests/nutrition-student-smoke.spec.ts --workers=1` (2/2 passing). (QA/UX)
 
 VENTAS/LEGAL (al buscar cobrar):
 - [ ] Proof Pack exportable (PDF) + PDF ejecutivo de reportes. (Sales)

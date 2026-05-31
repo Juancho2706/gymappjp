@@ -16,7 +16,7 @@ import {
     Target,
     Users,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgMembers, getOrgNutritionTemplates } from '../_data/org.queries'
+import { getOrgBySlug, getOrgMembers, getOrgNutritionTemplateUsage, getOrgNutritionTemplates } from '../_data/org.queries'
 import { CreateOrgNutritionTemplateForm } from './_components/CreateOrgNutritionTemplateForm'
 import { DeleteOrgNutritionTemplateButton } from './_components/DeleteOrgNutritionTemplateButton'
 
@@ -63,6 +63,8 @@ export default async function OrgNutritionPage({ params }: Props) {
         getOrgNutritionTemplates(org.id),
         getOrgMembers(org.id),
     ])
+    const templateUsage = await getOrgNutritionTemplateUsage(org.id, templates)
+    const usageByTemplate = new Map(templateUsage.map(item => [item.template_id, item]))
 
     const activeCoaches = members.filter(member => member.role === 'coach' && member.status === 'active' && member.coach_id)
     const goalCounts = templates.reduce<Record<string, number>>((acc, template) => {
@@ -73,8 +75,12 @@ export default async function OrgNutritionPage({ params }: Props) {
     const avgCalories = templates.length
         ? Math.round(templates.reduce((sum, template) => sum + (template.daily_calories ?? 0), 0) / Math.max(1, templates.filter(template => template.daily_calories).length || 1))
         : 0
-    const withMacros = templates.filter(template => template.protein_g || template.carbs_g || template.fats_g).length
-    const mealCount = templates.reduce((sum, template) => sum + template.meal_names.length, 0)
+    const templatesInUse = templateUsage.filter(item => item.active_clients > 0).length
+    const activeClientsUsingTemplates = templateUsage.reduce((sum, item) => sum + item.active_clients, 0)
+    const loggedClients7d = templateUsage.reduce((sum, item) => sum + item.logged_clients_7d, 0)
+    const adoptionAdherence = activeClientsUsingTemplates > 0
+        ? Math.round((loggedClients7d / activeClientsUsingTemplates) * 100)
+        : 0
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -117,8 +123,8 @@ export default async function OrgNutritionPage({ params }: Props) {
                             {[
                                 ['Templates', templates.length],
                                 ['Coaches', activeCoaches.length],
-                                ['Con macros', withMacros],
-                                ['Comidas', mealCount],
+                                ['En uso', templatesInUse],
+                                ['Adh. 7d', activeClientsUsingTemplates > 0 ? `${adoptionAdherence}%` : 'N/D'],
                             ].map(([label, value]) => (
                                 <div key={label} className="rounded-xl bg-zinc-900 p-3 text-center">
                                     <p className="text-2xl font-black text-white">{value}</p>
@@ -134,7 +140,7 @@ export default async function OrgNutritionPage({ params }: Props) {
                         [BookOpen, 'Catalogo', templates.length, 'plantillas disponibles'],
                         [Flame, 'Promedio kcal', avgCalories || 'N/D', 'templates con calorias'],
                         [Target, 'Objetivos', Object.keys(goalCounts).length, 'tipos cubiertos'],
-                        [Users, 'Acceso coaches', activeCoaches.length, 'enterprise coaches activos'],
+                        [Users, 'Alumnos usando', activeClientsUsingTemplates, 'match por nombre + macros'],
                     ] as const).map(([Icon, title, value, detail]) => (
                         <div key={title} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
                             <div className="flex items-center justify-between gap-3">
@@ -165,6 +171,26 @@ export default async function OrgNutritionPage({ params }: Props) {
                                 ))}
                             </div>
                         </section>
+
+                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                            <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Uso real</h2>
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-2">
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                                    <p className="text-2xl font-black text-white">{activeClientsUsingTemplates}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">Alumnos activos</p>
+                                </div>
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                                    <p className="text-2xl font-black text-white">{activeClientsUsingTemplates > 0 ? `${adoptionAdherence}%` : 'N/D'}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">Adherencia 7d</p>
+                                </div>
+                            </div>
+                            <p className="mt-3 text-xs leading-5 text-zinc-500">
+                                MVP sin migracion: detecta planes activos que conservan mismo nombre y macros del template org.
+                            </p>
+                        </section>
                     </aside>
 
                     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
@@ -192,7 +218,9 @@ export default async function OrgNutritionPage({ params }: Props) {
                                     <p className="mt-1 text-sm text-zinc-500">Crea bases para deficit, mantenimiento y volumen antes de escalar coaches.</p>
                                 </div>
                             ) : (
-                                templates.map(template => (
+                                templates.map(template => {
+                                    const usage = usageByTemplate.get(template.id)
+                                    return (
                                     <article key={template.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                             <div className="min-w-0 flex-1">
@@ -221,6 +249,21 @@ export default async function OrgNutritionPage({ params }: Props) {
                                                     ))}
                                                 </div>
 
+                                                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
+                                                        <p className="text-xs text-zinc-500">Alumnos activos</p>
+                                                        <p className="mt-1 text-lg font-black text-white">{usage?.active_clients ?? 0}</p>
+                                                    </div>
+                                                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
+                                                        <p className="text-xs text-zinc-500">Logs 7d</p>
+                                                        <p className="mt-1 text-lg font-black text-white">{usage?.logged_clients_7d ?? 0}</p>
+                                                    </div>
+                                                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
+                                                        <p className="text-xs text-zinc-500">Adh. 7d</p>
+                                                        <p className="mt-1 text-lg font-black text-white">{usage && usage.active_clients > 0 ? `${usage.adherence_7d}%` : 'N/D'}</p>
+                                                    </div>
+                                                </div>
+
                                                 <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">{macroSplit(template)}</p>
 
                                                 {template.meal_names.length > 0 && (
@@ -236,7 +279,8 @@ export default async function OrgNutritionPage({ params }: Props) {
                                             <DeleteOrgNutritionTemplateButton orgSlug={slug} templateId={template.id} />
                                         </div>
                                     </article>
-                                ))
+                                    )
+                                })
                             )}
                         </div>
                     </section>

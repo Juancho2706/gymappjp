@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClientPayments, getOrgClients } from '../_data/org.queries'
 import { recordEnterpriseClientPaymentFormAction } from './_actions/payment.actions'
+import { PaymentRecordSheet } from './_components/PaymentRecordSheet'
 
 export const metadata: Metadata = { title: 'Pagos alumnos' }
 
@@ -73,6 +74,22 @@ function formatCLP(amount: number) {
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(amount)
 }
 
+function addMonths(dateValue: string, months: number) {
+    const [year, month, day] = dateValue.split('-').map(Number)
+    const date = new Date(Date.UTC(year, month - 1, day))
+    date.setUTCMonth(date.getUTCMonth() + Math.max(1, months))
+    return date.toISOString().slice(0, 10)
+}
+
+function daysUntil(dateValue: string, todayValue: string) {
+    return Math.ceil((new Date(`${dateValue}T00:00:00Z`).getTime() - new Date(`${todayValue}T00:00:00Z`).getTime()) / 86_400_000)
+}
+
+function formatDate(value: string | null | undefined) {
+    if (!value) return 'Sin fecha'
+    return new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' }).format(new Date(`${value}T00:00:00`))
+}
+
 export default async function OrgPaymentsPage({ params, searchParams }: Props) {
     const { slug } = await params
     const resolvedSearchParams = await searchParams
@@ -96,6 +113,26 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
     const missingPaymentStatus = activeClients.length - trackedPayments
     const coverage = activeClients.length > 0 ? Math.round((trackedPayments / activeClients.length) * 100) : 0
     const today = new Date().toISOString().slice(0, 10)
+    const paymentAlerts = activeClients.map((client) => {
+        const latestPayment = latestPaymentByClient.get(client.id)
+        const isExempt = latestPayment?.status === 'scholarship' || latestPayment?.status === 'paused'
+        const nextDue = latestPayment && !isExempt
+            ? addMonths(latestPayment.payment_date, latestPayment.period_months ?? 1)
+            : null
+        const dueInDays = nextDue ? daysUntil(nextDue, today) : null
+        return { client, latestPayment, nextDue, dueInDays, isExempt }
+    })
+    const overdueAlerts = paymentAlerts.filter((row) => (
+        !row.isExempt &&
+        (row.latestPayment?.status === 'overdue' || (row.dueInDays !== null && row.dueInDays < 0))
+    ))
+    const dueSoonAlerts = paymentAlerts.filter((row) => (
+        !row.isExempt &&
+        row.latestPayment?.status !== 'overdue' &&
+        row.dueInDays !== null &&
+        row.dueInDays >= 0 &&
+        row.dueInDays <= 7
+    ))
     const filteredClients = clients.filter((client) => {
         const latestPayment = latestPaymentByClient.get(client.id)
         if (statusFilter === 'all') return true
@@ -130,8 +167,8 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                             {[
                                 ['Cobertura', `${coverage}%`],
                                 ['Sin registro', missingPaymentStatus],
-                                ['Pausados', inactiveClients.length],
-                                ['Cobro in-app', 'No'],
+                                ['Vencidos', overdueAlerts.length],
+                                ['Prox. 7d', dueSoonAlerts.length],
                             ].map(([label, value]) => (
                                 <div key={label} className="rounded-xl bg-zinc-900 p-3 text-center">
                                     <p className="text-2xl font-black text-white">{value}</p>
@@ -193,6 +230,8 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                                         : latestPayment
                                             ? paymentStateForStatus(latestPayment.status)
                                             : { label: 'Sin registro', tone: 'border-zinc-700 bg-zinc-900 text-zinc-400' }
+                                    const isExempt = latestPayment?.status === 'scholarship' || latestPayment?.status === 'paused'
+                                    const nextDue = latestPayment && !isExempt ? addMonths(latestPayment.payment_date, latestPayment.period_months ?? 1) : null
                                     return (
                                         <div key={client.id} className="border-b border-zinc-800 bg-zinc-950/50 last:border-b-0">
                                             {/* Mobile: compact single-line + expandable form */}
@@ -202,6 +241,11 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                                                 </div>
                                                 <div className="min-w-0 flex-1">
                                                     <p className="truncate text-sm font-semibold text-zinc-100">{client.full_name ?? 'Alumno sin nombre'}</p>
+                                                    {nextDue && (
+                                                        <p className="truncate text-[11px] font-semibold text-sky-300">
+                                                            Prox. vencimiento: {formatDate(nextDue)}
+                                                        </p>
+                                                    )}
                                                     <p className="truncate text-[11px] text-zinc-500">
                                                         {client.assignedCoach?.full_name ?? 'Sin coach'}
                                                         {latestPayment ? ` · ${latestPayment.payment_date}` : ''}
@@ -213,9 +257,27 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                                                     </span>
                                                 </div>
                                             </div>
-                                            <details className="px-3 pb-3 -mt-1">
+                                            <div className="px-3 pb-3 md:hidden">
+                                                <PaymentRecordSheet
+                                                    orgSlug={slug}
+                                                    clientId={client.id}
+                                                    clientName={client.full_name ?? 'Alumno sin nombre'}
+                                                    coachName={client.assignedCoach?.full_name ?? 'Sin coach'}
+                                                    hasCoach={Boolean(client.coach_id)}
+                                                    today={today}
+                                                    nextDueLabel={nextDue ? formatDate(nextDue) : null}
+                                                    latestPayment={latestPayment ? {
+                                                        amount: Math.round(Number(latestPayment.amount)),
+                                                        paymentDate: latestPayment.payment_date,
+                                                        status: latestPayment.status,
+                                                        description: latestPayment.service_description ?? '',
+                                                    } : undefined}
+                                                />
+                                            </div>
+                                            <details className="hidden px-3 pb-3 -mt-1 md:block">
                                                 <summary className="cursor-pointer text-xs font-bold text-sky-300">
                                                     {latestPayment ? `Ultimo: ${formatCLP(Number(latestPayment.amount))}` : 'Registrar pago externo'}
+                                                    {nextDue ? ` · vence ${formatDate(nextDue)}` : ''}
                                                 </summary>
                                                 <form action={recordEnterpriseClientPaymentFormAction.bind(null, slug)} className="mt-3 grid gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 md:grid-cols-[120px_140px_150px_1fr_auto]">
                                                     <input type="hidden" name="client_id" value={client.id} />
@@ -298,6 +360,45 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-red-400/25 bg-red-400/10 p-5">
+                            <div className="flex items-center gap-2">
+                                <CalendarClock className="h-4 w-4 text-red-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Vencimientos</h2>
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-2">
+                                <div className="rounded-xl border border-red-400/20 bg-zinc-950/60 p-3">
+                                    <p className="text-2xl font-black text-white">{overdueAlerts.length}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-red-200/70">Vencidos</p>
+                                </div>
+                                <div className="rounded-xl border border-amber-400/20 bg-zinc-950/60 p-3">
+                                    <p className="text-2xl font-black text-white">{dueSoonAlerts.length}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200/70">Prox. 7d</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 space-y-2">
+                                {[...overdueAlerts, ...dueSoonAlerts].slice(0, 5).map(({ client, nextDue, dueInDays }) => (
+                                    <a
+                                        key={client.id}
+                                        href={`/org/${slug}/clients?q=${encodeURIComponent(client.email ?? client.full_name ?? '')}`}
+                                        className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 transition hover:border-red-400/40"
+                                    >
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-sm font-bold text-zinc-100">{client.full_name ?? 'Alumno'}</span>
+                                            <span className="block text-xs text-zinc-500">{nextDue ? formatDate(nextDue) : 'Sin fecha'}</span>
+                                        </span>
+                                        <span className={dueInDays !== null && dueInDays < 0 ? 'text-xs font-black text-red-300' : 'text-xs font-black text-amber-300'}>
+                                            {dueInDays !== null && dueInDays < 0 ? `${Math.abs(dueInDays)}d atraso` : `${dueInDays ?? 0}d`}
+                                        </span>
+                                    </a>
+                                ))}
+                                {overdueAlerts.length === 0 && dueSoonAlerts.length === 0 && (
+                                    <p className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-sm text-zinc-500">
+                                        Sin vencimientos criticos en los proximos 7 dias.
+                                    </p>
+                                )}
                             </div>
                         </section>
 

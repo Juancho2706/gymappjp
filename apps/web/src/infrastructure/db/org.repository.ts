@@ -86,6 +86,14 @@ export type OrgNutritionTemplate = {
     created_at: string | null
 }
 
+export type OrgNutritionTemplateUsage = {
+    template_id: string
+    active_plans: number
+    active_clients: number
+    logged_clients_7d: number
+    adherence_7d: number
+}
+
 export async function findOrgBySlug(
     db: DB,
     userId: string,
@@ -159,6 +167,72 @@ export async function findOrgNutritionTemplates(db: DB, orgId: string): Promise<
     }))
 }
 
+export async function findOrgNutritionTemplateUsage(
+    db: DB,
+    orgId: string,
+    templates: OrgNutritionTemplate[]
+): Promise<OrgNutritionTemplateUsage[]> {
+    if (templates.length === 0) return []
+
+    const { data: plans } = await db
+        .from('nutrition_plans')
+        .select('id, client_id, name, daily_calories, protein_g, carbs_g, fats_g')
+        .eq('org_id', orgId)
+        .eq('is_active', true)
+
+    const usage = new Map<string, { planIds: Set<string>; clientIds: Set<string> }>()
+    for (const template of templates) {
+        usage.set(template.id, { planIds: new Set(), clientIds: new Set() })
+    }
+
+    for (const plan of plans ?? []) {
+        const matchedTemplate = templates.find((template) => (
+            template.name === plan.name &&
+            (template.daily_calories ?? null) === (plan.daily_calories ?? null) &&
+            (template.protein_g ?? null) === (plan.protein_g ?? null) &&
+            (template.carbs_g ?? null) === (plan.carbs_g ?? null) &&
+            (template.fats_g ?? null) === (plan.fats_g ?? null)
+        ))
+        if (!matchedTemplate) continue
+        const bucket = usage.get(matchedTemplate.id)
+        if (!bucket) continue
+        bucket.planIds.add(plan.id)
+        bucket.clientIds.add(plan.client_id)
+    }
+
+    const allPlanIds = [...new Set([...usage.values()].flatMap((bucket) => [...bucket.planIds]))]
+    const loggedPlanIds = new Map<string, Set<string>>()
+    if (allPlanIds.length > 0) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10)
+        const { data: logs } = await db
+            .from('daily_nutrition_logs')
+            .select('plan_id, client_id')
+            .in('plan_id', allPlanIds)
+            .gte('log_date', sevenDaysAgo)
+
+        for (const log of logs ?? []) {
+            if (!loggedPlanIds.has(log.plan_id)) loggedPlanIds.set(log.plan_id, new Set())
+            loggedPlanIds.get(log.plan_id)!.add(log.client_id)
+        }
+    }
+
+    return templates.map((template) => {
+        const bucket = usage.get(template.id) ?? { planIds: new Set<string>(), clientIds: new Set<string>() }
+        const loggedClients = new Set<string>()
+        for (const planId of bucket.planIds) {
+            for (const clientId of loggedPlanIds.get(planId) ?? []) loggedClients.add(clientId)
+        }
+        const activeClients = bucket.clientIds.size
+        return {
+            template_id: template.id,
+            active_plans: bucket.planIds.size,
+            active_clients: activeClients,
+            logged_clients_7d: loggedClients.size,
+            adherence_7d: activeClients > 0 ? Math.round((loggedClients.size / activeClients) * 100) : 0,
+        }
+    })
+}
+
 export async function findOrgClients(
     db: DB,
     orgId: string,
@@ -217,6 +291,20 @@ export type OrgClientPayment = {
     payment_date: string
     status: string
     created_at: string
+}
+
+export type OrgAssignmentHistoryItem = {
+    id: string
+    client_id: string
+    client_name: string | null
+    client_email: string | null
+    coach_id: string
+    coach_name: string | null
+    coach_slug: string | null
+    assigned_at: string | null
+    assigned_by: string | null
+    assigned_by_role: OrgRole | null
+    assigned_by_name: string | null
 }
 
 export type OrgAuditLog = {
@@ -395,6 +483,71 @@ export async function findOrgClientPayments(db: DB, orgId: string): Promise<OrgC
         .limit(500)
 
     return (data ?? []) as OrgClientPayment[]
+}
+
+export async function findOrgAssignmentHistory(
+    db: DB,
+    orgId: string,
+    limit = 12
+): Promise<OrgAssignmentHistoryItem[]> {
+    const { data: assignments } = await db
+        .from('coach_client_assignments')
+        .select('id, client_id, coach_id, assigned_at, assigned_by')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .order('assigned_at', { ascending: false })
+        .limit(Math.min(Math.max(limit, 1), 50))
+
+    if (!assignments?.length) return []
+
+    const clientIds = [...new Set(assignments.map((assignment) => assignment.client_id).filter(Boolean))]
+    const coachIds = [...new Set(assignments.map((assignment) => assignment.coach_id).filter(Boolean))]
+    const actorIds = [...new Set(assignments.map((assignment) => assignment.assigned_by).filter(Boolean))] as string[]
+
+    const [clientsRes, coachesRes, actorsRes] = await Promise.all([
+        clientIds.length > 0
+            ? db.from('clients').select('id, full_name, email').eq('org_id', orgId).in('id', clientIds)
+            : Promise.resolve({ data: [] }),
+        coachIds.length > 0
+            ? db.from('coaches').select('id, full_name, slug').in('id', coachIds)
+            : Promise.resolve({ data: [] }),
+        actorIds.length > 0
+            ? db
+                .from('organization_members')
+                .select('user_id, role, coach:coaches(full_name)')
+                .eq('org_id', orgId)
+                .in('user_id', actorIds)
+                .is('deleted_at', null)
+            : Promise.resolve({ data: [] }),
+    ])
+
+    const clients = new Map((clientsRes.data ?? []).map((client) => [client.id, client]))
+    const coaches = new Map((coachesRes.data ?? []).map((coach) => [coach.id, coach]))
+    const actors = new Map((actorsRes.data ?? []).map((actor) => [actor.user_id, actor]))
+
+    return assignments.map((assignment) => {
+        const client = clients.get(assignment.client_id)
+        const coach = coaches.get(assignment.coach_id)
+        const actor = assignment.assigned_by ? actors.get(assignment.assigned_by) : null
+        const actorCoach = actor?.coach
+        const actorCoachName = Array.isArray(actorCoach)
+            ? actorCoach[0]?.full_name
+            : actorCoach?.full_name
+
+        return {
+            id: assignment.id,
+            client_id: assignment.client_id,
+            client_name: client?.full_name ?? null,
+            client_email: client?.email ?? null,
+            coach_id: assignment.coach_id,
+            coach_name: coach?.full_name ?? null,
+            coach_slug: coach?.slug ?? null,
+            assigned_at: assignment.assigned_at ?? null,
+            assigned_by: assignment.assigned_by ?? null,
+            assigned_by_role: (actor?.role as OrgRole | undefined) ?? null,
+            assigned_by_name: actorCoachName ?? null,
+        }
+    })
 }
 
 export async function getOrgStats(db: DB, orgId: string) {
