@@ -3380,7 +3380,7 @@ Inputs usados para el bloque `Identity, Workspace y Acceso`:
 
 SEGURIDAD/BLOQUEANTE (antes de vender o prod):
 - [x] Mover `sharp` a dependencies + fail-closed en validateImageDimensions. Completado 2026-05-30 (commit e032a24).
-- [ ] MFA obligatorio para `org_owner`/`org_admin`, enforcement real. (Security)
+- [x] MFA enforcement real para `org_admin`. Completado 2026-05-30 (commit c75d377). Al crear org_admin → `app_metadata.requires_mfa_setup=true`; middleware bloquea acceso hasta enrollar TOTP; clearMfaRequirementAction lo limpia tras verificación; MfaBanner usa listFactors() en tiempo real, no localStorage. Nota: org_owner inicial debe setearse manualmente (no se crea por este form). (Security)
 - [~] Checklist RLS tabla-por-tabla + negative test por tabla. (Security/QA)
   - [x] `check_ins` — FUGA ENCONTRADA Y CERRADA 2026-05-30 (commit 0184742). Policy `qual=true` para `authenticated` permitía leer TODOS los check-ins (datos de salud). Migración `20260530170000` + 5 negative tests. 29/29 passing.
   - [x] `exercises` — auditado y fixed (migración `20260530100000`, sesión previa).
