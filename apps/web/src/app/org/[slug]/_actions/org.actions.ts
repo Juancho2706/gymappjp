@@ -1013,3 +1013,53 @@ export async function updateStaffRoleAction(
     revalidatePath(`/org/${orgSlug}/audit`)
     return { success: true }
 }
+
+/**
+ * Creates an org-level workout template (coach_id = null, org_id = orgId).
+ * Requires P2.5-C migration: workout_programs.coach_id nullable.
+ * Only owner/admin can create org templates.
+ */
+export async function createOrgWorkoutTemplateAction(
+    orgSlug: string,
+    formData: FormData,
+): Promise<{ success?: boolean; templateId?: string; error?: string }> {
+    const context = await resolveOrgAdminContext(orgSlug, ['org_owner', 'org_admin'])
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const name = String(formData.get('name') ?? '').trim()
+    const notes = String(formData.get('notes') ?? '').trim()
+    const weeksToRepeat = Math.max(1, Math.min(52, Number(formData.get('weeks_to_repeat') ?? 4)))
+
+    if (!name || name.length < 2) return { error: 'El nombre debe tener al menos 2 caracteres' }
+    if (name.length > 120) return { error: 'Nombre demasiado largo (máx 120 caracteres)' }
+
+    const { data, error } = await admin
+        .from('workout_programs')
+        .insert({
+            org_id: org.id,
+            coach_id: null,
+            name,
+            program_notes: notes || null,
+            weeks_to_repeat: weeksToRepeat,
+            is_active: false,
+            program_phases: [],
+        })
+        .select('id')
+        .single()
+    if (error) return { error: error.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'workout_template.created',
+        targetType: 'workout_program',
+        targetId: data.id,
+        metadata: { name, weeks_to_repeat: weeksToRepeat },
+    })
+
+    revalidatePath(`/org/${orgSlug}/programs`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, templateId: data.id }
+}

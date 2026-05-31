@@ -701,7 +701,8 @@ export async function computeOrgHealthScore(db: DB, orgId: string): Promise<OrgH
 }
 
 export type OrgWorkoutProgramOverview = {
-    templates: { id: string; name: string; coachId: string; coachName: string; coachSlug: string }[]
+    // coachId null = org-owned template (no specific coach)
+    templates: { id: string; name: string; coachId: string | null; coachName: string; coachSlug: string }[]
     totalClients: number
     clientsWithProgram: number
     coveragePct: number
@@ -749,17 +750,18 @@ export async function findOrgWorkoutProgramOverview(db: DB, orgId: string): Prom
         id: t.id,
         name: t.name,
         coachId: t.coach_id,
-        coachName: coachMap.get(t.coach_id)?.name ?? 'Coach',
-        coachSlug: coachMap.get(t.coach_id)?.slug ?? '',
+        coachName: t.coach_id ? (coachMap.get(t.coach_id)?.name ?? 'Coach') : 'Organización',
+        coachSlug: t.coach_id ? (coachMap.get(t.coach_id)?.slug ?? '') : '',
     }))
 
     const totalClients = clientsRes.data?.length ?? 0
     const clientsWithProgram = new Set((activeRes.data ?? []).map(p => p.client_id)).size
     const coveragePct = totalClients > 0 ? Math.round((clientsWithProgram / totalClients) * 100) : 0
 
-    // Per-coach active program count
+    // Per-coach active program count (exclude org-template programs with null coach_id)
     const coachProgramCount = new Map<string, number>()
     for (const p of activeRes.data ?? []) {
+        if (!p.coach_id) continue
         coachProgramCount.set(p.coach_id, (coachProgramCount.get(p.coach_id) ?? 0) + 1)
     }
 

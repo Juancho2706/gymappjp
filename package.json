@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:nutrition": "playwright test tests/nutrition-student-smoke.spec.ts",
+    "supa": "node_modules/.bin/supabase.cmd",
     "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs",
     "audit:nutrition-empty-meals": "node scripts/audit-nutrition-empty-meals.mjs",
     "check:meal-completions-deprecation": "node scripts/check-meal-completions-deprecation.mjs",

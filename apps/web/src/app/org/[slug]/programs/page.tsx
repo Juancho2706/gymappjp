@@ -7,6 +7,7 @@ import {
     ClipboardCheck,
     Dumbbell,
     ExternalLink,
+    Plus,
     User,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgWorkoutProgramOverview } from '../_data/org.queries'
@@ -163,10 +164,17 @@ export default async function OrgProgramsPage({ params }: Props) {
                             <div className="flex items-center gap-2">
                                 <BookOpen className="h-4 w-4 text-violet-300" aria-hidden="true" />
                                 <h2 className="text-lg font-black text-white">Templates</h2>
+                                <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-400">
+                                    {templates.length}
+                                </span>
                             </div>
-                            <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-400">
-                                {templates.length}
-                            </span>
+                            <Link
+                                href={`/org/${slug}/programs/new`}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-500/15 border border-violet-400/30 px-3 py-1.5 text-xs font-semibold text-violet-300 hover:bg-violet-500/25 transition-colors"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                Crear template
+                            </Link>
                         </div>
 
                         {templates.length > 0 ? (
@@ -178,7 +186,9 @@ export default async function OrgProgramsPage({ params }: Props) {
                                     >
                                         <div className="min-w-0">
                                             <p className="truncate text-sm font-bold text-zinc-100">{t.name}</p>
-                                            <p className="text-xs text-zinc-500">{t.coachName}</p>
+                                            <p className="text-xs text-zinc-500">
+                                                {t.coachId ? t.coachName : <span className="text-violet-400 font-medium">Template org</span>}
+                                            </p>
                                         </div>
                                     </div>
                                 ))}
@@ -191,9 +201,8 @@ export default async function OrgProgramsPage({ params }: Props) {
                         )}
 
                         <div className="mt-4 rounded-lg bg-zinc-800/40 border border-zinc-700/50 p-3">
-                            <p className="text-xs text-zinc-400 font-medium mb-1">Templates org completos</p>
-                            <p className="text-xs text-zinc-600 leading-5">
-                                Crear templates de organización que todos los coaches pueden usar está planificado para una próxima fase (P2.5-C).
+                            <p className="text-xs text-zinc-500 leading-5">
+                                Los templates creados aquí aparecen en el builder de cada coach enterprise. Los coaches agregan ejercicios, series y días antes de asignar a un alumno.
                             </p>
                             <Link
                                 href={`/org/${slug}/assignments`}

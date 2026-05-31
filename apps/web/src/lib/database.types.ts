@@ -2640,7 +2640,7 @@ export type Database = {
         Row: {
           ab_mode: boolean | null
           client_id: string | null
-          coach_id: string
+          coach_id: string | null
           created_at: string
           created_by_coach_id: string | null
           cycle_length: number | null
@@ -2663,7 +2663,7 @@ export type Database = {
         Insert: {
           ab_mode?: boolean | null
           client_id?: string | null
-          coach_id: string
+          coach_id?: string | null
           created_at?: string
           created_by_coach_id?: string | null
           cycle_length?: number | null
@@ -2686,7 +2686,7 @@ export type Database = {
         Update: {
           ab_mode?: boolean | null
           client_id?: string | null
-          coach_id?: string
+          coach_id?: string | null
           created_at?: string
           created_by_coach_id?: string | null
           cycle_length?: number | null
@@ -2864,20 +2864,20 @@ export type Database = {
       }
     }
     Functions: {
+      bulk_assign_selected_clients: {
+        Args: {
+          p_actor_id: string
+          p_client_ids: string[]
+          p_coach_id: string
+          p_org_id: string
+        }
+        Returns: number
+      }
       bulk_reassign_clients: {
         Args: {
           p_from_coach_id: string
           p_org_id: string
           p_to_coach_id: string
-        }
-        Returns: number
-      }
-      bulk_assign_selected_clients: {
-        Args: {
-          p_org_id: string
-          p_client_ids: string[]
-          p_coach_id: string
-          p_actor_id: string
         }
         Returns: number
       }
@@ -3251,4 +3251,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
