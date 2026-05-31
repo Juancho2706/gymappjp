@@ -3388,16 +3388,16 @@ SEGURIDAD/BLOQUEANTE (antes de vender o prod):
   - [x] `nutrition_plans/meals/meal_logs` — scoping OK. Negative tests agregados 2026-05-30.
   - [x] `client_payments` — scoping OK. Negative test agregado 2026-05-30.
   - [ ] `storage.objects` — inventario buckets + policies por prefix (ver ítem siguiente).
-- [ ] Inventario buckets storage + policies por prefix `orgs/{org_id}/`, `coaches/{coach_id}/`, `clients/{client_id}/` + test org A no lee assets org B. (Security)
+- [x] Inventario buckets storage + policies. Completado 2026-05-30. Auditados 4 buckets (checkins, exercise-media, logos, org-assets) — todos scoped por auth.uid() o org_id. Sin fugas. Nota: checkins SELECT bloquea coach de ver fotos de progreso del alumno (mejora futura). (Security)
 - [ ] Negative tests: branding resolver, workspace revocado por cache, exports cross-tenant. (QA)
 - [ ] Test revoke→no-reingreso enterprise, conserva standalone. (QA)
 - [ ] E2E happy path enterprise (Playwright). (QA)
 
 PRODUCTO (flujo usable end-to-end):
-- [ ] Workspace switcher persistente in-app (account menu) con labels humanos, sin re-login. (Architect/Frontend)
+- [x] Workspace switcher persistente in-app. Completado 2026-05-30 (commit fb87cbd). WorkspaceSwitcher en sidebar footer desktop + mobile header. Usa listUserWorkspaces() + selectWorkspaceAction existentes. Solo visible con 2+ workspaces. (Architect/Frontend)
 - [ ] Mover contratos `ActiveWorkspace`/`WorkspaceBrand` a `packages/`. (Mobile/Architect)
 - [ ] `bulkAssignSelectedClientsAction` → RPC transaccional + helper `assertOrgClientOwnership`. (Backend)
-- [ ] Eliminar `BulkClientActions.tsx` huérfano; tokenizar `md:left-72`. (Frontend)
+- [x] Eliminar `BulkClientActions.tsx` huérfano; comentario JSX inválido removido. Completado 2026-05-30. (Frontend)
 - [ ] Org-level health score para CSM. (Product/CSM)
 - [ ] Plan ejecutable fechado para `clients.id = auth.users.id` (multi-contexto alumno). (Architect)
 
