@@ -21,6 +21,7 @@ import {
 import { getOrgBySlug, getOrgInvoices, getOrgMembers } from '../_data/org.queries'
 import { OrgSettingsForm } from './_components/OrgSettingsForm'
 import { OrgInvoiceList } from './_components/OrgInvoiceList'
+import { SettingsAccordion } from './_components/SettingsAccordion'
 
 export const metadata: Metadata = { title: 'Admin' }
 
@@ -141,11 +142,7 @@ export default async function OrgSettingsPage({ params }: Props) {
 
                 <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
                     <div className="space-y-5">
-                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                            <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4 text-sky-300" aria-hidden="true" />
-                                <h2 className="text-lg font-black text-white">Datos del negocio</h2>
-                            </div>
+                        <SettingsAccordion title="Datos del negocio" icon={Building2} defaultOpen={true}>
                             <p className="mt-2 text-sm leading-6 text-zinc-500">
                                 Identidad administrativa de la organizacion. La marca publica vive en Marca, pero este resumen ayuda a soporte, ventas y onboarding.
                             </p>
@@ -165,50 +162,39 @@ export default async function OrgSettingsPage({ params }: Props) {
                                     </div>
                                 ))}
                             </div>
-                        </section>
+                        </SettingsAccordion>
 
                         {isAdmin ? (
-                            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                                <div className="flex items-center gap-2">
-                                    <Palette className="h-4 w-4 text-emerald-300" aria-hidden="true" />
-                                    <h2 className="text-lg font-black text-white">Ajustes rapidos de marca</h2>
-                                </div>
-                                <p className="mt-2 text-sm leading-6 text-zinc-500">
+                            <SettingsAccordion title="Ajustes rápidos de marca" icon={Palette} iconColor="text-emerald-300">
+                                <p className="text-sm leading-6 text-zinc-500 mb-4">
                                     Cambios basicos. El publish avanzado y el preview cross-platform se controlan desde Marca.
                                 </p>
-                                <div className="mt-5">
-                                    <OrgSettingsForm orgSlug={slug} defaultName={org.name} defaultColor={org.primary_color ?? ''} currentLogoUrl={org.logo_url} />
-                                </div>
-                            </section>
+                                <OrgSettingsForm orgSlug={slug} defaultName={org.name} defaultColor={org.primary_color ?? ''} currentLogoUrl={org.logo_url} />
+                            </SettingsAccordion>
                         ) : (
-                            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 text-sm text-zinc-500">
+                            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 text-sm text-zinc-500">
                                 Solo owner/admin pueden editar configuracion.
                             </section>
                         )}
                     </div>
 
                     <aside className="space-y-5">
-                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                    <BadgeDollarSign className="h-4 w-4 text-emerald-300" aria-hidden="true" />
-                                    <h2 className="text-lg font-black text-white">Billing enterprise</h2>
-                                </div>
+                        <SettingsAccordion title="Billing enterprise" icon={BadgeDollarSign} iconColor="text-emerald-300">
+                            <div className="flex items-center gap-2 mb-3">
                                 <span className={`rounded-full border px-2 py-1 text-xs font-bold ${statusTone(org.status)}`}>
                                     {org.status}
                                 </span>
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-zinc-500">
+                            <p className="text-sm leading-6 text-zinc-500 mb-4">
                                 Por ahora EVA Enterprise no cobra dentro de la app. Esta zona mantiene trazabilidad comercial y facturas manuales.
                             </p>
-
-                            <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
                                 {hasBillingRisk ? (
                                     <div className="flex items-start gap-3">
                                         <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" aria-hidden="true" />
                                         <div>
                                             <p className="text-sm font-black text-amber-200">Billing requiere revision</p>
-                                            <p className="mt-1 text-xs leading-5 text-zinc-500">Hay factura pendiente o vencida. No bloquear alumnos automaticamente sin decision comercial.</p>
+                                            <p className="mt-1 text-xs leading-5 text-zinc-500">Hay factura pendiente o vencida.</p>
                                         </div>
                                     </div>
                                 ) : (
@@ -216,26 +202,21 @@ export default async function OrgSettingsPage({ params }: Props) {
                                         <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" aria-hidden="true" />
                                         <div>
                                             <p className="text-sm font-black text-emerald-200">Sin bloqueo de cobro in-app</p>
-                                            <p className="mt-1 text-xs leading-5 text-zinc-500">Modelo manual listo para pre-revenue y ventas B2B.</p>
+                                            <p className="mt-1 text-xs leading-5 text-zinc-500">Modelo manual listo para pre-revenue.</p>
                                         </div>
                                     </div>
                                 )}
                             </div>
-
-                            <div className="mt-5">
+                            <div className="mt-4">
                                 <div className="mb-2 flex items-center gap-2">
                                     <ReceiptText className="h-4 w-4 text-zinc-400" aria-hidden="true" />
                                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Historial</p>
                                 </div>
                                 <OrgInvoiceList invoices={invoices} />
                             </div>
-                        </section>
+                        </SettingsAccordion>
 
-                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                            <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-amber-300" aria-hidden="true" />
-                                <h2 className="text-lg font-black text-white">Seats y plan</h2>
-                            </div>
+                        <SettingsAccordion title="Seats y plan" icon={Users} iconColor="text-amber-300">
 
                             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-center">
@@ -279,14 +260,10 @@ export default async function OrgSettingsPage({ params }: Props) {
                                     </span>
                                 </div>
                             </div>
-                        </section>
+                        </SettingsAccordion>
 
-                        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-                            <div className="flex items-center gap-2">
-                                <LockKeyhole className="h-4 w-4 text-sky-300" aria-hidden="true" />
-                                <h2 className="text-lg font-black text-white">Guardrails</h2>
-                            </div>
-                            <div className="mt-4 space-y-3">
+                        <SettingsAccordion title="Guardrails" icon={LockKeyhole} iconColor="text-sky-300">
+                            <div className="space-y-3">
                                 {guardrails.map(item => (
                                     <div key={item} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
                                         <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" aria-hidden="true" />
@@ -294,7 +271,7 @@ export default async function OrgSettingsPage({ params }: Props) {
                                     </div>
                                 ))}
                             </div>
-                        </section>
+                        </SettingsAccordion>
                     </aside>
                 </section>
             </div>

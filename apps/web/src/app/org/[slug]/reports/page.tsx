@@ -16,6 +16,7 @@ import {
     Users,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClients, getOrgInvoices, getOrgMembers, getOrgStats } from '../_data/org.queries'
+import { ReportsPdfButton } from './_components/ReportsPdfButton'
 
 export const metadata: Metadata = { title: 'Reportes' }
 
@@ -108,7 +109,7 @@ export default async function OrgReportsPage({ params }: Props) {
                                 </div>
                             </div>
                             <p className="mt-4 text-sm leading-6 text-zinc-500">
-                                Snapshot read-only. CSV disponible con permiso `org.reports.export`; PDF queda para fase ejecutiva.
+                                Snapshot read-only. CSV y PDF ejecutivo disponibles con permiso `org.reports.export`.
                             </p>
                         </div>
                     </div>
@@ -233,10 +234,23 @@ export default async function OrgReportsPage({ params }: Props) {
                         <h3 className="mt-4 text-sm font-black text-white">CSV operativo</h3>
                         <p className="mt-2 text-xs leading-5 text-zinc-400">Disponible. KPIs, coaches, alumnos en riesgo y listado completo. Auditado.</p>
                     </div>
-                    <div className="rounded-2xl border border-zinc-700 bg-zinc-900/70 p-4 opacity-60">
-                        <Download className="h-5 w-5 text-zinc-500" aria-hidden="true" />
-                        <h3 className="mt-4 text-sm font-black text-zinc-400">PDF ejecutivo</h3>
-                        <p className="mt-2 text-xs leading-5 text-zinc-500">Próximamente. Resumen listo para socios y reuniones internas.</p>
+                    <div className="rounded-2xl border border-sky-400/25 bg-zinc-900/70 p-4">
+                        <Download className="h-5 w-5 text-sky-300" aria-hidden="true" />
+                        <h3 className="mt-4 text-sm font-black text-white">PDF ejecutivo</h3>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">Resumen listo para reuniones con socios e inversionistas. Generado en el navegador, sin enviar datos al servidor.</p>
+                        <div className="mt-4">
+                            <ReportsPdfButton
+                                orgName={org.name}
+                                orgSlug={org.slug}
+                                primaryColor={org.primary_color}
+                                metrics={reportCards.map(r => ({ label: r.label, value: r.value, suffix: r.suffix }))}
+                                coaches={coachLoad}
+                                activeClients={activeClients.length}
+                                unassignedClients={unassignedClients.length}
+                                inactiveClients={inactiveClients.length}
+                                totalClients={clients.length}
+                            />
+                        </div>
                     </div>
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
                         <LockKeyhole className="h-5 w-5 text-sky-300" aria-hidden="true" />
