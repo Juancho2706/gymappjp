@@ -1897,6 +1897,17 @@ Prioridad P3 - diferenciadores futuros sin costo externo:
 - [x] Role home: owner, ops/admin, brand manager y analyst ven landing interna distinta. Completado 2026-06-01. `EnterpriseDashboardHome` muestra role focus banner para roles no-owner con quick links contextuales; action queue filtrado por permisos del rol; `org_owner` ve dashboard completo sin cambios.
 - [x] Mobile parity matrix por menu: Web/PWA, RN, native-only. Documentado 2026-05-31 en seccion responsive: define equivalentes RN/native-only por pantalla sin crear app RN todavia.
 
+#### Ideas P3 nuevas — investigacion 2026-06-01
+
+Hallazgos B2B SaaS 2026 aplicables sin costo externo:
+
+- [ ] **Reports: delta semanal preciso** — tabla `org_weekly_snapshots` (health_score, activeClients, assignmentRate) poblada por cron semanal existente. Delta real vs semana anterior. 1 migration + update cron job.
+- [ ] **Announcements: read receipts** — evento `announcement.viewed` en audit log cuando alumno ve novedad. Mide impacto de comunicaciones. Sin migration.
+- [ ] **Check-ins: reviewed_at** — campo `reviewed_at` en `check_ins` o tabla `check_in_reviews` para medir response time del coach. Diferenciador para venta "coaching personalizado". Migration + UI.
+- [ ] **Coaches: activity streak** — racha de check-ins respondidos consecutivos por coach. Calculable desde datos existentes. Sin migration.
+- [ ] **Onboarding: progress tracker** — wizard con % completado: logo subido, primer coach, primer alumno asignado, primer plan, primer anuncio. Sin migration (calculable desde datos).
+- [ ] **Reports: export agendado** — job que genera CSV semanal y lo envía por email al owner via Resend. Sin costo (Resend ya instalado). Requiere cron endpoint nuevo.
+
 No hacer todavia:
 
 - No integrar pasarela de pago para alumnos.
@@ -2769,7 +2780,7 @@ Pendiente:
 - [ ] Preview de impacto antes de revocar: alumnos afectados, reasignacion sugerida, standalone intacto.
 - [ ] Reset password/cambio rol con audit y feedback claro.
 - [ ] Separar mejor coaches operativos vs staff admin para evitar confusion de permisos.
-- [ ] Mobile: cards accionables con menu contextual.
+- [x] Mobile: menu contextual completado 2026-06-01. CoachActionsMenu: botón ⋯ en <lg abre bottom sheet con acciones; desktop sin cambios.
 
 ### Equipo / Staff & Access `/team`
 
@@ -2827,7 +2838,7 @@ Estado actual:
 Pendiente:
 
 - [x] Audiences: alumnos, coaches enterprise, staff o todos. Completado 2026-05-30 (e29d180).
-- [ ] Programar publicacion futura (requiere columna `published_at` — migration pendiente).
+- [x] Programar publicacion futura. Completado 2026-06-01. Migration `published_at`, form con 2 campos, seccion "Programados" en admin, filtro en client dashboard.
 - [x] Expiracion `active_until` ya existe en el form.
 - [ ] Read receipts/delivery status futuro.
 - [x] Mobile: composer como sheet/modal. Completado 2026-06-01. `AnnouncementComposerSheet`: desktop inline, mobile FAB + bottom sheet con `pb-safe`.
