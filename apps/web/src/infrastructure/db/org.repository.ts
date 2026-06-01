@@ -778,6 +778,103 @@ export async function findOrgWorkoutProgramOverview(db: DB, orgId: string): Prom
     return { templates, totalClients, clientsWithProgram, coveragePct, byCoach }
 }
 
+export type CoachStreak = {
+    coachId: string
+    coachName: string
+    currentStreak: number  // consecutive weeks with >= 1 client check-in
+    longestStreak: number
+    lastActiveWeek: string | null
+}
+
+/**
+ * Calculates coach check-in activity streaks.
+ * A "week" = 7-day period. Streak = consecutive weeks where at least
+ * one of the coach's clients submitted a check-in.
+ * Looks back up to 12 weeks.
+ */
+export async function findOrgCoachStreaks(db: DB, orgId: string): Promise<CoachStreak[]> {
+    const now = new Date()
+    // Build 12 weekly buckets (oldest first)
+    const weeks: { start: string; end: string }[] = []
+    for (let i = 11; i >= 0; i--) {
+        const end = new Date(now.getTime() - i * 7 * 86_400_000)
+        const start = new Date(end.getTime() - 7 * 86_400_000)
+        weeks.push({ start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) })
+    }
+
+    const [clientsRes, checkInsRes, membersRes] = await Promise.all([
+        db.from('clients').select('id, coach_id').eq('org_id', orgId).not('coach_id', 'is', null),
+        db.from('check_ins')
+            .select('client_id, date')
+            .gte('date', weeks[0].start)
+            .order('date', { ascending: false }),
+        db.from('organization_members')
+            .select('coach_id, coach:coaches(id, full_name)')
+            .eq('org_id', orgId)
+            .eq('role', 'coach')
+            .eq('status', 'active')
+            .is('deleted_at', null),
+    ])
+
+    const clients = clientsRes.data ?? []
+    const allCheckIns = checkInsRes.data ?? []
+
+    // Build client→coach map
+    const clientCoachMap = new Map<string, string>()
+    for (const c of clients) {
+        if (c.coach_id) clientCoachMap.set(c.id, c.coach_id)
+    }
+
+    // Build coachName map
+    const coachNameMap = new Map<string, string>()
+    for (const m of membersRes.data ?? []) {
+        if (m.coach_id && m.coach && !Array.isArray(m.coach)) {
+            coachNameMap.set(m.coach_id, (m.coach as { full_name: string | null }).full_name ?? 'Coach')
+        }
+    }
+
+    // For each coach, determine which weeks had activity
+    const coachWeekActivity = new Map<string, Set<number>>() // coachId → Set<weekIndex>
+    for (const ci of allCheckIns) {
+        const coachId = clientCoachMap.get(ci.client_id)
+        if (!coachId) continue
+        const weekIdx = weeks.findIndex(w => ci.date >= w.start && ci.date < w.end)
+        if (weekIdx === -1) continue
+        if (!coachWeekActivity.has(coachId)) coachWeekActivity.set(coachId, new Set())
+        coachWeekActivity.get(coachId)!.add(weekIdx)
+    }
+
+    const streaks: CoachStreak[] = []
+    for (const [coachId, activeWeeks] of coachWeekActivity.entries()) {
+        // Current streak: count backwards from latest week
+        let currentStreak = 0
+        for (let i = weeks.length - 1; i >= 0; i--) {
+            if (activeWeeks.has(i)) currentStreak++
+            else break
+        }
+
+        // Longest streak
+        let longestStreak = 0, cur = 0
+        for (let i = 0; i < weeks.length; i++) {
+            if (activeWeeks.has(i)) { cur++; longestStreak = Math.max(longestStreak, cur) }
+            else cur = 0
+        }
+
+        const lastWeekIdx = Math.max(...activeWeeks)
+        const lastActiveWeek = lastWeekIdx >= 0 ? weeks[lastWeekIdx]?.end ?? null : null
+
+        streaks.push({
+            coachId,
+            coachName: coachNameMap.get(coachId) ?? 'Coach',
+            currentStreak,
+            longestStreak,
+            lastActiveWeek,
+        })
+    }
+
+    return streaks.sort((a, b) => b.currentStreak - a.currentStreak)
+}
+
 export type OrgCheckInOverview = {
     total7d: number
     total30d: number

@@ -7,10 +7,11 @@ import {
     CalendarDays,
     CheckCircle2,
     ClipboardList,
+    Flame,
     TrendingUp,
     User,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgCheckInOverview } from '../_data/org.queries'
+import { getOrgBySlug, getOrgCheckInOverview, getOrgCoachStreaks } from '../_data/org.queries'
 import { orgRoleCan } from '@/domain/org/permissions'
 
 export const metadata: Metadata = { title: 'Check-ins' }
@@ -36,7 +37,10 @@ export default async function OrgCheckInsPage({ params }: Props) {
     if (!org) redirect('/coach/dashboard')
     if (!orgRoleCan(org.myRole, 'org.dashboard.view')) redirect(`/org/${slug}`)
 
-    const data = await getOrgCheckInOverview(org.id)
+    const [data, streaks] = await Promise.all([
+        getOrgCheckInOverview(org.id),
+        getOrgCoachStreaks(org.id),
+    ])
     const {
         total7d,
         total30d,
@@ -241,6 +245,42 @@ export default async function OrgCheckInsPage({ params }: Props) {
                         )}
                     </aside>
                 </div>
+                {/* Coach streaks */}
+                {streaks.length > 0 && (
+                    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Flame className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                            <h2 className="text-lg font-black text-white">Rachas de actividad</h2>
+                            <span className="ml-auto text-xs text-zinc-500">Semanas consecutivas con check-ins</span>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            {streaks.slice(0, 6).map(streak => (
+                                <div key={streak.coachId} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black ${
+                                            streak.currentStreak >= 4 ? 'bg-orange-400/15 text-orange-300' :
+                                            streak.currentStreak >= 2 ? 'bg-amber-400/15 text-amber-300' :
+                                            'bg-zinc-800 text-zinc-400'
+                                        }`}>
+                                            {streak.currentStreak > 0 ? `${streak.currentStreak}s` : '—'}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-bold text-zinc-100">{streak.coachName}</p>
+                                            <p className="text-[10px] text-zinc-600">
+                                                Mejor: {streak.longestStreak} sem
+                                                {streak.lastActiveWeek && ` · activo hasta ${streak.lastActiveWeek}`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {streak.currentStreak >= 4 && (
+                                        <Flame className="shrink-0 h-4 w-4 text-orange-400" />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
             </div>
         </div>
     )
