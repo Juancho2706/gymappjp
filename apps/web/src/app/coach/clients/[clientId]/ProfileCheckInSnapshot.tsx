@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useState, useTransition, type ReactNode } from 'react'
 import Image from 'next/image'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Scale, Battery, StickyNote, Camera, ChevronRight } from 'lucide-react'
+import { Scale, Battery, StickyNote, Camera, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,12 +15,15 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { markCheckInReviewed } from './_actions/client-detail.actions'
 
 type CheckInRow = {
+    id?: string
     created_at: string
     weight?: number | null
     energy_level?: number | null
     notes?: string | null
+    reviewed_at?: string | null
     front_photo_url?: string | null
     side_photo_url?: string | null
     back_photo_url?: string | null
@@ -69,13 +72,26 @@ function MetricRow({
 
 type ProfileCheckInSnapshotProps = {
     checkIn: CheckInRow | null | undefined
+    clientId: string
     onViewHistory: () => void
 }
 
-export function ProfileCheckInSnapshot({ checkIn, onViewHistory }: ProfileCheckInSnapshotProps) {
+export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: ProfileCheckInSnapshotProps) {
     const [open, setOpen] = useState(false)
+    const [reviewed, setReviewed] = useState(Boolean(checkIn?.reviewed_at))
+    const [pending, startTransition] = useTransition()
     const photo =
         checkIn?.front_photo_url || checkIn?.side_photo_url || checkIn?.back_photo_url
+
+    function handleMarkReviewed() {
+        if (!checkIn?.id) return
+        startTransition(async () => {
+            try {
+                await markCheckInReviewed(clientId, checkIn.id!)
+                setReviewed(true)
+            } catch { /* swallow — UI stays unreviewed */ }
+        })
+    }
 
     if (!checkIn) {
         return (
@@ -165,10 +181,31 @@ export function ProfileCheckInSnapshot({ checkIn, onViewHistory }: ProfileCheckI
                 </MetricRow>
             </div>
 
+            {/* Mark reviewed — enterprise response-time tracking */}
+            {checkIn.id && (
+                reviewed ? (
+                    <div className="relative z-10 mt-4 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-500">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Revisado
+                    </div>
+                ) : (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="relative z-10 mt-4 h-auto py-2 text-[10px] font-black uppercase tracking-widest gap-1.5"
+                        onClick={handleMarkReviewed}
+                        disabled={pending}
+                    >
+                        {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                        Marcar como revisado
+                    </Button>
+                )
+            )}
+
             <Button
                 type="button"
                 variant="ghost"
-                className="relative z-10 mt-4 h-auto py-2 px-0 text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary/90 justify-start gap-1"
+                className="relative z-10 mt-2 h-auto py-2 px-0 text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary/90 justify-start gap-1"
                 onClick={onViewHistory}
             >
                 Ver historial en Progreso

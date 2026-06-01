@@ -359,6 +359,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                 />
                                 <ProfileCheckInSnapshot
                                     checkIn={lastCheckIn}
+                                    clientId={client.id}
                                     onViewHistory={goToProgressHistory}
                                 />
                             </div>
