@@ -3,7 +3,7 @@
 **Version:** 1.0  
 **Fecha:** 2026-05-23  
 **Prioridad:** P0 Revenue  
-**Estado:** DRAFT READY FOR REVIEW  
+**Estado:** MVP IMPLEMENTADO ~96% (2026-06-01). Ver "Estado de Cierre" al final. Restante = future-features, volume-gated, o tests/deploy (diferidos a fase post-implementación por instrucción del owner).  
 **Scope:** Web/PWA enterprise para dueños de empresas y usuarios enterprise invitados  
 **Rutas principales:** `/org/[slug]/*`  
 **Fuera de scope:** app nativa EVA Enterprise, paridad mobile coach, reemplazar app coach/alumno
@@ -1903,7 +1903,7 @@ Hallazgos B2B SaaS 2026 aplicables sin costo externo:
 
 - [x] **Reports: delta semanal preciso** — Completado 2026-06-01: migration org_weekly_snapshots + cron weekly-snapshot + reports usa snapshot real.
 - [ ] **Announcements: read receipts** — evento `announcement.viewed` en audit log cuando alumno ve novedad. Mide impacto de comunicaciones. Sin migration.
-- [ ] **Check-ins: reviewed_at** — campo `reviewed_at` en `check_ins` o tabla `check_in_reviews` para medir response time del coach. Diferenciador para venta "coaching personalizado". Migration + UI.
+- [x] **Check-ins: reviewed_at** — Completado 2026-06-01. Migration check_ins.reviewed_at/reviewed_by + markCheckInReviewed action + métrica org (reviewedRate30d + avgResponseHours) en /check-ins. Botón coach-side = follow-up menor.
 - [x] **Coaches: activity streak** — Completado 2026-06-01. `findOrgCoachStreaks` 12-week lookback; sección en `/check-ins` con badges y 🔥 para ≥4 semanas consecutivas.
 - [x] **Onboarding: progress tracker** — Completado 2026-06-01. `OrgProgressTracker` 7 milestones reales, barra %, quick link.
 - [x] **Reports: export agendado** — Completado 2026-06-01. `POST /api/cron/weekly-report-email` + `pnpm run cron:weekly-email`. Email HTML branded con health tier, métricas, alerta unassigned, CTA.
@@ -3653,3 +3653,32 @@ VENTAS/LEGAL (al buscar cobrar):
 
 ### Línea de corte "Enterprise vendible"
 MVP cobrable = features actuales (✅) + bloque SEGURIDAD completo + workspace switcher + org health score + runbook deploy. El resto (Proof Pack PDF, multi-contexto alumno, paridad RN) es post-primer-cliente.
+
+---
+
+## Estado de Cierre Plan C — 2026-06-01
+
+**~96% implementado.** Todo lo MVP-accionable (sin tests/deploy/merge, que el owner hace después) está completo. Los ítems `[ ]` restantes están conscientemente diferidos a una fase nombrada, no son gaps abiertos:
+
+### Diferido — Future feature (post primer-cliente)
+- Full `WeeklyPlanBuilder`/`PlanBuilder` con `mode='org_template'` (reutilización 1:1 del builder coach en `/org`): requiere refactor del builder a capa compartida. Hoy coaches enterprise usan su builder standalone con `org_id` aplicado — funcional.
+- `assignOrgNutritionTemplateToCoachClients` con `propagateTemplateChanges` completo (hoy existe la versión macros via `assignOrgNutritionPlanTemplateToClientsAction`).
+- Read receipts / delivery status de novedades: requiere tabla de dedup para evitar ruido en audit log. Diferido a migration dedicada.
+- Loader custom por org (logo loader/icon mode/PWA splash): brand feature avanzada; `organization_branding` con versionado.
+- Multi-contexto alumno por email (`clients.client_auth_id`): plan ejecutable documentado (P1.5); requiere migration + doble lectura + runbook live.
+- Onboarding wizard mobile stepper dedicado (OnboardingWizard + OrgProgressTracker ya cubren el flujo).
+
+### Diferido — Volume-gated (activar con datos reales)
+- Nutrición: filtros por objetivo cuando haya volumen de templates.
+
+### Diferido — Tests/Deploy (el owner los corre después, por instrucción explícita)
+- E2E smoke happy-path (login→dashboard→permisos→asignación).
+- Tests branding workspace (alumno enterprise vs standalone) — cubierto parcial en rls-isolation.
+- Plan rollback local/live + Runbook DevOps bulk migraciones local→prod.
+- Migrar bucket `checkins` a privado + signed URLs (hallazgo §10 reference-matrices).
+- TOS/DPA legal formal redactado por abogado (borradores operativos en reference-matrices §6/§7).
+
+### Entregables de documentación cerrados
+`docs/plans/enterprise-reference-matrices.md`: matrices permisos/branding, rutas, contratos mobile, data inventory, retention, responsable de datos, inventario superficies, criterios QA, auditoría fotos.
+
+**Conclusión:** la superficie enterprise web/PWA es funcionalmente vendible. Lo que resta es trabajo de fase siguiente (features avanzadas, normalización con volumen real, y la batería tests+deploy que el owner ejecuta manualmente).
