@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { CoachEnterpriseActions } from './_components/CoachEnterpriseActions'
+import { CoachActionsMenu } from './_components/CoachActionsMenu'
 import { CoachQRButton } from './_components/CoachQRButton'
 import { CreateEnterpriseCoachForm } from './_components/CreateEnterpriseCoachForm'
 import { InviteCoachForm } from './_components/InviteCoachForm'
@@ -258,12 +259,27 @@ export default async function OrgCoachesPage({ params }: Props) {
                                             </div>
 
                                             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 lg:justify-end">
-                                                <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
+                                                {/* Mobile: ⋯ contextual menu replaces all inline actions */}
+                                                <CoachActionsMenu
+                                                    orgSlug={slug}
+                                                    memberId={member.id}
+                                                    coachId={coachId}
+                                                    coachName={member.coach?.full_name ?? 'Coach'}
+                                                    role={member.role}
+                                                    clientCount={assigned}
+                                                    otherCoaches={otherCoaches}
+                                                    inviteCode={member.coach?.invite_code ?? null}
+                                                    canManageRole={isAdmin}
+                                                    coachSlug={member.coach?.slug ?? undefined}
+                                                />
+
+                                                {/* Desktop: inline actions (hidden on mobile) */}
+                                                <span className="hidden lg:inline-flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400">
                                                     <RoleIcon className="h-3 w-3" aria-hidden="true" />
                                                     {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] ?? member.role}
                                                 </span>
                                                 {member.coach?.invite_code && (
-                                                    <>
+                                                    <span className="hidden lg:inline-flex items-center gap-1">
                                                         <span className="rounded-md bg-zinc-800 px-2 py-1 font-mono text-[10px] text-zinc-300">
                                                             {member.coach.invite_code}
                                                         </span>
@@ -272,10 +288,10 @@ export default async function OrgCoachesPage({ params }: Props) {
                                                             coachName={member.coach.full_name ?? 'Coach'}
                                                             siteUrl={siteUrl}
                                                         />
-                                                    </>
+                                                    </span>
                                                 )}
                                                 {isAdmin && (
-                                                    <>
+                                                    <span className="hidden lg:inline-flex items-center gap-2">
                                                         <CoachEnterpriseActions
                                                             orgSlug={slug}
                                                             memberId={member.id}
@@ -293,7 +309,7 @@ export default async function OrgCoachesPage({ params }: Props) {
                                                                 otherCoaches={otherCoaches}
                                                             />
                                                         )}
-                                                    </>
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>

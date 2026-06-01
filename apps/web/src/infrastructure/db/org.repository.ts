@@ -68,6 +68,7 @@ export type OrgAnnouncement = {
     body: string
     is_active: boolean
     active_until: string | null
+    published_at: string | null
     created_at: string | null
     audience: AnnouncementAudience
 }
@@ -154,7 +155,7 @@ export async function findOrgMembers(db: DB, orgId: string): Promise<OrgMember[]
 export async function findOrgAnnouncements(db: DB, orgId: string): Promise<OrgAnnouncement[]> {
     const { data } = await db
         .from('org_announcements')
-        .select('id, title, body, is_active, active_until, created_at, audience')
+        .select('id, title, body, is_active, active_until, published_at, created_at, audience')
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
         .limit(50)

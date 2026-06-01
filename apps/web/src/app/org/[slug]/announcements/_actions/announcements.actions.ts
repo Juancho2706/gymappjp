@@ -9,6 +9,7 @@ import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.servi
 const CreateAnnouncementSchema = z.object({
     title: z.string().min(1).max(120),
     body: z.string().min(1).max(1000),
+    published_at: z.string().optional(),  // ISO datetime; null = publish now
     active_until: z.string().optional(),
     audience: z.enum(['all', 'coaches', 'clients']).default('all'),
 })
@@ -29,17 +30,25 @@ export async function createAnnouncementAction(orgSlug: string, _prev: unknown, 
     const parsed = CreateAnnouncementSchema.safeParse({
         title: formData.get('title'),
         body: formData.get('body'),
+        published_at: formData.get('published_at') || undefined,
         active_until: formData.get('active_until') || undefined,
         audience: formData.get('audience') || 'all',
     })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos invalidos' }
 
     const admin = createServiceRoleClient()
+    const now = new Date().toISOString()
+    const publishedAt = parsed.data.published_at
+        ? new Date(parsed.data.published_at).toISOString()
+        : now  // null input = publish immediately
+
     const { data: announcement, error } = await admin.from('org_announcements').insert({
         org_id: ctx.org.id,
         title: parsed.data.title,
         body: parsed.data.body,
+        published_at: publishedAt,
         active_until: parsed.data.active_until ? new Date(parsed.data.active_until).toISOString() : null,
+        is_active: true,
         audience: parsed.data.audience,
         created_by: ctx.user.id,
     }).select('id').single()
@@ -51,7 +60,7 @@ export async function createAnnouncementAction(orgSlug: string, _prev: unknown, 
         action: 'org_announcement.created',
         targetType: 'org_announcement',
         targetId: announcement.id,
-        metadata: { title: parsed.data.title, active_until: parsed.data.active_until ?? null },
+        metadata: { title: parsed.data.title, published_at: publishedAt, active_until: parsed.data.active_until ?? null },
     })
     revalidatePath(`/org/${orgSlug}/announcements`)
     revalidatePath(`/org/${orgSlug}/audit`)

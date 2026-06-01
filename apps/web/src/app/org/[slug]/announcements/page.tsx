@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import {
     AlertTriangle,
     CalendarClock,
+    Clock,
     CheckCircle2,
     Eye,
     Megaphone,
@@ -49,9 +50,19 @@ export default async function AnnouncementsPage({ params }: Props) {
 
     const activeClients = clients.filter(client => client.is_active !== false)
     const activeCoaches = members.filter(member => member.role === 'coach' && member.status === 'active' && member.coach_id)
-    const liveAnnouncements = announcements.filter(item => item.is_active && !isExpired(item.active_until))
+    const now = new Date().toISOString()
+
+    // With published_at: scheduled = is_active but not yet published; live = published and not expired
+    const scheduledAnnouncements = announcements.filter(item =>
+        item.is_active && item.published_at && item.published_at > now && !isExpired(item.active_until)
+    )
+    const liveAnnouncements = announcements.filter(item =>
+        item.is_active && (!item.published_at || item.published_at <= now) && !isExpired(item.active_until)
+    )
     const expiredAnnouncements = announcements.filter(item => isExpired(item.active_until))
-    const inactiveAnnouncements = announcements.filter(item => !item.is_active && !isExpired(item.active_until))
+    const inactiveAnnouncements = announcements.filter(item =>
+        !item.is_active && !isExpired(item.active_until) && (!item.published_at || item.published_at <= now)
+    )
     const latestLive = liveAnnouncements[0] ?? null
 
     return (
@@ -94,11 +105,11 @@ export default async function AnnouncementsPage({ params }: Props) {
                         <div className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/75 p-3 md:grid-cols-4">
                             {[
                                 ['Activas', liveAnnouncements.length],
-                                ['Borradores', inactiveAnnouncements.length],
+                                ['Programadas', scheduledAnnouncements.length],
                                 ['Expiradas', expiredAnnouncements.length],
                                 ['Audiencia', activeClients.length],
                             ].map(([label, value]) => (
-                                <div key={label} className="rounded-xl bg-zinc-900 p-3 text-center">
+                                <div key={label} className={`rounded-xl bg-zinc-900 p-3 text-center ${label === 'Programadas' && (value as number) > 0 ? 'ring-1 ring-amber-400/30' : ''}`}>
                                     <p className="text-2xl font-black text-white">{value}</p>
                                     <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">{label}</p>
                                 </div>
@@ -163,6 +174,32 @@ export default async function AnnouncementsPage({ params }: Props) {
                             </div>
                         </div>
 
+                        {/* Scheduled announcements — not yet published */}
+                        {scheduledAnnouncements.length > 0 && (
+                            <div className="mt-4">
+                                <div className="flex items-center gap-2 mb-2 px-1">
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-xs font-bold text-amber-300">
+                                        <Clock className="h-3 w-3" />
+                                        Programados — {scheduledAnnouncements.length}
+                                    </span>
+                                    <p className="text-xs text-zinc-600">Pendientes de publicación automática</p>
+                                </div>
+                                <div className="space-y-2">
+                                    {scheduledAnnouncements.map(announcement => (
+                                        <div key={announcement.id} className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/15 bg-amber-400/5 px-4 py-3">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-bold text-zinc-200">{announcement.title}</p>
+                                                <p className="text-xs text-amber-400/80 mt-0.5">
+                                                    Se publica: {new Date(announcement.published_at!).toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            </div>
+                                            <AnnouncementRow orgSlug={slug} announcement={{ ...announcement, created_at: announcement.created_at ?? '' }} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="mt-5 space-y-3">
                             {announcements.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/50 p-8 text-center">
@@ -171,7 +208,7 @@ export default async function AnnouncementsPage({ params }: Props) {
                                     <p className="mt-1 text-sm text-zinc-500">Crea el primer mensaje cuando haya informacion accionable para alumnos.</p>
                                 </div>
                             ) : (
-                                announcements.map(announcement => (
+                                announcements.filter(a => !a.published_at || a.published_at <= now).map(announcement => (
                                     <AnnouncementRow key={announcement.id} orgSlug={slug} announcement={{ ...announcement, created_at: announcement.created_at ?? '' }} />
                                 ))
                             )}

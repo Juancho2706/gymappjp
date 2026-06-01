@@ -15,7 +15,7 @@ import {
     TrendingUp,
     Users,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgClients, getOrgInvoices, getOrgMembers, getOrgStats } from '../_data/org.queries'
+import { getOrgBySlug, getOrgCheckInOverview, getOrgClients, getOrgInvoices, getOrgMembers, getOrgStats } from '../_data/org.queries'
 import { ReportsPdfButton } from './_components/ReportsPdfButton'
 
 export const metadata: Metadata = { title: 'Reportes' }
@@ -40,11 +40,12 @@ export default async function OrgReportsPage({ params }: Props) {
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
-    const [stats, members, clients, invoices] = await Promise.all([
+    const [stats, members, clients, invoices, checkIns] = await Promise.all([
         getOrgStats(org.id),
         getOrgMembers(org.id),
         getOrgClients(org.id),
         getOrgInvoices(org.id),
+        getOrgCheckInOverview(org.id),
     ])
 
     const activeMembers = members.filter((member) => member.status === 'active')
@@ -69,11 +70,16 @@ export default async function OrgReportsPage({ params }: Props) {
         .sort((a, b) => b.clients - a.clients)
         .slice(0, 6)
 
+    // Week-over-week delta for check-ins: total7d vs approx prev 7d from 30d window
+    const prev7d = Math.max(0, checkIns.total30d - checkIns.total7d - 16) // rough prev-week from 30d
+    const checkInDelta = checkIns.total7d - prev7d
+    const checkInDeltaStr = checkInDelta >= 0 ? `+${checkInDelta}` : `${checkInDelta}`
+
     const reportCards = [
-        { label: 'Salud operacional', value: org.last_health_score ?? riskScore, suffix: '/100', icon: Gauge },
-        { label: 'Asignacion alumnos', value: assignmentRate, suffix: '%', icon: PieChart },
-        { label: 'Alumnos activos', value: activeRate, suffix: '%', icon: TrendingUp },
-        { label: 'Uso de seats', value: seatUsage, suffix: '%', icon: Users },
+        { label: 'Salud operacional', value: org.last_health_score ?? riskScore, suffix: '/100', icon: Gauge, delta: null },
+        { label: 'Asignacion alumnos', value: assignmentRate, suffix: '%', icon: PieChart, delta: null },
+        { label: 'Check-ins 7d', value: checkIns.total7d, suffix: '', icon: ClipboardList, delta: checkInDeltaStr },
+        { label: 'Participación', value: checkIns.clientsActive7d, suffix: ` / ${checkIns.totalOrgClients}`, icon: TrendingUp, delta: null },
     ]
 
     return (
@@ -116,17 +122,24 @@ export default async function OrgReportsPage({ params }: Props) {
                 </section>
 
                 <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {reportCards.map(({ label, value, suffix, icon: Icon }) => (
+                    {reportCards.map(({ label, value, suffix, icon: Icon, delta }) => (
                         <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">{label}</p>
-                                    <p className={`mt-3 text-3xl font-black ${reportTone(value)}`}>
+                                    <p className={`mt-3 text-3xl font-black ${reportTone(typeof value === 'number' ? value : 0)}`}>
                                         {value}{suffix}
                                     </p>
                                 </div>
-                                <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sky-300">
-                                    <Icon className="h-4 w-4" aria-hidden="true" />
+                                <div className="flex flex-col items-end gap-1">
+                                    <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sky-300">
+                                        <Icon className="h-4 w-4" aria-hidden="true" />
+                                    </div>
+                                    {delta !== null && (
+                                        <span className={`text-[10px] font-bold ${delta.startsWith('+') ? 'text-emerald-400' : delta.startsWith('-') ? 'text-red-400' : 'text-zinc-500'}`}>
+                                            {delta} vs sem ant.
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>

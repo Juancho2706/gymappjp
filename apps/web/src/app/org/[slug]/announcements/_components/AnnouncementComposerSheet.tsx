@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
-import { CalendarClock, Loader2, Plus, Send, X } from 'lucide-react'
+import { CalendarClock, Clock, Loader2, Plus, Send, X } from 'lucide-react'
 import { createAnnouncementAction } from '../_actions/announcements.actions'
 
 interface Props {
@@ -73,15 +73,35 @@ function AnnouncementForm({ orgSlug, audienceCount, onSuccess, compact = false }
                     ))}
                 </div>
             </div>
-            <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">Activo hasta (opcional)</label>
-                <div className="relative">
-                    <CalendarClock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            {/* Scheduling section */}
+            <div className="grid grid-cols-2 gap-3">
+                <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">
+                        <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Publicar el (opcional)
+                        </span>
+                    </label>
+                    <input
+                        name="published_at"
+                        type="datetime-local"
+                        className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-300"
+                    />
+                    <p className="mt-0.5 text-[10px] text-zinc-600">Vacío = publicar ahora</p>
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">
+                        <span className="flex items-center gap-1">
+                            <CalendarClock className="h-3 w-3" />
+                            Activo hasta
+                        </span>
+                    </label>
                     <input
                         name="active_until"
                         type="datetime-local"
-                        className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-950 pl-9 pr-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-300"
+                        className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-300"
                     />
+                    <p className="mt-0.5 text-[10px] text-zinc-600">Vacío = sin vencimiento</p>
                 </div>
             </div>
 
@@ -94,7 +114,7 @@ function AnnouncementForm({ orgSlug, audienceCount, onSuccess, compact = false }
                 className="w-full inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 text-sm font-black text-zinc-950 transition hover:bg-cyan-200 disabled:opacity-50"
             >
                 {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {pending ? 'Publicando...' : `Publicar para ${audienceCount} miembros`}
+                {pending ? 'Guardando...' : `Publicar para ${audienceCount} miembros`}
             </button>
         </form>
     )
