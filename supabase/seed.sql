@@ -17,6 +17,10 @@ DECLARE
   coach_inv  uuid := '00000000-0000-0000-0001-000000000008';
   org_owner_nocoach uuid := '00000000-0000-0000-0001-000000000009';
   coach_susp uuid := '00000000-0000-0000-0001-000000000010';
+  -- Enterprise staff (non-coach roles for multi-role tests)
+  staff_ops    uuid := '00000000-0000-0000-0001-000000000011';
+  staff_analyst uuid := '00000000-0000-0000-0001-000000000012';
+  staff_brand  uuid := '00000000-0000-0000-0001-000000000013';
   -- Org IDs
   org_a uuid := '00000000-0000-0000-0002-000000000001';
   org_b uuid := '00000000-0000-0000-0002-000000000002';
@@ -72,7 +76,11 @@ BEGIN
     (cb5, 'client-b5@eva-test.cl', pw, now(), '{"full_name":"Client B5"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (cs1, 'client-solo1@eva-test.cl', pw, now(), '{"full_name":"Client Solo1"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
     (cs2, 'client-solo2@eva-test.cl', pw, now(), '{"full_name":"Client Solo2"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
-    (cs3, 'client-solo3@eva-test.cl', pw, now(), '{"full_name":"Client Solo3"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', '')
+    (cs3, 'client-solo3@eva-test.cl', pw, now(), '{"full_name":"Client Solo3"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
+    -- Enterprise staff with non-coach roles (for multi-role tests)
+    (staff_ops,     'staff-ops-a@eva-test.cl',     pw, now(), '{"full_name":"Staff Ops A"}'::jsonb,     '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
+    (staff_analyst, 'staff-analyst-a@eva-test.cl', pw, now(), '{"full_name":"Staff Analyst A"}'::jsonb, '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', ''),
+    (staff_brand,   'staff-brand-a@eva-test.cl',   pw, now(), '{"full_name":"Staff Brand A"}'::jsonb,   '{"provider":"email","providers":["email"]}'::jsonb, now(), now(), 'authenticated', 'authenticated', false, '00000000-0000-0000-0000-000000000000', '', '', '', '', '')
   ON CONFLICT (id) DO NOTHING;
 
   -- ============================================================
@@ -113,7 +121,10 @@ BEGIN
     (org_a, coach_a1,          coach_a1,   'coach',     'active',  now()),
     (org_a, coach_a2,          coach_a2,   'coach',     'active',  now()),
     (org_a, coach_both,        coach_both, 'coach',     'active',  now()),
-    (org_a, org_owner_nocoach, NULL,       'org_admin', 'active',  now()),
+    (org_a, org_owner_nocoach, NULL,       'org_admin',      'active',  now()),
+    (org_a, staff_ops,         NULL,       'ops',            'active',  now()),
+    (org_a, staff_analyst,     NULL,       'analyst',        'active',  now()),
+    (org_a, staff_brand,       NULL,       'brand_manager',  'active',  now()),
     (org_b, owner_b,           owner_b,    'org_owner', 'active',  now()),
     (org_b, coach_b1,          coach_b1,   'coach',     'active',  now()),
     (org_b, coach_both,        coach_both, 'coach',     'active',  now()),
