@@ -911,3 +911,24 @@ export async function getClientNutritionActivityDates(clientId: string): Promise
     if (!data) return []
     return [...new Set(data.map((r) => r.log_date as string))]
 }
+
+/**
+ * Marks a client check-in as reviewed by the authenticated coach.
+ * Validates coach owns the client under the active workspace.
+ * Sets reviewed_at + reviewed_by for org response-time metrics.
+ */
+export async function markCheckInReviewed(clientId: string, checkInId: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+    await assertCoachClientReadAccess(supabase, user.id, clientId)
+
+    const { error } = await supabase
+        .from('check_ins')
+        .update({ reviewed_at: new Date().toISOString(), reviewed_by: user.id })
+        .eq('id', checkInId)
+        .eq('client_id', clientId)
+        .is('reviewed_at', null)
+    if (error) throw new Error(error.message)
+    return { success: true }
+}

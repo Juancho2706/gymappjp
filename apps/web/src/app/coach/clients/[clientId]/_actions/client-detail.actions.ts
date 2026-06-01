@@ -12,7 +12,9 @@ import {
     getDynamicMetrics as getDynamicMetricsService,
     getWeeklyCompliance as getWeeklyComplianceService,
     updateClientGoalWeight as updateClientGoalWeightService,
+    markCheckInReviewed as markCheckInReviewedService,
 } from '@/services/client/client-detail.service'
+import { revalidatePath } from 'next/cache'
 
 export async function getClientProfileData(clientId: string) {
     return getClientProfileDataService(clientId)
@@ -31,6 +33,12 @@ export async function addPayment(data: {
 
 export async function deletePayment(paymentId: string, clientId: string) {
     return deletePaymentService(paymentId, clientId)
+}
+
+export async function markCheckInReviewed(clientId: string, checkInId: string) {
+    const res = await markCheckInReviewedService(clientId, checkInId)
+    revalidatePath(`/coach/clients/${clientId}`)
+    return res
 }
 
 export async function getWeeklyCompliance(clientId: string) {

@@ -48,6 +48,8 @@ export default async function OrgCheckInsPage({ params }: Props) {
         clientsActive7d,
         totalOrgClients,
         noCheckIn14d,
+        reviewedRate30d,
+        avgResponseHours,
         byCoach,
         recent,
     } = data
@@ -96,6 +98,24 @@ export default async function OrgCheckInsPage({ params }: Props) {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </section>
+
+                {/* Coach response metrics (reviewed_at) */}
+                <section className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Revisados 30d</p>
+                        <p className={`mt-2 text-2xl font-black ${reviewedRate30d >= 70 ? 'text-emerald-300' : reviewedRate30d >= 40 ? 'text-amber-300' : 'text-red-300'}`}>
+                            {reviewedRate30d}%
+                        </p>
+                        <p className="mt-1 text-[11px] text-zinc-500">check-ins revisados por coach</p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Tiempo respuesta</p>
+                        <p className="mt-2 text-2xl font-black text-white">
+                            {avgResponseHours === null ? 'N/D' : avgResponseHours < 24 ? `${avgResponseHours}h` : `${Math.round(avgResponseHours / 24)}d`}
+                        </p>
+                        <p className="mt-1 text-[11px] text-zinc-500">promedio check-in → revisión</p>
                     </div>
                 </section>
 

@@ -882,6 +882,8 @@ export type OrgCheckInOverview = {
     clientsActive7d: number   // unique clients with check-in in last 7 days
     totalOrgClients: number
     noCheckIn14d: number      // active clients without check-in in 14+ days
+    reviewedRate30d: number   // % of 30d check-ins reviewed by coach
+    avgResponseHours: number | null  // avg hours between check-in created_at and reviewed_at
     byCoach: {
         coachId: string
         coachName: string
@@ -906,7 +908,7 @@ export async function findOrgCheckInOverview(db: DB, orgId: string): Promise<Org
             .select('id, full_name, coach_id, is_active')
             .eq('org_id', orgId),
         db.from('check_ins')
-            .select('id, client_id, date, created_at')
+            .select('id, client_id, date, created_at, reviewed_at')
             .gte('date', d30)
             .order('date', { ascending: false })
             .limit(500),
@@ -929,6 +931,20 @@ export async function findOrgCheckInOverview(db: DB, orgId: string): Promise<Org
     const checkIns7d = orgCheckIns.filter(ci => ci.date >= d7)
     const total7d = checkIns7d.length
     const clientsActive7d = new Set(checkIns7d.map(ci => ci.client_id)).size
+
+    // Coach response metrics: reviewed rate + avg response time
+    const reviewed = orgCheckIns.filter(ci => (ci as { reviewed_at?: string | null }).reviewed_at)
+    const reviewedRate30d = total30d > 0 ? Math.round((reviewed.length / total30d) * 100) : 0
+    let avgResponseHours: number | null = null
+    if (reviewed.length > 0) {
+        const totalHours = reviewed.reduce((sum, ci) => {
+            const created = ci.created_at ? new Date(ci.created_at).getTime() : null
+            const rev = new Date((ci as { reviewed_at: string }).reviewed_at).getTime()
+            if (!created) return sum
+            return sum + Math.max(0, (rev - created) / 3_600_000)
+        }, 0)
+        avgResponseHours = Math.round(totalHours / reviewed.length)
+    }
 
     // Clients with last check-in older than 14 days (or never)
     const lastCheckInByClient = new Map<string, string>() // clientId -> date
@@ -976,5 +992,5 @@ export async function findOrgCheckInOverview(db: DB, orgId: string): Promise<Org
         }
     })
 
-    return { total7d, total30d, clientsActive7d, totalOrgClients: clients.length, noCheckIn14d, byCoach, recent }
+    return { total7d, total30d, clientsActive7d, totalOrgClients: clients.length, noCheckIn14d, reviewedRate30d, avgResponseHours, byCoach, recent }
 }

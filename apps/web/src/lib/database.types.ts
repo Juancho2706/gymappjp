@@ -133,6 +133,8 @@ export type Database = {
           front_photo_url: string | null
           id: string
           notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           weight: number | null
         }
         Insert: {
@@ -144,6 +146,8 @@ export type Database = {
           front_photo_url?: string | null
           id?: string
           notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           weight?: number | null
         }
         Update: {
@@ -155,6 +159,8 @@ export type Database = {
           front_photo_url?: string | null
           id?: string
           notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           weight?: number | null
         }
         Relationships: [
@@ -163,6 +169,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_ins_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "coaches"
             referencedColumns: ["id"]
           },
         ]
