@@ -937,7 +937,7 @@ export async function reassignClientAction(
         .eq('org_id', org.id)
     if (error) return { error: error.message }
 
-    // Update assignment record
+    // Update assignment record (unique is org_id+client_id; move to new coach)
     await admin.from('coach_client_assignments')
         .upsert({
             org_id: org.id,
@@ -945,7 +945,8 @@ export async function reassignClientAction(
             coach_id: newCoachId,
             assigned_at: new Date().toISOString(),
             assigned_by: user.id,
-        }, { onConflict: 'org_id,client_id,coach_id' })
+            deleted_at: null,
+        }, { onConflict: 'org_id,client_id' })
         .then(undefined, () => undefined)
 
     await writeOrgAuditEvent(admin, {
@@ -1032,7 +1033,8 @@ export async function rollbackLastReassignmentAction(
             coach_id: previousCoachId,
             assigned_at: new Date().toISOString(),
             assigned_by: user.id,
-        }, { onConflict: 'org_id,client_id,coach_id' })
+            deleted_at: null,
+        }, { onConflict: 'org_id,client_id' })
         .then(undefined, () => undefined)
 
     await writeOrgAuditEvent(admin, {
