@@ -3632,7 +3632,7 @@ PRODUCTO (flujo usable end-to-end):
 UX/MOBILE:
 - [x] `/assignments` y `/payments`: rows compactas + bottom sheets mobile. Completado 2026-05-31. `/payments` usa `PaymentRecordSheet`; `/assignments` usa `CoachAssignmentsMobile` con cards por coach + sheet de alumnos. (UX)
 - [x] Safe-area pass en overlays/barras fixed enterprise. Completado 2026-05-31. No hay `h-screen`/`100vh` en `/org/[slug]`; se agrego `pl-safe pr-safe` a bottom nav, bulk bar/toast y modales/overlays enterprise (`CoachQRButton`, nutrition template, import clients, archive confirm, remove coach, revoke staff).
-- [ ] Migrar modales destructivos a bottom sheets en <md. (UX)
+- [x] Migrar modales a bottom sheets en <md. Completado 2026-06-01. 8 dialogs: items-end mobile / centered desktop, rounded-t-2xl + pb-safe. Bonus: fix crash de settings (SettingsAccordion recibía icon component fn desde RSC).
 - [x] Empty states con icon+headline+CTA por contexto. Completado 2026-06-01. `OrgEmptyState` reutilizable aplicado a clients/coaches/announcements. Pattern 2026 one-idea-per-screen.
 - [ ] Pasada contraste AA dark mode enterprise. (UX)
 - [x] Revisar warnings React hydration en Playwright mobile (`caret-color: transparent` en inputs). Completado 2026-05-31. Causa: `page.screenshot()` ocultaba carets por defecto y agregaba inline style a inputs; el audit visual usa `caret: 'initial'`. Verificado con `npx playwright test tests/enterprise/mobile-visual-audit.spec.ts --workers=1` sin mismatch `caret-color`. (QA/UX)
