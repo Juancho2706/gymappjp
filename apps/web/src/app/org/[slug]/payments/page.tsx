@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClientPayments, getOrgClients } from '../_data/org.queries'
 import { orgRoleCan } from '@/domain/org/permissions'
+import { OrgEmptyState } from '../_components/OrgEmptyState'
 import { recordEnterpriseClientPaymentFormAction } from './_actions/payment.actions'
 import { PaymentRecordSheet } from './_components/PaymentRecordSheet'
 
@@ -330,7 +331,15 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                                     )
                                 })
                             ) : (
-                                <div className="p-6 text-sm text-zinc-500">No hay alumnos para el filtro seleccionado.</div>
+                                <div className="p-4">
+                                    <OrgEmptyState
+                                        icon={ReceiptText}
+                                        tone="sky"
+                                        headline="Sin alumnos para este filtro"
+                                        description="Probá con otro estado de pago, o registrá el primer pago externo de un alumno desde su fila."
+                                        cta={{ label: 'Ver todos', href: `/org/${slug}/payments` }}
+                                    />
+                                </div>
                             )}
                         </div>
                     </div>

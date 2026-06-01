@@ -2916,7 +2916,7 @@ Pendiente:
 
 - [x] CSV de weekly brief con permission + audit `report.exported`. Verificado/cerrado 2026-05-31. `/reports/export` usa `org.reports.export`, audit fail-closed `report.exported`, checksum SHA-256 en header/metadata y CSV operacional.
 - [x] PDF ejecutivo completado 2026-06-01. `ReportsPdfButton` client-side con jspdf: metricas, alumnos, coaches, branding amber. Descarga reporte-[slug]-[date].pdf.
-- [ ] Rango de fechas y comparacion historica.
+- [x] Period toggle 7d/30d en reports. Completado 2026-06-01. `?period=` URL param, pill toggle, card check-ins cambia total7d/30d. Rango de fechas custom + comparación histórica completa quedan para cuando haya volumen.
 - [ ] No vender como analytics avanzado hasta normalizar adherencia/check-ins/pagos.
 - [ ] Mobile: resumen ejecutivo vertical con tabs.
 
@@ -3633,7 +3633,7 @@ UX/MOBILE:
 - [x] `/assignments` y `/payments`: rows compactas + bottom sheets mobile. Completado 2026-05-31. `/payments` usa `PaymentRecordSheet`; `/assignments` usa `CoachAssignmentsMobile` con cards por coach + sheet de alumnos. (UX)
 - [x] Safe-area pass en overlays/barras fixed enterprise. Completado 2026-05-31. No hay `h-screen`/`100vh` en `/org/[slug]`; se agrego `pl-safe pr-safe` a bottom nav, bulk bar/toast y modales/overlays enterprise (`CoachQRButton`, nutrition template, import clients, archive confirm, remove coach, revoke staff).
 - [ ] Migrar modales destructivos a bottom sheets en <md. (UX)
-- [ ] Empty states ilustrados por contexto. (UX)
+- [x] Empty states con icon+headline+CTA por contexto. Completado 2026-06-01. `OrgEmptyState` reutilizable aplicado a clients/coaches/announcements. Pattern 2026 one-idea-per-screen.
 - [ ] Pasada contraste AA dark mode enterprise. (UX)
 - [x] Revisar warnings React hydration en Playwright mobile (`caret-color: transparent` en inputs). Completado 2026-05-31. Causa: `page.screenshot()` ocultaba carets por defecto y agregaba inline style a inputs; el audit visual usa `caret: 'initial'`. Verificado con `npx playwright test tests/enterprise/mobile-visual-audit.spec.ts --workers=1` sin mismatch `caret-color`. (QA/UX)
 - [x] Revisar warning Recharts en dashboard durante Playwright: `width(-1) and height(-1) of chart should be greater than 0`. Fix estatico 2026-05-31 en `DashboardCharts`: `ResponsiveContainer` ahora tiene `minWidth`, `minHeight`, `initialDimension` y wrapper con min size. Typecheck pasa; no reaparecio en runs Playwright posteriores. (QA/UX)
