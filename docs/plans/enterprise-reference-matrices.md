@@ -145,4 +145,50 @@ Pendiente legal formal: redactar TOS enterprise con esta distinción + DPA (Data
 
 ---
 
-> Este documento cierra los entregables de documentación del Plan C (matrices de permisos/branding, lista de rutas, contratos mobile, data inventory, retention, responsable de datos). Los ítems legales formales (TOS/DPA redactados por abogado) y los que requieren deploy (runbook migraciones prod) quedan para la fase post-implementación.
+## 8. Inventario de Superficies de Marca
+
+Dónde se aplica el branding org y estado:
+
+| Superficie | Estado | Notas |
+|---|---|---|
+| Dashboard enterprise `/org/*` | ✅ | usa org.primary_color/logo |
+| Panel coach enterprise | ✅ | coach hereda marca org en contexto enterprise |
+| PWA alumno enterprise | ✅ | `client.org_id` → marca org en portal + manifest |
+| Login `/org/login` | ✅ | shell enterprise |
+| Loaders | 🟡 | loader genérico; loader custom por org = post-MVP |
+| PWA manifest/icons | 🟡 | manifest base; per-org dinámico = post-MVP |
+| Emails (Resend) | 🟡 | weekly email branded con nombre org; header/footer custom = post-MVP |
+| Reportes PDF | ✅ | header con nombre org + accent amber |
+| Proof Pack PDF | ✅ | logo/color/plan org |
+| QR invite | ✅ | genérico (no requiere marca) |
+| Error pages | 🟡 | EVA default; per-org = post-MVP |
+
+Las 🟡 requieren `organization_branding` con versionado o assets dinámicos — post-MVP, no bloquean primera venta.
+
+## 9. Criterios QA Web/Mobile (pre-venta)
+
+**Web (desktop):**
+- [x] Typecheck limpio (`pnpm typecheck`)
+- [x] Route guards por rol (multi-role-access.spec 18 tests)
+- [x] RLS isolation (rls-isolation.spec 46 tests)
+- [x] Audit coverage detector (`pnpm audit:org-sensitive-actions`)
+- [ ] E2E happy-path completo (post-deploy)
+
+**Mobile (390/430px):**
+- [x] Sin overflow horizontal (mobile-visual-audit 4/4)
+- [x] Bottom nav + safe areas
+- [x] Modales → bottom sheets
+- [x] Empty states con CTA
+- [x] Contraste AA (zinc-500 tier)
+
+## 10. Auditoría Acceso a Fotos/Progreso (hallazgo)
+
+`check_ins.*_photo_url` viven en bucket `checkins`:
+- **RLS:** SELECT/INSERT/UPDATE scoped a `foldername[1] = auth.uid()` — solo el dueño (alumno) accede vía API.
+- **Riesgo:** bucket es `public=true` → objetos servibles por URL pública directa (`/object/public/...`) bypaseando RLS si se conoce/adivina el path.
+- **Limitación actual:** coach NO puede ver fotos de check-in del alumno vía bucket (policy es `auth.uid()`).
+- **Recomendación (registrada):** migrar `checkins` a bucket privado + signed URLs antes de vender salud/progreso enterprise avanzado. Coach access vía signed URL emitido server-side con guard de pertenencia.
+
+---
+
+> Este documento cierra los entregables de documentación del Plan C (matrices de permisos/branding, rutas, contratos mobile, data inventory, retention, responsable de datos, inventario de superficies, criterios QA, auditoría de fotos). Los ítems legales formales (TOS/DPA por abogado), tests E2E y los que requieren deploy (runbook migraciones prod, migrar bucket a privado) quedan para la fase post-implementación.

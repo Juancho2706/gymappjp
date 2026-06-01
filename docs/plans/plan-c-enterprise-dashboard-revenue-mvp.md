@@ -1867,7 +1867,7 @@ Opcion A implementada: `nutrition_plan_templates` con `coach_id = null`.
 - [x] `pnpm run typecheck` + `pnpm run audit:org-sensitive-actions` pasan.
 - [ ] `assignOrgNutritionTemplateToCoachClients` (futuro): propagar template org a clientes via `NutritionService.propagateTemplateChanges`. No prioritario MVP.
 - [ ] Full PlanBuilder integration con `mode='org_template'` (futuro): coaches usan su builder standalone mientras tanto.
-- [ ] Tab "Planes activos" en `/nutrition` con todos los `nutrition_plans WHERE org_id = orgId` (futuro).
+- [x] Tab "Planes activos" en /nutrition. Completado 2026-06-01 (getOrgActiveNutritionPlans, sección por coach).
 
 **Criterios done globales Fase P2.5:**
 
@@ -2060,7 +2060,7 @@ Restricciones:
 - [x] Migrations locales necesarias para alumnos enterprise sin coach. Completado el 2026-05-26 19:55:20 -04:00. Migration: `supabase/migrations/20260526103000_clients_nullable_coach_for_enterprise.sql`; pendiente aplicarla cuando Supabase local este levantado.
 - [x] Aplicar migration local y verificar DB. Completado el 2026-05-26 20:39:12 -04:00. Verificacion: `npx supabase migration list --local`, consulta `information_schema.columns` para `clients.coach_id`, `npx supabase db lint --local`.
 - [ ] Plan rollback local/live.
-- [ ] Criterios QA web/mobile.
+- [x] Criterios QA web/mobile. Completado 2026-06-01: ver enterprise-reference-matrices.md §9.
 
 #### Regla de Ejecucion y Trazabilidad del Plan
 
@@ -2396,7 +2396,7 @@ Fases futuras:
 - [x] Data inventory. Completado 2026-06-01: ver enterprise-reference-matrices.md §5.
 - [x] Legal copy enterprise (borrador responsable de datos). Completado 2026-06-01: ver enterprise-reference-matrices.md §7. Redacción legal formal (TOS/DPA) = post-MVP.
 - [x] Retention/export/delete (borrador). Completado 2026-06-01: ver enterprise-reference-matrices.md §6.
-- [ ] Auditar acceso a fotos/progreso.
+- [x] Auditar acceso a fotos/progreso. Completado 2026-06-01: ver enterprise-reference-matrices.md §10. RLS scope por auth.uid(); riesgo bucket público registrado (migrar a privado+signed URLs post-MVP).
 - [x] Preparar checklist Ley 21.719. Completado 2026-06-01. 8 ítems P0/P1/P2 en Trust Center con deadline 2026-12-01. Cubre: data inventory, TOS, legal copy, retención, fotos audit, ARCO, consentimiento, pre-prod review.
 
 ##### 14. Testing Web/Mobile
@@ -2822,9 +2822,9 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Modelo `organization_branding`: draft/published/versionado/rollback.
+- [x] Branding draft/published. Completado (brand_draft jsonb + brand_published_at + publish action). Versionado/rollback con tabla de historial = post-MVP (no bloquea venta).
 - [ ] Loader custom real por org: logo loader, texto, icon mode, contraste y preview PWA.
-- [ ] Inventario de superficies: login, manifests, loaders, emails, reports, QR, PDFs, error pages.
+- [x] Inventario de superficies. Completado 2026-06-01: ver enterprise-reference-matrices.md §8.
 - [ ] Tests: alumno enterprise ve org brand; alumno standalone ve coach brand.
 - [x] Mobile: tabs/swipe completado 2026-06-01. `BrandMobileTabBar`: sticky tab bar solo en `<md` con 4 tabs (Config, Preview, Publicar, Propagar). Desktop siempre muestra todo.
 
@@ -3646,7 +3646,7 @@ UX/MOBILE:
 VENTAS/LEGAL (al buscar cobrar):
 - [x] Proof Pack PDF + PDF ejecutivo reportes. Completado 2026-06-01.
 - [x] Trust Center Lite. Completado 2026-05-31. `/org/[slug]/trust` consolida permisos, MFA posture, audit, exports, retention/data risks y datos sensibles sin servicio externo. (Sales/Security)
-- [ ] Derechos ARCO + data map + retention; checklist Ley 21.719 antes de 2026-12-01. (Legal)
+- [x] ARCO + data map + retention + checklist Ley 21.719. Completado 2026-06-01: enterprise-reference-matrices.md §5/§6 + checklist en /trust. Redacción legal formal = post-MVP.
 - [x] Responsable de datos por contexto. Completado 2026-06-01: ver enterprise-reference-matrices.md §7.
 - [ ] Runbook DevOps: bulk apply migraciones local→prod con orden + rollback + backup. (DevOps)
 - [x] CI que corre `rls-isolation.spec.ts` por PR. Completado 2026-05-31. `npm run test:e2e:enterprise-rls` y step dedicado `Enterprise RLS isolation` en `.github/workflows/ci.yml`; verificado local 46/46 passing. (DevOps)
