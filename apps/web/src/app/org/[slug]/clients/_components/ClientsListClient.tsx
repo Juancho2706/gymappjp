@@ -8,13 +8,15 @@ import {
     ChevronDown,
     ExternalLink,
     Loader2,
+    RefreshCw,
     Square,
     UserX,
     Users,
     X,
 } from 'lucide-react'
 import { AssignClientSelect } from './AssignClientSelect'
-import { bulkAssignSelectedClientsAction, bulkArchiveClientsAction } from '../../_actions/org.actions'
+import { ClientDetailSheet } from './ClientDetailSheet'
+import { bulkAssignSelectedClientsAction, bulkArchiveClientsAction, bulkReactivateClientsAction } from '../../_actions/org.actions'
 
 export type ClientDisplayRow = {
     id: string
@@ -64,6 +66,7 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
     const [showCoachPicker, setShowCoachPicker] = useState(false)
     const [confirmArchive, setConfirmArchive] = useState(false)
     const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null)
+    const [detailClient, setDetailClient] = useState<ClientDisplayRow | null>(null)
     const [pending, startTransition] = useTransition()
 
     const allSelected = selected.size === clients.length && clients.length > 0
@@ -108,6 +111,14 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
         })
     }
 
+    function handleReactivate() {
+        startTransition(async () => {
+            const res = await bulkReactivateClientsAction(orgSlug, [...selected])
+            if (res.error) showToast(false, res.error)
+            else { showToast(true, `${res.count} alumno${res.count === 1 ? '' : 's'} reactivado${res.count === 1 ? '' : 's'}.`); clearSelection() }
+        })
+    }
+
     if (clients.length === 0) {
         return (
             <div className="overflow-hidden rounded-xl border border-zinc-800">
@@ -146,7 +157,12 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
                 {clients.map(client => (
                     <div
                         key={client.id}
-                        className={`flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/50 p-3 last:border-b-0 xl:grid xl:gap-4 xl:grid-cols-[auto_1fr_180px_150px_180px] xl:items-center xl:p-4 transition-colors ${
+                        onClick={e => {
+                            // Open detail sheet if not clicking checkbox or action buttons
+                            if ((e.target as HTMLElement).closest('button,a,select')) return
+                            setDetailClient(client)
+                        }}
+                        className={`flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/50 p-3 last:border-b-0 xl:grid xl:gap-4 xl:grid-cols-[auto_1fr_180px_150px_180px] xl:items-center xl:p-4 transition-colors cursor-pointer hover:bg-zinc-900/60 ${
                             selected.has(client.id) ? 'bg-amber-400/5' : ''
                         }`}
                     >
@@ -269,6 +285,18 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
                                 )}
                             </div>
 
+                            {/* Reactivate (shown when inactive clients selected) */}
+                            {[...selected].some(id => clients.find(c => c.id === id)?.isActive === false) && (
+                                <button
+                                    onClick={handleReactivate}
+                                    disabled={pending}
+                                    className="flex items-center gap-1.5 rounded-xl border border-emerald-600/40 bg-emerald-600/15 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-600/25 transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline">Reactivar</span>
+                                </button>
+                            )}
+
                             {/* Archive */}
                             <button
                                 onClick={() => { setConfirmArchive(true); setShowCoachPicker(false) }}
@@ -329,6 +357,16 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
                     {toast.msg}
                     <button onClick={() => setToast(null)}><X className="h-4 w-4" /></button>
                 </div>
+            )}
+
+            {/* Client detail sheet — side panel desktop / bottom sheet mobile */}
+            {detailClient && (
+                <ClientDetailSheet
+                    orgSlug={orgSlug}
+                    client={detailClient}
+                    onClose={() => setDetailClient(null)}
+                    coaches={coaches}
+                />
             )}
         </>
     )

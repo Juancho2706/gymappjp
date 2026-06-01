@@ -706,6 +706,52 @@ export async function bulkAssignSelectedClientsAction(
 }
 
 /**
+ * Reactivates a selection of archived clients (sets is_active=true).
+ * Guards: all clients must belong to the org.
+ */
+export async function bulkReactivateClientsAction(
+    orgSlug: string,
+    clientIds: string[],
+): Promise<{ success?: boolean; count?: number; error?: string }> {
+    if (!clientIds.length) return { error: 'No hay alumnos seleccionados.' }
+    if (clientIds.length > 50) return { error: 'Máximo 50 alumnos por operación.' }
+
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: orgClients } = await admin
+        .from('clients')
+        .select('id')
+        .eq('org_id', org.id)
+        .in('id', clientIds)
+    const validIds = new Set((orgClients ?? []).map(c => c.id))
+    const invalid = clientIds.filter(id => !validIds.has(id))
+    if (invalid.length) return { error: `${invalid.length} alumnos no pertenecen a la organización.` }
+
+    const { error } = await admin
+        .from('clients')
+        .update({ is_active: true })
+        .eq('org_id', org.id)
+        .in('id', clientIds)
+    if (error) return { error: error.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.bulk_reactivated',
+        targetType: 'client',
+        targetId: org.id,
+        metadata: { client_ids: clientIds, count: clientIds.length },
+    })
+
+    revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, count: clientIds.length }
+}
+
+/**
  * Archives a selection of clients (sets is_active=false).
  * Guards: all clients must belong to the org.
  */
