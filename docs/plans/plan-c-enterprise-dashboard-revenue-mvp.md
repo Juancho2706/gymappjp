@@ -1891,7 +1891,7 @@ Opcion A implementada: `nutrition_plan_templates` con `coach_id = null`.
 
 Prioridad P3 - diferenciadores futuros sin costo externo:
 
-- [ ] "Proof Pack" exportable para ventas/CSM: brand preview, roles, audit, alumnos asignados, reporte semanal.
+- [x] "Proof Pack" exportable. Completado 2026-06-01: ruta /proof + ProofPackPdfButton (branding, métricas, capacidades, seguridad).
 - [x] Capacity Autopilot manual: Completado 2026-06-01. CapacityAutopilotCard en /assignments: max 3 sugerencias, target dinamico, approve button llama bulkAssignSelectedClientsAction. Aparece solo si hay coaches sobrecargados + con capacidad.
 - [x] Trust Center Lite: permisos, MFA, audit, retention, exports en una vista. Completado 2026-05-31. Nueva ruta `/org/[slug]/trust` y nav en Seguridad/Admin; read-only, sin servicios pagos.
 - [x] Role home: owner, ops/admin, brand manager y analyst ven landing interna distinta. Completado 2026-06-01. `EnterpriseDashboardHome` muestra role focus banner para roles no-owner con quick links contextuales; action queue filtrado por permisos del rol; `org_owner` ve dashboard completo sin cambios.
@@ -1901,7 +1901,7 @@ Prioridad P3 - diferenciadores futuros sin costo externo:
 
 Hallazgos B2B SaaS 2026 aplicables sin costo externo:
 
-- [ ] **Reports: delta semanal preciso** — tabla `org_weekly_snapshots` (health_score, activeClients, assignmentRate) poblada por cron semanal existente. Delta real vs semana anterior. 1 migration + update cron job.
+- [x] **Reports: delta semanal preciso** — Completado 2026-06-01: migration org_weekly_snapshots + cron weekly-snapshot + reports usa snapshot real.
 - [ ] **Announcements: read receipts** — evento `announcement.viewed` en audit log cuando alumno ve novedad. Mide impacto de comunicaciones. Sin migration.
 - [ ] **Check-ins: reviewed_at** — campo `reviewed_at` en `check_ins` o tabla `check_in_reviews` para medir response time del coach. Diferenciador para venta "coaching personalizado". Migration + UI.
 - [x] **Coaches: activity streak** — Completado 2026-06-01. `findOrgCoachStreaks` 12-week lookback; sección en `/check-ins` con badges y 🔥 para ≥4 semanas consecutivas.
@@ -2777,9 +2777,9 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Preview de impacto antes de revocar: alumnos afectados, reasignacion sugerida, standalone intacto.
-- [ ] Reset password/cambio rol con audit y feedback claro.
-- [ ] Separar mejor coaches operativos vs staff admin para evitar confusion de permisos.
+- [x] Preview de impacto antes de revocar. Completado: `RemoveCoachDialog` muestra clientCount, selector de reasignación y nota "standalone intacto".
+- [x] Reset password/cambio rol con audit. Completado: `CoachEnterpriseActions` (resetEnterpriseCoachPassword + updateEnterpriseCoachRole), ambos auditados.
+- [x] Separar coaches operativos vs staff admin. Completado: `/coaches` solo lista role=coach; staff enterprise vive en `/team`.
 - [x] Mobile: menu contextual completado 2026-06-01. CoachActionsMenu: botón ⋯ en <lg abre bottom sheet con acciones; desktop sin cambios.
 
 ### Equipo / Staff & Access `/team`
@@ -2873,7 +2873,7 @@ Pendiente:
 - [x] Tracking de uso por template/alumno. Completado 2026-05-31. MVP sin migracion: matchea planes activos por nombre + macros contra `org_nutrition_templates`, cuenta alumnos activos y adherencia 7d desde `daily_nutrition_logs`.
 - [x] Tracking de uso por coach. Completado 2026-05-31. Sin migracion: agrupa los planes activos matcheados por `coach_id`, muestra alumnos activos, planes activos, logs 7d y adherencia por coach en `/org/[slug]/nutrition`.
 - [ ] Full template creator en `/org/[slug]/nutrition/new` con PlanBuilder real (meals + foods). Ver Fase P2.5-D (requiere migration `nutrition_plan_templates.coach_id` nullable).
-- [ ] Tab "Planes activos" en `/nutrition`: todos los `nutrition_plans` donde `org_id = orgId` con adherencia por coach.
+- [x] Tab "Planes activos" en `/nutrition` por coach. Completado 2026-06-01: `getOrgActiveNutritionPlans` cuenta planes activos + alumnos únicos por coach. Sección "Planes activos por coach".
 - [x] Assign org template a coach/clientes via action auditada. Completado 2026-06-01 (`assignOrgNutritionPlanTemplateToClientsAction` + `AssignOrgNutritionTemplateButton`).
 - [ ] Filtros por objetivo cuando exista volumen suficiente de datos.
 - [x] Mobile: lista templates + button asignar (builder completo queda en desktop). Completado 2026-06-01.
@@ -3644,7 +3644,7 @@ UX/MOBILE:
 - [x] Mobile parity matrix Web/PWA/RN/native-only. Completado 2026-05-31. Matriz por menu documentada en seccion responsive; no se crea RN todavia. (Mobile)
 
 VENTAS/LEGAL (al buscar cobrar):
-- [ ] Proof Pack exportable (PDF) + PDF ejecutivo de reportes. (Sales)
+- [x] Proof Pack PDF + PDF ejecutivo reportes. Completado 2026-06-01.
 - [x] Trust Center Lite. Completado 2026-05-31. `/org/[slug]/trust` consolida permisos, MFA posture, audit, exports, retention/data risks y datos sensibles sin servicio externo. (Sales/Security)
 - [ ] Derechos ARCO + data map + retention; checklist Ley 21.719 antes de 2026-12-01. (Legal)
 - [ ] Definir responsable de datos por contexto en TOS enterprise. (Legal)
