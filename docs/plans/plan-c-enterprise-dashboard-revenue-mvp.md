@@ -2806,10 +2806,10 @@ Completado 2026-05-31:
 
 Pendiente:
 
-- [ ] Permisos granulares por feature: owner/admin/ops/analyst/brand_manager. *(commit a707d09 implemento ROLE_MATRIX; falta enforcement fine-grained por page)*
+- [x] Permisos granulares por feature: enforcement por page completado 2026-06-01. 8 páginas org redirigen roles sin `org.<area>.view` a `/org/[slug]`. analyst ganó audit.view + coaches.view.
 - [x] MFA policy real: `requires_mfa_setup` enforced via proxy.ts para org_admin. Completado (pre-existente).
 - [x] First-login password reset: `requires_password_change=true` en creacion de staff. proxy.ts redirige a `/setup-password` antes de MFA. Page con form + API route que limpia flag via service role. Completado 2026-06-01.
-- [ ] Tests multi-role: staff con cada rol ve las pantallas correctas.
+- [x] Tests multi-role: completado 2026-06-01. `multi-role-access.spec.ts` 18 tests: cada rol accede a lo permitido + 4 denial tests (brand_manager bloqueado de clients/payments, analyst de team/brand) + cross-org isolation.
 - [x] Mobile: role matrix 2-col en mobile (era full single-col). Completado 2026-06-01.
 
 ### Marca / Brand Studio `/brand`
