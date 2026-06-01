@@ -1892,7 +1892,7 @@ Opcion A implementada: `nutrition_plan_templates` con `coach_id = null`.
 Prioridad P3 - diferenciadores futuros sin costo externo:
 
 - [ ] "Proof Pack" exportable para ventas/CSM: brand preview, roles, audit, alumnos asignados, reporte semanal.
-- [ ] Capacity Autopilot manual: sugerencias de reasignacion por carga/riesgo, con aprobacion humana.
+- [x] Capacity Autopilot manual: Completado 2026-06-01. CapacityAutopilotCard en /assignments: max 3 sugerencias, target dinamico, approve button llama bulkAssignSelectedClientsAction. Aparece solo si hay coaches sobrecargados + con capacidad.
 - [x] Trust Center Lite: permisos, MFA, audit, retention, exports en una vista. Completado 2026-05-31. Nueva ruta `/org/[slug]/trust` y nav en Seguridad/Admin; read-only, sin servicios pagos.
 - [x] Role home: owner, ops/admin, brand manager y analyst ven landing interna distinta. Completado 2026-06-01. `EnterpriseDashboardHome` muestra role focus banner para roles no-owner con quick links contextuales; action queue filtrado por permisos del rol; `org_owner` ve dashboard completo sin cambios.
 - [x] Mobile parity matrix por menu: Web/PWA, RN, native-only. Documentado 2026-05-31 en seccion responsive: define equivalentes RN/native-only por pantalla sin crear app RN todavia.
