@@ -1903,7 +1903,7 @@ Hallazgos B2B SaaS 2026 aplicables sin costo externo:
 
 - [x] **Reports: delta semanal preciso** — Completado 2026-06-01: migration org_weekly_snapshots + cron weekly-snapshot + reports usa snapshot real.
 - [ ] **Announcements: read receipts** — evento `announcement.viewed` en audit log cuando alumno ve novedad. Mide impacto de comunicaciones. Sin migration.
-- [x] **Check-ins: reviewed_at** — Completado 2026-06-01. Migration check_ins.reviewed_at/reviewed_by + markCheckInReviewed action + métrica org (reviewedRate30d + avgResponseHours) en /check-ins. Botón coach-side = follow-up menor.
+- [x] **Check-ins: reviewed_at** — COMPLETO e2e 2026-06-01. Migration + markCheckInReviewed action + botón "Marcar revisado" coach (ProfileCheckInSnapshot) + métrica org (reviewedRate30d + avgResponseHours).
 - [x] **Coaches: activity streak** — Completado 2026-06-01. `findOrgCoachStreaks` 12-week lookback; sección en `/check-ins` con badges y 🔥 para ≥4 semanas consecutivas.
 - [x] **Onboarding: progress tracker** — Completado 2026-06-01. `OrgProgressTracker` 7 milestones reales, barra %, quick link.
 - [x] **Reports: export agendado** — Completado 2026-06-01. `POST /api/cron/weekly-report-email` + `pnpm run cron:weekly-email`. Email HTML branded con health tier, métricas, alerta unassigned, CTA.
@@ -3680,5 +3680,10 @@ MVP cobrable = features actuales (✅) + bloque SEGURIDAD completo + workspace s
 
 ### Entregables de documentación cerrados
 `docs/plans/enterprise-reference-matrices.md`: matrices permisos/branding, rutas, contratos mobile, data inventory, retention, responsable de datos, inventario superficies, criterios QA, auditoría fotos.
+
+### Verificación de migraciones (2026-06-01, rol DevOps)
+- Local: 58 migraciones, `db lint --local` → **"No schema errors found"** (tras fix RPC).
+- **Bug encontrado y corregido:** `bulk_assign_selected_clients` + upserts usaban `ON CONFLICT (org_id,client_id,coach_id)` contra `UNIQUE(org_id,client_id)` → error 42P10 en reasignación. Migration `20260601000700` + fix TS.
+- **Informe de conflicto remoto/local:** `docs/operations/SUPABASE_MIGRATION_CONFLICT_REPORT.md`. Divergencia ALTA: local usa baseline squasheado + 55 enterprise; prod tiene historia granular abril-mayo + 7 migraciones `20260528*` no incorporadas. Plan de merge seguro documentado (db pull batch 28-may → repair baseline applied → push solo enterprise). **NO ejecutar db push ciego a prod.**
 
 **Conclusión:** la superficie enterprise web/PWA es funcionalmente vendible. Lo que resta es trabajo de fase siguiente (features avanzadas, normalización con volumen real, y la batería tests+deploy que el owner ejecuta manualmente).
