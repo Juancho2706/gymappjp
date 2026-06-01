@@ -968,6 +968,93 @@ export async function reassignClientAction(
 }
 
 /**
+ * Reverts the most recent reassignment for a client back to the previous coach.
+ * Reads the last `client.reassigned` audit event (from_coach_id) and reassigns.
+ * Guards: org admin, client belongs to org, previous coach still active.
+ */
+export async function rollbackLastReassignmentAction(
+    orgSlug: string,
+    clientId: string,
+): Promise<{ success?: boolean; error?: string; revertedToCoachId?: string }> {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    // Find most recent reassignment for this client
+    const { data: lastEvent } = await admin
+        .from('org_audit_logs')
+        .select('metadata, created_at')
+        .eq('org_id', org.id)
+        .eq('action', 'client.reassigned')
+        .eq('target_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    if (!lastEvent) return { error: 'No hay reasignación reciente para revertir.' }
+
+    const meta = lastEvent.metadata as { from_coach_id?: string | null } | null
+    const previousCoachId = meta?.from_coach_id ?? null
+    if (!previousCoachId) return { error: 'El alumno no tenía coach previo (era cola sin asignar).' }
+
+    // Verify client + previous coach still valid
+    const { data: client } = await admin
+        .from('clients')
+        .select('id, coach_id, full_name')
+        .eq('id', clientId)
+        .eq('org_id', org.id)
+        .maybeSingle()
+    if (!client) return { error: 'Alumno no pertenece a esta organización.' }
+
+    const { data: prevCoach } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('org_id', org.id)
+        .eq('coach_id', previousCoachId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!prevCoach) return { error: 'El coach anterior ya no está activo en la organización.' }
+
+    if (client.coach_id === previousCoachId) return { error: 'El alumno ya está con el coach anterior.' }
+
+    const { error } = await admin
+        .from('clients')
+        .update({ coach_id: previousCoachId })
+        .eq('id', clientId)
+        .eq('org_id', org.id)
+    if (error) return { error: error.message }
+
+    await admin.from('coach_client_assignments')
+        .upsert({
+            org_id: org.id,
+            client_id: clientId,
+            coach_id: previousCoachId,
+            assigned_at: new Date().toISOString(),
+            assigned_by: user.id,
+        }, { onConflict: 'org_id,client_id,coach_id' })
+        .then(undefined, () => undefined)
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'client.reassignment_rolled_back',
+        targetType: 'client',
+        targetId: clientId,
+        metadata: {
+            reverted_from_coach_id: client.coach_id,
+            reverted_to_coach_id: previousCoachId,
+            client_name: client.full_name,
+        },
+    })
+
+    revalidatePath(`/org/${orgSlug}/assignments`)
+    revalidatePath(`/org/${orgSlug}/clients`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, revertedToCoachId: previousCoachId }
+}
+
+/**
  * Resets password for any enterprise staff member (not coach-specific).
  * Works by membership ID. Guards: org owner or admin only.
  * Returns temp password on success so caller can display it once.
