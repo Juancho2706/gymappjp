@@ -41,10 +41,10 @@ export function RevokeStaffButton({ orgSlug, memberId, memberName, memberRole }:
 
             {open && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 pl-safe pr-safe"
+                    className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4 pl-safe pr-safe"
                     onClick={e => { if (e.target === e.currentTarget) setOpen(false) }}
                 >
-                    <div className="w-full max-w-sm rounded-xl border border-border bg-background shadow-xl p-5 space-y-4">
+                    <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-xl pb-safe border border-border bg-background shadow-xl p-5 space-y-4">
                         <div className="flex items-start justify-between gap-2">
                             <div>
                                 <h2 className="font-semibold text-sm">Revocar acceso enterprise</h2>

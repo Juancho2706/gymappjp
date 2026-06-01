@@ -142,7 +142,7 @@ export default async function OrgSettingsPage({ params }: Props) {
 
                 <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
                     <div className="space-y-5">
-                        <SettingsAccordion title="Datos del negocio" icon={Building2} defaultOpen={true}>
+                        <SettingsAccordion title="Datos del negocio" icon={<Building2 className="h-4 w-4 text-sky-300" />} defaultOpen={true}>
                             <p className="mt-2 text-sm leading-6 text-zinc-500">
                                 Identidad administrativa de la organizacion. La marca publica vive en Marca, pero este resumen ayuda a soporte, ventas y onboarding.
                             </p>
@@ -165,7 +165,7 @@ export default async function OrgSettingsPage({ params }: Props) {
                         </SettingsAccordion>
 
                         {isAdmin ? (
-                            <SettingsAccordion title="Ajustes rápidos de marca" icon={Palette} iconColor="text-emerald-300">
+                            <SettingsAccordion title="Ajustes rápidos de marca" icon={<Palette className="h-4 w-4 text-emerald-300" />}>
                                 <p className="text-sm leading-6 text-zinc-500 mb-4">
                                     Cambios basicos. El publish avanzado y el preview cross-platform se controlan desde Marca.
                                 </p>
@@ -179,7 +179,7 @@ export default async function OrgSettingsPage({ params }: Props) {
                     </div>
 
                     <aside className="space-y-5">
-                        <SettingsAccordion title="Billing enterprise" icon={BadgeDollarSign} iconColor="text-emerald-300">
+                        <SettingsAccordion title="Billing enterprise" icon={<BadgeDollarSign className="h-4 w-4 text-emerald-300" />}>
                             <div className="flex items-center gap-2 mb-3">
                                 <span className={`rounded-full border px-2 py-1 text-xs font-bold ${statusTone(org.status)}`}>
                                     {org.status}
@@ -216,7 +216,7 @@ export default async function OrgSettingsPage({ params }: Props) {
                             </div>
                         </SettingsAccordion>
 
-                        <SettingsAccordion title="Seats y plan" icon={Users} iconColor="text-amber-300">
+                        <SettingsAccordion title="Seats y plan" icon={<Users className="h-4 w-4 text-amber-300" />}>
 
                             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-center">
@@ -262,7 +262,7 @@ export default async function OrgSettingsPage({ params }: Props) {
                             </div>
                         </SettingsAccordion>
 
-                        <SettingsAccordion title="Guardrails" icon={LockKeyhole} iconColor="text-sky-300">
+                        <SettingsAccordion title="Guardrails" icon={<LockKeyhole className="h-4 w-4 text-sky-300" />}>
                             <div className="space-y-3">
                                 {guardrails.map(item => (
                                     <div key={item} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">

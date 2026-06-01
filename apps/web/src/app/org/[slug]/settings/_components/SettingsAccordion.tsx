@@ -2,12 +2,10 @@
 
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 
 interface Props {
     title: string
-    icon: LucideIcon
-    iconColor?: string
+    icon: React.ReactNode  // pre-rendered icon element (RSC can't pass component fns to client)
     children: React.ReactNode
     defaultOpen?: boolean
 }
@@ -18,8 +16,7 @@ interface Props {
  */
 export function SettingsAccordion({
     title,
-    icon: Icon,
-    iconColor = 'text-sky-300',
+    icon,
     children,
     defaultOpen = false,
 }: Props) {
@@ -34,7 +31,7 @@ export function SettingsAccordion({
                 aria-expanded={open}
             >
                 <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${iconColor}`} aria-hidden="true" />
+                    {icon}
                     <span className="text-sm font-black text-white">{title}</span>
                 </div>
                 <ChevronDown
@@ -44,7 +41,7 @@ export function SettingsAccordion({
 
             {/* Desktop: always visible header */}
             <div className="hidden md:flex items-center gap-2 p-5 pb-0">
-                <Icon className={`h-4 w-4 ${iconColor}`} aria-hidden="true" />
+                {icon}
                 <h2 className="text-lg font-black text-white">{title}</h2>
             </div>
 
