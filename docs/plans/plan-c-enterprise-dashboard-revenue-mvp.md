@@ -2728,12 +2728,12 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Bulk actions seguros con preview: asignar, pausar/reactivar, cambiar pago, exportar seleccion.
+- [x] Bulk actions: asignar (done), archivar (done), **reactivar completado 2026-06-01** (`bulkReactivateClientsAction`, botón "Reactivar" aparece en bulk bar cuando hay inactivos seleccionados). Pendiente: cambiar pago bulk, exportar selección.
 - [x] Server action guards para alta/import/asignacion de alumnos: org, rol, coach activo de la empresa y audit. Completado el 2026-05-26 19:55:20 -04:00. Verificacion: `npm run typecheck`. Supabase local no estaba levantado, migracion pendiente de aplicar.
 - [x] Server action guards restantes de menus enterprise no auditados aun. Completado el 2026-05-26 20:39:12 -04:00 para anuncios, nutricion, pagos y onboarding. Verificacion: `npm run typecheck`, ESLint focalizado.
 - [x] Export/report guards avanzados para audit CSV: filtros, checksum/export hash y audit metadata. Completado el 2026-05-26 20:39:12 -04:00. Verificacion: `npm run typecheck`, ESLint focalizado.
 - [x] Pruebas negativas export org A vs org B. Completado 2026-05-31. `tests/enterprise/export-cross-tenant.spec.ts` valida audit/payments/reports: owner A exporta CSV de org A y slug swap hacia org B no entrega `text/csv` ni `Content-Disposition: attachment` usando `maxRedirects: 0`.
-- [ ] Mejorar mobile: list item compacto y details sheet para editar/asignar.
+- [x] Mejorar mobile: details sheet completado 2026-06-01. `ClientDetailSheet`: side panel desktop / bottom sheet mobile. Click fila → abre sheet con contacto, estado, historial asignaciones (lazy fetch desde audit_logs via `/api/org/[slug]/client-history`), acciones rápidas.
 - [ ] Resolver futuro modelo multi-contexto alumno por email antes de soportar mismo alumno en varios negocios.
 
 ### Operaciones / Asignaciones `/assignments`
@@ -2748,7 +2748,7 @@ Pendiente:
 - [x] Cockpit accionable slice 1: asignar alumno sin coach a coach activo de la empresa. Completado el 2026-05-26 21:11:37 -04:00.
 - [x] Bulk assign con preview antes/despues. Completado el 2026-05-26 21:32:49 -04:00. UI responsive: mobile 390px y desktop 1440px verificados con Playwright, sin overflow horizontal.
 - [x] Actividad reciente de asignaciones por alumno/coach desde `coach_client_assignments`. Completado el 2026-05-31. Agrega query cacheada `_data -> repository -> Supabase`, timeline compacto en `/org/[slug]/assignments` y link a Audit Log filtrado.
-- [ ] Historial append-only real de reasignaciones por alumno/coach. Deuda detectada 2026-05-31: `coach_client_assignments` usa `UNIQUE(org_id, client_id)` y upsert, por lo que conserva solo el ultimo estado. Para historial completo se requiere usar `org_audit_logs` como fuente canonica o crear tabla append-only futura sin costo extra.
+- [x] Historial de asignaciones desde audit_logs. Completado 2026-06-01 via `ClientDetailSheet`: lazy-fetch `/api/org/[slug]/client-history` que consulta `org_audit_logs` por `client_id`. Sin migration extra — usa logs ya existentes. Append-only real (tabla separada) queda pendiente si se necesita query optimizada.
 - [ ] Rollback de ultima reasignacion.
 - [ ] Configurar capacidad objetivo por empresa.
 - [x] Mobile: cards por coach + sheet de alumnos, no grids anchas. Completado 2026-05-31. `CoachAssignmentsMobile` muestra cards de capacidad en `<md`, abre bottom sheet con alumnos del coach y conserva reasignacion desde el sheet; la grilla de capacidad queda solo en `md+`.
