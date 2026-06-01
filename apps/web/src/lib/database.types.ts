@@ -1777,6 +1777,53 @@ export type Database = {
           },
         ]
       }
+      org_weekly_snapshots: {
+        Row: {
+          active_clients: number
+          assigned_clients: number
+          assignment_rate: number
+          check_ins_7d: number
+          created_at: string
+          health_score: number | null
+          id: string
+          org_id: string
+          total_coaches: number
+          week_start: string
+        }
+        Insert: {
+          active_clients?: number
+          assigned_clients?: number
+          assignment_rate?: number
+          check_ins_7d?: number
+          created_at?: string
+          health_score?: number | null
+          id?: string
+          org_id: string
+          total_coaches?: number
+          week_start: string
+        }
+        Update: {
+          active_clients?: number
+          assigned_clients?: number
+          assignment_rate?: number
+          check_ins_7d?: number
+          created_at?: string
+          health_score?: number | null
+          id?: string
+          org_id?: string
+          total_coaches?: number
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_weekly_snapshots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_invites: {
         Row: {
           attempt_count: number

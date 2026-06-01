@@ -40,13 +40,24 @@ export default async function OrgReportsPage({ params }: Props) {
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
-    const [stats, members, clients, invoices, checkIns] = await Promise.all([
+    const [stats, members, clients, invoices, checkIns, supabase] = await Promise.all([
         getOrgStats(org.id),
         getOrgMembers(org.id),
         getOrgClients(org.id),
         getOrgInvoices(org.id),
         getOrgCheckInOverview(org.id),
+        import('@/lib/supabase/server').then(m => m.createClient()),
     ])
+
+    // Fetch last 2 weekly snapshots for real delta comparison
+    const { data: snapshots } = await supabase
+        .from('org_weekly_snapshots')
+        .select('week_start, check_ins_7d, active_clients, assignment_rate, health_score')
+        .eq('org_id', org.id)
+        .order('week_start', { ascending: false })
+        .limit(2)
+    const thisWeekSnap = snapshots?.[0] ?? null
+    const prevWeekSnap = snapshots?.[1] ?? null
 
     const activeMembers = members.filter((member) => member.status === 'active')
     const coachMembers = activeMembers.filter((member) => member.role === 'coach' && member.coach_id)
@@ -70,10 +81,13 @@ export default async function OrgReportsPage({ params }: Props) {
         .sort((a, b) => b.clients - a.clients)
         .slice(0, 6)
 
-    // Week-over-week delta for check-ins: total7d vs approx prev 7d from 30d window
-    const prev7d = Math.max(0, checkIns.total30d - checkIns.total7d - 16) // rough prev-week from 30d
-    const checkInDelta = checkIns.total7d - prev7d
-    const checkInDeltaStr = checkInDelta >= 0 ? `+${checkInDelta}` : `${checkInDelta}`
+    // Week-over-week delta — prefer real snapshots, fall back to approximation
+    const hasRealDelta = thisWeekSnap !== null && prevWeekSnap !== null
+    const checkInDeltaVal = hasRealDelta
+        ? (thisWeekSnap!.check_ins_7d ?? checkIns.total7d) - (prevWeekSnap!.check_ins_7d ?? 0)
+        : checkIns.total7d - Math.max(0, checkIns.total30d - checkIns.total7d - 16)
+    const checkInDeltaStr = (checkInDeltaVal >= 0 ? '+' : '') + checkInDeltaVal
+    const deltaLabel = hasRealDelta ? 'vs sem ant.' : '~vs sem ant.'
 
     const reportCards = [
         { label: 'Salud operacional', value: org.last_health_score ?? riskScore, suffix: '/100', icon: Gauge, delta: null },
@@ -137,7 +151,7 @@ export default async function OrgReportsPage({ params }: Props) {
                                     </div>
                                     {delta !== null && (
                                         <span className={`text-[10px] font-bold ${delta.startsWith('+') ? 'text-emerald-400' : delta.startsWith('-') ? 'text-red-400' : 'text-zinc-500'}`}>
-                                            {delta} vs sem ant.
+                                            {delta} {deltaLabel}
                                         </span>
                                     )}
                                 </div>
