@@ -87,7 +87,7 @@ function AnnouncementForm({ orgSlug, audienceCount, onSuccess, compact = false }
                         type="datetime-local"
                         className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-300"
                     />
-                    <p className="mt-0.5 text-[10px] text-zinc-600">Vacío = publicar ahora</p>
+                    <p className="mt-0.5 text-[10px] text-zinc-500">Vacío = publicar ahora</p>
                 </div>
                 <div>
                     <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">
@@ -101,7 +101,7 @@ function AnnouncementForm({ orgSlug, audienceCount, onSuccess, compact = false }
                         type="datetime-local"
                         className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-300"
                     />
-                    <p className="mt-0.5 text-[10px] text-zinc-600">Vacío = sin vencimiento</p>
+                    <p className="mt-0.5 text-[10px] text-zinc-500">Vacío = sin vencimiento</p>
                 </div>
             </div>
 

@@ -152,7 +152,7 @@ export default async function OrgCheckInsPage({ params }: Props) {
                                                 </div>
                                                 <div className="shrink-0 text-right">
                                                     <p className={`text-lg font-black ${activityColor(rate)}`}>{rate}%</p>
-                                                    <p className="text-xs text-zinc-600">{coach.activeClients7d}/{coach.totalClients}</p>
+                                                    <p className="text-xs text-zinc-500">{coach.activeClients7d}/{coach.totalClients}</p>
                                                 </div>
                                             </div>
                                             <div className="mt-3 h-1.5 w-full rounded-full bg-zinc-800">
@@ -214,7 +214,7 @@ export default async function OrgCheckInsPage({ params }: Props) {
                                             }
                                             <div>
                                                 <p className="text-xs font-bold text-zinc-200">{label}</p>
-                                                <p className="text-[10px] text-zinc-600">{detail}</p>
+                                                <p className="text-[10px] text-zinc-500">{detail}</p>
                                             </div>
                                         </div>
                                         <p className={`text-lg font-black ${ok ? 'text-zinc-100' : 'text-amber-300'}`}>{value}</p>
@@ -236,10 +236,10 @@ export default async function OrgCheckInsPage({ params }: Props) {
                                             <div className="min-w-0">
                                                 <p className="truncate text-xs font-bold text-zinc-200">{ci.clientName ?? 'Alumno'}</p>
                                                 {ci.coachName && (
-                                                    <p className="truncate text-[10px] text-zinc-600">{ci.coachName}</p>
+                                                    <p className="truncate text-[10px] text-zinc-500">{ci.coachName}</p>
                                                 )}
                                             </div>
-                                            <p className="shrink-0 text-[10px] font-mono text-zinc-600">{ci.date}</p>
+                                            <p className="shrink-0 text-[10px] font-mono text-zinc-500">{ci.date}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -268,7 +268,7 @@ export default async function OrgCheckInsPage({ params }: Props) {
                                         </div>
                                         <div className="min-w-0">
                                             <p className="truncate text-sm font-bold text-zinc-100">{streak.coachName}</p>
-                                            <p className="text-[10px] text-zinc-600">
+                                            <p className="text-[10px] text-zinc-500">
                                                 Mejor: {streak.longestStreak} sem
                                                 {streak.lastActiveWeek && ` · activo hasta ${streak.lastActiveWeek}`}
                                             </p>

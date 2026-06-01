@@ -274,7 +274,7 @@ export default async function OrgNutritionPage({ params }: Props) {
                         <div className="mt-5 space-y-3">
                             {templates.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/50 p-8 text-center">
-                                    <Apple className="mx-auto h-8 w-8 text-zinc-600" aria-hidden="true" />
+                                    <Apple className="mx-auto h-8 w-8 text-zinc-500" aria-hidden="true" />
                                     <p className="mt-3 text-sm font-bold text-zinc-300">Sin templates nutricionales</p>
                                     <p className="mt-1 text-sm text-zinc-500">Crea bases para deficit, mantenimiento y volumen antes de escalar coaches.</p>
                                 </div>
@@ -423,7 +423,7 @@ export default async function OrgNutritionPage({ params }: Props) {
                                     </div>
                                     <div className="shrink-0 text-right">
                                         <p className="text-sm font-black text-white">{c.plans}</p>
-                                        <p className="text-[10px] text-zinc-600">{c.clients} alumno{c.clients !== 1 ? 's' : ''}</p>
+                                        <p className="text-[10px] text-zinc-500">{c.clients} alumno{c.clients !== 1 ? 's' : ''}</p>
                                     </div>
                                 </div>
                             ))}

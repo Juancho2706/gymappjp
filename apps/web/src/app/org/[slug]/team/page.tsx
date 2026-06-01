@@ -162,7 +162,7 @@ export default async function OrgTeamPage({ params }: Props) {
                                                     <p className={`truncate text-xs ${statusColor}`}>
                                                         {roleLabel(member.role)}
                                                         {member.status !== 'active' && (
-                                                            <span className="ml-1 text-zinc-600">· {member.status === 'revoked' ? 'Revocado' : 'Invitado'}</span>
+                                                            <span className="ml-1 text-zinc-500">· {member.status === 'revoked' ? 'Revocado' : 'Invitado'}</span>
                                                         )}
                                                     </p>
                                                 </div>
@@ -178,7 +178,7 @@ export default async function OrgTeamPage({ params }: Props) {
                                                         currentRole={member.role}
                                                     />
                                                 ) : (
-                                                    <span className="px-2 py-1 text-xs text-zinc-600">{roleLabel(member.role)}</span>
+                                                    <span className="px-2 py-1 text-xs text-zinc-500">{roleLabel(member.role)}</span>
                                                 )}
                                             </div>
 

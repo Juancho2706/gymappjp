@@ -40,7 +40,7 @@ export function CoachQRButton({ inviteCode, coachName, siteUrl }: Props) {
                     >
                         <div className="flex w-full items-center justify-between">
                             <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{coachName}</p>
-                            <button onClick={() => setOpen(false)} className="text-zinc-400 hover:text-zinc-700">
+                            <button onClick={() => setOpen(false)} className="text-zinc-400 hover:text-zinc-500">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>

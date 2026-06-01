@@ -154,9 +154,9 @@ export default async function OrgProgramsPage({ params }: Props) {
                             </div>
                         ) : (
                             <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-center">
-                                <Dumbbell className="mx-auto h-8 w-8 text-zinc-700 mb-3" />
+                                <Dumbbell className="mx-auto h-8 w-8 text-zinc-500 mb-3" />
                                 <p className="text-sm font-bold text-zinc-400">Sin programas activos</p>
-                                <p className="mt-1 text-xs text-zinc-600">
+                                <p className="mt-1 text-xs text-zinc-500">
                                     Los coaches crean programas desde{' '}
                                     <Link href="/coach/workout-programs" className="text-violet-400 hover:underline">
                                         su panel
@@ -212,7 +212,7 @@ export default async function OrgProgramsPage({ params }: Props) {
                         ) : (
                             <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 text-center">
                                 <p className="text-sm text-zinc-500">Sin templates creados.</p>
-                                <p className="mt-1 text-xs text-zinc-600">Los coaches crean templates desde su panel de programas.</p>
+                                <p className="mt-1 text-xs text-zinc-500">Los coaches crean templates desde su panel de programas.</p>
                             </div>
                         )}
 

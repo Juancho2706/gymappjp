@@ -219,7 +219,7 @@ export default async function OrgAuditPage({ params, searchParams }: Props) {
                                                     {metadataSummary(log.metadata)}
                                                 </p>
                                             </div>
-                                            <p className="shrink-0 text-[11px] text-zinc-600">{formatDate(log.created_at)}</p>
+                                            <p className="shrink-0 text-[11px] text-zinc-500">{formatDate(log.created_at)}</p>
                                         </div>
                                         {/* Desktop: full 3-column layout */}
                                         <div className="hidden lg:grid gap-3 lg:grid-cols-[1fr_170px_170px] lg:items-center p-4">

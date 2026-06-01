@@ -183,7 +183,7 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
                             >
                                 {selected.has(client.id)
                                     ? <CheckSquare2 className="h-4 w-4 text-amber-300" />
-                                    : <Square className="h-4 w-4 text-zinc-600 hover:text-zinc-400 transition-colors" />}
+                                    : <Square className="h-4 w-4 text-zinc-500 hover:text-zinc-400 transition-colors" />}
                             </button>
                         )}
 

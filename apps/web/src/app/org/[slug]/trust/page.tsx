@@ -210,7 +210,7 @@ export default async function OrgTrustCenterPage({ params }: Props) {
                                     ? 'border-amber-400/20 bg-amber-400/5'
                                     : 'border-zinc-800 bg-zinc-950/40'
                             }`}>
-                                <div className={`mt-0.5 shrink-0 ${done ? 'text-emerald-400' : priority === 'high' ? 'text-amber-400' : 'text-zinc-600'}`}>
+                                <div className={`mt-0.5 shrink-0 ${done ? 'text-emerald-400' : priority === 'high' ? 'text-amber-400' : 'text-zinc-500'}`}>
                                     {done ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                                 </div>
                                 <div>
@@ -218,7 +218,7 @@ export default async function OrgTrustCenterPage({ params }: Props) {
                                     <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">{detail}</p>
                                     {!done && (
                                         <span className={`mt-1 inline-block text-[10px] font-bold uppercase tracking-[0.08em] ${
-                                            priority === 'high' ? 'text-amber-400' : priority === 'medium' ? 'text-zinc-500' : 'text-zinc-700'
+                                            priority === 'high' ? 'text-amber-400' : priority === 'medium' ? 'text-zinc-500' : 'text-zinc-500'
                                         }`}>
                                             {priority === 'high' ? '● P0' : priority === 'medium' ? '○ P1' : '○ P2'}
                                         </span>

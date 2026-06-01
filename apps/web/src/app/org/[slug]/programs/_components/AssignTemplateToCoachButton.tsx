@@ -79,7 +79,7 @@ export function AssignTemplateToCoachButton({ orgSlug, templateId, templateName,
                                 </select>
                                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
                             </div>
-                            <p className="mt-1.5 text-[11px] text-zinc-600 leading-4">
+                            <p className="mt-1.5 text-[11px] text-zinc-500 leading-4">
                                 Se crea una copia en la biblioteca del coach. Puede editarla en su builder antes de asignarla a alumnos.
                             </p>
                         </div>

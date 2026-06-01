@@ -120,7 +120,7 @@ export default function NewOrgNutritionTemplatePage() {
                                 ].map(field => (
                                     <div key={field.name}>
                                         <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500 mb-1">
-                                            {field.label} <span className="text-zinc-700 normal-case font-normal">({field.unit})</span>
+                                            {field.label} <span className="text-zinc-500 normal-case font-normal">({field.unit})</span>
                                         </label>
                                         <input
                                             name={field.name}

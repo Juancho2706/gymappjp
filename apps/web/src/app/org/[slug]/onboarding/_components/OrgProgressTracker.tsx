@@ -159,7 +159,7 @@ export function OrgProgressTracker({ orgSlug, milestones }: Props) {
                                     : 'border-zinc-800 bg-zinc-950/40'
                             }`}
                         >
-                            <div className={`mt-0.5 shrink-0 ${item.done ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                            <div className={`mt-0.5 shrink-0 ${item.done ? 'text-emerald-400' : 'text-zinc-500'}`}>
                                 {item.done
                                     ? <CheckCircle2 className="h-4 w-4" />
                                     : <Circle className="h-4 w-4" />
@@ -174,7 +174,7 @@ export function OrgProgressTracker({ orgSlug, milestones }: Props) {
                             {!item.done && (
                                 <Link
                                     href={item.href}
-                                    className="shrink-0 self-center rounded-md p-1 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                                    className="shrink-0 self-center rounded-md p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                                     aria-label={`Ir a ${item.label}`}
                                 >
                                     <ArrowRight className="h-3.5 w-3.5" />

@@ -339,7 +339,7 @@ export function EnterpriseDashboardHome({
                                         <span className="block truncate text-sm font-bold text-zinc-100">{action.label}</span>
                                         <span className="block truncate text-[11px] text-zinc-500">{action.detail}</span>
                                     </span>
-                                    <ArrowRight className="h-4 w-4 shrink-0 text-zinc-600" aria-hidden="true" />
+                                    <ArrowRight className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden="true" />
                                 </Link>
                             ))}
                         </div>
@@ -455,7 +455,7 @@ export function EnterpriseDashboardHome({
                                             <span className="block text-sm font-bold text-zinc-100">{action.label}</span>
                                             <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{action.detail}</span>
                                         </span>
-                                        <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-zinc-600 transition group-hover:text-amber-300" aria-hidden="true" />
+                                        <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-zinc-500 transition group-hover:text-amber-300" aria-hidden="true" />
                                     </Link>
                                 ))}
                             </div>

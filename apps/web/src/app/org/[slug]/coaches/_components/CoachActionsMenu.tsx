@@ -99,7 +99,7 @@ export function CoachActionsMenu({
 
                             {canManageRole && (
                                 <div className="pt-2 border-t border-zinc-800">
-                                    <p className="px-4 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600">Administrar</p>
+                                    <p className="px-4 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">Administrar</p>
                                     <div className="flex items-center gap-2 px-4 py-2">
                                         <CoachEnterpriseActions
                                             orgSlug={orgSlug}

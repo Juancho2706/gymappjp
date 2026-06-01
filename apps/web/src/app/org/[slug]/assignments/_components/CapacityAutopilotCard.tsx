@@ -56,7 +56,7 @@ function SuggestionRow({
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-red-300">{suggestion.fromCoachName}</span>
                         <span className="text-xs text-zinc-500">({suggestion.fromLoad}% carga)</span>
-                        <ArrowRight className="h-3 w-3 text-zinc-600" />
+                        <ArrowRight className="h-3 w-3 text-zinc-500" />
                         <span className="text-sm font-bold text-emerald-300">{suggestion.toCoachName}</span>
                     </div>
                     <p className="mt-1 text-xs text-zinc-500">

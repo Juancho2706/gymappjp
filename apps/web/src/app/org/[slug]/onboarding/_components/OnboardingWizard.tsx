@@ -323,7 +323,7 @@ export function OnboardingWizard({
                         <div className="mt-4 space-y-3">
                             {readinessItems.map(item => (
                                 <div key={item.label} className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                                    <span className={item.done ? 'text-emerald-300' : 'text-zinc-600'}>
+                                    <span className={item.done ? 'text-emerald-300' : 'text-zinc-500'}>
                                         <Check className="h-4 w-4" />
                                     </span>
                                     <div>

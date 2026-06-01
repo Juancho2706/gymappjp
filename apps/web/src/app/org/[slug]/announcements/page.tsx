@@ -183,7 +183,7 @@ export default async function AnnouncementsPage({ params }: Props) {
                                         <Clock className="h-3 w-3" />
                                         Programados — {scheduledAnnouncements.length}
                                     </span>
-                                    <p className="text-xs text-zinc-600">Pendientes de publicación automática</p>
+                                    <p className="text-xs text-zinc-500">Pendientes de publicación automática</p>
                                 </div>
                                 <div className="space-y-2">
                                     {scheduledAnnouncements.map(announcement => (

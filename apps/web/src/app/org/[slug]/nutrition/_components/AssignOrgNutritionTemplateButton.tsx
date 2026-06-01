@@ -61,7 +61,7 @@ export function AssignOrgNutritionTemplateButton({ orgSlug, templateId, template
                                     <p>✓ Crea planes nutricionales para <strong className="text-zinc-200">{assignedClientsCount} alumnos con coach asignado</strong>.</p>
                                     <p>✓ Desactiva planes activos previos de esos alumnos.</p>
                                     <p>✓ Solo macros — el coach puede agregar comidas desde su panel.</p>
-                                    <p className="text-zinc-600">Alumnos sin coach asignado quedan excluidos.</p>
+                                    <p className="text-zinc-500">Alumnos sin coach asignado quedan excluidos.</p>
                                 </div>
 
                                 {error && (

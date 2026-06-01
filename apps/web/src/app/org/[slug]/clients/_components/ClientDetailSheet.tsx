@@ -100,32 +100,32 @@ export function ClientDetailSheet({ orgSlug, client, onClose, coaches }: Props) 
 
                 {/* Contact */}
                 <section>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600 mb-2">Contacto</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500 mb-2">Contacto</p>
                     <div className="space-y-2">
                         {client.email && (
                             <div className="flex items-center gap-2.5 text-sm text-zinc-300">
-                                <Mail className="h-4 w-4 shrink-0 text-zinc-600" />
+                                <Mail className="h-4 w-4 shrink-0 text-zinc-500" />
                                 <span className="truncate">{client.email}</span>
                             </div>
                         )}
                         {client.phone && (
                             <div className="flex items-center gap-2.5 text-sm text-zinc-300">
-                                <Phone className="h-4 w-4 shrink-0 text-zinc-600" />
+                                <Phone className="h-4 w-4 shrink-0 text-zinc-500" />
                                 <span>{client.phone}</span>
                             </div>
                         )}
                         {!client.email && !client.phone && (
-                            <p className="text-xs text-zinc-600">Sin datos de contacto</p>
+                            <p className="text-xs text-zinc-500">Sin datos de contacto</p>
                         )}
                     </div>
                 </section>
 
                 {/* Status */}
                 <section>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600 mb-2">Estado operacional</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500 mb-2">Estado operacional</p>
                     <div className="grid grid-cols-2 gap-2">
                         <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                            <p className="text-[10px] text-zinc-600 mb-1">Coach asignado</p>
+                            <p className="text-[10px] text-zinc-500 mb-1">Coach asignado</p>
                             {client.coachName ? (
                                 <p className="text-sm font-bold text-zinc-200">{client.coachName}</p>
                             ) : (
@@ -136,7 +136,7 @@ export function ClientDetailSheet({ orgSlug, client, onClose, coaches }: Props) 
                             )}
                         </div>
                         <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                            <p className="text-[10px] text-zinc-600 mb-1">Pago</p>
+                            <p className="text-[10px] text-zinc-500 mb-1">Pago</p>
                             <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${paymentTone(client.paymentStatus)}`}>
                                 {paymentLabel(client.paymentStatus)}
                             </span>
@@ -154,7 +154,7 @@ export function ClientDetailSheet({ orgSlug, client, onClose, coaches }: Props) 
 
                 {/* Quick actions */}
                 <section>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600 mb-2">Acciones rápidas</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500 mb-2">Acciones rápidas</p>
                     <div className="flex flex-wrap gap-2">
                         {client.coachId && (
                             <Link
@@ -184,13 +184,13 @@ export function ClientDetailSheet({ orgSlug, client, onClose, coaches }: Props) 
 
                 {/* Assignment history */}
                 <section>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600 mb-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500 mb-2">
                         Historial de asignaciones
                     </p>
                     {loadingHistory ? (
-                        <p className="text-xs text-zinc-600">Cargando...</p>
+                        <p className="text-xs text-zinc-500">Cargando...</p>
                     ) : history.length === 0 ? (
-                        <p className="text-xs text-zinc-600">Sin historial de cambios registrado.</p>
+                        <p className="text-xs text-zinc-500">Sin historial de cambios registrado.</p>
                     ) : (
                         <div className="space-y-2">
                             {history.map((event, i) => (
@@ -200,7 +200,7 @@ export function ClientDetailSheet({ orgSlug, client, onClose, coaches }: Props) 
                                         <p className="text-xs font-semibold text-zinc-300">
                                             {event.action.replace(/[._]/g, ' ')}
                                         </p>
-                                        <p className="text-[10px] text-zinc-600 mt-0.5">
+                                        <p className="text-[10px] text-zinc-500 mt-0.5">
                                             {formatDate(event.created_at)}
                                             {event.metadata?.to_coach_id != null && ` → coach ${String(event.metadata.to_coach_id).slice(0, 8)}...`}
                                         </p>
