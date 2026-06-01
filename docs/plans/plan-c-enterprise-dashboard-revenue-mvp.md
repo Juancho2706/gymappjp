@@ -1904,9 +1904,9 @@ Hallazgos B2B SaaS 2026 aplicables sin costo externo:
 - [ ] **Reports: delta semanal preciso** — tabla `org_weekly_snapshots` (health_score, activeClients, assignmentRate) poblada por cron semanal existente. Delta real vs semana anterior. 1 migration + update cron job.
 - [ ] **Announcements: read receipts** — evento `announcement.viewed` en audit log cuando alumno ve novedad. Mide impacto de comunicaciones. Sin migration.
 - [ ] **Check-ins: reviewed_at** — campo `reviewed_at` en `check_ins` o tabla `check_in_reviews` para medir response time del coach. Diferenciador para venta "coaching personalizado". Migration + UI.
-- [ ] **Coaches: activity streak** — racha de check-ins respondidos consecutivos por coach. Calculable desde datos existentes. Sin migration.
-- [ ] **Onboarding: progress tracker** — wizard con % completado: logo subido, primer coach, primer alumno asignado, primer plan, primer anuncio. Sin migration (calculable desde datos).
-- [ ] **Reports: export agendado** — job que genera CSV semanal y lo envía por email al owner via Resend. Sin costo (Resend ya instalado). Requiere cron endpoint nuevo.
+- [x] **Coaches: activity streak** — Completado 2026-06-01. `findOrgCoachStreaks` 12-week lookback; sección en `/check-ins` con badges y 🔥 para ≥4 semanas consecutivas.
+- [x] **Onboarding: progress tracker** — Completado 2026-06-01. `OrgProgressTracker` 7 milestones reales, barra %, quick link.
+- [x] **Reports: export agendado** — Completado 2026-06-01. `POST /api/cron/weekly-report-email` + `pnpm run cron:weekly-email`. Email HTML branded con health tier, métricas, alerta unassigned, CTA.
 
 No hacer todavia:
 
