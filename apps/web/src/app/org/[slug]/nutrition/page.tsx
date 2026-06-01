@@ -17,9 +17,10 @@ import {
     Target,
     Users,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgMembers, getOrgNutritionTemplateUsage, getOrgNutritionTemplates } from '../_data/org.queries'
+import { getOrgBySlug, getOrgClients, getOrgMembers, getOrgNutritionPlanTemplates, getOrgNutritionTemplateUsage, getOrgNutritionTemplates } from '../_data/org.queries'
 import { CreateOrgNutritionTemplateForm } from './_components/CreateOrgNutritionTemplateForm'
 import { DeleteOrgNutritionTemplateButton } from './_components/DeleteOrgNutritionTemplateButton'
+import { AssignOrgNutritionTemplateButton } from './_components/AssignOrgNutritionTemplateButton'
 
 export const metadata: Metadata = { title: 'Nutricion' }
 
@@ -60,12 +61,15 @@ export default async function OrgNutritionPage({ params }: Props) {
     const isAdmin = orgRoleCan(org.myRole, 'org.coaches.invite')
     if (!isAdmin) redirect(`/org/${slug}`)
 
-    const [templates, members] = await Promise.all([
+    const [templates, members, orgPlanTemplates, clients] = await Promise.all([
         getOrgNutritionTemplates(org.id),
         getOrgMembers(org.id),
+        getOrgNutritionPlanTemplates(org.id),
+        getOrgClients(org.id),
     ])
     const templateUsage = await getOrgNutritionTemplateUsage(org.id, templates)
     const usageByTemplate = new Map(templateUsage.map(item => [item.template_id, item]))
+    const assignedClientsCount = clients.filter(c => c.is_active !== false && c.coach_id).length
 
     const activeCoaches = members.filter(member => member.role === 'coach' && member.status === 'active' && member.coach_id)
     const goalCounts = templates.reduce<Record<string, number>>((acc, template) => {
@@ -354,6 +358,48 @@ export default async function OrgNutritionPage({ params }: Props) {
                         </div>
                     </section>
                 </section>
+
+                {/* Org plan templates (from nutrition_plan_templates with coach_id=null) */}
+                {orgPlanTemplates.length > 0 && (
+                    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                        <div className="flex items-center justify-between gap-2 mb-4">
+                            <div className="flex items-center gap-2">
+                                <Layers3 className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                                <h2 className="text-lg font-black text-white">Templates plan completos</h2>
+                                <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-400">{orgPlanTemplates.length}</span>
+                            </div>
+                            <Link
+                                href={`/org/${slug}/nutrition/new`}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/20 transition-colors"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                Crear
+                            </Link>
+                        </div>
+                        <p className="text-xs text-zinc-500 mb-4">
+                            Templates org con macros objetivo. Los coaches los abren en su panel para agregar comidas. Usa "Asignar a alumnos" para propagar macros base a todos los alumnos asignados.
+                        </p>
+                        <div className="space-y-2">
+                            {orgPlanTemplates.map(t => (
+                                <div key={t.id} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-bold text-zinc-100">{t.name}</p>
+                                        <p className="text-xs text-zinc-500">
+                                            {t.goal_type ? `${t.goal_type} · ` : ''}{t.daily_calories ? `${t.daily_calories} kcal` : 'sin calorías'}
+                                            {t.protein_g ? ` · ${t.protein_g}g proteína` : ''}
+                                        </p>
+                                    </div>
+                                    <AssignOrgNutritionTemplateButton
+                                        orgSlug={slug}
+                                        templateId={t.id}
+                                        templateName={t.name}
+                                        assignedClientsCount={assignedClientsCount}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
             </div>
         </div>
     )

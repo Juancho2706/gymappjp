@@ -19,6 +19,7 @@ import { AssignmentQuickAssignPanel } from './_components/AssignmentQuickAssignP
 import { BulkAssignPanel } from './_components/BulkAssignPanel'
 import { CoachAssignmentsMobile } from './_components/CoachAssignmentsMobile'
 import { ReassignClientSelect } from './_components/ReassignClientSelect'
+import { CapacityAutopilotCard, type AutopilotSuggestion } from './_components/CapacityAutopilotCard'
 
 export const metadata: Metadata = { title: 'Asignaciones' }
 
@@ -87,6 +88,37 @@ export default async function OrgAssignmentsPage({ params }: Props) {
         .filter((row) => row.available > 0)
         .sort((a, b) => a.load - b.load)
         .slice(0, 3)
+
+    // ── Capacity Autopilot suggestions ───────────────────────────────────────
+    // Dynamic target: avg load per coach, capped at TARGET_CLIENTS_PER_COACH.
+    const dynamicTarget = linkedCoaches.length > 0
+        ? Math.min(TARGET_CLIENTS_PER_COACH, Math.ceil(activeClients.length / linkedCoaches.length))
+        : TARGET_CLIENTS_PER_COACH
+
+    const underloaded = coachRows.filter(r => r.count < Math.floor(dynamicTarget * 0.8))
+
+    const autopilotSuggestions: AutopilotSuggestion[] = []
+    for (const heavy of overloaded) {
+        if (underloaded.length === 0) break
+        const target = underloaded.sort((a, b) => a.count - b.count)[0]
+        const excess = heavy.count - Math.ceil(dynamicTarget * 1.0)
+        const canMove = Math.min(excess, target.available, 5) // max 5 per suggestion
+        if (canMove <= 0) continue
+        const toMove = activeClients.filter(c => c.coach_id === heavy.id).slice(0, canMove)
+        if (toMove.length === 0) continue
+        autopilotSuggestions.push({
+            fromCoachId: heavy.id,
+            fromCoachName: heavy.name,
+            toCoachId: target.id,
+            toCoachName: target.name,
+            clientIds: toMove.map(c => c.id),
+            clientNames: toMove.map(c => c.full_name ?? 'Alumno'),
+            count: toMove.length,
+            fromLoad: heavy.load,
+        })
+        // Limit to 3 suggestions
+        if (autopilotSuggestions.length >= 3) break
+    }
 
     return (
         <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -408,6 +440,10 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                     )}
                 </section>
 
+                {autopilotSuggestions.length > 0 && (
+                    <CapacityAutopilotCard orgSlug={slug} suggestions={autopilotSuggestions} />
+                )}
+
                 <section className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
                         <AlertTriangle className="h-5 w-5 text-amber-300" aria-hidden="true" />
@@ -417,7 +453,7 @@ export default async function OrgAssignmentsPage({ params }: Props) {
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
                         <Users className="h-5 w-5 text-sky-300" aria-hidden="true" />
                         <h3 className="mt-4 text-sm font-black text-white">Workload</h3>
-                        <p className="mt-2 text-xs leading-5 text-zinc-500">Umbral: {TARGET_CLIENTS_PER_COACH} alumnos activos por coach. Rojo ≥100%, ámbar ≥80%.</p>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">Umbral: {TARGET_CLIENTS_PER_COACH} por coach (dinámico: {dynamicTarget} según pool actual). Rojo ≥100%, ámbar ≥80%.</p>
                     </div>
                 </section>
             </div>

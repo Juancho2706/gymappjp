@@ -97,3 +97,15 @@ export const getOrgCheckInOverview = cache(async (orgId: string) => {
     const supabase = await createClient()
     return findOrgCheckInOverview(supabase, orgId)
 })
+
+/** Org-owned nutrition plan templates (coach_id = null, from nutrition_plan_templates). */
+export const getOrgNutritionPlanTemplates = cache(async (orgId: string) => {
+    const supabase = await createClient()
+    const { data } = await supabase
+        .from('nutrition_plan_templates')
+        .select('id, name, description, goal_type, daily_calories, protein_g, carbs_g, fats_g')
+        .eq('org_id', orgId)
+        .is('coach_id', null)
+        .order('created_at', { ascending: false })
+    return data ?? []
+})

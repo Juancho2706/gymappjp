@@ -126,6 +126,85 @@ export async function createOrgNutritionPlanTemplateAction(orgSlug: string, form
     return { success: true, templateId: template.id }
 }
 
+/**
+ * Assigns an org nutrition plan template to all assigned org clients
+ * (or a subset). Creates nutrition_plans using each client's coach_id.
+ * Only works for clients who already have a coach assigned.
+ * Templates from nutrition_plan_templates (coach_id = null, org_id = orgId).
+ */
+export async function assignOrgNutritionPlanTemplateToClientsAction(
+    orgSlug: string,
+    templateId: string,
+) {
+    const ctx = await resolveAdminContext(orgSlug)
+    if ('error' in ctx) return { error: ctx.error }
+
+    const parsedId = TemplateIdSchema.safeParse(templateId)
+    if (!parsedId.success) return { error: 'Template invalido' }
+
+    const admin = createServiceRoleClient()
+
+    // Fetch template (must be org-owned: coach_id = null)
+    const { data: template } = await admin
+        .from('nutrition_plan_templates')
+        .select('id, name, daily_calories, protein_g, carbs_g, fats_g, description')
+        .eq('id', parsedId.data)
+        .eq('org_id', ctx.org.id)
+        .is('coach_id', null)
+        .maybeSingle()
+    if (!template) return { error: 'Template org no encontrado' }
+
+    // Fetch all assigned org clients
+    const { data: clients } = await admin
+        .from('clients')
+        .select('id, coach_id, full_name')
+        .eq('org_id', ctx.org.id)
+        .not('coach_id', 'is', null)
+        .eq('is_active', true)
+    if (!clients || clients.length === 0) return { error: 'No hay alumnos con coach asignado' }
+
+    // Deactivate existing active plans for these clients
+    const clientIds = clients.map(c => c.id)
+    await admin
+        .from('nutrition_plans')
+        .update({ is_active: false })
+        .in('client_id', clientIds)
+        .eq('org_id', ctx.org.id)
+        .eq('is_active', true)
+
+    // Create new plans from template macros
+    const plans = clients.map(client => ({
+        client_id: client.id,
+        coach_id: client.coach_id!,
+        org_id: ctx.org.id,
+        template_id: template.id,
+        name: template.name,
+        daily_calories: template.daily_calories,
+        protein_g: template.protein_g,
+        carbs_g: template.carbs_g,
+        fats_g: template.fats_g,
+        instructions: template.description,
+        is_active: true,
+        is_custom: false,
+    }))
+
+    const { error } = await admin.from('nutrition_plans').insert(plans)
+    if (error) return { error: error.message }
+
+    await writeOrgAuditEvent(admin, {
+        orgId: ctx.org.id,
+        actorId: ctx.user.id,
+        action: 'nutrition_template.assigned',
+        targetType: 'nutrition_plan_template',
+        targetId: template.id,
+        metadata: { name: template.name, clients_assigned: plans.length },
+    })
+
+    revalidatePath(`/org/${orgSlug}/nutrition`)
+    revalidatePath(`/org/${orgSlug}/audit`)
+    return { success: true, assigned: plans.length }
+}
+
 export async function deleteOrgNutritionTemplateAction(orgSlug: string, id: string) {
     const ctx = await resolveAdminContext(orgSlug)
     if ('error' in ctx) return { error: ctx.error }
