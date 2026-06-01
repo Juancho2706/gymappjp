@@ -24,6 +24,7 @@ import { CreateEnterpriseCoachForm } from './_components/CreateEnterpriseCoachFo
 import { InviteCoachForm } from './_components/InviteCoachForm'
 import { RemoveCoachButton } from './_components/RemoveCoachButton'
 import { RemoveCoachDialog } from './_components/RemoveCoachDialog'
+import { OrgEmptyState } from '../_components/OrgEmptyState'
 
 export const metadata: Metadata = { title: 'Equipo' }
 
@@ -317,7 +318,14 @@ export default async function OrgCoachesPage({ params }: Props) {
                                     )
                                 })
                             ) : (
-                                <div className="p-6 text-sm text-zinc-500">Sin coaches activos. Crea el primero arriba.</div>
+                                <div className="p-4">
+                                    <OrgEmptyState
+                                        icon={Users}
+                                        tone="amber"
+                                        headline="Sin coaches activos"
+                                        description="Invitá a tu primer coach con el formulario de arriba. Recibirá un código para activar su cuenta enterprise."
+                                    />
+                                </div>
                             )}
                         </div>
                     </div>

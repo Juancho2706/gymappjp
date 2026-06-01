@@ -23,6 +23,7 @@ export const metadata: Metadata = { title: 'Reportes' }
 
 interface Props {
     params: Promise<{ slug: string }>
+    searchParams: Promise<{ period?: string }>
 }
 
 function percentage(value: number, total: number) {
@@ -36,8 +37,10 @@ function reportTone(value: number) {
     return 'text-red-300'
 }
 
-export default async function OrgReportsPage({ params }: Props) {
+export default async function OrgReportsPage({ params, searchParams }: Props) {
     const { slug } = await params
+    const { period: rawPeriod } = await searchParams
+    const period: '7d' | '30d' = rawPeriod === '30d' ? '30d' : '7d'
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
     if (!orgRoleCan(org.myRole, 'org.reports.view')) redirect(`/org/${slug}`)
@@ -91,11 +94,12 @@ export default async function OrgReportsPage({ params }: Props) {
     const checkInDeltaStr = (checkInDeltaVal >= 0 ? '+' : '') + checkInDeltaVal
     const deltaLabel = hasRealDelta ? 'vs sem ant.' : '~vs sem ant.'
 
+    const checkInsValue = period === '30d' ? checkIns.total30d : checkIns.total7d
     const reportCards = [
         { label: 'Salud operacional', value: org.last_health_score ?? riskScore, suffix: '/100', icon: Gauge, delta: null },
         { label: 'Asignacion alumnos', value: assignmentRate, suffix: '%', icon: PieChart, delta: null },
-        { label: 'Check-ins 7d', value: checkIns.total7d, suffix: '', icon: ClipboardList, delta: checkInDeltaStr },
-        { label: 'Participación', value: checkIns.clientsActive7d, suffix: ` / ${checkIns.totalOrgClients}`, icon: TrendingUp, delta: null },
+        { label: `Check-ins ${period}`, value: checkInsValue, suffix: '', icon: ClipboardList, delta: period === '7d' ? checkInDeltaStr : null },
+        { label: 'Participación 7d', value: checkIns.clientsActive7d, suffix: ` / ${checkIns.totalOrgClients}`, icon: TrendingUp, delta: null },
     ]
 
     return (
@@ -136,6 +140,24 @@ export default async function OrgReportsPage({ params }: Props) {
                         </div>
                     </div>
                 </section>
+
+                {/* Period toggle for check-ins metric */}
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500">Período check-ins:</span>
+                    <div className="inline-flex rounded-lg border border-zinc-700 p-0.5">
+                        {(['7d', '30d'] as const).map(p => (
+                            <a
+                                key={p}
+                                href={`/org/${slug}/reports?period=${p}`}
+                                className={`rounded-md px-3 py-1 text-xs font-bold transition-colors ${
+                                    period === p ? 'bg-sky-400 text-zinc-950' : 'text-zinc-400 hover:text-zinc-200'
+                                }`}
+                            >
+                                {p === '7d' ? '7 días' : '30 días'}
+                            </a>
+                        ))}
+                    </div>
+                </div>
 
                 <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {reportCards.map(({ label, value, suffix, icon: Icon, delta }) => (

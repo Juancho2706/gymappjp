@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { AssignClientSelect } from './AssignClientSelect'
 import { ClientDetailSheet } from './ClientDetailSheet'
+import { OrgEmptyState } from '../../_components/OrgEmptyState'
 import { bulkAssignSelectedClientsAction, bulkArchiveClientsAction, bulkReactivateClientsAction } from '../../_actions/org.actions'
 
 export type ClientDisplayRow = {
@@ -121,8 +122,14 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
 
     if (clients.length === 0) {
         return (
-            <div className="overflow-hidden rounded-xl border border-zinc-800">
-                <div className="p-8 text-center text-sm text-zinc-500">Sin alumnos en esta vista.</div>
+            <div className="mt-5">
+                <OrgEmptyState
+                    icon={Users}
+                    tone="amber"
+                    headline="Sin alumnos en esta vista"
+                    description="Agregá alumnos manualmente, importá un CSV, o ajustá el filtro activo para ver otros estados."
+                    cta={isAdmin ? { label: 'Agregar alumno', href: `/org/${orgSlug}/clients` } : undefined}
+                />
             </div>
         )
     }

@@ -18,6 +18,7 @@ import {
 import { getOrgAnnouncements, getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
 import { AnnouncementComposerSheet } from './_components/AnnouncementComposerSheet'
 import { AnnouncementRow } from './_components/AnnouncementRow'
+import { OrgEmptyState } from '../_components/OrgEmptyState'
 
 export const metadata: Metadata = { title: 'Novedades' }
 
@@ -202,11 +203,12 @@ export default async function AnnouncementsPage({ params }: Props) {
 
                         <div className="mt-5 space-y-3">
                             {announcements.length === 0 ? (
-                                <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/50 p-8 text-center">
-                                    <MessageSquareText className="mx-auto h-8 w-8 text-zinc-600" aria-hidden="true" />
-                                    <p className="mt-3 text-sm font-bold text-zinc-300">Sin novedades publicadas</p>
-                                    <p className="mt-1 text-sm text-zinc-500">Crea el primer mensaje cuando haya informacion accionable para alumnos.</p>
-                                </div>
+                                <OrgEmptyState
+                                    icon={MessageSquareText}
+                                    tone="sky"
+                                    headline="Sin novedades publicadas"
+                                    description="Creá el primer mensaje cuando haya información accionable para coaches o alumnos enterprise. Usá el composer de la izquierda."
+                                />
                             ) : (
                                 announcements.filter(a => !a.published_at || a.published_at <= now).map(announcement => (
                                     <AnnouncementRow key={announcement.id} orgSlug={slug} announcement={{ ...announcement, created_at: announcement.created_at ?? '' }} />
