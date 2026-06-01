@@ -27,7 +27,8 @@
     "seed:enterprise-demo:local": "node scripts/seed-enterprise-demo-local.mjs",
     "audit:org-sensitive-actions": "node scripts/check-org-sensitive-actions-audit.mjs",
     "audit:checksum:manual": "node scripts/run-audit-checksum-manual.mjs",
-    "test:e2e:enterprise-rls": "playwright test tests/enterprise/rls-isolation.spec.ts --workers=1"
+    "test:e2e:enterprise-rls": "playwright test tests/enterprise/rls-isolation.spec.ts --workers=1",
+    "test:e2e:enterprise-roles": "playwright test tests/enterprise/multi-role-access.spec.ts --workers=1"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
