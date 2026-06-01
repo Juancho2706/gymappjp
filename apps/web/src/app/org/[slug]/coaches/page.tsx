@@ -65,6 +65,7 @@ export default async function OrgCoachesPage({ params }: Props) {
     const { slug } = await params
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.coaches.view')) redirect(`/org/${slug}`)
 
     const isAdmin = orgRoleCan(org.myRole, 'org.coaches.invite')
     const [members, clients] = await Promise.all([

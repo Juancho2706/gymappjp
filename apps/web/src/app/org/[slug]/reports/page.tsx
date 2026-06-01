@@ -16,6 +16,7 @@ import {
     Users,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgCheckInOverview, getOrgClients, getOrgInvoices, getOrgMembers, getOrgStats } from '../_data/org.queries'
+import { orgRoleCan } from '@/domain/org/permissions'
 import { ReportsPdfButton } from './_components/ReportsPdfButton'
 
 export const metadata: Metadata = { title: 'Reportes' }
@@ -39,6 +40,7 @@ export default async function OrgReportsPage({ params }: Props) {
     const { slug } = await params
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.reports.view')) redirect(`/org/${slug}`)
 
     const [stats, members, clients, invoices, checkIns, supabase] = await Promise.all([
         getOrgStats(org.id),

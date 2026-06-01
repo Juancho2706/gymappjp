@@ -61,6 +61,7 @@ export default async function OrgAuditPage({ params, searchParams }: Props) {
     const { action: actionFilter, actor_id: actorFilter, target_type: targetTypeFilter, from, to } = await searchParams
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.audit.view')) redirect(`/org/${slug}`)
 
     const filters = {
         from: from ? `${from}T00:00:00` : undefined,

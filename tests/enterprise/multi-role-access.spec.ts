@@ -122,6 +122,34 @@ test.describe('Multi-role enterprise access', () => {
         await expect(page.locator('text=Asignar alumnos sin coach')).not.toBeVisible()
     })
 
+    // ── Route guard denials (role lacks permission → redirect to dashboard) ────
+
+    test('brand_manager cannot access /clients (no clients.view)', async ({ page }) => {
+        await orgLogin(page, 'staff-brand-a@eva-test.cl')
+        await page.goto(`/org/${ORG_SLUG}/clients`)
+        // brand_manager lacks org.clients.view → guard redirects to /org/[slug]
+        await page.waitForURL(url => url.href.endsWith(`/org/${ORG_SLUG}`), { timeout: 8000 })
+        expect(page.url()).not.toContain('/clients')
+    })
+
+    test('brand_manager cannot access /payments (no payments.view)', async ({ page }) => {
+        await orgLogin(page, 'staff-brand-a@eva-test.cl')
+        await page.goto(`/org/${ORG_SLUG}/payments`)
+        await page.waitForURL(url => !url.href.includes('/payments'), { timeout: 8000 })
+    })
+
+    test('analyst cannot access /team (no team.view)', async ({ page }) => {
+        await orgLogin(page, 'staff-analyst-a@eva-test.cl')
+        await page.goto(`/org/${ORG_SLUG}/team`)
+        await page.waitForURL(url => !url.href.includes('/team'), { timeout: 8000 })
+    })
+
+    test('analyst cannot access /brand (no brand.view)', async ({ page }) => {
+        await orgLogin(page, 'staff-analyst-a@eva-test.cl')
+        await page.goto(`/org/${ORG_SLUG}/brand`)
+        await page.waitForURL(url => !url.href.includes('/brand'), { timeout: 8000 })
+    })
+
     // ── Cross-org isolation (roles can't see other orgs) ──────────────────────
 
     test('ops org_a cannot access org_b dashboard', async ({ page }) => {

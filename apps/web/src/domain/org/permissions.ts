@@ -83,6 +83,8 @@ const ROLE_PERMISSIONS: Record<OrgRole, readonly OrgPermission[]> = {
         'org.clients.view',
         'org.payments.view',
         'org.reports.view', 'org.reports.export',
+        'org.audit.view',      // read audit evidence
+        'org.coaches.view',    // see coach performance (read-only)
     ],
     brand_manager: [
         'org.dashboard.view',

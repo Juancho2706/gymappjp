@@ -15,6 +15,7 @@ import {
     WalletCards,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgClientPayments, getOrgClients } from '../_data/org.queries'
+import { orgRoleCan } from '@/domain/org/permissions'
 import { recordEnterpriseClientPaymentFormAction } from './_actions/payment.actions'
 import { PaymentRecordSheet } from './_components/PaymentRecordSheet'
 
@@ -96,6 +97,7 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
     const statusFilter = isPaymentFilter(resolvedSearchParams?.status) ? resolvedSearchParams.status : 'all'
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.payments.view')) redirect(`/org/${slug}`)
 
     const [clients, payments] = await Promise.all([
         getOrgClients(org.id),

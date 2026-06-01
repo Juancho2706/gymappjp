@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { RevokeStaffButton } from './_components/RevokeStaffButton'
+import { orgRoleCan } from '@/domain/org/permissions'
 import { ChangeStaffRoleButton } from './_components/ChangeStaffRoleButton'
 import { ResetStaffPasswordButton } from './_components/ResetStaffPasswordButton'
 import { CreateStaffDialog } from './_components/CreateStaffDialog'
@@ -77,6 +78,7 @@ export default async function OrgTeamPage({ params }: Props) {
     const { slug } = await params
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.team.view')) redirect(`/org/${slug}`)
 
     const members = await getOrgMembers(org.id)
     const enterpriseUsers = members.filter((member) => member.role !== 'coach')

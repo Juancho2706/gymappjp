@@ -15,6 +15,7 @@ import {
     Users,
 } from 'lucide-react'
 import { getOrgAssignmentHistory, getOrgBySlug, getOrgClients, getOrgMembers } from '../_data/org.queries'
+import { orgRoleCan } from '@/domain/org/permissions'
 import { AssignmentQuickAssignPanel } from './_components/AssignmentQuickAssignPanel'
 import { BulkAssignPanel } from './_components/BulkAssignPanel'
 import { CoachAssignmentsMobile } from './_components/CoachAssignmentsMobile'
@@ -51,6 +52,7 @@ export default async function OrgAssignmentsPage({ params }: Props) {
     const { slug } = await params
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.clients.view')) redirect(`/org/${slug}`)
 
     // Use org-configured capacity or fall back to default 25
     const TARGET_CLIENTS_PER_COACH = org.default_coach_capacity ?? DEFAULT_CAPACITY

@@ -14,6 +14,7 @@ import {
     TabletSmartphone,
 } from 'lucide-react'
 import { getOrgBySlug } from '../_data/org.queries'
+import { orgRoleCan } from '@/domain/org/permissions'
 import { BrandCenterActions } from './_components/BrandCenterActions'
 import { BrandMobileTabBar } from './_components/BrandMobileTabBar'
 import { Suspense } from 'react'
@@ -73,6 +74,7 @@ export default async function OrgBrandPage({ params, searchParams }: Props) {
     const activeTab = tab ?? 'config'
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.brand.view')) redirect(`/org/${slug}`)
 
     const primaryColor = getReadableColor(org.primary_color)
     const compactName = org.name.length > 18 ? `${org.name.slice(0, 18)}...` : org.name

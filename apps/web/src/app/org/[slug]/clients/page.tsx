@@ -31,6 +31,7 @@ export default async function OrgClientsPage({ params, searchParams }: Props) {
 
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+    if (!orgRoleCan(org.myRole, 'org.clients.view')) redirect(`/org/${slug}`)
 
     const isAdmin = orgRoleCan(org.myRole, 'org.clients.assign')
 
