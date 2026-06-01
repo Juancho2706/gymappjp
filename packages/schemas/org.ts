@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const UpdateOrgSchema = z.object({
     name: z.string().min(2).max(80),
     primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().or(z.literal('')),
+    default_coach_capacity: z.coerce.number().int().min(1).max(500).optional(),
 })
 export type UpdateOrgInput = z.infer<typeof UpdateOrgSchema>
 

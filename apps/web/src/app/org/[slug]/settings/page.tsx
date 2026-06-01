@@ -169,7 +169,7 @@ export default async function OrgSettingsPage({ params }: Props) {
                                 <p className="text-sm leading-6 text-zinc-500 mb-4">
                                     Cambios basicos. El publish avanzado y el preview cross-platform se controlan desde Marca.
                                 </p>
-                                <OrgSettingsForm orgSlug={slug} defaultName={org.name} defaultColor={org.primary_color ?? ''} currentLogoUrl={org.logo_url} />
+                                <OrgSettingsForm orgSlug={slug} defaultName={org.name} defaultColor={org.primary_color ?? ''} currentLogoUrl={org.logo_url} defaultCoachCapacity={org.default_coach_capacity} />
                             </SettingsAccordion>
                         ) : (
                             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 text-sm text-zinc-500">

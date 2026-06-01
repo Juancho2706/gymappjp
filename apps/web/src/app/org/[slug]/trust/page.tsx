@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import {
+    AlertTriangle,
     Archive,
     CheckCircle2,
     Database,
@@ -9,6 +10,7 @@ import {
     Fingerprint,
     KeyRound,
     LockKeyhole,
+    Scale,
     ShieldCheck,
     Users,
 } from 'lucide-react'
@@ -173,6 +175,58 @@ export default async function OrgTrustCenterPage({ params }: Props) {
                             </div>
                         </section>
                     </aside>
+                </section>
+
+                {/* Ley 21.719 Compliance Checklist — deadline 2026-12-01 */}
+                <section className="rounded-2xl border border-amber-400/20 bg-zinc-900/70 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-2">
+                            <Scale className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                            <h2 className="text-lg font-black text-white">Ley 21.719 — Protección de datos Chile</h2>
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-xs font-bold text-amber-300">
+                            <AlertTriangle className="h-3 w-3" />
+                            Deadline 2026-12-01
+                        </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 mb-4">
+                        La Ley 21.719 entra en vigencia el 1 de diciembre de 2026. Datos de salud/fitness/nutrición/fotos pueden requerir mayor cuidado operativo. Completar antes del deadline.
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        {[
+                            { label: 'Inventario de datos personales', detail: 'Mapear email, teléfono, fotos progreso, peso, nutrición, workouts por contexto.', done: false, priority: 'high' },
+                            { label: 'Responsable de datos definido', detail: 'Aclarar si EVA es responsable o procesador por contrato enterprise. TOS actualizado.', done: false, priority: 'high' },
+                            { label: 'Legal copy enterprise revisado', detail: 'Revisar lenguaje de pagos, datos sensibles y roles antes de mostrar a clientes.', done: false, priority: 'high' },
+                            { label: 'Retención y borrado definidos', detail: 'Política de retention/export/delete por tipo de dato. Plazo razonable documentado.', done: false, priority: 'medium' },
+                            { label: 'Acceso a fotos y progreso auditado', detail: 'Verificar que check-in photos solo acceden coach+alumno. Bucket `checkins` es público.', done: false, priority: 'medium' },
+                            { label: 'Derechos ARCO operacionales', detail: 'Acceso, rectificación, cancelación, oposición. Definir cómo responder solicitudes.', done: false, priority: 'medium' },
+                            { label: 'Consentimiento explícito documentado', detail: 'Registro de cuándo y cómo cada alumno/coach consintió el tratamiento de datos.', done: false, priority: 'low' },
+                            { label: 'Checklist completo pre-prod', detail: 'Revisión final antes de operar con clientes de pago. No lanzar antes de completar los ítems high.', done: false, priority: 'low' },
+                        ].map(({ label, detail, done, priority }) => (
+                            <div key={label} className={`flex items-start gap-3 rounded-xl border p-3 ${
+                                done
+                                    ? 'border-emerald-400/15 bg-emerald-400/5'
+                                    : priority === 'high'
+                                    ? 'border-amber-400/20 bg-amber-400/5'
+                                    : 'border-zinc-800 bg-zinc-950/40'
+                            }`}>
+                                <div className={`mt-0.5 shrink-0 ${done ? 'text-emerald-400' : priority === 'high' ? 'text-amber-400' : 'text-zinc-600'}`}>
+                                    {done ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-zinc-200">{label}</p>
+                                    <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">{detail}</p>
+                                    {!done && (
+                                        <span className={`mt-1 inline-block text-[10px] font-bold uppercase tracking-[0.08em] ${
+                                            priority === 'high' ? 'text-amber-400' : priority === 'medium' ? 'text-zinc-500' : 'text-zinc-700'
+                                        }`}>
+                                            {priority === 'high' ? '● P0' : priority === 'medium' ? '○ P1' : '○ P2'}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </section>
             </div>
         </div>

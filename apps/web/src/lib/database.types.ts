@@ -1953,6 +1953,7 @@ export type Database = {
           client_limit: number
           created_at: string | null
           currency: string
+          default_coach_capacity: number
           deleted_at: string | null
           id: string
           last_health_score: number | null
@@ -1978,6 +1979,7 @@ export type Database = {
           client_limit?: number
           created_at?: string | null
           currency?: string
+          default_coach_capacity?: number
           deleted_at?: string | null
           id?: string
           last_health_score?: number | null
@@ -2003,6 +2005,7 @@ export type Database = {
           client_limit?: number
           created_at?: string | null
           currency?: string
+          default_coach_capacity?: number
           deleted_at?: string | null
           id?: string
           last_health_score?: number | null

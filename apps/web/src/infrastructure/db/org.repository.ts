@@ -27,6 +27,7 @@ export type OrgWithMembership = {
     last_health_score: number | null
     brand_draft: BrandDraft | null
     brand_published_at: string | null
+    default_coach_capacity: number
     myRole: Exclude<OrgRole, 'coach'>
 }
 
@@ -110,7 +111,7 @@ export async function findOrgBySlug(
 ): Promise<OrgWithMembership | null> {
     const { data: org } = await db
         .from('organizations')
-        .select('id, slug, name, logo_url, primary_color, plan, status, seats_included, trial_ends_at, billing_cycle, currency, created_at, onboarding_step, last_health_score, brand_draft, brand_published_at')
+        .select('id, slug, name, logo_url, primary_color, plan, status, seats_included, trial_ends_at, billing_cycle, currency, created_at, onboarding_step, last_health_score, brand_draft, brand_published_at, default_coach_capacity')
         .eq('slug', slug)
         .is('deleted_at', null)
         .maybeSingle()

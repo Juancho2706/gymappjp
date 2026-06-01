@@ -77,6 +77,7 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
     const parsed = UpdateOrgSchema.safeParse({
         name: formData.get('name'),
         primary_color: formData.get('primary_color') || undefined,
+        default_coach_capacity: formData.get('default_coach_capacity') || undefined,
     })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
 
@@ -84,8 +85,9 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
     if ('error' in context) return { error: context.error }
     const { org, user, supabase } = context
 
-    const updateData: Record<string, string> = { name: parsed.data.name }
+    const updateData: Record<string, string | number> = { name: parsed.data.name }
     if (parsed.data.primary_color) updateData.primary_color = parsed.data.primary_color
+    if (parsed.data.default_coach_capacity) updateData.default_coach_capacity = parsed.data.default_coach_capacity
 
     const { error } = await supabase
         .from('organizations')

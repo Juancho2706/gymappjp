@@ -15,11 +15,14 @@ import {
 } from 'lucide-react'
 import { getOrgBySlug } from '../_data/org.queries'
 import { BrandCenterActions } from './_components/BrandCenterActions'
+import { BrandMobileTabBar } from './_components/BrandMobileTabBar'
+import { Suspense } from 'react'
 
 export const metadata: Metadata = { title: 'Brand Center' }
 
 interface Props {
     params: Promise<{ slug: string }>
+    searchParams: Promise<{ tab?: string }>
 }
 
 const BRAND_SURFACES = [
@@ -64,8 +67,10 @@ function contrastRatio(foreground: string, background: string) {
     return Number(((light + 0.05) / (dark + 0.05)).toFixed(2))
 }
 
-export default async function OrgBrandPage({ params }: Props) {
+export default async function OrgBrandPage({ params, searchParams }: Props) {
     const { slug } = await params
+    const { tab } = await searchParams
+    const activeTab = tab ?? 'config'
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
 
@@ -132,6 +137,12 @@ export default async function OrgBrandPage({ params }: Props) {
                     </div>
                 </section>
 
+                {/* Mobile tab bar — hidden on md+ */}
+                <Suspense>
+                    <BrandMobileTabBar orgSlug={slug} />
+                </Suspense>
+
+                {/* QA items — always visible (they're the "score" summary) */}
                 <section className="grid gap-3 md:grid-cols-4">
                     {qaItems.map((item) => (
                         <div key={item.label} className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
@@ -148,8 +159,10 @@ export default async function OrgBrandPage({ params }: Props) {
                     ))}
                 </section>
 
-                <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                {/* Config + Preview sections — xl:grid on desktop, tabs on mobile */}
+                <section className={`grid gap-4 xl:grid-cols-[0.95fr_1.05fr] ${activeTab === 'propagate' ? 'hidden md:grid' : ''}`}>
+                    {/* Left: Preview matrix — shown on 'preview' tab on mobile, always on desktop */}
+                    <div className={`rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 ${activeTab !== 'preview' ? 'hidden xl:block' : ''}`}>
                         <div className="flex items-center gap-2">
                             <Eye className="h-4 w-4 text-amber-300" aria-hidden="true" />
                             <h2 className="text-lg font-black text-white">Preview matrix</h2>
@@ -234,7 +247,8 @@ export default async function OrgBrandPage({ params }: Props) {
                         </div>
                     </div>
 
-                    <div className="grid gap-4">
+                    {/* Right: Config controls — shown on 'config' or 'publish' tabs, always on desktop */}
+                    <div className={`grid gap-4 ${activeTab === 'preview' || activeTab === 'propagate' ? 'hidden xl:grid' : ''}`}>
                         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="h-4 w-4 text-amber-300" aria-hidden="true" />
@@ -314,7 +328,8 @@ export default async function OrgBrandPage({ params }: Props) {
                     </div>
                 </section>
 
-                <section className="grid gap-4 lg:grid-cols-[1fr_0.75fr]">
+                {/* Propagation section — shown on 'propagate' tab on mobile, always on desktop */}
+                <section className={`grid gap-4 lg:grid-cols-[1fr_0.75fr] ${activeTab !== 'propagate' ? 'hidden md:grid' : ''}`}>
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
                         <div className="flex items-center gap-2">
                             <GitBranch className="h-4 w-4 text-emerald-300" aria-hidden="true" />

@@ -11,6 +11,7 @@ interface Props {
     defaultName: string
     defaultColor: string
     currentLogoUrl?: string | null
+    defaultCoachCapacity?: number
 }
 
 function SubmitButton() {
@@ -27,7 +28,7 @@ function SubmitButton() {
     )
 }
 
-export function OrgSettingsForm({ orgSlug, defaultName, defaultColor, currentLogoUrl }: Props) {
+export function OrgSettingsForm({ orgSlug, defaultName, defaultColor, currentLogoUrl, defaultCoachCapacity = 25 }: Props) {
     const [state, action] = useActionState(
         async (_: unknown, formData: FormData) => updateOrgAction(orgSlug, formData),
         null
@@ -102,6 +103,22 @@ export function OrgSettingsForm({ orgSlug, defaultName, defaultColor, currentLog
                             className="h-10 w-10 cursor-pointer rounded-xl border border-zinc-700 bg-zinc-950 p-1"
                         />
                         <span className="text-xs text-zinc-500">Color base de la organizacion</span>
+                    </div>
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">
+                        Capacidad target por coach
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            name="default_coach_capacity"
+                            type="number"
+                            min={1}
+                            max={500}
+                            defaultValue={defaultCoachCapacity}
+                            className="h-10 w-24 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-sky-400"
+                        />
+                        <span className="text-xs text-zinc-500">alumnos activos por coach (usada en /asignaciones)</span>
                     </div>
                 </div>
                 {state?.error && <p className="text-xs text-red-400">{state.error}</p>}

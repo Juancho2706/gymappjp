@@ -27,7 +27,7 @@ interface Props {
     params: Promise<{ slug: string }>
 }
 
-const TARGET_CLIENTS_PER_COACH = 25
+const DEFAULT_CAPACITY = 25 // fallback when org has no custom setting
 
 function initials(name: string | null | undefined) {
     return (name?.trim()?.charAt(0) || '?').toUpperCase()
@@ -51,6 +51,9 @@ export default async function OrgAssignmentsPage({ params }: Props) {
     const { slug } = await params
     const org = await getOrgBySlug(slug)
     if (!org) redirect('/coach/dashboard')
+
+    // Use org-configured capacity or fall back to default 25
+    const TARGET_CLIENTS_PER_COACH = org.default_coach_capacity ?? DEFAULT_CAPACITY
 
     const [clients, members, assignmentHistory] = await Promise.all([
         getOrgClients(org.id),
