@@ -2393,11 +2393,11 @@ Solucion propuesta:
 
 Fases futuras:
 
-- [ ] Crear data inventory.
+- [ ] Crear data inventory (inventario formal de tablas + campos sensibles).
 - [ ] Revisar legal copy enterprise.
-- [ ] Definir retention/export/delete.
+- [ ] Definir retention/export/delete policy.
 - [ ] Auditar acceso a fotos/progreso.
-- [ ] Preparar checklist Ley 21.719 antes de 2026-12-01.
+- [x] Preparar checklist Ley 21.719. Completado 2026-06-01. 8 ítems P0/P1/P2 en Trust Center con deadline 2026-12-01. Cubre: data inventory, TOS, legal copy, retención, fotos audit, ARCO, consentimiento, pre-prod review.
 
 ##### 14. Testing Web/Mobile
 
@@ -2750,7 +2750,7 @@ Pendiente:
 - [x] Actividad reciente de asignaciones por alumno/coach desde `coach_client_assignments`. Completado el 2026-05-31. Agrega query cacheada `_data -> repository -> Supabase`, timeline compacto en `/org/[slug]/assignments` y link a Audit Log filtrado.
 - [x] Historial de asignaciones desde audit_logs. Completado 2026-06-01 via `ClientDetailSheet`: lazy-fetch `/api/org/[slug]/client-history` que consulta `org_audit_logs` por `client_id`. Sin migration extra — usa logs ya existentes. Append-only real (tabla separada) queda pendiente si se necesita query optimizada.
 - [ ] Rollback de ultima reasignacion.
-- [ ] Configurar capacidad objetivo por empresa.
+- [x] Configurar capacidad objetivo por empresa. Completado 2026-06-01. Migration `organizations.default_coach_capacity DEFAULT 25`. Campo en settings form. assignments/page usa `org.default_coach_capacity ?? 25`.
 - [x] Mobile: cards por coach + sheet de alumnos, no grids anchas. Completado 2026-05-31. `CoachAssignmentsMobile` muestra cards de capacidad en `<md`, abre bottom sheet con alumnos del coach y conserva reasignacion desde el sheet; la grilla de capacidad queda solo en `md+`.
 
 ### Operaciones / Pagos alumnos `/payments`
@@ -2826,7 +2826,7 @@ Pendiente:
 - [ ] Loader custom real por org: logo loader, texto, icon mode, contraste y preview PWA.
 - [ ] Inventario de superficies: login, manifests, loaders, emails, reports, QR, PDFs, error pages.
 - [ ] Tests: alumno enterprise ve org brand; alumno standalone ve coach brand.
-- [ ] Mobile: previews en tabs/swipe, no paneles largos.
+- [x] Mobile: tabs/swipe completado 2026-06-01. `BrandMobileTabBar`: sticky tab bar solo en `<md` con 4 tabs (Config, Preview, Publicar, Propagar). Desktop siempre muestra todo.
 
 ### Herramientas / Novedades `/announcements`
 
