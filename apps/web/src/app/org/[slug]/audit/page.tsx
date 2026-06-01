@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { orgRoleCan } from '@/domain/org/permissions'
 import { getOrgAuditLogs, getOrgBySlug } from '../_data/org.queries'
+import { OrgEmptyState } from '../_components/OrgEmptyState'
 
 export const metadata: Metadata = { title: 'Audit Log' }
 
@@ -252,8 +253,15 @@ export default async function OrgAuditPage({ params, searchParams }: Props) {
                                     </div>
                                 ))
                             ) : (
-                                <div className="p-6 text-sm text-zinc-500">
-                                    {(actionFilter || actorFilter || targetTypeFilter) ? 'Sin resultados para ese filtro.' : 'No hay eventos todavia.'}
+                                <div className="p-4">
+                                    <OrgEmptyState
+                                        icon={FileText}
+                                        tone="neutral"
+                                        headline={(actionFilter || actorFilter || targetTypeFilter) ? 'Sin resultados para ese filtro' : 'No hay eventos auditados todavía'}
+                                        description={(actionFilter || actorFilter || targetTypeFilter)
+                                            ? 'Ajustá o limpiá los filtros para ver más eventos.'
+                                            : 'Las acciones sensibles (asignaciones, cambios de marca, exports) aparecerán aquí automáticamente.'}
+                                    />
                                 </div>
                             )}
                         </div>

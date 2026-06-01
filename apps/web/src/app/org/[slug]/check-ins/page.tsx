@@ -12,6 +12,7 @@ import {
     User,
 } from 'lucide-react'
 import { getOrgBySlug, getOrgCheckInOverview, getOrgCoachStreaks } from '../_data/org.queries'
+import { OrgEmptyState } from '../_components/OrgEmptyState'
 import { orgRoleCan } from '@/domain/org/permissions'
 
 export const metadata: Metadata = { title: 'Check-ins' }
@@ -167,11 +168,12 @@ export default async function OrgCheckInsPage({ params }: Props) {
                                 })}
                             </div>
                         ) : (
-                            <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-center">
-                                <ClipboardList className="mx-auto h-8 w-8 text-zinc-700 mb-3" />
-                                <p className="text-sm text-zinc-500">Sin datos de check-ins en los últimos 30 días.</p>
-                                <p className="mt-1 text-xs text-zinc-600">Los alumnos envían check-ins desde su app móvil.</p>
-                            </div>
+                            <OrgEmptyState
+                                icon={ClipboardList}
+                                tone="emerald"
+                                headline="Sin check-ins en los últimos 30 días"
+                                description="Los alumnos envían check-ins desde su app. Cuando lleguen, verás participación, rachas por coach y alumnos sin contacto."
+                            />
                         )}
                     </section>
 
