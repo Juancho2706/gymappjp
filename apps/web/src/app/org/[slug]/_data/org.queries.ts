@@ -115,3 +115,44 @@ export const getOrgNutritionPlanTemplates = cache(async (orgId: string) => {
         .order('created_at', { ascending: false })
     return data ?? []
 })
+
+/** Active nutrition plans across the org, grouped by coach. */
+export const getOrgActiveNutritionPlans = cache(async (orgId: string) => {
+    const supabase = await createClient()
+    const [plansRes, membersRes] = await Promise.all([
+        supabase
+            .from('nutrition_plans')
+            .select('id, name, coach_id, client_id, daily_calories')
+            .eq('org_id', orgId)
+            .eq('is_active', true),
+        supabase
+            .from('organization_members')
+            .select('coach_id, coach:coaches(full_name)')
+            .eq('org_id', orgId)
+            .eq('role', 'coach')
+            .eq('status', 'active')
+            .is('deleted_at', null),
+    ])
+    const coachName = new Map<string, string>()
+    for (const m of membersRes.data ?? []) {
+        if (m.coach_id && m.coach && !Array.isArray(m.coach)) {
+            coachName.set(m.coach_id, (m.coach as { full_name: string | null }).full_name ?? 'Coach')
+        }
+    }
+    const byCoach = new Map<string, { coachId: string; coachName: string; plans: number; clients: Set<string> }>()
+    for (const p of plansRes.data ?? []) {
+        if (!p.coach_id) continue
+        if (!byCoach.has(p.coach_id)) {
+            byCoach.set(p.coach_id, { coachId: p.coach_id, coachName: coachName.get(p.coach_id) ?? 'Coach', plans: 0, clients: new Set() })
+        }
+        const b = byCoach.get(p.coach_id)!
+        b.plans++
+        if (p.client_id) b.clients.add(p.client_id)
+    }
+    return {
+        totalActivePlans: plansRes.data?.length ?? 0,
+        byCoach: Array.from(byCoach.values())
+            .map(b => ({ coachId: b.coachId, coachName: b.coachName, plans: b.plans, clients: b.clients.size }))
+            .sort((a, b) => b.plans - a.plans),
+    }
+})

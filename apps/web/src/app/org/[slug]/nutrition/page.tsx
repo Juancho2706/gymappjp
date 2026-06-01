@@ -17,7 +17,7 @@ import {
     Target,
     Users,
 } from 'lucide-react'
-import { getOrgBySlug, getOrgClients, getOrgMembers, getOrgNutritionPlanTemplates, getOrgNutritionTemplateUsage, getOrgNutritionTemplates } from '../_data/org.queries'
+import { getOrgActiveNutritionPlans, getOrgBySlug, getOrgClients, getOrgMembers, getOrgNutritionPlanTemplates, getOrgNutritionTemplateUsage, getOrgNutritionTemplates } from '../_data/org.queries'
 import { CreateOrgNutritionTemplateForm } from './_components/CreateOrgNutritionTemplateForm'
 import { DeleteOrgNutritionTemplateButton } from './_components/DeleteOrgNutritionTemplateButton'
 import { AssignOrgNutritionTemplateButton } from './_components/AssignOrgNutritionTemplateButton'
@@ -61,11 +61,12 @@ export default async function OrgNutritionPage({ params }: Props) {
     const isAdmin = orgRoleCan(org.myRole, 'org.coaches.invite')
     if (!isAdmin) redirect(`/org/${slug}`)
 
-    const [templates, members, orgPlanTemplates, clients] = await Promise.all([
+    const [templates, members, orgPlanTemplates, clients, activePlans] = await Promise.all([
         getOrgNutritionTemplates(org.id),
         getOrgMembers(org.id),
         getOrgNutritionPlanTemplates(org.id),
         getOrgClients(org.id),
+        getOrgActiveNutritionPlans(org.id),
     ])
     const templateUsage = await getOrgNutritionTemplateUsage(org.id, templates)
     const usageByTemplate = new Map(templateUsage.map(item => [item.template_id, item]))
@@ -395,6 +396,35 @@ export default async function OrgNutritionPage({ params }: Props) {
                                         templateName={t.name}
                                         assignedClientsCount={assignedClientsCount}
                                     />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* Active nutrition plans across the org, by coach */}
+                {activePlans.totalActivePlans > 0 && (
+                    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Flame className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                            <h2 className="text-lg font-black text-white">Planes activos por coach</h2>
+                            <span className="ml-auto rounded-full bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-400">
+                                {activePlans.totalActivePlans} activos
+                            </span>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            {activePlans.byCoach.map(c => (
+                                <div key={c.coachId} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-400/10 text-xs font-black text-emerald-300">
+                                            {c.coachName.charAt(0).toUpperCase()}
+                                        </div>
+                                        <p className="truncate text-sm font-bold text-zinc-100">{c.coachName}</p>
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                        <p className="text-sm font-black text-white">{c.plans}</p>
+                                        <p className="text-[10px] text-zinc-600">{c.clients} alumno{c.clients !== 1 ? 's' : ''}</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
