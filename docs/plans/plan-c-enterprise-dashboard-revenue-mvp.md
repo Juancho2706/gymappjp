@@ -2853,11 +2853,11 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Ruta `/org/[slug]/programs`: overview templates org + cobertura alumnos + alumnos sin programa. Ver Fase P2.5-B.
-- [ ] Creator org template workout en `/org/[slug]/programs/new`. Ver Fase P2.5-C (requiere migration `workout_programs.coach_id` nullable).
-- [ ] Links desde `/coaches/[coachId]` y `/clients/[clientId]` al builder coach en contexto enterprise.
-- [ ] Nav: agregar "Programas" al grupo Herramientas en `OrgEnterpriseNav`.
-- [ ] Mobile: overview compacto + link a builder (no builder embebido en mobile).
+- [x] Ruta `/org/[slug]/programs` (P2.5-B). Completado 2026-06-01.
+- [x] Creator org template workout `/programs/new` (P2.5-C). Completado 2026-06-01.
+- [x] Links coaches/clients → builder. Completado 2026-06-01.
+- [x] Nav "Programas" en Herramientas. Completado 2026-06-01.
+- [x] Mobile overview + link a builder. Completado 2026-06-01.
 
 ### Herramientas / Nutricion `/nutrition`
 
@@ -2874,9 +2874,9 @@ Pendiente:
 - [x] Tracking de uso por coach. Completado 2026-05-31. Sin migracion: agrupa los planes activos matcheados por `coach_id`, muestra alumnos activos, planes activos, logs 7d y adherencia por coach en `/org/[slug]/nutrition`.
 - [ ] Full template creator en `/org/[slug]/nutrition/new` con PlanBuilder real (meals + foods). Ver Fase P2.5-D (requiere migration `nutrition_plan_templates.coach_id` nullable).
 - [ ] Tab "Planes activos" en `/nutrition`: todos los `nutrition_plans` donde `org_id = orgId` con adherencia por coach.
-- [ ] Assign org template a coach/clientes via action auditada.
+- [x] Assign org template a coach/clientes via action auditada. Completado 2026-06-01 (`assignOrgNutritionPlanTemplateToClientsAction` + `AssignOrgNutritionTemplateButton`).
 - [ ] Filtros por objetivo cuando exista volumen suficiente de datos.
-- [ ] Mobile: lista templates + button asignar; builder completo queda en desktop.
+- [x] Mobile: lista templates + button asignar (builder completo queda en desktop). Completado 2026-06-01.
 
 ### Seguridad/Admin `/settings`
 
@@ -2887,8 +2887,8 @@ Estado actual:
 Pendiente:
 
 - [ ] Flujo comercial para seats, cambio de plan y contacto legal/finanzas sin cobro in-app.
-- [ ] Separar settings administrativos de billing/contrato.
-- [ ] Centralizar `canViewBilling(workspace)`.
+- [x] Separar settings de billing/contrato. Completado 2026-06-01: secciones independientes `SettingsAccordion` (Datos, Marca, Billing, Seats, Guardrails).
+- [x] Centralizar `canViewBilling(workspace)`. Ya existe en `services/auth/workspace-permissions.service.ts` (coach standalone only). Verificado 2026-06-01.
 - [x] Mobile: accordion por seccion. Completado 2026-06-01. `SettingsAccordion` client component: tap-to-expand en mobile, siempre visible en desktop.
 
 ### Seguridad/Admin / Auditoria `/audit`
@@ -2918,7 +2918,7 @@ Pendiente:
 - [x] PDF ejecutivo completado 2026-06-01. `ReportsPdfButton` client-side con jspdf: metricas, alumnos, coaches, branding amber. Descarga reporte-[slug]-[date].pdf.
 - [x] Period toggle 7d/30d en reports. Completado 2026-06-01. `?period=` URL param, pill toggle, card check-ins cambia total7d/30d. Rango de fechas custom + comparación histórica completa quedan para cuando haya volumen.
 - [ ] No vender como analytics avanzado hasta normalizar adherencia/check-ins/pagos.
-- [ ] Mobile: resumen ejecutivo vertical con tabs.
+- [x] Mobile: resumen ejecutivo vertical + period toggle. Completado 2026-06-01: cards stackean (`sm:grid-cols-2`), secciones a 1 columna `<xl`, toggle 7d/30d tipo tabs.
 
 ### Onboarding `/onboarding`
 
@@ -2928,9 +2928,9 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Medir time-to-value real: primer coach activo, primeros alumnos asignados, primer reporte exportado.
-- [ ] Checklist por owner/admin/CSM.
-- [ ] Mobile: wizard paso a paso.
+- [x] Medir time-to-value real. Completado 2026-06-01: `OrgProgressTracker` mide 7 milestones reales (marca, primer coach activo, primer alumno asignado, primer anuncio, primeros check-ins, primer reporte exportado, health≥70) con % y quick link.
+- [x] Checklist por owner/CSM. Completado 2026-06-01: OrgProgressTracker es el checklist accionable; cada item linkea a la pantalla que lo resuelve.
+- [ ] Mobile: wizard paso a paso (OnboardingWizard ya existe; el stepper mobile dedicado queda pendiente).
 
 ---
 
