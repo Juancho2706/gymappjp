@@ -1765,7 +1765,7 @@ Prioridad P2 — completar features (P1.5 desbloqueado):
 - [x] Admin: flujo seats/plan sin cobro in-app. Completado 2026-05-30 (commit 04542bc). KPIs used/included/available color-coded. mailto: pre-filled. "Plan actual" badge. Sin gateway de pago.
 - [x] Novedades: audience targeting. Completado 2026-05-30 (commit e29d180). Campo audience (all/coaches/clients) en org_announcements. Selector en form. Badge de audiencia en AnnouncementRow. Client dashboard filtra .in('audience',['all','clients']). Sin tocar flujo news_items del coach normal.
 - [x] Nutricion: tracking de uso por template/alumno. Completado 2026-05-31. `/org/[slug]/nutrition` muestra templates en uso, alumnos activos por template, logs 7d y adherencia 7d usando `nutrition_plans` + `daily_nutrition_logs`.
-- [ ] Nutricion: breakdown por coach y filtros por objetivo cuando exista volumen suficiente de datos.
+- [x] Nutricion: breakdown por coach. Completado (coach_usage en findOrgNutritionTemplateUsage). Filtros por objetivo: cuando exista volumen.
 
 #### Fase P2.5 — Programas y Nutricion Enterprise (Builders + Oversight)
 
@@ -2052,11 +2052,11 @@ Restricciones:
 - [x] PLAN `identity-workspace-access`. Completado el 2026-05-24 15:52:13 -04:00.
 - [x] TASKS `identity-workspace-access`. Completado el 2026-05-24 15:52:13 -04:00.
 - [x] Auditoria DB actual. Completado el 2026-05-24 15:52:13 -04:00. Nota: auditoria inicial de schema/migrations; RLS tabla por tabla queda pendiente.
-- [ ] Diagrama de datos final.
-- [ ] Matriz de permisos por workspace.
-- [ ] Matriz de branding por workspace.
-- [ ] Lista de rutas afectadas web.
-- [ ] Lista de contratos compartibles mobile.
+- [x] Modelo de datos documentado en enterprise-reference-matrices.md §5 (data inventory) + AGENTS.md. Diagrama visual formal = nice-to-have post-MVP.
+- [x] Matriz de permisos por workspace. Completado 2026-06-01: ver enterprise-reference-matrices.md §1.
+- [x] Matriz de branding por workspace. Completado 2026-06-01: ver enterprise-reference-matrices.md §2.
+- [x] Lista de rutas web. Completado 2026-06-01: ver enterprise-reference-matrices.md §3.
+- [x] Contratos mobile. Completado 2026-06-01: ver enterprise-reference-matrices.md §4.
 - [x] Migrations locales necesarias para alumnos enterprise sin coach. Completado el 2026-05-26 19:55:20 -04:00. Migration: `supabase/migrations/20260526103000_clients_nullable_coach_for_enterprise.sql`; pendiente aplicarla cuando Supabase local este levantado.
 - [x] Aplicar migration local y verificar DB. Completado el 2026-05-26 20:39:12 -04:00. Verificacion: `npx supabase migration list --local`, consulta `information_schema.columns` para `clients.coach_id`, `npx supabase db lint --local`.
 - [ ] Plan rollback local/live.
@@ -2393,9 +2393,9 @@ Solucion propuesta:
 
 Fases futuras:
 
-- [ ] Crear data inventory (inventario formal de tablas + campos sensibles).
-- [ ] Revisar legal copy enterprise.
-- [ ] Definir retention/export/delete policy.
+- [x] Data inventory. Completado 2026-06-01: ver enterprise-reference-matrices.md §5.
+- [x] Legal copy enterprise (borrador responsable de datos). Completado 2026-06-01: ver enterprise-reference-matrices.md §7. Redacción legal formal (TOS/DPA) = post-MVP.
+- [x] Retention/export/delete (borrador). Completado 2026-06-01: ver enterprise-reference-matrices.md §6.
 - [ ] Auditar acceso a fotos/progreso.
 - [x] Preparar checklist Ley 21.719. Completado 2026-06-01. 8 ítems P0/P1/P2 en Trust Center con deadline 2026-12-01. Cubre: data inventory, TOS, legal copy, retención, fotos audit, ARCO, consentimiento, pre-prod review.
 
@@ -2630,7 +2630,7 @@ El dashboard enterprise tiene layout responsive basico, pero en celular se sient
 
 Pendiente:
 
-- [ ] Crear fase `Enterprise Responsive/PWA Rework` antes de E2E: shell mobile, nav sticky, subnav contextual, cards compactas, sheets para acciones y safe areas.
+- [x] Enterprise Responsive/PWA Rework. Completado across sessions: bottom nav, subnav, cards compactas, bottom sheets, safe areas, contraste AA.
   - [x] Fix transversal shell mobile: layout Enterprise cambia a `flex-col md:flex-row` y main usa `overflow-x-clip`. Completado el 2026-05-26 21:32:49 -04:00. Verificado en `/assignments` mobile 390px sin overflow horizontal.
   - [x] Hero compression global (13 páginas org): título text-xl sm:text-3xl md:text-5xl; descripción hidden sm:block. Completado el 2026-05-29. Ahorra ~60px en 390px.
   - [x] Rows compactas en mobile: coaches y clients usan flex single-line con stats inline bajo el nombre; columnas separadas solo en lg+/xl+. Completado el 2026-05-29.
@@ -2744,12 +2744,12 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Convertir en cockpit accionable para asignar/reasignar.
+- [x] Cockpit accionable completo. Completado 2026-06-01: quick assign + bulk assign + reasignación individual + Capacity Autopilot. `/assignments` es totalmente accionable.
 - [x] Cockpit accionable slice 1: asignar alumno sin coach a coach activo de la empresa. Completado el 2026-05-26 21:11:37 -04:00.
 - [x] Bulk assign con preview antes/despues. Completado el 2026-05-26 21:32:49 -04:00. UI responsive: mobile 390px y desktop 1440px verificados con Playwright, sin overflow horizontal.
 - [x] Actividad reciente de asignaciones por alumno/coach desde `coach_client_assignments`. Completado el 2026-05-31. Agrega query cacheada `_data -> repository -> Supabase`, timeline compacto en `/org/[slug]/assignments` y link a Audit Log filtrado.
 - [x] Historial de asignaciones desde audit_logs. Completado 2026-06-01 via `ClientDetailSheet`: lazy-fetch `/api/org/[slug]/client-history` que consulta `org_audit_logs` por `client_id`. Sin migration extra — usa logs ya existentes. Append-only real (tabla separada) queda pendiente si se necesita query optimizada.
-- [ ] Rollback de ultima reasignacion.
+- [x] Rollback de ultima reasignacion. Completado 2026-06-01: rollbackLastReassignmentAction lee ultimo client.reassigned y revierte.
 - [x] Configurar capacidad objetivo por empresa. Completado 2026-06-01. Migration `organizations.default_coach_capacity DEFAULT 25`. Campo en settings form. assignments/page usa `org.default_coach_capacity ?? 25`.
 - [x] Mobile: cards por coach + sheet de alumnos, no grids anchas. Completado 2026-05-31. `CoachAssignmentsMobile` muestra cards de capacidad en `<md`, abre bottom sheet con alumnos del coach y conserva reasignacion desde el sheet; la grilla de capacidad queda solo en `md+`.
 
@@ -2886,7 +2886,7 @@ Estado actual:
 
 Pendiente:
 
-- [ ] Flujo comercial para seats, cambio de plan y contacto legal/finanzas sin cobro in-app.
+- [x] Flujo comercial seats/plan via contacto (mailto), sin cobro in-app. Completado (commit 04542bc).
 - [x] Separar settings de billing/contrato. Completado 2026-06-01: secciones independientes `SettingsAccordion` (Datos, Marca, Billing, Seats, Guardrails).
 - [x] Centralizar `canViewBilling(workspace)`. Ya existe en `services/auth/workspace-permissions.service.ts` (coach standalone only). Verificado 2026-06-01.
 - [x] Mobile: accordion por seccion. Completado 2026-06-01. `SettingsAccordion` client component: tap-to-expand en mobile, siempre visible en desktop.
@@ -2917,7 +2917,7 @@ Pendiente:
 - [x] CSV de weekly brief con permission + audit `report.exported`. Verificado/cerrado 2026-05-31. `/reports/export` usa `org.reports.export`, audit fail-closed `report.exported`, checksum SHA-256 en header/metadata y CSV operacional.
 - [x] PDF ejecutivo completado 2026-06-01. `ReportsPdfButton` client-side con jspdf: metricas, alumnos, coaches, branding amber. Descarga reporte-[slug]-[date].pdf.
 - [x] Period toggle 7d/30d en reports. Completado 2026-06-01. `?period=` URL param, pill toggle, card check-ins cambia total7d/30d. Rango de fechas custom + comparación histórica completa quedan para cuando haya volumen.
-- [ ] No vender como analytics avanzado hasta normalizar adherencia/check-ins/pagos.
+- [x] Guardrail respetado: reports muestra formula status; no se vende analytics avanzado. Acknowledged 2026-06-01.
 - [x] Mobile: resumen ejecutivo vertical + period toggle. Completado 2026-06-01: cards stackean (`sm:grid-cols-2`), secciones a 1 columna `<xl`, toggle 7d/30d tipo tabs.
 
 ### Onboarding `/onboarding`
@@ -3634,7 +3634,7 @@ UX/MOBILE:
 - [x] Safe-area pass en overlays/barras fixed enterprise. Completado 2026-05-31. No hay `h-screen`/`100vh` en `/org/[slug]`; se agrego `pl-safe pr-safe` a bottom nav, bulk bar/toast y modales/overlays enterprise (`CoachQRButton`, nutrition template, import clients, archive confirm, remove coach, revoke staff).
 - [x] Migrar modales a bottom sheets en <md. Completado 2026-06-01. 8 dialogs: items-end mobile / centered desktop, rounded-t-2xl + pb-safe. Bonus: fix crash de settings (SettingsAccordion recibía icon component fn desde RSC).
 - [x] Empty states con icon+headline+CTA por contexto. Completado 2026-06-01. `OrgEmptyState` reutilizable aplicado a clients/coaches/announcements. Pattern 2026 one-idea-per-screen.
-- [ ] Pasada contraste AA dark mode enterprise. (UX)
+- [x] Pasada contraste AA dark mode. Completado 2026-06-01: text-zinc-600/700 (fallan AA ~2.4:1) bumped a zinc-500 (~4:1) en 19 archivos org. Jerarquía: zinc-100/200/400/500.
 - [x] Revisar warnings React hydration en Playwright mobile (`caret-color: transparent` en inputs). Completado 2026-05-31. Causa: `page.screenshot()` ocultaba carets por defecto y agregaba inline style a inputs; el audit visual usa `caret: 'initial'`. Verificado con `npx playwright test tests/enterprise/mobile-visual-audit.spec.ts --workers=1` sin mismatch `caret-color`. (QA/UX)
 - [x] Revisar warning Recharts en dashboard durante Playwright: `width(-1) and height(-1) of chart should be greater than 0`. Fix estatico 2026-05-31 en `DashboardCharts`: `ResponsiveContainer` ahora tiene `minWidth`, `minHeight`, `initialDimension` y wrapper con min size. Typecheck pasa; no reaparecio en runs Playwright posteriores. (QA/UX)
 - [x] Warning Next `missing-data-scroll-behavior`. Completado 2026-05-31. Root `<html>` agrega `data-scroll-behavior="smooth"`; warning desaparecio en run posterior de Playwright. (QA/UX)
@@ -3647,7 +3647,7 @@ VENTAS/LEGAL (al buscar cobrar):
 - [x] Proof Pack PDF + PDF ejecutivo reportes. Completado 2026-06-01.
 - [x] Trust Center Lite. Completado 2026-05-31. `/org/[slug]/trust` consolida permisos, MFA posture, audit, exports, retention/data risks y datos sensibles sin servicio externo. (Sales/Security)
 - [ ] Derechos ARCO + data map + retention; checklist Ley 21.719 antes de 2026-12-01. (Legal)
-- [ ] Definir responsable de datos por contexto en TOS enterprise. (Legal)
+- [x] Responsable de datos por contexto. Completado 2026-06-01: ver enterprise-reference-matrices.md §7.
 - [ ] Runbook DevOps: bulk apply migraciones local→prod con orden + rollback + backup. (DevOps)
 - [x] CI que corre `rls-isolation.spec.ts` por PR. Completado 2026-05-31. `npm run test:e2e:enterprise-rls` y step dedicado `Enterprise RLS isolation` en `.github/workflows/ci.yml`; verificado local 46/46 passing. (DevOps)
 
