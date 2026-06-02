@@ -1,6 +1,8 @@
 import 'react-native-gesture-handler'
+import '../global.css'
 import { useEffect, useRef, useState } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -126,20 +128,22 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <BottomSheetModalProvider>
-        <ThemeProvider>
-          <StatusBar style="light" />
-          <MotiView
-            from={{ opacity: 0 }}
-            animate={{ opacity: splashDone ? 1 : 0 }}
-            transition={{ type: 'timing', duration: 300 }}
-            style={{ flex: 1 }}
-          >
-            <RootLayoutNav />
-          </MotiView>
-          {!splashDone && <EvaSplash onFinish={() => setSplashDone(true)} />}
-        </ThemeProvider>
-      </BottomSheetModalProvider>
+      <SafeAreaProvider>
+        <BottomSheetModalProvider>
+          <ThemeProvider>
+            <StatusBar style="light" />
+            <MotiView
+              from={{ opacity: 0 }}
+              animate={{ opacity: splashDone ? 1 : 0 }}
+              transition={{ type: 'timing', duration: 300 }}
+              style={{ flex: 1 }}
+            >
+              <RootLayoutNav />
+            </MotiView>
+            {!splashDone && <EvaSplash onFinish={() => setSplashDone(true)} />}
+          </ThemeProvider>
+        </BottomSheetModalProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }

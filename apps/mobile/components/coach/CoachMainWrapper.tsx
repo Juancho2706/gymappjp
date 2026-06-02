@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import type { RefreshControlProps } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -21,6 +22,9 @@ function hexToRgba(hex: string, alpha: number): string {
 
 export function CoachMainWrapper({ children, scroll = true, refreshControl }: CoachMainWrapperProps) {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
+  // Clear the translucent blur tab bar + iPhone home indicator.
+  const bottomPad = insets.bottom + 84
 
   const content = (
     <MotiView
@@ -56,7 +60,7 @@ export function CoachMainWrapper({ children, scroll = true, refreshControl }: Co
       {scroll ? (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={refreshControl}

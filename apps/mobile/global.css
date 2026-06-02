@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base token values (rgb channels). Mirror lib/theme.ts. Dynamic brand color
+   (coach/org) overrides --color-primary/--color-accent at runtime via vars(). */
+@layer base {
+  :root {
+    --color-primary: 0 122 255;
+    --color-primary-foreground: 255 255 255;
+    --color-background: 245 245 245;
+    --color-card: 255 255 255;
+    --color-foreground: 18 18 18;
+    --color-muted: 229 231 235;
+    --color-muted-foreground: 107 114 128;
+    --color-border: 0 0 0;
+    --color-accent: 0 122 255;
+    --color-accent-foreground: 0 122 255;
+    --color-cyan: 0 229 255;
+    --color-destructive: 255 59 48;
+    --color-success: 52 199 89;
+  }
+
+  .dark:root,
+  .dark {
+    --color-primary: 0 122 255;
+    --color-primary-foreground: 255 255 255;
+    --color-background: 18 18 18;
+    --color-card: 30 30 30;
+    --color-foreground: 248 249 250;
+    --color-muted: 39 39 42;
+    --color-muted-foreground: 161 161 170;
+    --color-border: 255 255 255;
+    --color-accent: 0 229 255;
+    --color-accent-foreground: 0 229 255;
+    --color-cyan: 0 229 255;
+    --color-destructive: 255 59 48;
+    --color-success: 48 209 88;
+  }
+}

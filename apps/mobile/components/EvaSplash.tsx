@@ -38,8 +38,9 @@ export function EvaSplash({ onFinish }: Props) {
       ])
     ).start()
 
-    const t1 = setTimeout(() => setExiting(true), 2000)
-    const t2 = setTimeout(() => onFinish(), 2420)
+    // Snappier brand moment (was 2.0/2.42s) — fonts already gate this overlay.
+    const t1 = setTimeout(() => setExiting(true), 1300)
+    const t2 = setTimeout(() => onFinish(), 1700)
     return () => {
       clearTimeout(t1)
       clearTimeout(t2)

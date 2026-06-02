@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { useColorScheme } from 'react-native'
+import { useColorScheme, View } from 'react-native'
+import { colorScheme as nwColorScheme, vars } from 'nativewind'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { applyCoachBranding, darkTheme, lightTheme, type Theme } from '../lib/theme'
+import { applyCoachBranding, brandVars, darkTheme, lightTheme, type Theme } from '../lib/theme'
 import { type CoachBranding, loadStoredBranding } from '../lib/branding'
 
 type ThemeMode = 'light' | 'dark' | 'system'
@@ -31,9 +32,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
-  const resolvedScheme = mode === 'system' ? colorScheme : mode
+  const resolvedScheme: 'light' | 'dark' = (mode === 'system' ? colorScheme : mode) === 'dark' ? 'dark' : 'light'
   const base = resolvedScheme === 'dark' ? darkTheme : lightTheme
   const theme = applyCoachBranding(base, branding?.primaryColor)
+
+  // Keep NativeWind's class-based dark mode in sync with our resolved scheme.
+  useEffect(() => {
+    nwColorScheme.set(resolvedScheme)
+  }, [resolvedScheme])
+
+  // Live brand accent for Tailwind classes (bg-primary, text-accent…).
+  const themeVars = { ...vars(brandVars(branding?.primaryColor, resolvedScheme)) }
 
   function toggleTheme() {
     const next: ThemeMode = resolvedScheme === 'dark' ? 'light' : 'dark'
@@ -43,7 +52,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeContext.Provider value={{ theme, branding, setBranding, mode, toggleTheme }}>
-      {children}
+      <View style={[{ flex: 1 }, themeVars]}>{children}</View>
     </ThemeContext.Provider>
   )
 }

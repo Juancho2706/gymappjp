@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import { StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import type { TextInputProps, ViewStyle } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
@@ -8,18 +8,21 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string
   trailingLabel?: React.ReactNode
   leftIcon?: LucideIcon
+  rightIcon?: LucideIcon
+  onRightIconPress?: () => void
   error?: string | null
   size?: 'md' | 'lg'
   containerStyle?: ViewStyle
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, trailingLabel, leftIcon: LeftIcon, error, size = 'md', containerStyle, ...rest },
+  { label, trailingLabel, leftIcon: LeftIcon, rightIcon: RightIcon, onRightIconPress, error, size = 'md', containerStyle, ...rest },
   ref
 ) {
   const { theme } = useTheme()
   const height = size === 'lg' ? 52 : 48
   const iconPad = LeftIcon ? 44 : 16
+  const rightPad = RightIcon ? 44 : 16
 
   return (
     <View style={[styles.wrap, containerStyle]}>
@@ -48,7 +51,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             {
               height,
               paddingLeft: iconPad,
-              paddingRight: 16,
+              paddingRight: rightPad,
               borderRadius: theme.radius.lg,
               backgroundColor: theme.secondary,
               borderColor: error ? theme.destructive : theme.border,
@@ -57,6 +60,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             },
           ]}
         />
+        {RightIcon ? (
+          <Pressable onPress={onRightIconPress} hitSlop={10} style={styles.rightIconWrap}>
+            <RightIcon size={18} color={theme.mutedForeground} />
+          </Pressable>
+        ) : null}
       </View>
       {error ? (
         <Text style={[styles.error, { color: theme.destructive, fontFamily: theme.fontSans }]}>
@@ -79,6 +87,14 @@ const styles = StyleSheet.create({
   iconWrap: {
     position: 'absolute',
     left: 16,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  rightIconWrap: {
+    position: 'absolute',
+    right: 14,
     top: 0,
     bottom: 0,
     justifyContent: 'center',

@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  Animated,
-  ScrollView,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,18 +9,17 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { BlurView } from 'expo-blur'
 import {
   Apple,
   Bell,
   ClipboardList,
   CreditCard,
-  ChevronLeft,
-  ChevronRight,
   Dumbbell,
-  HelpCircle,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
+  MoreHorizontal,
   Moon,
   Settings,
   Sun,
@@ -185,9 +183,11 @@ export function CoachMobileHeader() {
   )
 }
 
+// Primary thumb-zone tabs; the rest live behind "Más" (native pattern, no overflow scroll).
+const PRIMARY_TABS = ['home', 'clientes', 'builder', 'nutricion']
+
 export function CoachMobileTabBar({
   state,
-  descriptors,
   navigation,
 }: {
   state: { index: number; routes: TabRoute[] }
@@ -195,170 +195,76 @@ export function CoachMobileTabBar({
   navigation: any
 }) {
   const insets = useSafeAreaInsets()
-  const { theme } = useTheme()
-  const scrollRef = useRef<ScrollView>(null)
-  const pulse = useRef(new Animated.Value(0)).current
-  const [viewportWidth, setViewportWidth] = useState(0)
-  const [contentWidth, setContentWidth] = useState(0)
-  const [scrollX, setScrollX] = useState(0)
+  const { theme, mode } = useTheme()
+  const isDark = mode !== 'light'
+  const [moreOpen, setMoreOpen] = useState(false)
 
-  const canScrollLeft = scrollX > 4
-  const canScrollRight = scrollX + viewportWidth < contentWidth - 4
   const routes = state.routes
+  const activeName = routes[state.index]?.name
+  const primary = PRIMARY_TABS
+    .map((name) => routes.find((r) => r.name === name))
+    .filter(Boolean) as TabRoute[]
+  const overflow = routes.filter((r) => !PRIMARY_TABS.includes(r.name))
+  const overflowActive = !PRIMARY_TABS.includes(activeName)
 
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 850, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 850, useNativeDriver: true }),
-      ])
+  function go(name: string) {
+    setMoreOpen(false)
+    const route = routes.find((r) => r.name === name)
+    if (!route) return
+    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true })
+    if (activeName !== name && !event.defaultPrevented) navigation.navigate(name)
+  }
+
+  function TabButton({ name, focused, icon: Icon, label, onPress }: { name: string; focused: boolean; icon: LucideIcon; label: string; onPress: () => void }) {
+    return (
+      <TouchableOpacity activeOpacity={0.82} accessibilityRole="button" accessibilityState={focused ? { selected: true } : {}} accessibilityLabel={label} onPress={onPress} style={styles.tabPressable}>
+        <MotiView animate={{ scale: focused ? 1 : 0.96 }} transition={{ type: 'spring', damping: 16, stiffness: 230 }}
+          style={[styles.tabItem, focused ? { backgroundColor: hexToRgba(theme.primary, 0.1) } : null]}>
+          <Icon size={22} color={focused ? theme.primary : theme.mutedForeground} strokeWidth={focused ? 2.4 : 2.1} />
+          <Text numberOfLines={1} style={[styles.tabLabel, { color: focused ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{label}</Text>
+        </MotiView>
+      </TouchableOpacity>
     )
-    loop.start()
-    return () => loop.stop()
-  }, [pulse])
-
-  const arrowOffset = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 4],
-  })
-
-  const activeShadow = useMemo(
-    () => ({
-      shadowColor: theme.primary,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.22,
-      shadowRadius: 14,
-      elevation: 5,
-    }),
-    [theme.primary]
-  )
+  }
 
   return (
-    <View
-      style={[
-        styles.tabShell,
-        {
-          paddingBottom: insets.bottom,
-          backgroundColor: theme.card,
-          borderTopColor: theme.border,
-        },
-      ]}
-    >
-      {canScrollLeft && (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.leftFade,
-            {
-              backgroundColor: theme.card,
-            },
-          ]}
-        >
-          <Animated.View style={{ transform: [{ translateX: Animated.multiply(arrowOffset, -1) }] }}>
-            <ChevronLeft size={18} color={hexToRgba(theme.foreground, 0.55)} strokeWidth={2.4} />
-          </Animated.View>
-        </View>
-      )}
-      {canScrollRight && (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.rightFade,
-            {
-              backgroundColor: theme.card,
-            },
-          ]}
-        >
-          <Animated.View style={{ transform: [{ translateX: arrowOffset }] }}>
-            <ChevronRight size={18} color={hexToRgba(theme.foreground, 0.55)} strokeWidth={2.4} />
-          </Animated.View>
-        </View>
+    <>
+      {/* Overflow ("Más") sheet */}
+      {moreOpen && (
+        <>
+          <Pressable style={styles.backdrop} onPress={() => setMoreOpen(false)} />
+          <MotiView
+            from={{ opacity: 0, translateY: 16 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 180 }}
+            style={[styles.morePanel, { bottom: insets.bottom + 64, backgroundColor: theme.card, borderColor: theme.border }]}
+          >
+            {overflow.map((r) => {
+              const meta = NAV_META[r.name] ?? { label: r.name, shortLabel: r.name, icon: LayoutDashboard }
+              const Icon = meta.icon
+              const focused = activeName === r.name
+              return (
+                <TouchableOpacity key={r.key} activeOpacity={0.75} onPress={() => go(r.name)} style={styles.moreRow}>
+                  <Icon size={19} color={focused ? theme.primary : theme.mutedForeground} strokeWidth={2.2} />
+                  <Text style={[styles.moreRowText, { color: focused ? theme.primary : theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{meta.label}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </MotiView>
+        </>
       )}
 
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        bounces
-        showsHorizontalScrollIndicator={false}
-        overScrollMode="never"
-        scrollEventThrottle={16}
-        contentContainerStyle={styles.tabScroller}
-        onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
-        onContentSizeChange={(width) => setContentWidth(width)}
-        onScroll={(event) => setScrollX(event.nativeEvent.contentOffset.x)}
-      >
-        {routes.map((route, index) => {
-          const focused = state.index === index
-          const meta = NAV_META[route.name] ?? {
-            label: descriptors[route.key]?.options?.title ?? route.name,
-            shortLabel: descriptors[route.key]?.options?.tabBarLabel ?? route.name,
-            icon: LayoutDashboard,
-          }
-          const Icon = meta.icon
-
-          function onPress() {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            })
-            if (!focused && !event.defaultPrevented) {
-              navigation.navigate(route.name)
-            }
-          }
-
-          return (
-            <TouchableOpacity
-              key={route.key}
-              activeOpacity={0.82}
-              accessibilityRole="button"
-              accessibilityState={focused ? { selected: true } : {}}
-              accessibilityLabel={meta.label}
-              onPress={onPress}
-              style={styles.tabPressable}
-            >
-              <MotiView
-                animate={{ scale: focused ? 1 : 0.98 }}
-                transition={{ type: 'spring', damping: 16, stiffness: 230 }}
-                style={[
-                  styles.tabItem,
-                  focused
-                    ? [
-                        {
-                          backgroundColor: hexToRgba(theme.primary, 0.1),
-                          borderColor: hexToRgba(theme.primary, 0.22),
-                        },
-                        activeShadow,
-                      ]
-                    : {
-                        borderColor: 'transparent',
-                        backgroundColor: 'transparent',
-                      },
-                ]}
-              >
-                <Icon
-                  size={20}
-                  color={focused ? theme.primary : theme.mutedForeground}
-                  strokeWidth={focused ? 2.4 : 2.1}
-                />
-                <Text
-                  numberOfLines={2}
-                  style={[
-                    styles.tabLabel,
-                    {
-                      color: focused ? theme.foreground : theme.mutedForeground,
-                      fontFamily: 'Inter_600SemiBold',
-                    },
-                  ]}
-                >
-                  {meta.shortLabel}
-                </Text>
-              </MotiView>
-            </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
-    </View>
+      {/* Tab bar — blur on iOS/Android (key surface), home-indicator inset */}
+      <BlurView intensity={isDark ? 32 : 48} tint={isDark ? 'dark' : 'light'} style={[styles.tabShell, { paddingBottom: insets.bottom, borderTopColor: theme.border }]}>
+        <View style={styles.tabRow}>
+          {primary.map((r) => {
+            const meta = NAV_META[r.name] ?? { label: r.name, shortLabel: r.name, icon: LayoutDashboard }
+            return <TabButton key={r.key} name={r.name} focused={activeName === r.name} icon={meta.icon} label={meta.shortLabel} onPress={() => go(r.name)} />
+          })}
+          <TabButton name="__more" focused={overflowActive} icon={MoreHorizontal} label="Más" onPress={() => setMoreOpen((o) => !o)} />
+        </View>
+      </BlurView>
+    </>
   )
 }
 
@@ -410,64 +316,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabShell: {
-    position: 'relative',
     borderTopWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    elevation: 18,
   },
-  tabScroller: {
-    paddingHorizontal: 4,
+  tabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 6,
     paddingTop: 8,
-    paddingBottom: 8,
-    gap: 2,
   },
   tabPressable: {
-    minWidth: 58,
-    maxWidth: 84,
-    flexShrink: 0,
+    flex: 1,
   },
   tabItem: {
-    minHeight: 54,
+    minHeight: 50,
     borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 3,
   },
   tabLabel: {
-    maxWidth: 62,
     textAlign: 'center',
     fontSize: 10,
     lineHeight: 12,
     letterSpacing: 0.2,
   },
-  leftFade: {
+  backdrop: {
     position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    zIndex: 2,
-    width: 38,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    paddingLeft: 4,
-    opacity: 0.92,
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 40,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  rightFade: {
+  morePanel: {
     position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    zIndex: 2,
-    width: 38,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingRight: 4,
-    opacity: 0.92,
+    right: 12,
+    left: 12,
+    zIndex: 50,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  moreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  moreRowText: {
+    fontSize: 15,
   },
 })

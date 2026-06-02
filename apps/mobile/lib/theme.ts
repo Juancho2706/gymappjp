@@ -1,4 +1,5 @@
 import type { ViewStyle } from 'react-native'
+import { resolveBrandTheme } from '@eva/brand-kit'
 
 export interface Theme {
   // Core (used across all screens)
@@ -127,7 +128,43 @@ export const darkTheme: Theme = {
   fontDisplay: 'Montserrat_600SemiBold',
 }
 
+const DEFAULT_BRAND = '#007AFF'
+
+/** "#rrggbb" -> "r g b" (channels for NativeWind rgb(var(--x) / <alpha>)). */
+export function hexToChannels(hex: string): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16) || 0
+  const g = parseInt(h.slice(2, 4), 16) || 0
+  const b = parseInt(h.slice(4, 6), 16) || 0
+  return `${r} ${g} ${b}`
+}
+
+/**
+ * StyleSheet Theme branded via @eva/brand-kit (same engine as web/PWA): the
+ * accent is contrast-clamped and matches the published org/coach brand.
+ */
 export function applyCoachBranding(base: Theme, primaryColor?: string | null): Theme {
-  if (!primaryColor) return base
-  return { ...base, primary: primaryColor }
+  const scheme = base === darkTheme ? 'dark' : 'light'
+  const t = resolveBrandTheme({ brandColor: primaryColor || DEFAULT_BRAND })[scheme]
+  return {
+    ...base,
+    primary: t.accent,
+    primaryForeground: t.accentText,
+    accentForeground: t.accent,
+  }
+}
+
+/**
+ * NativeWind CSS-var overrides for the brand accent (per scheme). Spread the
+ * result onto a wrapping <View style={...}> so Tailwind classes (bg-primary,
+ * text-primary, border-accent…) pick up the live brand color.
+ */
+export function brandVars(primaryColor: string | null | undefined, scheme: 'light' | 'dark'): Record<string, string> {
+  const t = resolveBrandTheme({ brandColor: primaryColor || DEFAULT_BRAND })[scheme]
+  return {
+    '--color-primary': hexToChannels(t.accent),
+    '--color-primary-foreground': hexToChannels(t.accentText),
+    '--color-accent': hexToChannels(t.accent),
+    '--color-accent-foreground': hexToChannels(t.accent),
+  }
 }
