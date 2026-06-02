@@ -4,16 +4,18 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Search } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
-import type { ExerciseBlock } from './ExerciseSetRow'
+import type { BuilderBlock } from '../../lib/plan-builder/types'
 
 interface Exercise {
   id: string
   name: string
   muscle_group: string | null
+  gif_url: string | null
+  video_url: string | null
 }
 
 interface ExerciseSearchSheetProps {
-  onSelect: (exercise: ExerciseBlock) => void
+  onSelect: (block: BuilderBlock) => void
 }
 
 export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSheetProps>(
@@ -30,22 +32,28 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
       setLoading(true)
       const { data } = await supabase
         .from('exercises')
-        .select('id, name, muscle_group')
+        .select('id, name, muscle_group, gif_url, video_url')
         .ilike('name', `%${text.trim()}%`)
         .order('name')
         .limit(40)
-      setResults(data ?? [])
+      setResults((data as Exercise[]) ?? [])
       setLoading(false)
     }, [])
 
     function handleSelect(exercise: Exercise) {
       onSelect({
-        exerciseId: exercise.id,
-        exerciseName: exercise.name,
-        muscleGroup: exercise.muscle_group ?? 'General',
-        sets: '3',
+        uid: `block-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        exercise_id: exercise.id,
+        exercise_name: exercise.name,
+        muscle_group: exercise.muscle_group ?? 'General',
+        gif_url: exercise.gif_url ?? undefined,
+        video_url: exercise.video_url ?? undefined,
+        sets: 3,
         reps: '8-10',
-        restTime: '60s',
+        rest_time: '60s',
+        section: 'main',
+        superset_group: null,
+        is_override: false,
       })
       setQuery('')
       setResults([])
