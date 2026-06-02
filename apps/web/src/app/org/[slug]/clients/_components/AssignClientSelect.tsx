@@ -23,7 +23,12 @@ export function AssignClientSelect({ orgSlug, clientId, currentCoachId, coaches 
         if (!coachId) return
         startTransition(async () => {
             const res = await assignClientToCoach(orgSlug, clientId, coachId)
-            if (res?.error) alert(res.error)
+            if (res?.error) { alert(res.error); return }
+            // Pool client's first assignment generated credentials — show for manual delivery (no email sent).
+            if (res?.credentials) {
+                const { email, tempPassword, loginUrl } = res.credentials
+                alert(`Accesos del alumno (compártelos manualmente, no se envía email):\n\nEmail: ${email}\nContraseña temporal: ${tempPassword}${loginUrl ? `\nLink: ${loginUrl}` : ''}`)
+            }
         })
     }
 

@@ -58,7 +58,14 @@ export function AssignmentQuickAssignPanel({ orgSlug, clients, coaches, targetCl
                 setMessage({ type: 'error', text: result.error })
                 return
             }
-            setMessage({ type: 'success', text: 'Alumno asignado. La vista se actualizara con datos auditados.' })
+            // First assignment of a pool client returns credentials for manual delivery (no email).
+            const creds = result?.credentials
+            setMessage({
+                type: 'success',
+                text: creds
+                    ? `Alumno asignado. Accesos (compartir manual, sin email) — Email: ${creds.email} · Pass: ${creds.tempPassword}${creds.loginUrl ? ` · Link: ${creds.loginUrl}` : ''}`
+                    : 'Alumno asignado. La vista se actualizara con datos auditados.',
+            })
             router.refresh()
         })
     }

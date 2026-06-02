@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
+import { generateTempPassword, getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 
 const AssignClientSchema = z.object({
     clientId: z.guid(),
@@ -42,6 +42,10 @@ export type ImportClientResult = {
     email: string
     success: boolean
     error?: string
+    /** Temp password for manual delivery (students are not emailed). Present on success. */
+    tempPassword?: string
+    /** Branded login URL when a coach is assigned. */
+    loginUrl?: string
 }
 
 async function resolveOrgAdminContext(orgSlug: string) {
@@ -68,6 +72,28 @@ async function assertCoachInOrg(
     return Boolean(data)
 }
 
+/**
+ * Resolve the branded login URL for an org client assigned to a coach.
+ * NOTE: by product decision we DO NOT email students. Credentials (login URL +
+ * temp password) are returned to the org admin to deliver manually (WhatsApp,
+ * in person, etc.). Pool clients (no coach yet) have no branded path until
+ * assigned. Returns null when there is no usable login target.
+ */
+async function resolveOrgClientLoginUrl(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    coachId: string | null
+): Promise<string | null> {
+    if (!coachId) return null
+    const { data: coach } = await admin
+        .from('coaches')
+        .select('slug')
+        .eq('id', coachId)
+        .maybeSingle()
+    if (!coach?.slug) return null
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    return `${appUrl}/c/${coach.slug}/login`
+}
+
 export async function assignClientToCoach(orgSlug: string, clientId: string, coachId: string) {
     const parsed = AssignClientSchema.safeParse({ clientId, coachId })
     if (!parsed.success) return { error: 'Datos invalidos' }
@@ -82,7 +108,7 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
 
     const { data: client } = await admin
         .from('clients')
-        .select('id, coach_id')
+        .select('id, coach_id, email, full_name, force_password_change')
         .eq('id', clientId)
         .eq('org_id', org.id)
         .maybeSingle()
@@ -107,20 +133,34 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
         .eq('org_id', org.id)
     if (updateError) return { error: updateError.message }
 
+    // First assignment of a pool client that never logged in: they have no usable
+    // credentials (creation does not set a known password). Reset + return them so
+    // the admin shares manually. Students are NOT emailed.
+    const isFirstAssignmentOfPoolClient = !client.coach_id && client.force_password_change && client.email
+    let credentials: { email: string; tempPassword: string; loginUrl: string | null } | undefined
+    if (isFirstAssignmentOfPoolClient) {
+        const tempPassword = generateTempPassword()
+        const { error: pwErr } = await admin.auth.admin.updateUserById(client.id, { password: tempPassword })
+        if (!pwErr) {
+            const loginUrl = await resolveOrgClientLoginUrl(admin, coachId)
+            credentials = { email: client.email!, tempPassword, loginUrl }
+        }
+    }
+
     await writeOrgAuditEvent(admin, {
         orgId: org.id,
         actorId: user.id,
         action: 'client.assigned',
         targetType: 'client',
         targetId: client.id,
-        metadata: { coach_id: coachId, previous_coach_id: client.coach_id },
+        metadata: { coach_id: coachId, previous_coach_id: client.coach_id, credentials_reset: Boolean(credentials) },
     })
 
     revalidatePath(`/org/${orgSlug}/clients`)
     revalidatePath(`/org/${orgSlug}/assignments`)
     revalidatePath(`/org/${orgSlug}/reports`)
     revalidatePath(`/org/${orgSlug}/audit`)
-    return { success: true }
+    return { success: true, credentials }
 }
 
 export async function bulkAssignUnassignedClientsAction(orgSlug: string, clientIds: string[], coachId: string) {
@@ -222,7 +262,7 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         if (!coachInOrg) return { error: 'El coach no pertenece a esta organizacion' }
     }
 
-    const tempPassword = Math.random().toString(36).slice(-10) + 'Aa1!'
+    const tempPassword = generateTempPassword()
     const { data: newAuthUser, error: authErr } = await admin.auth.admin.createUser({
         email: parsed.data.email,
         password: tempPassword,
@@ -258,6 +298,8 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         })
     }
 
+    const loginUrl = await resolveOrgClientLoginUrl(admin, coachId)
+
     await writeOrgAuditEvent(admin, {
         orgId: org.id,
         actorId: user.id,
@@ -268,7 +310,8 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
     })
 
     revalidatePath(`/org/${orgSlug}/clients`)
-    return { success: true, clientId: client.id }
+    // Credentials returned for manual delivery — students are NOT emailed.
+    return { success: true, clientId: client.id, email: parsed.data.email, tempPassword, loginUrl }
 }
 
 export async function importClientsFromCSVAction(
@@ -309,7 +352,7 @@ export async function importClientsFromCSVAction(
             }
         }
 
-        const tempPassword = Math.random().toString(36).slice(-10) + 'Aa1!'
+        const tempPassword = generateTempPassword()
         const { data: newAuthUser, error: authErr } = await admin.auth.admin.createUser({
             email: parsed.data.email,
             password: tempPassword,
@@ -352,6 +395,8 @@ export async function importClientsFromCSVAction(
             } catch { /* best-effort */ }
         }
 
+        const loginUrl = await resolveOrgClientLoginUrl(admin, coachIdForInsert)
+
         await writeOrgAuditEvent(admin, {
             orgId: org.id,
             actorId: user.id,
@@ -361,7 +406,8 @@ export async function importClientsFromCSVAction(
             metadata: { email: parsed.data.email, source: 'csv_import', coach_id: coachIdForInsert },
         })
 
-        results.push({ email: parsed.data.email, success: true })
+        // Credentials returned for manual delivery — students are NOT emailed.
+        results.push({ email: parsed.data.email, success: true, tempPassword, loginUrl: loginUrl ?? undefined })
     }
 
     revalidatePath(`/org/${orgSlug}/clients`)

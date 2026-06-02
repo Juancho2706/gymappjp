@@ -84,7 +84,21 @@ export function AddClientForm({ orgSlug, coaches }: Props) {
                 </span>
             </label>
             {state?.error && <p className="text-xs text-red-400">{state.error}</p>}
-            {state?.success && <p className="text-xs text-emerald-500">Cliente agregado correctamente</p>}
+            {state?.success && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs space-y-1.5">
+                    <p className="font-semibold text-emerald-400">Alumno creado. Comparte estos accesos manualmente (no se envía email).</p>
+                    {state.loginUrl && (
+                        <p className="text-emerald-200/90"><span className="text-muted-foreground">Link:</span> <code className="font-mono">{state.loginUrl}</code></p>
+                    )}
+                    <p className="text-emerald-200/90"><span className="text-muted-foreground">Email:</span> <code className="font-mono">{state.email}</code></p>
+                    {state.tempPassword && (
+                        <p className="text-emerald-200/90"><span className="text-muted-foreground">Contraseña temporal:</span> <code className="font-mono">{state.tempPassword}</code></p>
+                    )}
+                    {!state.loginUrl && (
+                        <p className="text-amber-300/90">Sin coach asignado aún — el alumno tendrá link de acceso al asignarse a un coach.</p>
+                    )}
+                </div>
+            )}
         </form>
     )
 }

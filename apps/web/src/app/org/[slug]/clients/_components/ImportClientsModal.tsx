@@ -255,6 +255,31 @@ export function ImportClientsModal({ orgSlug, coaches }: Props) {
                                             </div>
                                         )}
                                     </div>
+                                    {successCount > 0 && (
+                                        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2">
+                                            <p className="text-xs font-semibold text-emerald-400">
+                                                No se envían emails a los alumnos. Descarga las credenciales y compártelas manualmente.
+                                            </p>
+                                            <button
+                                                onClick={() => {
+                                                    const header = 'email,password_temporal,link_login'
+                                                    const body = results
+                                                        .filter(r => r.success)
+                                                        .map(r => `${r.email},${r.tempPassword ?? ''},${r.loginUrl ?? ''}`)
+                                                        .join('\n')
+                                                    const blob = new Blob([`${header}\n${body}`], { type: 'text/csv' })
+                                                    const a = document.createElement('a')
+                                                    a.href = URL.createObjectURL(blob)
+                                                    a.download = 'credenciales-alumnos.csv'
+                                                    a.click()
+                                                }}
+                                                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
+                                            >
+                                                <Download className="w-3.5 h-3.5" />
+                                                Descargar credenciales ({successCount})
+                                            </button>
+                                        </div>
+                                    )}
                                     <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
                                         {results.map((r, i) => (
                                             <div key={i} className="flex items-center justify-between px-3 py-2 text-xs">
