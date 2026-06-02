@@ -13,6 +13,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { AppBackground } from '../../../components/AppBackground'
 
 export default function HistoryScreen() {
   const { theme } = useTheme()
@@ -39,6 +40,7 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Historial" subtitle="Tus entrenamientos" />
         <EvaLoaderScreen subtitle="Cargando historial…" />
       </SafeAreaView>
@@ -48,6 +50,7 @@ export default function HistoryScreen() {
   if (sections.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Historial" subtitle="Tus entrenamientos" />
         <EmptyState icon={History} title="Sin historial" subtitle="Completá tu primer entrenamiento para verlo aquí." />
       </SafeAreaView>
@@ -56,6 +59,7 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <SectionList
         sections={sections}
         keyExtractor={(item) => item}

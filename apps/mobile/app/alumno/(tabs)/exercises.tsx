@@ -18,6 +18,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { BottomSheet, EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { AppBackground } from '../../../components/AppBackground'
 
 interface Exercise {
   id: string
@@ -76,6 +77,7 @@ export default function ExercisesScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader title="Aprender Técnica" subtitle="Catálogo de ejercicios" />
 
       <View style={styles.searchWrap}>

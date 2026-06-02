@@ -9,6 +9,7 @@ import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Badge, EmptyState } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { canCreateCustomExercises, listCoachExercises, type ExerciseRow } from '../../../lib/exercises'
 import { getCoachProfile } from '../../../lib/coach'
@@ -78,6 +79,7 @@ export default function EjerciciosScreen() {
   if (loading) {
     return (
       <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Ejercicios" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando biblioteca…" />
       </SafeAreaView>
@@ -86,6 +88,7 @@ export default function EjerciciosScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader
         title="Ejercicios"
         subtitle={`${exercises.length} en biblioteca · ${customCount} propios`}

@@ -7,6 +7,7 @@ import { Camera, Check, ImageIcon, Info, Lock, Palette, Share2, Sparkles, Type }
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ScreenHeader, Section, InfoRow } from '../../../components'
 import { EvaLoader, EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 import { getCoachOrgContext } from '../../../lib/org'
 import {
   getCoachBrandSettings,
@@ -129,6 +130,7 @@ export default function MiMarcaScreen() {
   if (loading) {
     return (
       <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Mi Marca" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando tu marca…" />
       </SafeAreaView>
@@ -137,6 +139,7 @@ export default function MiMarcaScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader title="Mi Marca" subtitle="Personalizá la app de tus alumnos" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

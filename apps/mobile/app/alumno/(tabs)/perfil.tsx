@@ -11,6 +11,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Button, InfoRow, Section } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { AppBackground } from '../../../components/AppBackground'
 
 interface AlumnoDetail {
   fullName: string
@@ -90,6 +91,7 @@ export default function AlumnoPerfilScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando perfil…" />
       ) : (

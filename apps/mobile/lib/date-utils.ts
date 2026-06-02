@@ -27,6 +27,17 @@ export function getSantiagoIsoYmdForUtcInstant(isoUtc: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string; endIso: string } {
+  const noonUtc = new Date(`${isoDate}T12:00:00Z`)
+  const sanDateAsLocal = toSantiagoDate(noonUtc)
+  const offsetMs = noonUtc.getTime() - sanDateAsLocal.getTime()
+  const midnightUtcMs = new Date(`${isoDate}T00:00:00Z`).getTime() + offsetMs
+  return {
+    startIso: new Date(midnightUtcMs).toISOString(),
+    endIso: new Date(midnightUtcMs + 86_400_000).toISOString(),
+  }
+}
+
 export function isoDateAddDays(iso: string, days: number): string {
   const d = new Date(`${iso}T12:00:00Z`)
   d.setDate(d.getDate() + days)

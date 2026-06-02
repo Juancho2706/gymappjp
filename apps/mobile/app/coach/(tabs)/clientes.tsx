@@ -35,6 +35,7 @@ import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 import {
   buildStats,
   filterClients,
@@ -666,6 +667,7 @@ export default function ClientesScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader
         title="Alumnos"
         subtitle={`${stats.active} activos · ${stats.total} total`}

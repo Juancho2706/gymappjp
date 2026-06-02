@@ -22,6 +22,7 @@ import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ScreenHeader } from '../../../components'
+import { AppBackground } from '../../../components/AppBackground'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp']
@@ -187,6 +188,7 @@ export default function CheckInScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScreenHeader title="Check-in" subtitle="Registrá tu progreso semanal" />
 

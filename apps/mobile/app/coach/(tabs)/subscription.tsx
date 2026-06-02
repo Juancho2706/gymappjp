@@ -5,6 +5,7 @@ import { CalendarClock, ExternalLink, Lock, Users } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, ProgressBar, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 import {
   STATUS_LABELS,
   TIER_LABELS,
@@ -32,6 +33,7 @@ export default function SubscriptionScreen() {
   if (loading) {
     return (
       <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Suscripción" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando tu plan…" />
       </SafeAreaView>
@@ -41,6 +43,7 @@ export default function SubscriptionScreen() {
   if (!data) {
     return (
       <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Suscripción" />
         <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No se pudo cargar tu plan.</Text>
       </SafeAreaView>
@@ -58,6 +61,7 @@ export default function SubscriptionScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader title="Suscripción" subtitle="Tu plan y uso" />
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>

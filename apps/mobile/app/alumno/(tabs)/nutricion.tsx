@@ -49,6 +49,7 @@ import {
 } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { AppBackground } from '../../../components/AppBackground'
 import { getDailyHabits } from '../../../lib/habits.queries'
 import type { HabitsData } from '../../../lib/habits.queries'
 import { readNutritionCache, writeNutritionCache } from '../../../lib/nutrition-offline-cache'
@@ -375,6 +376,7 @@ export default function AlumnoNutricionScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Nutrición" subtitle="Tu plan personalizado" />
         <EvaLoaderScreen subtitle="Cargando nutrición…" />
       </SafeAreaView>
@@ -384,6 +386,7 @@ export default function AlumnoNutricionScreen() {
   if (!plan) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
         <ScreenHeader title="Nutrición" subtitle="Tu plan personalizado" />
         <EmptyState icon={Apple} title="Sin plan activo" subtitle="Tu coach aún no te asignó un plan de nutrición." />
       </SafeAreaView>
@@ -392,6 +395,7 @@ export default function AlumnoNutricionScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScreenHeader
           title="Nutrición"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import { Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -10,6 +10,8 @@ import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, InfoRow, Section } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
@@ -90,13 +92,15 @@ export default function CoachPerfilScreen() {
   if (loading) {
     return (
       <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <AppBackground />
+        <EvaLoaderScreen subtitle="Cargando perfil..." />
       </SafeAreaView>
     )
   }
 
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
           Perfil

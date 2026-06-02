@@ -26,6 +26,7 @@ import {
 } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { AppBackground } from '../../../components/AppBackground'
 import { getTodayInSantiago, timeGreeting, formatLongDate } from '../../../lib/date-utils'
 import { getDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 
@@ -256,6 +257,7 @@ export default function AlumnoHomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader
         title={`${timeGreeting()}, ${data?.client?.fullName?.split(' ')[0] ?? ''}`.trim()}
         subtitle={formatLongDate()}

@@ -9,6 +9,7 @@ import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, MacroPill, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 import { deletePlan, getClientPlans, setPlanActive, type PlanSummary } from '../../../lib/nutrition-builder'
 
 interface Client { id: string; full_name: string }
@@ -83,6 +84,7 @@ export default function CoachNutricionScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader
         title="Nutricion"
         subtitle={selectedClient ? `Planes de ${selectedClient.full_name}` : 'Selecciona un alumno'}

@@ -1,24 +1,38 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Linking, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Image } from 'expo-image'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Activity, Archive, ArchiveRestore, CreditCard, Dumbbell, MessageCircle, Pencil, Salad, User } from 'lucide-react-native'
+import { Activity, Apple, Archive, ArchiveRestore, Check, CreditCard, Droplets, Dumbbell, Flame, Footprints, Heart, LayoutGrid, MessageCircle, Moon, Pencil, Salad, Share2, Target, Timer, TrendingDown, TrendingUp, Trophy, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
-import { Badge, Button, EmptyState, InfoRow, NativeDialog, Section, SegmentedTabs, Sparkline, TopBar } from '../../../components'
+import { Badge, Button, ComplianceRing, EmptyState, InfoRow, MacroPill, NativeDialog, ProgressBar, Section, SegmentedTabs, Sparkline, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 import { apiFetch } from '../../../lib/api'
 import {
   getCoachClientDetail,
+  getCoachClientDayDetail,
+  markCoachCheckInReviewed,
   setCoachClientArchived,
   updateCoachClient,
+  type ActivityDay,
+  type ActiveNutritionInfo,
   type CheckInEntry,
+  type ClientDayDetail,
+  type ComplianceSummary,
   type CoachClientDetail,
+  type FavoriteFoodEntry,
+  type MuscleVolumeEntry,
+  type NutritionMealPlanEntry,
+  type NutritionTimelineEntry,
   type PaymentEntry,
+  type PersonalRecordEntry,
   type ActiveProgramInfo,
 } from '../../../lib/coach-client-detail'
+import { getTodayInSantiago } from '../../../lib/date-utils'
 
-type Tab = 'resumen' | 'progreso' | 'pagos'
+type Tab = 'resumen' | 'actividad' | 'progreso' | 'pagos'
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -37,6 +51,20 @@ export default function ClientDetailScreen() {
   const [checkIns, setCheckIns] = useState<CheckInEntry[]>([])
   const [payments, setPayments] = useState<PaymentEntry[]>([])
   const [activeProgram, setActiveProgram] = useState<ActiveProgramInfo | null>(null)
+  const [activeNutrition, setActiveNutrition] = useState<ActiveNutritionInfo | null>(null)
+  const [compliance, setCompliance] = useState<ComplianceSummary | null>(null)
+  const [activity, setActivity] = useState<ActivityDay[]>([])
+  const [personalRecords, setPersonalRecords] = useState<PersonalRecordEntry[]>([])
+  const [muscleVolume, setMuscleVolume] = useState<MuscleVolumeEntry[]>([])
+  const [nutritionMeals, setNutritionMeals] = useState<NutritionMealPlanEntry[]>([])
+  const [nutritionTimeline, setNutritionTimeline] = useState<NutritionTimelineEntry[]>([])
+  const [nutritionMonthlyAvgPct, setNutritionMonthlyAvgPct] = useState(0)
+  const [nutritionStreakDays, setNutritionStreakDays] = useState(0)
+  const [favoriteFoods, setFavoriteFoods] = useState<FavoriteFoodEntry[]>([])
+  const [selectedDate, setSelectedDate] = useState(() => getTodayInSantiago().iso)
+  const [dayDetail, setDayDetail] = useState<ClientDayDetail | null>(null)
+  const [dayLoading, setDayLoading] = useState(false)
+  const [sessions30d, setSessions30d] = useState(0)
   const [loading, setLoading] = useState(true)
   const [payOpen, setPayOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -48,9 +76,36 @@ export default function ClientDetailScreen() {
     setCheckIns(res.checkIns)
     setPayments(res.payments)
     setActiveProgram(res.activeProgram)
+    setActiveNutrition(res.activeNutrition)
+    setCompliance(res.compliance)
+    setActivity(res.activity)
+    setPersonalRecords(res.personalRecords)
+    setMuscleVolume(res.muscleVolume)
+    setNutritionMeals(res.nutritionMeals)
+    setNutritionTimeline(res.nutritionTimeline)
+    setNutritionMonthlyAvgPct(res.nutritionMonthlyAvgPct)
+    setNutritionStreakDays(res.nutritionStreakDays)
+    setFavoriteFoods(res.favoriteFoods)
+    setSelectedDate((prev) => res.activity.find((day) => day.workout || day.nutrition || day.checkIn)?.date ?? prev)
+    setSessions30d(res.sessions30d)
     setLoading(false)
   }
   useEffect(() => { load() }, [clientId])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadDay() {
+      if (!clientId || !selectedDate) return
+      setDayLoading(true)
+      const detail = await getCoachClientDayDetail(clientId, selectedDate)
+      if (!cancelled) {
+        setDayDetail(detail)
+        setDayLoading(false)
+      }
+    }
+    loadDay()
+    return () => { cancelled = true }
+  }, [clientId, selectedDate])
 
   function openWhatsApp() {
     const digits = (client?.phone ?? '').replace(/\D/g, '')
@@ -97,9 +152,13 @@ export default function ClientDetailScreen() {
   }
 
   const weights = [...checkIns].reverse().map((c) => c.weight).filter((w): w is number => w != null)
+  const currentWeight = weights.length ? weights[weights.length - 1] : null
+  const weightDelta = weights.length >= 2 ? Number((weights[weights.length - 1] - weights[weights.length - 2]).toFixed(1)) : null
+  const deltaUp = (weightDelta ?? 0) > 0
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <TopBar back title={client.full_name} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -114,8 +173,23 @@ export default function ClientDetailScreen() {
           <Badge label={client.is_archived ? 'Archivado' : client.is_active ? 'Activo' : 'Inactivo'} tone={client.is_archived ? 'muted' : client.is_active ? 'success' : 'muted'} />
         </MotiView>
 
+        {/* Stat strip */}
+        <View style={styles.statStrip}>
+          <MiniStat theme={theme} icon={Activity} label="Peso" value={currentWeight != null ? String(currentWeight) : '—'} unit={currentWeight != null ? 'kg' : ''} />
+          <MiniStat theme={theme} icon={deltaUp ? TrendingUp : TrendingDown} label="Cambio"
+            value={weightDelta != null ? `${weightDelta > 0 ? '+' : ''}${weightDelta}` : '—'} unit={weightDelta != null ? 'kg' : ''}
+            color={weightDelta == null ? undefined : deltaUp ? '#EF4444' : theme.success} />
+          <MiniStat theme={theme} icon={Dumbbell} label="Sesiones 30d" value={String(sessions30d)} />
+          <MiniStat theme={theme} icon={Flame} label="Check-ins" value={String(checkIns.length)} />
+        </View>
+
         <SegmentedTabs<Tab>
-          items={[{ value: 'resumen', label: 'Resumen' }, { value: 'progreso', label: 'Progreso' }, { value: 'pagos', label: 'Pagos' }]}
+          items={[
+            { value: 'resumen', label: 'Resumen' },
+            { value: 'actividad', label: 'Actividad' },
+            { value: 'progreso', label: 'Progreso' },
+            { value: 'pagos', label: 'Pagos' },
+          ]}
           value={tab}
           onChange={setTab}
         />
@@ -131,27 +205,57 @@ export default function ClientDetailScreen() {
               <ActionTile icon={Pencil} label="Editar datos" theme={theme} onPress={() => setEditOpen(true)} />
             </View>
 
+            {compliance ? <CompliancePanel compliance={compliance} theme={theme} /> : null}
+
             {(client.phone || client.goal_weight_kg != null || client.subscription_start_date) ? (
               <Section title="Información">
                 {client.phone ? <InfoRow label="Teléfono" value={client.phone} /> : null}
-                {client.goal_weight_kg != null ? <InfoRow label="Peso objetivo" value={`${client.goal_weight_kg} kg`} /> : null}
                 {client.subscription_start_date ? <InfoRow label="Alumno desde" value={formatDate(client.subscription_start_date)} last /> : null}
               </Section>
             ) : null}
 
+            <GoalWeightInline client={client} theme={theme} onSaved={load} />
+
             {activeProgram ? (
-              <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+              <TouchableOpacity activeOpacity={0.85} onPress={() => router.push(`/coach/program-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)}
+                style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
                 <View style={styles.statTitleRow}><Dumbbell size={15} color={theme.primary} />
                   <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Programa activo</Text>
                 </View>
                 <Text style={[styles.statBig, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{activeProgram.name}</Text>
                 <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{activeProgram.planCount} plan{activeProgram.planCount !== 1 ? 'es' : ''}</Text>
-              </View>
+              </TouchableOpacity>
             ) : null}
+
+            {activeProgram ? <ProgramStructurePanel program={activeProgram} theme={theme} /> : null}
+
+            <NutritionCoachPanel
+              activeNutrition={activeNutrition}
+              meals={nutritionMeals}
+              timeline={nutritionTimeline}
+              monthlyAvgPct={nutritionMonthlyAvgPct}
+              streakDays={nutritionStreakDays}
+              favoriteFoods={favoriteFoods}
+              theme={theme}
+            />
 
             <Button label="Mensaje por WhatsApp" variant="outline" leftIcon={MessageCircle} onPress={openWhatsApp} full />
             <Button label={client.is_archived ? 'Reactivar alumno' : 'Archivar alumno'} variant={client.is_archived ? 'outline' : 'ghost'}
               leftIcon={client.is_archived ? ArchiveRestore : Archive} onPress={confirmArchive} full />
+          </>
+        ) : null}
+
+        {tab === 'actividad' ? (
+          <>
+            <TrainingAnalyticsPanel personalRecords={personalRecords} muscleVolume={muscleVolume} theme={theme} />
+            <ActivityTab
+              activity={activity}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              dayDetail={dayDetail}
+              loading={dayLoading}
+              theme={theme}
+            />
           </>
         ) : null}
 
@@ -167,13 +271,12 @@ export default function ClientDetailScreen() {
               </View>
             ) : null}
             {checkIns.length > 0 ? (
-              <Section title="Historial de check-ins">
-                {checkIns.map((c, i) => (
-                  <InfoRow key={`${c.date}-${i}`} label={formatDate(c.date)}
-                    value={[c.weight != null ? `${c.weight} kg` : null, c.energy_level != null ? `Energía ${c.energy_level}/10` : null].filter(Boolean).join(' · ') || '—'}
-                    last={i === checkIns.length - 1} />
+              <View style={{ gap: 10 }}>
+                <Text style={[styles.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>HISTORIAL DE CHECK-INS</Text>
+                {checkIns.map((c) => (
+                  <CheckInCard key={c.id} c={c} clientId={client.id} theme={theme} onReviewed={load} />
                 ))}
-              </Section>
+              </View>
             ) : (
               <EmptyState icon={Activity} title="Sin check-ins" subtitle="Este alumno aún no registra check-ins." />
             )}
@@ -205,6 +308,565 @@ export default function ClientDetailScreen() {
         <EditClientForm client={client} onDone={() => { setEditOpen(false); load() }} onCancel={() => setEditOpen(false)} />
       </NativeDialog>
     </SafeAreaView>
+  )
+}
+
+function MiniStat({ theme, icon: Icon, label, value, unit, color }: { theme: any; icon: any; label: string; value: string; unit?: string; color?: string }) {
+  return (
+    <View style={[styles.miniStat, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+      <Icon size={14} color={color ?? theme.primary} />
+      <Text style={[styles.miniValue, { color: color ?? theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
+        {value}{unit ? <Text style={{ fontSize: 10, color: theme.mutedForeground }}> {unit}</Text> : null}
+      </Text>
+      <Text style={[styles.miniLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>{label}</Text>
+    </View>
+  )
+}
+
+function CompliancePanel({ compliance, theme }: { compliance: ComplianceSummary; theme: any }) {
+  const workoutPct = Math.min(1, compliance.workoutsThisWeek / Math.max(1, compliance.workoutsTarget))
+  const nutritionPct = Math.min(1, compliance.nutritionWeeklyAvgPct / 100)
+  const checkPct = Math.min(1, compliance.checkInCompliancePercent / 100)
+  const workoutDelta = Math.round((workoutPct * 100) - (Math.min(1, compliance.workoutsPrevWeek / Math.max(1, compliance.workoutsTarget)) * 100))
+  const nutritionDelta = compliance.nutritionWeeklyAvgPct - compliance.nutritionPrevWeeklyAvgPct
+  const checkDelta = compliance.checkInCompliancePercent - compliance.checkInCompliancePercentWeekAgo
+
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.statTitleRow}>
+        <Flame size={15} color={theme.primary} />
+        <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Cumplimiento semanal</Text>
+      </View>
+      <View style={styles.ringRow}>
+        <ComplianceItem label="Entreno" hint={`${compliance.workoutsThisWeek}/${compliance.workoutsTarget}`} delta={workoutDelta} value={workoutPct} color={theme.primary} theme={theme} />
+        <ComplianceItem label="Nutrición" hint={`${compliance.nutritionWeeklyAvgPct}%`} delta={nutritionDelta} value={nutritionPct} color={compliance.nutritionWeeklyAvgPct >= 70 ? theme.success : compliance.nutritionWeeklyAvgPct >= 50 ? '#F59E0B' : theme.destructive} theme={theme} />
+        <ComplianceItem label="Check-in" hint={`${compliance.checkInCompliancePercent}%`} delta={checkDelta} value={checkPct} color={compliance.checkInCompliancePercent >= 70 ? theme.success : compliance.checkInCompliancePercent >= 40 ? '#F59E0B' : theme.destructive} theme={theme} />
+      </View>
+    </View>
+  )
+}
+
+function ComplianceItem({ label, hint, delta, value, color, theme }: { label: string; hint: string; delta: number; value: number; color: string; theme: any }) {
+  return (
+    <View style={styles.complianceItem}>
+      <ComplianceRing value={value} label={label} color={color} size={68} />
+      <Text style={[styles.complianceHint, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{hint}</Text>
+      <Text style={[styles.complianceDelta, { color: delta > 0 ? theme.success : delta < 0 ? theme.destructive : theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        {delta > 0 ? '+' : ''}{delta} pts
+      </Text>
+    </View>
+  )
+}
+
+function GoalWeightInline({ client, theme, onSaved }: { client: CoachClientDetail; theme: any; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(client.goal_weight_kg != null ? String(client.goal_weight_kg) : '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    const numeric = value.trim() ? Number(value.replace(',', '.')) : null
+    const r = await updateCoachClient(client.id, { goal_weight_kg: numeric })
+    setSaving(false)
+    if (!r.ok) {
+      Alert.alert('Error', r.error ?? 'No se pudo guardar.')
+      return
+    }
+    setEditing(false)
+    onSaved()
+  }
+
+  return (
+    <View style={[styles.goalCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.goalTop}>
+        <View style={styles.statTitleRow}>
+          <Activity size={15} color={theme.primary} />
+          <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Peso objetivo</Text>
+        </View>
+        <TouchableOpacity onPress={() => setEditing((v) => !v)} hitSlop={8}>
+          <Pencil size={16} color={theme.primary} />
+        </TouchableOpacity>
+      </View>
+      {editing ? (
+        <View style={styles.goalEditRow}>
+          <TextInput
+            value={value}
+            onChangeText={setValue}
+            keyboardType="decimal-pad"
+            placeholder="75"
+            placeholderTextColor={theme.mutedForeground}
+            style={[styles.goalInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]}
+          />
+          <Button label={saving ? '...' : 'OK'} onPress={save} disabled={saving} style={{ width: 72 }} />
+        </View>
+      ) : (
+        <Text style={[styles.goalValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          {client.goal_weight_kg != null ? `${client.goal_weight_kg} kg` : 'Sin objetivo'}
+        </Text>
+      )}
+    </View>
+  )
+}
+
+function ProgramStructurePanel({ program, theme }: { program: ActiveProgramInfo; theme: any }) {
+  const todayDow = new Date().getDay() === 0 ? 7 : new Date().getDay()
+  const currentWeek = resolveProgramWeek(program)
+  const weekProgress = currentWeek && program.weeks_to_repeat > 0 ? currentWeek / program.weeks_to_repeat : 0
+  const daysLeft = program.end_date ? Math.max(0, Math.ceil((new Date(`${program.end_date}T23:59:59`).getTime() - Date.now()) / 86400000)) : null
+
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.statTitleRow}>
+        <LayoutGrid size={15} color={theme.primary} />
+        <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Microciclo del programa</Text>
+      </View>
+
+      <View style={styles.programMetaRow}>
+        <MetaPill label={program.program_structure_type === 'cycle' ? 'Cíclico' : 'Semanal'} theme={theme} />
+        {program.ab_mode ? <MetaPill label="A/B" theme={theme} tone="warning" /> : null}
+        <MetaPill label={`${program.weeks_to_repeat} sem.`} theme={theme} />
+        {daysLeft != null ? <MetaPill label={`${daysLeft}d restantes`} theme={theme} /> : null}
+      </View>
+
+      {currentWeek ? (
+        <View style={{ gap: 6 }}>
+          <View style={styles.programWeekRow}>
+            <Text style={[styles.dayRowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Semana ciclo</Text>
+            <Text style={[styles.dayMetric, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{currentWeek}/{program.weeks_to_repeat}</Text>
+          </View>
+          <ProgressBar value={weekProgress} color={theme.primary} height={7} />
+        </View>
+      ) : null}
+
+      <View style={styles.programGrid}>
+        {program.workoutPlans.length ? program.workoutPlans.map((plan) => (
+          <View
+            key={plan.id}
+            style={[
+              styles.programDay,
+              {
+                backgroundColor: plan.day_of_week === todayDow ? theme.primary + '12' : theme.secondary,
+                borderColor: plan.day_of_week === todayDow ? theme.primary + '55' : theme.border,
+                borderRadius: theme.radius.lg,
+              },
+            ]}
+          >
+            <View style={styles.programDayTop}>
+              <Text style={[styles.programDayDow, { color: plan.day_of_week === todayDow ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+                {plan.day_of_week ? dayName(plan.day_of_week) : 'Día'}
+              </Text>
+              {plan.week_variant ? <Text style={[styles.variantText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{plan.week_variant}</Text> : null}
+            </View>
+            <Text numberOfLines={2} style={[styles.programDayTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{plan.title}</Text>
+            <Text style={[styles.dayRowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{plan.blocks.length} ejercicios</Text>
+            {plan.blocks.slice(0, 3).map((block) => (
+              <View key={block.id} style={styles.programExerciseRow}>
+                <Dumbbell size={11} color={theme.primary} />
+                <Text numberOfLines={1} style={[styles.programExerciseText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  {block.exerciseName}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )) : (
+          <Text style={[styles.emptyLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Programa sin días cargados.</Text>
+        )}
+      </View>
+    </View>
+  )
+}
+
+function TrainingAnalyticsPanel({ personalRecords, muscleVolume, theme }: { personalRecords: PersonalRecordEntry[]; muscleVolume: MuscleVolumeEntry[]; theme: any }) {
+  const maxVolume = Math.max(1, ...muscleVolume.map((row) => row.volume))
+  if (!personalRecords.length && !muscleVolume.length) return null
+
+  return (
+    <View style={{ gap: 12 }}>
+      {personalRecords.length ? (
+        <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+          <View style={styles.statTitleRow}>
+            <Trophy size={15} color="#F59E0B" />
+            <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Récords de peso</Text>
+          </View>
+          {personalRecords.slice(0, 5).map((record, i) => (
+            <View key={`${record.exerciseName}-${i}`} style={[styles.prRow, i < Math.min(personalRecords.length, 5) - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={[styles.dayRowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{record.exerciseName}</Text>
+                <Text style={[styles.dayRowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{record.muscleGroup ?? 'Sin grupo'}</Text>
+              </View>
+              <Text style={[styles.prValue, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>
+                {record.maxWeightKg} kg{record.repsAtMax != null ? ` x${record.repsAtMax}` : ''}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {muscleVolume.length ? (
+        <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+          <View style={styles.statTitleRow}>
+            <Target size={15} color={theme.primary} />
+            <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Volumen por grupo (30d)</Text>
+          </View>
+          {muscleVolume.slice(0, 7).map((row) => (
+            <View key={row.muscleGroup} style={styles.volumeRow}>
+              <View style={styles.volumeLabelRow}>
+                <Text style={[styles.volumeLabel, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{row.muscleGroup}</Text>
+                <Text style={[styles.volumeValue, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{Math.round(row.volume).toLocaleString('es-CL')}</Text>
+              </View>
+              <ProgressBar value={row.volume / maxVolume} color={theme.primary} height={6} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+function NutritionCoachPanel({
+  activeNutrition,
+  meals,
+  timeline,
+  monthlyAvgPct,
+  streakDays,
+  favoriteFoods,
+  theme,
+}: {
+  activeNutrition: ActiveNutritionInfo | null
+  meals: NutritionMealPlanEntry[]
+  timeline: NutritionTimelineEntry[]
+  monthlyAvgPct: number
+  streakDays: number
+  favoriteFoods: FavoriteFoodEntry[]
+  theme: any
+}) {
+  if (!activeNutrition) return null
+
+  const latestLogged = timeline.find((row) => row.mealsDone > 0)
+  const weekRows = timeline.slice(0, 7)
+  const prevRows = timeline.slice(7, 14)
+  const weekAvg = Math.round(weekRows.reduce((sum, row) => sum + row.compliancePct, 0) / Math.max(1, weekRows.length))
+  const prevAvg = Math.round(prevRows.reduce((sum, row) => sum + row.compliancePct, 0) / Math.max(1, prevRows.length))
+  const weekDelta = weekAvg - prevAvg
+  const heatRows = [...timeline].reverse()
+  const kcalRows = [...weekRows].reverse()
+  const maxKcal = Math.max(1, ...kcalRows.map((row) => Math.max(row.targetCalories, row.consumedCalories)))
+
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.statTitleRow}>
+        <Apple size={15} color={theme.primary} />
+        <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Nutricion coach</Text>
+      </View>
+
+      <Text numberOfLines={1} style={[styles.statBig, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{activeNutrition.name}</Text>
+      <View style={styles.macroRow}>
+        {activeNutrition.daily_calories != null && <MacroPill label="kcal" value={activeNutrition.daily_calories} color={theme.primary} />}
+        {activeNutrition.protein_g != null && <MacroPill label="P" value={activeNutrition.protein_g} color="#EF4444" />}
+        {activeNutrition.carbs_g != null && <MacroPill label="C" value={activeNutrition.carbs_g} color="#F59E0B" />}
+        {activeNutrition.fats_g != null && <MacroPill label="G" value={activeNutrition.fats_g} color="#8B5CF6" />}
+      </View>
+
+      <View style={styles.nutritionStatsRow}>
+        <NutritionMetric label="7d" value={`${weekAvg}%`} delta={weekDelta} theme={theme} />
+        <NutritionMetric label="30d" value={`${monthlyAvgPct}%`} theme={theme} />
+        <NutritionMetric label="Racha" value={`${streakDays}d`} theme={theme} />
+      </View>
+
+      <View style={styles.nutritionHeatRow}>
+        {heatRows.map((row) => (
+          <View key={row.date} style={[styles.nutritionHeatCell, { backgroundColor: nutritionColor(row.compliancePct, theme), opacity: row.mealsTotal > 0 ? 1 : 0.28 }]} />
+        ))}
+      </View>
+
+      {kcalRows.length ? (
+        <View style={{ gap: 7 }}>
+          {kcalRows.map((row) => {
+            const day = new Date(`${row.date}T12:00:00`).toLocaleDateString('es-CL', { weekday: 'short' }).slice(0, 3)
+            return (
+              <View key={row.date} style={styles.kcalBarRow}>
+                <Text style={[styles.kcalDay, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{day}</Text>
+                <View style={[styles.kcalTrack, { backgroundColor: theme.secondary }]}>
+                  <View style={{ width: `${Math.min(100, (row.targetCalories / maxKcal) * 100)}%`, height: '100%', borderRadius: 99, backgroundColor: theme.border }} />
+                  <View style={{ position: 'absolute', left: 0, top: 0, width: `${Math.min(100, (row.consumedCalories / maxKcal) * 100)}%`, height: '100%', borderRadius: 99, backgroundColor: nutritionColor(row.compliancePct, theme) }} />
+                </View>
+                <Text style={[styles.kcalValue, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{row.consumedCalories}</Text>
+              </View>
+            )
+          })}
+        </View>
+      ) : null}
+
+      {favoriteFoods.length ? (
+        <View style={{ gap: 8 }}>
+          <View style={styles.statTitleRow}>
+            <Heart size={14} color="#F43F5E" />
+            <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Favoritos del alumno</Text>
+          </View>
+          <View style={styles.favoriteWrap}>
+            {favoriteFoods.slice(0, 10).map((food) => (
+              <View key={food.id} style={[styles.favoriteChip, { backgroundColor: '#F43F5E18', borderColor: '#F43F5E44', borderRadius: theme.radius.sm }]}>
+                <Text numberOfLines={1} style={[styles.favoriteText, { color: '#F43F5E', fontFamily: 'Inter_700Bold' }]}>{food.name}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {meals.length ? (
+        <View style={{ gap: 8 }}>
+          <View style={styles.statTitleRow}>
+            <Salad size={14} color={theme.primary} />
+            <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Plan completo</Text>
+          </View>
+          {meals.slice(0, 6).map((meal, i) => (
+            <View key={meal.id} style={[styles.nutritionMealRow, i < Math.min(meals.length, 6) - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={[styles.dayRowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{meal.name}</Text>
+                <Text style={[styles.dayRowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  {meal.day_of_week ? dayName(meal.day_of_week) : 'Todos'} · {meal.foodCount} alimentos
+                </Text>
+              </View>
+              <Text style={[styles.dayMetric, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>{meal.calories} kcal</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {latestLogged ? (
+        <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Ultimo registro: {formatDate(latestLogged.date)} · {latestLogged.mealsDone}/{latestLogged.mealsTotal} comidas
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function NutritionMetric({ label, value, delta, theme }: { label: string; value: string; delta?: number; theme: any }) {
+  return (
+    <View style={[styles.nutritionMetric, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+      <Text style={[styles.nutritionMetricValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{value}</Text>
+      <Text style={[styles.nutritionMetricLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      {delta != null ? (
+        <Text style={[styles.nutritionMetricDelta, { color: delta > 0 ? theme.success : delta < 0 ? theme.destructive : theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          {delta > 0 ? '+' : ''}{delta} pts
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function nutritionColor(pct: number, theme: any): string {
+  if (pct >= 80) return theme.success
+  if (pct >= 50) return '#F59E0B'
+  if (pct > 0) return theme.destructive
+  return theme.border
+}
+
+function MetaPill({ label, theme, tone }: { label: string; theme: any; tone?: 'warning' }) {
+  const color = tone === 'warning' ? '#F59E0B' : theme.primary
+  return (
+    <View style={[styles.metaPill, { backgroundColor: color + '16', borderColor: color + '44', borderRadius: theme.radius.sm }]}>
+      <Text style={[styles.metaPillText, { color, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+    </View>
+  )
+}
+
+function dayName(day: number): string {
+  return ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][day - 1] ?? `D${day}`
+}
+
+function resolveProgramWeek(program: ActiveProgramInfo): number | null {
+  if (!program.start_date) return null
+  const start = new Date(`${program.start_date}T12:00:00`).getTime()
+  const now = Date.now()
+  if (!Number.isFinite(start)) return null
+  const diffDays = Math.max(0, Math.floor((now - start) / 86400000))
+  return Math.min(Math.max(1, Math.ceil((diffDays + 1) / 7)), Math.max(1, program.weeks_to_repeat))
+}
+
+function ActivityTab({ activity, selectedDate, onSelectDate, dayDetail, loading, theme }: {
+  activity: ActivityDay[]
+  selectedDate: string
+  onSelectDate: (date: string) => void
+  dayDetail: ClientDayDetail | null
+  loading: boolean
+  theme: any
+}) {
+  return (
+    <View style={{ gap: 14 }}>
+      <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+        <View style={styles.statTitleRow}>
+          <Activity size={15} color={theme.primary} />
+          <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Historial de actividad</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}>
+          {activity.map((day) => (
+            <DayChip key={day.date} day={day} active={day.date === selectedDate} onPress={() => onSelectDate(day.date)} theme={theme} />
+          ))}
+        </ScrollView>
+      </View>
+
+      {loading ? (
+        <EvaLoaderScreen subtitle="Cargando día..." />
+      ) : dayDetail ? (
+        <View style={{ gap: 12 }}>
+          <DayWorkout detail={dayDetail} theme={theme} />
+          <DayNutrition detail={dayDetail} theme={theme} />
+          <DayHabits detail={dayDetail} theme={theme} />
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+function DayChip({ day, active, onPress, theme }: { day: ActivityDay; active: boolean; onPress: () => void; theme: any }) {
+  const date = new Date(`${day.date}T12:00:00`)
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={onPress}
+      style={[styles.dayChip, { backgroundColor: active ? theme.primary : theme.secondary, borderColor: active ? theme.primary : theme.border, borderRadius: theme.radius.lg }]}
+    >
+      <Text style={[styles.dayDow, { color: active ? theme.primaryForeground : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+        {date.toLocaleDateString('es-CL', { weekday: 'short' }).slice(0, 3)}
+      </Text>
+      <Text style={[styles.dayNum, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+        {date.getDate()}
+      </Text>
+      <View style={styles.dayDots}>
+        <View style={[styles.dayDot, { backgroundColor: day.workout ? (active ? theme.primaryForeground : theme.primary) : theme.border }]} />
+        <View style={[styles.dayDot, { backgroundColor: day.nutrition ? '#10B981' : theme.border }]} />
+        <View style={[styles.dayDot, { backgroundColor: day.checkIn ? '#F59E0B' : theme.border }]} />
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+function DayWorkout({ detail, theme }: { detail: ClientDayDetail; theme: any }) {
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.statTitleRow}>
+        <Dumbbell size={15} color={theme.primary} />
+        <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Entrenamiento del día</Text>
+      </View>
+      {detail.workoutSets.length ? detail.workoutSets.slice(0, 12).map((set, i) => (
+        <View key={`${set.exerciseName}-${i}`} style={[styles.dayRow, i < detail.workoutSets.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={[styles.dayRowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{set.exerciseName}</Text>
+            <Text style={[styles.dayRowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{set.muscleGroup ?? 'Sin grupo'} · Serie {set.setNumber ?? '-'}</Text>
+          </View>
+          <Text style={[styles.dayMetric, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            {set.weightKg ?? 0}kg x {set.repsDone ?? 0}
+          </Text>
+        </View>
+      )) : (
+        <Text style={[styles.emptyLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin sets registrados este día.</Text>
+      )}
+    </View>
+  )
+}
+
+function DayNutrition({ detail, theme }: { detail: ClientDayDetail; theme: any }) {
+  const done = detail.nutritionMeals.filter((meal) => meal.completed).length
+  const total = detail.nutritionMeals.length
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.statTitleRow}>
+        <Apple size={15} color={theme.primary} />
+        <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Nutrición del día</Text>
+      </View>
+      {total ? (
+        <>
+          <ProgressBar value={done / total} color={done / total >= 0.8 ? theme.success : '#F59E0B'} height={7} />
+          {detail.nutritionMeals.map((meal, i) => (
+            <View key={`${meal.name}-${i}`} style={styles.mealRow}>
+              <Check size={14} color={meal.completed ? theme.success : theme.mutedForeground} />
+              <Text style={[styles.dayRowTitle, { color: meal.completed ? theme.foreground : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{meal.name}</Text>
+            </View>
+          ))}
+        </>
+      ) : (
+        <Text style={[styles.emptyLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin registro nutricional este día.</Text>
+      )}
+    </View>
+  )
+}
+
+function DayHabits({ detail, theme }: { detail: ClientDayDetail; theme: any }) {
+  const h = detail.habits
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.statTitleRow}>
+        <Flame size={15} color={theme.primary} />
+        <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Hábitos</Text>
+      </View>
+      {h ? (
+        <>
+          <View style={styles.habitGrid}>
+            <HabitItem icon={Droplets} label="Agua" value={h.water_ml != null ? `${h.water_ml} ml` : '-'} theme={theme} />
+            <HabitItem icon={Footprints} label="Pasos" value={h.steps != null ? h.steps.toLocaleString('es-CL') : '-'} theme={theme} />
+            <HabitItem icon={Moon} label="Sueño" value={h.sleep_hours != null ? `${h.sleep_hours}h` : '-'} theme={theme} />
+            <HabitItem icon={Activity} label="Ayuno" value={h.fasting_hours != null ? `${h.fasting_hours}h` : '-'} theme={theme} />
+          </View>
+          {h.notes ? <Text style={[styles.ciNotes, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{h.notes}</Text> : null}
+        </>
+      ) : (
+        <Text style={[styles.emptyLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin hábitos registrados este día.</Text>
+      )}
+    </View>
+  )
+}
+
+function HabitItem({ icon: Icon, label, value, theme }: { icon: any; label: string; value: string; theme: any }) {
+  return (
+    <View style={[styles.habitItem, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+      <Icon size={15} color={theme.primary} />
+      <Text style={[styles.habitValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
+      <Text style={[styles.habitLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+    </View>
+  )
+}
+
+function CheckInCard({ c, clientId, theme, onReviewed }: { c: CheckInEntry; clientId: string; theme: any; onReviewed: () => void }) {
+  const photos = [c.front_photo_url, c.back_photo_url].filter(Boolean) as string[]
+  async function review() {
+    const r = await markCoachCheckInReviewed(clientId, c.id)
+    if (!r.ok) Alert.alert('Error', r.error ?? 'No se pudo marcar como revisado.')
+    else onReviewed()
+  }
+  return (
+    <View style={[styles.ciCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+      <View style={styles.ciTop}>
+        <Text style={[styles.ciDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(c.date)}</Text>
+        {c.weight != null ? <Text style={[styles.ciWeight, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{c.weight} kg</Text> : null}
+      </View>
+      <View style={[styles.reviewRow, { backgroundColor: c.reviewed_at ? theme.success + '18' : theme.secondary, borderColor: c.reviewed_at ? theme.success + '44' : theme.border }]}>
+        <Text style={[styles.reviewText, { color: c.reviewed_at ? theme.success : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+          {c.reviewed_at ? 'Revisado por coach' : 'Pendiente de revisión'}
+        </Text>
+        {!c.reviewed_at ? (
+          <TouchableOpacity onPress={review} hitSlop={8}>
+            <Text style={[styles.reviewAction, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>Marcar</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {c.energy_level != null ? (
+        <View style={styles.ciEnergyRow}>
+          <Text style={[styles.ciEnergyLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Energía</Text>
+          <View style={[styles.ciEnergyTrack, { backgroundColor: theme.muted }]}>
+            <View style={{ width: `${(c.energy_level / 10) * 100}%`, height: '100%', borderRadius: 99, backgroundColor: theme.primary }} />
+          </View>
+          <Text style={[styles.ciEnergyVal, { color: theme.foreground, fontFamily: theme.fontSans }]}>{c.energy_level}/10</Text>
+        </View>
+      ) : null}
+      {c.notes ? <Text style={[styles.ciNotes, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{c.notes}</Text> : null}
+      {photos.length ? (
+        <View style={styles.ciPhotos}>
+          {photos.map((p, i) => <Image key={i} source={{ uri: p }} style={styles.ciPhoto} contentFit="cover" transition={150} />)}
+        </View>
+      ) : null}
+    </View>
   )
 }
 
@@ -312,6 +974,84 @@ function EditClientForm({ client, onDone, onCancel }: { client: CoachClientDetai
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  statStrip: { flexDirection: 'row', gap: 8 },
+  miniStat: { flex: 1, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 8, gap: 3, alignItems: 'flex-start' },
+  miniValue: { fontSize: 16, letterSpacing: -0.3 },
+  miniLabel: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.4 },
+  ringRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingTop: 4 },
+  complianceItem: { flex: 1, alignItems: 'center', gap: 4 },
+  complianceHint: { fontSize: 13 },
+  complianceDelta: { fontSize: 10 },
+  goalCard: { padding: 16, borderWidth: 1, gap: 10 },
+  goalTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  goalValue: { fontSize: 24, letterSpacing: -0.5 },
+  goalEditRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  goalInput: { flex: 1, height: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 16 },
+  programMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  metaPill: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  metaPillText: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.7 },
+  programWeekRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  programGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingTop: 4 },
+  programDay: { width: '47%', flexGrow: 1, borderWidth: 1, padding: 12, gap: 6 },
+  programDayTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  programDayDow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
+  variantText: { fontSize: 10, textTransform: 'uppercase' },
+  programDayTitle: { fontSize: 13, lineHeight: 17 },
+  programExerciseRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  programExerciseText: { flex: 1, fontSize: 11 },
+  prRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 9 },
+  prValue: { fontSize: 13 },
+  volumeRow: { gap: 6 },
+  volumeLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  volumeLabel: { fontSize: 12, flex: 1 },
+  volumeValue: { fontSize: 11 },
+  nutritionStatsRow: { flexDirection: 'row', gap: 8, paddingTop: 2 },
+  nutritionMetric: { flex: 1, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 8, gap: 2 },
+  nutritionMetricValue: { fontSize: 17, letterSpacing: -0.2 },
+  nutritionMetricLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
+  nutritionMetricDelta: { fontSize: 10 },
+  nutritionHeatRow: { flexDirection: 'row', gap: 2, paddingVertical: 4 },
+  nutritionHeatCell: { flex: 1, height: 18, minWidth: 4, borderRadius: 4 },
+  kcalBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kcalDay: { width: 32, fontSize: 10, textTransform: 'uppercase' },
+  kcalTrack: { flex: 1, height: 7, borderRadius: 99, overflow: 'hidden' },
+  kcalValue: { width: 46, textAlign: 'right', fontSize: 11 },
+  favoriteWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  favoriteChip: { maxWidth: '48%', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
+  favoriteText: { fontSize: 11 },
+  nutritionMealRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9 },
+  dayStrip: { gap: 8, paddingTop: 4 },
+  dayChip: { width: 58, paddingVertical: 9, paddingHorizontal: 8, borderWidth: 1, alignItems: 'center', gap: 3 },
+  dayDow: { fontSize: 10, textTransform: 'uppercase' },
+  dayNum: { fontSize: 18, lineHeight: 21 },
+  dayDots: { flexDirection: 'row', gap: 3, marginTop: 2 },
+  dayDot: { width: 5, height: 5, borderRadius: 3 },
+  dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9 },
+  dayRowTitle: { fontSize: 13, flexShrink: 1 },
+  dayRowSub: { fontSize: 11, marginTop: 2 },
+  dayMetric: { fontSize: 13 },
+  mealRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 },
+  habitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  habitItem: { width: '47%', flexGrow: 1, borderWidth: 1, padding: 10, gap: 3 },
+  habitValue: { fontSize: 14 },
+  habitLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
+  emptyLine: { fontSize: 13, lineHeight: 18 },
+  macroRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 6 },
+  listHeading: { fontSize: 11, letterSpacing: 0.8 },
+  ciCard: { borderWidth: 1, padding: 14, gap: 8 },
+  ciTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  reviewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  reviewText: { fontSize: 12 },
+  reviewAction: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6 },
+  ciDate: { fontSize: 14 },
+  ciWeight: { fontSize: 15 },
+  ciEnergyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ciEnergyLabel: { fontSize: 12, width: 54 },
+  ciEnergyTrack: { flex: 1, height: 6, borderRadius: 99, overflow: 'hidden' },
+  ciEnergyVal: { fontSize: 12, width: 38, textAlign: 'right' },
+  ciNotes: { fontSize: 13, lineHeight: 18 },
+  ciPhotos: { flexDirection: 'row', gap: 8, marginTop: 2 },
+  ciPhoto: { width: 64, height: 80, borderRadius: 10 },
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 48, gap: 14 },
   heroCard: { padding: 22, borderWidth: 1, alignItems: 'center', gap: 8 },
   heroAvatar: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },

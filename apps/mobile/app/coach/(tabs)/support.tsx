@@ -5,6 +5,7 @@ import { MotiView } from 'moti'
 import { ChevronDown, ExternalLink, Mail } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ScreenHeader, Section } from '../../../components'
+import { AppBackground } from '../../../components/AppBackground'
 
 const SUPPORT_EMAIL = 'soporte@eva-app.cl'
 const HELP_URL = 'https://eva-app.cl/ayuda'
@@ -24,6 +25,7 @@ export default function SupportScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader title="Soporte" subtitle="Ayuda y contacto" />
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>

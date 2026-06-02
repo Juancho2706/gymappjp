@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -13,6 +12,8 @@ import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ScreenHeader } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 
 interface CheckIn {
   id: string
@@ -147,13 +148,14 @@ export default function CheckInsScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader
         title="Check-ins"
         subtitle={!loading ? `${checkIns.length} ${checkIns.length === 1 ? 'reciente' : 'recientes'}` : undefined}
       />
 
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando check-ins..." />
       ) : checkIns.length === 0 ? (
         <EmptyState
           icon={Camera}

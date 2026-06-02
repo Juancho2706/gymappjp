@@ -17,6 +17,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Badge, EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { AppBackground } from '../../../components/AppBackground'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const TODAY_DOW = new Date().getDay()
@@ -147,6 +148,7 @@ export default function WorkoutScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader
         title="Mi entrenamiento"
         subtitle="Tocá el plan de hoy para empezar"

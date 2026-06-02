@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,8 @@ import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ScreenHeader } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 
@@ -103,6 +104,7 @@ export default function BuilderScreen() {
 
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <ScreenHeader
         title="Programas"
         subtitle={
@@ -115,7 +117,7 @@ export default function BuilderScreen() {
       />
 
       {loadingClients ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando programas..." />
       ) : (
         <View style={{ flex: 1 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
@@ -159,7 +161,7 @@ export default function BuilderScreen() {
               subtitle="Toca un nombre arriba para ver sus planes de entrenamiento."
             />
           ) : loadingPlans ? (
-            <ActivityIndicator style={{ marginTop: 32 }} color={theme.primary} />
+            <EvaLoaderScreen subtitle="Cargando planes..." />
           ) : plans.length === 0 ? (
             <EmptyState
               icon={Dumbbell}
