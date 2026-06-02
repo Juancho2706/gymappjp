@@ -107,6 +107,13 @@ DTOs/schemas que deben vivir en `packages/schemas` / `packages/types` antes de l
 
 Regla: RN consume los mismos DTOs, no reimplementa lógica. Matriz mobile parity por menú ya documentada en plan principal (sección responsive).
 
+### 4.1 Tokens de marca white-label (Brand Center)
+`WorkspaceBrand` (re-exportado en `packages/types`) lleva los tokens que la app RN debe consumir para verse con la marca de la org/coach — un solo origen de verdad:
+`{ brandName, primaryColor, logoUrl, loaderText, useCustomLoader, loaderIconMode ('logo'|'text'|'coach'|'eva'|'none'), loaderTextColor, splashBgColor, source ('organization'|'coach'|'eva_default') }`.
+- Resolución: `resolveBrandForWorkspace()` (org → coach → eva). En enterprise, la org es la fuente de verdad y se propaga a `coaches` al publicar.
+- Splash/icono móvil web: generados gratis con `next/og` en `/api/splash/[coach_slug]` (la RN replicará con su propio asset pipeline a partir de `logoUrl` + `splashBgColor`).
+- Spec completa: `specs/enterprise-brand-center/`.
+
 ---
 
 ## 5. Data Inventory (Ley 21.719)

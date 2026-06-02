@@ -3648,7 +3648,7 @@ VENTAS/LEGAL (al buscar cobrar):
 - [x] Trust Center Lite. Completado 2026-05-31. `/org/[slug]/trust` consolida permisos, MFA posture, audit, exports, retention/data risks y datos sensibles sin servicio externo. (Sales/Security)
 - [x] ARCO + data map + retention + checklist Ley 21.719. Completado 2026-06-01: enterprise-reference-matrices.md §5/§6 + checklist en /trust. Redacción legal formal = post-MVP.
 - [x] Responsable de datos por contexto. Completado 2026-06-01: ver enterprise-reference-matrices.md §7.
-- [ ] Runbook DevOps: bulk apply migraciones local→prod con orden + rollback + backup. (DevOps)
+- [x] Runbook DevOps: bulk apply migraciones local→prod con orden + rollback + backup. Completado 2026-06-01 en `docs/operations/MERGE_TO_LIVE_RUNBOOK.md` (código + Supabase + env + storage + smoke + rollback; referencia `SUPABASE_MIGRATION_CONFLICT_REPORT.md`). (DevOps)
 - [x] CI que corre `rls-isolation.spec.ts` por PR. Completado 2026-05-31. `npm run test:e2e:enterprise-rls` y step dedicado `Enterprise RLS isolation` en `.github/workflows/ci.yml`; verificado local 46/46 passing. (DevOps)
 
 ### Línea de corte "Enterprise vendible"
@@ -3687,3 +3687,83 @@ MVP cobrable = features actuales (✅) + bloque SEGURIDAD completo + workspace s
 - **Informe de conflicto remoto/local:** `docs/operations/SUPABASE_MIGRATION_CONFLICT_REPORT.md`. Divergencia ALTA: local usa baseline squasheado + 55 enterprise; prod tiene historia granular abril-mayo + 7 migraciones `20260528*` no incorporadas. Plan de merge seguro documentado (db pull batch 28-may → repair baseline applied → push solo enterprise). **NO ejecutar db push ciego a prod.**
 
 **Conclusión:** la superficie enterprise web/PWA es funcionalmente vendible. Lo que resta es trabajo de fase siguiente (features avanzadas, normalización con volumen real, y la batería tests+deploy que el owner ejecuta manualmente).
+
+### Batería de pruebas completa 14-roles (2026-06-01) — Supabase LOCAL
+- Informe completo: `docs/testing/FULL_TEST_REPORT_14_ROLES.md`.
+- Resultado: typecheck PASS · lint 0 errores · **Vitest 149/153** (4 skip opt-in) · **Playwright 142/144** (2 skip justificados) · **0 fallos**.
+- **Bug de negocio encontrado y corregido (rol Backend/PM):** el límite de seats contaba staff no-coach (`ops/analyst/brand_manager/org_admin`, `coach_id NULL`) como si consumieran cupos de coach → orgs con staff quedaban "sin seats" para coaches reales. Fix en `org.actions.ts` (invite + createEnterpriseUser, cuenta `coach_id IS NOT NULL`, límite sólo al crear coach) y `org.repository.ts` (`totalCoaches` excluye staff). **Decisión de producto confirmada: seats = capacidad de coaches; el staff administrativo NO descuenta seats.**
+- Deuda de tests saldada: 4 unit (mocks de resolución de workspace + registro free→active) y 11 E2E (copys de UI rediseñada, label duplicado de contraseña, gate de `PublicCodeRequiredModal`).
+- **Nota de interacción (rol Mobile/QA):** `PublicCodeRequiredModal` (`fixed inset-0 z-[100]`) bloquea el dashboard coach hasta confirmar el código corto; cualquier flujo E2E/móvil debe disolverlo primero (helper de login ya lo hace).
+
+### Auditoría de flujo enterprise→coach→alumno + completitud de menús + assessment de comprador (2026-06-01)
+
+**Completitud de menús (rol Frontend/PM/UX):** ✅ los 6 grupos del nav enterprise (`OrgEnterpriseNav`) apuntan a páginas reales con datos en vivo, sin placeholders:
+- Command Center (dashboard, /reports) · Operaciones (/clients, /assignments, /payments) · Equipo (/coaches, /team) · Marca (/brand) · Herramientas (/announcements, /nutrition, /programs, /check-ins) · Seguridad (/settings, /trust, /proof, /audit).
+- `EnterpriseComingSoonPage.tsx` es **código muerto** (no se importa en ninguna ruta) → ningún menú muestra "próximamente". Candidato a borrar.
+- `/proof` (Proof Pack) y `/reports` confirmados reales: stats/members/clients/audit/invoices en vivo + export PDF + delta semanal real desde `org_weekly_snapshots`. Sin datos mock en `_data/`.
+
+**🐞 GAP CRÍTICO encontrado y CORREGIDO (rol Backend/CSM/Sales): los alumnos creados por la org no podían acceder a la app.**
+- `addClientToOrgAction` (alta individual) y `importClientsFromCSVAction` (CSV masivo) creaban el usuario auth con password aleatorio (`Math.random()`) y `force_password_change`, **sin entregar credenciales de ninguna forma**. El alumno nunca sabía que tenía cuenta → cero acceso. Rompía la promesa core ("agrega tus alumnos y obtienen la PWA white-label").
+- **Decisión de producto (2026-06-01): NO se envían emails a los alumnos.** Las credenciales (email + password temporal + link `/c/[slug]/login`) se **devuelven al admin para reparto manual** (WhatsApp, presencial). Consistente con la filosofía "todo manual" del enterprise y evita dependencia/costo de email transaccional.
+  - Alta individual → `AddClientForm` muestra las credenciales en pantalla al crear.
+  - CSV masivo → botón "Descargar credenciales (N)" exporta `email,password_temporal,link_login` de los exitosos.
+  - Primera asignación de alumno del pool → `assignClientToCoach` resetea password y devuelve credenciales (las UIs de asignación las muestran).
+  - Password ahora vía `generateTempPassword()` (cripto-seguro, no `Math.random`). Sin `welcome_email_sent`; se audita `credentials_reset` en asignación.
+- Nota: el flujo **standalone coach** (`createClientInternal`) sí sigue enviando email de bienvenida vía Resend (comportamiento existente de ese producto, no enterprise). Cambiar eso requiere instrucción explícita.
+
+**🐞 Seat bug — 3ra ubicación corregida:** `/reports` calculaba `seatUsage` con `activeMembers.length` (incluía staff). Ahora usa `coachMembers.length`. (Las otras 2 ubicaciones — invite/createUser y `getOrgStats` — se corrigieron en la corrida de tests previa.)
+
+**Observaciones / follow-ups (no bloqueantes, priorizados):**
+- **[P1] Bulk-assign del pool no devuelve credenciales** (sí lo hace la asignación individual). Pendiente: que `bulkAssignUnassignedClientsAction` resetee password y devuelva credenciales por alumno para descarga CSV (mismo patrón que el import). Sin emails.
+- **[P1] Alumno del pool sin coach no tiene login white-label** (`/c/[slug]` requiere slug de coach). Decisión de diseño a documentar: ¿login a nivel org, o exigir coach antes de dar acceso? Hoy las credenciales se generan/entregan al asignar coach (ya implementado).
+- **[P2] Billing enterprise 100% manual** (link/transferencia MP): sin facturación recurrente automática, sin dunning, sin recibos al dueño. Es decisión por presupuesto (único gateway CLP recurrente es MP pre-approvals, reservado a coaches). Para el comprador: agregar al menos **recibo/comprobante PDF descargable** desde `/settings` o `/payments` (gratis, jspdf ya está) y recordatorio de vencimiento por email.
+- **[P2] Table-stakes de mercado 2026 ausentes** (ver fuentes abajo): reserva de clases/horarios, check-in self-service/kiosko, detección de churn. EVA es coaching white-label (PT 1:1), no gym de clases — varios no aplican, pero **churn risk** sí es viable gratis (ya hay health score + adherencia; falta alerta proactiva). Reserva de clases = decisión de scope, no gap de calidad.
+
+**Assessment de comprador (dueño de gym/academia que evalúa comprar):**
+- **Lo que cierra venta hoy:** white-label por coach (diferenciador real vs competencia que cobra por usuario), multi-coach bajo una org, dashboard command center + reportes + Proof Pack exportable (material de confianza), RBAC granular + MFA + audit log con checksum (argumento de seguridad/compliance Ley 19.628/21.719), aislamiento multi-tenant verificado por RLS (46 tests).
+- **Lo que un comprador preguntaría y hoy es débil:** "¿mis alumnos reciben acceso automático?" → **ahora sí** (post-fix). "¿facturación automática?" → no (manual, por presupuesto). "¿reserva de clases?" → no (fuera de scope coaching). "¿app nativa?" → PWA hoy, RN en roadmap.
+- **Veredicto:** vendible para nicho **coaching/PT white-label multi-coach**. El fix de bienvenida de alumnos era condición necesaria — sin él, el onboarding del comprador fallaba en el primer alumno. Con él, el flujo org→coach→alumno queda completo de punta a punta.
+
+Fuentes de mercado (gym/fitness SaaS 2026): [Virtuagym](https://business.virtuagym.com/blog/best-fitness-studio-software/) · [Glofox](https://www.glofox.com/blog/gym-management/) · [Zenoti](https://www.zenoti.com/thecheckin/best-fitness-gym-software-2026).
+
+---
+
+## ESTUDIO: White-label Loader + Splash por Org (2026-06-01)
+
+> **✅ SECCIÓN MARCA CERRADA 2026-06-02 (v1 + v2).** v2 implementado: motor de color compartido `packages/brand-kit` (culori/OKLCH, WCAG) para paridad web+RN, acento light/dark con guard de contraste en vivo (publish bloqueado si falla AA), texto on-color auto, logos claro/oscuro, versionado (`brand_history`). Bug latente corregido: publish no aplicaba el draft. Verificado: vitest 158, enterprise E2E **100/100** (incl publish end-to-end). Dominio propio (`eva.negocio.cl`) = **diferido/null**. Spec: `specs/enterprise-brand-center/` (SPEC/PLAN/TASKS/IMPROVEMENTS). Plan ejecutado: rework UI/UX del menú Marca + limpieza de info-dev + fix de permisos (`brand_manager` edita/publica, `ops` excluido, `org_admin` edita sin publicar vía `orgRoleCan`) + loader de org como fuente de verdad (migración local `20260601001000_org_brand_loader_splash`, `WorkspaceBrand` extendido, `proxy.ts` override) + splash iOS generado con `next/og` (`/api/splash/[coach_slug]`, verificado PNG 1170×2532). Bug latente corregido: el publish nunca aplicaba el draft (leía columna no seleccionada). Verificado: typecheck/lint limpios, E2E enterprise 98+ verde, 2 tests nuevos de permisos de marca. Local only, sin merge.
+
+> El white-label es el diferenciador #1 del enterprise. Este estudio audita qué existe, qué falta para una experiencia "app propia" de la org, y un plan de implementación **100% gratis** (sin servicios pagos). Investigación: [Next.js PWA guide](https://nextjs.org/docs/app/guides/progressive-web-apps), [Next.js multi-tenant guide](https://nextjs.org/docs/app/guides/multi-tenant), [dynamic PWA icons con ImageResponse](https://aurorascharff.no/posts/dynamically-generating-pwa-app-icons-nextjs-16-serwist/).
+
+### Lo que YA está hecho (no reconstruir)
+- **Manifest dinámico por coach:** `/api/manifest/[coach_slug]` + `/c/[coach_slug]/manifest.webmanifest` → name/short_name/theme_color/icons por marca.
+- **Theme + favicon dinámicos:** `generateViewport` setea `themeColor`; `layout.tsx` inyecta `<link rel="icon">` + `apple-touch-icon` con logo o **SVG generado** (inicial + color de marca) como fallback.
+- **Loader custom (nivel COACH):** campos `loader_text`, `use_custom_loader`, `loader_icon_mode` (`eva`/`coach`/`none`), `loader_text_color` en `coaches`; viajan por headers de middleware `x-coach-loader-*`; el `/c/[coach_slug]/layout.tsx` los expone como CSS vars (`--coach-loader-*`) y `EvaRouteLoader`/`CoachLoadingShell` los consumen. Configurable en `coach/settings` (BrandSettingsForm).
+- **Paleta de marca** generada desde un color (`generateBrandPalette`).
+- `resolveBrandForWorkspace` ya da a workspaces enterprise `loaderText: org.name`.
+
+### Gaps reales para white-label de ORG
+1. **El loader del alumno enterprise usa config del COACH, no de la org.** El `/c/[coach_slug]/layout.tsx` lee `x-coach-loader-*` (campos del coach). Un alumno de una org ve el loader de SU coach (normalmente default EVA en coaches `org_managed`), no un loader único del gimnasio. → el dueño no puede setear UNA identidad de carga consistente para toda su org.
+2. **`organizations`/`organization_branding` no tiene campos de loader** (`use_custom_loader`, `loader_icon_mode`, `loader_text_color`) ni de splash. El `/org/[slug]/brand` solo edita color + logo.
+3. **Sin splash screen iOS** (`apple-touch-startup-image`). Es el gap más visible de "se siente app nativa": al abrir la PWA instalada en iPhone hay pantalla en blanco en vez de splash con logo de marca.
+4. **Íconos PWA install no normalizados:** el manifest referencia `logo_url` crudo; si no es cuadrado 192/512 ni "maskable", el ícono instalado se ve mal/recortado en Android.
+
+### Plan de implementación (FASES, gratis)
+**Fase WL-1 — Org como fuente de verdad del loader (backend + middleware):**
+- Migration local: agregar a `organizations` (o `organization_branding`) `loader_text`, `use_custom_loader bool`, `loader_icon_mode text`, `loader_text_color text`, `splash_bg_color text` (default = primary_color).
+- En el resolver de branding del middleware (`proxy.ts` + `workspace-brand.service`): cuando el coach es `org_managed`, poblar `x-coach-loader-*` desde la ORG (cadena de fallback: org loader → coach loader → EVA). Single source of truth por org. Sin cambios en `EvaRouteLoader` (ya consume las vars).
+
+**Fase WL-2 — Splash iOS + íconos PWA generados (gratis con `ImageResponse` nativo de Next, sin libs):**
+- Ruta `app/api/splash/[slug]/route.tsx` con `ImageResponse`: logo centrado sobre `splash_bg_color`, parametrizada por tamaño (`?w=&h=`). Resuelve marca org (enterprise) o coach (standalone) por slug.
+- Inyectar en `/c/[coach_slug]/layout.tsx` los `<link rel="apple-touch-startup-image" media="(device-width:...)">` para los ~12 tamaños Apple vigentes (apuntando a `/api/splash/[slug]?w=&h=`).
+- Ruta `app/api/icon/[slug]/route.tsx` (`ImageResponse`): ícono 192/512 **maskable** (logo padded sobre fondo de marca). El manifest pasa a referenciar `/api/icon/[slug]?size=192|512` en vez de `logo_url` crudo.
+- Cache headers largos (`Cache-Control: public, max-age=31536000, immutable`) → coste server ~0.
+
+**Fase WL-3 — UI de configuración en `/org/[slug]/brand`:**
+- Reusar el patrón de `BrandSettingsForm` (coach) para exponer loader_text/icon_mode/color + preview en vivo + preview de splash. Permite al dueño "ver su app" antes de publicar.
+
+**Notas técnicas:**
+- `ImageResponse` (de `next/og`) es **nativo y gratis** — no requiere servicio externo ni clave. Edge-compatible.
+- Serwist no soporta Turbopack (default de Next 16); **no aplica** porque EVA usa `public/sw.js` propio, no Serwist.
+- Per-coach manifest fue deprecado como *install prompt* en Fase 6A, pero el manifest dinámico sigue sirviendo para theme/icon — esta fase lo refuerza, no lo revierte.
+
+**Esfuerzo:** medio. Riesgo bajo (aditivo, sin romper coach standalone). Sin dependencias pagas. **Prioridad: P1 post-MVP** — es el refuerzo del diferenciador estrella, ideal para la demo de venta.
