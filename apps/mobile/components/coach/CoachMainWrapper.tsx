@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import type { RefreshControlProps } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { LinearGradient } from 'expo-linear-gradient'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -39,23 +40,13 @@ export function CoachMainWrapper({ children, scroll = true, refreshControl }: Co
 
   return (
     <View style={[styles.shell, { backgroundColor: theme.background }]}>
-      <View
+      {/* Subtle top brand wash (replaces the hard colored circles — luminance shift, not a disc). */}
+      <LinearGradient
         pointerEvents="none"
-        style={[
-          styles.glowTop,
-          {
-            backgroundColor: hexToRgba(theme.primary, 0.18),
-          },
-        ]}
-      />
-      <View
-        pointerEvents="none"
-        style={[
-          styles.glowBottom,
-          {
-            backgroundColor: hexToRgba(theme.primary, 0.1),
-          },
-        ]}
+        colors={[hexToRgba(theme.primary, 0.1), 'transparent']}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.9, y: 0.5 }}
+        style={styles.topWash}
       />
       {scroll ? (
         <ScrollView
@@ -91,21 +82,11 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 16,
   },
-  glowTop: {
+  topWash: {
     position: 'absolute',
-    top: -170,
-    right: -120,
-    width: 360,
-    height: 360,
-    borderRadius: 180,
-    opacity: 0.8,
-  },
-  glowBottom: {
-    position: 'absolute',
-    bottom: -120,
-    left: -130,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
   },
 })

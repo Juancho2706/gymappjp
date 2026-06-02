@@ -62,12 +62,12 @@ export default function LoginScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      {/* Brand glow background — dark-first, subtle, no blur cost */}
+      {/* Brand wash — subtle, dark-first (no saturated disc) */}
       <LinearGradient
-        colors={[theme.primary + '22', 'transparent']}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 0.6 }}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 360 }}
+        colors={[theme.primary + '14', 'transparent']}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.9, y: 0.5 }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 300 }}
         pointerEvents="none"
       />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -112,7 +112,7 @@ export default function LoginScreen() {
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 500, delay: 120 }}
           >
-            <GlassCard variant="solid" glow style={{ padding: 20 }}>
+            <GlassCard variant="solid" style={{ padding: 20 }}>
               <View style={{ gap: 16 }}>
                 <Input
                   label="Email"

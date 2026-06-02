@@ -155,10 +155,12 @@ function StatTile({
 }
 const statStyles = StyleSheet.create({
   tile: {
-    flex: 1,
+    // 3 per row (was flex:1 → 6 squished in one row).
+    flexBasis: '31%',
+    flexGrow: 1,
+    minWidth: 100,
     padding: 12,
     gap: 4,
-    minWidth: 0,
   },
   iconWrap: {
     width: 30,
