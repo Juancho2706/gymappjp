@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ExternalLink, KeyRound, LogOut, User, UserCog } from 'lucide-react-native'
@@ -9,6 +9,8 @@ import { getClientProfile } from '../../../lib/client'
 import { clearBranding } from '../../../lib/branding'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, InfoRow, Section } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 interface AlumnoDetail {
   fullName: string
@@ -89,7 +91,7 @@ export default function AlumnoPerfilScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando perfil…" />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>

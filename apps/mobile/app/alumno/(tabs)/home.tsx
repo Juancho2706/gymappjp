@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,6 +24,8 @@ import {
   StreakWidget,
   WelcomeModal,
 } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { getTodayInSantiago, timeGreeting, formatLongDate } from '../../../lib/date-utils'
 import { getDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 
@@ -249,7 +249,7 @@ export default function AlumnoHomeScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando…" />
       </SafeAreaView>
     )
   }

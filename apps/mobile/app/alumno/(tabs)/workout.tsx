@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,6 +15,8 @@ import { getClientProfile } from '../../../lib/client'
 import { flushLogQueue, getPendingLogCount } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, EmptyState, ScreenHeader } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const TODAY_DOW = new Date().getDay()
@@ -180,7 +181,7 @@ export default function WorkoutScreen() {
       />
 
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando rutinas…" />
       ) : plans.length === 0 ? (
         <EmptyState
           icon={Dumbbell}

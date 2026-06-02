@@ -59,6 +59,10 @@ export async function fetchBrandingByInviteCode(inviteCode: string): Promise<Coa
   return fetchBrandingByCoachIdentifier(inviteCode)
 }
 
+export async function saveStoredBranding(branding: CoachBranding): Promise<void> {
+  await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(branding))
+}
+
 export async function loadStoredBranding(): Promise<CoachBranding | null> {
   const raw = await AsyncStorage.getItem(BRANDING_KEY)
   if (!raw) return null

@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  ActivityIndicator,
-  SafeAreaView,
   SectionList,
   StyleSheet,
   Text,
@@ -13,6 +11,8 @@ import { getWorkoutHistoryFull, buildDaySummaries } from '../../../lib/history.q
 import type { DaySummary } from '../../../lib/history.queries'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ScreenHeader } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function HistoryScreen() {
   const { theme } = useTheme()
@@ -40,7 +40,7 @@ export default function HistoryScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Historial" subtitle="Tus entrenamientos" />
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando historial…" />
       </SafeAreaView>
     )
   }

@@ -13,6 +13,7 @@ import { getCoachProfile } from '../../lib/coach'
 import { useTheme } from '../../context/ThemeContext'
 import { ExerciseSearchSheet } from '../../components/coach/ExerciseSearchSheet'
 import { BlockEditorSheet } from '../../components/coach/BlockEditorSheet'
+import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
 import type { BuilderBlock, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
@@ -231,7 +232,7 @@ export default function ProgramBuilderScreen() {
   }
 
   if (loading) {
-    return <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}><ActivityIndicator style={{ flex: 1 }} color={theme.primary} /></SafeAreaView>
+    return <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}><EvaLoaderScreen subtitle="Cargando programa…" /></SafeAreaView>
   }
 
   return (

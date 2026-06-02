@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Alert,
   AppState,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   Share,
   StyleSheet,
@@ -49,6 +47,8 @@ import {
   ScreenHeader,
   WorkoutContextBanner,
 } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { getDailyHabits } from '../../../lib/habits.queries'
 import type { HabitsData } from '../../../lib/habits.queries'
 import { readNutritionCache, writeNutritionCache } from '../../../lib/nutrition-offline-cache'
@@ -376,7 +376,7 @@ export default function AlumnoNutricionScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Nutrición" subtitle="Tu plan personalizado" />
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando nutrición…" />
       </SafeAreaView>
     )
   }

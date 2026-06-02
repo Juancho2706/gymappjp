@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +22,8 @@ import { getClientProfile } from '../../../lib/client'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, NativeDialog, OfflineBanner, ProgressBar, TopBar } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { RestTimer } from '../../../components/workout/RestTimer'
 import { WorkoutSummaryModal } from '../../../components/workout/WorkoutSummaryModal'
 
@@ -369,7 +369,7 @@ export default function WorkoutExecutionScreen() {
       <TopBar back title={planTitle || 'Workout'} onBack={() => router.back()} />
 
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando rutina…" />
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <View style={[styles.progressHeader, { borderBottomColor: theme.border }]}>

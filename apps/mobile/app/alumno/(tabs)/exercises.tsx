@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   Image,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +16,8 @@ import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { useTheme } from '../../../context/ThemeContext'
 import { BottomSheet, EmptyState, ScreenHeader } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 interface Exercise {
   id: string
@@ -128,7 +128,7 @@ export default function ExercisesScreen() {
       )}
 
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando ejercicios…" />
       ) : filtered.length === 0 ? (
         <EmptyState icon={BookOpen} title="Sin resultados" subtitle="Intenta con otra búsqueda o músculo." />
       ) : (

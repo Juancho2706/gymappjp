@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { CoachMainWrapper } from '../../../components/coach/CoachMainWrapper'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import {
   MobileActivityFeed,
   MobileBillingBanners,
@@ -53,11 +54,7 @@ export default function CoachHomeScreen() {
   }, [load])
 
   if (loading) {
-    return (
-      <View style={[styles.loading, { backgroundColor: theme.background }]}>
-        <ActivityIndicator color={theme.primary} />
-      </View>
-    )
+    return <EvaLoaderScreen subtitle="Cargando tu panel…" />
   }
 
   if (!data || error) {

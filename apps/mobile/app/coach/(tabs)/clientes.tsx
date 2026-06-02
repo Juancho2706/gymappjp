@@ -6,13 +6,13 @@ import {
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
   AlertTriangle,
@@ -31,6 +31,7 @@ import {
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import {
   buildStats,
   filterClients,
@@ -616,15 +617,15 @@ export default function ClientesScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Alumnos" subtitle="Cargando..." />
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando alumnos…" />
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Alumnos"
         subtitle={`${stats.active} activos · ${stats.total} total`}

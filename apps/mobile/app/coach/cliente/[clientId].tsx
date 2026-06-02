@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Activity, Archive, ArchiveRestore, Calendar, CreditCard, Dumbbell, MessageCircle, Pencil, Salad, User } from 'lucide-react-native'
+import { Activity, Archive, ArchiveRestore, CreditCard, Dumbbell, MessageCircle, Pencil, Salad, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, EmptyState, InfoRow, NativeDialog, Section, SegmentedTabs, Sparkline, TopBar } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { apiFetch } from '../../../lib/api'
 import {
   getCoachClientDetail,
@@ -82,7 +83,7 @@ export default function ClientDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando alumno…" />
       </SafeAreaView>
     )
   }
