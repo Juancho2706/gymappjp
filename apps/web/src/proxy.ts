@@ -469,7 +469,7 @@ export async function proxy(request: NextRequest) {
             if (client.org_id) {
                 const { data: orgBrand } = await supabase
                     .from('organizations')
-                    .select('name, primary_color, logo_url')
+                    .select('name, primary_color, logo_url, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, accent_light, accent_dark, logo_url_dark, neutral_tint')
                     .eq('id', client.org_id)
                     .maybeSingle()
 
@@ -477,6 +477,19 @@ export async function proxy(request: NextRequest) {
                     requestHeaders.set('x-coach-brand-name', orgBrand.name ?? coach.brand_name)
                     requestHeaders.set('x-coach-primary-color', orgBrand.primary_color || resolvedColor)
                     requestHeaders.set('x-coach-logo-url', orgBrand.logo_url?.trim() || coach.logo_url?.trim() || BRAND_APP_ICON)
+                    // Per-mode white-label theme inputs (brand-kit resolves on render).
+                    const ob = orgBrand as Record<string, unknown>
+                    requestHeaders.set('x-coach-accent-light', String(ob.accent_light ?? '').trim())
+                    requestHeaders.set('x-coach-accent-dark', String(ob.accent_dark ?? '').trim())
+                    requestHeaders.set('x-coach-logo-url-dark', String(ob.logo_url_dark ?? '').trim())
+                    requestHeaders.set('x-coach-neutral-tint', String(ob.neutral_tint ?? false))
+                    // Org is the source of truth for the loader (white-label consistency
+                    // across all its coaches). org icon mode 'logo'→show logo, 'text'→none.
+                    const orgRow = orgBrand as Record<string, unknown>
+                    requestHeaders.set('x-coach-loader-text', String(orgRow.loader_text ?? '').trim())
+                    requestHeaders.set('x-coach-use-custom-loader', String(orgRow.use_custom_loader ?? false))
+                    requestHeaders.set('x-coach-loader-text-color', String(orgRow.loader_text_color ?? '').trim())
+                    requestHeaders.set('x-coach-loader-icon-mode', orgRow.loader_icon_mode === 'text' ? 'none' : 'coach')
                     requestHeaders.set('x-workspace-brand-source', 'organization')
                 }
             }

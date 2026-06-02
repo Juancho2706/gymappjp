@@ -1958,9 +1958,12 @@ export type Database = {
       }
       organizations: {
         Row: {
+          accent_dark: string | null
+          accent_light: string | null
           billing_cycle: string | null
           billing_start_date: string | null
           brand_draft: Json | null
+          brand_history: Json
           brand_published_at: string | null
           brand_published_by: string | null
           client_limit: number
@@ -1971,8 +1974,13 @@ export type Database = {
           id: string
           last_health_score: number | null
           last_health_score_at: string | null
+          loader_icon_mode: string
+          loader_text: string | null
+          loader_text_color: string | null
           logo_url: string | null
+          logo_url_dark: string | null
           name: string
+          neutral_tint: boolean
           onboarding_step: number | null
           owner_user_id: string
           plan: string
@@ -1980,13 +1988,18 @@ export type Database = {
           purge_scheduled_at: string | null
           seats_included: number
           slug: string
+          splash_bg_color: string | null
           status: string
           trial_ends_at: string | null
+          use_custom_loader: boolean
         }
         Insert: {
+          accent_dark?: string | null
+          accent_light?: string | null
           billing_cycle?: string | null
           billing_start_date?: string | null
           brand_draft?: Json | null
+          brand_history?: Json
           brand_published_at?: string | null
           brand_published_by?: string | null
           client_limit?: number
@@ -1997,8 +2010,13 @@ export type Database = {
           id?: string
           last_health_score?: number | null
           last_health_score_at?: string | null
+          loader_icon_mode?: string
+          loader_text?: string | null
+          loader_text_color?: string | null
           logo_url?: string | null
+          logo_url_dark?: string | null
           name: string
+          neutral_tint?: boolean
           onboarding_step?: number | null
           owner_user_id: string
           plan?: string
@@ -2006,13 +2024,18 @@ export type Database = {
           purge_scheduled_at?: string | null
           seats_included?: number
           slug: string
+          splash_bg_color?: string | null
           status?: string
           trial_ends_at?: string | null
+          use_custom_loader?: boolean
         }
         Update: {
+          accent_dark?: string | null
+          accent_light?: string | null
           billing_cycle?: string | null
           billing_start_date?: string | null
           brand_draft?: Json | null
+          brand_history?: Json
           brand_published_at?: string | null
           brand_published_by?: string | null
           client_limit?: number
@@ -2023,8 +2046,13 @@ export type Database = {
           id?: string
           last_health_score?: number | null
           last_health_score_at?: string | null
+          loader_icon_mode?: string
+          loader_text?: string | null
+          loader_text_color?: string | null
           logo_url?: string | null
+          logo_url_dark?: string | null
           name?: string
+          neutral_tint?: boolean
           onboarding_step?: number | null
           owner_user_id?: string
           plan?: string
@@ -2032,8 +2060,10 @@ export type Database = {
           purge_scheduled_at?: string | null
           seats_included?: number
           slug?: string
+          splash_bg_color?: string | null
           status?: string
           trial_ends_at?: string | null
+          use_custom_loader?: boolean
         }
         Relationships: []
       }

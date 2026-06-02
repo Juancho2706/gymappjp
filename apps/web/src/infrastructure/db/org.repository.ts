@@ -8,6 +8,15 @@ export type BrandDraft = {
     name?: string
     primary_color?: string
     logo_url?: string | null
+    loader_text?: string | null
+    use_custom_loader?: boolean
+    loader_icon_mode?: string
+    loader_text_color?: string | null
+    splash_bg_color?: string | null
+    accent_light?: string | null
+    accent_dark?: string | null
+    logo_url_dark?: string | null
+    neutral_tint?: boolean
 }
 
 export type OrgWithMembership = {
@@ -28,6 +37,15 @@ export type OrgWithMembership = {
     brand_draft: BrandDraft | null
     brand_published_at: string | null
     default_coach_capacity: number
+    loader_text: string | null
+    use_custom_loader: boolean
+    loader_icon_mode: string
+    loader_text_color: string | null
+    splash_bg_color: string | null
+    accent_light: string | null
+    accent_dark: string | null
+    logo_url_dark: string | null
+    neutral_tint: boolean
     myRole: Exclude<OrgRole, 'coach'>
 }
 
@@ -111,7 +129,7 @@ export async function findOrgBySlug(
 ): Promise<OrgWithMembership | null> {
     const { data: org } = await db
         .from('organizations')
-        .select('id, slug, name, logo_url, primary_color, plan, status, seats_included, trial_ends_at, billing_cycle, currency, created_at, onboarding_step, last_health_score, brand_draft, brand_published_at, default_coach_capacity')
+        .select('id, slug, name, logo_url, primary_color, plan, status, seats_included, trial_ends_at, billing_cycle, currency, created_at, onboarding_step, last_health_score, brand_draft, brand_published_at, default_coach_capacity, loader_text, use_custom_loader, loader_icon_mode, loader_text_color, splash_bg_color, accent_light, accent_dark, logo_url_dark, neutral_tint')
         .eq('slug', slug)
         .is('deleted_at', null)
         .maybeSingle()
@@ -609,7 +627,7 @@ export async function getOrgStats(db: DB, orgId: string) {
     const [membersRes, clientsRes] = await Promise.all([
         db
             .from('organization_members')
-            .select('id, status', { count: 'exact' })
+            .select('id, status, coach_id', { count: 'exact' })
             .eq('org_id', orgId)
             .is('deleted_at', null),
         db
@@ -622,7 +640,8 @@ export async function getOrgStats(db: DB, orgId: string) {
     const clients = clientsRes.data ?? []
 
     return {
-        totalCoaches: members.filter(m => m.status === 'active').length,
+        // Seats = coach capacity. Non-coach staff (coach_id NULL) don't consume coach seats.
+        totalCoaches: members.filter(m => m.status === 'active' && m.coach_id != null).length,
         pendingInvites: members.filter(m => m.status === 'invited').length,
         totalClients: clients.length,
         activeClients: clients.filter(c => c.is_active).length,

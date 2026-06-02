@@ -64,6 +64,19 @@ export type WorkspaceBrand = {
     primaryColor: string
     logoUrl: string | null
     loaderText?: string | null
+    /** White-label loader/splash tokens — also consumed by the future RN app. */
+    useCustomLoader?: boolean
+    loaderIconMode?: 'logo' | 'text' | 'coach' | 'eva' | 'none'
+    loaderTextColor?: string | null
+    splashBgColor?: string | null
+    /**
+     * Brand-theme INPUTS (not resolved colors). Consumers (web + RN) feed these to
+     * `@eva/brand-kit` resolveBrandTheme() to get identical light+dark themes.
+     */
+    accentLight?: string | null
+    accentDark?: string | null
+    logoUrlDark?: string | null
+    neutralTint?: boolean
     source: 'organization' | 'coach' | 'eva_default'
 }
 

@@ -72,7 +72,8 @@ export default async function OrgReportsPage({ params, searchParams }: Props) {
     const assignedClients = activeClients.filter((client) => client.coach_id)
     const assignmentRate = percentage(assignedClients.length, activeClients.length)
     const activeRate = percentage(activeClients.length, clients.length)
-    const seatUsage = percentage(activeMembers.length, org.seats_included)
+    // Seats = coach capacity; non-coach staff don't consume seats.
+    const seatUsage = percentage(coachMembers.length, org.seats_included)
     const pendingInvoices = invoices.filter((invoice) => invoice.status === 'pending' || invoice.status === 'overdue')
     const riskScore = Math.max(0, 100 - (unassignedClients.length * 8) - (inactiveClients.length * 5) - (pendingInvoices.length * 6))
 

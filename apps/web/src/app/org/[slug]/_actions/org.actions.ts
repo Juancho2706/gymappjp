@@ -10,12 +10,15 @@ import { generateUniqueInviteCode } from '@/services/coach/coach.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { generateTempPassword, generateUniqueCoachSlug, getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 import { computeOrgHealthScore } from '@/infrastructure/db/org.repository'
+import { rolesWithOrgPermission } from '@/domain/org/permissions'
+import { isThemeReadable } from '@eva/brand-kit'
+import type { Json } from '@/lib/database.types'
 
 const ALLOWED_LOGO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_LOGO_BYTES = 2 * 1024 * 1024 // 2 MB
 
 export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
-    const context = await resolveOrgAdminContext(orgSlug)
+    const context = await resolveOrgAdminContext(orgSlug, rolesWithOrgPermission('org.brand.edit'))
     if ('error' in context) return { error: context.error }
 
     const file = formData.get('logo')
@@ -42,8 +45,12 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
     const admin = createServiceRoleClient()
     const { org, user } = context
 
+    // 'dark' = logo variant for dark backgrounds; 'light' (default) = main logo.
+    const variant = formData.get('variant') === 'dark' ? 'dark' : 'light'
+    const draftKey = variant === 'dark' ? 'logo_url_dark' : 'logo_url'
+
     const ext = file.type.split('/')[1].replace('jpeg', 'jpg')
-    const path = `orgs/${org.id}/logo.${ext}`
+    const path = `orgs/${org.id}/logo${variant === 'dark' ? '-dark' : ''}.${ext}`
 
     const { error: uploadError } = await admin.storage
         .from('org-assets')
@@ -52,9 +59,15 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
 
     const { data: { publicUrl } } = admin.storage.from('org-assets').getPublicUrl(path)
 
+    // Store logo in the draft (not live) so it only reaches coaches/students on publish.
+    const { data: cur } = await admin.from('organizations').select('brand_draft').eq('id', org.id).single()
+    const base = (cur?.brand_draft as Record<string, unknown> | null) ?? {}
+    const mergedDraft = draftKey === 'logo_url_dark'
+        ? { ...base, logo_url_dark: publicUrl }
+        : { ...base, logo_url: publicUrl }
     const { error: dbErr } = await admin
         .from('organizations')
-        .update({ logo_url: publicUrl })
+        .update({ brand_draft: mergedDraft })
         .eq('id', org.id)
     if (dbErr) return { error: dbErr.message }
 
@@ -64,7 +77,7 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
         action: 'brand.logo_uploaded',
         targetType: 'organization',
         targetId: org.id,
-        metadata: { path, content_type: file.type, size: file.size },
+        metadata: { path, content_type: file.type, size: file.size, variant },
     })
 
     revalidatePath(`/org/${orgSlug}`)
@@ -117,16 +130,21 @@ export async function updateOrgAction(orgSlug: string, formData: FormData) {
  */
 export async function saveBrandDraftAction(
     orgSlug: string,
-    draft: { name?: string; primary_color?: string; logo_url?: string | null }
+    draft: { name?: string; primary_color?: string; logo_url?: string | null; loader_text?: string | null; use_custom_loader?: boolean; loader_icon_mode?: string; loader_text_color?: string | null; splash_bg_color?: string | null; accent_light?: string | null; accent_dark?: string | null; logo_url_dark?: string | null; neutral_tint?: boolean }
 ) {
-    const context = await resolveOrgAdminContext(orgSlug)
+    const context = await resolveOrgAdminContext(orgSlug, rolesWithOrgPermission('org.brand.edit'))
     if ('error' in context) return { error: context.error }
     const admin = createServiceRoleClient()
     const { org } = context
 
+    // Merge into existing draft so a previously-uploaded logo isn't wiped by a
+    // later name/color save (logo upload writes logo_url into the same draft).
+    const { data: cur } = await admin.from('organizations').select('brand_draft').eq('id', org.id).single()
+    const merged = { ...((cur?.brand_draft as Record<string, unknown> | null) ?? {}), ...draft }
+
     const { error } = await admin
         .from('organizations')
-        .update({ brand_draft: draft })
+        .update({ brand_draft: merged })
         .eq('id', org.id)
     if (error) return { error: error.message }
 
@@ -138,7 +156,7 @@ export async function saveBrandDraftAction(
  * Discards unpublished draft without affecting live brand.
  */
 export async function discardBrandDraftAction(orgSlug: string) {
-    const context = await resolveOrgAdminContext(orgSlug)
+    const context = await resolveOrgAdminContext(orgSlug, rolesWithOrgPermission('org.brand.edit'))
     if ('error' in context) return { error: context.error }
     const admin = createServiceRoleClient()
     const { org } = context
@@ -149,39 +167,82 @@ export async function discardBrandDraftAction(orgSlug: string) {
 }
 
 export async function publishEnterpriseBrandAction(orgSlug: string) {
-    const context = await resolveOrgAdminContext(orgSlug)
+    const context = await resolveOrgAdminContext(orgSlug, rolesWithOrgPermission('org.brand.publish'))
     if ('error' in context) return { error: context.error }
 
     const admin = createServiceRoleClient()
     const { org, user } = context
 
-    // Apply draft if it exists, otherwise use current live values
-    const draft = (org as Record<string, unknown>).brand_draft as Record<string, unknown> | null
-    const primaryColor = (draft?.primary_color as string | null) ?? org.primary_color ?? '#10B981'
-    const logoUrl = draft ? (draft.logo_url as string | null | undefined) : org.logo_url
-    const orgName = (draft?.name as string | null) ?? org.name
+    // Fetch the full brand row (context.org only carries a subset of columns).
+    const { data: full, error: fullErr } = await admin
+        .from('organizations')
+        .select('id, name, primary_color, logo_url, brand_draft, loader_text, use_custom_loader, loader_icon_mode, loader_text_color, splash_bg_color, accent_light, accent_dark, logo_url_dark, neutral_tint, brand_history')
+        .eq('id', org.id)
+        .single()
+    if (fullErr || !full) return { error: fullErr?.message ?? 'Organización no encontrada' }
 
-    // Promote draft to live
-    if (draft) {
-        await admin.from('organizations').update({
-            name: orgName,
-            primary_color: primaryColor,
-            logo_url: logoUrl ?? org.logo_url,
-            brand_draft: null,
-            brand_published_at: new Date().toISOString(),
-            brand_published_by: user.id,
-        }).eq('id', org.id)
-    } else {
-        await admin.from('organizations').update({
-            brand_published_at: new Date().toISOString(),
-            brand_published_by: user.id,
-        }).eq('id', org.id)
+    // Effective values: draft overrides live, live falls back to defaults.
+    const draft = (full.brand_draft ?? null) as Record<string, unknown> | null
+    const pick = <T,>(key: string, live: T): T => (draft && key in draft ? (draft[key] as T) : live)
+    const eff = {
+        name: pick('name', full.name),
+        primaryColor: pick<string | null>('primary_color', full.primary_color) ?? '#10B981',
+        logoUrl: pick<string | null>('logo_url', full.logo_url),
+        useCustomLoader: pick<boolean | null>('use_custom_loader', full.use_custom_loader) ?? false,
+        loaderText: pick<string | null>('loader_text', full.loader_text),
+        loaderIconMode: pick<string | null>('loader_icon_mode', full.loader_icon_mode) ?? 'logo',
+        loaderTextColor: pick<string | null>('loader_text_color', full.loader_text_color),
+        splashBgColor: pick<string | null>('splash_bg_color', full.splash_bg_color),
+        accentLight: pick<string | null>('accent_light', full.accent_light),
+        accentDark: pick<string | null>('accent_dark', full.accent_dark),
+        logoUrlDark: pick<string | null>('logo_url_dark', full.logo_url_dark),
+        neutralTint: pick<boolean | null>('neutral_tint', full.neutral_tint) ?? false,
     }
 
-    const loaderText = orgName
+    // Readiness gate: never publish an unreadable theme (would make text invisible
+    // on coach/student apps). Same engine the UI uses → consistent verdict.
+    if (!isThemeReadable({ brandColor: eff.primaryColor, accentLight: eff.accentLight, accentDark: eff.accentDark, neutralTint: eff.neutralTint })) {
+        return { error: 'La combinación de marca no cumple el contraste mínimo (AA). Ajusta el color o el acento antes de publicar.' }
+    }
+
+    // History snapshot for rollback (keep last 3 published versions).
+    const prevHistory = Array.isArray(full.brand_history) ? (full.brand_history as Json[]) : []
+    const snapshot = {
+        name: eff.name, primary_color: eff.primaryColor, logo_url: eff.logoUrl ?? full.logo_url,
+        accent_light: eff.accentLight, accent_dark: eff.accentDark, logo_url_dark: eff.logoUrlDark,
+        neutral_tint: eff.neutralTint, loader_text: eff.loaderText, use_custom_loader: eff.useCustomLoader,
+        loader_icon_mode: eff.loaderIconMode, loader_text_color: eff.loaderTextColor, splash_bg_color: eff.splashBgColor,
+        published_at: new Date().toISOString(), published_by: user.id,
+    }
+    const brandHistory = [snapshot as unknown as Json, ...prevHistory].slice(0, 3)
+
+    // Promote effective values to live + clear draft + stamp publish metadata.
+    await admin.from('organizations').update({
+        name: eff.name,
+        primary_color: eff.primaryColor,
+        logo_url: eff.logoUrl ?? full.logo_url,
+        loader_text: eff.loaderText,
+        use_custom_loader: eff.useCustomLoader,
+        loader_icon_mode: eff.loaderIconMode,
+        loader_text_color: eff.loaderTextColor,
+        splash_bg_color: eff.splashBgColor,
+        accent_light: eff.accentLight,
+        accent_dark: eff.accentDark,
+        logo_url_dark: eff.logoUrlDark,
+        neutral_tint: eff.neutralTint,
+        brand_history: brandHistory,
+        brand_draft: null,
+        brand_published_at: new Date().toISOString(),
+        brand_published_by: user.id,
+    }).eq('id', org.id)
+
+    // Coach loader: org config drives it (not auto-derived). coaches.loader_text max 10.
+    const coachLoaderText = (eff.useCustomLoader && eff.loaderText ? eff.loaderText : eff.name)
         .replace(/[^a-zA-Z0-9]/g, '')
         .slice(0, 10)
         .toUpperCase() || 'APP'
+    // org icon mode 'logo' → coach shows the (org) logo; 'text' → no icon, text only.
+    const coachIconMode = eff.loaderIconMode === 'text' ? 'none' : 'coach'
 
     const { data: coachMembers, error: membersError } = await admin
         .from('organization_members')
@@ -200,14 +261,14 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
         const { error: coachesError } = await admin
             .from('coaches')
             .update({
-                brand_name: orgName,
-                primary_color: primaryColor,
-                logo_url: logoUrl ?? org.logo_url,
+                brand_name: eff.name,
+                primary_color: eff.primaryColor,
+                logo_url: eff.logoUrl ?? full.logo_url,
                 use_brand_colors_coach: true,
-                use_custom_loader: true,
-                loader_text: loaderText,
-                loader_text_color: primaryColor,
-                loader_icon_mode: 'coach',
+                use_custom_loader: eff.useCustomLoader,
+                loader_text: coachLoaderText,
+                loader_text_color: eff.loaderTextColor ?? eff.primaryColor,
+                loader_icon_mode: coachIconMode,
             })
             .in('id', coachIds)
 
@@ -220,7 +281,7 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
         action: 'brand.published',
         targetType: 'organization',
         targetId: org.id,
-        metadata: { coach_count: coachIds.length, primary_color: primaryColor, has_logo: Boolean(org.logo_url) },
+        metadata: { coach_count: coachIds.length, primary_color: eff.primaryColor, has_logo: Boolean(eff.logoUrl) },
     })
 
     revalidatePath(`/org/${orgSlug}`)
@@ -254,13 +315,18 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
     const admin = createServiceRoleClient()
     const { org, user } = context
 
-    const { count } = await admin
-        .from('organization_members')
-        .select('id', { count: 'exact', head: true })
-        .eq('org_id', org.id)
-        .eq('status', 'active')
-        .is('deleted_at', null)
-    if ((count ?? 0) >= org.seats_included) return { error: `Límite de ${org.seats_included} coaches alcanzado` }
+    // Seats = coach capacity. Only coach creation consumes a seat; non-coach staff
+    // (ops/analyst/brand_manager/org_admin) are not capped by coach seats.
+    if (parsed.data.role === 'coach') {
+        const { count } = await admin
+            .from('organization_members')
+            .select('id', { count: 'exact', head: true })
+            .eq('org_id', org.id)
+            .eq('status', 'active')
+            .is('deleted_at', null)
+            .not('coach_id', 'is', null)
+        if ((count ?? 0) >= org.seats_included) return { error: `Límite de ${org.seats_included} coaches alcanzado` }
+    }
 
     const email = sanitizePlatformEmail(parsed.data.email)
     const availability = await assertPlatformEmailAvailable(admin, email)
@@ -382,13 +448,15 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
     const admin = createServiceRoleClient()
     const { org, user, supabase } = context
 
-    // Check seat limit
+    // Check seat limit — seats = coach capacity. Non-coach staff (ops/analyst/
+    // brand_manager/org_admin, coach_id NULL) don't consume coach seats.
     const { count } = await supabase
         .from('organization_members')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', org.id)
         .eq('status', 'active')
         .is('deleted_at', null)
+        .not('coach_id', 'is', null)
     if ((count ?? 0) >= org.seats_included) return { error: `Límite de ${org.seats_included} coaches alcanzado` }
 
     // Find target coach by email via auth admin

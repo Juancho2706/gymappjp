@@ -87,7 +87,29 @@ test.describe('Multi-role enterprise access', () => {
         await orgLogin(page, 'staff-brand-a@eva-test.cl')
         await page.goto(`/org/${ORG_SLUG}/brand`)
         expect(page.url()).toContain('/brand')
-        await expect(page.locator('text=Brand Center').first()).toBeVisible({ timeout: 8000 })
+        await expect(page.locator('text=Personaliza tu marca').first()).toBeVisible({ timeout: 8000 })
+    })
+
+    test('brand_manager: can publish brand (publish enabled)', async ({ page }) => {
+        await orgLogin(page, 'staff-brand-a@eva-test.cl')
+        await page.goto(`/org/${ORG_SLUG}/brand`)
+        await expect(page.getByRole('button', { name: /Publicar a coaches/i })).toBeEnabled({ timeout: 8000 })
+    })
+
+    test('org_admin: can edit brand but NOT publish (publish disabled)', async ({ page }) => {
+        await orgLogin(page, 'org-owner-nocoach@eva-test.cl')
+        await page.goto(`/org/${ORG_SLUG}/brand`)
+        await expect(page.locator('text=Personaliza tu marca').first()).toBeVisible({ timeout: 8000 })
+        await expect(page.getByRole('button', { name: /Publicar a coaches/i })).toBeDisabled()
+    })
+
+    test('brand_manager: publish runs end-to-end (gate + propagation)', async ({ page }) => {
+        await orgLogin(page, 'staff-brand-a@eva-test.cl')
+        await page.goto(`/org/${ORG_SLUG}/brand`)
+        const publish = page.getByRole('button', { name: /Publicar a coaches/i })
+        await expect(publish).toBeEnabled({ timeout: 8000 })
+        await publish.click()
+        await expect(page.getByText(/Marca publicada en/i)).toBeVisible({ timeout: 12000 })
     })
 
     test('analyst: can access /reports', async ({ page }) => {

@@ -107,6 +107,17 @@ export function orgRoleCanAny(role: string | null | undefined, ...permissions: O
     return permissions.some(p => orgRoleCan(role, p))
 }
 
+/**
+ * Returns the org roles that hold a given permission. Use to gate server actions
+ * by permission instead of a hardcoded role list (single source of truth).
+ * e.g. rolesWithOrgPermission('org.brand.publish') → ['org_owner', 'brand_manager'].
+ */
+export function rolesWithOrgPermission(permission: OrgPermission): OrgRole[] {
+    return (Object.keys(ROLE_PERMISSIONS) as OrgRole[]).filter(role =>
+        (ROLE_PERMISSIONS[role] as readonly string[]).includes(permission)
+    )
+}
+
 export function isOrgRole(role: string | null | undefined): role is OrgRole {
     return role === 'org_owner' ||
         role === 'org_admin' ||

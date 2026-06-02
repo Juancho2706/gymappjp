@@ -37,7 +37,17 @@ export type WorkspaceOrgRow = {
     primary_color: string | null
 }
 
-export type WorkspaceBrandOrgRow = Pick<WorkspaceOrgRow, 'id' | 'name' | 'logo_url' | 'primary_color'>
+export type WorkspaceBrandOrgRow = Pick<WorkspaceOrgRow, 'id' | 'name' | 'logo_url' | 'primary_color'> & {
+    loader_text: string | null
+    use_custom_loader: boolean | null
+    loader_icon_mode: string | null
+    loader_text_color: string | null
+    splash_bg_color: string | null
+    accent_light: string | null
+    accent_dark: string | null
+    logo_url_dark: string | null
+    neutral_tint: boolean | null
+}
 
 export type WorkspaceBrandCoachRow = Pick<
     WorkspaceCoachRow,
@@ -116,7 +126,7 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
 export async function findWorkspaceOrgBrand(db: DB, orgId: string): Promise<WorkspaceBrandOrgRow | null> {
     const { data } = await db
         .from('organizations')
-        .select('id, name, logo_url, primary_color')
+        .select('id, name, logo_url, primary_color, loader_text, use_custom_loader, loader_icon_mode, loader_text_color, splash_bg_color, accent_light, accent_dark, logo_url_dark, neutral_tint')
         .eq('id', orgId)
         .maybeSingle()
 

@@ -17,11 +17,28 @@ import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
+import { resolveBrandTheme } from '@eva/brand-kit'
 
 interface Props {
     children: React.ReactNode
     params: Promise<{ coach_slug: string }>
 }
+
+// Apple PWA splash screens (device CSS px + pixel ratio → physical px for the image).
+// Generated white-label per coach/org via /api/splash/[slug]. Free (native next/og).
+const APPLE_SPLASH: { dw: number; dh: number; r: number }[] = [
+    { dw: 320, dh: 568, r: 2 }, // SE 1
+    { dw: 375, dh: 667, r: 2 }, // 8 / SE 2-3
+    { dw: 414, dh: 736, r: 3 }, // 8 Plus
+    { dw: 375, dh: 812, r: 3 }, // X / 11 Pro / 12 mini
+    { dw: 414, dh: 896, r: 2 }, // XR / 11
+    { dw: 414, dh: 896, r: 3 }, // XS Max / 11 Pro Max
+    { dw: 390, dh: 844, r: 3 }, // 12 / 13 / 14
+    { dw: 428, dh: 926, r: 3 }, // 12/13 Pro Max
+    { dw: 393, dh: 852, r: 3 }, // 14 Pro / 15
+    { dw: 430, dh: 932, r: 3 }, // 14/15 Pro Max
+    { dw: 768, dh: 1024, r: 2 }, // iPad
+]
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { coach_slug } = await params
@@ -121,8 +138,19 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
     const loaderIconMode = (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
 
-    // Generate full brand palette
-    const palette = generateBrandPalette(primaryColor)
+    // Per-mode white-label accent (org-driven). brand-kit resolves a readable
+    // light + dark accent from the brand color + optional per-mode overrides.
+    const accentLight = isFreeTier ? null : (headersList.get('x-coach-accent-light') || null)
+    const accentDark = isFreeTier ? null : (headersList.get('x-coach-accent-dark') || null)
+    const neutralTint = !isFreeTier && headersList.get('x-coach-neutral-tint') === 'true'
+    const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint })
+
+    // Generate full brand palette (derived shades) from the resolved light accent.
+    const palette = generateBrandPalette(brandTheme.light.accent)
+    const lightAccent = brandTheme.light.accent
+    const lightOnAccent = brandTheme.light.accentText
+    const darkAccent = brandTheme.dark.accent
+    const darkOnAccent = brandTheme.dark.accentText
 
     // Generate fallback favicon SVG (initial + color) if no logo
     const faviconUrl = logoUrl || generateFaviconSvg(brandName, primaryColor)
@@ -135,26 +163,41 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         <>
             <link rel="icon" href={faviconUrl} />
             <link rel="apple-touch-icon" href={faviconUrl} />
+            {APPLE_SPLASH.map(({ dw, dh, r }) => (
+                <link
+                    key={`${dw}x${dh}@${r}`}
+                    rel="apple-touch-startup-image"
+                    media={`screen and (device-width: ${dw}px) and (device-height: ${dh}px) and (-webkit-device-pixel-ratio: ${r}) and (orientation: portrait)`}
+                    href={`/api/splash/${coach_slug}?w=${dw * r}&h=${dh * r}`}
+                />
+            ))}
             <style dangerouslySetInnerHTML={{ __html: `
                 :root {
-                    --theme-primary: ${palette.primary};
+                    --theme-primary: ${lightAccent};
                     --theme-primary-rgb: ${palette.primaryRgb};
                     --theme-primary-dark: ${palette.primaryDark};
                     --theme-primary-light: ${palette.primaryLight};
                     --theme-primary-surface: ${palette.primarySurface};
                     --theme-primary-glow: ${palette.primaryGlow};
-                    --theme-primary-foreground: ${palette.primaryForeground};
-                    --primary: ${palette.primary};
-                    --primary-foreground: ${palette.primaryForeground};
+                    --theme-primary-foreground: ${lightOnAccent};
+                    --primary: ${lightAccent};
+                    --primary-foreground: ${lightOnAccent};
                     --coach-loader-text: '${(loaderText || '').replace(/'/g, "\\'")}';
                     --coach-use-custom-loader: ${useCustomLoader ? '1' : '0'};
                     --coach-loader-color: '${(loaderTextColor || '').replace(/'/g, "\\'")}';
                     --coach-loader-icon-mode: '${loaderIconMode}';
                 }
+                /* Dark-mode accent (next-themes .dark class) — org can set a brighter accent for dark. */
+                .dark {
+                    --theme-primary: ${darkAccent};
+                    --theme-primary-foreground: ${darkOnAccent};
+                    --primary: ${darkAccent};
+                    --primary-foreground: ${darkOnAccent};
+                }
             ` }} />
             <div
                 className="flex flex-col md:flex-row min-h-dvh antialiased bg-background text-foreground"
-                style={{ '--theme-primary': palette.primary, '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
+                style={{ '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
             >
