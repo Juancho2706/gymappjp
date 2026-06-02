@@ -18,6 +18,7 @@
       "bundleIdentifier": "cl.evaapp.eva",
       "buildNumber": "2",
       "supportsTablet": false,
+      "associatedDomains": ["applinks:eva-app.cl", "webcredentials:eva-app.cl"],
       "infoPlist": {
         "NSCameraUsageDescription": "Para enviar fotos de progreso a tu coach",
         "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
@@ -66,6 +67,21 @@
               "scheme": "https",
               "host": "eva-app.cl",
               "pathPrefix": "/invite/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "eva-app.cl",
+              "path": "/reset-password"
             }
           ],
           "category": [
