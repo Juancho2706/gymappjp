@@ -11,6 +11,10 @@
   },
   "dependencies": {
     "@sentry/nextjs": "^10.53.1",
+    "culori": "^4.0.2",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/culori": "^4.0.1"
   }
 }
