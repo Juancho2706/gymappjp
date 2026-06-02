@@ -44,3 +44,32 @@ export function resolveCurrentPeriodEnd(input: {
     const months = BILLING_CYCLE_CONFIG[cycle]?.months ?? 1
     return addMonths(now, months).toISOString()
 }
+
+export type TerminalEventDecision = 'expire' | 'ignore-free' | 'none'
+
+/**
+ * Decides how a subscription webhook event that may terminate a coach should be applied.
+ *
+ * - 'expire'      → block the coach (status='expired'); they must reactivate.
+ * - 'ignore-free' → a terminal event reached a free-tier coach who has no paid subscription
+ *                   to terminate; leave their subscription untouched. Guards the race where a
+ *                   coach abandons paid checkout then clicks "Activar plan gratuito":
+ *                   activate-free cancels the pending MP preapproval, MP emits a cancellation
+ *                   webhook, and without this guard the stale event re-locked the just-activated
+ *                   free coach as 'expired' (tier=free + status=expired).
+ * - 'none'        → not a terminal event; no blocking.
+ *
+ * A cancellation only terminates once the paid period has lapsed (periodExpiredOrNull).
+ */
+export function resolveTerminalEvent(input: {
+    statusForUpdate: string
+    periodExpiredOrNull: boolean
+    subscriptionTier: string | null | undefined
+}): TerminalEventDecision {
+    const isTerminal =
+        input.statusForUpdate === 'expired' ||
+        (input.statusForUpdate === 'canceled' && input.periodExpiredOrNull)
+    if (!isTerminal) return 'none'
+    if (input.subscriptionTier === 'free') return 'ignore-free'
+    return 'expire'
+}

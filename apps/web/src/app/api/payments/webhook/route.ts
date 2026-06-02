@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
-import { mapProviderStatus, resolveCurrentPeriodEnd } from '@/lib/payments/subscription-state'
+import { mapProviderStatus, resolveCurrentPeriodEnd, resolveTerminalEvent } from '@/lib/payments/subscription-state'
 import {
     getTierMaxClients,
     isBillingCycleAllowedForTier,
@@ -194,16 +194,29 @@ async function handleWebhook(request: Request, rawBody: string) {
     const periodExpiredOrNull =
         !coach.current_period_end ||
         new Date(coach.current_period_end).getTime() <= Date.now()
-    const isTerminatedEvent =
-        statusForUpdate === 'expired' ||
-        (statusForUpdate === 'canceled' && periodExpiredOrNull)
+    const terminalDecision = resolveTerminalEvent({
+        statusForUpdate,
+        periodExpiredOrNull,
+        subscriptionTier: coach.subscription_tier,
+    })
 
-    if (isTerminatedEvent) {
+    if (terminalDecision === 'expire') {
         coachUpdate.subscription_status = 'expired'
         // Intentionally NOT setting subscription_tier, billing_cycle, or max_clients —
         // the reactivate page uses the preserved tier to anchor the coach to their old plan.
         coachUpdate.current_period_end = null
         coachUpdate.subscription_mp_id = null
+    } else if (terminalDecision === 'ignore-free') {
+        // Free-tier coach has no paid subscription to terminate. A stale cancellation
+        // (e.g. activate-free cancelling an abandoned checkout) must not re-lock a
+        // just-activated free coach as 'expired'. Leave subscription fields untouched.
+        console.info('[payments.webhook] ignoring terminal event for free-tier coach', {
+            traceId,
+            coachId: coach.id,
+            providerStatus: result.providerStatus,
+        })
+        delete coachUpdate.subscription_status
+        delete coachUpdate.current_period_end
     }
 
     const { error: coachUpdateError } = await admin.from('coaches').update(coachUpdate).eq('id', coach.id)
