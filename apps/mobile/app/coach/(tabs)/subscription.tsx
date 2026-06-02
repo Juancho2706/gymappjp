@@ -31,7 +31,7 @@ export default function SubscriptionScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Suscripción" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando tu plan…" />
       </SafeAreaView>
@@ -40,7 +40,7 @@ export default function SubscriptionScreen() {
 
   if (!data) {
     return (
-      <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Suscripción" />
         <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No se pudo cargar tu plan.</Text>
       </SafeAreaView>
@@ -57,7 +57,7 @@ export default function SubscriptionScreen() {
   const renewDate = profile.subscriptionStatus === 'trialing' ? profile.trialEndsAt : profile.currentPeriodEnd
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader title="Suscripción" subtitle="Tu plan y uso" />
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>

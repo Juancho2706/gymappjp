@@ -13,11 +13,14 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Swipeable } from 'react-native-gesture-handler'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import {
   AlertTriangle,
   ChevronRight,
   Dumbbell,
+  EyeOff,
   Flame,
   LayoutGrid,
   RefreshCw,
@@ -142,13 +145,15 @@ function StatTile({
       onPress={onPress}
       activeOpacity={0.75}
     >
-      <View style={[statStyles.iconWrap, { backgroundColor: color + '1A' }]}>
-        <Icon size={16} color={color} />
+      <View style={statStyles.topRow}>
+        <View style={[statStyles.iconWrap, { backgroundColor: color + '1A' }]}>
+          <Icon size={13} color={color} />
+        </View>
+        <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          {sub}{value}
+        </Text>
       </View>
-      <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-        {sub}{value}
-      </Text>
-      <Text style={[statStyles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+      <Text style={[statStyles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -156,23 +161,24 @@ function StatTile({
 }
 const statStyles = StyleSheet.create({
   tile: {
-    // 3 per row (was flex:1 → 6 squished in one row).
+    // 3 per row, compact (icon + value inline → ~half the height).
     flexBasis: '31%',
     flexGrow: 1,
-    minWidth: 100,
-    padding: 12,
-    gap: 4,
+    minWidth: 96,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    gap: 3,
   },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
   },
-  value: { fontSize: 22, lineHeight: 26 },
-  label: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
+  value: { fontSize: 19, lineHeight: 22 },
+  label: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.6 },
 })
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
@@ -181,23 +187,37 @@ function AlertBanner({
   message,
   color,
   onPress,
+  onDismiss,
 }: {
   message: string
   color: string
   onPress: () => void
+  onDismiss: () => void
 }) {
   return (
-    <TouchableOpacity
-      style={[alertStyles.wrap, { backgroundColor: color + '18', borderColor: color + '44' }]}
-      onPress={onPress}
-      activeOpacity={0.8}
+    <Swipeable
+      renderRightActions={() => (
+        <View style={[alertStyles.dismiss, { backgroundColor: color + '22' }]}>
+          <EyeOff size={15} color={color} />
+          <Text style={[alertStyles.dismissText, { color }]}>Ocultar</Text>
+        </View>
+      )}
+      onSwipeableOpen={onDismiss}
+      overshootRight={false}
+      friction={1.6}
     >
-      <Text style={[alertStyles.text, { color, flex: 1 }]}>{message}</Text>
-      <View style={alertStyles.cta}>
-        <Text style={[alertStyles.ctaText, { color }]}>Ver</Text>
-        <ChevronRight size={14} color={color} />
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity
+        style={[alertStyles.wrap, { backgroundColor: color + '18', borderColor: color + '44' }]}
+        onPress={onPress}
+        activeOpacity={0.8}
+      >
+        <Text style={[alertStyles.text, { color, flex: 1 }]}>{message}</Text>
+        <View style={alertStyles.cta}>
+          <Text style={[alertStyles.ctaText, { color }]}>Ver</Text>
+          <ChevronRight size={14} color={color} />
+        </View>
+      </TouchableOpacity>
+    </Swipeable>
   )
 }
 const alertStyles = StyleSheet.create({
@@ -215,6 +235,8 @@ const alertStyles = StyleSheet.create({
   text: { fontSize: 13, fontWeight: '600' },
   cta: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   ctaText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dismiss: { width: 96, marginRight: 16, marginBottom: 8, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  dismissText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
 })
 
 // ─── Client Row ───────────────────────────────────────────────────────────────
@@ -580,8 +602,14 @@ export default function ClientesScreen() {
   const [showSortSheet, setShowSortSheet] = useState(false)
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    AsyncStorage.getItem('eva_alumnos_alerts_dismissed').then((raw) => {
+      if (raw) { try { setDismissed(JSON.parse(raw)) } catch {} }
+    })
+  }, [])
 
   async function load(silent = false) {
     if (!silent) setLoading(true)
@@ -603,6 +631,18 @@ export default function ClientesScreen() {
   const expiredBanner = stats.expiredProgramCount > 0
   const syncBanner = stats.pendingSyncCount > 0
 
+  // Swipe-to-dismiss alerts: hidden until the next day OR until the count changes.
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const isDismissed = (key: string, count: number) => {
+    const d = dismissed[key]
+    return !!d && d.date === todayIso && d.count === count
+  }
+  const dismissAlert = (key: string, count: number) => {
+    const next = { ...dismissed, [key]: { date: todayIso, count } }
+    setDismissed(next)
+    AsyncStorage.setItem('eva_alumnos_alerts_dismissed', JSON.stringify(next)).catch(() => {})
+  }
+
   const hasActiveFilters = riskFilter !== 'all' || statusFilter !== 'any'
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
 
@@ -617,7 +657,7 @@ export default function ClientesScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Alumnos" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando alumnos…" />
       </SafeAreaView>
@@ -625,7 +665,7 @@ export default function ClientesScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Alumnos"
         subtitle={`${stats.active} activos · ${stats.total} total`}
@@ -699,25 +739,28 @@ export default function ClientesScreen() {
             </View>
 
             {/* Alert banners */}
-            {urgentBanner && (
+            {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
               <AlertBanner
                 message={`🔴 ${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`}
                 color="#EF4444"
                 onPress={() => setRiskFilter('urgent')}
+                onDismiss={() => dismissAlert('urgent', stats.urgentCount)}
               />
             )}
-            {expiredBanner && (
+            {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
               <AlertBanner
                 message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`}
                 color="#F97316"
                 onPress={() => setRiskFilter('expired_program')}
+                onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)}
               />
             )}
-            {syncBanner && (
+            {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
               <AlertBanner
                 message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`}
                 color="#F59E0B"
                 onPress={() => setRiskFilter('password_reset')}
+                onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)}
               />
             )}
 

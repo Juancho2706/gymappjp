@@ -102,7 +102,7 @@ export default function BuilderScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Programas"
         subtitle={

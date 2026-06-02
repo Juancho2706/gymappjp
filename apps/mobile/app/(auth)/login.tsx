@@ -4,6 +4,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native'
@@ -64,10 +65,11 @@ export default function LoginScreen() {
     <View className="flex-1 bg-background">
       {/* Brand wash — subtle, dark-first (no saturated disc) */}
       <LinearGradient
-        colors={[theme.primary + '14', 'transparent']}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.9, y: 0.5 }}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 300 }}
+        colors={[theme.primary + '24', theme.primary + '0A', 'transparent']}
+        locations={[0, 0.4, 0.75]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -168,7 +170,6 @@ export default function LoginScreen() {
                   rightIcon={ArrowRight}
                   onPress={handleLogin}
                   loading={loading}
-                  disabled={!email || !password}
                   full
                   size="lg"
                   style={{ marginTop: 4 }}

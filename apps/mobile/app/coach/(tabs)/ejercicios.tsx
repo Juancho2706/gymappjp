@@ -77,7 +77,7 @@ export default function EjerciciosScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Ejercicios" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando biblioteca…" />
       </SafeAreaView>
@@ -85,7 +85,7 @@ export default function EjerciciosScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Ejercicios"
         subtitle={`${exercises.length} en biblioteca · ${customCount} propios`}

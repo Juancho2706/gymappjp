@@ -1,4 +1,4 @@
-import { View, type ViewProps, type ViewStyle } from 'react-native'
+import { View, StyleSheet, type ViewProps, type ViewStyle } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTheme } from '../context/ThemeContext'
@@ -13,40 +13,42 @@ interface GlassCardProps extends ViewProps {
 }
 
 /**
- * Liquid-glass-lite surface. Default 'solid' = gradient + subtle border + optional
- * glow (cheap, 60fps on mid Android). 'blur' = expo-blur frosted, reserve for key
- * surfaces (header/tab bar/hero) per the perf-first decision.
+ * Liquid-glass-lite surface. Border + radius + clip live on ONE view (so rounded
+ * corners never mismatch a square blur/gradient fill behind them), with the
+ * gradient/blur as an absolute fill underneath the content. 'solid' = brand-tinted
+ * gradient (cheap, 60fps); 'blur' = expo-blur frosted (reserve for key surfaces).
  */
-export function GlassCard({ children, variant = 'solid', intensity = 24, glow = false, className, style, ...rest }: GlassCardProps) {
+export function GlassCard({ children, variant = 'solid', intensity = 22, glow = false, className, style, ...rest }: GlassCardProps) {
   const { theme, mode } = useTheme()
   const isDark = mode !== 'light'
-  const radiusStyle: ViewStyle = { borderRadius: theme.radius['2xl'], overflow: 'hidden' }
-  const glowStyle = glow ? theme.shadowGlowBlue : null
+  const radius = theme.radius['2xl']
+
+  const base: ViewStyle = {
+    borderRadius: radius,
+    borderWidth: 1,
+    borderColor: theme.border,
+    overflow: 'hidden',
+  }
 
   if (variant === 'blur') {
     return (
-      <View style={[radiusStyle, glowStyle, style]} {...rest}>
-        <BlurView intensity={intensity} tint={isDark ? 'dark' : 'light'} style={{ flex: 1 }}>
-          <View className={className} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius['2xl'] }}>
-            {children}
-          </View>
-        </BlurView>
+      <View style={[base, glow ? theme.shadowGlowBlue : null, style]} {...rest}>
+        <BlurView intensity={intensity} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+        {/* legibility veil over the blur (glass best-practice: 10–40% tint) */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(20,22,28,0.35)' : 'rgba(255,255,255,0.35)' }]} />
+        <View className={className} style={{ flex: 1 }}>{children}</View>
       </View>
     )
   }
 
-  // 'solid': brand-tinted gradient surface (no blur cost).
   const gradient: [string, string] = isDark
-    ? ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.015)']
-    : ['rgba(255,255,255,0.9)', 'rgba(248,250,252,0.7)']
+    ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.015)']
+    : ['rgba(255,255,255,0.92)', 'rgba(248,250,252,0.75)']
 
   return (
-    <View style={[radiusStyle, glowStyle, style]} {...rest}>
-      <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ flex: 1 }}>
-        <View className={className} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius['2xl'] }}>
-          {children}
-        </View>
-      </LinearGradient>
+    <View style={[base, { backgroundColor: theme.card }, glow ? theme.shadowGlowBlue : null, style]} {...rest}>
+      <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View className={className} style={{ flex: 1 }}>{children}</View>
     </View>
   )
 }

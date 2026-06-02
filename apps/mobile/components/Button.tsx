@@ -42,7 +42,7 @@ export function Button({
   const containerStyle = getVariantContainer(variant, theme)
   const textColor = getVariantTextColor(variant, theme)
   const shadow = variant === 'primary' || variant === 'electric' ? theme.shadowGlowBlue : null
-  const dimAlpha = disabled || loading ? 0.5 : 1
+  const dimAlpha = disabled || loading ? 0.6 : 1
 
   return (
     <HapticPressable

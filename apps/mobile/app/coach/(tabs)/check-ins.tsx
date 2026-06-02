@@ -146,7 +146,7 @@ export default function CheckInsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Check-ins"
         subtitle={!loading ? `${checkIns.length} ${checkIns.length === 1 ? 'reciente' : 'recientes'}` : undefined}

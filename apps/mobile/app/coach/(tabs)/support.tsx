@@ -23,7 +23,7 @@ export default function SupportScreen() {
   const insets = useSafeAreaInsets()
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader title="Soporte" subtitle="Ayuda y contacto" />
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>

@@ -82,7 +82,7 @@ export default function CoachNutricionScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Nutricion"
         subtitle={selectedClient ? `Planes de ${selectedClient.full_name}` : 'Selecciona un alumno'}

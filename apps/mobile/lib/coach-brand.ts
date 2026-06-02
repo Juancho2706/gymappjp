@@ -17,6 +17,7 @@ export interface CoachBrandSettings {
   logoUrl: string | null
   loaderText: string | null
   loaderTextColor: string | null
+  loaderIconMode: string
   useCustomLoader: boolean
   welcomeMessage: string | null
 }
@@ -27,6 +28,7 @@ export interface CoachBrandEditable {
   useBrandColors: boolean
   loaderText: string | null
   loaderTextColor: string | null
+  loaderIconMode: string
   useCustomLoader: boolean
   welcomeMessage: string | null
 }
@@ -37,7 +39,7 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
 
   const { data } = await supabase
     .from('coaches')
-    .select('id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, use_custom_loader, welcome_message')
+    .select('id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, welcome_message')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -53,6 +55,7 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
     logoUrl: data.logo_url ?? null,
     loaderText: data.loader_text ?? null,
     loaderTextColor: data.loader_text_color ?? null,
+    loaderIconMode: (data.loader_icon_mode as string) ?? 'eva',
     useCustomLoader: Boolean(data.use_custom_loader),
     welcomeMessage: data.welcome_message ?? null,
   }
@@ -74,6 +77,7 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
       use_brand_colors_coach: input.useBrandColors,
       loader_text: input.loaderText?.trim() || null,
       loader_text_color: input.loaderTextColor?.trim() || null,
+      loader_icon_mode: input.loaderIconMode || 'eva',
       use_custom_loader: input.useCustomLoader,
       welcome_message: input.welcomeMessage?.trim() || null,
       updated_at: new Date().toISOString(),

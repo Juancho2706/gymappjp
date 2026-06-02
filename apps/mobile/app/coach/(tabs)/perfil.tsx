@@ -89,14 +89,14 @@ export default function CoachPerfilScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
           Perfil

@@ -37,8 +37,9 @@ import {
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import Svg, { Rect } from 'react-native-svg'
-import { CartesianChart, Area, Line, Bar } from 'victory-native'
-import { useFont } from '@shopify/react-native-skia'
+import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-native'
+import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
+import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
@@ -1966,10 +1967,30 @@ export function MobileDashboardCharts({ areaData, barData }: { areaData: MobileC
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const INTER_FONT = require('@expo-google-fonts/inter/Inter_400Regular.ttf')
 
+// Touch tooltip (Skia, UI-thread) — dot + value where the user presses the chart.
+function ChartTooltip({ xPos, yPos, value, color, font }: {
+  xPos: SharedValue<number>
+  yPos: SharedValue<number>
+  value: SharedValue<number>
+  color: string
+  font: ReturnType<typeof useFont>
+}) {
+  const label = useDerivedValue(() => `${Math.round(value.value)}`)
+  const tx = useDerivedValue(() => xPos.value + 8)
+  const ty = useDerivedValue(() => yPos.value - 10)
+  return (
+    <>
+      <Circle cx={xPos} cy={yPos} r={5} color={color} />
+      {font ? <SkiaText x={tx} y={ty} text={label} font={font} color={color} /> : null}
+    </>
+  )
+}
+
 function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
   const { theme } = useTheme()
   const glass = useGlassStyle()
   const font = useFont(INTER_FONT, 9)
+  const { state, isActive } = useChartPressState({ x: '', y: { sesiones: 0 } })
   const chartData = data.length > 0 ? data : [{ name: '-', sesiones: 0 }]
 
   return (
@@ -1997,6 +2018,7 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
             yKeys={['sesiones']}
             domainPadding={{ left: 10, right: 10, top: 20 }}
             axisOptions={{ font, tickCount: 4, labelColor: theme.mutedForeground }}
+            chartPressState={state}
           >
             {({ points, chartBounds }) => (
               <>
@@ -2013,6 +2035,9 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
                   strokeWidth={2.5}
                   animate={{ type: 'timing', duration: 400 }}
                 />
+                {isActive ? (
+                  <ChartTooltip xPos={state.x.position} yPos={state.y.sesiones.position} value={state.y.sesiones.value} color="#3B82F6" font={font} />
+                ) : null}
               </>
             )}
           </CartesianChart>
@@ -2026,6 +2051,7 @@ function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
   const { theme } = useTheme()
   const glass = useGlassStyle()
   const font = useFont(INTER_FONT, 9)
+  const { state, isActive } = useChartPressState({ x: '', y: { alumnos: 0 } })
   const chartData = data.length > 0 ? data : [{ name: '-', alumnos: 0 }]
 
   return (
@@ -2053,15 +2079,21 @@ function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
             yKeys={['alumnos']}
             domainPadding={{ left: 14, right: 14, top: 20 }}
             axisOptions={{ font, tickCount: 6, labelColor: theme.mutedForeground }}
+            chartPressState={state}
           >
             {({ points, chartBounds }) => (
-              <Bar
-                points={points.alumnos}
-                chartBounds={chartBounds}
-                color="#22D3EE"
-                roundedCorners={{ topLeft: 5, topRight: 5 }}
-                animate={{ type: 'timing', duration: 400 }}
-              />
+              <>
+                <Bar
+                  points={points.alumnos}
+                  chartBounds={chartBounds}
+                  color="#22D3EE"
+                  roundedCorners={{ topLeft: 5, topRight: 5 }}
+                  animate={{ type: 'timing', duration: 400 }}
+                />
+                {isActive ? (
+                  <ChartTooltip xPos={state.x.position} yPos={state.y.alumnos.position} value={state.y.alumnos.value} color="#22D3EE" font={font} />
+                ) : null}
+              </>
             )}
           </CartesianChart>
         )}
