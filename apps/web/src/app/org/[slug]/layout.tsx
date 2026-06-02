@@ -35,7 +35,7 @@ export default async function OrgAdminLayout({ children, params }: Props) {
     const workspaces = user ? await listUserWorkspaces(supabase, user.id) : []
 
     return (
-        <div className="flex min-h-dvh flex-col bg-zinc-950 text-zinc-100 md:flex-row">
+        <div className="flex min-h-dvh flex-col bg-zinc-950 text-zinc-100 md:h-dvh md:flex-row md:overflow-hidden">
             <OrgEnterpriseNav
                 slug={slug}
                 workspaces={workspaces}
@@ -49,9 +49,10 @@ export default async function OrgAdminLayout({ children, params }: Props) {
                 }}
             />
 
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
                 {(org.myRole === 'org_owner' || org.myRole === 'org_admin') && <MfaBanner orgSlug={slug} />}
-                <main className="flex-1 overflow-x-clip overflow-y-auto">
+                {/* Mobile: pad bottom so content clears the fixed tab bar. Desktop: scroll inside main. */}
+                <main className="flex-1 overflow-x-clip overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
                     {children}
                 </main>
             </div>

@@ -172,7 +172,7 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
 
     return (
         <>
-            <aside className="hidden w-72 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 md:flex">
+            <aside className="hidden w-72 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 md:flex md:h-dvh md:sticky md:top-0">
                 <div className="border-b border-zinc-800 p-4">
                     <Link
                         href={baseHref}
@@ -190,7 +190,7 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
                     </div>
                 </div>
 
-                <nav className="flex-1 overflow-y-auto p-3" aria-label="Enterprise navigation">
+                <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Enterprise navigation">
                     <div className="space-y-2">
                         {NAV_GROUPS.map((group) => {
                             const groupActive = activeGroup.id === group.id
@@ -349,8 +349,6 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
                     })()}
                 </div>
             </nav>
-            {/* Spacer so content doesn't hide behind bottom bar on mobile */}
-            <div className="h-16 md:hidden" aria-hidden="true" />
         </>
     )
 }
