@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { Calendar, Dumbbell, Plus } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useRouter } from 'expo-router'

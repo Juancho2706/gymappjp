@@ -1,50 +1,33 @@
-import { useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  FlatList,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
-import { Apple, BadgeCheck, UtensilsCrossed } from 'lucide-react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { Apple, BadgeCheck, CheckCircle2, Plus, Trash2, UtensilsCrossed } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, MacroPill, ScreenHeader } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { deletePlan, getClientPlans, setPlanActive, type PlanSummary } from '../../../lib/nutrition-builder'
 
 interface Client { id: string; full_name: string }
-interface NutritionPlan {
-  id: string
-  name: string
-  daily_calories: number | null
-  protein_g: number | null
-  carbs_g: number | null
-  fats_g: number | null
-  is_active: boolean
-  mealCount: number
-}
 
 export default function CoachNutricionScreen() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [plans, setPlans] = useState<NutritionPlan[]>([])
+  const [plans, setPlans] = useState<PlanSummary[]>([])
   const [loadingClients, setLoadingClients] = useState(true)
   const [loadingPlans, setLoadingPlans] = useState(false)
 
-  useEffect(() => {
-    loadClients()
-  }, [])
+  useEffect(() => { loadClients() }, [])
 
   async function loadClients() {
     setLoadingClients(true)
     const coach = await getCoachProfile()
     if (!coach) { setLoadingClients(false); return }
-
     const { data } = await supabase
       .from('clients')
       .select('id, full_name')
@@ -52,47 +35,66 @@ export default function CoachNutricionScreen() {
       .eq('is_archived', false)
       .eq('is_active', true)
       .order('full_name')
-
     setClients(data ?? [])
     setLoadingClients(false)
   }
 
-  async function selectClient(client: Client) {
+  const loadPlans = useCallback(async (clientId: string) => {
+    setLoadingPlans(true)
+    setPlans(await getClientPlans(clientId))
+    setLoadingPlans(false)
+  }, [])
+
+  function selectClient(client: Client) {
     setSelectedClient(client)
     setPlans([])
-    setLoadingPlans(true)
+    loadPlans(client.id)
+  }
 
-    const { data } = await supabase
-      .from('nutrition_plans')
-      .select('id, name, daily_calories, protein_g, carbs_g, fats_g, is_active, nutrition_meals ( id )')
-      .eq('client_id', client.id)
-      .order('is_active', { ascending: false })
-      .order('created_at', { ascending: false })
+  // Reload the selected client's plans when returning from the builder.
+  useFocusEffect(useCallback(() => {
+    if (selectedClient) loadPlans(selectedClient.id)
+  }, [selectedClient, loadPlans]))
 
-    setPlans(
-      (data ?? []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        daily_calories: p.daily_calories,
-        protein_g: p.protein_g,
-        carbs_g: p.carbs_g,
-        fats_g: p.fats_g,
-        is_active: p.is_active,
-        mealCount: p.nutrition_meals?.length ?? 0,
-      }))
-    )
-    setLoadingPlans(false)
+  function openBuilder(planId?: string) {
+    if (!selectedClient) return
+    const base = `/coach/nutrition-builder?clientId=${selectedClient.id}&clientName=${encodeURIComponent(selectedClient.full_name)}`
+    router.push(planId ? `${base}&planId=${planId}` : base)
+  }
+
+  async function activate(plan: PlanSummary) {
+    if (!selectedClient) return
+    const r = await setPlanActive(selectedClient.id, plan.id)
+    if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo activar.'); return }
+    loadPlans(selectedClient.id)
+  }
+
+  function confirmDelete(plan: PlanSummary) {
+    if (!selectedClient) return
+    Alert.alert('Eliminar plan', `¿Eliminar "${plan.name}"? No se puede deshacer.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        const r = await deletePlan(plan.id)
+        if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo eliminar.'); return }
+        loadPlans(selectedClient.id)
+      } },
+    ])
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Nutricion"
         subtitle={selectedClient ? `Planes de ${selectedClient.full_name}` : 'Selecciona un alumno'}
+        trailing={selectedClient ? (
+          <TouchableOpacity onPress={() => openBuilder()} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: theme.primary }]}>
+            <Plus size={20} color={theme.primaryForeground} />
+          </TouchableOpacity>
+        ) : undefined}
       />
 
       {loadingClients ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <EvaLoaderScreen subtitle="Cargando alumnos…" />
       ) : (
         <View style={{ flex: 1 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
@@ -101,27 +103,11 @@ export default function CoachNutricionScreen() {
               return (
                 <TouchableOpacity
                   key={c.id}
-                  style={[
-                    styles.clientChip,
-                    {
-                      borderColor: active ? theme.primary : theme.border,
-                      backgroundColor: active ? theme.primary : theme.secondary,
-                      borderRadius: theme.radius.lg,
-                    },
-                  ]}
+                  style={[styles.clientChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary : theme.secondary, borderRadius: theme.radius.lg }]}
                   onPress={() => selectClient(c)}
                   activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      {
-                        color: active ? theme.primaryForeground : theme.foreground,
-                        fontFamily: 'Montserrat_700Bold',
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
+                  <Text style={[styles.chipText, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
                     {c.full_name}
                   </Text>
                 </TouchableOpacity>
@@ -130,56 +116,30 @@ export default function CoachNutricionScreen() {
           </ScrollView>
 
           {!selectedClient ? (
-            <EmptyState
-              icon={UtensilsCrossed}
-              title="Elige un alumno"
-              subtitle="Toca un nombre arriba para ver sus planes de nutricion."
-            />
+            <EmptyState icon={UtensilsCrossed} title="Elige un alumno" subtitle="Toca un nombre arriba para ver y crear sus planes de nutricion." />
           ) : loadingPlans ? (
-            <ActivityIndicator style={{ marginTop: 32 }} color={theme.primary} />
+            <EvaLoaderScreen subtitle="Cargando planes…" />
           ) : plans.length === 0 ? (
-            <EmptyState
-              icon={Apple}
-              title="Sin planes de nutricion"
-              subtitle="Crea planes desde la app web en eva-app.cl."
-            />
+            <View style={{ flex: 1 }}>
+              <EmptyState icon={Apple} title="Sin planes de nutricion" subtitle="Toca + para crear el primer plan de este alumno." />
+            </View>
           ) : (
             <FlatList
               data={plans}
               keyExtractor={(p) => p.id}
               renderItem={({ item, index }) => (
-                <MotiView
-                  from={{ opacity: 0, translateY: 12 }}
-                  animate={{ opacity: 1, translateY: 0 }}
-                  transition={{ type: 'timing', duration: 350, delay: Math.min(index * 50, 400) }}
-                >
-                  <View
-                    style={[
-                      styles.planCard,
-                      {
-                        backgroundColor: theme.card,
-                        borderColor: item.is_active ? theme.success : theme.border,
-                        borderWidth: item.is_active ? 2 : 1,
-                        borderRadius: theme.radius.xl,
-                      },
-                    ]}
-                  >
+                <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 320, delay: Math.min(index * 50, 400) }}>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => openBuilder(item.id)}
+                    style={[styles.planCard, { backgroundColor: theme.card, borderColor: item.is_active ? theme.success : theme.border, borderWidth: item.is_active ? 2 : 1, borderRadius: theme.radius.xl }]}>
                     <View style={styles.planTop}>
                       <View style={styles.titleRow}>
                         <Apple size={18} color={theme.primary} strokeWidth={1.75} />
-                        <Text
-                          style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]}
-                          numberOfLines={2}
-                        >
-                          {item.name}
-                        </Text>
+                        <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]} numberOfLines={2}>{item.name}</Text>
                       </View>
                       {item.is_active ? (
                         <View style={[styles.activeBadge, { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm }]}>
                           <BadgeCheck size={12} color={theme.success} />
-                          <Text style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
-                            Activo
-                          </Text>
+                          <Text style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>Activo</Text>
                         </View>
                       ) : null}
                     </View>
@@ -194,7 +154,19 @@ export default function CoachNutricionScreen() {
                         {item.fats_g != null && <MacroPill label="G" value={item.fats_g} color="#8B5CF6" />}
                       </View>
                     ) : null}
-                  </View>
+                    <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
+                      {!item.is_active ? (
+                        <TouchableOpacity onPress={() => activate(item)} activeOpacity={0.8} style={styles.actionBtn}>
+                          <CheckCircle2 size={15} color={theme.success} />
+                          <Text style={[styles.actionText, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Activar</Text>
+                        </TouchableOpacity>
+                      ) : <View style={styles.actionBtn} />}
+                      <TouchableOpacity onPress={() => confirmDelete(item)} activeOpacity={0.8} style={styles.actionBtn}>
+                        <Trash2 size={15} color={theme.destructive} />
+                        <Text style={[styles.actionText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
                 </MotiView>
               )}
               contentContainerStyle={styles.planList}
@@ -209,26 +181,20 @@ export default function CoachNutricionScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   pickerRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  clientChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderWidth: 1,
-    maxWidth: 180,
-  },
+  clientChip: { paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, maxWidth: 180 },
   chipText: { fontSize: 13, letterSpacing: 0.3 },
-  planList: { paddingHorizontal: 16, paddingBottom: 32, gap: 10 },
+  planList: { paddingHorizontal: 16, paddingBottom: 110, gap: 10 },
   planCard: { padding: 16, gap: 8 },
-  planTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
+  planTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
   planName: { fontSize: 16, letterSpacing: -0.2, flex: 1 },
   activeBadge: { paddingHorizontal: 8, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 4 },
   activeBadgeText: { fontSize: 11, letterSpacing: 0.3 },
   planSub: { fontSize: 13 },
   macrosRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
+  actionRow: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, marginTop: 6, paddingTop: 10, gap: 10 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  actionText: { fontSize: 13 },
 })

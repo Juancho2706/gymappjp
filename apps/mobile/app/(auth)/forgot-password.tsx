@@ -2,11 +2,11 @@ import { useState } from 'react'
 import {
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ArrowRight, KeyRound, Mail } from 'lucide-react-native'
 import { MotiView } from 'moti'
