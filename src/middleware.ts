@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
 
     // Edge Config kill switch — disable free tier registration without a deploy.
     // Set free_tier_kill_switch=true in Vercel Edge Config to block /register and /pricing.
-    if (pathname === '/register' || pathname === '/registro-beta') {
+    if (pathname === '/register') {
         const edgeConfigId = process.env.EDGE_CONFIG
         if (edgeConfigId) {
             try {
@@ -52,14 +52,13 @@ export async function middleware(request: NextRequest) {
             pathname === '/register' ||
             pathname === '/forgot-password' ||
             pathname === '/reset-password' ||
-            pathname === '/registro-beta' ||
             /^\/c\/[^/]+\/login$/.test(pathname)
         if (authPost) {
             const rl = await rateLimitAuth(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
         }
         // Tighter per-IP limit for account creation (5/hour) — prevents free-tier abuse
-        if (pathname === '/register' || pathname === '/registro-beta') {
+        if (pathname === '/register') {
             const rl = await rateLimitSignup(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
         }
@@ -366,7 +365,7 @@ export async function middleware(request: NextRequest) {
     // 4. Redirect logged-in coaches away from auth pages
     // EXCEPT for /reset-password which needs the session
     // ============================================================
-    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password') || pathname.startsWith('/registro-beta')
+    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
     if (isAuthPage && user) {
         const { data: coachData } = await supabase
             .from('coaches')
