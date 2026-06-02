@@ -23,7 +23,7 @@ test.describe('navigation perf smoke', () => {
         await page.goto('/login')
         await expect(page.getByRole('heading', { name: 'Bienvenido de vuelta' })).toBeVisible({ timeout: 60_000 })
         await page.getByLabel('Email').fill(email!)
-        await page.getByLabel('Contraseña').fill(password!)
+        await page.getByLabel('Contraseña', { exact: true }).fill(password!)
         await page.getByRole('button', { name: /ingresar al panel/i }).click()
 
         // Standalone coaches land on /coach/dashboard; enterprise coaches on /org/[slug]

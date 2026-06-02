@@ -38,8 +38,8 @@ export default async function NewNutritionTemplatePage({ searchParams }: Props) 
           carbs_g: tpl.carbs_g ?? 0,
           fats_g: tpl.fats_g ?? 0,
           instructions: tpl.instructions ?? '',
-          meals: tpl.meal_names.map(m => ({
-            id: `meal-${m.order_index}-${Date.now()}`,
+          meals: tpl.meal_names.map((m, idx) => ({
+            id: `meal-${m.order_index}-${idx}`,
             name: m.name,
             notes: m.description ?? null,
             foodItems: [],

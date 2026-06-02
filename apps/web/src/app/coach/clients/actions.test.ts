@@ -14,6 +14,11 @@ vi.mock('@/lib/supabase/admin-raw', () => ({
   createRawAdminClient: createRawAdminClientMock,
 }))
 
+// Bypass workspace resolution — coach standalone scope (orgId null).
+vi.mock('@/services/auth/workspace.service', () => ({
+  resolvePreferredWorkspace: vi.fn().mockResolvedValue({ type: 'coach_standalone', userId: 'coach-1', coachId: 'coach-1' }),
+}))
+
 vi.mock('next/cache', () => ({
   revalidatePath: revalidatePathMock,
 }))
@@ -46,11 +51,9 @@ describe('createClientAction', () => {
     }
     const clientsCountQuery = {
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ count: 1, error: null }),
     }
-    clientsCountQuery.eq
-      .mockReturnValueOnce(clientsCountQuery)
-      .mockResolvedValueOnce({ count: 1, error: null })
 
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },
@@ -81,11 +84,9 @@ describe('createClientAction', () => {
     }
     const clientsCountQuery = {
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ count: 2, error: null }),
     }
-    clientsCountQuery.eq
-      .mockReturnValueOnce(clientsCountQuery)
-      .mockResolvedValueOnce({ count: 2, error: null })
 
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },

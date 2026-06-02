@@ -8,6 +8,11 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: createClientMock,
 }))
 
+// Bypass workspace resolution (queries workspace_preferences/coaches/etc) — coach standalone scope.
+vi.mock('@/services/auth/workspace.service', () => ({
+  resolvePreferredWorkspace: vi.fn().mockResolvedValue({ type: 'coach_standalone', userId: 'coach-1', coachId: 'coach-1' }),
+}))
+
 vi.mock('@/lib/date-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/date-utils')>()
   return {
@@ -31,6 +36,15 @@ describe('getWeeklyCompliance', () => {
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },
       from: vi.fn((table: string) => {
+        if (table === 'clients') {
+          // assertCoachClientReadAccess: .select('id').eq().eq().is().maybeSingle()
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            is: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'client-1' }, error: null }),
+          }
+        }
         if (table === 'workout_sessions') {
           return {
             select: vi.fn().mockReturnThis(),

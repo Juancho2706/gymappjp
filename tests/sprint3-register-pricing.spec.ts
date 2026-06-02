@@ -32,5 +32,5 @@ test('register multi-step keeps selected plan from query', async ({ page }) => {
   await page.getByRole('button', { name: 'Continuar' }).click()
 
   await expect(page.getByText('Resumen antes de pagar')).toBeVisible()
-  await expect(page.getByText('Plan:')).toBeVisible()
+  await expect(page.getByText('Plan', { exact: true }).first()).toBeVisible()
 })

@@ -43,9 +43,9 @@ test.describe('Org dashboard', () => {
     await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}`)
-    await expect(page.locator('h1', { hasText: 'Dashboard' })).toBeVisible()
-    // Seat usage section visible
-    await expect(page.locator('text=Uso de seats')).toBeVisible()
+    await expect(page.locator('text=Command center').first()).toBeVisible()
+    // Seat usage stat visible
+    await expect(page.locator('text=Coaches activos').first()).toBeVisible()
   })
 
   test('coach sin org no puede acceder a /org/[slug]', async ({ page }) => {
@@ -99,7 +99,7 @@ test.describe('Org coaches management', () => {
     // Org A has 4 active members in seed
     await expect(page.locator('h1')).toBeVisible()
     // At least one coach listed (page uses div rows, not tr)
-    await expect(page.locator('text=Activos')).toBeVisible()
+    await expect(page.locator('text=Activos').first()).toBeVisible()
   })
 
   test('org_coach (no admin) no puede remover coaches', async ({ page }) => {
@@ -129,8 +129,8 @@ test.describe('Org settings', () => {
     await page.waitForURL(POST_LOGIN_URL, { timeout: 10_000 })
 
     await page.goto(`/org/${ORG_A_SLUG}/settings`)
-    await expect(page.locator('h1', { hasText: 'Configuración' })).toBeVisible()
-    await expect(page.locator('text=Branding')).toBeVisible()
+    await expect(page.locator('h1', { hasText: 'Admin center enterprise' })).toBeVisible()
+    await expect(page.locator('text=Datos del negocio').last()).toBeVisible()
   })
 
   test('logo rechaza archivo PDF (tipo MIME inválido)', async ({ page }) => {
@@ -190,7 +190,7 @@ test.describe('Seat limit upsell', () => {
 
     await page.goto(`/org/${ORG_A_SLUG}`)
     // This suite may have linked an extra coach earlier; seat usage should still render.
-    await expect(page.locator('text=Uso de seats')).toBeVisible()
+    await expect(page.locator('text=Coaches activos').first()).toBeVisible()
   })
 })
 

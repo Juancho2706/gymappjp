@@ -20,6 +20,11 @@ vi.mock('@/lib/supabase/admin-raw', () => ({
   createRawAdminClient: createRawAdminClientMock,
 }))
 
+vi.mock('@/lib/auth/send-coach-email-confirmation', () => ({
+  sendCoachSignupConfirmationEmail: vi.fn().mockResolvedValue({ ok: true }),
+  resendCoachSignupConfirmationEmail: vi.fn().mockResolvedValue({ ok: true }),
+}))
+
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }))
@@ -327,9 +332,10 @@ describe('registerAction', () => {
     expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
       id: 'u-free',
       subscription_tier: 'free',
-      subscription_status: 'pending_email',
+      subscription_status: 'active',
       payment_provider: 'admin',
       max_clients: 3,
+      trial_used_email: 'coach@example.com',
     }))
     expect(createClientMock).not.toHaveBeenCalled()
     expect(redirectMock).toHaveBeenCalledWith('/verify-email?email=coach%40example.com')

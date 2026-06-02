@@ -378,7 +378,7 @@ export default async function OrgNutritionPage({ params }: Props) {
                             </Link>
                         </div>
                         <p className="text-xs text-zinc-500 mb-4">
-                            Templates org con macros objetivo. Los coaches los abren en su panel para agregar comidas. Usa "Asignar a alumnos" para propagar macros base a todos los alumnos asignados.
+                            Templates org con macros objetivo. Los coaches los abren en su panel para agregar comidas. Usa «Asignar a alumnos» para propagar macros base a todos los alumnos asignados.
                         </p>
                         <div className="space-y-2">
                             {orgPlanTemplates.map(t => (

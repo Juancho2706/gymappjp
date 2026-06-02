@@ -59,6 +59,8 @@ export default async function OrgSettingsPage({ params }: Props) {
     const seatUsage = Math.round((usedSeats / Math.max(1, org.seats_included)) * 100)
     const latestInvoice = invoices[0] ?? null
     const hasBillingRisk = latestInvoice?.status === 'overdue' || latestInvoice?.status === 'pending'
+    // Server component renders once per request; Date.now() is deterministic here.
+    // eslint-disable-next-line react-hooks/purity
     const trialEndsSoon = org.trial_ends_at ? new Date(org.trial_ends_at).getTime() - Date.now() < 1000 * 60 * 60 * 24 * 14 : false
 
     const guardrails = [

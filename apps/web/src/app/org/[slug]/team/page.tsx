@@ -224,7 +224,7 @@ export default async function OrgTeamPage({ params }: Props) {
                             ) : (
                                 <div className="p-6 text-sm text-zinc-500">
                                     No hay staff enterprise adicional.{' '}
-                                    <span className="text-zinc-400">Usá "Crear usuario" para agregar admins, analistas o managers de marca.</span>
+                                    <span className="text-zinc-400">Usá «Crear usuario» para agregar admins, analistas o managers de marca.</span>
                                 </div>
                             )}
                         </div>

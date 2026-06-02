@@ -60,7 +60,7 @@ test.describe('Invite coach via org panel', () => {
     await expect(page.locator('h1')).toBeVisible()
 
     // Invite form: coach-invited already exists as a coach in seed
-    await page.locator('summary', { hasText: 'Vincular coach existente' }).click()
+    await page.locator('summary', { hasText: 'Abrir formulario' }).click()
     const emailInput = page.getByPlaceholder('coach existente@email.com')
     await emailInput.fill('coach-invited@eva-test.cl')
     const submitBtn = page.locator('details').getByRole('button', { name: /vincular|invitar/i })

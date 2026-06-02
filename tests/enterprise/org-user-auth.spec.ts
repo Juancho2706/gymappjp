@@ -22,7 +22,7 @@ test.describe('Org-only user auth', () => {
     await page.click('button[type="submit"]')
 
     await page.waitForURL(`/org/${ORG_A_SLUG}`, { timeout: 10_000 })
-    await expect(page.locator('h1', { hasText: 'Dashboard' })).toBeVisible()
+    await expect(page.locator('text=Command center').first()).toBeVisible()
   })
 
   test('org-only user has org access but no coach row', async () => {
