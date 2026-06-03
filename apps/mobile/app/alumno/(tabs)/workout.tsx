@@ -39,7 +39,7 @@ export default function WorkoutScreen() {
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function load() {

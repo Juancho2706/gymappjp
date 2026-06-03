@@ -155,6 +155,13 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - Pendiente del feedback: **flujo de asignar plantillas** (UX, falta detalle de qué confunde) + fine-tune visual cards (falta screenshot).
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
 
+## Claude update - 2026-06-03 - hardening loaders (anti-cuelgue)
+- Mismo patrón del bug de loading infinito existía en ~11 pantallas (loader full-screen sin try/finally → si una query rechaza, nunca apaga `loading`). Endurecidos:
+  - try/finally: `coach/foods`, `coach/(tabs)/ejercicios`, `cliente/[clientId]`.
+  - `.catch(() => setLoading(false))` en call site: alumno home/history/exercises/workout/nutricion/perfil + coach check-ins/builder/perfil.
+- Regla para nuevos loaders: SIEMPRE `setLoading(false)` en `finally` o `load().catch(...)`.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
 ## Codex update - 2026-06-02 - APK visual/nutrition fixes
 - Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
 - Input de cantidad en comidas ajustado para Android: altura/lineHeight/padding centrados para evitar que numeros como `50` se corten arriba.

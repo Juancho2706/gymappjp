@@ -38,7 +38,7 @@ export default function ExercisesScreen() {
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
   const [selected, setSelected] = useState<Exercise | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

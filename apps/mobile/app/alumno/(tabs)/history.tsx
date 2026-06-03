@@ -20,7 +20,7 @@ export default function HistoryScreen() {
   const [loading, setLoading] = useState(true)
   const [sections, setSections] = useState<{ title: string; subtitle: string; data: string[] }[]>([])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

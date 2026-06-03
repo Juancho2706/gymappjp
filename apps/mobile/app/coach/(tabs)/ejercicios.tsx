@@ -36,11 +36,14 @@ export default function EjerciciosScreen() {
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'initial') setLoading(true)
     else setRefreshing(true)
-    const [{ exercises: rows }, profile] = await Promise.all([listCoachExercises(), getCoachProfile()])
-    setExercises(rows)
-    setCanCreate(canCreateCustomExercises(profile?.subscriptionTier))
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const [{ exercises: rows }, profile] = await Promise.all([listCoachExercises(), getCoachProfile()])
+      setExercises(rows)
+      setCanCreate(canCreateCustomExercises(profile?.subscriptionTier))
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])

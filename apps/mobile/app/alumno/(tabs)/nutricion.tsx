@@ -175,7 +175,7 @@ export default function AlumnoNutricionScreen() {
   }, [isOnline, clientId, plan])
 
   useEffect(() => {
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function load() {

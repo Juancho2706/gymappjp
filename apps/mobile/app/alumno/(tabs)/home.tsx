@@ -107,7 +107,7 @@ export default function AlumnoHomeScreen() {
   useEffect(() => {
     // Gate: alumno sin intake → onboarding antes del dashboard.
     getOnboardingStatus().then((done) => { if (!done) router.replace('/alumno/onboarding') })
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function load() {

@@ -132,7 +132,7 @@ export default function BuilderScreen() {
   const [actionBusy, setActionBusy] = useState<string | null>(null)
 
   useEffect(() => {
-    loadLibrary()
+    loadLibrary().catch(() => setLoading(false))
   }, [])
 
   async function loadLibrary() {

@@ -37,7 +37,7 @@ export default function AlumnoPerfilScreen() {
   const [changingPassword, setChangingPassword] = useState(false)
 
   useEffect(() => {
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function load() {

@@ -30,8 +30,11 @@ export default function CoachFoodsScreen() {
 
   async function load() {
     setLoading(true)
-    setFoods(await listCoachFoods())
-    setLoading(false)
+    try {
+      setFoods(await listCoachFoods())
+    } finally {
+      setLoading(false)
+    }
   }
   useEffect(() => { load() }, [])
 

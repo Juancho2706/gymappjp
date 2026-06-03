@@ -48,7 +48,7 @@ export default function CoachPerfilScreen() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function load() {
