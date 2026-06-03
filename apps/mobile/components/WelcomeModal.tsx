@@ -23,6 +23,16 @@ interface Props {
 
 const STORAGE_KEY_PREFIX = 'eva_welcome_modal_v'
 
+/** Normaliza links de YouTube/Vimeo a su URL embebible para el WebView. */
+function toEmbedUrl(raw: string): string {
+  const url = (raw ?? '').trim()
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([\w-]{11})/)
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?playsinline=1`
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/)
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`
+  return url
+}
+
 export function WelcomeModal({ brandName, enabled, content, type, version }: Props) {
   const { theme } = useTheme()
   const [visible, setVisible] = useState(false)
@@ -90,7 +100,7 @@ export function WelcomeModal({ brandName, enabled, content, type, version }: Pro
           {type === 'video' ? (
             <View style={styles.videoWrap}>
               <WebView
-                source={{ uri: content }}
+                source={{ uri: toEmbedUrl(content) }}
                 style={styles.video}
                 allowsInlineMediaPlayback
                 mediaPlaybackRequiresUserAction={false}

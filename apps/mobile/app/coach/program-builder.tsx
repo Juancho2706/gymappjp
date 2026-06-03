@@ -51,7 +51,9 @@ function mapDbBlock(b: any): BuilderBlock {
 }
 
 export default function ProgramBuilderScreen() {
-  const { clientId, clientName } = useLocalSearchParams<{ clientId: string; clientName?: string }>()
+  const { clientId, clientName, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; templateId?: string; mode?: string }>()
+  // Template mode = build/edit a reusable program with client_id null (no client).
+  const isTemplate = mode === 'template' || !!templateId
   const { theme } = useTheme()
   const router = useRouter()
   const searchRef = useRef<BottomSheetModal>(null)
@@ -98,12 +100,14 @@ export default function ProgramBuilderScreen() {
 
   useEffect(() => {
     (async () => {
-      const { data: prog } = await supabase
-        .from('workout_programs')
-        .select('id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )')
-        .eq('client_id', clientId)
-        .eq('is_active', true)
-        .maybeSingle()
+      // New template (no templateId) → start blank.
+      if (isTemplate && !templateId) { reshapeReady.current = true; setName('Nueva plantilla'); setLoading(false); return }
+
+      const sel = 'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )'
+      const query = supabase.from('workout_programs').select(sel)
+      const { data: prog } = await (templateId
+        ? query.eq('id', templateId).maybeSingle()
+        : query.eq('client_id', clientId!).eq('is_active', true).maybeSingle())
 
       if (prog) {
         const structure = (prog.program_structure_type as ProgramStructureType) ?? 'weekly'
@@ -125,7 +129,7 @@ export default function ProgramBuilderScreen() {
       reshapeReady.current = true
       setLoading(false)
     })()
-  }, [clientId])
+  }, [clientId, templateId])
 
   // Reshape both variants when structure / cycle length changes (preserve blocks).
   useEffect(() => {
@@ -171,13 +175,13 @@ export default function ProgramBuilderScreen() {
         weeks_to_repeat: weeks,
         cycle_length: structureType === 'cycle' ? cycleLength : null,
         ab_mode: abMode,
-        is_active: true,
+        is_active: isTemplate ? false : true,
       }
       if (pid) {
         await supabase.from('workout_programs').update(meta).eq('id', pid)
       } else {
         const { data, error } = await supabase.from('workout_programs')
-          .insert({ client_id: clientId, coach_id: coach.id, ...meta }).select('id').single()
+          .insert({ client_id: isTemplate ? null : (clientId ?? null), coach_id: coach.id, ...meta }).select('id').single()
         if (error) throw error
         pid = data.id
         setProgramId(pid)
@@ -199,7 +203,7 @@ export default function ProgramBuilderScreen() {
         for (const day of set.days) {
           if (day.blocks.length === 0) continue
           const { data: plan, error: planErr } = await supabase.from('workout_plans')
-            .insert({ program_id: pid, client_id: clientId, coach_id: coach.id, title: day.title || day.name, day_of_week: day.id, week_variant: set.variant })
+            .insert({ program_id: pid, client_id: isTemplate ? null : (clientId ?? null), coach_id: coach.id, title: day.title || day.name, day_of_week: day.id, week_variant: set.variant })
             .select('id').single()
           if (planErr) throw planErr
           const inserts = day.blocks.map((b, i) => ({

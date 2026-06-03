@@ -98,6 +98,13 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - `Nueva plantilla`, editar plantilla directa y sync con overrides quedan como siguiente bloque porque el builder RN todavia no soporta template mode completo.
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
 
+## Claude update - 2026-06-02 - deep links + welcome modal + workout templates
+- **Deep-link routing**: `app/+native-intent.ts` creado. Mapea `/c/<slug>` y `/invite/<code>` → resuelve branding (`fetchBrandingByCoachIdentifier`, cachea AsyncStorage) → `/(auth)/login?role=alumno`. `/reset-password` ya mapea solo.
+- **Welcome modal (Mi Marca)**: `coach-brand.ts` lee/escribe `welcome_modal_enabled/content/type` + bump `welcome_modal_version` cuando cambia (paridad web). `settings.tsx` suma sección "Mensaje al entrar al dashboard" (toggle + Texto/Video + contenido). `components/WelcomeModal.tsx` ahora normaliza YouTube/Vimeo a embed. Alumno home ya lo renderiza.
+- **Workout template mode**: `program-builder.tsx` acepta params `mode=template` (nueva plantilla, `client_id` null) y `templateId` (editar plantilla). Save usa `client_id null` + `is_active false` en modo plantilla. `builder.tsx` `openNewTemplate`/`editProgram` ya rutean (antes eran stubs con Alert). Crear/editar/asignar/duplicar plantilla = completo.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+- **Quedan**: nutrición plantillas (propagar a varios) + ciclos; SHA256 Android en `assetlinks.json` (manual via `eas credentials`); store prep (iconos/EAS/TestFlight-Play).
+
 ## Codex update - 2026-06-02 - APK visual/nutrition fixes
 - Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
 - Input de cantidad en comidas ajustado para Android: altura/lineHeight/padding centrados para evitar que numeros como `50` se corten arriba.

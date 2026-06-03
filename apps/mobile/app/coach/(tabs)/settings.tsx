@@ -36,6 +36,9 @@ export default function MiMarcaScreen() {
   const [loaderTextColor, setLoaderTextColor] = useState('')
   const [loaderIconMode, setLoaderIconMode] = useState<'eva' | 'coach' | 'none'>('eva')
   const [welcomeMessage, setWelcomeMessage] = useState('')
+  const [welcomeModalEnabled, setWelcomeModalEnabled] = useState(false)
+  const [welcomeModalType, setWelcomeModalType] = useState<'text' | 'video'>('text')
+  const [welcomeModalContent, setWelcomeModalContent] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
 
   const [saving, setSaving] = useState(false)
@@ -58,6 +61,9 @@ export default function MiMarcaScreen() {
         setLoaderTextColor(s.loaderTextColor ?? '')
         setLoaderIconMode((s.loaderIconMode as 'eva' | 'coach' | 'none') ?? 'eva')
         setWelcomeMessage(s.welcomeMessage ?? '')
+        setWelcomeModalEnabled(s.welcomeModalEnabled)
+        setWelcomeModalType(s.welcomeModalType)
+        setWelcomeModalContent(s.welcomeModalContent ?? '')
         setLogoUrl(s.logoUrl)
       }
       setLoading(false)
@@ -110,6 +116,9 @@ export default function MiMarcaScreen() {
       loaderIconMode,
       useCustomLoader,
       welcomeMessage: welcomeMessage || null,
+      welcomeModalEnabled,
+      welcomeModalContent: welcomeModalContent || null,
+      welcomeModalType,
     })
     setSaving(false)
     if (!r.ok) { setError(r.error ?? 'No se pudo guardar.'); return }
@@ -254,6 +263,23 @@ export default function MiMarcaScreen() {
             {/* Welcome */}
             <SectionCard theme={theme} icon={Type} title="Bienvenida">
               <Field theme={theme} label="Mensaje en el login del alumno" value={welcomeMessage} onChangeText={setWelcomeMessage} placeholder="Mensaje para tus alumnos al entrar" multiline />
+            </SectionCard>
+
+            {/* Welcome modal — aparece al entrar al dashboard del alumno */}
+            <SectionCard theme={theme} icon={Sparkles} title="Mensaje al entrar al dashboard">
+              <Toggle theme={theme} label="Mostrar mensaje o video al alumno" on={welcomeModalEnabled} onPress={() => setWelcomeModalEnabled((v) => !v)} />
+              {welcomeModalEnabled ? (
+                <>
+                  <Segmented theme={theme}
+                    options={[{ value: 'text', label: 'Texto' }, { value: 'video', label: 'Video' }]}
+                    value={welcomeModalType} onChange={(v) => setWelcomeModalType(v as 'text' | 'video')} />
+                  {welcomeModalType === 'text' ? (
+                    <Field theme={theme} label="Mensaje" value={welcomeModalContent} onChangeText={setWelcomeModalContent} placeholder="Ej: ¡Feliz lunes! Esta semana nos enfocamos en..." multiline />
+                  ) : (
+                    <Field theme={theme} label="URL de YouTube o Vimeo" value={welcomeModalContent} onChangeText={setWelcomeModalContent} placeholder="https://youtube.com/watch?v=..." autoCapitalize="none" keyboardType="url" />
+                  )}
+                </>
+              ) : null}
             </SectionCard>
 
             <Button label={saving ? 'Guardando...' : saved ? '¡Guardado!' : 'Guardar cambios'} onPress={save} disabled={saving} full />

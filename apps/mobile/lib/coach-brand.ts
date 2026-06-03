@@ -20,6 +20,9 @@ export interface CoachBrandSettings {
   loaderIconMode: string
   useCustomLoader: boolean
   welcomeMessage: string | null
+  welcomeModalEnabled: boolean
+  welcomeModalContent: string | null
+  welcomeModalType: 'text' | 'video'
 }
 
 export interface CoachBrandEditable {
@@ -31,6 +34,9 @@ export interface CoachBrandEditable {
   loaderIconMode: string
   useCustomLoader: boolean
   welcomeMessage: string | null
+  welcomeModalEnabled: boolean
+  welcomeModalContent: string | null
+  welcomeModalType: 'text' | 'video'
 }
 
 export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null> {
@@ -39,7 +45,7 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
 
   const { data } = await supabase
     .from('coaches')
-    .select('id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, welcome_message')
+    .select('id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -58,6 +64,9 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
     loaderIconMode: (data.loader_icon_mode as string) ?? 'eva',
     useCustomLoader: Boolean(data.use_custom_loader),
     welcomeMessage: data.welcome_message ?? null,
+    welcomeModalEnabled: Boolean(data.welcome_modal_enabled),
+    welcomeModalContent: data.welcome_modal_content ?? null,
+    welcomeModalType: (data.welcome_modal_type as 'text' | 'video') ?? 'text',
   }
 }
 
@@ -68,6 +77,20 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
   const name = input.brandName.trim()
   if (name.length < 2) return { ok: false, error: 'El nombre de marca debe tener al menos 2 caracteres.' }
   if (!/^#[0-9a-fA-F]{6}$/.test(input.primaryColor)) return { ok: false, error: 'Color de marca inválido (usá formato #RRGGBB).' }
+
+  // Bump welcome_modal_version when the modal changes so students re-see it (web parity).
+  const { data: current } = await supabase
+    .from('coaches')
+    .select('welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const modalContent = input.welcomeModalContent?.trim() || null
+  const modalChanged =
+    Boolean(current?.welcome_modal_enabled) !== input.welcomeModalEnabled ||
+    (current?.welcome_modal_content ?? null) !== modalContent ||
+    ((current?.welcome_modal_type as string) ?? 'text') !== input.welcomeModalType
+  const modalVersion = (current?.welcome_modal_version ?? 0) + (modalChanged ? 1 : 0)
 
   const { error } = await supabase
     .from('coaches')
@@ -80,6 +103,11 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
       loader_icon_mode: input.loaderIconMode || 'eva',
       use_custom_loader: input.useCustomLoader,
       welcome_message: input.welcomeMessage?.trim() || null,
+      welcome_modal_enabled: input.welcomeModalEnabled,
+      welcome_modal_content: modalContent,
+      welcome_modal_type: input.welcomeModalType,
+      welcome_modal_version: modalVersion,
+      ...(modalChanged ? { welcome_modal_updated_at: new Date().toISOString() } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', user.id)

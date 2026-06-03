@@ -189,21 +189,18 @@ export default function BuilderScreen() {
   }, [programs, search, filterType, filterStatus, filterStructure, filterPhases])
 
   function openNewTemplate() {
-    Alert.alert(
-      'Nueva plantilla',
-      'El creador de plantillas se mejora en el siguiente bloque. Por ahora crea o edita programas desde un alumno activo.',
-      [{ text: 'OK' }]
-    )
+    router.push({ pathname: '/coach/program-builder', params: { mode: 'template' } })
   }
 
   function editProgram(program: ProgramItem) {
-    if (!program.client_id || !program.client?.full_name) {
-      Alert.alert('Plantilla', 'La edicion directa de plantillas queda para el siguiente bloque del builder.')
+    if (!program.client_id) {
+      // Template → edit by program id (client_id null).
+      router.push({ pathname: '/coach/program-builder', params: { templateId: program.id } })
       return
     }
     router.push({
       pathname: '/coach/program-builder',
-      params: { clientId: program.client_id, clientName: program.client.full_name },
+      params: { clientId: program.client_id, clientName: program.client?.full_name ?? '' },
     })
   }
 
