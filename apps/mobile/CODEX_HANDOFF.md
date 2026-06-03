@@ -85,3 +85,14 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - `lib/coach-client-detail.ts` ahora trae timeline nutricional 30d, macros por comida desde `food_items`, favoritos desde `client_food_preferences`, y calcula kcal consumidas con fallback por cumplimiento cuando no hay macro data.
 - Sin deps nuevas y sin cambios BD. Todo por Supabase client + RLS.
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
+## Codex update - 2026-06-02 - coach detail export
+- Detalle alumno RN suma `Exportar resumen` con `Share.share()` nativo: reporte texto con datos alumno, peso/check-in, programa, sesiones, nutricion y pagos.
+- Se eligio export texto v1 para no sumar deps (`expo-print`, `expo-sharing` o `react-native-share`) antes del APK feedback.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
+## Codex update - 2026-06-02 - workout program library mobile
+- Tab coach `Programas` dejo de ser selector por alumno y ahora es hub/biblioteca: plantillas, programas asignados, activos, alumnos sin plan, busqueda, tabs Todos/Plantillas/En curso, filtros por estado/estructura/fases, vista compacta/comoda.
+- Cards muestran estado, alumno asignado, dias con bloques, ejercicios principales, A/B, fases, flexible/vinculado y preview modal con estructura por dia/bloques.
+- `Nueva plantilla`, editar plantilla directa, asignar plantilla y acciones avanzadas quedan como siguiente bloque porque el builder RN todavia no soporta template mode completo.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.

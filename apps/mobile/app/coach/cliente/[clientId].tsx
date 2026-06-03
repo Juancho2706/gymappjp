@@ -156,6 +156,49 @@ export default function ClientDetailScreen() {
   const weightDelta = weights.length >= 2 ? Number((weights[weights.length - 1] - weights[weights.length - 2]).toFixed(1)) : null
   const deltaUp = (weightDelta ?? 0) > 0
 
+  async function exportSummary() {
+    if (!client) return
+    const latestCheckIn = checkIns[0]
+    const nutritionWeek = nutritionTimeline.slice(0, 7)
+    const nutritionWeekAvg = Math.round(
+      nutritionWeek.reduce((sum, row) => sum + row.compliancePct, 0) / Math.max(1, nutritionWeek.length)
+    )
+    const report = [
+      `EVA - Resumen alumno`,
+      ``,
+      `Alumno: ${client.full_name}`,
+      `Email: ${client.email}`,
+      client.phone ? `Telefono: ${client.phone}` : null,
+      `Estado: ${client.is_archived ? 'Archivado' : client.is_active ? 'Activo' : 'Inactivo'}`,
+      ``,
+      `Peso actual: ${currentWeight != null ? `${currentWeight} kg` : 'Sin datos'}`,
+      `Cambio ultimo check-in: ${weightDelta != null ? `${weightDelta > 0 ? '+' : ''}${weightDelta} kg` : 'Sin datos'}`,
+      `Peso objetivo: ${client.goal_weight_kg != null ? `${client.goal_weight_kg} kg` : 'Sin objetivo'}`,
+      latestCheckIn ? `Ultimo check-in: ${formatDate(latestCheckIn.date)}${latestCheckIn.weight != null ? ` - ${latestCheckIn.weight} kg` : ''}` : `Ultimo check-in: Sin datos`,
+      ``,
+      `Programa activo: ${activeProgram ? activeProgram.name : 'Sin programa'}`,
+      activeProgram ? `Dias de entrenamiento: ${activeProgram.planCount}` : null,
+      `Sesiones 30d: ${sessions30d}`,
+      ``,
+      `Nutricion activa: ${activeNutrition ? activeNutrition.name : 'Sin plan'}`,
+      activeNutrition?.daily_calories != null ? `Meta kcal: ${activeNutrition.daily_calories}` : null,
+      activeNutrition ? `Cumplimiento nutricion 7d: ${nutritionWeekAvg}%` : null,
+      activeNutrition ? `Cumplimiento nutricion 30d: ${nutritionMonthlyAvgPct}%` : null,
+      activeNutrition ? `Racha nutricion: ${nutritionStreakDays} dias` : null,
+      ``,
+      `Pagos registrados: ${payments.length}`,
+      payments[0] ? `Ultimo pago: ${formatDate(payments[0].payment_date)} - ${formatCurrency(payments[0].amount)}` : null,
+      ``,
+      `Generado desde EVA Mobile`,
+    ].filter(Boolean).join('\n')
+
+    try {
+      await Share.share({ title: `Resumen ${client.full_name}`, message: report })
+    } catch (e: any) {
+      Alert.alert('No se pudo exportar', e?.message ?? 'Intenta nuevamente.')
+    }
+  }
+
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
@@ -240,6 +283,7 @@ export default function ClientDetailScreen() {
             />
 
             <Button label="Mensaje por WhatsApp" variant="outline" leftIcon={MessageCircle} onPress={openWhatsApp} full />
+            <Button label="Exportar resumen" variant="outline" leftIcon={Share2} onPress={exportSummary} full />
             <Button label={client.is_archived ? 'Reactivar alumno' : 'Archivar alumno'} variant={client.is_archived ? 'outline' : 'ghost'}
               leftIcon={client.is_archived ? ArchiveRestore : Archive} onPress={confirmArchive} full />
           </>
