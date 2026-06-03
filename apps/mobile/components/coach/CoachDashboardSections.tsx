@@ -1374,6 +1374,7 @@ function QuickActionButton({
   onPress: () => void
 }) {
   const { theme } = useTheme()
+  const isLight = theme.card === '#FFFFFF'
 
   return (
     <TouchableOpacity
@@ -1382,8 +1383,8 @@ function QuickActionButton({
       style={[
         styles.quickActionButton,
         {
-          backgroundColor: theme.card === '#FFFFFF' ? 'rgba(255,255,255,0.95)' : 'rgba(18,18,18,0.68)',
-          borderColor: theme.card === '#FFFFFF' ? 'rgba(0,0,0,0.11)' : theme.border,
+          backgroundColor: isLight ? 'rgba(255,255,255,0.88)' : 'rgba(12,16,20,0.74)',
+          borderColor: isLight ? 'rgba(15,23,42,0.1)' : 'rgba(255,255,255,0.11)',
           shadowColor: '#000',
         },
       ]}
@@ -1407,12 +1408,13 @@ function QuickActionButton({
 
 function useGlassStyle() {
   const { theme } = useTheme()
+  const isLight = theme.card === '#FFFFFF'
   return {
-    backgroundColor: hexToRgba(theme.card === '#FFFFFF' ? '#FFFFFF' : '#000000', theme.card === '#FFFFFF' ? 0.72 : 0.42),
-    borderColor: theme.border,
+    backgroundColor: isLight ? 'rgba(255,255,255,0.84)' : 'rgba(7,10,14,0.64)',
+    borderColor: isLight ? 'rgba(15,23,42,0.1)' : 'rgba(255,255,255,0.11)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: theme.card === '#FFFFFF' ? 0.09 : 0.32,
+    shadowOpacity: isLight ? 0.08 : 0.28,
     shadowRadius: 24,
     elevation: 6,
   }
@@ -3177,6 +3179,7 @@ const styles = StyleSheet.create({
     height: 230,
     paddingHorizontal: 12,
     paddingVertical: 16,
+    backgroundColor: 'transparent',
   },
   chartEmpty: {
     flex: 1,

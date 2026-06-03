@@ -29,6 +29,7 @@ export interface FoodRow {
   fats_g: number
   serving_size: number
   serving_unit: string
+  is_liquid: boolean
   category: string | null
   brand: string | null
 }
@@ -45,6 +46,8 @@ export interface DraftFoodItem {
   carbs_g: number
   fats_g: number
   serving_size: number
+  serving_unit: string
+  is_liquid: boolean
 }
 
 export interface DraftMeal {
@@ -109,6 +112,8 @@ export function foodToDraftItem(food: FoodRow): DraftFoodItem {
     carbs_g: food.carbs_g,
     fats_g: food.fats_g,
     serving_size: food.serving_size || 100,
+    serving_unit: food.serving_unit || 'g',
+    is_liquid: !!food.is_liquid || food.serving_unit === 'ml',
   }
 }
 
@@ -163,7 +168,7 @@ export async function createCustomFood(input: CustomFoodInput): Promise<{ ok: bo
       category: input.category,
       coach_id: coachId,
     })
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, brand')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
     .single()
 
   if (error) return { ok: false, error: error.message }
@@ -175,7 +180,7 @@ export async function searchFoods(query: string): Promise<FoodRow[]> {
   const filter = coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null'
   let q = supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, brand')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
     .or(filter)
     .order('name')
     .limit(40)
@@ -214,7 +219,7 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
 
   const { data: meals } = await supabase
     .from('nutrition_meals')
-    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit ) )')
+    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid ) )')
     .eq('plan_id', planId)
     .order('order_index', { ascending: true })
 
@@ -236,6 +241,8 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
       carbs_g: fi.foods?.carbs_g ?? 0,
       fats_g: fi.foods?.fats_g ?? 0,
       serving_size: fi.foods?.serving_size ?? 100,
+      serving_unit: fi.foods?.serving_unit ?? 'g',
+      is_liquid: !!fi.foods?.is_liquid || fi.foods?.serving_unit === 'ml',
     })),
   }))
 

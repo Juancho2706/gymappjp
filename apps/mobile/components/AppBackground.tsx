@@ -1,6 +1,5 @@
 import { StyleSheet, View } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
-import Svg, { Defs, Pattern, Path, Rect } from 'react-native-svg'
+import Svg, { Defs, Pattern, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -21,37 +20,33 @@ export function AppBackground() {
   const { theme, mode } = useTheme()
   const isDark = mode !== 'light'
   const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'
+  const topWash = hexToRgba(theme.primary, isDark ? 0.18 : 0.13)
+  const topWashMid = hexToRgba(theme.primary, isDark ? 0.07 : 0.045)
+  const sideWash = hexToRgba('#22D3EE', isDark ? 0.09 : 0.055)
+  const sideWashMid = hexToRgba('#22D3EE', isDark ? 0.035 : 0.022)
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg style={StyleSheet.absoluteFill}>
+      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
         <Defs>
           <Pattern id="appgrid" width={28} height={28} patternUnits="userSpaceOnUse">
             <Path d="M28 0 L0 0 0 28" fill="none" stroke={gridColor} strokeWidth={0.5} />
           </Pattern>
+          <RadialGradient id="appTopWash" cx="18%" cy="2%" r="78%">
+            <Stop offset="0" stopColor={topWash} />
+            <Stop offset="0.48" stopColor={topWashMid} />
+            <Stop offset="1" stopColor={theme.primary} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="appSideWash" cx="88%" cy="64%" r="76%">
+            <Stop offset="0" stopColor={sideWash} />
+            <Stop offset="0.46" stopColor={sideWashMid} />
+            <Stop offset="1" stopColor="#22D3EE" stopOpacity={0} />
+          </RadialGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#appgrid)" />
+        <Rect width="100%" height="100%" fill="url(#appTopWash)" />
+        <Rect width="100%" height="100%" fill="url(#appSideWash)" />
       </Svg>
-      <LinearGradient
-        pointerEvents="none"
-        colors={[hexToRgba(theme.primary, 0.16), hexToRgba(theme.primary, 0.04), 'transparent']}
-        locations={[0, 0.4, 0.8]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.7, y: 0.55 }}
-        style={styles.top}
-      />
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', hexToRgba('#22D3EE', isDark ? 0.07 : 0.05)]}
-        start={{ x: 1, y: 0.2 }}
-        end={{ x: 0.3, y: 1 }}
-        style={styles.corner}
-      />
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  top: { position: 'absolute', top: 0, left: 0, right: 0, height: 280 },
-  corner: { position: 'absolute', top: 0, right: 0, bottom: 0, width: '70%' },
-})

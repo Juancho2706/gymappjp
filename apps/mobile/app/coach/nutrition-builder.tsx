@@ -10,7 +10,6 @@ import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import {
   DAY_OF_WEEK,
-  FOOD_UNITS,
   draftTotals,
   emptyPlanDraft,
   foodToDraftItem,
@@ -21,6 +20,11 @@ import {
   type FoodRow,
   type PlanDraft,
 } from '../../lib/nutrition-builder'
+
+function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: boolean }) {
+  const units = item.is_liquid || item.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
+  return units.includes(item.unit) ? units : [item.unit, ...units.filter((u) => u !== item.unit)]
+}
 
 export default function NutritionBuilderScreen() {
   const { theme } = useTheme()
@@ -171,10 +175,15 @@ export default function NutritionBuilderScreen() {
                       {Math.round(it.calories * (it.serving_size > 0 ? it.quantity / it.serving_size : 0))} kcal
                     </Text>
                   </View>
-                  <TextInput value={String(it.quantity)} onChangeText={(v) => updateItemQty(meal.uid, it.uid, v)} keyboardType="number-pad"
-                    style={[styles.qtyInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, fontFamily: theme.fontSans }]} />
+                  <TextInput
+                    value={String(it.quantity)}
+                    onChangeText={(v) => updateItemQty(meal.uid, it.uid, v)}
+                    keyboardType="number-pad"
+                    textAlignVertical="center"
+                    style={[styles.qtyInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, fontFamily: theme.fontSans }]}
+                  />
                   <View style={styles.unitWrap}>
-                    {FOOD_UNITS.map((u) => {
+                    {unitsForFood(it).map((u) => {
                       const active = it.unit === u
                       return (
                         <TouchableOpacity key={u} onPress={() => updateItemUnit(meal.uid, it.uid, u)} activeOpacity={0.8}
@@ -262,7 +271,7 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
   itemName: { fontSize: 13 },
   itemMacro: { fontSize: 11, marginTop: 2 },
-  qtyInput: { width: 54, height: 36, borderWidth: 1, borderRadius: 8, textAlign: 'center', fontSize: 14 },
+  qtyInput: { width: 62, height: 44, borderWidth: 1, borderRadius: 9, textAlign: 'center', fontSize: 16, lineHeight: 20, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, includeFontPadding: false },
   unitWrap: { flexDirection: 'row', gap: 2, backgroundColor: 'transparent' },
   unitChip: { paddingHorizontal: 7, paddingVertical: 6, borderRadius: 7 },
   addFood: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 10 },

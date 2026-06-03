@@ -14,20 +14,24 @@ import { useRouter } from 'expo-router'
 import {
   CalendarDays,
   CheckCircle2,
+  Copy,
   Dumbbell,
   Eye,
   Filter,
+  GitMerge,
   Layers3,
   ListChecks,
   Pencil,
   Plus,
   Search,
   Sparkles,
+  Trash2,
   Users,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
+import { getCoachOrgContext } from '../../../lib/org'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, ScreenHeader, SegmentedTabs } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -46,6 +50,7 @@ type ClientLite = {
 
 type ProgramBlock = {
   id: string
+  exercise_id: string
   order_index: number
   sets: number
   reps: string
@@ -55,6 +60,10 @@ type ProgramBlock = {
   rest_time: string | null
   notes: string | null
   superset_group: string | null
+  target_weight_kg?: number | null
+  progression_type?: string | null
+  progression_value?: number | null
+  is_override?: boolean | null
   exercise?: { name: string | null } | null
 }
 
@@ -62,6 +71,9 @@ type ProgramPlan = {
   id: string
   day_of_week: number | null
   title: string
+  group_name?: string | null
+  week_variant?: string | null
+  assigned_date?: string | null
   workout_blocks?: ProgramBlock[] | null
 }
 
@@ -69,8 +81,13 @@ type ProgramItem = {
   id: string
   name: string
   client_id: string | null
+  org_id?: string | null
   weeks_to_repeat: number | null
   start_date: string | null
+  end_date?: string | null
+  duration_days?: number | null
+  start_date_flexible?: boolean | null
+  program_notes?: string | null
   created_at: string
   updated_at?: string | null
   is_active?: boolean | null
@@ -107,6 +124,12 @@ export default function BuilderScreen() {
   const [filterPhases, setFilterPhases] = useState<FilterPhases>('all')
   const [compact, setCompact] = useState(false)
   const [preview, setPreview] = useState<ProgramItem | null>(null)
+  const [assignProgram, setAssignProgram] = useState<ProgramItem | null>(null)
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([])
+  const [assignDurationWeeks, setAssignDurationWeeks] = useState('4')
+  const [duplicateProgram, setDuplicateProgram] = useState<ProgramItem | null>(null)
+  const [duplicateName, setDuplicateName] = useState('')
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
 
   useEffect(() => {
     loadLibrary()
@@ -124,13 +147,15 @@ export default function BuilderScreen() {
       supabase
         .from('workout_programs')
         .select(`
-          id, name, client_id, weeks_to_repeat, start_date, created_at, updated_at, is_active,
-          program_phases, program_structure_type, cycle_length, ab_mode, duration_type, source_template_id,
+          id, name, client_id, org_id, weeks_to_repeat, start_date, end_date, duration_days, start_date_flexible,
+          program_notes, created_at, updated_at, is_active, program_phases, program_structure_type, cycle_length,
+          ab_mode, duration_type, source_template_id,
           client:clients(id, full_name),
           workout_plans (
-            id, day_of_week, title,
+            id, day_of_week, title, group_name, week_variant, assigned_date,
             workout_blocks (
-              id, order_index, sets, reps, section, tempo, rir, rest_time, notes, superset_group,
+              id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes,
+              superset_group, progression_type, progression_value, is_override,
               exercise:exercises(name)
             )
           )
@@ -180,6 +205,84 @@ export default function BuilderScreen() {
       pathname: '/coach/program-builder',
       params: { clientId: program.client_id, clientName: program.client.full_name },
     })
+  }
+
+  function openAssign(program: ProgramItem) {
+    if (program.client_id) return
+    setAssignProgram(program)
+    setSelectedClientIds([])
+    setAssignDurationWeeks(String(program.weeks_to_repeat ?? 4))
+  }
+
+  function openDuplicate(program: ProgramItem) {
+    setDuplicateProgram(program)
+    setDuplicateName(defaultDuplicateName(program))
+  }
+
+  async function confirmDuplicate() {
+    if (!duplicateProgram) return
+    const name = duplicateName.trim()
+    if (name.length < 2 || name.length > 100) {
+      Alert.alert('Nombre invalido', 'Usa entre 2 y 100 caracteres.')
+      return
+    }
+    setActionBusy(`duplicate-${duplicateProgram.id}`)
+    const result = await duplicateProgramAsTemplate(duplicateProgram, name)
+    setActionBusy(null)
+    if (!result.ok) {
+      Alert.alert('No se pudo duplicar', result.error ?? 'Intenta nuevamente.')
+      return
+    }
+    setDuplicateProgram(null)
+    setDuplicateName('')
+    await loadLibrary()
+  }
+
+  async function confirmAssign() {
+    if (!assignProgram) return
+    if (!selectedClientIds.length) {
+      Alert.alert('Selecciona alumnos', 'Elige al menos un alumno para asignar esta plantilla.')
+      return
+    }
+    const weeks = Math.max(1, Math.min(52, Number(assignDurationWeeks) || assignProgram.weeks_to_repeat || 4))
+    setActionBusy(`assign-${assignProgram.id}`)
+    const result = await assignTemplateToClients(assignProgram, selectedClientIds, { durationWeeks: weeks })
+    setActionBusy(null)
+    if (!result.ok) {
+      Alert.alert('No se pudo asignar', result.error ?? 'Intenta nuevamente.')
+      return
+
+    }
+    setAssignProgram(null)
+    setSelectedClientIds([])
+    await loadLibrary()
+  }
+
+  function confirmDelete(program: ProgramItem) {
+    Alert.alert(
+      program.client_id ? 'Eliminar programa' : 'Eliminar plantilla',
+      program.client_id
+        ? `Se eliminara "${program.name}" de ${program.client?.full_name ?? 'este alumno'}.`
+        : `Se eliminara la plantilla "${program.name}".`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            setActionBusy(`delete-${program.id}`)
+            const { error } = await supabase.from('workout_programs').delete().eq('id', program.id)
+            setActionBusy(null)
+            if (error) Alert.alert('No se pudo eliminar', error.message)
+            else loadLibrary()
+          },
+        },
+      ]
+    )
+  }
+
+  function toggleSelectedClient(clientId: string) {
+    setSelectedClientIds((prev) => prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [...prev, clientId])
   }
 
   if (loading) {
@@ -262,6 +365,11 @@ export default function BuilderScreen() {
                   theme={theme}
                   onPreview={() => setPreview(item)}
                   onEdit={() => editProgram(item)}
+                  onAssign={() => openAssign(item)}
+                  onDuplicate={() => openDuplicate(item)}
+                  onDelete={() => confirmDelete(item)}
+                  onSync={() => Alert.alert('Sincronizar', 'El merge con overrides queda para el siguiente micro-bloque.')}
+                  busy={actionBusy?.endsWith(item.id) ?? false}
                 />
               </MotiView>
             )}
@@ -280,7 +388,45 @@ export default function BuilderScreen() {
       </TouchableOpacity>
 
       <NativeDialog open={!!preview} title={preview?.name ?? 'Vista previa'} onClose={() => setPreview(null)} maxWidth={520}>
-        {preview ? <ProgramPreview program={preview} theme={theme} onEdit={() => { const p = preview; setPreview(null); editProgram(p) }} /> : null}
+        {preview ? (
+          <ProgramPreview
+            program={preview}
+            theme={theme}
+            onEdit={() => { const p = preview; setPreview(null); editProgram(p) }}
+            onAssign={() => { const p = preview; setPreview(null); openAssign(p) }}
+            onDuplicate={() => { const p = preview; setPreview(null); openDuplicate(p) }}
+          />
+        ) : null}
+      </NativeDialog>
+
+      <NativeDialog open={!!assignProgram} title={assignProgram ? `Asignar ${assignProgram.name}` : 'Asignar'} onClose={() => setAssignProgram(null)} maxWidth={520}>
+        {assignProgram ? (
+          <AssignTemplateDialog
+            program={assignProgram}
+            clients={clients}
+            selectedClientIds={selectedClientIds}
+            durationWeeks={assignDurationWeeks}
+            busy={actionBusy === `assign-${assignProgram.id}`}
+            onToggleClient={toggleSelectedClient}
+            onDurationChange={setAssignDurationWeeks}
+            onCancel={() => setAssignProgram(null)}
+            onConfirm={confirmAssign}
+            theme={theme}
+          />
+        ) : null}
+      </NativeDialog>
+
+      <NativeDialog open={!!duplicateProgram} title="Duplicar como plantilla" onClose={() => setDuplicateProgram(null)} maxWidth={440}>
+        {duplicateProgram ? (
+          <DuplicateDialog
+            name={duplicateName}
+            busy={actionBusy === `duplicate-${duplicateProgram.id}`}
+            onChangeName={setDuplicateName}
+            onCancel={() => setDuplicateProgram(null)}
+            onConfirm={confirmDuplicate}
+            theme={theme}
+          />
+        ) : null}
       </NativeDialog>
     </SafeAreaView>
   )
@@ -325,7 +471,29 @@ function HeroStat({ icon: Icon, label, value, color, theme }: { icon: any; label
   )
 }
 
-function ProgramCard({ program, compact, theme, onPreview, onEdit }: { program: ProgramItem; compact: boolean; theme: any; onPreview: () => void; onEdit: () => void }) {
+function ProgramCard({
+  program,
+  compact,
+  theme,
+  onPreview,
+  onEdit,
+  onAssign,
+  onDuplicate,
+  onDelete,
+  onSync,
+  busy,
+}: {
+  program: ProgramItem
+  compact: boolean
+  theme: any
+  onPreview: () => void
+  onEdit: () => void
+  onAssign: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+  onSync: () => void
+  busy: boolean
+}) {
   const stats = getProgramStats(program)
   const isTemplate = !program.client_id
   const accent = isTemplate ? theme.primary : program.is_active ? theme.success : theme.mutedForeground
@@ -385,7 +553,10 @@ function ProgramCard({ program, compact, theme, onPreview, onEdit }: { program: 
         <View style={styles.cardActions}>
           <ActionButton icon={Eye} label="Preview" onPress={onPreview} theme={theme} />
           <ActionButton icon={Pencil} label="Editar" onPress={onEdit} theme={theme} />
-          {isTemplate ? <ActionButton icon={Users} label="Asignar" onPress={() => Alert.alert('Asignar plantilla', 'Lo portamos en el siguiente bloque.')} theme={theme} /> : null}
+          {isTemplate ? <ActionButton icon={Users} label="Asignar" onPress={onAssign} theme={theme} disabled={busy} /> : null}
+          <ActionButton icon={Copy} label="Duplicar" onPress={onDuplicate} theme={theme} disabled={busy} />
+          {program.source_template_id ? <ActionButton icon={GitMerge} label="Sync" onPress={onSync} theme={theme} disabled={busy} /> : null}
+          <ActionButton icon={Trash2} label="Eliminar" onPress={onDelete} theme={theme} danger disabled={busy} />
         </View>
       </View>
     </TouchableOpacity>
@@ -404,7 +575,7 @@ function StatusBadge({ program, theme }: { program: ProgramItem; theme: any }) {
   )
 }
 
-function ProgramPreview({ program, theme, onEdit }: { program: ProgramItem; theme: any; onEdit: () => void }) {
+function ProgramPreview({ program, theme, onEdit, onAssign, onDuplicate }: { program: ProgramItem; theme: any; onEdit: () => void; onAssign: () => void; onDuplicate: () => void }) {
   const plans = sortedPlans(program)
   const stats = getProgramStats(program)
   const phases = program.program_phases ?? []
@@ -463,6 +634,8 @@ function ProgramPreview({ program, theme, onEdit }: { program: ProgramItem; them
 
       <View style={styles.previewActions}>
         <Button label="Editar" leftIcon={Pencil} onPress={onEdit} full />
+        {!program.client_id ? <Button label="Asignar plantilla" variant="outline" leftIcon={Users} onPress={onAssign} full /> : null}
+        <Button label="Duplicar como plantilla" variant="outline" leftIcon={Copy} onPress={onDuplicate} full />
       </View>
     </ScrollView>
   )
@@ -478,11 +651,129 @@ function PreviewMetric({ icon: Icon, label, value, theme }: { icon: any; label: 
   )
 }
 
-function ActionButton({ icon: Icon, label, onPress, theme }: { icon: any; label: string; onPress: () => void; theme: any }) {
+function AssignTemplateDialog({
+  program,
+  clients,
+  selectedClientIds,
+  durationWeeks,
+  busy,
+  onToggleClient,
+  onDurationChange,
+  onCancel,
+  onConfirm,
+  theme,
+}: {
+  program: ProgramItem
+  clients: ClientLite[]
+  selectedClientIds: string[]
+  durationWeeks: string
+  busy: boolean
+  onToggleClient: (clientId: string) => void
+  onDurationChange: (value: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+  theme: any
+}) {
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.actionButton, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-      <Icon size={14} color={theme.primary} />
-      <Text style={[styles.actionText, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+    <View style={{ gap: 12 }}>
+      <Text style={[styles.dialogText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        Copia la plantilla como programa activo para cada alumno. Si ya tiene un plan activo, se desactiva y se conserva el historial.
+      </Text>
+
+      <View style={[styles.inputWrap, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
+        <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Duracion semanas</Text>
+        <TextInput
+          value={durationWeeks}
+          onChangeText={onDurationChange}
+          keyboardType="number-pad"
+          placeholder="4"
+          placeholderTextColor={theme.mutedForeground}
+          style={[styles.inlineInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
+        />
+      </View>
+
+      <ScrollView style={styles.assignList} showsVerticalScrollIndicator={false}>
+        {clients.map((client) => {
+          const selected = selectedClientIds.includes(client.id)
+          const activePlan = (client.workout_programs ?? []).find((p) => p.is_active)
+          return (
+            <TouchableOpacity
+              key={client.id}
+              activeOpacity={0.82}
+              onPress={() => onToggleClient(client.id)}
+              style={[styles.assignClientRow, { backgroundColor: selected ? theme.primary + '12' : theme.secondary, borderColor: selected ? theme.primary + '55' : theme.border, borderRadius: theme.radius.lg }]}
+            >
+              <View style={[styles.checkBox, { backgroundColor: selected ? theme.primary : 'transparent', borderColor: selected ? theme.primary : theme.border }]}>
+                {selected ? <CheckCircle2 size={15} color={theme.primaryForeground} /> : null}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={[styles.assignClientName, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{client.full_name}</Text>
+                <Text numberOfLines={1} style={[styles.cardMeta, { color: activePlan ? '#F59E0B' : theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  {activePlan ? `Sobrescribe: ${activePlan.name}` : 'Sin programa activo'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )
+        })}
+      </ScrollView>
+
+      <View style={styles.dialogActions}>
+        <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={busy} style={{ flex: 1 }} />
+        <Button
+          label={busy ? 'Asignando...' : `Asignar ${selectedClientIds.length || ''}`.trim()}
+          onPress={onConfirm}
+          disabled={busy || !selectedClientIds.length || !program.workout_plans?.length}
+          style={{ flex: 1 }}
+        />
+      </View>
+    </View>
+  )
+}
+
+function DuplicateDialog({
+  name,
+  busy,
+  onChangeName,
+  onCancel,
+  onConfirm,
+  theme,
+}: {
+  name: string
+  busy: boolean
+  onChangeName: (value: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+  theme: any
+}) {
+  return (
+    <View style={{ gap: 12 }}>
+      <Text style={[styles.dialogText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        Crea una copia reutilizable sin alumno asignado.
+      </Text>
+      <View style={[styles.inputWrap, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
+        <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Nombre</Text>
+        <TextInput
+          value={name}
+          onChangeText={onChangeName}
+          placeholder="Nombre de la plantilla"
+          placeholderTextColor={theme.mutedForeground}
+          style={[styles.inlineInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
+        />
+      </View>
+      <View style={styles.dialogActions}>
+        <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={busy} style={{ flex: 1 }} />
+        <Button label={busy ? 'Duplicando...' : 'Duplicar'} onPress={onConfirm} disabled={busy} style={{ flex: 1 }} />
+      </View>
+    </View>
+  )
+}
+
+function ActionButton({ icon: Icon, label, onPress, theme, danger, disabled }: { icon: any; label: string; onPress: () => void; theme: any; danger?: boolean; disabled?: boolean }) {
+  const color = danger ? theme.destructive : theme.primary
+  return (
+    <TouchableOpacity disabled={disabled} onPress={onPress} style={[styles.actionButton, { backgroundColor: danger ? color + '10' : theme.secondary, borderColor: danger ? color + '44' : theme.border, borderRadius: theme.radius.lg, opacity: disabled ? 0.55 : 1 }]}>
+      <Icon size={14} color={color} />
+      <Text style={[styles.actionText, { color: danger ? color : theme.foreground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -590,6 +881,184 @@ function dayLabel(day: number | null): string {
   return DAY_LABELS[day] ?? `D${day}`
 }
 
+function defaultDuplicateName(program: ProgramItem): string {
+  if (program.client?.full_name) return `Copia de ${program.client.full_name}`
+  return `${program.name} (Copia)`
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function programInsertFromTemplate(program: ProgramItem, input: {
+  coachId: string
+  orgId: string | null
+  name: string
+  clientId: string | null
+  isActive: boolean
+  sourceTemplateId: string | null
+  startDate: string | null
+  endDate: string | null
+  weeks?: number
+}) {
+  return {
+    coach_id: input.coachId,
+    created_by_coach_id: input.coachId,
+    client_id: input.clientId,
+    org_id: input.orgId,
+    name: input.name,
+    weeks_to_repeat: input.weeks ?? program.weeks_to_repeat ?? 1,
+    start_date: input.startDate,
+    end_date: input.endDate,
+    duration_type: program.duration_type ?? 'weeks',
+    duration_days: program.duration_days ?? null,
+    program_structure_type: program.program_structure_type ?? 'weekly',
+    cycle_length: program.cycle_length ?? null,
+    start_date_flexible: input.clientId ? false : (program.start_date_flexible ?? true),
+    program_notes: program.program_notes ?? null,
+    ab_mode: program.ab_mode ?? false,
+    program_phases: program.program_phases ?? [],
+    source_template_id: input.sourceTemplateId,
+    is_active: input.isActive,
+  }
+}
+
+function blockInsertFromSource(block: ProgramBlock, planId: string) {
+  return {
+    plan_id: planId,
+    exercise_id: block.exercise_id,
+    order_index: block.order_index ?? 0,
+    sets: block.sets ?? 3,
+    reps: block.reps || '8-10',
+    target_weight_kg: block.target_weight_kg ?? null,
+    tempo: block.tempo ?? null,
+    rir: block.rir ?? null,
+    rest_time: block.rest_time ?? null,
+    notes: block.notes ?? null,
+    superset_group: block.superset_group ?? null,
+    progression_type: block.progression_type ?? null,
+    progression_value: block.progression_value ?? null,
+    section: ['warmup', 'main', 'cooldown'].includes(String(block.section)) ? block.section : 'main',
+    is_override: false,
+  }
+}
+
+async function copyPlansAndBlocks(source: ProgramItem, newProgramId: string, coachId: string, clientId: string | null, assignedDate: string | null): Promise<{ ok: boolean; error?: string }> {
+  for (const plan of sortedPlans(source)) {
+    const { data: newPlan, error: planError } = await supabase
+      .from('workout_plans')
+      .insert({
+        coach_id: coachId,
+        program_id: newProgramId,
+        client_id: clientId,
+        day_of_week: plan.day_of_week,
+        title: plan.title,
+        group_name: plan.group_name ?? null,
+        assigned_date: assignedDate,
+        week_variant: plan.week_variant ?? 'A',
+      })
+      .select('id')
+      .single()
+    if (planError || !newPlan) return { ok: false, error: planError?.message ?? 'No se pudo copiar un dia.' }
+
+    const blocks = sortedBlocks(plan).map((block) => blockInsertFromSource(block, newPlan.id))
+    if (blocks.length) {
+      const { error } = await supabase.from('workout_blocks').insert(blocks)
+      if (error) return { ok: false, error: error.message }
+    }
+  }
+  return { ok: true }
+}
+
+async function duplicateProgramAsTemplate(program: ProgramItem, name: string): Promise<{ ok: boolean; error?: string }> {
+  const coach = await getCoachProfile()
+  if (!coach) return { ok: false, error: 'Coach no encontrado.' }
+  const { orgId } = await getCoachOrgContext()
+
+  const { data: existing } = await supabase
+    .from('workout_programs')
+    .select('id')
+    .eq('coach_id', coach.id)
+    .eq('name', name)
+    .is('client_id', null)
+    .maybeSingle()
+  if (existing) return { ok: false, error: `Ya tienes una plantilla llamada "${name}".` }
+
+  const insert = programInsertFromTemplate(program, {
+    coachId: coach.id,
+    orgId,
+    name,
+    clientId: null,
+    isActive: false,
+    sourceTemplateId: null,
+    startDate: null,
+    endDate: null,
+  })
+
+  const { data: newProgram, error } = await supabase.from('workout_programs').insert(insert as any).select('id').single()
+  if (error || !newProgram) return { ok: false, error: error?.message ?? 'No se pudo crear la copia.' }
+  const copied = await copyPlansAndBlocks(program, newProgram.id, coach.id, null, null)
+  if (!copied.ok) {
+    await supabase.from('workout_programs').delete().eq('id', newProgram.id)
+    return copied
+  }
+  return { ok: true }
+}
+
+async function assignTemplateToClients(template: ProgramItem, clientIds: string[], options: { durationWeeks: number }): Promise<{ ok: boolean; error?: string }> {
+  const coach = await getCoachProfile()
+  if (!coach) return { ok: false, error: 'Coach no encontrado.' }
+  const { orgId } = await getCoachOrgContext()
+  const start = todayIso()
+  const end = addDays(start, options.durationWeeks * 7)
+
+  for (const clientId of clientIds) {
+    const insert = programInsertFromTemplate(template, {
+      coachId: coach.id,
+      orgId,
+      name: template.name,
+      clientId,
+      isActive: false,
+      sourceTemplateId: template.id,
+      startDate: start,
+      endDate: end,
+      weeks: options.durationWeeks,
+    })
+    const { data: newProgram, error } = await supabase.from('workout_programs').insert(insert as any).select('id').single()
+    if (error || !newProgram) return { ok: false, error: error?.message ?? 'No se pudo asignar el programa.' }
+
+    const copied = await copyPlansAndBlocks(template, newProgram.id, coach.id, clientId, start)
+    if (!copied.ok) {
+      await supabase.from('workout_programs').delete().eq('id', newProgram.id)
+      return copied
+    }
+
+    const { error: deactivateError } = await supabase
+      .from('workout_programs')
+      .update({ is_active: false })
+      .eq('coach_id', coach.id)
+      .eq('client_id', clientId)
+      .eq('is_active', true)
+    if (deactivateError) {
+      await supabase.from('workout_programs').delete().eq('id', newProgram.id)
+      return { ok: false, error: deactivateError.message }
+    }
+
+    const { error: activateError } = await supabase.from('workout_programs').update({ is_active: true }).eq('id', newProgram.id)
+    if (activateError) {
+      await supabase.from('workout_programs').delete().eq('id', newProgram.id)
+      return { ok: false, error: activateError.message }
+    }
+  }
+  return { ok: true }
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, position: 'relative' },
   content: { flex: 1, paddingHorizontal: 16, gap: 12 },
@@ -657,6 +1126,15 @@ const styles = StyleSheet.create({
   blockName: { fontSize: 13 },
   blockDose: { fontSize: 12 },
   previewActions: { paddingTop: 4 },
+  dialogText: { fontSize: 13, lineHeight: 18 },
+  inputWrap: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },
+  inputLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.7 },
+  inlineInput: { fontSize: 15, paddingVertical: 0, minHeight: 28 },
+  assignList: { maxHeight: 320 },
+  assignClientRow: { borderWidth: 1, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  checkBox: { width: 24, height: 24, borderRadius: 7, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  assignClientName: { fontSize: 13 },
+  dialogActions: { flexDirection: 'row', gap: 10, paddingTop: 2 },
   fab: {
     position: 'absolute',
     right: 20,

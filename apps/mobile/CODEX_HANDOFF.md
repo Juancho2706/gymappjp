@@ -94,5 +94,13 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 ## Codex update - 2026-06-02 - workout program library mobile
 - Tab coach `Programas` dejo de ser selector por alumno y ahora es hub/biblioteca: plantillas, programas asignados, activos, alumnos sin plan, busqueda, tabs Todos/Plantillas/En curso, filtros por estado/estructura/fases, vista compacta/comoda.
 - Cards muestran estado, alumno asignado, dias con bloques, ejercicios principales, A/B, fases, flexible/vinculado y preview modal con estructura por dia/bloques.
-- `Nueva plantilla`, editar plantilla directa, asignar plantilla y acciones avanzadas quedan como siguiente bloque porque el builder RN todavia no soporta template mode completo.
+- Acciones reales agregadas: duplicar cualquier programa como plantilla, asignar plantilla a multiples alumnos y eliminar con confirmacion. La asignacion crea copia inactiva, copia dias/bloques y recien ahi cambia el activo para no dejar al alumno sin plan si falla.
+- `Nueva plantilla`, editar plantilla directa y sync con overrides quedan como siguiente bloque porque el builder RN todavia no soporta template mode completo.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
+## Codex update - 2026-06-02 - APK visual/nutrition fixes
+- Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
+- Input de cantidad en comidas ajustado para Android: altura/lineHeight/padding centrados para evitar que numeros como `50` se corten arriba.
+- `AppBackground` cambia washes lineales por radiales SVG para eliminar el corte vertical duro en dark mode y los bloques claros visibles detras de cards translucidas.
+- Dashboard coach sube opacidad/control de borde en glass cards y quick actions para modo claro, manteniendo fondo EVA sin cuadrados internos.
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
