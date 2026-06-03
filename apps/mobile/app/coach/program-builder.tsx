@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { Copy, GripVertical, Link2, Moon, Plus, Redo2, Undo2 } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, Copy, GripVertical, Link2, Moon, Plus, Redo2, Undo2 } from 'lucide-react-native'
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { supabase } from '../../lib/supabase'
 import { getCoachProfile } from '../../lib/coach'
@@ -79,6 +79,7 @@ export default function ProgramBuilderScreen() {
   const [activeDayId, setActiveDayId] = useState(1)
   const [editingUid, setEditingUid] = useState<string | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
+  const [metaOpen, setMetaOpen] = useState(false) // panel de configuración colapsable → más espacio para ejercicios
 
   const builder = usePlanBuilder(initial)
   const { days, addExercise, removeBlock, updateBlock, moveBlock, updateDayTitle, toggleRestDay, copyDay, toggleSuperset, setBlockSection, toggleBlockOverride, undo, redo, canUndo, canRedo, setDays } = builder
@@ -267,35 +268,50 @@ export default function ProgramBuilderScreen() {
               {clientName ? <Text style={[styles.subTitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Programa de {clientName}</Text> : null}
               <TextInput value={name} onChangeText={setName} placeholder="Nombre del programa" placeholderTextColor={theme.mutedForeground}
                 style={[styles.nameInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} />
-              <View style={styles.metaRow}>
-                <SmallSeg theme={theme} label="Estructura" options={[{ v: 'weekly', l: 'Semanal' }, { v: 'cycle', l: 'Ciclo' }]} value={structureType} onChange={(v) => setStructureType(v as ProgramStructureType)} />
-                {structureType === 'cycle' ? (
-                  <View style={{ width: 90 }}>
-                    <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Días ciclo</Text>
-                    <TextInput value={String(cycleLength)} onChangeText={(v) => setCycleLength(Math.max(1, Math.min(7, Number(v) || 1)))} keyboardType="number-pad"
-                      style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                  </View>
-                ) : null}
-              </View>
-              <View style={styles.metaRow}>
-                <SmallSeg theme={theme} label="Duración" options={[{ v: 'weeks', l: 'Semanas' }, { v: 'async', l: 'Async' }, { v: 'calendar_days', l: 'Días' }]} value={durationType} onChange={(v) => setDurationType(v as DurationType)} />
-                <View style={{ width: 96 }}>
-                  <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Repetir (sem)</Text>
-                  <TextInput value={String(weeks)} onChangeText={(v) => setWeeks(Math.max(1, Number(v) || 1))} keyboardType="number-pad"
-                    style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                </View>
-              </View>
 
-              {structureType === 'weekly' ? (
-                <View style={[styles.abRow, { borderColor: theme.border }]}>
-                  <Text style={[styles.abLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Semanas A/B (alterna 2 rutinas)</Text>
-                  <TouchableOpacity onPress={() => toggleAb(!abMode)} activeOpacity={0.8} style={[styles.switch, { backgroundColor: abMode ? theme.primary : theme.muted }]}>
-                    <View style={[styles.knob, { backgroundColor: '#fff', alignSelf: abMode ? 'flex-end' : 'flex-start' }]} />
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {abMode && structureType === 'weekly' ? (
-                <SmallSeg theme={theme} label="Variante activa" options={[{ v: 'A', l: 'Semana A' }, { v: 'B', l: 'Semana B' }]} value={variant} onChange={(v) => switchVariant(v as 'A' | 'B')} />
+              {/* Config colapsable → libera espacio para los ejercicios del día */}
+              <TouchableOpacity onPress={() => setMetaOpen((o) => !o)} activeOpacity={0.75}
+                style={[styles.metaToggle, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                {metaOpen ? <ChevronDown size={16} color={theme.mutedForeground} /> : <ChevronRight size={16} color={theme.mutedForeground} />}
+                <Text style={[styles.metaToggleText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Configuración del programa</Text>
+                <Text style={[styles.metaToggleHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+                  {structureType === 'weekly' ? 'Semanal' : `Ciclo ${cycleLength}d`}{abMode ? ' · A/B' : ''}
+                </Text>
+              </TouchableOpacity>
+
+              {metaOpen ? (
+                <>
+                  <View style={styles.metaRow}>
+                    <SmallSeg theme={theme} label="Estructura" options={[{ v: 'weekly', l: 'Semanal' }, { v: 'cycle', l: 'Ciclo' }]} value={structureType} onChange={(v) => setStructureType(v as ProgramStructureType)} />
+                    {structureType === 'cycle' ? (
+                      <View style={{ width: 90 }}>
+                        <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Días ciclo</Text>
+                        <TextInput value={String(cycleLength)} onChangeText={(v) => setCycleLength(Math.max(1, Math.min(7, Number(v) || 1)))} keyboardType="number-pad"
+                          style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.metaRow}>
+                    <SmallSeg theme={theme} label="Duración" options={[{ v: 'weeks', l: 'Semanas' }, { v: 'async', l: 'Async' }, { v: 'calendar_days', l: 'Días' }]} value={durationType} onChange={(v) => setDurationType(v as DurationType)} />
+                    <View style={{ width: 96 }}>
+                      <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Repetir (sem)</Text>
+                      <TextInput value={String(weeks)} onChangeText={(v) => setWeeks(Math.max(1, Number(v) || 1))} keyboardType="number-pad"
+                        style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                    </View>
+                  </View>
+
+                  {structureType === 'weekly' ? (
+                    <View style={[styles.abRow, { borderColor: theme.border }]}>
+                      <Text style={[styles.abLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Semanas A/B (alterna 2 rutinas)</Text>
+                      <TouchableOpacity onPress={() => toggleAb(!abMode)} activeOpacity={0.8} style={[styles.switch, { backgroundColor: abMode ? theme.primary : theme.muted }]}>
+                        <View style={[styles.knob, { backgroundColor: '#fff', alignSelf: abMode ? 'flex-end' : 'flex-start' }]} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  {abMode && structureType === 'weekly' ? (
+                    <SmallSeg theme={theme} label="Variante activa" options={[{ v: 'A', l: 'Semana A' }, { v: 'B', l: 'Semana B' }]} value={variant} onChange={(v) => switchVariant(v as 'A' | 'B')} />
+                  ) : null}
+                </>
               ) : null}
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
@@ -401,6 +417,9 @@ const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 14, paddingBottom: 60 },
   subTitle: { fontSize: 13 },
   nameInput: { height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 16 },
+  metaToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
+  metaToggleText: { fontSize: 14 },
+  metaToggleHint: { fontSize: 12, marginLeft: 'auto' },
   metaRow: { flexDirection: 'row', gap: 10 },
   metaLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   weeksInput: { height: 38, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 14 },

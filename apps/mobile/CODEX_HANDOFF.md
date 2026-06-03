@@ -162,6 +162,26 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - Regla para nuevos loaders: SIEMPRE `setLoading(false)` en `finally` o `load().catch(...)`.
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
 
+## Claude update - 2026-06-03 - FASE 1 DB-compat resiliente (bugs críticos device)
+- **Root cause:** el APK pega a prod STANDALONE que NO tiene columnas v2/enterprise+Codex (`org_id` en workout_programs/nutrition_plans/exercises/clients; `reviewed_at`/`reviewed_by` en check_ins) → rompían: Ejercicios 0, Programas 0, detalle alumno "no encontrado", error assign/save/copy nutrición. **NO tocar live.**
+- **`lib/db-compat.ts`** (nuevo): `selectWithFallback(rich, minimal)` (reintenta sin columnas enterprise si PostgREST tira error de columna), `isMissingColumnError`, `optionalCol`.
+- **Lecturas con fallback (org_id):** `lib/exercises.ts listCoachExercises` (filtro+select), `app/coach/(tabs)/builder.tsx loadLibrary` (workout_programs), `lib/client.ts getClientProfile` (clients).
+- **Inserts org_id condicionales** (`...(orgId ? {org_id} : {})`): `nutrition-builder.ts` (saveClientPlan, duplicatePlanToClient), `nutrition-templates.ts` (saveTemplate, assignTemplateToClients). Standalone (orgId null) omite → corre en remote; enterprise lo setea cuando la DB lo tenga.
+- **`coach-client-detail.ts`:** `getCoachClientDetail` trae `client` PRIMERO (independiente) + envuelve el resto en try/catch → devuelve `EMPTY` con client si las queries ricas fallan (el detalle SIEMPRE abre). check_ins select con fallback (sin reviewed_at). `markCoachCheckInReviewed` tolerante (mensaje si la columna no está).
+- **Compat futura:** cuando prod = DB local/enterprise, los selects ricos pegan y los inserts setean org_id solos. NO revertir.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS. **Falta verificar en device (remote).**
+
+## Claude update - 2026-06-03 - FASE 2 (parity) + FASE 3 (UI sobria)
+- **F2.3 Nutrition builder:** objetivos macro **auto = suma de alimentos** (flag `macrosManual`; toggle "↺ Auto / ✓ Auto"); cada alimento muestra **P/C/G** (no solo kcal).
+- **F2.4 Check-ins coach:** cards muestran **thumbnails** de fotos (front+back) → tap abre **visor full-screen** (Modal); antes solo decía "Foto adjunta".
+- **F2.1 Workout builder:** **panel de configuración colapsable** (`metaOpen`, default cerrado) → libera espacio para ejercicios del día (pedido explícito). Secciones (warmup/main/cooldown) siguen editables por bloque vía `BlockEditorSheet` — el grouping con DnD por-sección queda como mejora futura (refactor DnD).
+- **F3.1 Background:** `AppBackground` MUY sutil — grid tenue + UN wash radial de marca (≤0.06), **sin cyan fijo**; prop `accent` (default `theme.primary` = brand-aware). Antes saturaba.
+- **F3.3 Dashboard:** NextBestAction quita el bg "cuadrado" translúcido → borde-izq de color (img14); QuickActions usan `theme.card` opaco (consistente); animación de dialogs (NativeDialog) de spring-scale → timing fade+slide (sin rebote "feo").
+- **F3.4 Alert banners** (clientes): fondo **opaco** (`theme.card` + borde-izq de color) legible + swipe a **ambos lados** para ocultar.
+- **F3.5 Push** (perfil): el Switch refleja el **permiso real** (`getPermissionsAsync`); ON → `syncPushToken`.
+- F3.2 tipografía/contraste: mayormente resuelto por el background sutil (el texto `mutedForeground` ya se lee); componentes base usan tokens del theme. F3.6 FAQ: ya era acordeón con tokens.
+- Validado por chunk: `npx tsc --noEmit` PASS + `npx expo export --platform android` PASS.
+
 ## Codex update - 2026-06-02 - APK visual/nutrition fixes
 - Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
 - Input de cantidad en comidas ajustado para Android: altura/lineHeight/padding centrados para evitar que numeros como `50` se corten arriba.

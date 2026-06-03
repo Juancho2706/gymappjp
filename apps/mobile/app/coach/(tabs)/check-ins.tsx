@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import {
   FlatList,
+  Modal,
+  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Activity, Calendar, Camera } from 'lucide-react-native'
+import { Image } from 'expo-image'
+import { Activity, Calendar, Camera, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
@@ -22,6 +26,7 @@ interface CheckIn {
   weight: number | null
   energy_level: number | null
   front_photo_url: string | null
+  back_photo_url: string | null
   notes: string | null
   clients: { full_name: string } | null
 }
@@ -42,6 +47,7 @@ export default function CheckInsScreen() {
   const { theme } = useTheme()
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
   const [loading, setLoading] = useState(true)
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null)
 
   useEffect(() => {
     load().catch(() => setLoading(false))
@@ -63,7 +69,7 @@ export default function CheckInsScreen() {
 
     const { data } = await supabase
       .from('check_ins')
-      .select('id, client_id, date, weight, energy_level, front_photo_url, notes, clients ( full_name )')
+      .select('id, client_id, date, weight, energy_level, front_photo_url, back_photo_url, notes, clients ( full_name )')
       .in('client_id', clientIds)
       .order('date', { ascending: false })
       .limit(40)
@@ -128,12 +134,13 @@ export default function CheckInsScreen() {
             </View>
           )}
 
-          {item.front_photo_url ? (
-            <View style={styles.photoRow}>
-              <Camera size={14} color={theme.primary} />
-              <Text style={[styles.photoIndicator, { color: theme.primary, fontFamily: theme.fontSans }]}>
-                Foto adjunta
-              </Text>
+          {(item.front_photo_url || item.back_photo_url) ? (
+            <View style={styles.photoThumbs}>
+              {([item.front_photo_url, item.back_photo_url].filter(Boolean) as string[]).map((url, i) => (
+                <TouchableOpacity key={i} onPress={() => setViewerUrl(url)} activeOpacity={0.85}>
+                  <Image source={{ uri: url }} style={[styles.thumb, { borderColor: theme.border }]} contentFit="cover" transition={150} />
+                </TouchableOpacity>
+              ))}
             </View>
           ) : null}
           {item.notes ? (
@@ -171,6 +178,13 @@ export default function CheckInsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      <Modal visible={!!viewerUrl} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setViewerUrl(null)}>
+        <Pressable style={styles.viewerOverlay} onPress={() => setViewerUrl(null)}>
+          {viewerUrl ? <Image source={{ uri: viewerUrl }} style={styles.viewerImg} contentFit="contain" transition={150} /> : null}
+          <View style={styles.viewerClose}><X size={24} color="#fff" /></View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -195,7 +209,10 @@ const styles = StyleSheet.create({
   energyText: { fontSize: 11, letterSpacing: 0.3 },
   energyBarBg: { height: 4, borderRadius: 2, overflow: 'hidden' },
   energyBarFill: { height: 4, borderRadius: 2 },
-  photoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  photoIndicator: { fontSize: 12, fontWeight: '500' },
+  photoThumbs: { flexDirection: 'row', gap: 8 },
+  thumb: { width: 64, height: 80, borderRadius: 10, borderWidth: 1 },
   notes: { fontSize: 13, lineHeight: 18 },
+  viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  viewerImg: { width: '100%', height: '82%' },
+  viewerClose: { position: 'absolute', top: 48, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
 })

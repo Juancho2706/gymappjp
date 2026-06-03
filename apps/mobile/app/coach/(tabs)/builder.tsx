@@ -32,6 +32,7 @@ import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext } from '../../../lib/org'
+import { selectWithFallback } from '../../../lib/db-compat'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, ScreenHeader, SegmentedTabs } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -143,13 +144,7 @@ export default function BuilderScreen() {
       return
     }
 
-    const [programRes, clientsRes] = await Promise.all([
-      supabase
-        .from('workout_programs')
-        .select(`
-          id, name, client_id, org_id, weeks_to_repeat, start_date, end_date, duration_days, start_date_flexible,
-          program_notes, created_at, updated_at, is_active, program_phases, program_structure_type, cycle_length,
-          ab_mode, duration_type, source_template_id,
+    const planBlock = `
           client:clients(id, full_name),
           workout_plans (
             id, day_of_week, title, group_name, week_variant, assigned_date,
@@ -158,10 +153,21 @@ export default function BuilderScreen() {
               superset_group, progression_type, progression_value, is_override,
               exercise:exercises(name)
             )
-          )
-        `)
-        .eq('coach_id', coach.id)
-        .order('updated_at', { ascending: false }),
+          )`
+    const baseCols = `id, name, client_id, weeks_to_repeat, start_date, end_date, duration_days, start_date_flexible,
+          program_notes, created_at, updated_at, is_active, program_phases, program_structure_type, cycle_length,
+          ab_mode, duration_type, source_template_id`
+    const richCols = `id, name, client_id, org_id, weeks_to_repeat, start_date, end_date, duration_days, start_date_flexible,
+          program_notes, created_at, updated_at, is_active, program_phases, program_structure_type, cycle_length,
+          ab_mode, duration_type, source_template_id,${planBlock}`
+    const minCols = `${baseCols},${planBlock}`
+
+    const [programRes, clientsRes] = await Promise.all([
+      // Rich (con org_id) → fallback sin org_id para prod standalone.
+      selectWithFallback<any>(
+        () => supabase.from('workout_programs').select(richCols).eq('coach_id', coach.id).order('updated_at', { ascending: false }),
+        () => supabase.from('workout_programs').select(minCols).eq('coach_id', coach.id).order('updated_at', { ascending: false })
+      ),
       supabase
         .from('clients')
         .select('id, full_name, workout_programs(id, name, is_active)')

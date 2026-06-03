@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { selectWithFallback } from './db-compat'
 
 export interface ClientProfile {
   id: string
@@ -12,11 +13,10 @@ export async function getClientProfile(): Promise<ClientProfile | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data } = await supabase
-    .from('clients')
-    .select('id, full_name, coach_id, org_id')
-    .eq('id', user.id)
-    .maybeSingle()
+  const { data } = await selectWithFallback<any>(
+    () => supabase.from('clients').select('id, full_name, coach_id, org_id').eq('id', user.id).maybeSingle(),
+    () => supabase.from('clients').select('id, full_name, coach_id').eq('id', user.id).maybeSingle()
+  )
 
   if (!data) return null
   return {

@@ -13,6 +13,8 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Button, InfoRow, Section } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import * as Notifications from 'expo-notifications'
+import { syncPushToken } from '../../../lib/push'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
@@ -49,7 +51,20 @@ export default function CoachPerfilScreen() {
 
   useEffect(() => {
     load().catch(() => setLoading(false))
+    // Reflejar el estado REAL del permiso del SO (no asumir off).
+    Notifications.getPermissionsAsync().then(({ status }) => setPushEnabled(status === 'granted')).catch(() => {})
   }, [])
+
+  async function togglePush(value: boolean) {
+    if (value && coach) {
+      await syncPushToken(coach.id, supabase).catch(() => {})
+      const { status } = await Notifications.getPermissionsAsync()
+      setPushEnabled(status === 'granted')
+    } else {
+      // El permiso del SO se gestiona en Ajustes del teléfono; acá solo reflejamos.
+      setPushEnabled(false)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -200,7 +215,7 @@ export default function CoachPerfilScreen() {
             </Text>
             <Switch
               value={pushEnabled}
-              onValueChange={setPushEnabled}
+              onValueChange={togglePush}
               trackColor={{ false: theme.border, true: theme.primary + '88' }}
               thumbColor={pushEnabled ? theme.primary : theme.mutedForeground}
             />

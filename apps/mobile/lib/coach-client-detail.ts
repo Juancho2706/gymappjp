@@ -4,6 +4,7 @@ import {
   getTodayInSantiago,
   isoDateAddDays,
 } from './date-utils'
+import { isMissingColumnError, selectWithFallback } from './db-compat'
 import {
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
@@ -358,6 +359,32 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   nutritionStreakDays: number
   favoriteFoods: FavoriteFoodEntry[]
 }> {
+  // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
+  // ricas fallen en una prod sin columnas enterprise/Codex.
+  const { data: clientData } = await supabase
+    .from('clients')
+    .select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at')
+    .eq('id', clientId)
+    .maybeSingle()
+  const baseClient = (clientData as CoachClientDetail | null) ?? null
+  const EMPTY = {
+    client: baseClient,
+    checkIns: [] as CheckInEntry[],
+    payments: [] as PaymentEntry[],
+    activeProgram: null as ActiveProgramInfo | null,
+    activeNutrition: null as ActiveNutritionInfo | null,
+    sessions30d: 0,
+    compliance: { workoutsThisWeek: 0, workoutsPrevWeek: 0, workoutsTarget: 1, nutritionWeeklyAvgPct: 0, nutritionPrevWeeklyAvgPct: 0, checkInCompliancePercent: 0, checkInCompliancePercentWeekAgo: 0 },
+    activity: [] as ActivityDay[],
+    personalRecords: [] as PersonalRecordEntry[],
+    muscleVolume: [] as MuscleVolumeEntry[],
+    nutritionMeals: [] as NutritionMealPlanEntry[],
+    nutritionTimeline: [] as NutritionTimelineEntry[],
+    nutritionMonthlyAvgPct: 0,
+    nutritionStreakDays: 0,
+    favoriteFoods: [] as FavoriteFoodEntry[],
+  }
+  try {
   const { iso: todayIso } = getTodayInSantiago()
   const sevenDaysAgo = isoDateAddDays(todayIso, -7)
   const fourteenDaysAgo = isoDateAddDays(todayIso, -14)
@@ -379,12 +406,10 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at')
         .eq('id', clientId)
         .maybeSingle(),
-      supabase
-        .from('check_ins')
-        .select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at')
-        .eq('client_id', clientId)
-        .order('date', { ascending: false })
-        .limit(200),
+      selectWithFallback<any>(
+        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
+        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
+      ),
       supabase
         .from('client_payments')
         .select('id, amount, payment_date, service_description, status, period_months')
@@ -548,7 +573,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   }
 
   return {
-    client: (clientRes.data as CoachClientDetail | null) ?? null,
+    client: baseClient,
     checkIns,
     payments: (paymentRes.data as PaymentEntry[] | null) ?? [],
     activeProgram: program,
@@ -585,6 +610,10 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       .map((row) => row.foods)
       .filter(Boolean) as any[])
       .map((food) => ({ id: food.id as string, name: food.name as string })),
+  }
+  } catch (e) {
+    console.warn('[coach-client-detail] partial load', e)
+    return EMPTY
   }
 }
 
@@ -666,7 +695,10 @@ export async function markCoachCheckInReviewed(clientId: string, checkInId: stri
     .eq('id', checkInId)
     .eq('client_id', clientId)
     .is('reviewed_at', null)
-  if (error) return { ok: false, error: error.message }
+  if (error) {
+    if (isMissingColumnError(error)) return { ok: false, error: 'Marcar revisado estará disponible al actualizar tu cuenta.' }
+    return { ok: false, error: error.message }
+  }
   return { ok: true }
 }
 

@@ -12,40 +12,34 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /**
- * Shared layered backdrop (faint grid + two brand washes) used behind the coach
- * dashboard and the student app — the "líneas bonitas + difuminados" of the web.
- * Place as an absolute-fill child behind content. Uses the live brand accent.
+ * Backdrop MUY sutil (estética sobria 2026: bordes/luminancia > saturación). Grid
+ * tenue + UN wash radial de marca apenas perceptible arriba. Color = `accent` (o el
+ * acento de marca live `theme.primary`). Sin cyan fijo. Pensado para no competir con
+ * el contenido en light NI dark.
  */
-export function AppBackground() {
+export function AppBackground({ accent }: { accent?: string }) {
   const { theme, mode } = useTheme()
   const isDark = mode !== 'light'
-  const gridColor = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(15,23,42,0.03)'
-  const topWash = hexToRgba(theme.primary, isDark ? 0.10 : 0.07)
-  const topWashMid = hexToRgba(theme.primary, isDark ? 0.035 : 0.025)
-  const sideWash = hexToRgba('#22D3EE', isDark ? 0.05 : 0.03)
-  const sideWashMid = hexToRgba('#22D3EE', isDark ? 0.018 : 0.012)
+  const tint = accent ?? theme.primary
+  const gridColor = isDark ? 'rgba(255,255,255,0.022)' : 'rgba(15,23,42,0.02)'
+  const washIn = hexToRgba(tint, isDark ? 0.06 : 0.04)
+  const washMid = hexToRgba(tint, isDark ? 0.02 : 0.015)
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
         <Defs>
-          <Pattern id="appgrid" width={28} height={28} patternUnits="userSpaceOnUse">
-            <Path d="M28 0 L0 0 0 28" fill="none" stroke={gridColor} strokeWidth={0.5} />
+          <Pattern id="appgrid" width={30} height={30} patternUnits="userSpaceOnUse">
+            <Path d="M30 0 L0 0 0 30" fill="none" stroke={gridColor} strokeWidth={0.5} />
           </Pattern>
-          <RadialGradient id="appTopWash" cx="18%" cy="2%" r="78%">
-            <Stop offset="0" stopColor={topWash} />
-            <Stop offset="0.48" stopColor={topWashMid} />
-            <Stop offset="1" stopColor={theme.primary} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="appSideWash" cx="88%" cy="64%" r="76%">
-            <Stop offset="0" stopColor={sideWash} />
-            <Stop offset="0.46" stopColor={sideWashMid} />
-            <Stop offset="1" stopColor="#22D3EE" stopOpacity={0} />
+          <RadialGradient id="appWash" cx="22%" cy="0%" r="85%">
+            <Stop offset="0" stopColor={washIn} />
+            <Stop offset="0.45" stopColor={washMid} />
+            <Stop offset="1" stopColor={tint} stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#appgrid)" />
-        <Rect width="100%" height="100%" fill="url(#appTopWash)" />
-        <Rect width="100%" height="100%" fill="url(#appSideWash)" />
+        <Rect width="100%" height="100%" fill="url(#appWash)" />
       </Svg>
     </View>
   )

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { selectWithFallback } from './db-compat'
 
 // Coach exercise library. Reads via Supabase (RLS: system exercises +
 // coach-owned). Mutations run under the coach session (RLS enforces coach_id =
@@ -73,6 +74,9 @@ export interface ExerciseInput {
 
 const SELECT_COLUMNS =
   'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id, org_id'
+// Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.
+const SELECT_COLUMNS_MIN =
+  'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id'
 
 /** Free tier cannot create custom exercises (mirrors web getTierCapabilities). */
 export function canCreateCustomExercises(tier: string | null | undefined): boolean {
@@ -86,23 +90,17 @@ async function currentCoachId(): Promise<string | null> {
 
 export async function listCoachExercises(): Promise<{ exercises: ExerciseRow[]; coachId: string | null }> {
   const coachId = await currentCoachId()
-  // System catalog (coach_id + org_id null) OR the coach's own custom exercises.
-  const filter = coachId
+  // Catálogo sistema (coach_id+org_id null) OR propios. Filtro rico usa org_id;
+  // fallback (prod sin org_id) usa solo coach_id.
+  const richFilter = coachId
     ? `and(coach_id.is.null,org_id.is.null),coach_id.eq.${coachId}`
     : `and(coach_id.is.null,org_id.is.null)`
+  const minFilter = coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : `coach_id.is.null`
 
-  let res = await supabase
-    .from('exercises')
-    .select(SELECT_COLUMNS)
-    .or(filter)
-    .is('deleted_at', null)
-    .order('muscle_group')
-    .order('name')
-
-  if (res.error) {
-    // Fallback for environments where deleted_at/body_part are absent.
-    res = await supabase.from('exercises').select(SELECT_COLUMNS).or(filter).order('muscle_group').order('name')
-  }
+  const res = await selectWithFallback<any>(
+    () => supabase.from('exercises').select(SELECT_COLUMNS).or(richFilter).is('deleted_at', null).order('muscle_group').order('name'),
+    () => supabase.from('exercises').select(SELECT_COLUMNS_MIN).or(minFilter).order('muscle_group').order('name')
+  )
 
   const rows = (res.data as Omit<ExerciseRow, 'isOwn'>[] | null) ?? []
   const exercises = rows.map((r) => ({ ...r, isOwn: !!coachId && r.coach_id === coachId }))

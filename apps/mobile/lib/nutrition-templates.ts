@@ -114,7 +114,7 @@ export async function saveTemplate(draft: PlanDraft): Promise<{ ok: boolean; tem
 
   const templateData = {
     coach_id: coachId,
-    org_id: ctx.orgId,
+    ...(ctx.orgId ? { org_id: ctx.orgId } : {}),
     name: draft.name.trim(),
     daily_calories: Math.round(draft.daily_calories) || 0,
     protein_g: Math.round(draft.protein_g) || 0,
@@ -191,7 +191,7 @@ export async function assignTemplateToClients(templateId: string, clientIds: str
       const { data: np, error: planErr } = await supabase
         .from('nutrition_plans')
         .insert({
-          client_id: clientId, coach_id: coachId, org_id: orgId,
+          client_id: clientId, coach_id: coachId, ...(orgId ? { org_id: orgId } : {}),
           name: tmpl.name, daily_calories: tmpl.daily_calories, protein_g: tmpl.protein_g,
           carbs_g: tmpl.carbs_g, fats_g: tmpl.fats_g, instructions: tmpl.instructions ?? null,
           is_active: true, is_custom: false, template_id: templateId,

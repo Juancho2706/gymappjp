@@ -38,24 +38,32 @@ export default function NutritionBuilderScreen() {
   const [draft, setDraft] = useState<PlanDraft>(emptyPlanDraft())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Objetivos = suma de alimentos automáticamente, salvo que el coach los edite a mano.
+  const [macrosManual, setMacrosManual] = useState(false)
 
   useEffect(() => {
     (async () => {
       if (isTemplate) {
-        if (templateId) { const d = await getTemplateDraft(templateId); if (d) setDraft(d) }
+        if (templateId) { const d = await getTemplateDraft(templateId); if (d) { setDraft(d); setMacrosManual((d.daily_calories ?? 0) > 0) } }
         else setDraft((p) => ({ ...p, name: '' }))
         setLoading(false)
         return
       }
       if (planId) {
         const d = await getPlanDraft(planId)
-        if (d) setDraft(d)
+        if (d) { setDraft(d); setMacrosManual((d.daily_calories ?? 0) > 0) }
       }
       setLoading(false)
     })()
   }, [planId, templateId])
 
   const totals = draftTotals(draft.meals)
+
+  // Auto: objetivos siguen la suma de alimentos (salvo edición manual del coach).
+  useEffect(() => {
+    if (macrosManual) return
+    setDraft((d) => ({ ...d, daily_calories: totals.kcal, protein_g: totals.protein, carbs_g: totals.carbs, fats_g: totals.fats }))
+  }, [totals.kcal, totals.protein, totals.carbs, totals.fats, macrosManual])
 
   function patch(p: Partial<PlanDraft>) { setDraft((d) => ({ ...d, ...p })) }
   function setMeals(fn: (meals: DraftMeal[]) => DraftMeal[]) { setDraft((d) => ({ ...d, meals: fn(d.meals) })) }
@@ -130,12 +138,21 @@ export default function NutritionBuilderScreen() {
           {/* Plan meta */}
           <Field theme={theme} label="Nombre del plan" value={draft.name} onChangeText={(v: string) => patch({ name: v })} placeholder="Ej: Definición — 2000 kcal" />
 
-          <Label theme={theme}>Objetivos diarios</Label>
+          <View style={styles.objHeaderRow}>
+            <Label theme={theme}>Objetivos diarios</Label>
+            {macrosManual ? (
+              <TouchableOpacity onPress={() => setMacrosManual(false)} activeOpacity={0.7}>
+                <Text style={[styles.autoChip, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>↺ Auto desde alimentos</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={[styles.autoChip, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Auto desde alimentos ✓</Text>
+            )}
+          </View>
           <View style={styles.macroRow}>
-            <MacroField theme={theme} label="kcal" value={draft.daily_calories} onChange={(n) => patch({ daily_calories: n })} />
-            <MacroField theme={theme} label="Prot (g)" value={draft.protein_g} onChange={(n) => patch({ protein_g: n })} />
-            <MacroField theme={theme} label="Carbs (g)" value={draft.carbs_g} onChange={(n) => patch({ carbs_g: n })} />
-            <MacroField theme={theme} label="Gras (g)" value={draft.fats_g} onChange={(n) => patch({ fats_g: n })} />
+            <MacroField theme={theme} label="kcal" value={draft.daily_calories} onChange={(n) => { setMacrosManual(true); patch({ daily_calories: n }) }} />
+            <MacroField theme={theme} label="Prot (g)" value={draft.protein_g} onChange={(n) => { setMacrosManual(true); patch({ protein_g: n }) }} />
+            <MacroField theme={theme} label="Carbs (g)" value={draft.carbs_g} onChange={(n) => { setMacrosManual(true); patch({ carbs_g: n }) }} />
+            <MacroField theme={theme} label="Gras (g)" value={draft.fats_g} onChange={(n) => { setMacrosManual(true); patch({ fats_g: n }) }} />
           </View>
 
           {/* Live totals from foods */}
@@ -179,9 +196,14 @@ export default function NutritionBuilderScreen() {
                 <View key={it.uid} style={[styles.itemRow, { borderColor: theme.border }]}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.name}</Text>
-                    <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                      {Math.round(it.calories * (it.serving_size > 0 ? it.quantity / it.serving_size : 0))} kcal
-                    </Text>
+                    {(() => {
+                      const f = it.serving_size > 0 ? it.quantity / it.serving_size : 0
+                      return (
+                        <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                          {Math.round(it.calories * f)} kcal · P{Math.round(it.protein_g * f)} C{Math.round(it.carbs_g * f)} G{Math.round(it.fats_g * f)}
+                        </Text>
+                      )
+                    })()}
                   </View>
                   <TextInput
                     value={String(it.quantity)}
@@ -266,6 +288,8 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12 },
   input: { minHeight: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   macroRow: { flexDirection: 'row', gap: 8 },
+  objHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  autoChip: { fontSize: 11 },
   macroLabel: { fontSize: 11 },
   macroInput: { height: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, fontSize: 15, textAlign: 'center' },
   totals: { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, gap: 3 },

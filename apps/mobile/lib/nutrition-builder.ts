@@ -312,7 +312,7 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
   const planData = {
     client_id: clientId,
     coach_id: coachId,
-    org_id: orgId,
+    ...(orgId ? { org_id: orgId } : {}),
     name: draft.name.trim(),
     daily_calories: Math.round(draft.daily_calories) || 0,
     protein_g: Math.round(draft.protein_g) || 0,
@@ -475,7 +475,7 @@ export async function duplicatePlanToClient(sourcePlanId: string, targetClientId
     const { data: np, error: planErr } = await supabase
       .from('nutrition_plans')
       .insert({
-        client_id: targetClientId, coach_id: coachId, org_id: orgId,
+        client_id: targetClientId, coach_id: coachId, ...(orgId ? { org_id: orgId } : {}),
         name: (src as any).name, daily_calories: (src as any).daily_calories, protein_g: (src as any).protein_g,
         carbs_g: (src as any).carbs_g, fats_g: (src as any).fats_g, instructions: (src as any).instructions ?? null,
         is_active: true, is_custom: true,

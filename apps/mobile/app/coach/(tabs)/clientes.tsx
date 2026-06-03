@@ -195,24 +195,29 @@ function AlertBanner({
   onPress: () => void
   onDismiss: () => void
 }) {
+  const { theme } = useTheme()
+  const hideAction = (side: 'left' | 'right') => (
+    <View style={[alertStyles.dismiss, { backgroundColor: color + '22' }, side === 'left' ? { marginLeft: 16, marginRight: 0 } : null]}>
+      <EyeOff size={15} color={color} />
+      <Text style={[alertStyles.dismissText, { color }]}>Ocultar</Text>
+    </View>
+  )
   return (
     <Swipeable
-      renderRightActions={() => (
-        <View style={[alertStyles.dismiss, { backgroundColor: color + '22' }]}>
-          <EyeOff size={15} color={color} />
-          <Text style={[alertStyles.dismissText, { color }]}>Ocultar</Text>
-        </View>
-      )}
+      renderRightActions={() => hideAction('right')}
+      renderLeftActions={() => hideAction('left')}
       onSwipeableOpen={onDismiss}
       overshootRight={false}
+      overshootLeft={false}
       friction={1.6}
     >
+      {/* Fondo OPACO (theme.card) + acento de color a la izquierda → legible sobre cualquier fondo. */}
       <TouchableOpacity
-        style={[alertStyles.wrap, { backgroundColor: color + '18', borderColor: color + '44' }]}
+        style={[alertStyles.wrap, { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 3, borderLeftColor: color }]}
         onPress={onPress}
         activeOpacity={0.8}
       >
-        <Text style={[alertStyles.text, { color, flex: 1 }]}>{message}</Text>
+        <Text style={[alertStyles.text, { color: theme.foreground, flex: 1 }]} numberOfLines={2}>{message}</Text>
         <View style={alertStyles.cta}>
           <Text style={[alertStyles.ctaText, { color }]}>Ver</Text>
           <ChevronRight size={14} color={color} />

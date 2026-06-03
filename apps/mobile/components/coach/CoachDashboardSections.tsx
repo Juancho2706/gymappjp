@@ -1374,20 +1374,12 @@ function QuickActionButton({
   onPress: () => void
 }) {
   const { theme } = useTheme()
-  const isLight = theme.card === '#FFFFFF'
 
   return (
     <TouchableOpacity
       activeOpacity={0.82}
       onPress={onPress}
-      style={[
-        styles.quickActionButton,
-        {
-          backgroundColor: isLight ? 'rgba(255,255,255,0.88)' : 'rgba(12,16,20,0.74)',
-          borderColor: isLight ? 'rgba(15,23,42,0.1)' : 'rgba(255,255,255,0.11)',
-          shadowColor: '#000',
-        },
-      ]}
+      style={[styles.quickActionButton, { backgroundColor: theme.card, borderColor: theme.border }]}
     >
       <Icon size={16} color={theme.primary} strokeWidth={2.3} />
       <Text
@@ -1767,7 +1759,7 @@ export function MobileNextBestAction({
   }
 
   return (
-    <View style={[styles.nextCard, glass, { borderRadius: theme.radius['2xl'], backgroundColor: hexToRgba(toneColor, 0.08) }]}>
+    <View style={[styles.nextCard, glass, { borderRadius: theme.radius['2xl'], borderLeftWidth: 3, borderLeftColor: toneColor }]}>
       <View style={styles.panelTitleRow}>
         <Sparkles size={17} color={theme.primary} />
         <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
