@@ -20,6 +20,7 @@ import {
   type FoodRow,
   type PlanDraft,
 } from '../../lib/nutrition-builder'
+import { getTemplateDraft, saveTemplate } from '../../lib/nutrition-templates'
 
 function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: boolean }) {
   const units = item.is_liquid || item.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
@@ -29,7 +30,8 @@ function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: b
 export default function NutritionBuilderScreen() {
   const { theme } = useTheme()
   const router = useRouter()
-  const { clientId, clientName, planId } = useLocalSearchParams<{ clientId: string; clientName?: string; planId?: string }>()
+  const { clientId, clientName, planId, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; planId?: string; templateId?: string; mode?: string }>()
+  const isTemplate = mode === 'template' || !!templateId
   const foodSheetRef = useRef<BottomSheetModal>(null)
   const activeMealRef = useRef<string | null>(null)
 
@@ -39,13 +41,19 @@ export default function NutritionBuilderScreen() {
 
   useEffect(() => {
     (async () => {
+      if (isTemplate) {
+        if (templateId) { const d = await getTemplateDraft(templateId); if (d) setDraft(d) }
+        else setDraft((p) => ({ ...p, name: '' }))
+        setLoading(false)
+        return
+      }
       if (planId) {
         const d = await getPlanDraft(planId)
         if (d) setDraft(d)
       }
       setLoading(false)
     })()
-  }, [planId])
+  }, [planId, templateId])
 
   const totals = draftTotals(draft.meals)
 
@@ -78,9 +86,9 @@ export default function NutritionBuilderScreen() {
   }
 
   async function save() {
-    if (draft.name.trim().length < 2) { Alert.alert('Falta el nombre', 'Indicá un nombre para el plan.'); return }
+    if (draft.name.trim().length < 2) { Alert.alert('Falta el nombre', isTemplate ? 'Indicá un nombre para la plantilla.' : 'Indicá un nombre para el plan.'); return }
     setSaving(true)
-    const res = await saveClientPlan(clientId, draft)
+    const res = isTemplate ? await saveTemplate(draft) : await saveClientPlan(clientId!, draft)
     setSaving(false)
     if (!res.ok) { Alert.alert('Error', res.error ?? 'No se pudo guardar.'); return }
     router.back()
@@ -103,7 +111,7 @@ export default function NutritionBuilderScreen() {
           <Text style={[styles.headerBackText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Volver</Text>
         </TouchableOpacity>
         <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          {planId ? 'Editar plan' : 'Nuevo plan'}
+          {isTemplate ? (templateId ? 'Editar plantilla' : 'Nueva plantilla') : (planId ? 'Editar plan' : 'Nuevo plan')}
         </Text>
         <TouchableOpacity onPress={save} disabled={saving} activeOpacity={0.85}
           style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>

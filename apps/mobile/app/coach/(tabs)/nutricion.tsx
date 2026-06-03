@@ -2,15 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Apple, BadgeCheck, CheckCircle2, Copy, Plus, Trash2, UtensilsCrossed } from 'lucide-react-native'
+import { Apple, BadgeCheck, CheckCircle2, Copy, Layers, Pencil, Plus, Trash2, Users, UtensilsCrossed } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
-import { EmptyState, MacroPill, NativeDialog, ScreenHeader } from '../../../components'
+import { Button, EmptyState, MacroPill, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { deletePlan, duplicatePlanToClient, getClientPlans, setPlanActive, type PlanSummary } from '../../../lib/nutrition-builder'
+import { assignTemplateToClients, deleteTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
 
 interface Client { id: string; full_name: string }
 
@@ -24,6 +25,11 @@ export default function CoachNutricionScreen() {
   const [loadingPlans, setLoadingPlans] = useState(false)
   const [copyPlan, setCopyPlan] = useState<PlanSummary | null>(null)
   const [copyBusy, setCopyBusy] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [templates, setTemplates] = useState<TemplateSummary[]>([])
+  const [assignTemplate, setAssignTemplate] = useState<TemplateSummary | null>(null)
+  const [assignIds, setAssignIds] = useState<string[]>([])
+  const [tplBusy, setTplBusy] = useState(false)
 
   useEffect(() => { loadClients() }, [])
 
@@ -94,17 +100,50 @@ export default function CoachNutricionScreen() {
     Alert.alert('Plan copiado', 'El plan quedó activo para el alumno elegido.')
   }
 
+  async function openTemplates() {
+    setTemplatesOpen(true)
+    setTemplates(await listTemplates())
+  }
+  function confirmDeleteTemplate(t: TemplateSummary) {
+    Alert.alert('Eliminar plantilla', `¿Eliminar "${t.name}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        const r = await deleteTemplate(t.id)
+        if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo eliminar.'); return }
+        setTemplates(await listTemplates())
+      } },
+    ])
+  }
+  async function doAssign() {
+    if (!assignTemplate || !assignIds.length) return
+    setTplBusy(true)
+    const r = await assignTemplateToClients(assignTemplate.id, assignIds)
+    setTplBusy(false)
+    setAssignTemplate(null)
+    setAssignIds([])
+    if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo asignar.'); return }
+    Alert.alert('Plantilla asignada', `Asignada a ${assignIds.length} alumno(s) como plan activo.`)
+    if (selectedClient) loadPlans(selectedClient.id)
+  }
+
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScreenHeader
         title="Nutricion"
         subtitle={selectedClient ? `Planes de ${selectedClient.full_name}` : 'Selecciona un alumno'}
-        trailing={selectedClient ? (
-          <TouchableOpacity onPress={() => openBuilder()} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: theme.primary }]}>
-            <Plus size={20} color={theme.primaryForeground} />
-          </TouchableOpacity>
-        ) : undefined}
+        trailing={
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={openTemplates} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border }]}>
+              <Layers size={18} color={theme.foreground} />
+            </TouchableOpacity>
+            {selectedClient ? (
+              <TouchableOpacity onPress={() => openBuilder()} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: theme.primary }]}>
+                <Plus size={20} color={theme.primaryForeground} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        }
       />
 
       {loadingClients ? (
@@ -211,6 +250,60 @@ export default function CoachNutricionScreen() {
           ) : null}
         </View>
       </NativeDialog>
+
+      {/* Plantillas de nutrición */}
+      <NativeDialog open={templatesOpen} title="Plantillas de nutrición" onClose={() => setTemplatesOpen(false)}>
+        <View style={{ gap: 10 }}>
+          <Button label="Nueva plantilla" leftIcon={Plus} onPress={() => { setTemplatesOpen(false); router.push('/coach/nutrition-builder?mode=template') }} full />
+          {templates.length === 0 ? (
+            <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Aún no tenés plantillas. Creá una para reutilizar planes entre alumnos.</Text>
+          ) : (
+            <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
+              {templates.map((t) => (
+                <View key={t.id} style={[styles.tplCard, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
+                  <Text style={[styles.tplName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{t.name}</Text>
+                  <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    {t.daily_calories ?? 0} kcal · {t.mealCount} comida{t.mealCount !== 1 ? 's' : ''}
+                  </Text>
+                  <View style={styles.tplActions}>
+                    <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => { setTemplatesOpen(false); router.push(`/coach/nutrition-builder?templateId=${t.id}`) }}>
+                      <Pencil size={14} color={theme.foreground} /><Text style={[styles.tplBtnText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Editar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => { setTemplatesOpen(false); setAssignIds([]); setAssignTemplate(t) }}>
+                      <Users size={14} color={theme.primary} /><Text style={[styles.tplBtnText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Asignar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => confirmDeleteTemplate(t)}>
+                      <Trash2 size={14} color={theme.destructive} /><Text style={[styles.tplBtnText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Borrar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </NativeDialog>
+
+      {/* Asignar plantilla a alumnos */}
+      <NativeDialog open={!!assignTemplate} title={`Asignar "${assignTemplate?.name ?? ''}"`} onClose={() => setAssignTemplate(null)}>
+        <View style={{ gap: 8 }}>
+          <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Cada alumno elegido recibe esta plantilla como plan activo (el anterior queda inactivo).
+          </Text>
+          <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
+            {clients.map((c) => {
+              const on = assignIds.includes(c.id)
+              return (
+                <TouchableOpacity key={c.id} activeOpacity={0.8} onPress={() => setAssignIds((ids) => on ? ids.filter((x) => x !== c.id) : [...ids, c.id])}
+                  style={[styles.copyRow, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : theme.secondary, borderRadius: theme.radius.lg }]}>
+                  <Text style={[styles.copyName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>{c.full_name}</Text>
+                  {on ? <CheckCircle2 size={16} color={theme.primary} /> : <View style={{ width: 16 }} />}
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+          <Button label={tplBusy ? 'Asignando...' : `Asignar a ${assignIds.length} alumno(s)`} onPress={doAssign} disabled={tplBusy || assignIds.length === 0} full />
+        </View>
+      </NativeDialog>
     </SafeAreaView>
   )
 }
@@ -236,4 +329,9 @@ const styles = StyleSheet.create({
   copyHint: { fontSize: 12, lineHeight: 17 },
   copyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
   copyName: { fontSize: 14, flex: 1 },
+  tplCard: { borderWidth: 1, padding: 12, gap: 4 },
+  tplName: { fontSize: 15 },
+  tplActions: { flexDirection: 'row', gap: 14, marginTop: 6 },
+  tplBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  tplBtnText: { fontSize: 13 },
 })

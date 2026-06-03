@@ -126,6 +126,19 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - **Foods coach CRUD**: `app/coach/foods.tsx` (listar/buscar/crear/editar/eliminar alimentos propios) + entry "Mis alimentos" en coach perfil. `lib/nutrition-builder.ts` suma `listCoachFoods`, `updateFood`, `deleteFood` (RLS coach; delete falla con mensaje si el food está en uso por FK).
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
 
+## Claude update - 2026-06-02 - nutrición plantillas (reales)
+- **Plantillas de nutrición** portadas de `nutrition.service.ts` (tablas ya existen, cero cambios BD). `lib/nutrition-templates.ts`: `listTemplates`, `getTemplateDraft`, `saveTemplate` (= `createOrUpdateTemplateFromJson`: `nutrition_plan_templates` + `template_meals` + `saved_meals`/`saved_meal_items`/`template_meal_groups`, 1 grupo/comida), `deleteTemplate`, `assignTemplateToClients`.
+- **assignTemplateToClients** = versión simplificada y segura de `propagateTemplateChanges`: por alumno desactiva el plan activo y crea uno nuevo `nutrition_plans` (template_id, is_custom false, is_active true) + meals + food_items. NO hace update in-place (la web preserva plan_id para logs; acá se crea nuevo y el viejo queda inactivo, logs intactos). **Falta vs web:** preservación in-place de logs + swap groups múltiples + ciclos (`nutrition_plan_cycles`).
+- **UI**: `nutrition-builder.tsx` ahora es template-aware (`mode=template`/`templateId`, reusa PlanDraft, guarda con `saveTemplate`). `nutricion.tsx` suma botón "Plantillas" (header) → modal listar/nueva/editar/asignar(multi-select alumnos)/borrar.
+- ⚠️ **Necesita verificación en device**: la propagación escribe en varias tablas; probar crear plantilla → asignar a alumno → ver plan en web.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
+## Claude update - 2026-06-03 - FIX build iOS (associated-domains)
+- **iOS archive fallaba**: `Provisioning profile "evaapp_production" doesn't include the Associated Domains capability`. Causa: `ios.associatedDomains` (agregado en W5) inyecta el entitlement `com.apple.developer.associated-domains`, pero el App ID `cl.evaapp.eva` + profile `evaapp_production` NO tienen esa capability habilitada en Apple Developer.
+- **Fix**: removido `ios.associatedDomains` de `app.json` → iOS buildea. Android App Links (intentFilters) + scheme `eva://` siguen funcionando; solo se pierden los **universal links iOS** (no críticos aún).
+- **Para re-activar universal links iOS** (antes del launch): en developer.apple.com activar "Associated Domains" en App ID `cl.evaapp.eva`, regenerar profile `evaapp_production`, y volver a poner `"associatedDomains": ["applinks:eva-app.cl", "webcredentials:eva-app.cl"]` en `app.json` ios. (O usar `eas credentials` para que EAS lo gestione.)
+- Aviso menor no-fatal del log: `eas.json` profile sin `channel` → EAS Update OTA deshabilitado para ese build (no rompe). Configurar con `eas update:configure` si se quiere OTA.
+
 ## Codex update - 2026-06-02 - APK visual/nutrition fixes
 - Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
 - Input de cantidad en comidas ajustado para Android: altura/lineHeight/padding centrados para evitar que numeros como `50` se corten arriba.
