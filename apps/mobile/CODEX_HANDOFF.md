@@ -139,6 +139,11 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - **Para re-activar universal links iOS** (antes del launch): en developer.apple.com activar "Associated Domains" en App ID `cl.evaapp.eva`, regenerar profile `evaapp_production`, y volver a poner `"associatedDomains": ["applinks:eva-app.cl", "webcredentials:eva-app.cl"]` en `app.json` ios. (O usar `eas credentials` para que EAS lo gestione.)
 - Aviso menor no-fatal del log: `eas.json` profile sin `channel` → EAS Update OTA deshabilitado para ese build (no rompe). Configurar con `eas update:configure` si se quiere OTA.
 
+## Claude update - 2026-06-03 - gráfica energía + nota onboarding coach
+- **Detalle alumno**: `components/coach/TrendChart.tsx` (genérico: line+area+tooltip). Progreso ahora tiene gráfica de **peso** (kg) **y de energía** (/10). `WeightTrendChart.tsx` quedó superseded (no se importa).
+- **Onboarding coach** = **web-only por diseño**, NO portar: usa service-role + selección de tier pago + MercadoPago (`coach/onboarding/complete`). El signup RN del coach es free-tier / o se registra en web. Quitar del backlog mobile.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
 ## Codex update - 2026-06-02 - APK visual/nutrition fixes
 - Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
 - Input de cantidad en comidas ajustado para Android: altura/lineHeight/padding centrados para evitar que numeros como `50` se corten arriba.

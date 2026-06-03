@@ -9,7 +9,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, ComplianceRing, EmptyState, InfoRow, MacroPill, NativeDialog, ProgressBar, Section, SegmentedTabs, Sparkline, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
-import { WeightTrendChart } from '../../../components/coach/WeightTrendChart'
+import { TrendChart } from '../../../components/coach/TrendChart'
 import { apiFetch } from '../../../lib/api'
 import {
   getCoachClientDetail,
@@ -153,6 +153,7 @@ export default function ClientDetailScreen() {
   }
 
   const weights = [...checkIns].reverse().map((c) => c.weight).filter((w): w is number => w != null)
+  const energies = [...checkIns].reverse().map((c) => c.energy_level).filter((e): e is number => e != null)
   const currentWeight = weights.length ? weights[weights.length - 1] : null
   const weightDelta = weights.length >= 2 ? Number((weights[weights.length - 1] - weights[weights.length - 2]).toFixed(1)) : null
   const deltaUp = (weightDelta ?? 0) > 0
@@ -311,8 +312,17 @@ export default function ClientDetailScreen() {
                 <View style={styles.statTitleRow}><Activity size={15} color={theme.primary} />
                   <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Evolución de peso</Text>
                 </View>
-                <WeightTrendChart points={weights.map((kg, i) => ({ label: String(i + 1), kg }))} />
+                <TrendChart points={weights.map((kg, i) => ({ label: String(i + 1), v: kg }))} suffix=" kg" decimals={1} />
                 <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{weights[weights.length - 1]} kg actual · {weights[0]} kg inicial · {weights.length} registros</Text>
+              </View>
+            ) : null}
+            {energies.length >= 2 ? (
+              <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+                <View style={styles.statTitleRow}><Activity size={15} color="#F59E0B" />
+                  <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Evolución de energía</Text>
+                </View>
+                <TrendChart points={energies.map((e, i) => ({ label: String(i + 1), v: e }))} color="#F59E0B" suffix="/10" decimals={0} />
+                <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{energies[energies.length - 1]}/10 actual · promedio {(energies.reduce((a, b) => a + b, 0) / energies.length).toFixed(1)}/10</Text>
               </View>
             ) : null}
             {checkIns.length > 0 ? (
