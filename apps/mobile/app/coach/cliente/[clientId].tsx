@@ -9,6 +9,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, ComplianceRing, EmptyState, InfoRow, MacroPill, NativeDialog, ProgressBar, Section, SegmentedTabs, Sparkline, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { WeightTrendChart } from '../../../components/coach/WeightTrendChart'
 import { apiFetch } from '../../../lib/api'
 import {
   getCoachClientDetail,
@@ -308,10 +309,10 @@ export default function ClientDetailScreen() {
             {weights.length >= 2 ? (
               <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
                 <View style={styles.statTitleRow}><Activity size={15} color={theme.primary} />
-                  <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Peso (últimos check-ins)</Text>
+                  <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Evolución de peso</Text>
                 </View>
-                <Sparkline values={weights} />
-                <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{weights[weights.length - 1]} kg actual · {weights[0]} kg inicial</Text>
+                <WeightTrendChart points={weights.map((kg, i) => ({ label: String(i + 1), kg }))} />
+                <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{weights[weights.length - 1]} kg actual · {weights[0]} kg inicial · {weights.length} registros</Text>
               </View>
             ) : null}
             {checkIns.length > 0 ? (

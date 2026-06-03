@@ -296,89 +296,90 @@ export default function BuilderScreen() {
       <AppBackground />
       <ScreenHeader title="Programas" subtitle="Plantillas, planes activos y alumnos asignados." />
 
-      <View style={styles.content}>
-        <LibraryHero stats={stats} theme={theme} onNewTemplate={openNewTemplate} />
+      <FlashList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <LibraryHero stats={stats} theme={theme} onNewTemplate={openNewTemplate} />
 
-        <View style={[styles.toolbar, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-          <View style={[styles.searchBox, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-            <Search size={16} color={theme.mutedForeground} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Buscar programa o alumno..."
-              placeholderTextColor={theme.mutedForeground}
-              style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
-            />
-          </View>
-
-          <SegmentedTabs<FilterType>
-            items={[
-              { value: 'all', label: 'Todos' },
-              { value: 'templates', label: 'Plantillas' },
-              { value: 'assigned', label: 'En curso' },
-            ]}
-            value={filterType}
-            onChange={setFilterType}
-          />
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-            <FilterPill label="Activos" active={filterStatus === 'active'} onPress={() => setFilterStatus(filterStatus === 'active' ? 'all' : 'active')} theme={theme} />
-            <FilterPill label="Inactivos" active={filterStatus === 'inactive'} onPress={() => setFilterStatus(filterStatus === 'inactive' ? 'all' : 'inactive')} theme={theme} />
-            <FilterPill label="Semanal" active={filterStructure === 'weekly'} onPress={() => setFilterStructure(filterStructure === 'weekly' ? 'all' : 'weekly')} theme={theme} />
-            <FilterPill label="Ciclo" active={filterStructure === 'cycle'} onPress={() => setFilterStructure(filterStructure === 'cycle' ? 'all' : 'cycle')} theme={theme} />
-            <FilterPill label="Con fases" active={filterPhases === 'with'} onPress={() => setFilterPhases(filterPhases === 'with' ? 'all' : 'with')} theme={theme} />
-          </ScrollView>
-
-          <View style={styles.toolbarFooter}>
-            <View style={styles.resultLabel}>
-              <Filter size={14} color={theme.mutedForeground} />
-              <Text style={[styles.resultText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {filtered.length} de {programs.length}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setCompact((v) => !v)} style={[styles.viewToggle, { borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-              <Text style={[styles.viewToggleText, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
-                {compact ? 'Compacta' : 'Comoda'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {filtered.length ? (
-          <FlashList
-            data={filtered}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item, index }) => (
-              <MotiView
-                from={{ opacity: 0, translateY: 10 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={{ type: 'timing', duration: 260, delay: Math.min(index * 24, 220) }}
-              >
-                <ProgramCard
-                  program={item}
-                  compact={compact}
-                  theme={theme}
-                  onPreview={() => setPreview(item)}
-                  onEdit={() => editProgram(item)}
-                  onAssign={() => openAssign(item)}
-                  onDuplicate={() => openDuplicate(item)}
-                  onDelete={() => confirmDelete(item)}
-                  onSync={() => Alert.alert('Sincronizar', 'El merge con overrides queda para el siguiente micro-bloque.')}
-                  busy={actionBusy?.endsWith(item.id) ?? false}
+            <View style={[styles.toolbar, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+              <View style={[styles.searchBox, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+                <Search size={16} color={theme.mutedForeground} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Buscar programa o alumno..."
+                  placeholderTextColor={theme.mutedForeground}
+                  style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
                 />
-              </MotiView>
-            )}
-          />
-        ) : (
+              </View>
+
+              <SegmentedTabs<FilterType>
+                items={[
+                  { value: 'all', label: 'Todos' },
+                  { value: 'templates', label: 'Plantillas' },
+                  { value: 'assigned', label: 'En curso' },
+                ]}
+                value={filterType}
+                onChange={setFilterType}
+              />
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+                <FilterPill label="Activos" active={filterStatus === 'active'} onPress={() => setFilterStatus(filterStatus === 'active' ? 'all' : 'active')} theme={theme} />
+                <FilterPill label="Inactivos" active={filterStatus === 'inactive'} onPress={() => setFilterStatus(filterStatus === 'inactive' ? 'all' : 'inactive')} theme={theme} />
+                <FilterPill label="Semanal" active={filterStructure === 'weekly'} onPress={() => setFilterStructure(filterStructure === 'weekly' ? 'all' : 'weekly')} theme={theme} />
+                <FilterPill label="Ciclo" active={filterStructure === 'cycle'} onPress={() => setFilterStructure(filterStructure === 'cycle' ? 'all' : 'cycle')} theme={theme} />
+                <FilterPill label="Con fases" active={filterPhases === 'with'} onPress={() => setFilterPhases(filterPhases === 'with' ? 'all' : 'with')} theme={theme} />
+              </ScrollView>
+
+              <View style={styles.toolbarFooter}>
+                <View style={styles.resultLabel}>
+                  <Filter size={14} color={theme.mutedForeground} />
+                  <Text style={[styles.resultText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    {filtered.length} de {programs.length}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setCompact((v) => !v)} style={[styles.viewToggle, { borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+                  <Text style={[styles.viewToggleText, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+                    {compact ? 'Compacta' : 'Comoda'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
           <EmptyState
             icon={Dumbbell}
             title={programs.length ? 'Sin resultados' : 'Aun no tienes programas'}
             subtitle={programs.length ? 'Prueba otro filtro o busqueda.' : 'Crea una plantilla o un programa desde un alumno.'}
           />
+        }
+        renderItem={({ item, index }) => (
+          <MotiView
+            from={{ opacity: 0, translateY: 10 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 260, delay: Math.min(index * 24, 220) }}
+          >
+            <ProgramCard
+              program={item}
+              compact={compact}
+              theme={theme}
+              onPreview={() => setPreview(item)}
+              onEdit={() => editProgram(item)}
+              onAssign={() => openAssign(item)}
+              onDuplicate={() => openDuplicate(item)}
+              onDelete={() => confirmDelete(item)}
+              onSync={() => Alert.alert('Sincronizar', 'El merge con overrides queda para el siguiente micro-bloque.')}
+              busy={actionBusy?.endsWith(item.id) ?? false}
+            />
+          </MotiView>
         )}
-      </View>
+      />
 
       <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary }]} onPress={openNewTemplate} activeOpacity={0.86}>
         <Plus size={24} color={theme.primaryForeground} />
@@ -1081,7 +1082,9 @@ const styles = StyleSheet.create({
   resultText: { fontSize: 12 },
   viewToggle: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
   viewToggleText: { fontSize: 11 },
-  listContent: { paddingBottom: 96 },
+  list: { flex: 1 },
+  listHeader: { gap: 12, paddingBottom: 12 },
+  listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 110 },
   programCard: { marginBottom: 10, borderWidth: 1, flexDirection: 'row', overflow: 'hidden' },
   programCardCompact: { minHeight: 104 },
   accentBar: { width: 5 },

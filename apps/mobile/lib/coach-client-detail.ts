@@ -384,7 +384,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at')
         .eq('client_id', clientId)
         .order('date', { ascending: false })
-        .limit(30),
+        .limit(200),
       supabase
         .from('client_payments')
         .select('id, amount, payment_date, service_description, status, period_months')

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Bell, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
+import { Apple, Bell, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
@@ -125,7 +126,11 @@ export default function CoachPerfilScreen() {
               },
             ]}
           >
-            <User size={30} color={theme.primary} strokeWidth={1.75} />
+            {coach?.logoUrl ? (
+              <Image source={{ uri: coach.logoUrl }} style={styles.avatarLogo} contentFit="cover" transition={150} />
+            ) : (
+              <User size={30} color={theme.primary} strokeWidth={1.75} />
+            )}
           </View>
           <Text style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
             {coach?.fullName ?? '-'}
@@ -205,7 +210,17 @@ export default function CoachPerfilScreen() {
         <Section title="Cuenta">
           <TouchableOpacity
             style={[styles.linkRow, { borderColor: theme.border }]}
-            onPress={() => Linking.openURL('https://eva-app.cl/c/change-password')}
+            onPress={() => router.push('/coach/foods')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              Mis alimentos
+            </Text>
+            <Apple size={14} color={theme.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.linkRow, { borderColor: theme.border }]}
+            onPress={() => router.push('/change-password')}
             activeOpacity={0.7}
           >
             <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
@@ -239,7 +254,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+    overflow: 'hidden',
   },
+  avatarLogo: { width: 72, height: 72 },
   heroName: { fontSize: 19, letterSpacing: -0.3, marginTop: 4 },
   heroBrand: { fontSize: 14 },
   heroSlug: { fontSize: 12 },

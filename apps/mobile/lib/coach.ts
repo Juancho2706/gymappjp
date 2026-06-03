@@ -12,6 +12,7 @@ export interface CoachProfile {
   trialEndsAt: string | null
   maxClients: number
   hasCoachLogo?: boolean
+  logoUrl?: string | null
 }
 
 function normalizeSubscriptionTier(raw: string | null | undefined): CoachProfile['subscriptionTier'] {
@@ -43,5 +44,6 @@ export async function getCoachProfile(): Promise<CoachProfile | null> {
     trialEndsAt: data.trial_ends_at,
     maxClients: data.max_clients,
     hasCoachLogo: Boolean(data.logo_url?.trim()),
+    logoUrl: data.logo_url ?? null,
   }
 }

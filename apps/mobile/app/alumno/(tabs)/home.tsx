@@ -12,6 +12,7 @@ import { Apple, CalendarDays, ChevronRight, Droplets, Dumbbell, Footprints, Scal
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile, type ClientProfile } from '../../../lib/client'
+import { getOnboardingStatus } from '../../../lib/alumno-onboarding'
 import { useTheme } from '../../../context/ThemeContext'
 import {
   Button,
@@ -104,6 +105,8 @@ export default function AlumnoHomeScreen() {
   const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
+    // Gate: alumno sin intake → onboarding antes del dashboard.
+    getOnboardingStatus().then((done) => { if (!done) router.replace('/alumno/onboarding') })
     load()
   }, [])
 

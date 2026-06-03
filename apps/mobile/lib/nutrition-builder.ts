@@ -175,6 +175,49 @@ export async function createCustomFood(input: CustomFoodInput): Promise<{ ok: bo
   return { ok: true, food: data as FoodRow }
 }
 
+/** Coach-owned foods for the management screen (editable; system foods excluded). */
+export async function listCoachFoods(): Promise<FoodRow[]> {
+  const coachId = await currentCoachId()
+  if (!coachId) return []
+  const { data } = await supabase
+    .from('foods')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
+    .eq('coach_id', coachId)
+    .order('name')
+  return (data as FoodRow[] | null) ?? []
+}
+
+export async function updateFood(id: string, input: CustomFoodInput): Promise<{ ok: boolean; error?: string }> {
+  const coachId = await currentCoachId()
+  if (!coachId) return { ok: false, error: 'No autenticado.' }
+  if (input.name.trim().length < 2) return { ok: false, error: 'Indicá el nombre del alimento.' }
+  const { error } = await supabase
+    .from('foods')
+    .update({
+      name: input.name.trim(),
+      calories: Math.round(input.calories),
+      protein_g: Math.round(input.protein_g) || 0,
+      carbs_g: Math.round(input.carbs_g) || 0,
+      fats_g: Math.round(input.fats_g) || 0,
+      serving_size: Math.round(input.serving_size) || 100,
+      serving_unit: input.serving_unit,
+      is_liquid: input.serving_unit === 'ml',
+      category: input.category,
+    })
+    .eq('id', id)
+    .eq('coach_id', coachId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+export async function deleteFood(id: string): Promise<{ ok: boolean; error?: string }> {
+  const coachId = await currentCoachId()
+  if (!coachId) return { ok: false, error: 'No autenticado.' }
+  const { error } = await supabase.from('foods').delete().eq('id', id).eq('coach_id', coachId)
+  if (error) return { ok: false, error: 'No se pudo eliminar. Puede estar en uso en un plan.' }
+  return { ok: true }
+}
+
 export async function searchFoods(query: string): Promise<FoodRow[]> {
   const coachId = await currentCoachId()
   const filter = coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null'
@@ -372,4 +415,88 @@ export async function deletePlan(planId: string): Promise<{ ok: boolean; error?:
   const { error } = await supabase.from('nutrition_plans').delete().eq('id', planId).eq('coach_id', coachId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
+}
+
+export interface ClientLite { id: string; full_name: string }
+
+/** Coach's active clients for the copy-to-client picker (RLS-scoped). */
+export async function listCoachClients(): Promise<ClientLite[]> {
+  const coachId = await currentCoachId()
+  if (!coachId) return []
+  const { data } = await supabase
+    .from('clients')
+    .select('id, full_name')
+    .eq('coach_id', coachId)
+    .eq('is_archived', false)
+    .order('full_name')
+  return (data as ClientLite[] | null) ?? []
+}
+
+/**
+ * Clone an active/any plan from one client to another as a new CUSTOM active plan.
+ * Mirrors web `duplicatePlanToClient` — same tables (nutrition_plans/nutrition_meals/
+ * food_items), so it never touches the template machinery. Deactivates the target's
+ * current active plan (logs untouched).
+ */
+export async function duplicatePlanToClient(sourcePlanId: string, targetClientId: string): Promise<{ ok: boolean; planId?: string; error?: string }> {
+  const coachId = await currentCoachId()
+  if (!coachId) return { ok: false, error: 'No autenticado.' }
+  const ctx = await getCoachOrgContext()
+  const orgId = ctx.orgId
+
+  try {
+    const { data: src } = await supabase
+      .from('nutrition_plans')
+      .select('id, name, daily_calories, protein_g, carbs_g, fats_g, instructions')
+      .eq('id', sourcePlanId)
+      .eq('coach_id', coachId)
+      .maybeSingle()
+    if (!src) return { ok: false, error: 'Plan origen no encontrado.' }
+
+    const { data: meals } = await supabase
+      .from('nutrition_meals')
+      .select('id, name, description, order_index, day_of_week')
+      .eq('plan_id', sourcePlanId)
+      .order('order_index', { ascending: true })
+    const mealIds = (meals ?? []).map((m: any) => m.id)
+
+    const { data: items } = mealIds.length
+      ? await supabase.from('food_items').select('meal_id, food_id, quantity, unit').in('meal_id', mealIds)
+      : { data: [] as any[] }
+    const itemsByMeal = new Map<string, any[]>()
+    for (const it of (items as any[]) ?? []) {
+      const list = itemsByMeal.get(it.meal_id) ?? []
+      list.push(it)
+      itemsByMeal.set(it.meal_id, list)
+    }
+
+    await supabase.from('nutrition_plans').update({ is_active: false }).eq('client_id', targetClientId).eq('coach_id', coachId).eq('is_active', true)
+
+    const { data: np, error: planErr } = await supabase
+      .from('nutrition_plans')
+      .insert({
+        client_id: targetClientId, coach_id: coachId, org_id: orgId,
+        name: (src as any).name, daily_calories: (src as any).daily_calories, protein_g: (src as any).protein_g,
+        carbs_g: (src as any).carbs_g, fats_g: (src as any).fats_g, instructions: (src as any).instructions ?? null,
+        is_active: true, is_custom: true,
+      })
+      .select('id').single()
+    if (planErr) throw planErr
+
+    for (const m of (meals as any[]) ?? []) {
+      const { data: nm, error: mErr } = await supabase
+        .from('nutrition_meals')
+        .insert({ plan_id: np.id, name: m.name, description: m.description ?? '', order_index: m.order_index, day_of_week: m.day_of_week ?? null })
+        .select('id').single()
+      if (mErr) throw mErr
+      const its = itemsByMeal.get(m.id) ?? []
+      if (its.length) {
+        await supabase.from('food_items').insert(its.map((fi) => ({ meal_id: nm.id, food_id: fi.food_id, quantity: fi.quantity, unit: fi.unit })))
+      }
+    }
+
+    return { ok: true, planId: np.id }
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'No se pudo copiar el plan.' }
+  }
 }

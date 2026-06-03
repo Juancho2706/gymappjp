@@ -8,6 +8,7 @@ import {
   useColorScheme,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import {
@@ -141,7 +142,11 @@ export function CoachMobileHeader() {
             },
           ]}
         >
-          <Text style={[styles.brandMarkText, { color: theme.primary }]}>E</Text>
+          {coach?.logoUrl ? (
+            <Image source={{ uri: coach.logoUrl }} style={styles.brandLogo} contentFit="cover" transition={150} />
+          ) : (
+            <Text style={[styles.brandMarkText, { color: theme.primary }]}>{(title || 'E').charAt(0).toUpperCase()}</Text>
+          )}
         </View>
         <Text
           numberOfLines={1}
@@ -292,7 +297,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
+  brandLogo: { width: 32, height: 32 },
   brandMarkText: {
     fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 17,

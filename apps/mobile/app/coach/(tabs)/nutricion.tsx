@@ -2,15 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Apple, BadgeCheck, CheckCircle2, Plus, Trash2, UtensilsCrossed } from 'lucide-react-native'
+import { Apple, BadgeCheck, CheckCircle2, Copy, Plus, Trash2, UtensilsCrossed } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
-import { EmptyState, MacroPill, ScreenHeader } from '../../../components'
+import { EmptyState, MacroPill, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
-import { deletePlan, getClientPlans, setPlanActive, type PlanSummary } from '../../../lib/nutrition-builder'
+import { deletePlan, duplicatePlanToClient, getClientPlans, setPlanActive, type PlanSummary } from '../../../lib/nutrition-builder'
 
 interface Client { id: string; full_name: string }
 
@@ -22,6 +22,8 @@ export default function CoachNutricionScreen() {
   const [plans, setPlans] = useState<PlanSummary[]>([])
   const [loadingClients, setLoadingClients] = useState(true)
   const [loadingPlans, setLoadingPlans] = useState(false)
+  const [copyPlan, setCopyPlan] = useState<PlanSummary | null>(null)
+  const [copyBusy, setCopyBusy] = useState(false)
 
   useEffect(() => { loadClients() }, [])
 
@@ -80,6 +82,16 @@ export default function CoachNutricionScreen() {
         loadPlans(selectedClient.id)
       } },
     ])
+  }
+
+  async function copyToClient(targetId: string) {
+    if (!copyPlan) return
+    setCopyBusy(true)
+    const r = await duplicatePlanToClient(copyPlan.id, targetId)
+    setCopyBusy(false)
+    setCopyPlan(null)
+    if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo copiar.'); return }
+    Alert.alert('Plan copiado', 'El plan quedó activo para el alumno elegido.')
   }
 
   return (
@@ -163,6 +175,10 @@ export default function CoachNutricionScreen() {
                           <Text style={[styles.actionText, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Activar</Text>
                         </TouchableOpacity>
                       ) : <View style={styles.actionBtn} />}
+                      <TouchableOpacity onPress={() => setCopyPlan(item)} activeOpacity={0.8} style={styles.actionBtn}>
+                        <Copy size={15} color={theme.primary} />
+                        <Text style={[styles.actionText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Copiar</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity onPress={() => confirmDelete(item)} activeOpacity={0.8} style={styles.actionBtn}>
                         <Trash2 size={15} color={theme.destructive} />
                         <Text style={[styles.actionText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Eliminar</Text>
@@ -177,6 +193,24 @@ export default function CoachNutricionScreen() {
           )}
         </View>
       )}
+
+      <NativeDialog open={!!copyPlan} title="Copiar plan a otro alumno" onClose={() => setCopyPlan(null)}>
+        <View style={{ gap: 8 }}>
+          <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Se crea como plan activo del alumno elegido (su plan anterior queda inactivo).
+          </Text>
+          {clients.filter((c) => c.id !== selectedClient?.id).map((c) => (
+            <TouchableOpacity key={c.id} disabled={copyBusy} onPress={() => copyToClient(c.id)} activeOpacity={0.8}
+              style={[styles.copyRow, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg, opacity: copyBusy ? 0.5 : 1 }]}>
+              <Text style={[styles.copyName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>{c.full_name}</Text>
+              <Copy size={15} color={theme.primary} />
+            </TouchableOpacity>
+          ))}
+          {clients.filter((c) => c.id !== selectedClient?.id).length === 0 ? (
+            <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No hay otros alumnos.</Text>
+          ) : null}
+        </View>
+      </NativeDialog>
     </SafeAreaView>
   )
 }
@@ -199,4 +233,7 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, marginTop: 6, paddingTop: 10, gap: 10 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   actionText: { fontSize: 13 },
+  copyHint: { fontSize: 12, lineHeight: 17 },
+  copyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  copyName: { fontSize: 14, flex: 1 },
 })

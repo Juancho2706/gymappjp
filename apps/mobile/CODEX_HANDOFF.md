@@ -102,8 +102,29 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - **Deep-link routing**: `app/+native-intent.ts` creado. Mapea `/c/<slug>` y `/invite/<code>` → resuelve branding (`fetchBrandingByCoachIdentifier`, cachea AsyncStorage) → `/(auth)/login?role=alumno`. `/reset-password` ya mapea solo.
 - **Welcome modal (Mi Marca)**: `coach-brand.ts` lee/escribe `welcome_modal_enabled/content/type` + bump `welcome_modal_version` cuando cambia (paridad web). `settings.tsx` suma sección "Mensaje al entrar al dashboard" (toggle + Texto/Video + contenido). `components/WelcomeModal.tsx` ahora normaliza YouTube/Vimeo a embed. Alumno home ya lo renderiza.
 - **Workout template mode**: `program-builder.tsx` acepta params `mode=template` (nueva plantilla, `client_id` null) y `templateId` (editar plantilla). Save usa `client_id null` + `is_active false` en modo plantilla. `builder.tsx` `openNewTemplate`/`editProgram` ya rutean (antes eran stubs con Alert). Crear/editar/asignar/duplicar plantilla = completo.
+- **Nutrición copiar-plan**: `lib/nutrition-builder.ts` suma `duplicatePlanToClient(sourcePlanId, targetClientId)` (mismo schema `nutrition_plans/nutrition_meals/food_items`, NO toca tablas template) + `listCoachClients`. `nutricion.tsx` cards suman acción "Copiar" + modal selector de alumno. Da reuse de plan entre alumnos sin la maquinaria template.
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
-- **Quedan**: nutrición plantillas (propagar a varios) + ciclos; SHA256 Android en `assetlinks.json` (manual via `eas credentials`); store prep (iconos/EAS/TestFlight-Play).
+- **Quedan**:
+  - **Nutrición plantillas reales** (tablas `nutrition_plan_templates` + `template_meals` + `saved_meals` + `template_meal_groups`) + propagación: NO portado — es ~530 líneas (`apps/web/src/services/nutrition.service.ts`: `createOrUpdateTemplateFromJson`, `propagateTemplateChanges`, `duplicateTemplate`) con schema distinto al builder mobile. Requiere pasada dedicada + testing en device (riesgo de huérfanos/RLS). El `copiar-plan` cubre el 80% del valor mientras tanto.
+  - **Nutrición ciclos** (`nutrition_plan_cycles`) — power-web, pendiente.
+  - SHA256 Android en `assetlinks.json` (manual via `eas credentials`); store prep (iconos/EAS/TestFlight-Play).
+
+## Claude update - 2026-06-02 - APK fixes (scroll/logo/chart) + auditoría
+- **Scroll biblioteca planes**: `builder.tsx` hero+toolbar pasaron a `ListHeaderComponent` del FlashList (antes fijos arriba → lista "pegada"). FlashList `flex:1`.
+- **Logo coach**: `getCoachProfile` ahora devuelve `logoUrl`. Se muestra en header (`CoachMobileChrome` brandMark), perfil coach (avatar) y Mi Marca (ya estaba). Si no aparece en device → revisar `coaches.logo_url` del coach de prueba + acceso al bucket `logos`.
+- **Detalle alumno**: gráfica de peso interactiva nueva (`components/coach/WeightTrendChart.tsx`, victory + tooltip) reemplaza el Sparkline en Progreso; check-ins subidos a 200.
+- **Auditoría RN vs web**: ver `apps/mobile/AUDIT_RN_vs_WEB.md` (pantalla por pantalla, gaps priorizados).
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
+## Claude update - 2026-06-02 - onboarding alumno + change-password
+- **Onboarding/intake alumno**: `app/alumno/onboarding.tsx` (peso/altura/objetivo/experiencia/días/lesiones/condiciones + confirmación 14+). `lib/alumno-onboarding.ts` (`getOnboardingStatus`, `submitIntake` → `client_intake` + `clients.onboarding_completed`/`age_confirmed_at`). **Gate** en `alumno/(tabs)/home`: si no completó → `router.replace('/alumno/onboarding')`. Opciones espejan el form web.
+- **Change-password coach**: `app/change-password.tsx` (nativo, `supabase.auth.updateUser`). Coach perfil ahora rutea ahí (antes link web). Alumno perfil ya tenía modal nativo.
+- Auditoría completa en `apps/mobile/AUDIT_RN_vs_WEB.md`.
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
+## Claude update - 2026-06-02 - foods management
+- **Foods coach CRUD**: `app/coach/foods.tsx` (listar/buscar/crear/editar/eliminar alimentos propios) + entry "Mis alimentos" en coach perfil. `lib/nutrition-builder.ts` suma `listCoachFoods`, `updateFood`, `deleteFood` (RLS coach; delete falla con mensaje si el food está en uso por FK).
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
 
 ## Codex update - 2026-06-02 - APK visual/nutrition fixes
 - Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
