@@ -160,9 +160,16 @@ export interface WorkoutDaySet {
   rpe: number | null
 }
 
+export interface NutritionDayFood {
+  name: string
+  quantity: number | null
+  unit: string | null
+}
+
 export interface NutritionDayMeal {
   name: string
   completed: boolean
+  foods: NutritionDayFood[]
 }
 
 export interface HabitsDayEntry {
@@ -342,6 +349,32 @@ function buildNutritionTimeline(
   return out.reverse()
 }
 
+export interface DaySeriesPoint { date: string; v: number }
+
+// Serie diaria de volumen (tonelaje = Σ peso×reps) desde logs ya fetchados.
+function buildVolumeSeries(rows: any[]): DaySeriesPoint[] {
+  const map = new Map<string, number>()
+  for (const r of rows) {
+    const d = String(r.logged_at ?? '').slice(0, 10)
+    if (!d) continue
+    map.set(d, (map.get(d) ?? 0) + (Number(r.weight_kg) || 0) * (Number(r.reps_done) || 0))
+  }
+  return [...map].sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, v: Math.round(v) }))
+}
+
+// Serie diaria de fuerza (mejor 1RM estimado = peso×(1+reps/30)) desde logs ya fetchados.
+function buildStrengthSeries(rows: any[]): DaySeriesPoint[] {
+  const map = new Map<string, number>()
+  for (const r of rows) {
+    const d = String(r.logged_at ?? '').slice(0, 10)
+    const w = Number(r.weight_kg) || 0
+    if (!d || w <= 0) continue
+    const e1rm = w * (1 + (Number(r.reps_done) || 0) / 30)
+    map.set(d, Math.max(map.get(d) ?? 0, e1rm))
+  }
+  return [...map].sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, v: Math.round(v) }))
+}
+
 export async function getCoachClientDetail(clientId: string): Promise<{
   client: CoachClientDetail | null
   checkIns: CheckInEntry[]
@@ -353,6 +386,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   activity: ActivityDay[]
   personalRecords: PersonalRecordEntry[]
   muscleVolume: MuscleVolumeEntry[]
+  volumeSeries: DaySeriesPoint[]
+  strengthSeries: DaySeriesPoint[]
   nutritionMeals: NutritionMealPlanEntry[]
   nutritionTimeline: NutritionTimelineEntry[]
   nutritionMonthlyAvgPct: number
@@ -378,6 +413,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     activity: [] as ActivityDay[],
     personalRecords: [] as PersonalRecordEntry[],
     muscleVolume: [] as MuscleVolumeEntry[],
+    volumeSeries: [] as DaySeriesPoint[],
+    strengthSeries: [] as DaySeriesPoint[],
     nutritionMeals: [] as NutritionMealPlanEntry[],
     nutritionTimeline: [] as NutritionTimelineEntry[],
     nutritionMonthlyAvgPct: 0,
@@ -600,6 +637,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     activity: Array.from(activityByDate.values()).reverse(),
     personalRecords: buildPersonalRecords((prLogsRes.data as any[] | null) ?? []),
     muscleVolume: buildMuscleVolume((volumeLogsRes.data as any[] | null) ?? []),
+    volumeSeries: buildVolumeSeries((volumeLogsRes.data as any[] | null) ?? []),
+    strengthSeries: buildStrengthSeries((prLogsRes.data as any[] | null) ?? []),
     nutritionMeals,
     nutritionTimeline,
     nutritionMonthlyAvgPct: Math.round(
@@ -638,7 +677,7 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
         log_date,
         nutrition_meal_logs (
           is_completed,
-          nutrition_meals ( name, order_index )
+          nutrition_meals ( name, order_index, food_items ( quantity, unit, foods ( name ) ) )
         )
       `)
       .eq('client_id', clientId)
@@ -666,6 +705,11 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
     .map((row) => ({
       name: row.nutrition_meals?.name ?? 'Comida',
       completed: !!row.is_completed,
+      foods: ((row.nutrition_meals?.food_items ?? []) as any[]).map((fi) => ({
+        name: fi.foods?.name ?? 'Alimento',
+        quantity: fi.quantity ?? null,
+        unit: fi.unit ?? null,
+      })),
     }))
 
   return {

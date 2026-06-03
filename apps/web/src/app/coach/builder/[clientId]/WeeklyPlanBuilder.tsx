@@ -14,6 +14,7 @@ import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { AppOnlyPopup } from '@/components/AppOnlyPopup'
 import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './_actions/builder.actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
@@ -932,6 +933,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+            <AppOnlyPopup storageKey="builder" title="Arma rutinas mejor en la app">
+                Reordena con gestos, arma offline y revisa el progreso con gráficas táctiles en la app de EVA.
+            </AppOnlyPopup>
             {showDraftBanner && (
                 <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[72] animate-in slide-in-from-bottom rounded-xl border border-primary/25 bg-background/95 p-3 shadow-2xl backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:rounded-none md:border-x-0 md:border-t-0 md:bg-primary/10 md:shadow-none">
                     <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-4">

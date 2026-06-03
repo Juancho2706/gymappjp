@@ -3,12 +3,15 @@ import { Alert, Linking, ScrollView, Share, StyleSheet, Text, TextInput, Touchab
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Activity, Apple, Archive, ArchiveRestore, Check, CreditCard, Droplets, Dumbbell, Flame, Footprints, Heart, LayoutGrid, MessageCircle, Moon, Pencil, Salad, Share2, Target, Timer, TrendingDown, TrendingUp, Trophy, User } from 'lucide-react-native'
+import { Activity, Apple, Archive, ArchiveRestore, Check, ChevronLeft, ChevronRight, CreditCard, Droplets, Dumbbell, Flame, Footprints, Heart, LayoutGrid, MessageCircle, Moon, Pencil, Salad, Share2, Target, Timer, TrendingDown, TrendingUp, Trophy, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
+import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, ComplianceRing, EmptyState, InfoRow, MacroPill, NativeDialog, ProgressBar, Section, SegmentedTabs, Sparkline, TopBar } from '../../../components'
-import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { EvaLoader, EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { PhotoLightbox } from '../../../components/PhotoLightbox'
 import { TrendChart } from '../../../components/coach/TrendChart'
 import { apiFetch } from '../../../lib/api'
 import {
@@ -23,6 +26,7 @@ import {
   type ClientDayDetail,
   type ComplianceSummary,
   type CoachClientDetail,
+  type DaySeriesPoint,
   type FavoriteFoodEntry,
   type MuscleVolumeEntry,
   type NutritionMealPlanEntry,
@@ -57,6 +61,8 @@ export default function ClientDetailScreen() {
   const [activity, setActivity] = useState<ActivityDay[]>([])
   const [personalRecords, setPersonalRecords] = useState<PersonalRecordEntry[]>([])
   const [muscleVolume, setMuscleVolume] = useState<MuscleVolumeEntry[]>([])
+  const [volumeSeries, setVolumeSeries] = useState<DaySeriesPoint[]>([])
+  const [strengthSeries, setStrengthSeries] = useState<DaySeriesPoint[]>([])
   const [nutritionMeals, setNutritionMeals] = useState<NutritionMealPlanEntry[]>([])
   const [nutritionTimeline, setNutritionTimeline] = useState<NutritionTimelineEntry[]>([])
   const [nutritionMonthlyAvgPct, setNutritionMonthlyAvgPct] = useState(0)
@@ -69,6 +75,8 @@ export default function ClientDetailScreen() {
   const [loading, setLoading] = useState(true)
   const [payOpen, setPayOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [lightbox, setLightbox] = useState<{ photos: string[]; index: number } | null>(null)
+  const [chartMetric, setChartMetric] = useState('weight')
 
   async function load() {
     setLoading(true)
@@ -83,6 +91,8 @@ export default function ClientDetailScreen() {
       setActivity(res.activity)
       setPersonalRecords(res.personalRecords)
       setMuscleVolume(res.muscleVolume)
+      setVolumeSeries(res.volumeSeries)
+      setStrengthSeries(res.strengthSeries)
       setNutritionMeals(res.nutritionMeals)
       setNutritionTimeline(res.nutritionTimeline)
       setNutritionMonthlyAvgPct(res.nutritionMonthlyAvgPct)
@@ -159,6 +169,17 @@ export default function ClientDetailScreen() {
 
   const weights = [...checkIns].reverse().map((c) => c.weight).filter((w): w is number => w != null)
   const energies = [...checkIns].reverse().map((c) => c.energy_level).filter((e): e is number => e != null)
+
+  // Progreso multi-chart: cada serie usa TrendChart (scrub táctil incluido).
+  const CHART_DEFS = [
+    { key: 'weight', label: 'Peso', points: weights.map((kg, i) => ({ label: String(i + 1), v: kg })), color: theme.primary, suffix: ' kg', decimals: 1 },
+    { key: 'energy', label: 'Energía', points: energies.map((e, i) => ({ label: String(i + 1), v: e })), color: '#F59E0B', suffix: '/10', decimals: 0 },
+    { key: 'calories', label: 'Calorías', points: nutritionTimeline.map((t, i) => ({ label: String(i + 1), v: Math.round(t.consumedCalories) })), color: '#10B981', suffix: ' kcal', decimals: 0 },
+    { key: 'balance', label: 'Balance', points: nutritionTimeline.map((t, i) => ({ label: String(i + 1), v: Math.round(t.consumedCalories - t.targetCalories) })), color: '#8B5CF6', suffix: ' kcal', decimals: 0 },
+    { key: 'volume', label: 'Volumen', points: volumeSeries.map((p, i) => ({ label: String(i + 1), v: p.v })), color: theme.primary, suffix: ' kg', decimals: 0 },
+    { key: 'strength', label: 'Fuerza', points: strengthSeries.map((p, i) => ({ label: String(i + 1), v: p.v })), color: '#06B6D4', suffix: ' kg', decimals: 0 },
+  ].filter((d) => d.points.length >= 2)
+  const activeMetric = CHART_DEFS.find((d) => d.key === chartMetric) ?? CHART_DEFS[0]
   const currentWeight = weights.length ? weights[weights.length - 1] : null
   const weightDelta = weights.length >= 2 ? Number((weights[weights.length - 1] - weights[weights.length - 2]).toFixed(1)) : null
   const deltaUp = (weightDelta ?? 0) > 0
@@ -256,6 +277,7 @@ export default function ClientDetailScreen() {
             </View>
 
             {compliance ? <CompliancePanel compliance={compliance} theme={theme} /> : null}
+            <WeeklyComplianceBar activity={activity} theme={theme} />
 
             {(client.phone || client.goal_weight_kg != null || client.subscription_start_date) ? (
               <Section title="Información">
@@ -312,29 +334,31 @@ export default function ClientDetailScreen() {
 
         {tab === 'progreso' ? (
           <>
-            {weights.length >= 2 ? (
+            {CHART_DEFS.length && activeMetric ? (
               <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-                <View style={styles.statTitleRow}><Activity size={15} color={theme.primary} />
-                  <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Evolución de peso</Text>
+                <View style={styles.statTitleRow}><Activity size={15} color={activeMetric.color} />
+                  <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Progreso · {activeMetric.label}</Text>
                 </View>
-                <TrendChart points={weights.map((kg, i) => ({ label: String(i + 1), v: kg }))} suffix=" kg" decimals={1} />
-                <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{weights[weights.length - 1]} kg actual · {weights[0]} kg inicial · {weights.length} registros</Text>
-              </View>
-            ) : null}
-            {energies.length >= 2 ? (
-              <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-                <View style={styles.statTitleRow}><Activity size={15} color="#F59E0B" />
-                  <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Evolución de energía</Text>
-                </View>
-                <TrendChart points={energies.map((e, i) => ({ label: String(i + 1), v: e }))} color="#F59E0B" suffix="/10" decimals={0} />
-                <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{energies[energies.length - 1]}/10 actual · promedio {(energies.reduce((a, b) => a + b, 0) / energies.length).toFixed(1)}/10</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                  {CHART_DEFS.map((d) => {
+                    const on = d.key === activeMetric.key
+                    return (
+                      <TouchableOpacity key={d.key} onPress={() => setChartMetric(d.key)} activeOpacity={0.8}
+                        style={[styles.chartPill, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
+                        <Text style={{ fontSize: 12.5, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{d.label}</Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </ScrollView>
+                <TrendChart points={activeMetric.points} color={activeMetric.color} suffix={activeMetric.suffix} decimals={activeMetric.decimals} />
+                <Text style={[styles.statSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Desliza el dedo sobre la gráfica para ver cada valor.</Text>
               </View>
             ) : null}
             {checkIns.length > 0 ? (
               <View style={{ gap: 10 }}>
                 <Text style={[styles.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>HISTORIAL DE CHECK-INS</Text>
                 {checkIns.map((c) => (
-                  <CheckInCard key={c.id} c={c} clientId={client.id} theme={theme} onReviewed={load} />
+                  <CheckInCard key={c.id} c={c} clientId={client.id} theme={theme} onReviewed={load} onOpenPhoto={(photos, i) => setLightbox({ photos, index: i })} />
                 ))}
               </View>
             ) : (
@@ -367,6 +391,8 @@ export default function ClientDetailScreen() {
       <NativeDialog open={editOpen} title="Editar alumno" onClose={() => setEditOpen(false)}>
         <EditClientForm client={client} onDone={() => { setEditOpen(false); load() }} onCancel={() => setEditOpen(false)} />
       </NativeDialog>
+
+      <PhotoLightbox photos={lightbox?.photos ?? []} index={lightbox?.index ?? 0} visible={!!lightbox} onClose={() => setLightbox(null)} />
     </SafeAreaView>
   )
 }
@@ -745,6 +771,33 @@ function resolveProgramWeek(program: ActiveProgramInfo): number | null {
   return Math.min(Math.max(1, Math.ceil((diffDays + 1) / 7)), Math.max(1, program.weeks_to_repeat))
 }
 
+function WeeklyComplianceBar({ activity, theme }: { activity: ActivityDay[]; theme: any }) {
+  const last7 = [...activity].sort((a, b) => a.date.localeCompare(b.date)).slice(-7)
+  if (last7.length === 0) return null
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      <View style={styles.statTitleRow}>
+        <Activity size={15} color={theme.primary} />
+        <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Cumplimiento semanal</Text>
+      </View>
+      <View style={styles.weekRow}>
+        {last7.map((d) => {
+          const score = ((d.workout ? 1 : 0) + (d.nutrition ? 1 : 0) + (d.checkIn ? 1 : 0)) / 3
+          const date = new Date(`${d.date}T12:00:00`)
+          return (
+            <View key={d.date} style={styles.weekCol}>
+              <View style={[styles.weekTrack, { backgroundColor: theme.muted }]}>
+                <View style={{ height: `${Math.max(6, Math.round(score * 100))}%`, width: '100%', backgroundColor: score >= 0.66 ? theme.success : score > 0 ? theme.primary : theme.border, borderRadius: 5 }} />
+              </View>
+              <Text style={[styles.weekDow, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{date.toLocaleDateString('es-CL', { weekday: 'short' }).slice(0, 1).toUpperCase()}</Text>
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
 function ActivityTab({ activity, selectedDate, onSelectDate, dayDetail, loading, theme }: {
   activity: ActivityDay[]
   selectedDate: string
@@ -753,30 +806,66 @@ function ActivityTab({ activity, selectedDate, onSelectDate, dayDetail, loading,
   loading: boolean
   theme: any
 }) {
-  return (
-    <View style={{ gap: 14 }}>
-      <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-        <View style={styles.statTitleRow}>
-          <Activity size={15} color={theme.primary} />
-          <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Historial de actividad</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}>
-          {activity.map((day) => (
-            <DayChip key={day.date} day={day} active={day.date === selectedDate} onPress={() => onSelectDate(day.date)} theme={theme} />
-          ))}
-        </ScrollView>
-      </View>
+  const sorted = [...activity].sort((a, b) => a.date.localeCompare(b.date))
+  const sidx = sorted.findIndex((d) => d.date === selectedDate)
+  const cur = sidx >= 0 ? sorted[sidx] : null
+  const go = (delta: 1 | -1) => {
+    const ni = sidx + delta
+    if (ni < 0 || ni >= sorted.length) return
+    onSelectDate(sorted[ni].date)
+    Haptics.selectionAsync().catch(() => {})
+  }
+  const swipe = Gesture.Race(
+    Gesture.Fling().direction(Directions.LEFT).runOnJS(true).onEnd(() => go(1)),
+    Gesture.Fling().direction(Directions.RIGHT).runOnJS(true).onEnd(() => go(-1))
+  )
 
-      {loading ? (
-        <EvaLoaderScreen subtitle="Cargando día..." />
-      ) : dayDetail ? (
-        <View style={{ gap: 12 }}>
-          <DayWorkout detail={dayDetail} theme={theme} />
-          <DayNutrition detail={dayDetail} theme={theme} />
-          <DayHabits detail={dayDetail} theme={theme} />
+  return (
+    <GestureDetector gesture={swipe}>
+      <View style={{ gap: 14 }}>
+        <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+          <View style={styles.statTitleRow}>
+            <Activity size={15} color={theme.primary} />
+            <Text style={[styles.statTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Historial de actividad</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}>
+            {activity.map((day) => (
+              <DayChip key={day.date} day={day} active={day.date === selectedDate} onPress={() => onSelectDate(day.date)} theme={theme} />
+            ))}
+          </ScrollView>
         </View>
-      ) : null}
-    </View>
+
+        {/* DayNavigator: prev / fecha + adherencia / sig (también swipe ← →) */}
+        <View style={[styles.dayNav, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+          <TouchableOpacity onPress={() => go(-1)} disabled={sidx <= 0} hitSlop={8}>
+            <ChevronLeft size={22} color={sidx <= 0 ? theme.muted : theme.foreground} />
+          </TouchableOpacity>
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.dayNavDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(selectedDate)}</Text>
+            {cur ? (
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <View style={[styles.navDot, { backgroundColor: cur.workout ? theme.primary : theme.border }]} />
+                <View style={[styles.navDot, { backgroundColor: cur.nutrition ? '#10B981' : theme.border }]} />
+                <View style={[styles.navDot, { backgroundColor: cur.checkIn ? '#F59E0B' : theme.border }]} />
+              </View>
+            ) : null}
+          </View>
+          <TouchableOpacity onPress={() => go(1)} disabled={sidx >= sorted.length - 1} hitSlop={8}>
+            <ChevronRight size={22} color={sidx >= sorted.length - 1 ? theme.muted : theme.foreground} />
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={{ paddingVertical: 28 }}><EvaLoader size="sm" subtitle="Cargando día..." /></View>
+        ) : dayDetail ? (
+          <View style={{ gap: 12 }}>
+            <DayWorkout detail={dayDetail} theme={theme} />
+            <DayNutrition detail={dayDetail} theme={theme} />
+            <DayHabits detail={dayDetail} theme={theme} />
+          </View>
+        ) : null}
+      </View>
+    </GestureDetector>
   )
 }
 
@@ -828,6 +917,7 @@ function DayWorkout({ detail, theme }: { detail: ClientDayDetail; theme: any }) 
 }
 
 function DayNutrition({ detail, theme }: { detail: ClientDayDetail; theme: any }) {
+  const [open, setOpen] = useState<Set<number>>(new Set())
   const done = detail.nutritionMeals.filter((meal) => meal.completed).length
   const total = detail.nutritionMeals.length
   return (
@@ -839,12 +929,29 @@ function DayNutrition({ detail, theme }: { detail: ClientDayDetail; theme: any }
       {total ? (
         <>
           <ProgressBar value={done / total} color={done / total >= 0.8 ? theme.success : '#F59E0B'} height={7} />
-          {detail.nutritionMeals.map((meal, i) => (
-            <View key={`${meal.name}-${i}`} style={styles.mealRow}>
-              <Check size={14} color={meal.completed ? theme.success : theme.mutedForeground} />
-              <Text style={[styles.dayRowTitle, { color: meal.completed ? theme.foreground : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{meal.name}</Text>
-            </View>
-          ))}
+          {detail.nutritionMeals.map((meal, i) => {
+            const isOpen = open.has(i)
+            const hasFoods = meal.foods.length > 0
+            return (
+              <View key={`${meal.name}-${i}`}>
+                <TouchableOpacity activeOpacity={hasFoods ? 0.7 : 1} onPress={() => { if (!hasFoods) return; setOpen((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n }) }} style={styles.mealRow}>
+                  <Check size={14} color={meal.completed ? theme.success : theme.mutedForeground} />
+                  <Text style={[styles.dayRowTitle, { color: meal.completed ? theme.foreground : theme.mutedForeground, fontFamily: 'Inter_600SemiBold', flex: 1 }]} numberOfLines={1}>{meal.name}</Text>
+                  {hasFoods ? <Text style={[styles.mealCount, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{meal.foods.length} alim.</Text> : null}
+                  {hasFoods ? <ChevronRight size={14} color={theme.mutedForeground} style={{ transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }} /> : null}
+                </TouchableOpacity>
+                {isOpen && hasFoods ? (
+                  <View style={styles.foodList}>
+                    {meal.foods.map((f, fi) => (
+                      <Text key={fi} style={[styles.foodItem, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+                        • {f.name}{f.quantity != null ? ` — ${f.quantity}${f.unit ? ` ${f.unit}` : ''}` : ''}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            )
+          })}
         </>
       ) : (
         <Text style={[styles.emptyLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin registro nutricional este día.</Text>
@@ -888,12 +995,12 @@ function HabitItem({ icon: Icon, label, value, theme }: { icon: any; label: stri
   )
 }
 
-function CheckInCard({ c, clientId, theme, onReviewed }: { c: CheckInEntry; clientId: string; theme: any; onReviewed: () => void }) {
+function CheckInCard({ c, clientId, theme, onReviewed, onOpenPhoto }: { c: CheckInEntry; clientId: string; theme: any; onReviewed: () => void; onOpenPhoto: (photos: string[], index: number) => void }) {
   const photos = [c.front_photo_url, c.back_photo_url].filter(Boolean) as string[]
   async function review() {
     const r = await markCoachCheckInReviewed(clientId, c.id)
     if (!r.ok) Alert.alert('Error', r.error ?? 'No se pudo marcar como revisado.')
-    else onReviewed()
+    else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); onReviewed() }
   }
   return (
     <View style={[styles.ciCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
@@ -923,7 +1030,11 @@ function CheckInCard({ c, clientId, theme, onReviewed }: { c: CheckInEntry; clie
       {c.notes ? <Text style={[styles.ciNotes, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{c.notes}</Text> : null}
       {photos.length ? (
         <View style={styles.ciPhotos}>
-          {photos.map((p, i) => <Image key={i} source={{ uri: p }} style={styles.ciPhoto} contentFit="cover" transition={150} />)}
+          {photos.map((p, i) => (
+            <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => onOpenPhoto(photos, i)}>
+              <Image source={{ uri: p }} style={styles.ciPhoto} contentFit="cover" transition={150} />
+            </TouchableOpacity>
+          ))}
         </View>
       ) : null}
     </View>
@@ -1086,6 +1197,17 @@ const styles = StyleSheet.create({
   dayNum: { fontSize: 18, lineHeight: 21 },
   dayDots: { flexDirection: 'row', gap: 3, marginTop: 2 },
   dayDot: { width: 5, height: 5, borderRadius: 3 },
+  dayNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
+  dayNavDate: { fontSize: 14, textTransform: 'capitalize' },
+  navDot: { width: 6, height: 6, borderRadius: 3 },
+  mealCount: { fontSize: 11 },
+  foodList: { paddingLeft: 22, paddingBottom: 6, gap: 3 },
+  foodItem: { fontSize: 12, lineHeight: 17 },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 6, marginTop: 4 },
+  weekCol: { flex: 1, alignItems: 'center', gap: 6 },
+  weekTrack: { width: '100%', height: 56, borderRadius: 5, justifyContent: 'flex-end', overflow: 'hidden' },
+  weekDow: { fontSize: 10 },
+  chartPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7 },
   dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9 },
   dayRowTitle: { fontSize: 13, flexShrink: 1 },
   dayRowSub: { fontSize: 11, marginTop: 2 },

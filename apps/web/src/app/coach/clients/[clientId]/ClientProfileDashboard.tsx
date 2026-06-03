@@ -5,6 +5,7 @@ import { useTheme } from 'next-themes'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Activity, Dumbbell, User, Edit2, Plus, PieChart as PieChartIcon, Flame, TrendingUp, Camera, ArrowUpRight, ArrowDownRight, Minus, Trophy, Layers } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
+import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart, ReferenceLine } from 'recharts'
 import Image from 'next/image'
@@ -369,6 +370,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                 <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
                                     <Camera className="w-4 h-4" /> Evolución Visual (Último Mes)
                                 </h3>
+                                <div className="mb-4 relative z-10">
+                                    <AppOnlyBadge>Mira las fotos con zoom y desliza entre ellas en la app de EVA</AppOnlyBadge>
+                                </div>
                                 {checkInsWithPhotos.length > 0 ? (
                                     <div className="grid grid-cols-3 gap-4 relative z-10">
                                         {checkInsWithPhotos.map((c: any, i: number) => (
@@ -485,6 +489,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                     <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
                                         <Activity className="w-4 h-4" /> Panel de Progreso Unificado
                                     </h3>
+                                    <AppOnlyBadge className="self-start">Gráficas táctiles: desliza el dedo sobre el gráfico en la app de EVA</AppOnlyBadge>
                                     {/* Peso objetivo inline */}
                                     <form
                                         className="flex items-center gap-1.5"

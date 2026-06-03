@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { BillingBanners } from './banners/BillingBanners'
 import { FreeWelcomeModal } from './FreeWelcomeModal'
 import { GreetingHeader } from './header/GreetingHeader'
+import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { QuickActionsBar } from './header/QuickActionsBar'
 import { KpiStrip } from './kpi/KpiStrip'
 import { FocusList } from './focus/FocusList'
@@ -107,7 +108,10 @@ export function DashboardShell({
                     className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
                 >
                     <GreetingHeader coachName={coachName} pendingCount={pendingCount} />
-                    <QuickActionsBar clients={data.clientList} />
+                    <div className="flex flex-col items-start gap-2">
+                        <QuickActionsBar clients={data.clientList} />
+                        <AppOnlyBadge>Notificaciones, offline y gestos: todo mejor en la app de EVA</AppOnlyBadge>
+                    </div>
                 </motion.header>
 
                 <motion.section variants={itemVariants}>

@@ -1,8 +1,11 @@
-import { forwardRef, useCallback, useMemo, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { Search } from 'lucide-react-native'
+import { Clock, Search } from 'lucide-react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../lib/supabase'
+
+const RECENTS_KEY = 'builder_recent_exercises'
 import { useTheme } from '../../context/ThemeContext'
 import type { BuilderBlock } from '../../lib/plan-builder/types'
 
@@ -24,7 +27,21 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
     const [query, setQuery] = useState('')
     const [results, setResults] = useState<Exercise[]>([])
     const [loading, setLoading] = useState(false)
+    const [recents, setRecents] = useState<Exercise[]>([])
     const snapPoints = useMemo(() => ['75%', '95%'], [])
+
+    useEffect(() => {
+      AsyncStorage.getItem(RECENTS_KEY).then((raw) => {
+        if (!raw) return
+        try { setRecents(JSON.parse(raw) as Exercise[]) } catch {}
+      }).catch(() => {})
+    }, [])
+
+    function pushRecent(ex: Exercise) {
+      const next = [ex, ...recents.filter((r) => r.id !== ex.id)].slice(0, 8)
+      setRecents(next)
+      AsyncStorage.setItem(RECENTS_KEY, JSON.stringify(next)).catch(() => {})
+    }
 
     const search = useCallback(async (text: string) => {
       setQuery(text)
@@ -41,6 +58,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
     }, [])
 
     function handleSelect(exercise: Exercise) {
+      pushRecent(exercise)
       onSelect({
         uid: `block-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         exercise_id: exercise.id,
@@ -83,6 +101,22 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
         </View>
 
         <BottomSheetScrollView contentContainerStyle={styles.list}>
+          {query.trim().length < 2 && recents.length > 0 ? (
+            <>
+              <View style={styles.recentHead}>
+                <Clock size={13} color={theme.mutedForeground} />
+                <Text style={[styles.recentLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Recientes</Text>
+              </View>
+              {recents.map((ex) => (
+                <TouchableOpacity key={`r-${ex.id}`} style={[styles.row, { borderColor: theme.border }]} onPress={() => handleSelect(ex)} activeOpacity={0.7}>
+                  <View>
+                    <Text style={[styles.exName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{ex.name}</Text>
+                    {ex.muscle_group ? <Text style={[styles.exMuscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{ex.muscle_group}</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </>
+          ) : null}
           {results.length === 0 && query.length >= 2 && !loading ? (
             <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               Sin resultados para "{query}"
@@ -127,6 +161,8 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 15 },
   list: { paddingHorizontal: 16, paddingBottom: 24, gap: 6 },
+  recentHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 2 },
+  recentLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   empty: { textAlign: 'center', fontSize: 14, marginTop: 24 },
   row: {
     paddingHorizontal: 14,

@@ -4,21 +4,50 @@ import {
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronDown, ChevronRight, Copy, GripVertical, Link2, Moon, Plus, Redo2, Undo2 } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, Copy, Eye, GripVertical, Layers, Link2, Moon, Plus, Redo2, Scale, Undo2, Users, X } from 'lucide-react-native'
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist'
+import * as Haptics from 'expo-haptics'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../lib/supabase'
+import { isMissingColumnError, selectWithFallback } from '../../lib/db-compat'
 import { getCoachProfile } from '../../lib/coach'
 import { useTheme } from '../../context/ThemeContext'
 import { ExerciseSearchSheet } from '../../components/coach/ExerciseSearchSheet'
 import { BlockEditorSheet } from '../../components/coach/BlockEditorSheet'
+import { TemplatePickerSheet } from '../../components/coach/TemplatePickerSheet'
+import { AssignClientsSheet } from '../../components/coach/AssignClientsSheet'
+import { MuscleBalanceSheet } from '../../components/coach/MuscleBalanceSheet'
+import { ProgramPreviewSheet } from '../../components/coach/ProgramPreviewSheet'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
-import type { BuilderBlock, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
+import type { BuilderBlock, BuilderSection, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
 
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const SECTION_ORDER: BuilderSection[] = ['warmup', 'main', 'cooldown']
+const SECTION_LABEL: Record<BuilderSection, string> = { warmup: 'Calentamiento', main: 'Principal', cooldown: 'Enfriamiento' }
+
+// Item de la lista del día: encabezado de sección o bloque (ejercicio).
+type BuilderRow =
+  | { type: 'header'; section: BuilderSection; count: number }
+  | { type: 'block'; block: BuilderBlock; section: BuilderSection }
+
+// Una superserie no puede cruzar secciones → limpiar grupos que quedaron repartidos.
+function clearCrossSectionSupersets(blocks: BuilderBlock[]): BuilderBlock[] {
+  const groups = new Map<string, Set<BuilderSection>>()
+  for (const b of blocks) {
+    if (!b.superset_group) continue
+    const secs = groups.get(b.superset_group) ?? new Set<BuilderSection>()
+    secs.add(b.section ?? 'main')
+    groups.set(b.superset_group, secs)
+  }
+  const bad = new Set([...groups].filter(([, secs]) => secs.size > 1).map(([g]) => g))
+  if (!bad.size) return blocks
+  return blocks.map((b) => (b.superset_group && bad.has(b.superset_group) ? { ...b, superset_group: null } : b))
+}
 
 function emptyDays(): DayState[] {
   return buildDaySkeleton('weekly', 7, [])
@@ -50,6 +79,114 @@ function mapDbBlock(b: any): BuilderBlock {
   }
 }
 
+// Columnas base (las que la prod standalone seguro tiene).
+const PROGRAM_SELECT =
+  'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )'
+// Rico = base + meta extra (notas/fecha/phases). Si la columna falta, selectWithFallback usa el base.
+const PROGRAM_SELECT_RICH = PROGRAM_SELECT.replace(
+  'ab_mode,',
+  'ab_mode, program_notes, start_date, start_date_flexible, program_phases,'
+)
+
+type ProgramPhase = { name: string; weeks: number; color: string }
+const PHASE_COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#F43F5E']
+
+type ProgramMetaPayload = {
+  name: string
+  program_structure_type: ProgramStructureType
+  duration_type: DurationType
+  weeks_to_repeat: number
+  cycle_length: number | null
+  ab_mode: boolean
+  is_active: boolean
+  program_notes?: string | null
+  start_date?: string | null
+  start_date_flexible?: boolean
+  program_phases?: unknown
+}
+
+function blockInsert(b: BuilderBlock, i: number, planId: string) {
+  return {
+    plan_id: planId,
+    exercise_id: b.exercise_id,
+    order_index: i,
+    sets: b.sets ?? 3,
+    reps: b.reps || '8-10',
+    rir: b.rir || null,
+    rest_time: b.rest_time || null,
+    notes: b.notes || null,
+    target_weight_kg: b.target_weight_kg && b.target_weight_kg.trim() ? Number(b.target_weight_kg) : null,
+    tempo: b.tempo || null,
+    superset_group: b.superset_group || null,
+    progression_type: b.progression_type || null,
+    progression_value: b.progression_value ?? null,
+    section: b.section ?? 'main',
+    is_override: b.is_override ?? false,
+  }
+}
+
+// Quita las columnas de meta extra (para prod que aún no las tiene).
+function baseMeta(m: ProgramMetaPayload): ProgramMetaPayload {
+  const { program_notes, start_date, start_date_flexible, program_phases, ...rest } = m
+  void program_notes; void start_date; void start_date_flexible; void program_phases
+  return rest as ProgramMetaPayload
+}
+
+// Crea/actualiza un programa + sus plans/blocks. Reusado por guardar y por asignar
+// a alumnos (programId null → crea uno nuevo por alumno). Resiliente: si faltan
+// columnas meta extra en la BD, reintenta con el set base.
+async function persistProgram(opts: {
+  coachId: string
+  clientId: string | null
+  programId: string | null
+  meta: ProgramMetaPayload
+  variantSets: { variant: 'A' | 'B'; days: DayState[] }[]
+}): Promise<string> {
+  let pid = opts.programId
+  if (pid) {
+    const upd = await supabase.from('workout_programs').update(opts.meta).eq('id', pid)
+    if (upd.error && isMissingColumnError(upd.error)) {
+      await supabase.from('workout_programs').update(baseMeta(opts.meta)).eq('id', pid)
+    }
+  } else {
+    let ins = await supabase
+      .from('workout_programs')
+      .insert({ client_id: opts.clientId, coach_id: opts.coachId, ...opts.meta })
+      .select('id')
+      .single()
+    if (ins.error && isMissingColumnError(ins.error)) {
+      ins = await supabase
+        .from('workout_programs')
+        .insert({ client_id: opts.clientId, coach_id: opts.coachId, ...baseMeta(opts.meta) })
+        .select('id')
+        .single()
+    }
+    if (ins.error) throw ins.error
+    pid = (ins.data as { id: string }).id
+  }
+  const { data: oldPlans } = await supabase.from('workout_plans').select('id').eq('program_id', pid)
+  const oldIds = (oldPlans ?? []).map((p) => (p as { id: string }).id)
+  if (oldIds.length) {
+    await supabase.from('workout_blocks').delete().in('plan_id', oldIds)
+    await supabase.from('workout_plans').delete().in('id', oldIds)
+  }
+  for (const set of opts.variantSets) {
+    for (const day of set.days) {
+      if (day.blocks.length === 0) continue
+      const { data: plan, error: planErr } = await supabase
+        .from('workout_plans')
+        .insert({ program_id: pid, client_id: opts.clientId, coach_id: opts.coachId, title: day.title || day.name, day_of_week: day.id, week_variant: set.variant })
+        .select('id')
+        .single()
+      if (planErr) throw planErr
+      const inserts = day.blocks.map((b, i) => blockInsert(b, i, (plan as { id: string }).id))
+      const { error: blkErr } = await supabase.from('workout_blocks').insert(inserts)
+      if (blkErr) throw blkErr
+    }
+  }
+  return pid as string
+}
+
 export default function ProgramBuilderScreen() {
   const { clientId, clientName, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; templateId?: string; mode?: string }>()
   // Template mode = build/edit a reusable program with client_id null (no client).
@@ -58,6 +195,10 @@ export default function ProgramBuilderScreen() {
   const router = useRouter()
   const searchRef = useRef<BottomSheetModal>(null)
   const editorRef = useRef<BottomSheetModal>(null)
+  const templateRef = useRef<BottomSheetModal>(null)
+  const assignRef = useRef<BottomSheetModal>(null)
+  const balanceRef = useRef<BottomSheetModal>(null)
+  const previewRef = useRef<BottomSheetModal>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -75,14 +216,24 @@ export default function ProgramBuilderScreen() {
   // The builder holds the ACTIVE variant; the inactive one is stashed here.
   const [otherDays, setOtherDays] = useState<DayState[]>(emptyDays())
   const reshapeReady = useRef(false)
+  // Meta extra (paridad web): notas, fecha de inicio flexible y fases.
+  const [programNotes, setProgramNotes] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [startDateFlexible, setStartDateFlexible] = useState(true)
+  const [phases, setPhases] = useState<ProgramPhase[]>([])
+  // Offline-first: autosave local del borrador + restaurar (ventaja nativa vs web).
+  const [pendingDraft, setPendingDraft] = useState<any | null>(null)
+  const hydratedRef = useRef(false)
+  const draftKey = `builder_draft_${templateId ?? clientId ?? 'new'}`
 
   const [activeDayId, setActiveDayId] = useState(1)
   const [editingUid, setEditingUid] = useState<string | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
   const [metaOpen, setMetaOpen] = useState(false) // panel de configuración colapsable → más espacio para ejercicios
+  const [pendingSection, setPendingSection] = useState<BuilderSection>('main') // sección destino al agregar ejercicio
 
   const builder = usePlanBuilder(initial)
-  const { days, addExercise, removeBlock, updateBlock, moveBlock, updateDayTitle, toggleRestDay, copyDay, toggleSuperset, setBlockSection, toggleBlockOverride, undo, redo, canUndo, canRedo, setDays } = builder
+  const { days, addExercise, removeBlock, updateBlock, setDayBlocks, transferBlock, updateDayTitle, toggleRestDay, copyDay, toggleSuperset, setBlockSection, toggleBlockOverride, undo, redo, canUndo, canRedo, setDays } = builder
 
   const liveDays = useRef(days)
   useEffect(() => { liveDays.current = days }, [days])
@@ -102,19 +253,30 @@ export default function ProgramBuilderScreen() {
   useEffect(() => {
     (async () => {
       // New template (no templateId) → start blank.
-      if (isTemplate && !templateId) { reshapeReady.current = true; setName('Nueva plantilla'); setLoading(false); return }
+      if (isTemplate && !templateId) {
+        setName('Nueva plantilla')
+        const dRaw = await AsyncStorage.getItem(draftKey).catch(() => null)
+        if (dRaw) { try { setPendingDraft(JSON.parse(dRaw)) } catch {} }
+        reshapeReady.current = true; hydratedRef.current = true; setLoading(false); return
+      }
 
-      const sel = 'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )'
-      const query = supabase.from('workout_programs').select(sel)
-      const { data: prog } = await (templateId
-        ? query.eq('id', templateId).maybeSingle()
-        : query.eq('client_id', clientId!).eq('is_active', true).maybeSingle())
+      // Carga rica (con meta extra) → si faltan columnas, fallback al set base.
+      const { data: prog } = await selectWithFallback<any>(
+        () => {
+          const q = supabase.from('workout_programs').select(PROGRAM_SELECT_RICH)
+          return templateId ? q.eq('id', templateId).maybeSingle() : q.eq('client_id', clientId!).eq('is_active', true).maybeSingle()
+        },
+        () => {
+          const q = supabase.from('workout_programs').select(PROGRAM_SELECT)
+          return templateId ? q.eq('id', templateId).maybeSingle() : q.eq('client_id', clientId!).eq('is_active', true).maybeSingle()
+        }
+      )
 
       if (prog) {
         const structure = (prog.program_structure_type as ProgramStructureType) ?? 'weekly'
         const plans = (prog.workout_plans ?? []) as any[]
         const len = structure === 'cycle' ? Math.max(1, Math.min(7, prog.cycle_length ?? 4)) : 7
-        const hasB = plans.some((p) => (p.week_variant ?? 'A') === 'B')
+        const hasB = plans.some((p: any) => (p.week_variant ?? 'A') === 'B')
         setProgramId(prog.id)
         setName(prog.name ?? 'Programa principal')
         setStructureType(structure)
@@ -122,15 +284,32 @@ export default function ProgramBuilderScreen() {
         setWeeks(prog.weeks_to_repeat ?? 4)
         setCycleLength(len)
         setAbMode(Boolean(prog.ab_mode) || hasB)
+        setProgramNotes(prog.program_notes ?? '')
+        setStartDate(prog.start_date ?? '')
+        setStartDateFlexible(prog.start_date_flexible ?? true)
+        setPhases(Array.isArray(prog.program_phases) ? (prog.program_phases as ProgramPhase[]) : [])
         const a = variantDays(plans, 'A', structure, len)
         setInitial(a)
         setDays(a)
         setOtherDays(variantDays(plans, 'B', structure, len))
       }
+      const draftRaw = await AsyncStorage.getItem(draftKey).catch(() => null)
+      if (draftRaw) { try { setPendingDraft(JSON.parse(draftRaw)) } catch {} }
+      hydratedRef.current = true
       reshapeReady.current = true
       setLoading(false)
     })()
   }, [clientId, templateId])
+
+  // Autosave del borrador (debounce). Pausado mientras se ofrece restaurar uno previo.
+  useEffect(() => {
+    if (!hydratedRef.current || pendingDraft) return
+    const t = setTimeout(() => {
+      const draft = { name, structureType, durationType, weeks, cycleLength, abMode, variant, days, otherDays, programNotes, startDate, startDateFlexible, phases, savedAt: Date.now() }
+      AsyncStorage.setItem(draftKey, JSON.stringify(draft)).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [name, structureType, durationType, weeks, cycleLength, abMode, variant, days, otherDays, programNotes, startDate, startDateFlexible, phases, pendingDraft, draftKey])
 
   // Reshape both variants when structure / cycle length changes (preserve blocks).
   useEffect(() => {
@@ -159,6 +338,149 @@ export default function ProgramBuilderScreen() {
 
   function openEditor(uid: string) { setEditingUid(uid); editorRef.current?.present() }
 
+  // Lista del día agrupada por sección (encabezado + bloques) para el DraggableFlatList.
+  const listItems = useMemo<BuilderRow[]>(() => {
+    const blocks = currentDay?.blocks ?? []
+    const rows: BuilderRow[] = []
+    for (const section of SECTION_ORDER) {
+      const inSec = blocks.filter((b) => (b.section ?? 'main') === section)
+      rows.push({ type: 'header', section, count: inSec.length })
+      for (const b of inSec) rows.push({ type: 'block', block: b, section })
+    }
+    return rows
+  }, [currentDay])
+
+  // Al soltar: reconstruir bloques desde el orden plano + reasignar sección según el header anterior.
+  function handleDragEnd(data: BuilderRow[]) {
+    let cur: BuilderSection = 'warmup'
+    let changed = false
+    const rebuilt: BuilderBlock[] = []
+    for (const row of data) {
+      if (row.type === 'header') { cur = row.section; continue }
+      const orig = row.block.section ?? 'main'
+      if (orig !== cur) changed = true
+      rebuilt.push(orig === cur ? row.block : { ...row.block, section: cur })
+    }
+    setDayBlocks(currentDay.id, clearCrossSectionSupersets(rebuilt))
+    Haptics.impactAsync(changed ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+  }
+
+  function addToSection(section: BuilderSection) {
+    setPendingSection(section)
+    searchRef.current?.present()
+  }
+
+  // Swipe horizontal para cambiar de día (ventaja nativa sobre los chips de la web).
+  function changeDay(dir: 1 | -1) {
+    const idx = days.findIndex((d) => d.id === activeDayId)
+    const next = days[idx + dir]
+    if (!next) return
+    setActiveDayId(next.id)
+    Haptics.selectionAsync().catch(() => {})
+  }
+  const dayGesture = useMemo(
+    () =>
+      Gesture.Race(
+        Gesture.Fling().direction(Directions.LEFT).runOnJS(true).onEnd(() => changeDay(1)),
+        Gesture.Fling().direction(Directions.RIGHT).runOnJS(true).onEnd(() => changeDay(-1))
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [days, activeDayId]
+  )
+
+  function buildMeta(isActive: boolean): ProgramMetaPayload {
+    return {
+      name: name.trim(),
+      program_structure_type: structureType,
+      duration_type: durationType,
+      weeks_to_repeat: weeks,
+      cycle_length: structureType === 'cycle' ? cycleLength : null,
+      ab_mode: abMode,
+      is_active: isActive,
+      program_notes: programNotes.trim() || null,
+      start_date: startDateFlexible ? null : (startDate.trim() || null),
+      start_date_flexible: startDateFlexible,
+      program_phases: phases.length ? phases : null,
+    }
+  }
+  function currentVariantSets(): { variant: 'A' | 'B'; days: DayState[] }[] {
+    return abMode
+      ? [{ variant, days }, { variant: variant === 'A' ? 'B' : 'A', days: otherDays }]
+      : [{ variant: 'A', days }]
+  }
+
+  async function assignToClients(clientIds: string[]) {
+    if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre antes de asignar.'); return }
+    setSaving(true)
+    try {
+      const coach = await getCoachProfile()
+      if (!coach) throw new Error('Coach no encontrado')
+      for (const cid of clientIds) {
+        await persistProgram({ coachId: coach.id, clientId: cid, programId: null, meta: buildMeta(true), variantSets: currentVariantSets() })
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      Alert.alert('Listo', `Programa asignado a ${clientIds.length} alumno${clientIds.length === 1 ? '' : 's'}.`)
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo asignar.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function loadTemplate(id: string) {
+    const { data: raw } = await selectWithFallback<any>(
+      () => supabase.from('workout_programs').select(PROGRAM_SELECT_RICH).eq('id', id).maybeSingle(),
+      () => supabase.from('workout_programs').select(PROGRAM_SELECT).eq('id', id).maybeSingle()
+    )
+    const prog = raw as any
+    if (!prog) return
+    const structure = (prog.program_structure_type as ProgramStructureType) ?? 'weekly'
+    const plans = (prog.workout_plans ?? []) as any[]
+    const len = structure === 'cycle' ? Math.max(1, Math.min(7, prog.cycle_length ?? 4)) : 7
+    const hasB = plans.some((p: any) => (p.week_variant ?? 'A') === 'B')
+    setName(prog.name ?? name)
+    setStructureType(structure)
+    setDurationType((prog.duration_type as DurationType) ?? 'weeks')
+    setWeeks(prog.weeks_to_repeat ?? 4)
+    setCycleLength(len)
+    setAbMode(Boolean(prog.ab_mode) || hasB)
+    setProgramNotes(prog.program_notes ?? '')
+    setStartDate(prog.start_date ?? '')
+    setStartDateFlexible(prog.start_date_flexible ?? true)
+    setPhases(Array.isArray(prog.program_phases) ? (prog.program_phases as ProgramPhase[]) : [])
+    reshapeReady.current = true
+    setDays(variantDays(plans, 'A', structure, len))
+    setOtherDays(variantDays(plans, 'B', structure, len))
+    setActiveDayId(1)
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+  }
+
+  function recoverDraft() {
+    const d = pendingDraft
+    if (!d) return
+    reshapeReady.current = true
+    setName(d.name ?? name)
+    setStructureType(d.structureType ?? 'weekly')
+    setDurationType(d.durationType ?? 'weeks')
+    setWeeks(d.weeks ?? 4)
+    setCycleLength(d.cycleLength ?? 4)
+    setAbMode(!!d.abMode)
+    setVariant(d.variant ?? 'A')
+    setProgramNotes(d.programNotes ?? '')
+    setStartDate(d.startDate ?? '')
+    setStartDateFlexible(d.startDateFlexible ?? true)
+    setPhases(Array.isArray(d.phases) ? d.phases : [])
+    setOtherDays(Array.isArray(d.otherDays) ? d.otherDays : emptyDays())
+    setDays(Array.isArray(d.days) ? d.days : emptyDays())
+    setActiveDayId(1)
+    setPendingDraft(null)
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+  }
+  function discardDraft() {
+    AsyncStorage.removeItem(draftKey).catch(() => {})
+    setPendingDraft(null)
+  }
+
   async function handleSave() {
     if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre para el programa.'); return }
     const hasAny = days.some((d) => d.blocks.length > 0) || (abMode && otherDays.some((d) => d.blocks.length > 0))
@@ -167,67 +489,15 @@ export default function ProgramBuilderScreen() {
     try {
       const coach = await getCoachProfile()
       if (!coach) throw new Error('Coach no encontrado')
-
-      let pid = programId
-      const meta = {
-        name: name.trim(),
-        program_structure_type: structureType,
-        duration_type: durationType,
-        weeks_to_repeat: weeks,
-        cycle_length: structureType === 'cycle' ? cycleLength : null,
-        ab_mode: abMode,
-        is_active: isTemplate ? false : true,
-      }
-      if (pid) {
-        await supabase.from('workout_programs').update(meta).eq('id', pid)
-      } else {
-        const { data, error } = await supabase.from('workout_programs')
-          .insert({ client_id: isTemplate ? null : (clientId ?? null), coach_id: coach.id, ...meta }).select('id').single()
-        if (error) throw error
-        pid = data.id
-        setProgramId(pid)
-      }
-
-      // Rebuild plans+blocks for this program (variant A / weekly).
-      const { data: oldPlans } = await supabase.from('workout_plans').select('id').eq('program_id', pid)
-      const oldIds = (oldPlans ?? []).map((p) => p.id)
-      if (oldIds.length) {
-        await supabase.from('workout_blocks').delete().in('plan_id', oldIds)
-        await supabase.from('workout_plans').delete().in('id', oldIds)
-      }
-
-      const sets: { variant: 'A' | 'B'; days: DayState[] }[] = abMode
-        ? [{ variant, days }, { variant: variant === 'A' ? 'B' : 'A', days: otherDays }]
-        : [{ variant: 'A', days }]
-
-      for (const set of sets) {
-        for (const day of set.days) {
-          if (day.blocks.length === 0) continue
-          const { data: plan, error: planErr } = await supabase.from('workout_plans')
-            .insert({ program_id: pid, client_id: isTemplate ? null : (clientId ?? null), coach_id: coach.id, title: day.title || day.name, day_of_week: day.id, week_variant: set.variant })
-            .select('id').single()
-          if (planErr) throw planErr
-          const inserts = day.blocks.map((b, i) => ({
-            plan_id: plan.id,
-            exercise_id: b.exercise_id,
-            order_index: i,
-            sets: b.sets ?? 3,
-            reps: b.reps || '8-10',
-            rir: b.rir || null,
-            rest_time: b.rest_time || null,
-            notes: b.notes || null,
-            target_weight_kg: b.target_weight_kg && b.target_weight_kg.trim() ? Number(b.target_weight_kg) : null,
-            tempo: b.tempo || null,
-            superset_group: b.superset_group || null,
-            progression_type: b.progression_type || null,
-            progression_value: b.progression_value ?? null,
-            section: b.section ?? 'main',
-            is_override: b.is_override ?? false,
-          }))
-          const { error: blkErr } = await supabase.from('workout_blocks').insert(inserts)
-          if (blkErr) throw blkErr
-        }
-      }
+      const pid = await persistProgram({
+        coachId: coach.id,
+        clientId: isTemplate ? null : (clientId ?? null),
+        programId,
+        meta: buildMeta(isTemplate ? false : true),
+        variantSets: currentVariantSets(),
+      })
+      setProgramId(pid)
+      AsyncStorage.removeItem(draftKey).catch(() => {})
       router.back()
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'No se pudo guardar.')
@@ -248,17 +518,35 @@ export default function ProgramBuilderScreen() {
         <View style={styles.undoRow}>
           <TouchableOpacity onPress={undo} disabled={!canUndo} hitSlop={8}><Undo2 size={20} color={canUndo ? theme.foreground : theme.muted} /></TouchableOpacity>
           <TouchableOpacity onPress={redo} disabled={!canRedo} hitSlop={8}><Redo2 size={20} color={canRedo ? theme.foreground : theme.muted} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => balanceRef.current?.present()} hitSlop={8}><Scale size={19} color={theme.foreground} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => previewRef.current?.present()} hitSlop={8}><Eye size={19} color={theme.foreground} /></TouchableOpacity>
         </View>
         <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.topBtn}>
           {saving ? <ActivityIndicator size="small" color={theme.primary} /> : <Text style={[styles.topBtnText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Guardar</Text>}
         </TouchableOpacity>
       </View>
 
+      {pendingDraft ? (
+        <View style={[styles.draftBanner, { borderColor: theme.border, backgroundColor: theme.card }]}>
+          <Text style={[styles.draftText, { color: theme.foreground, fontFamily: theme.fontSans }]} numberOfLines={2}>Hay un borrador sin guardar de este programa.</Text>
+          <View style={styles.draftActions}>
+            <TouchableOpacity onPress={discardDraft} hitSlop={6}>
+              <Text style={[styles.draftDiscard, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Descartar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={recoverDraft} activeOpacity={0.85} style={[styles.draftBtn, { backgroundColor: theme.primary }]}>
+              <Text style={[styles.draftBtnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>Recuperar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      <GestureDetector gesture={dayGesture}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <DraggableFlatList
-          data={currentDay.blocks}
-          keyExtractor={(b) => b.uid}
-          onDragEnd={({ from, to }) => { if (from !== to) moveBlock(currentDay.id, from, to) }}
+          data={listItems}
+          keyExtractor={(item) => (item.type === 'header' ? `h-${item.section}` : item.block.uid)}
+          onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
+          onDragEnd={({ data }) => handleDragEnd(data)}
           activationDistance={14}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
@@ -311,8 +599,59 @@ export default function ProgramBuilderScreen() {
                   {abMode && structureType === 'weekly' ? (
                     <SmallSeg theme={theme} label="Variante activa" options={[{ v: 'A', l: 'Semana A' }, { v: 'B', l: 'Semana B' }]} value={variant} onChange={(v) => switchVariant(v as 'A' | 'B')} />
                   ) : null}
+
+                  <View style={[styles.abRow, { borderColor: theme.border }]}>
+                    <Text style={[styles.abLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Fecha de inicio flexible</Text>
+                    <TouchableOpacity onPress={() => setStartDateFlexible((v) => !v)} activeOpacity={0.8} style={[styles.switch, { backgroundColor: startDateFlexible ? theme.primary : theme.muted }]}>
+                      <View style={[styles.knob, { backgroundColor: '#fff', alignSelf: startDateFlexible ? 'flex-end' : 'flex-start' }]} />
+                    </TouchableOpacity>
+                  </View>
+                  {!startDateFlexible ? (
+                    <View>
+                      <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Fecha de inicio</Text>
+                      <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.mutedForeground} autoCapitalize="none"
+                        style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                    </View>
+                  ) : null}
+
+                  <View>
+                    <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Notas del programa</Text>
+                    <TextInput value={programNotes} onChangeText={setProgramNotes} placeholder="Notas para vos o el alumno" placeholderTextColor={theme.mutedForeground} multiline
+                      style={[styles.notesInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                  </View>
+
+                  <View>
+                    <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Fases (periodización)</Text>
+                    {phases.map((ph, i) => (
+                      <View key={i} style={styles.phaseRow}>
+                        <TouchableOpacity onPress={() => setPhases((prev) => prev.map((p, idx) => idx === i ? { ...p, color: PHASE_COLORS[(PHASE_COLORS.indexOf(p.color) + 1) % PHASE_COLORS.length] } : p))} style={[styles.phaseColor, { backgroundColor: ph.color }]} />
+                        <TextInput value={ph.name} onChangeText={(v) => setPhases((prev) => prev.map((p, idx) => idx === i ? { ...p, name: v } : p))} placeholder="Fase" placeholderTextColor={theme.mutedForeground}
+                          style={[styles.phaseName, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                        <TextInput value={String(ph.weeks)} onChangeText={(v) => setPhases((prev) => prev.map((p, idx) => idx === i ? { ...p, weeks: Math.max(1, Number(v) || 1) } : p))} keyboardType="number-pad"
+                          style={[styles.phaseWeeks, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                        <TouchableOpacity onPress={() => setPhases((prev) => prev.filter((_, idx) => idx !== i))} hitSlop={6} style={styles.phaseDel}>
+                          <X size={15} color={theme.mutedForeground} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity onPress={() => setPhases((prev) => [...prev, { name: '', weeks: 4, color: PHASE_COLORS[prev.length % PHASE_COLORS.length] }])} activeOpacity={0.8} style={[styles.phaseAdd, { borderColor: theme.border }]}>
+                      <Plus size={14} color={theme.primary} />
+                      <Text style={[styles.phaseAddText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Agregar fase</Text>
+                    </TouchableOpacity>
+                  </View>
                 </>
               ) : null}
+
+              <View style={styles.actionRow}>
+                <TouchableOpacity onPress={() => templateRef.current?.present()} activeOpacity={0.8} style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                  <Layers size={15} color={theme.primary} />
+                  <Text style={[styles.actionChipText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>Cargar plantilla</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => assignRef.current?.present()} activeOpacity={0.8} style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                  <Users size={15} color={theme.primary} />
+                  <Text style={[styles.actionChipText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>Asignar a alumnos</Text>
+                </TouchableOpacity>
+              </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
                 {days.map((d) => {
@@ -341,26 +680,43 @@ export default function ProgramBuilderScreen() {
               </View>
             </View>
           }
-          renderItem={({ item: b, drag, isActive }) => (
-            <ScaleDecorator>
-              <View style={[styles.blockCard, { backgroundColor: theme.card, borderColor: b.superset_group ? theme.primary + '66' : theme.border, opacity: isActive ? 0.92 : 1, marginBottom: 8 }]}>
-                <TouchableOpacity onLongPress={drag} delayLongPress={140} hitSlop={8} style={{ paddingRight: 2 }}>
-                  <GripVertical size={18} color={theme.mutedForeground} />
-                </TouchableOpacity>
-                <TouchableOpacity style={{ flex: 1, gap: 2 }} activeOpacity={0.85} onPress={() => openEditor(b.uid)}>
-                  <View style={styles.blockTitleRow}>
-                    {b.superset_group ? <View style={[styles.ssBadge, { backgroundColor: theme.primary + '22' }]}><Link2 size={10} color={theme.primary} /><Text style={[styles.ssText, { color: theme.primary }]}>{b.superset_group}</Text></View> : null}
-                    <Text style={[styles.blockName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{b.exercise_name}</Text>
+          renderItem={({ item, drag, isActive }) => {
+            if (item.type === 'header') {
+              return (
+                <View style={styles.sectionHeader}>
+                  <View style={[styles.sectionDot, { backgroundColor: theme.primary }]} />
+                  <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{SECTION_LABEL[item.section].toUpperCase()}</Text>
+                  <View style={[styles.sectionCount, { borderColor: theme.border }]}>
+                    <Text style={[styles.sectionCountText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{item.count}</Text>
                   </View>
-                  <Text style={[styles.blockMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                    {b.sets}×{b.reps}{b.target_weight_kg ? ` · ${b.target_weight_kg}kg` : ''}{b.rest_time ? ` · ${b.rest_time}` : ''}{b.section && b.section !== 'main' ? ` · ${b.section === 'warmup' ? 'calent.' : 'enfri.'}` : ''}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScaleDecorator>
-          )}
+                  <TouchableOpacity onPress={() => addToSection(item.section)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: theme.border }]}>
+                    <Plus size={14} color={theme.primary} />
+                  </TouchableOpacity>
+                </View>
+              )
+            }
+            const b = item.block
+            return (
+              <ScaleDecorator>
+                <View style={[styles.blockCard, { backgroundColor: theme.card, borderColor: b.superset_group ? theme.primary + '66' : theme.border, opacity: isActive ? 0.92 : 1, marginBottom: 8 }]}>
+                  <TouchableOpacity onLongPress={drag} delayLongPress={140} hitSlop={8} style={{ paddingRight: 2 }}>
+                    <GripVertical size={18} color={theme.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ flex: 1, gap: 2 }} activeOpacity={0.85} onPress={() => openEditor(b.uid)}>
+                    <View style={styles.blockTitleRow}>
+                      {b.superset_group ? <View style={[styles.ssBadge, { backgroundColor: theme.primary + '22' }]}><Link2 size={10} color={theme.primary} /><Text style={[styles.ssText, { color: theme.primary }]}>{b.superset_group}</Text></View> : null}
+                      <Text style={[styles.blockName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{b.exercise_name}</Text>
+                    </View>
+                    <Text style={[styles.blockMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+                      {b.sets}×{b.reps}{b.target_weight_kg ? ` · ${b.target_weight_kg}kg` : ''}{b.rest_time ? ` · ${b.rest_time}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScaleDecorator>
+            )
+          }}
           ListFooterComponent={
-            <TouchableOpacity onPress={() => searchRef.current?.present()} activeOpacity={0.8}
+            <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.8}
               style={[styles.addBtn, { borderColor: theme.border, backgroundColor: theme.card }]}>
               <Plus size={18} color={theme.primary} />
               <Text style={[styles.addText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Agregar ejercicio a {currentDay.name}</Text>
@@ -368,10 +724,18 @@ export default function ProgramBuilderScreen() {
           }
         />
       </KeyboardAvoidingView>
+      </GestureDetector>
 
-      <ExerciseSearchSheet ref={searchRef} onSelect={(block) => addExercise(activeDayId, { ...block, dayId: activeDayId })} />
+      <ExerciseSearchSheet ref={searchRef} onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: pendingSection }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }} />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}
-        onSetSection={setBlockSection.bind(null, activeDayId)} onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)} />
+        onSetSection={setBlockSection.bind(null, activeDayId)} onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)}
+        days={days.map((d) => ({ id: d.id, name: d.name }))} currentDayId={activeDayId} clientId={isTemplate ? undefined : clientId}
+        onMoveToDay={(uid, target) => { transferBlock(uid, activeDayId, target); setActiveDayId(target); editorRef.current?.dismiss(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}) }} />
+
+      <TemplatePickerSheet ref={templateRef} onSelect={loadTemplate} />
+      <AssignClientsSheet ref={assignRef} onAssign={(ids) => { assignRef.current?.dismiss(); assignToClients(ids) }} saving={saving} />
+      <MuscleBalanceSheet ref={balanceRef} days={days} />
+      <ProgramPreviewSheet ref={previewRef} days={days} name={name} />
 
       {/* Copy day modal */}
       {copyOpen ? (
@@ -413,7 +777,13 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
   topBtn: { minWidth: 64 }, topBtnText: { fontSize: 15 },
-  undoRow: { flexDirection: 'row', gap: 18 },
+  undoRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  draftBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  draftText: { flex: 1, fontSize: 12.5, lineHeight: 17 },
+  draftActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  draftDiscard: { fontSize: 13 },
+  draftBtn: { borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
+  draftBtnText: { fontSize: 13 },
   scroll: { padding: 16, gap: 14, paddingBottom: 60 },
   subTitle: { fontSize: 13 },
   nameInput: { height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 16 },
@@ -423,12 +793,23 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', gap: 10 },
   metaLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   weeksInput: { height: 38, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 14 },
+  notesInput: { minHeight: 64, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingTop: 10, fontSize: 14, textAlignVertical: 'top' },
+  phaseRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  phaseColor: { width: 22, height: 22, borderRadius: 11 },
+  phaseName: { flex: 1, height: 38, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 14 },
+  phaseWeeks: { width: 52, height: 38, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 14, textAlign: 'center' },
+  phaseDel: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  phaseAdd: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 10, marginTop: 2 },
+  phaseAddText: { fontSize: 13 },
   abRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   abLabel: { fontSize: 13, flexShrink: 1 },
   switch: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
   knob: { width: 22, height: 22, borderRadius: 11 },
   seg: { flexDirection: 'row', borderWidth: 1, borderRadius: 10, padding: 3, gap: 3 },
   segItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  actionRow: { flexDirection: 'row', gap: 8 },
+  actionChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderRadius: 11, paddingVertical: 11, paddingHorizontal: 8 },
+  actionChipText: { fontSize: 12.5 },
   dayRow: { gap: 8, paddingVertical: 2 },
   dayChip: { minWidth: 52, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 3 },
   dayChipText: { fontSize: 13 },
@@ -442,6 +823,12 @@ const styles = StyleSheet.create({
   ssText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   blockName: { fontSize: 14, flexShrink: 1 },
   blockMeta: { fontSize: 12 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
+  sectionDot: { width: 7, height: 7, borderRadius: 4 },
+  sectionTitle: { fontSize: 12, letterSpacing: 0.6 },
+  sectionCount: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
+  sectionCountText: { fontSize: 11 },
+  sectionAdd: { marginLeft: 'auto', width: 30, height: 30, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   reorder: { gap: 2 },
   addBtn: { height: 48, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 },
   addText: { fontSize: 14 },

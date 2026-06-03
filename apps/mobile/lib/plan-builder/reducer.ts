@@ -20,6 +20,10 @@ export type BuilderAction =
   | { type: 'REMOVE_BLOCK'; payload: { dayId: number; uid: string } }
   | { type: 'UPDATE_BLOCK'; payload: { block: BuilderBlock } }
   | { type: 'MOVE_BLOCK'; payload: { dayId: number; oldIndex: number; newIndex: number } }
+  // RN-only: reemplaza los bloques de un día (usado por el reorden con secciones del
+  // builder mobile, que recalcula orden + section desde el drag plano). Divergencia
+  // mínima del 1:1 web; web podría adoptarla.
+  | { type: 'SET_DAY_BLOCKS'; payload: { dayId: number; blocks: BuilderBlock[] } }
   | { type: 'TRANSFER_BLOCK'; payload: { activeId: string; activeDayId: number; overDayId: number } }
   | { type: 'UPDATE_DAY_TITLE'; payload: { dayId: number; title: string } }
   | { type: 'COPY_DAY'; payload: { sourceId: number; targetIds: number[] } }
@@ -58,6 +62,11 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
         d.id === action.payload.dayId
           ? { ...d, blocks: arrayMove(d.blocks, action.payload.oldIndex, action.payload.newIndex) }
           : d
+      )
+
+    case 'SET_DAY_BLOCKS':
+      return state.map((d) =>
+        d.id === action.payload.dayId ? { ...d, blocks: action.payload.blocks } : d
       )
 
     case 'TRANSFER_BLOCK': {
@@ -225,6 +234,9 @@ export function usePlanBuilder(initialDays: DayState[]) {
   const moveBlock = useCallback((dayId: number, oldIndex: number, newIndex: number) => {
     dispatchWithHistory({ type: 'MOVE_BLOCK', payload: { dayId, oldIndex, newIndex } })
   }, [dispatchWithHistory])
+  const setDayBlocks = useCallback((dayId: number, blocks: BuilderBlock[]) => {
+    dispatchWithHistory({ type: 'SET_DAY_BLOCKS', payload: { dayId, blocks } })
+  }, [dispatchWithHistory])
   const transferBlock = useCallback((activeId: string, activeDayId: number, overDayId: number) => {
     dispatchWithHistory({ type: 'TRANSFER_BLOCK', payload: { activeId, activeDayId, overDayId } })
   }, [dispatchWithHistory])
@@ -258,6 +270,7 @@ export function usePlanBuilder(initialDays: DayState[]) {
     removeBlock,
     updateBlock,
     moveBlock,
+    setDayBlocks,
     transferBlock,
     updateDayTitle,
     copyDay,

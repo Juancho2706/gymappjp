@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { LayoutTemplate, Users, Apple, Plus, HelpCircle } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { TemplateLibrary, type TemplateLibraryItem } from './TemplateLibrary'
 import { ActivePlansBoard } from './ActivePlansBoard'
 import type { ActivePlanBoardRow } from '../_data/nutrition-coach.queries'
@@ -56,6 +57,7 @@ export function NutritionHub({
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter font-display leading-none">Nutrición</h1>
+            <AppOnlyBadge>Gestiónalo desde el celular en la app de EVA</AppOnlyBadge>
             <CoachNutritionGuideDialog
               hasClients={hasClients}
               onAssign={() => setHubTab('clients')}
