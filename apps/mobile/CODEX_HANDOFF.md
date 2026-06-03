@@ -144,6 +144,17 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - **Onboarding coach** = **web-only por diseño**, NO portar: usa service-role + selección de tier pago + MercadoPago (`coach/onboarding/complete`). El signup RN del coach es free-tier / o se registra en web. Quitar del backlog mobile.
 - Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
 
+## Claude update - 2026-06-03 - fixes feedback device (APK)
+- **Loading infinito en detalle alumno**: `load()` en `cliente/[clientId].tsx` no tenía try/finally → si `getCoachClientDetail` rechazaba (alguna query falla en DB live), `setLoading(false)` nunca corría. Envuelto en try/catch/finally. (Si tras esto el detalle sale vacío en device, mandar logs: alguna query de la lib 677-líneas rechaza con datos live.)
+- **Fondo muy iluminado**: bajé alphas en `AppBackground` (~40-45%): topWash 0.18→0.10, side 0.09→0.05, grid 0.04→0.035 (dark).
+- **Cards dashboard coach**: `useGlassStyle` usaba fondo semi-transparente hardcoded + detección light frágil (`theme.card==='#FFFFFF'`) → cards "despegadas". Ahora = `theme.card` + `theme.border` + sombra (consistente con el resto de la app). Afecta KPIs, charts y secciones del dashboard.
+- **Nombres cortados al asignar nutrición**: rows de cliente a 2 líneas (eran 1).
+- **Splash** (`EvaSplash.tsx`): rework limpio — wordmark EVA multicolor con reveal staggered + glow + underline (sin logo blanco/corners/pill). Research 2026: minimal, motion-forward.
+- **Selector coach/alumno** (`app/index.tsx`): rework — wordmark EVA + 2 cards premium (coach filled, alumno glass) con eyebrow/título/desc/chevron + AppBackground.
+- **Código alumno** (`alumno/codigo.tsx`): AppBackground + hero centrado.
+- Pendiente del feedback: **flujo de asignar plantillas** (UX, falta detalle de qué confunde) + fine-tune visual cards (falta screenshot).
+- Validado: `npx tsc --noEmit` PASS y `npx expo export --platform android` PASS.
+
 ## Codex update - 2026-06-02 - APK visual/nutrition fixes
 - Nutrition builder RN ahora respeta `foods.is_liquid` / `serving_unit`: alimentos solidos muestran `g/un`, liquidos `ml/un`, manteniendo la unidad actual si un plan viejo trae otra.
 - Input de cantidad en comidas ajustado para Android: altura/lineHeight/padding centrados para evitar que numeros como `50` se corten arriba.

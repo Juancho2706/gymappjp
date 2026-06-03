@@ -72,24 +72,29 @@ export default function ClientDetailScreen() {
 
   async function load() {
     setLoading(true)
-    const res = await getCoachClientDetail(clientId)
-    setClient(res.client)
-    setCheckIns(res.checkIns)
-    setPayments(res.payments)
-    setActiveProgram(res.activeProgram)
-    setActiveNutrition(res.activeNutrition)
-    setCompliance(res.compliance)
-    setActivity(res.activity)
-    setPersonalRecords(res.personalRecords)
-    setMuscleVolume(res.muscleVolume)
-    setNutritionMeals(res.nutritionMeals)
-    setNutritionTimeline(res.nutritionTimeline)
-    setNutritionMonthlyAvgPct(res.nutritionMonthlyAvgPct)
-    setNutritionStreakDays(res.nutritionStreakDays)
-    setFavoriteFoods(res.favoriteFoods)
-    setSelectedDate((prev) => res.activity.find((day) => day.workout || day.nutrition || day.checkIn)?.date ?? prev)
-    setSessions30d(res.sessions30d)
-    setLoading(false)
+    try {
+      const res = await getCoachClientDetail(clientId)
+      setClient(res.client)
+      setCheckIns(res.checkIns)
+      setPayments(res.payments)
+      setActiveProgram(res.activeProgram)
+      setActiveNutrition(res.activeNutrition)
+      setCompliance(res.compliance)
+      setActivity(res.activity)
+      setPersonalRecords(res.personalRecords)
+      setMuscleVolume(res.muscleVolume)
+      setNutritionMeals(res.nutritionMeals)
+      setNutritionTimeline(res.nutritionTimeline)
+      setNutritionMonthlyAvgPct(res.nutritionMonthlyAvgPct)
+      setNutritionStreakDays(res.nutritionStreakDays)
+      setFavoriteFoods(res.favoriteFoods)
+      setSelectedDate((prev) => res.activity.find((day) => day.workout || day.nutrition || day.checkIn)?.date ?? prev)
+      setSessions30d(res.sessions30d)
+    } catch (e) {
+      console.warn('[client-detail] load failed', e)
+    } finally {
+      setLoading(false)
+    }
   }
   useEffect(() => { load() }, [clientId])
 

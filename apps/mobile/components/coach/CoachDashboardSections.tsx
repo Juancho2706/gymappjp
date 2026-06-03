@@ -1407,16 +1407,19 @@ function QuickActionButton({
 }
 
 function useGlassStyle() {
-  const { theme } = useTheme()
-  const isLight = theme.card === '#FFFFFF'
+  const { theme, mode } = useTheme()
+  const isDark = mode !== 'light'
+  // Solid theme surface + border → consistent with every other card in the app
+  // (the old semi-transparent slab looked detached over the backdrop).
   return {
-    backgroundColor: isLight ? 'rgba(255,255,255,0.84)' : 'rgba(7,10,14,0.64)',
-    borderColor: isLight ? 'rgba(15,23,42,0.1)' : 'rgba(255,255,255,0.11)',
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: isLight ? 0.08 : 0.28,
-    shadowRadius: 24,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: isDark ? 0.22 : 0.06,
+    shadowRadius: 18,
+    elevation: 5,
   }
 }
 

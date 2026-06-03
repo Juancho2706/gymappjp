@@ -14,6 +14,7 @@ import { MotiView } from 'moti'
 import { fetchBrandingByCoachIdentifier, normalizeCoachIdentifier } from '../../lib/branding'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, TopBar } from '../../components'
+import { AppBackground } from '../../components/AppBackground'
 
 export default function CodigoScreen() {
   const router = useRouter()
@@ -42,6 +43,7 @@ export default function CodigoScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kav}
@@ -141,10 +143,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
   },
-  title: { fontSize: 28, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, lineHeight: 20, marginBottom: 4 },
+  title: { fontSize: 28, letterSpacing: -0.5, textAlign: 'center' },
+  subtitle: { fontSize: 14, lineHeight: 20, marginBottom: 4, textAlign: 'center' },
   input: {
     height: 72,
     borderWidth: 2,

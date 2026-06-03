@@ -1,228 +1,122 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { LinearGradient } from 'expo-linear-gradient'
-import { Activity, Dumbbell, ExternalLink, Sparkles } from 'lucide-react-native'
+import { Activity, ChevronRight, Dumbbell } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
+import { AppBackground } from '../components/AppBackground'
+
+const LETTERS = [
+  { c: 'E', color: '#8B5CF6' },
+  { c: 'V', color: '#06B6D4' },
+  { c: 'A', color: '#10B981' },
+]
 
 export default function RoleSelector() {
   const router = useRouter()
   const { theme } = useTheme()
 
   return (
-    <LinearGradient
-      colors={[theme.background, theme.primary + '0A', theme.background]}
-      style={styles.gradient}
-    >
-      <GridOverlay color={theme.foreground} />
-      <SafeAreaView style={styles.container}>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      <AppBackground />
+      <SafeAreaView style={styles.safe}>
+        {/* Brand */}
         <MotiView
-          from={{ opacity: 0, scale: 0.92, translateY: 16 }}
-          animate={{ opacity: 1, scale: 1, translateY: 0 }}
-          transition={{ type: 'spring', damping: 14 }}
+          from={{ opacity: 0, translateY: 18 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 500 }}
           style={styles.header}
         >
-          <View
-            style={[
-              styles.brandPill,
-              {
-                backgroundColor: theme.primary + '12',
-                borderColor: theme.primary + '30',
-                borderRadius: theme.radius.lg,
-              },
-            ]}
-          >
-            <Sparkles size={14} color={theme.primary} />
-            <Text style={[styles.brandPillText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-              Bienvenido
-            </Text>
+          <View style={styles.wordmark}>
+            {LETTERS.map((l, i) => (
+              <MotiView key={l.c} from={{ opacity: 0, translateY: 14 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'spring', damping: 13, delay: 100 + i * 90 }}>
+                <Text style={[styles.letter, { color: l.color }]}>{l.c}</Text>
+              </MotiView>
+            ))}
           </View>
-          <Text style={[styles.brand, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-            EVA
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Entrenamiento personalizado
+          <Text style={[styles.tagline, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            ENTRENAMIENTO PERSONALIZADO
           </Text>
         </MotiView>
 
-        <View style={styles.buttons}>
-          <RoleButton
-            delay={300}
+        {/* Role cards */}
+        <View style={styles.cards}>
+          <RoleCard
+            delay={280}
             icon={Dumbbell}
-            title="SOY COACH"
-            description="Gestiona alumnos y programas"
+            eyebrow="PARA PROFESIONALES"
+            title="Soy coach"
+            desc="Gestioná alumnos, programas y nutrición."
             primary
+            theme={theme}
             onPress={() => router.push('/(auth)/login?role=coach')}
           />
-          <RoleButton
-            delay={450}
+          <RoleCard
+            delay={420}
             icon={Activity}
-            title="SOY ALUMNO"
-            description="Accede a tu entrenamiento"
+            eyebrow="PARA ENTRENAR"
+            title="Soy alumno"
+            desc="Accedé a tu plan con el código de tu coach."
+            theme={theme}
             onPress={() => router.push('/alumno/codigo')}
           />
         </View>
 
-        <MotiView
-          from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ type: 'timing', duration: 400, delay: 650 }}
-          style={styles.footerRow}
-        >
-          <Text style={[styles.footer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            eva-app.cl
-          </Text>
-          <ExternalLink size={12} color={theme.mutedForeground} />
+        <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: 'timing', duration: 400, delay: 650 }}>
+          <Text style={[styles.footer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>eva-app.cl</Text>
         </MotiView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   )
 }
 
-function RoleButton({
-  icon: Icon,
-  title,
-  description,
-  primary,
-  delay,
-  onPress,
-}: {
-  icon: typeof Dumbbell
-  title: string
-  description: string
-  primary?: boolean
-  delay: number
-  onPress: () => void
+function RoleCard({ icon: Icon, eyebrow, title, desc, primary, delay, theme, onPress }: {
+  icon: typeof Dumbbell; eyebrow: string; title: string; desc: string; primary?: boolean; delay: number; theme: any; onPress: () => void
 }) {
-  const { theme } = useTheme()
   const fg = primary ? theme.primaryForeground : theme.foreground
-  const sub = primary ? 'rgba(255,255,255,0.78)' : theme.mutedForeground
-
+  const sub = primary ? 'rgba(255,255,255,0.82)' : theme.mutedForeground
+  const iconBg = primary ? 'rgba(255,255,255,0.18)' : theme.primary + '14'
+  const iconBorder = primary ? 'rgba(255,255,255,0.25)' : theme.primary + '30'
   return (
-    <MotiView
-      from={{ opacity: 0, translateY: 22 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 500, delay }}
-    >
+    <MotiView from={{ opacity: 0, translateY: 22 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 480, delay }}>
       <TouchableOpacity
-        style={[
-          styles.btn,
-          primary
-            ? { backgroundColor: theme.primary, borderRadius: theme.radius['2xl'] }
-            : {
-                backgroundColor: theme.card,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: theme.radius['2xl'],
-              },
-          primary ? theme.shadowGlowBlue : null,
-        ]}
+        activeOpacity={0.88}
         onPress={onPress}
-        activeOpacity={0.85}
+        style={[
+          styles.card,
+          { borderRadius: theme.radius['2xl'] },
+          primary
+            ? [{ backgroundColor: theme.primary }, theme.shadowGlowBlue]
+            : { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
+        ]}
       >
-        <View
-          style={[
-            styles.iconWrap,
-            {
-              backgroundColor: primary ? 'rgba(255,255,255,0.16)' : theme.primary + '12',
-              borderColor: primary ? 'rgba(255,255,255,0.22)' : theme.primary + '30',
-              borderRadius: theme.radius.xl,
-            },
-          ]}
-        >
-          <Icon size={32} color={primary ? theme.primaryForeground : theme.primary} strokeWidth={1.75} />
+        <View style={[styles.cardIcon, { backgroundColor: iconBg, borderColor: iconBorder, borderRadius: theme.radius.xl }]}>
+          <Icon size={26} color={primary ? theme.primaryForeground : theme.primary} strokeWidth={2} />
         </View>
-        <Text style={[styles.btnTitle, { color: fg, fontFamily: 'Montserrat_800ExtraBold' }]}>
-          {title}
-        </Text>
-        <Text style={[styles.btnDesc, { color: sub, fontFamily: theme.fontSans }]}>
-          {description}
-        </Text>
+        <View style={styles.cardText}>
+          <Text style={[styles.cardEyebrow, { color: sub, fontFamily: 'Inter_600SemiBold' }]}>{eyebrow}</Text>
+          <Text style={[styles.cardTitle, { color: fg, fontFamily: 'Montserrat_800ExtraBold' }]}>{title}</Text>
+          <Text style={[styles.cardDesc, { color: sub, fontFamily: theme.fontSans }]}>{desc}</Text>
+        </View>
+        <ChevronRight size={22} color={primary ? theme.primaryForeground : theme.mutedForeground} />
       </TouchableOpacity>
     </MotiView>
   )
 }
 
-function GridOverlay({ color }: { color: string }) {
-  return (
-    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Defs>
-        <Pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
-          <Line x1="28" y1="0" x2="28" y2="28" stroke={color} strokeWidth="1" opacity="0.03" />
-          <Line x1="0" y1="28" x2="28" y2="28" stroke={color} strokeWidth="1" opacity="0.03" />
-        </Pattern>
-      </Defs>
-      <Rect width="100%" height="100%" fill="url(#grid)" />
-    </Svg>
-  )
-}
-
 const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  container: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingVertical: 56,
-    paddingHorizontal: 24,
-  },
-  header: {
-    alignItems: 'center',
-    paddingTop: 40,
-  },
-  brandPill: {
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginBottom: 18,
-  },
-  brandPillText: { fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
-  brand: {
-    fontSize: 64,
-    letterSpacing: -3,
-    lineHeight: 64,
-  },
-  subtitle: {
-    fontSize: 14,
-    marginTop: 8,
-    letterSpacing: 0.4,
-  },
-  buttons: {
-    gap: 16,
-  },
-  btn: {
-    padding: 28,
-    alignItems: 'center',
-    gap: 8,
-  },
-  iconWrap: {
-    width: 58,
-    height: 58,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  btnTitle: {
-    fontSize: 20,
-    letterSpacing: 1.2,
-  },
-  btnDesc: {
-    fontSize: 13,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 5,
-  },
-  footer: {
-    textAlign: 'center',
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
+  root: { flex: 1 },
+  safe: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 40 },
+  header: { alignItems: 'center', paddingTop: 36 },
+  wordmark: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
+  letter: { fontSize: 64, lineHeight: 66, fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -3 },
+  tagline: { fontSize: 11, letterSpacing: 2.4, marginTop: 12 },
+  cards: { gap: 14 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 20 },
+  cardIcon: { width: 54, height: 54, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cardText: { flex: 1, gap: 2 },
+  cardEyebrow: { fontSize: 10, letterSpacing: 1.2 },
+  cardTitle: { fontSize: 21, letterSpacing: -0.4 },
+  cardDesc: { fontSize: 13, lineHeight: 18, marginTop: 2 },
+  footer: { textAlign: 'center', fontSize: 12, letterSpacing: 0.5 },
 })

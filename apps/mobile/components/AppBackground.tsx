@@ -19,11 +19,11 @@ function hexToRgba(hex: string, alpha: number): string {
 export function AppBackground() {
   const { theme, mode } = useTheme()
   const isDark = mode !== 'light'
-  const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'
-  const topWash = hexToRgba(theme.primary, isDark ? 0.18 : 0.13)
-  const topWashMid = hexToRgba(theme.primary, isDark ? 0.07 : 0.045)
-  const sideWash = hexToRgba('#22D3EE', isDark ? 0.09 : 0.055)
-  const sideWashMid = hexToRgba('#22D3EE', isDark ? 0.035 : 0.022)
+  const gridColor = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(15,23,42,0.03)'
+  const topWash = hexToRgba(theme.primary, isDark ? 0.10 : 0.07)
+  const topWashMid = hexToRgba(theme.primary, isDark ? 0.035 : 0.025)
+  const sideWash = hexToRgba('#22D3EE', isDark ? 0.05 : 0.03)
+  const sideWashMid = hexToRgba('#22D3EE', isDark ? 0.018 : 0.012)
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
