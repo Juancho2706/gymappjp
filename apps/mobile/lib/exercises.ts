@@ -72,6 +72,34 @@ export interface ExerciseInput {
   gif_url?: string | null
 }
 
+/** Extrae el ID (11 chars) de una URL de YouTube (watch, youtu.be, embed, shorts). */
+export function youtubeId(url: string | null | undefined): string | null {
+  if (!url) return null
+  const m = url.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)
+  return m ? m[1] : null
+}
+
+/** Miniatura de un video de YouTube. */
+export function youtubeThumb(id: string): string {
+  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`
+}
+
+/**
+ * URL de miniatura/preview de un ejercicio: gif → imagen → thumb de YouTube.
+ * Muchos ejercicios del sistema traen solo `video_url` (YouTube) → derivamos la
+ * miniatura para que la fila no caiga al ícono placeholder.
+ */
+export function exerciseThumb(row: {
+  gif_url: string | null
+  image_url: string | null
+  video_url: string | null
+}): string | null {
+  if (row.gif_url) return row.gif_url
+  if (row.image_url) return row.image_url
+  const yt = youtubeId(row.video_url)
+  return yt ? youtubeThumb(yt) : null
+}
+
 const SELECT_COLUMNS =
   'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id, org_id'
 // Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.

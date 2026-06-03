@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, AccessibilityInfo } from 'react-native'
 import { useEffect, useState } from 'react'
 import { MotiView } from 'moti'
 import { useTheme } from '../context/ThemeContext'
+import { AppBackground } from './AppBackground'
 
 // EVA brand loader — the multicolor "EVA" letters with a staggered wave.
 // Default in-app loading indicator (replaces ActivityIndicator). EVA gradient
@@ -49,11 +50,16 @@ export function EvaLoader({ size = 'lg', subtitle }: { size?: Size; subtitle?: s
   )
 }
 
-/** Full-screen centered loader (use for initial screen loads). */
+/**
+ * Loader a sección completa. Usa `absoluteFill` + fondo opaco + AppBackground propio,
+ * así CUBRE toda la pantalla aunque se monte como hermano tras un header (antes
+ * quedaba chico debajo del título). Sirve para arranque y para estados loading.
+ */
 export function EvaLoaderScreen({ subtitle }: { subtitle?: string }) {
   const { theme } = useTheme()
   return (
-    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+    <View style={[StyleSheet.absoluteFill, styles.screen, { backgroundColor: theme.background }]}>
+      <AppBackground />
       <EvaLoader subtitle={subtitle} />
     </View>
   )
