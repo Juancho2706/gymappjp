@@ -1,8 +1,9 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
-import { Activity, Clock, Dumbbell, Eye, Play, Plus, Search, X } from 'lucide-react-native'
+import { MotiView } from 'moti'
+import { Activity, ChevronUp, Clock, Dumbbell, Eye, Play, Plus, Search, X } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme } from '../../context/ThemeContext'
 import { exerciseThumb, filterExercises, youtubeId, MUSCLE_GROUPS, type ExerciseRow } from '../../lib/exercises'
@@ -10,6 +11,7 @@ import { getMuscleColor } from '../../lib/muscle-colors'
 import type { BuilderBlock } from '../../lib/plan-builder/types'
 
 const RECENTS_KEY = 'builder_recent_exercises'
+const EMPTY: Ex[] = [] // ref estable para no virtualizar nada con el sheet colapsado
 
 type Ex = Pick<ExerciseRow, 'id' | 'name' | 'muscle_group' | 'gif_url' | 'image_url' | 'video_url' | 'secondary_muscles' | 'body_part' | 'equipment'>
 
@@ -62,8 +64,11 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
       AsyncStorage.setItem(RECENTS_KEY, JSON.stringify(next)).catch(() => {})
     }
 
-    const filtered = useMemo(() => filterExercises(exercises, query, muscle), [exercises, query, muscle])
-    const showRecents = query.trim() === '' && muscle === 'Todos' && recents.length > 0
+    const deferredQuery = useDeferredValue(query)
+    const filtered = useMemo(() => filterExercises(exercises, deferredQuery, muscle), [exercises, deferredQuery, muscle])
+    const showRecents = deferredQuery.trim() === '' && muscle === 'Todos' && recents.length > 0
+    // Lazy: con el sheet colapsado (index ≤ 0) no virtualizamos filas.
+    const data = index >= 1 ? filtered : EMPTY
 
     function handleSelect(ex: Ex) {
       pushRecent(ex)
@@ -90,7 +95,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
       return (
         <TouchableOpacity style={[styles.row, { borderColor: theme.border, backgroundColor: theme.card }]} onPress={() => handleSelect(ex)} activeOpacity={0.8}>
           <View style={[styles.thumb, { backgroundColor: hexToRgba(color, 0.15) }]}>
-            {thumb ? <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" transition={120} /> : <Activity size={18} color={color} />}
+            {thumb ? <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" cachePolicy="memory-disk" recyclingKey={ex.id} /> : <Activity size={18} color={color} />}
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
             <Text numberOfLines={1} style={[styles.exName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{ex.name}</Text>
@@ -115,8 +120,10 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
         <View style={[styles.grabber, { backgroundColor: theme.mutedForeground }]} />
         {index <= 0 ? (
           <View style={styles.collapsedRow}>
-            <Plus size={15} color={theme.primary} />
-            <Text style={[styles.collapsedText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Añadir ejercicio</Text>
+            <MotiView from={{ translateY: 1 }} animate={{ translateY: -4 }} transition={{ loop: true, type: 'timing', duration: 850 }}>
+              <ChevronUp size={16} color={theme.primary} />
+            </MotiView>
+            <Text style={[styles.collapsedText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>DESLIZA PARA AÑADIR EJERCICIOS</Text>
             <Text style={[styles.collapsedHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>· {dayBlockCount} en {dayName}</Text>
           </View>
         ) : null}
@@ -138,12 +145,16 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
         style={styles.sheetShadow}
       >
         <BottomSheetFlatList
-          data={filtered}
+          data={data}
           keyExtractor={(ex) => ex.id}
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews
           ListHeaderComponent={
             <View style={{ gap: 10 }}>
               <View style={styles.headerRow}>
@@ -215,9 +226,9 @@ const styles = StyleSheet.create({
   sheetShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 16 },
   handle: { paddingTop: 8, paddingBottom: 6, alignItems: 'center', gap: 6 },
   grabber: { width: 38, height: 4, borderRadius: 2, opacity: 0.4 },
-  collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 2 },
-  collapsedText: { fontSize: 13 },
-  collapsedHint: { fontSize: 12 },
+  collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 2, paddingHorizontal: 16 },
+  collapsedText: { fontSize: 11.5, letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 1 },
+  collapsedHint: { fontSize: 10.5 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 15 },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 44 },

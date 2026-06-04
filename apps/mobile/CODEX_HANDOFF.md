@@ -218,3 +218,15 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - **F8 animaciones:** overlay de modo **cinematic** (negro full + `assets/eva-icon.png` tint blanco + label, swap ~480ms / limpia ~2.2s); **slide translateX** direccional al cambiar de día (Moti, `SLIDE`=22% ancho) en ambos modos.
 - **F9 tour:** `components/coach/BuilderOnboardingTour.tsx` (spotlight Modal con cutout de 4 paneles + ring + card de pasos Saltar/Atrás/Siguiente/Finalizar). Anclas medidas con `measureInWindow` vía registro de refs (`regTour`): ⚙/?/💾/⋮/A-B/day-tabs. Short auto la 1ª vez (`builder_onboarding_seen_short_v1`), full por el botón ?.
 - Validado cada tanda: `npx tsc --noEmit` PASS + `npx expo export --platform android` PASS. **Falta verificar en device lado a lado.**
+
+## Claude update - 2026-06-04 - Builder RN optimización interna (O1-O8, mismo look)
+- Foco: perf interna sin cambiar diseño. Plan: `~/.claude/plans/dynamic-churning-bonbon.md`.
+- **O1 gifs (causa raíz):** ejercicios del sistema guardan el gif como URL **directa no-YouTube en `video_url`** (ExerciseDB). `exerciseThumb` (`lib/exercises.ts`) ahora: `gif_url → image_url → youtube(video_url) → video_url directo → null` (espeja `rawVideoUrl` web). Arregla catálogo + bloques + pestaña Ejercicios coach de una.
+- **O2 swipe sin remount:** se quitó el `MotiView key={day-...}` que **remontaba todo el DraggableFlatList** por cambio de día. Ahora `Animated.View` (Reanimated) con `translateX` (useSharedValue + withTiming 170ms) + `scrollToOffset(0)`; la lista persiste (sólo cambia `data`). Swipe instantáneo.
+- **O3 memo:** `BuilderBlockCard` → `React.memo` con comparador (block identidad + isActive + catGif/Image/Video + drag); ignora handlers inline → no re-render por estado ajeno (dirty/config/tour/ping). `contentContainerStyle` del día memoizado.
+- **O4 virtualización:** día `initialNumToRender=6/maxToRenderPerBatch=6/windowSize=5`; catálogo `10/10/7 + removeClippedSubviews`. (getItemLayout omitido en catálogo por header variable de "recientes".)
+- **O5 expo-image:** thumbs de filas (card + catálogo) → **sin `transition`** (causa framedrops en listas, expo#37561) + `cachePolicy="memory-disk"` + `recyclingKey` (block.uid / ex.id). Preview de imagen única conserva transition.
+- **O6 catálogo:** `useDeferredValue(query)` (filtra fuera del teclado) + `data = index>=1 ? filtered : EMPTY` (no virtualiza colapsado).
+- **O7 higiene:** `dayGesture` estable (deps `[]`, lee de refs `liveDays/activeDayIdRef/simpleModeRef`) → no reconfigura el GestureDetector por edición; `editingBlock` acotado a `currentDay.blocks`; autosave debounce 1.5→2.5s + `InteractionManager.runAfterInteractions`.
+- **O8 handle:** "DESLIZA PARA AÑADIR EJERCICIOS" + chevron-up con loop Moti (translateY).
+- Validado: `npx tsc --noEmit` PASS + `npx expo export --platform android` PASS. **Falta verificar en device** (gifs visibles, swipe instantáneo, scroll fluido).

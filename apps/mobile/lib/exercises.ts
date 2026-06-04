@@ -97,7 +97,10 @@ export function exerciseThumb(row: {
   if (row.gif_url) return row.gif_url
   if (row.image_url) return row.image_url
   const yt = youtubeId(row.video_url)
-  return yt ? youtubeThumb(yt) : null
+  if (yt) return youtubeThumb(yt)
+  // video_url directo no-YouTube (gif/mp4 de ExerciseDB) — la web lo usa como rawVideoUrl.
+  if (row.video_url) return row.video_url
+  return null
 }
 
 /** Normaliza acentos + minúsculas (1:1 web `normalizeString`). */

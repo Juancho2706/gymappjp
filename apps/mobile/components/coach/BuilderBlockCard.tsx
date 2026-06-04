@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
 import { CircleHelp, GripVertical, Minus, Plus, X } from 'lucide-react-native'
@@ -35,7 +35,7 @@ interface Props {
 /** Card de ejercicio 1:1 con la web (ExerciseBlock): borde por músculo, miniatura,
  *  badges (sección, sets×reps con quick-edit, descanso, superserie, progresión, músculo)
  *  + botones CAL/PRI/ENF + eliminar. */
-export function BuilderBlockCard({ block, drag, isActive, onEdit, onRemove, onUpdate, onSetSection, onToggleSuperset, catGif, catImage, catVideo }: Props) {
+function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, onSetSection, onToggleSuperset, catGif, catImage, catVideo }: Props) {
   const { theme } = useTheme()
   const [editing, setEditing] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -60,7 +60,7 @@ export function BuilderBlockCard({ block, drag, isActive, onEdit, onRemove, onUp
 
         <View style={[styles.thumb, { backgroundColor: hexToRgba(muscle, 0.15) }]}>
           {thumb ? (
-            <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" transition={120} />
+            <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" cachePolicy="memory-disk" recyclingKey={block.uid} />
           ) : (
             <View style={{ width: '100%', height: '100%', backgroundColor: hexToRgba(muscle, 0.22) }} />
           )}
@@ -143,6 +143,19 @@ export function BuilderBlockCard({ block, drag, isActive, onEdit, onRemove, onUp
     </ScaleDecorator>
   )
 }
+
+// Memo: re-render sólo si cambia el bloque (identidad), su estado de drag o la media del catálogo.
+// Ignora handlers inline del renderItem → no re-render por estado ajeno del builder.
+export const BuilderBlockCard = memo(
+  BuilderBlockCardInner,
+  (a, b) =>
+    a.block === b.block &&
+    a.isActive === b.isActive &&
+    a.catGif === b.catGif &&
+    a.catImage === b.catImage &&
+    a.catVideo === b.catVideo &&
+    a.drag === b.drag,
+)
 
 const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderWidth: 1, borderLeftWidth: 4, borderRadius: 12, marginBottom: 8 },

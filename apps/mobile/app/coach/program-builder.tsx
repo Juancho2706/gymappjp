@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable,
+  ActivityIndicator, Alert, Dimensions, InteractionManager, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
 import { Image } from 'expo-image'
@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import BottomSheet, { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { ArrowLeft, ChevronLeft, ChevronRight, CircleHelp, Copy, Eye, Layers, Link2, Moon, MoreVertical, Plus, Printer, Redo2, Save, Scale, Settings, Sparkles, Sun, Undo2, Users, X } from 'lucide-react-native'
 import DraggableFlatList from 'react-native-draggable-flatlist'
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -275,6 +276,23 @@ export default function ProgramBuilderScreen() {
   const liveDays = useRef(days)
   useEffect(() => { liveDays.current = days }, [days])
 
+  // Slide de día sin remontar la lista (Reanimated, UI thread).
+  const listRef = useRef<any>(null)
+  const dayTx = useSharedValue(0)
+  const daySlideStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dayTx.value }] }))
+  useEffect(() => {
+    dayTx.value = slideDir.current * SLIDE
+    dayTx.value = withTiming(0, { duration: 170, easing: Easing.out(Easing.cubic) })
+    listRef.current?.scrollToOffset?.({ offset: 0, animated: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDayId])
+
+  // Refs para que el gesto de swipe sea estable (no se recree por cada edición).
+  const activeDayIdRef = useRef(1)
+  const simpleModeRef = useRef(false)
+  useEffect(() => { activeDayIdRef.current = activeDayId })
+  useEffect(() => { simpleModeRef.current = isSimpleMode })
+
   // Precarga del catálogo de ejercicios (una vez). Resiliente: si falla, queda vacío.
   useEffect(() => {
     listCoachExercises().then(({ exercises }) => setCatalog(exercises)).catch(() => {})
@@ -348,9 +366,12 @@ export default function ProgramBuilderScreen() {
   useEffect(() => {
     if (!hydratedRef.current || pendingDraft) return
     const t = setTimeout(() => {
-      const draft = { name, structureType, durationType, weeks, cycleLength, abMode, variant, days, otherDays, programNotes, startDate, startDateFlexible, phases, savedAt: Date.now() }
-      AsyncStorage.setItem(draftKey, JSON.stringify(draft)).catch(() => {})
-    }, 1500)
+      // Serializar/persistir fuera del hilo de interacción para no competir con gestos.
+      InteractionManager.runAfterInteractions(() => {
+        const draft = { name, structureType, durationType, weeks, cycleLength, abMode, variant, days, otherDays, programNotes, startDate, startDateFlexible, phases, savedAt: Date.now() }
+        AsyncStorage.setItem(draftKey, JSON.stringify(draft)).catch(() => {})
+      })
+    }, 2500)
     return () => clearTimeout(t)
   }, [name, structureType, durationType, weeks, cycleLength, abMode, variant, days, otherDays, programNotes, startDate, startDateFlexible, phases, pendingDraft, draftKey])
 
@@ -405,9 +426,11 @@ export default function ProgramBuilderScreen() {
   const currentDay = days.find((d) => d.id === activeDayId) ?? days[0]
   const dayTotalSets = (currentDay?.blocks ?? []).reduce((s, b) => s + (b.sets ?? 0), 0)
   const dayMuscles = Array.from(new Set((currentDay?.blocks ?? []).map((b) => b.muscle_group).filter(Boolean))) as string[]
-  const editingBlock = useMemo(() => days.flatMap((d) => d.blocks).find((b) => b.uid === editingUid) ?? null, [days, editingUid])
+  const editingBlock = useMemo(() => (currentDay?.blocks ?? []).find((b) => b.uid === editingUid) ?? null, [currentDay, editingUid])
 
   function openEditor(uid: string) { setEditingUid(uid); editorRef.current?.present() }
+
+  const scrollContentStyle = useMemo(() => [styles.scroll, { paddingBottom: isSimpleMode ? 96 : 150 }], [isSimpleMode])
 
   // Tab de día 1:1 web: etiqueta (3 letras) + nº de ejercicios (rest→ZZZ, vacío→·).
   function renderDayTab(d: DayState, fixed: boolean) {
@@ -516,14 +539,16 @@ export default function ProgramBuilderScreen() {
 
   // Swipe horizontal para cambiar de día (ventaja nativa sobre los chips de la web).
   function changeDay(dir: 1 | -1) {
-    const idx = days.findIndex((d) => d.id === activeDayId)
-    const next = days[idx + dir]
+    const list = liveDays.current
+    const idx = list.findIndex((d) => d.id === activeDayIdRef.current)
+    const next = list[idx + dir]
     if (!next) return
     slideDir.current = dir
     setActiveDayId(next.id)
     Haptics.selectionAsync().catch(() => {})
-    if (isSimpleMode) pokeHint()
+    if (simpleModeRef.current) pokeHint()
   }
+  // Gesto estable (lee de refs) → no se reconfigura el GestureDetector en cada edición.
   const dayGesture = useMemo(
     () =>
       Gesture.Race(
@@ -531,7 +556,7 @@ export default function ProgramBuilderScreen() {
         Gesture.Fling().direction(Directions.RIGHT).runOnJS(true).onEnd(() => changeDay(-1))
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [days, activeDayId, isSimpleMode]
+    []
   )
 
   function buildMeta(isActive: boolean): ProgramMetaPayload {
@@ -754,22 +779,20 @@ export default function ProgramBuilderScreen() {
 
       <GestureDetector gesture={dayGesture}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <MotiView
-          key={`day-${activeDayId}`}
-          from={{ opacity: 0, translateX: slideDir.current * SLIDE }}
-          animate={{ opacity: 1, translateX: 0 }}
-          transition={{ type: 'timing', duration: 260 }}
-          style={{ flex: 1 }}
-        >
+        <Animated.View style={[{ flex: 1 }, daySlideStyle]}>
         <DraggableFlatList
+          ref={listRef}
           data={listItems}
           keyExtractor={(item) => (item.type === 'header' ? `h-${item.section}` : item.block.uid)}
           onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
           onDragEnd={({ data }) => handleDragEnd(data)}
           activationDistance={14}
-          contentContainerStyle={[styles.scroll, { paddingBottom: isSimpleMode ? 96 : 150 }]}
+          contentContainerStyle={scrollContentStyle}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
           ListHeaderComponent={
             <View style={{ gap: 14, paddingBottom: 14 }}>
               {isSimpleMode && abMode ? (
@@ -910,7 +933,7 @@ export default function ProgramBuilderScreen() {
             )
           }
         />
-        </MotiView>
+        </Animated.View>
       </KeyboardAvoidingView>
       </GestureDetector>
 
