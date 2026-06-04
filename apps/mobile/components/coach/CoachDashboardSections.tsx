@@ -739,6 +739,7 @@ export function MobileOnboardingChecklist({
   if (dismissed && !allDone) {
     return (
       <View style={[styles.onboardingResume, glass, { borderRadius: theme.radius.xl }]}>
+        <CardGlass />
         <Text style={[styles.onboardingResumeText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
           Sigues con pasos pendientes en tu guia de inicio.
         </Text>
@@ -2674,6 +2675,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 14,
     gap: 12,
+    overflow: 'hidden',
   },
   onboardingResumeText: {
     fontSize: 14,

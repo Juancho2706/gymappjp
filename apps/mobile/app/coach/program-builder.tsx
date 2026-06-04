@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, GripVertical, Layers, Link2, Moon, Plus, Redo2, Scale, Sparkles, Undo2, Users, X } from 'lucide-react-native'
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist'
+import { ChevronLeft, ChevronRight, Copy, Eye, Layers, Moon, MoreVertical, Plus, Printer, Redo2, Scale, Settings, Sparkles, Undo2, Users, X } from 'lucide-react-native'
+import DraggableFlatList from 'react-native-draggable-flatlist'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -22,6 +22,11 @@ import { TemplatePickerSheet } from '../../components/coach/TemplatePickerSheet'
 import { AssignClientsSheet } from '../../components/coach/AssignClientsSheet'
 import { MuscleBalanceSheet } from '../../components/coach/MuscleBalanceSheet'
 import { ProgramPreviewSheet } from '../../components/coach/ProgramPreviewSheet'
+import { BuilderBlockCard } from '../../components/coach/BuilderBlockCard'
+import { ProgramConfigSheet } from '../../components/coach/ProgramConfigSheet'
+import { ProgramPhasesBar } from '../../components/coach/ProgramPhasesBar'
+import { getMuscleColor } from '../../lib/muscle-colors'
+import { exportProgramPdf } from '../../lib/program-pdf'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
@@ -86,11 +91,10 @@ const PROGRAM_SELECT =
 // Rico = base + meta extra (notas/fecha/phases). Si la columna falta, selectWithFallback usa el base.
 const PROGRAM_SELECT_RICH = PROGRAM_SELECT.replace(
   'ab_mode,',
-  'ab_mode, program_notes, start_date, start_date_flexible, program_phases,'
+  'ab_mode, duration_days, program_notes, start_date, start_date_flexible, program_phases,'
 )
 
 type ProgramPhase = { name: string; weeks: number; color: string }
-const PHASE_COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#F43F5E']
 
 type ProgramMetaPayload = {
   name: string
@@ -100,6 +104,7 @@ type ProgramMetaPayload = {
   cycle_length: number | null
   ab_mode: boolean
   is_active: boolean
+  duration_days?: number | null
   program_notes?: string | null
   start_date?: string | null
   start_date_flexible?: boolean
@@ -128,8 +133,8 @@ function blockInsert(b: BuilderBlock, i: number, planId: string) {
 
 // Quita las columnas de meta extra (para prod que aún no las tiene).
 function baseMeta(m: ProgramMetaPayload): ProgramMetaPayload {
-  const { program_notes, start_date, start_date_flexible, program_phases, ...rest } = m
-  void program_notes; void start_date; void start_date_flexible; void program_phases
+  const { program_notes, start_date, start_date_flexible, program_phases, duration_days, ...rest } = m
+  void program_notes; void start_date; void start_date_flexible; void program_phases; void duration_days
   return rest as ProgramMetaPayload
 }
 
@@ -200,6 +205,7 @@ export default function ProgramBuilderScreen() {
   const assignRef = useRef<BottomSheetModal>(null)
   const balanceRef = useRef<BottomSheetModal>(null)
   const previewRef = useRef<BottomSheetModal>(null)
+  const configRef = useRef<BottomSheetModal>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -230,13 +236,14 @@ export default function ProgramBuilderScreen() {
   const [isSimpleMode, setIsSimpleMode] = useState(false)
   const [modeLabel, setModeLabel] = useState<string | null>(null)
   const [showHint, setShowHint] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const simpleHydrated = useRef(false)
   const slideDir = useRef(0)
 
   const [activeDayId, setActiveDayId] = useState(1)
   const [editingUid, setEditingUid] = useState<string | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
-  const [metaOpen, setMetaOpen] = useState(false) // panel de configuración colapsable → más espacio para ejercicios
+  const [durationDays, setDurationDays] = useState<number | null>(null) // para duración async / días corridos
   const [pendingSection, setPendingSection] = useState<BuilderSection>('main') // sección destino al agregar ejercicio
 
   const builder = usePlanBuilder(initial)
@@ -293,6 +300,7 @@ export default function ProgramBuilderScreen() {
         setAbMode(Boolean(prog.ab_mode) || hasB)
         setProgramNotes(prog.program_notes ?? '')
         setStartDate(prog.start_date ?? '')
+    setDurationDays(prog.duration_days ?? null)
         setStartDateFlexible(prog.start_date_flexible ?? true)
         setPhases(Array.isArray(prog.program_phases) ? (prog.program_phases as ProgramPhase[]) : [])
         const a = variantDays(plans, 'A', structure, len)
@@ -353,6 +361,8 @@ export default function ProgramBuilderScreen() {
   }
 
   const currentDay = days.find((d) => d.id === activeDayId) ?? days[0]
+  const dayTotalSets = (currentDay?.blocks ?? []).reduce((s, b) => s + (b.sets ?? 0), 0)
+  const dayMuscles = Array.from(new Set((currentDay?.blocks ?? []).map((b) => b.muscle_group).filter(Boolean))) as string[]
   const editingBlock = useMemo(() => days.flatMap((d) => d.blocks).find((b) => b.uid === editingUid) ?? null, [days, editingUid])
 
   function openEditor(uid: string) { setEditingUid(uid); editorRef.current?.present() }
@@ -397,7 +407,6 @@ export default function ProgramBuilderScreen() {
     const next = !isSimpleMode
     setModeLabel(next ? 'Modo Simple' : 'Modo Normal')
     Haptics.selectionAsync().catch(() => {})
-    if (next) setMetaOpen(false)
     setTimeout(() => { setIsSimpleMode(next); if (next) pokeHint() }, 200)
     setTimeout(() => setModeLabel(null), 1600)
   }
@@ -434,6 +443,7 @@ export default function ProgramBuilderScreen() {
       program_notes: programNotes.trim() || null,
       start_date: startDateFlexible ? null : (startDate.trim() || null),
       start_date_flexible: startDateFlexible,
+      duration_days: durationType === 'weeks' ? null : durationDays,
       program_phases: phases.length ? phases : null,
     }
   }
@@ -461,6 +471,19 @@ export default function ProgramBuilderScreen() {
     }
   }
 
+  async function handlePrint() {
+    setMenuOpen(false)
+    try {
+      const coach = await getCoachProfile()
+      const sets = currentVariantSets()
+      const aDays = sets.find((s) => s.variant === 'A')?.days ?? days
+      const bDays = sets.find((s) => s.variant === 'B')?.days
+      await exportProgramPdf({ programName: name || 'Programa', clientName, coachName: coach?.fullName ?? coach?.brandName ?? null, weeksToRepeat: weeks, days: aDays, daysB: abMode ? bDays : undefined, isABMode: abMode })
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo generar el PDF.')
+    }
+  }
+
   async function loadTemplate(id: string) {
     const { data: raw } = await selectWithFallback<any>(
       () => supabase.from('workout_programs').select(PROGRAM_SELECT_RICH).eq('id', id).maybeSingle(),
@@ -480,6 +503,7 @@ export default function ProgramBuilderScreen() {
     setAbMode(Boolean(prog.ab_mode) || hasB)
     setProgramNotes(prog.program_notes ?? '')
     setStartDate(prog.start_date ?? '')
+    setDurationDays(prog.duration_days ?? null)
     setStartDateFlexible(prog.start_date_flexible ?? true)
     setPhases(Array.isArray(prog.program_phases) ? (prog.program_phases as ProgramPhase[]) : [])
     reshapeReady.current = true
@@ -552,8 +576,8 @@ export default function ProgramBuilderScreen() {
         <View style={styles.undoRow}>
           <TouchableOpacity onPress={undo} disabled={!canUndo} hitSlop={8}><Undo2 size={20} color={canUndo ? theme.foreground : theme.muted} /></TouchableOpacity>
           <TouchableOpacity onPress={redo} disabled={!canRedo} hitSlop={8}><Redo2 size={20} color={canRedo ? theme.foreground : theme.muted} /></TouchableOpacity>
-          <TouchableOpacity onPress={() => balanceRef.current?.present()} hitSlop={8}><Scale size={19} color={theme.foreground} /></TouchableOpacity>
-          <TouchableOpacity onPress={() => previewRef.current?.present()} hitSlop={8}><Eye size={19} color={theme.foreground} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={8}><MoreVertical size={20} color={theme.foreground} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => configRef.current?.present()} hitSlop={8} style={[styles.gearBtn, { borderColor: '#F59E0B66' }]}><Settings size={18} color="#F59E0B" /></TouchableOpacity>
         </View>
         <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.topBtn}>
           {saving ? <ActivityIndicator size="small" color={theme.primary} /> : <Text style={[styles.topBtnText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Guardar</Text>}
@@ -599,101 +623,7 @@ export default function ProgramBuilderScreen() {
               <TextInput value={name} onChangeText={setName} placeholder="Nombre del programa" placeholderTextColor={theme.mutedForeground}
                 style={[styles.nameInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} />
 
-              {/* Config colapsable → libera espacio para los ejercicios del día */}
-              <TouchableOpacity onPress={() => setMetaOpen((o) => !o)} activeOpacity={0.75}
-                style={[styles.metaToggle, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                {metaOpen ? <ChevronDown size={16} color={theme.mutedForeground} /> : <ChevronRight size={16} color={theme.mutedForeground} />}
-                <Text style={[styles.metaToggleText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Configuración del programa</Text>
-                <Text style={[styles.metaToggleHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                  {structureType === 'weekly' ? 'Semanal' : `Ciclo ${cycleLength}d`}{abMode ? ' · A/B' : ''}
-                </Text>
-              </TouchableOpacity>
-
-              {metaOpen ? (
-                <>
-                  <View style={styles.metaRow}>
-                    <SmallSeg theme={theme} label="Estructura" options={[{ v: 'weekly', l: 'Semanal' }, { v: 'cycle', l: 'Ciclo' }]} value={structureType} onChange={(v) => setStructureType(v as ProgramStructureType)} />
-                    {structureType === 'cycle' ? (
-                      <View style={{ width: 90 }}>
-                        <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Días ciclo</Text>
-                        <TextInput value={String(cycleLength)} onChangeText={(v) => setCycleLength(Math.max(1, Math.min(7, Number(v) || 1)))} keyboardType="number-pad"
-                          style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={styles.metaRow}>
-                    <SmallSeg theme={theme} label="Duración" options={[{ v: 'weeks', l: 'Semanas' }, { v: 'async', l: 'Async' }, { v: 'calendar_days', l: 'Días' }]} value={durationType} onChange={(v) => setDurationType(v as DurationType)} />
-                    <View style={{ width: 96 }}>
-                      <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Repetir (sem)</Text>
-                      <TextInput value={String(weeks)} onChangeText={(v) => setWeeks(Math.max(1, Number(v) || 1))} keyboardType="number-pad"
-                        style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                    </View>
-                  </View>
-
-                  {structureType === 'weekly' ? (
-                    <View style={[styles.abRow, { borderColor: theme.border }]}>
-                      <Text style={[styles.abLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Semanas A/B (alterna 2 rutinas)</Text>
-                      <TouchableOpacity onPress={() => toggleAb(!abMode)} activeOpacity={0.8} style={[styles.switch, { backgroundColor: abMode ? theme.primary : theme.muted }]}>
-                        <View style={[styles.knob, { backgroundColor: '#fff', alignSelf: abMode ? 'flex-end' : 'flex-start' }]} />
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                  {abMode && structureType === 'weekly' ? (
-                    <SmallSeg theme={theme} label="Variante activa" options={[{ v: 'A', l: 'Semana A' }, { v: 'B', l: 'Semana B' }]} value={variant} onChange={(v) => switchVariant(v as 'A' | 'B')} />
-                  ) : null}
-
-                  <View style={[styles.abRow, { borderColor: theme.border }]}>
-                    <Text style={[styles.abLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Fecha de inicio flexible</Text>
-                    <TouchableOpacity onPress={() => setStartDateFlexible((v) => !v)} activeOpacity={0.8} style={[styles.switch, { backgroundColor: startDateFlexible ? theme.primary : theme.muted }]}>
-                      <View style={[styles.knob, { backgroundColor: '#fff', alignSelf: startDateFlexible ? 'flex-end' : 'flex-start' }]} />
-                    </TouchableOpacity>
-                  </View>
-                  {!startDateFlexible ? (
-                    <View>
-                      <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Fecha de inicio</Text>
-                      <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.mutedForeground} autoCapitalize="none"
-                        style={[styles.weeksInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                    </View>
-                  ) : null}
-
-                  <View>
-                    <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Notas del programa</Text>
-                    <TextInput value={programNotes} onChangeText={setProgramNotes} placeholder="Notas para vos o el alumno" placeholderTextColor={theme.mutedForeground} multiline
-                      style={[styles.notesInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                  </View>
-
-                  <View>
-                    <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Fases (periodización)</Text>
-                    {phases.map((ph, i) => (
-                      <View key={i} style={styles.phaseRow}>
-                        <TouchableOpacity onPress={() => setPhases((prev) => prev.map((p, idx) => idx === i ? { ...p, color: PHASE_COLORS[(PHASE_COLORS.indexOf(p.color) + 1) % PHASE_COLORS.length] } : p))} style={[styles.phaseColor, { backgroundColor: ph.color }]} />
-                        <TextInput value={ph.name} onChangeText={(v) => setPhases((prev) => prev.map((p, idx) => idx === i ? { ...p, name: v } : p))} placeholder="Fase" placeholderTextColor={theme.mutedForeground}
-                          style={[styles.phaseName, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                        <TextInput value={String(ph.weeks)} onChangeText={(v) => setPhases((prev) => prev.map((p, idx) => idx === i ? { ...p, weeks: Math.max(1, Number(v) || 1) } : p))} keyboardType="number-pad"
-                          style={[styles.phaseWeeks, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-                        <TouchableOpacity onPress={() => setPhases((prev) => prev.filter((_, idx) => idx !== i))} hitSlop={6} style={styles.phaseDel}>
-                          <X size={15} color={theme.mutedForeground} />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                    <TouchableOpacity onPress={() => setPhases((prev) => [...prev, { name: '', weeks: 4, color: PHASE_COLORS[prev.length % PHASE_COLORS.length] }])} activeOpacity={0.8} style={[styles.phaseAdd, { borderColor: theme.border }]}>
-                      <Plus size={14} color={theme.primary} />
-                      <Text style={[styles.phaseAddText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Agregar fase</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : null}
-
-              <View style={styles.actionRow}>
-                <TouchableOpacity onPress={() => templateRef.current?.present()} activeOpacity={0.8} style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                  <Layers size={15} color={theme.primary} />
-                  <Text style={[styles.actionChipText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>Cargar plantilla</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => assignRef.current?.present()} activeOpacity={0.8} style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                  <Users size={15} color={theme.primary} />
-                  <Text style={[styles.actionChipText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>Asignar a alumnos</Text>
-                </TouchableOpacity>
-              </View>
+              {!isSimpleMode && phases.length ? <ProgramPhasesBar phases={phases} weeks={weeks} /> : null}
 
               </>) : null}
 
@@ -722,41 +652,58 @@ export default function ProgramBuilderScreen() {
                   <Copy size={15} color={theme.mutedForeground} />
                 </TouchableOpacity>
               </View>
+
+              {!isSimpleMode && !currentDay.is_rest ? (
+                <View style={styles.volRow}>
+                  <View style={[styles.volChip, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                    <Text style={[styles.volLbl, { color: theme.mutedForeground }]}>EJ.</Text>
+                    <Text style={[styles.volVal, { color: theme.foreground }]}>{currentDay.blocks.length}</Text>
+                  </View>
+                  <View style={[styles.volChip, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                    <Text style={[styles.volLbl, { color: theme.mutedForeground }]}>SERIES</Text>
+                    <Text style={[styles.volVal, { color: theme.foreground }]}>{dayTotalSets}</Text>
+                  </View>
+                  <View style={styles.volDots}>
+                    {dayMuscles.map((m) => <View key={m} style={[styles.muscleDot, { backgroundColor: getMuscleColor(m) }]} />)}
+                  </View>
+                </View>
+              ) : null}
+
+              {currentDay.is_rest ? (
+                <View style={[styles.restBanner, { borderColor: '#6366F133', backgroundColor: '#6366F114' }]}>
+                  <Moon size={16} color="#818CF8" />
+                  <Text style={[styles.restBannerText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>DÍA DE DESCANSO</Text>
+                </View>
+              ) : null}
             </View>
           }
           renderItem={({ item, drag, isActive }) => {
             if (item.type === 'header') {
+              const secColor = item.section === 'warmup' ? '#F59E0B' : item.section === 'cooldown' ? '#38BDF8' : theme.primary
               return (
-                <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionDot, { backgroundColor: theme.primary }]} />
-                  <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{SECTION_LABEL[item.section].toUpperCase()}</Text>
-                  <View style={[styles.sectionCount, { borderColor: theme.border }]}>
-                    <Text style={[styles.sectionCountText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{item.count}</Text>
+                <View style={[styles.sectionHeader, { borderColor: secColor + '55', backgroundColor: secColor + '12' }]}>
+                  <View style={[styles.sectionDot, { backgroundColor: secColor }]} />
+                  <Text style={[styles.sectionTitle, { color: secColor, fontFamily: 'Montserrat_700Bold' }]}>{SECTION_LABEL[item.section].toUpperCase()}</Text>
+                  <View style={[styles.sectionCount, { borderColor: secColor + '55' }]}>
+                    <Text style={[styles.sectionCountText, { color: secColor, fontFamily: theme.fontSans }]}>{item.count}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => addToSection(item.section)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: theme.border }]}>
-                    <Plus size={14} color={theme.primary} />
+                  <TouchableOpacity onPress={() => addToSection(item.section)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: secColor + '55' }]}>
+                    <Plus size={14} color={secColor} />
                   </TouchableOpacity>
                 </View>
               )
             }
-            const b = item.block
             return (
-              <ScaleDecorator>
-                <View style={[styles.blockCard, isSimpleMode && styles.blockCardCompact, { backgroundColor: theme.card, borderColor: b.superset_group ? theme.primary + '66' : theme.border, opacity: isActive ? 0.92 : 1, marginBottom: isSimpleMode ? 6 : 8 }]}>
-                  <TouchableOpacity onLongPress={drag} delayLongPress={140} hitSlop={8} style={{ paddingRight: 2 }}>
-                    <GripVertical size={18} color={theme.mutedForeground} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={{ flex: 1, gap: 2 }} activeOpacity={0.85} onPress={() => openEditor(b.uid)}>
-                    <View style={styles.blockTitleRow}>
-                      {b.superset_group ? <View style={[styles.ssBadge, { backgroundColor: theme.primary + '22' }]}><Link2 size={10} color={theme.primary} /><Text style={[styles.ssText, { color: theme.primary }]}>{b.superset_group}</Text></View> : null}
-                      <Text style={[styles.blockName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{b.exercise_name}</Text>
-                    </View>
-                    <Text style={[styles.blockMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                      {b.sets}×{b.reps}{b.target_weight_kg ? ` · ${b.target_weight_kg}kg` : ''}{b.rest_time ? ` · ${b.rest_time}` : ''}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScaleDecorator>
+              <BuilderBlockCard
+                block={item.block}
+                drag={drag}
+                isActive={isActive}
+                onEdit={openEditor}
+                onRemove={(uid) => removeBlock(activeDayId, uid)}
+                onUpdate={updateBlock}
+                onSetSection={(uid, s) => setBlockSection(activeDayId, uid, s)}
+                onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
+              />
             )
           }}
           ListFooterComponent={
@@ -781,6 +728,21 @@ export default function ProgramBuilderScreen() {
       <AssignClientsSheet ref={assignRef} onAssign={(ids) => { assignRef.current?.dismiss(); assignToClients(ids) }} saving={saving} />
       <MuscleBalanceSheet ref={balanceRef} days={days} />
       <ProgramPreviewSheet ref={previewRef} days={days} name={name} />
+      <ProgramConfigSheet ref={configRef}
+        name={name} setName={setName}
+        structureType={structureType} setStructureType={setStructureType}
+        cycleLength={cycleLength} setCycleLength={setCycleLength}
+        durationType={durationType} setDurationType={setDurationType}
+        weeks={weeks} setWeeks={setWeeks}
+        durationDays={durationDays} setDurationDays={setDurationDays}
+        abMode={abMode} onToggleAb={toggleAb}
+        variant={variant} onSwitchVariant={switchVariant}
+        startDateFlexible={startDateFlexible} setStartDateFlexible={setStartDateFlexible}
+        startDate={startDate} setStartDate={setStartDate}
+        programNotes={programNotes} setProgramNotes={setProgramNotes}
+        phases={phases} setPhases={setPhases}
+        onClose={() => {}}
+      />
 
       {/* Copy day modal */}
       {copyOpen ? (
@@ -796,6 +758,29 @@ export default function ProgramBuilderScreen() {
           </View>
         </View>
       ) : null}
+
+      {/* Menú ⋮ de acciones secundarias (1:1 web móvil) */}
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
+          <View style={[styles.menuCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            {[
+              { icon: Eye, label: 'Vista previa', on: () => { setMenuOpen(false); previewRef.current?.present() } },
+              { icon: Scale, label: 'Balance muscular', on: () => { setMenuOpen(false); balanceRef.current?.present() } },
+              { icon: Layers, label: 'Cargar plantilla', on: () => { setMenuOpen(false); templateRef.current?.present() } },
+              { icon: Users, label: 'Asignar a alumnos', on: () => { setMenuOpen(false); assignRef.current?.present() } },
+              { icon: Printer, label: 'Imprimir / PDF', on: handlePrint },
+            ].map((it) => {
+              const Icon = it.icon
+              return (
+                <TouchableOpacity key={it.label} onPress={it.on} activeOpacity={0.8} style={styles.menuItem}>
+                  <Icon size={17} color={theme.foreground} />
+                  <Text style={[styles.menuItemText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* FAB "+" verde (solo en Simple) */}
       {isSimpleMode ? (
@@ -831,29 +816,16 @@ export default function ProgramBuilderScreen() {
   )
 }
 
-function SmallSeg({ theme, label, options, value, onChange }: { theme: any; label: string; options: { v: string; l: string }[]; value: string; onChange: (v: string) => void }) {
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={[styles.metaLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <View style={[styles.seg, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-        {options.map((o) => {
-          const active = o.v === value
-          return (
-            <TouchableOpacity key={o.v} onPress={() => onChange(o.v)} activeOpacity={0.8} style={[styles.segItem, active && { backgroundColor: theme.primary }]}>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.l}</Text>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
   topBtn: { minWidth: 64 }, topBtnText: { fontSize: 15 },
-  undoRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  undoRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
+  gearBtn: { borderWidth: 1, borderRadius: 9, padding: 5 },
+  menuBackdrop: { flex: 1, alignItems: 'flex-end', paddingTop: 64, paddingRight: 12 },
+  menuCard: { width: 224, borderWidth: 1, borderRadius: 14, paddingVertical: 6, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  menuItemText: { fontSize: 14 },
   draftBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   draftText: { flex: 1, fontSize: 12.5, lineHeight: 17 },
   draftActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -899,7 +871,15 @@ const styles = StyleSheet.create({
   ssText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   blockName: { fontSize: 14, flexShrink: 1 },
   blockMeta: { fontSize: 12 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 14, marginBottom: 6 },
+  volRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  volChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+  volLbl: { fontSize: 9, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.6 },
+  volVal: { fontSize: 12, fontFamily: 'Montserrat_700Bold' },
+  volDots: { flexDirection: 'row', gap: 4, marginLeft: 2 },
+  muscleDot: { width: 9, height: 9, borderRadius: 5 },
+  restBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 16 },
+  restBannerText: { fontSize: 12, letterSpacing: 1 },
   sectionDot: { width: 7, height: 7, borderRadius: 4 },
   sectionTitle: { fontSize: 12, letterSpacing: 0.6 },
   sectionCount: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },

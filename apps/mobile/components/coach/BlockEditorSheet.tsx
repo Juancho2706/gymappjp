@@ -1,14 +1,24 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { History, Link2, Trash2 } from 'lucide-react-native'
+import { Image } from 'expo-image'
+import { Dumbbell, History, Link2, Trash2 } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
+import { exerciseThumb } from '../../lib/exercises'
+import { getMuscleColor } from '../../lib/muscle-colors'
 import type { BuilderBlock, BuilderSection } from '../../lib/plan-builder/types'
 
 function fmtShort(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
   return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+}
+
+function hexToRgba(hex: string, a: number): string {
+  const h = hex.replace('#', '')
+  const f = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const n = parseInt(f, 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
 }
 
 interface Props {
@@ -96,8 +106,25 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
       <BottomSheetScrollView contentContainerStyle={styles.body}>
-        <Text style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{draft.exercise_name}</Text>
-        <Text style={[styles.muscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{draft.muscle_group}</Text>
+        {(() => {
+          const muscle = getMuscleColor(draft.muscle_group)
+          const thumb = exerciseThumb({ gif_url: draft.gif_url ?? null, image_url: null, video_url: draft.video_url ?? null })
+          return (
+            <View style={styles.header}>
+              <View style={[styles.thumb, { backgroundColor: hexToRgba(muscle, 0.15) }]}>
+                {thumb ? <Image source={{ uri: thumb }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={120} />
+                  : <Dumbbell size={22} color={muscle} />}
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>{draft.exercise_name}</Text>
+                <View style={styles.muscleRow}>
+                  <View style={[styles.mDot, { backgroundColor: muscle }]} />
+                  <Text style={[styles.muscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{draft.muscle_group}</Text>
+                </View>
+              </View>
+            </View>
+          )
+        })()}
 
         {history ? (
           <View style={[styles.histRow, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
@@ -218,8 +245,12 @@ function Switch({ theme, on, onPress }: { theme: any; on: boolean; onPress: () =
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingBottom: 40, gap: 12 },
-  name: { fontSize: 18 },
-  muscle: { fontSize: 13, marginTop: -6 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  thumb: { width: 52, height: 52, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  name: { fontSize: 17, lineHeight: 21 },
+  muscleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mDot: { width: 8, height: 8, borderRadius: 4 },
+  muscle: { fontSize: 13 },
   histRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
   histText: { fontSize: 12, flex: 1 },
   label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
