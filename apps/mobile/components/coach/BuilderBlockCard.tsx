@@ -158,7 +158,7 @@ export const BuilderBlockCard = memo(
 )
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderWidth: 1, borderLeftWidth: 4, borderRadius: 12, marginBottom: 8 },
+  card: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderWidth: 1, borderLeftWidth: 4, borderRadius: 12, marginBottom: 6 },
   grip: { paddingTop: 2 },
   thumb: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden' },
   thumbImg: { width: 40, height: 40 },

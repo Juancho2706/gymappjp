@@ -4,6 +4,7 @@ import {
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
 import { Image } from 'expo-image'
+import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -260,6 +261,7 @@ export default function ProgramBuilderScreen() {
   const [tourMode, setTourMode] = useState<'short' | 'full'>('short')
   const [seenTour, setSeenTour] = useState(true)
   const tourTargets = useRef<Map<string, any>>(new Map())
+  const rootRef = useRef<View>(null) // ancla de coordenadas para el tour (measureLayout)
   const autoTourTried = useRef(false)
   const simpleHydrated = useRef(false)
   const slideDir = useRef(0)
@@ -495,8 +497,10 @@ export default function ProgramBuilderScreen() {
   }
   const getTourRect = useCallback((id: string) => new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
     const node = tourTargets.current.get(id)
-    if (!node?.measureInWindow) { resolve(null); return }
-    node.measureInWindow((x: number, y: number, width: number, height: number) => resolve({ x, y, width, height }))
+    const root = rootRef.current
+    if (!node?.measureLayout || !root) { resolve(null); return }
+    // Relativo al root in-tree → mismo espacio que el overlay del tour (sin offset de status bar).
+    node.measureLayout(root, (x: number, y: number, width: number, height: number) => resolve({ x, y, width, height }), () => resolve(null))
   }), [])
   const tourSteps = useMemo<TourStep[]>(() => {
     const base: TourStep[] = [
@@ -698,6 +702,7 @@ export default function ProgramBuilderScreen() {
   }
 
   return (
+    <View ref={rootRef} collapsable={false} style={{ flex: 1 }}>
     <SafeAreaView edges={['top', 'bottom']} style={[styles.root, { backgroundColor: theme.background }]}>
       {/* Top bar 1:1 web: ← / nombre+estado / ⋮ ? ⚙(ping) 💾 */}
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
@@ -737,8 +742,8 @@ export default function ProgramBuilderScreen() {
               <Settings size={17} color="#F59E0B" />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity ref={regTour('save-button')} onPress={handleSave} disabled={saving} activeOpacity={0.85} style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
-            {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : <Save size={18} color={theme.primaryForeground} />}
+          <TouchableOpacity ref={regTour('save-button')} onPress={handleSave} disabled={saving} activeOpacity={0.85} style={[styles.saveBtn, { backgroundColor: theme.primary, shadowColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
+            {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : <Save size={19} color={theme.primaryForeground} />}
           </TouchableOpacity>
         </View>
       </View>
@@ -762,6 +767,21 @@ export default function ProgramBuilderScreen() {
           ) : null}
         </View>
       ) : null}
+
+      {/* Barra de días — fija (no desliza con el contenido) */}
+      <View style={styles.dayTabsBar}>
+        {days.length <= 7 ? (
+          <View ref={regTour('days-board')} collapsable={false} style={[styles.dayTabBar, { backgroundColor: theme.secondary }]}>
+            {days.map((d) => renderDayTab(d, false))}
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View ref={regTour('days-board')} collapsable={false} style={[styles.dayTabBar, { backgroundColor: theme.secondary }]}>
+              {days.map((d) => renderDayTab(d, true))}
+            </View>
+          </ScrollView>
+        )}
+      </View>
 
       {pendingDraft ? (
         <View style={[styles.draftBanner, { borderColor: theme.border, backgroundColor: theme.card }]}>
@@ -794,7 +814,7 @@ export default function ProgramBuilderScreen() {
           maxToRenderPerBatch={6}
           windowSize={5}
           ListHeaderComponent={
-            <View style={{ gap: 14, paddingBottom: 14 }}>
+            <View style={{ gap: 10, paddingBottom: 6 }}>
               {isSimpleMode && abMode ? (
                 <View style={[styles.abSeg, { backgroundColor: theme.secondary, alignSelf: 'center' }]}>
                   {(['A', 'B'] as const).map((v) => (
@@ -805,18 +825,6 @@ export default function ProgramBuilderScreen() {
                 </View>
               ) : null}
               {!isSimpleMode && phases.length ? <ProgramPhasesBar phases={phases} weeks={weeks} /> : null}
-
-              {days.length <= 7 ? (
-                <View ref={regTour('days-board')} collapsable={false} style={[styles.dayTabBar, { backgroundColor: theme.secondary }]}>
-                  {days.map((d) => renderDayTab(d, false))}
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View ref={regTour('days-board')} collapsable={false} style={[styles.dayTabBar, { backgroundColor: theme.secondary }]}>
-                    {days.map((d) => renderDayTab(d, true))}
-                  </View>
-                </ScrollView>
-              )}
 
               <View style={[styles.dayCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
               <View style={styles.dayHeader}>
@@ -1018,10 +1026,13 @@ export default function ProgramBuilderScreen() {
         </TouchableOpacity>
       ) : null}
 
-      {/* Toggle Modo Simple/Normal (Sparkles) */}
+      {/* Toggle Modo Simple/Normal (Sparkles) — degradado púrpura como la web en Normal */}
       <TouchableOpacity onPress={toggleSimpleMode} activeOpacity={0.85}
-        style={[styles.fabMode, { bottom: isSimpleMode ? 28 : 116, backgroundColor: isSimpleMode ? theme.card : theme.primary, borderColor: theme.border, borderWidth: isSimpleMode ? 1 : 0 }]}>
-        <Sparkles size={20} color={isSimpleMode ? theme.mutedForeground : theme.primaryForeground} />
+        style={[styles.fabMode, { bottom: isSimpleMode ? 28 : 116, backgroundColor: isSimpleMode ? theme.card : 'transparent', borderColor: theme.border, borderWidth: isSimpleMode ? 1 : 0, shadowColor: isSimpleMode ? '#000' : '#8b5cf6', shadowOpacity: isSimpleMode ? 0.25 : 0.55 }]}>
+        {!isSimpleMode ? (
+          <LinearGradient colors={['#6366f1', '#8b5cf6', '#a855f7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGradient} />
+        ) : null}
+        <Sparkles size={20} color={isSimpleMode ? theme.mutedForeground : '#fff'} />
       </TouchableOpacity>
 
       {/* Label de transición */}
@@ -1044,6 +1055,7 @@ export default function ProgramBuilderScreen() {
         </View>
       ) : null}
 
+    </SafeAreaView>
       <BuilderOnboardingTour
         open={tourOpen}
         steps={tourSteps}
@@ -1051,7 +1063,7 @@ export default function ProgramBuilderScreen() {
         onClose={handleCloseTour}
         remeasureSignal={`${activeDayId}-${abMode}-${tourMode}`}
       />
-    </SafeAreaView>
+    </View>
   )
 }
 
@@ -1072,15 +1084,15 @@ const styles = StyleSheet.create({
   iconOutline: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   gearBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   pingAmber: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 9, backgroundColor: '#F59E0B' },
-  saveBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  saveBtn: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   abBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
   abToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 1 },
   abTag: { fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   abLabelTxt: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
   abSeg: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 10, marginLeft: 'auto' },
   abSegItem: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 7 },
-  dayCard: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
-  ssConnector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 6, marginBottom: 8 },
+  dayCard: { borderWidth: 1, borderRadius: 16, padding: 10, gap: 8 },
+  ssConnector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 2, marginBottom: 4 },
   ssLine: { flex: 1, height: 1 },
   ssPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   ssPillTxt: { fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase' },
@@ -1107,7 +1119,8 @@ const styles = StyleSheet.create({
   draftDiscard: { fontSize: 13 },
   draftBtn: { borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
   draftBtnText: { fontSize: 13 },
-  scroll: { padding: 16, gap: 14, paddingBottom: 60 },
+  scroll: { padding: 16, gap: 8, paddingBottom: 60 },
+  dayTabsBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
   subTitle: { fontSize: 13 },
   nameInput: { height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 16 },
   metaToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
@@ -1146,7 +1159,7 @@ const styles = StyleSheet.create({
   ssText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   blockName: { fontSize: 14, flexShrink: 1 },
   blockMeta: { fontSize: 12 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 14, marginBottom: 6 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 6, marginBottom: 4 },
   volRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   volChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
   volLbl: { fontSize: 9, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.6 },
@@ -1165,6 +1178,7 @@ const styles = StyleSheet.create({
   addText: { fontSize: 14 },
   blockCardCompact: { padding: 9 },
   fabMode: { position: 'absolute', right: 16, bottom: 28, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6 },
+  fabGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 24 },
   fabAdd: { position: 'absolute', right: 16, bottom: 86, width: 56, height: 56, borderRadius: 28, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 },
   modeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
   modeOverlayText: { color: '#fff', fontSize: 26, fontFamily: 'Montserrat_700Bold', letterSpacing: 6, textTransform: 'uppercase' },

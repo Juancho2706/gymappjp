@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
 
 export type TourStep = { id: string; title: string; description: string; placement?: 'top' | 'bottom'; footerHint?: string }
@@ -58,7 +58,7 @@ export function BuilderOnboardingTour({ open, steps, getRect, onClose, remeasure
   const cardLeft = Math.max(12, Math.min(r.x, SCREEN_W - CARD_W - 12))
 
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => onClose(false)}>
+    <View style={styles.overlay}>
       <View style={StyleSheet.absoluteFill}>
         {/* Cutout: 4 paneles oscuros alrededor del ancla */}
         <View style={[styles.panel, { top: 0, left: 0, right: 0, height: hy }]} />
@@ -87,11 +87,12 @@ export function BuilderOnboardingTour({ open, steps, getRect, onClose, remeasure
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 200, elevation: 30 },
   panel: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.72)' },
   ring: { position: 'absolute', borderWidth: 2, borderRadius: 12 },
   card: { position: 'absolute', borderWidth: 1, borderRadius: 14, padding: 14, gap: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 12 },

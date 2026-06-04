@@ -230,3 +230,12 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - **O7 higiene:** `dayGesture` estable (deps `[]`, lee de refs `liveDays/activeDayIdRef/simpleModeRef`) → no reconfigura el GestureDetector por edición; `editingBlock` acotado a `currentDay.blocks`; autosave debounce 1.5→2.5s + `InteractionManager.runAfterInteractions`.
 - **O8 handle:** "DESLIZA PARA AÑADIR EJERCICIOS" + chevron-up con loop Moti (translateY).
 - Validado: `npx tsc --noEmit` PASS + `npx expo export --platform android` PASS. **Falta verificar en device** (gifs visibles, swipe instantáneo, scroll fluido).
+
+## Claude update - 2026-06-04 - Builder RN pulido visual + fix tour (P1-P6)
+- **P5 (tour, fix raíz):** el spotlight marcaba mal (status bar) por `Modal statusBarTranslucent` + `measureInWindow` (desfase edge-to-edge SDK54). Ahora: root envuelto en `<View ref={rootRef}>`, `getTourRect` usa `node.measureLayout(rootRef.current,…)` y `BuilderOnboardingTour` es un **overlay in-tree** (sin Modal, `zIndex/elevation` altos) renderizado fuera del SafeAreaView → coords mismas que measureLayout → resalta exacto.
+- **P6 (catálogo):** `handleSelect` ya NO cierra el sheet (`snapToIndex(0)` removido) → se agregan varios; el "+" de la fila se vuelve **✓ verde** (Moti scale/fade, 900ms, `addedFlash` + `extraData`).
+- **P2:** day-tabs movidas FUERA del `Animated.View` deslizante a un área **fija** (`styles.dayTabsBar`) bajo la barra A/B → ya no se mueven al cambiar de día (sólo desliza el contenido). `regTour('days-board')` ahora estable.
+- **P1 spacing:** ListHeader gap 14→10/pb 6, `scroll` gap 14→8, `sectionHeader` mt 14→6, `ssConnector` pv 6→2/mb 8→4, `dayCard` padding 12→10/gap 10→8, card `marginBottom` 8→6.
+- **P3 FAB modo:** Normal usa `LinearGradient` púrpura `['#6366f1','#8b5cf6','#a855f7']` + glow púrpura (como web); Simple = card/borde.
+- **P4 Guardar:** `saveBtn` 42×42 radius 12 + glow color marca (`shadowColor: theme.primary`), ícono 19.
+- Validado: `npx tsc --noEmit` PASS + `npx expo export --platform android` PASS.

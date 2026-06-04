@@ -3,7 +3,7 @@ import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Tou
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import { MotiView } from 'moti'
-import { Activity, ChevronUp, Clock, Dumbbell, Eye, Play, Plus, Search, X } from 'lucide-react-native'
+import { Activity, Check, ChevronUp, Clock, Dumbbell, Eye, Play, Plus, Search, X } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme } from '../../context/ThemeContext'
 import { exerciseThumb, filterExercises, youtubeId, MUSCLE_GROUPS, type ExerciseRow } from '../../lib/exercises'
@@ -43,6 +43,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
     const [index, setIndex] = useState(simpleMode ? -1 : 0)
     const [recents, setRecents] = useState<Ex[]>([])
     const [preview, setPreview] = useState<Ex | null>(null)
+    const [addedFlash, setAddedFlash] = useState<Record<string, boolean>>({})
     const snapPoints = useMemo(() => ['12%', '42%', '85%'], [])
 
     const setRefs = useCallback((r: BottomSheet | null) => {
@@ -86,7 +87,9 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
         superset_group: null,
         is_override: false,
       })
-      localRef.current?.snapToIndex(0)
+      // No cerrar el menú: el coach agrega varios. Feedback ✓ verde breve por fila.
+      setAddedFlash((f) => ({ ...f, [ex.id]: true }))
+      setTimeout(() => setAddedFlash((f) => { const n = { ...f }; delete n[ex.id]; return n }), 900)
     }
 
     function renderItem({ item: ex }: { item: Ex }) {
@@ -105,7 +108,13 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
             </View>
           </View>
           <TouchableOpacity onPress={() => setPreview(ex)} hitSlop={8} style={styles.eyeBtn}><Eye size={16} color={theme.mutedForeground} /></TouchableOpacity>
-          <View style={[styles.addBtn, { backgroundColor: theme.primary }]}><Plus size={16} color={theme.primaryForeground} /></View>
+          {addedFlash[ex.id] ? (
+            <MotiView from={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'timing', duration: 160 }} style={[styles.addBtn, { backgroundColor: '#10B981' }]}>
+              <Check size={16} color="#fff" />
+            </MotiView>
+          ) : (
+            <View style={[styles.addBtn, { backgroundColor: theme.primary }]}><Plus size={16} color={theme.primaryForeground} /></View>
+          )}
         </TouchableOpacity>
       )
     }
@@ -146,6 +155,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
       >
         <BottomSheetFlatList
           data={data}
+          extraData={addedFlash}
           keyExtractor={(ex) => ex.id}
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
