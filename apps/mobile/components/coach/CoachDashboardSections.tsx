@@ -36,7 +36,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
+import Svg, { Rect } from 'react-native-svg'
 import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-native'
 import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
@@ -56,7 +56,7 @@ import { getRecommendedTier, TIER_CONFIG } from '../../lib/coach-tiers'
 import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
 import { Button } from '../Button'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiFetch, getApiBaseUrl } from '../../lib/api'
 
@@ -75,31 +75,6 @@ function formatCurrency(n: number): string {
     currency: 'CLP',
     maximumFractionDigits: 0,
   }).format(n)
-}
-
-/**
- * Difuminado de color de marca en la esquina sup-der de una card (espeja la
- * GlassCard de la web). Se monta como PRIMER hijo de la card (queda detrás del
- * contenido); requiere `overflow:'hidden'` en la card para recortar a las esquinas.
- */
-function CardGlow({ color }: { color?: string }) {
-  const { theme, mode } = useTheme()
-  const isDark = mode !== 'light'
-  const c = color ?? theme.primary
-  const a = isDark ? 0.075 : 0.055
-  const id = `dashglow-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
-  return (
-    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
-      <Defs>
-        <RadialGradient id={id} cx="100%" cy="0%" r="58%">
-          <Stop offset="0" stopColor={hexToRgba(c, a)} />
-          <Stop offset="0.5" stopColor={hexToRgba(c, a * 0.22)} />
-          <Stop offset="1" stopColor={c} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
-  )
 }
 
 export function MobileBillingBanners({ coach, activeClientCount }: { coach: CoachProfile; activeClientCount: number }) {
@@ -739,9 +714,7 @@ export function MobileOnboardingChecklist({
   }
 
   return (
-    <View style={[styles.onboardingCard, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlow />
-      <View style={styles.onboardingHeader}>
+    <View style={[styles.onboardingCard, glass, { borderRadius: theme.radius.xl }]}>      <View style={styles.onboardingHeader}>
         <View style={styles.onboardingHeaderCopy}>
           <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
             TU RUTA EN EVA
@@ -1545,9 +1518,7 @@ function MobileKpiTile({
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 320 }}
       style={[styles.kpiCard, glass, { borderRadius: theme.radius.xl }]}
-    >
-      <CardGlow />
-      <View style={styles.kpiTop}>
+    >      <View style={styles.kpiTop}>
         <Text style={[styles.kpiLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]} numberOfLines={2}>
           {label}
         </Text>
@@ -1598,9 +1569,7 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlow />
-      <View style={styles.panelHeader}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>      <View style={styles.panelHeader}>
         <View style={styles.panelTitleRow}>
           <TriangleAlert size={17} color="#F59E0B" />
           <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
@@ -1785,9 +1754,7 @@ export function MobileNextBestAction({
   }
 
   return (
-    <View style={[styles.nextCard, glass, { borderRadius: theme.radius.xl, borderLeftWidth: 3, borderLeftColor: toneColor }]}>
-      <CardGlow color={toneColor} />
-      <View style={styles.panelTitleRow}>
+    <View style={[styles.nextCard, glass, { borderRadius: theme.radius.xl, borderLeftWidth: 3, borderLeftColor: toneColor }]}>      <View style={styles.panelTitleRow}>
         <Sparkles size={17} color={theme.primary} />
         <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
           PROXIMA ACCION
@@ -1813,9 +1780,7 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlow />
-      <View style={styles.panelHeader}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>      <View style={styles.panelHeader}>
         <View style={styles.panelTitleRow}>
           <CalendarClock size={17} color={theme.primary} />
           <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
@@ -1867,9 +1832,7 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlow />
-      <View style={styles.panelTitleRow}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>      <View style={styles.panelTitleRow}>
         <Clock size={17} color="#F59E0B" />
         <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
           Programas por vencer
@@ -1926,9 +1889,7 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlow />
-      <View style={styles.panelTitleRow}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>      <View style={styles.panelTitleRow}>
         <Activity size={17} color={theme.primary} />
         <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
           Actividad reciente
@@ -2021,9 +1982,7 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
   const chartData = data.length > 0 ? data : [{ name: '-', sesiones: 0 }]
 
   return (
-    <View style={[styles.chartCard, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlow />
-      <View style={styles.chartHeader}>
+    <View style={[styles.chartCard, glass, { borderRadius: theme.radius.xl }]}>      <View style={styles.chartHeader}>
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(59,130,246,0.12)' }]}>
           <TrendingUp size={16} color="#3B82F6" />
         </View>
@@ -2083,9 +2042,7 @@ function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
   const chartData = data.length > 0 ? data : [{ name: '-', alumnos: 0 }]
 
   return (
-    <View style={[styles.chartCard, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlow />
-      <View style={styles.chartHeader}>
+    <View style={[styles.chartCard, glass, { borderRadius: theme.radius.xl }]}>      <View style={styles.chartHeader}>
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(34,211,238,0.12)' }]}>
           <Activity size={16} color="#22D3EE" />
         </View>

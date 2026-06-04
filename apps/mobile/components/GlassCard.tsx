@@ -20,7 +20,7 @@ interface GlassCardProps extends ViewProps {
   intensity?: number
   className?: string
   glow?: boolean
-  /** Difuminado de color de marca en la esquina sup-der (como GlassCard web). Default true. */
+  /** Difuminado de color de marca en la esquina sup-der. Default false (cards planas, 1:1 web). */
   cornerGlow?: boolean
   /** Color del cornerGlow (default theme.primary). */
   glowColor?: string
@@ -34,7 +34,7 @@ interface GlassCardProps extends ViewProps {
  * 'blur' = expo-blur frosted (reserve for key surfaces). `cornerGlow` añade un radial
  * SVG con el color de marca en la esquina sup-der (espeja la GlassCard de la web).
  */
-export function GlassCard({ children, variant = 'solid', intensity = 22, glow = false, cornerGlow = true, glowColor, className, style, ...rest }: GlassCardProps) {
+export function GlassCard({ children, variant = 'solid', intensity = 22, glow = false, cornerGlow = false, glowColor, className, style, ...rest }: GlassCardProps) {
   const { theme, mode } = useTheme()
   const isDark = mode !== 'light'
   const radius = theme.radius['2xl']
