@@ -86,14 +86,14 @@ function CardGlow({ color }: { color?: string }) {
   const { theme, mode } = useTheme()
   const isDark = mode !== 'light'
   const c = color ?? theme.primary
-  const a = isDark ? 0.16 : 0.1
+  const a = isDark ? 0.075 : 0.055
   const id = `dashglow-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   return (
     <Svg pointerEvents="none" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
       <Defs>
-        <RadialGradient id={id} cx="100%" cy="0%" r="75%">
+        <RadialGradient id={id} cx="100%" cy="0%" r="58%">
           <Stop offset="0" stopColor={hexToRgba(c, a)} />
-          <Stop offset="0.6" stopColor={hexToRgba(c, a * 0.28)} />
+          <Stop offset="0.5" stopColor={hexToRgba(c, a * 0.22)} />
           <Stop offset="1" stopColor={c} stopOpacity={0} />
         </RadialGradient>
       </Defs>
@@ -276,7 +276,7 @@ function MobileBanner({
         {
           borderColor: hexToRgba(toneColor, 0.32),
           backgroundColor: hexToRgba(toneColor, 0.1),
-          borderRadius: theme.radius['2xl'],
+          borderRadius: theme.radius.xl,
         },
       ]}
     >
@@ -721,7 +721,7 @@ export function MobileOnboardingChecklist({
 
   if (!ready) {
     return (
-      <View style={[styles.onboardingSkeleton, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius['2xl'] }]} />
+      <View style={[styles.onboardingSkeleton, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius.xl }]} />
     )
   }
 
@@ -729,7 +729,7 @@ export function MobileOnboardingChecklist({
 
   if (dismissed && !allDone) {
     return (
-      <View style={[styles.onboardingResume, { borderColor: hexToRgba(theme.primary, 0.25), backgroundColor: hexToRgba(theme.primary, 0.06), borderRadius: theme.radius['2xl'] }]}>
+      <View style={[styles.onboardingResume, glass, { borderRadius: theme.radius.xl }]}>
         <Text style={[styles.onboardingResumeText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
           Sigues con pasos pendientes en tu guia de inicio.
         </Text>
@@ -739,7 +739,7 @@ export function MobileOnboardingChecklist({
   }
 
   return (
-    <View style={[styles.onboardingCard, glass, { borderRadius: theme.radius['2xl'] }]}>
+    <View style={[styles.onboardingCard, glass, { borderRadius: theme.radius.xl }]}>
       <CardGlow />
       <View style={styles.onboardingHeader}>
         <View style={styles.onboardingHeaderCopy}>
@@ -1399,21 +1399,25 @@ function QuickActionButton({
   shortLabel: string
   onPress: () => void
 }) {
-  const { theme } = useTheme()
+  const { theme, mode } = useTheme()
+  const isDark = mode !== 'light'
 
   return (
     <TouchableOpacity
+      accessibilityLabel={label}
+      accessibilityRole="button"
       activeOpacity={0.82}
       onPress={onPress}
-      style={[styles.quickActionButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+      style={[
+        styles.quickActionButton,
+        {
+          backgroundColor: isDark ? 'rgba(10,10,10,0.58)' : 'rgba(255,255,255,0.82)',
+          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.11)',
+          shadowColor: '#000',
+        },
+      ]}
     >
       <Icon size={16} color={theme.primary} strokeWidth={2.3} />
-      <Text
-        style={[styles.quickActionLabel, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
       <Text
         style={[styles.quickActionShort, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}
         numberOfLines={1}
@@ -1425,19 +1429,17 @@ function QuickActionButton({
 }
 
 function useGlassStyle() {
-  const { theme, mode } = useTheme()
+  const { mode } = useTheme()
   const isDark = mode !== 'light'
-  // Solid theme surface + border → consistent with every other card in the app
-  // (the old semi-transparent slab looked detached over the backdrop).
   return {
-    backgroundColor: theme.card,
+    backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.76)',
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.11)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: isDark ? 0.22 : 0.06,
-    shadowRadius: 18,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: isDark ? 0.16 : 0.055,
+    shadowRadius: isDark ? 20 : 14,
+    elevation: isDark ? 4 : 2,
   }
 }
 
@@ -1542,7 +1544,7 @@ function MobileKpiTile({
       from={{ opacity: 0, translateY: 14 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 320 }}
-      style={[styles.kpiCard, glass, { borderRadius: theme.radius['2xl'] }]}
+      style={[styles.kpiCard, glass, { borderRadius: theme.radius.xl }]}
     >
       <CardGlow />
       <View style={styles.kpiTop}>
@@ -1596,7 +1598,7 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius['2xl'] }]}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
       <CardGlow />
       <View style={styles.panelHeader}>
         <View style={styles.panelTitleRow}>
@@ -1635,18 +1637,14 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
                 <View style={[
                   styles.scorePill,
                   {
-                    backgroundColor: item.attentionScore >= 50
-                      ? 'rgba(239,68,68,0.15)'
-                      : item.attentionScore >= 25
-                        ? 'rgba(245,158,11,0.15)'
-                        : 'rgba(16,185,129,0.15)',
+                    backgroundColor: 'rgba(245,158,11,0.15)',
                   },
                 ]}>
                   <Text style={[
                     styles.scoreText,
                     {
                       fontFamily: 'Inter_700Bold',
-                      color: item.attentionScore >= 50 ? '#EF4444' : item.attentionScore >= 25 ? '#F59E0B' : '#10B981',
+                      color: '#F59E0B',
                     },
                   ]}>{item.attentionScore}</Text>
                 </View>
@@ -1787,7 +1785,7 @@ export function MobileNextBestAction({
   }
 
   return (
-    <View style={[styles.nextCard, glass, { borderRadius: theme.radius['2xl'], borderLeftWidth: 3, borderLeftColor: toneColor }]}>
+    <View style={[styles.nextCard, glass, { borderRadius: theme.radius.xl, borderLeftWidth: 3, borderLeftColor: toneColor }]}>
       <CardGlow color={toneColor} />
       <View style={styles.panelTitleRow}>
         <Sparkles size={17} color={theme.primary} />
@@ -1815,7 +1813,7 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius['2xl'] }]}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
       <CardGlow />
       <View style={styles.panelHeader}>
         <View style={styles.panelTitleRow}>
@@ -1869,7 +1867,7 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius['2xl'] }]}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
       <CardGlow />
       <View style={styles.panelTitleRow}>
         <Clock size={17} color="#F59E0B" />
@@ -1928,7 +1926,7 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius['2xl'] }]}>
+    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
       <CardGlow />
       <View style={styles.panelTitleRow}>
         <Activity size={17} color={theme.primary} />
@@ -2023,7 +2021,7 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
   const chartData = data.length > 0 ? data : [{ name: '-', sesiones: 0 }]
 
   return (
-    <View style={[styles.chartCard, glass, { borderRadius: theme.radius['2xl'] }]}>
+    <View style={[styles.chartCard, glass, { borderRadius: theme.radius.xl }]}>
       <CardGlow />
       <View style={styles.chartHeader}>
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(59,130,246,0.12)' }]}>
@@ -2085,7 +2083,7 @@ function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
   const chartData = data.length > 0 ? data : [{ name: '-', alumnos: 0 }]
 
   return (
-    <View style={[styles.chartCard, glass, { borderRadius: theme.radius['2xl'] }]}>
+    <View style={[styles.chartCard, glass, { borderRadius: theme.radius.xl }]}>
       <CardGlow />
       <View style={styles.chartHeader}>
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(34,211,238,0.12)' }]}>
@@ -2503,24 +2501,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickActionButton: {
-    minHeight: 40,
+    minHeight: 36,
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 7,
-    elevation: 2,
-  },
-  quickActionLabel: {
-    fontSize: 13,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
   quickActionShort: {
-    display: 'none',
     fontSize: 13,
   },
   placeholderDialog: {
@@ -2678,8 +2672,8 @@ const styles = StyleSheet.create({
   },
   onboardingCard: {
     borderWidth: 1,
-    padding: 16,
-    gap: 15,
+    padding: 14,
+    gap: 13,
     overflow: 'hidden',
   },
   onboardingHeader: {
@@ -3006,9 +3000,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   greetingTitle: {
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -0.6,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: 0,
   },
   greetingSub: {
     fontSize: 14,
@@ -3024,10 +3018,10 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minHeight: 142,
+    minHeight: 128,
     borderWidth: 1,
-    padding: 16,
-    gap: 10,
+    padding: 14,
+    gap: 8,
     overflow: 'hidden',
   },
   kpiTop: {
@@ -3065,14 +3059,14 @@ const styles = StyleSheet.create({
   },
   panel: {
     borderWidth: 1,
-    padding: 16,
-    gap: 14,
+    padding: 14,
+    gap: 12,
     overflow: 'hidden',
   },
   nextCard: {
     borderWidth: 1,
-    padding: 16,
-    gap: 12,
+    padding: 14,
+    gap: 10,
     overflow: 'hidden',
   },
   panelHeader: {
@@ -3087,8 +3081,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   panelTitle: {
-    fontSize: 18,
-    letterSpacing: -0.2,
+    fontSize: 17,
+    letterSpacing: 0,
   },
   panelAction: {
     fontSize: 10,
@@ -3101,11 +3095,11 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   row: {
-    minHeight: 56,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 11,
+    paddingVertical: 9,
   },
   rowCopy: {
     flex: 1,
@@ -3136,9 +3130,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   nextTitle: {
-    fontSize: 21,
-    lineHeight: 25,
-    letterSpacing: -0.3,
+    fontSize: 20,
+    lineHeight: 24,
+    letterSpacing: 0,
   },
   nextDescription: {
     fontSize: 13,
@@ -3150,8 +3144,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
   },
   ctaText: {
     color: '#FFFFFF',
