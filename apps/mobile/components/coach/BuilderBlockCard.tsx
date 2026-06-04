@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { GripVertical, Minus, Plus, X } from 'lucide-react-native'
+import { CircleHelp, GripVertical, Minus, Plus, X } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { useTheme } from '../../context/ThemeContext'
 import { exerciseThumb } from '../../lib/exercises'
@@ -26,14 +26,19 @@ interface Props {
   onUpdate: (block: BuilderBlock) => void
   onSetSection: (uid: string, section: BuilderSection) => void
   onToggleSuperset: (uid: string) => void
+  /** Fallback de media desde el catálogo (por exercise_id) cuando el bloque no la trae. */
+  catGif?: string | null
+  catImage?: string | null
+  catVideo?: string | null
 }
 
 /** Card de ejercicio 1:1 con la web (ExerciseBlock): borde por músculo, miniatura,
  *  badges (sección, sets×reps con quick-edit, descanso, superserie, progresión, músculo)
  *  + botones CAL/PRI/ENF + eliminar. */
-export function BuilderBlockCard({ block, drag, isActive, onEdit, onRemove, onUpdate, onSetSection, onToggleSuperset }: Props) {
+export function BuilderBlockCard({ block, drag, isActive, onEdit, onRemove, onUpdate, onSetSection, onToggleSuperset, catGif, catImage, catVideo }: Props) {
   const { theme } = useTheme()
   const [editing, setEditing] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [qs, setQs] = useState(block.sets ?? 3)
   const [qr, setQr] = useState(block.reps ?? '8-10')
   useEffect(() => { setQs(block.sets ?? 3); setQr(block.reps ?? '8-10') }, [block.uid])
@@ -41,7 +46,7 @@ export function BuilderBlockCard({ block, drag, isActive, onEdit, onRemove, onUp
   const muscle = getMuscleColor(block.muscle_group)
   const sec: BuilderSection = block.section === 'warmup' || block.section === 'cooldown' ? block.section : 'main'
   const secC = sec === 'warmup' ? '#F59E0B' : sec === 'cooldown' ? '#38BDF8' : theme.primary
-  const thumb = exerciseThumb({ gif_url: block.gif_url ?? null, image_url: null, video_url: block.video_url ?? null })
+  const thumb = exerciseThumb({ gif_url: block.gif_url ?? catGif ?? null, image_url: catImage ?? null, video_url: block.video_url ?? catVideo ?? null })
   const complete = (block.sets ?? 0) > 0 && !!block.reps
 
   function saveQuick() { onUpdate({ ...block, sets: qs, reps: qr }); setEditing(false) }
@@ -111,8 +116,25 @@ export function BuilderBlockCard({ block, drag, isActive, onEdit, onRemove, onUp
                 </TouchableOpacity>
               )
             })}
+            <TouchableOpacity onPress={() => setHelpOpen(true)} hitSlop={8} style={[styles.helpBtn, { borderColor: theme.border }]}>
+              <CircleHelp size={13} color={theme.mutedForeground} />
+            </TouchableOpacity>
           </View>
         </View>
+
+        <Modal visible={helpOpen} transparent animationType="fade" onRequestClose={() => setHelpOpen(false)}>
+          <Pressable style={styles.helpBackdrop} onPress={() => setHelpOpen(false)}>
+            <Pressable style={[styles.helpCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
+              <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Secciones (CAL / PRI / ENF)</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: 'Inter_700Bold' }}>CAL</Text> (Calentamiento): prepara el cuerpo antes del trabajo intenso.</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: 'Inter_700Bold' }}>PRI</Text> (Principal): bloque principal (volumen e intensidad).</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: 'Inter_700Bold' }}>ENF</Text> (Enfriamiento): bajar pulsaciones y recuperación al final.</Text>
+              <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold', marginTop: 6 }]}>Superserie</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Une el ejercicio con el siguiente solo si están en la misma sección. Si cambiás la sección de uno, el enlace se rompe.</Text>
+              <TouchableOpacity onPress={() => setHelpOpen(false)} style={[styles.helpClose, { backgroundColor: theme.primary }]}><Text style={{ color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold', fontSize: 13 }}>Entendido</Text></TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <TouchableOpacity onPress={() => onRemove(block.uid)} hitSlop={6} style={styles.del}>
           <X size={18} color={theme.mutedForeground} />
@@ -136,7 +158,13 @@ const styles = StyleSheet.create({
   qval: { fontSize: 12, fontFamily: 'Montserrat_700Bold', minWidth: 16, textAlign: 'center' },
   qinput: { width: 56, height: 26, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, fontSize: 12, textAlign: 'center' },
   okbtn: { borderRadius: 5, paddingHorizontal: 8, paddingVertical: 4 },
-  secSwitch: { flexDirection: 'row', gap: 3, marginTop: 1 },
+  secSwitch: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   secBtn: { minWidth: 34, paddingVertical: 4, alignItems: 'center', borderRadius: 6 },
+  helpBtn: { width: 26, height: 26, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 },
   del: { padding: 4 },
+  helpBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  helpCard: { width: '100%', maxWidth: 380, borderWidth: 1, borderRadius: 16, padding: 16, gap: 7 },
+  helpTitle: { fontSize: 14 },
+  helpLine: { fontSize: 12.5, lineHeight: 18 },
+  helpClose: { marginTop: 10, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
 })

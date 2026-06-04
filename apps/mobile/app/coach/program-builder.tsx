@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable,
+  ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronLeft, ChevronRight, Copy, Eye, Layers, Moon, MoreVertical, Plus, Printer, Redo2, Scale, Settings, Sparkles, Undo2, Users, X } from 'lucide-react-native'
+import BottomSheet, { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { ArrowLeft, ChevronLeft, ChevronRight, CircleHelp, Copy, Eye, Layers, Link2, Moon, MoreVertical, Plus, Printer, Redo2, Save, Scale, Settings, Sparkles, Sun, Undo2, Users, X } from 'lucide-react-native'
 import DraggableFlatList from 'react-native-draggable-flatlist'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
@@ -25,7 +26,9 @@ import { ProgramPreviewSheet } from '../../components/coach/ProgramPreviewSheet'
 import { BuilderBlockCard } from '../../components/coach/BuilderBlockCard'
 import { ProgramConfigSheet } from '../../components/coach/ProgramConfigSheet'
 import { ProgramPhasesBar } from '../../components/coach/ProgramPhasesBar'
+import { BuilderOnboardingTour, type TourStep } from '../../components/coach/BuilderOnboardingTour'
 import { getMuscleColor } from '../../lib/muscle-colors'
+import { listCoachExercises, type ExerciseRow } from '../../lib/exercises'
 import { exportProgramPdf } from '../../lib/program-pdf'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
@@ -33,6 +36,7 @@ import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
 import type { BuilderBlock, BuilderSection, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
 
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const SLIDE = Math.round(Dimensions.get('window').width * 0.22) // desplazamiento del slide de día
 const SECTION_ORDER: BuilderSection[] = ['warmup', 'main', 'cooldown']
 const SECTION_LABEL: Record<BuilderSection, string> = { warmup: 'Calentamiento', main: 'Principal', cooldown: 'Enfriamiento' }
 
@@ -62,14 +66,22 @@ function dayLabel(structure: ProgramStructureType, d: DayState): string {
   return structure === 'weekly' ? DAY_SHORT[d.id] : `D${d.id}`
 }
 
+// PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento.
+function embeddedExerciseRow(raw: any): { name?: string; muscle_group?: string; gif_url?: string; video_url?: string } | null {
+  if (raw == null) return null
+  if (Array.isArray(raw)) return raw[0] && typeof raw[0] === 'object' ? raw[0] : null
+  return typeof raw === 'object' ? raw : null
+}
+
 function mapDbBlock(b: any): BuilderBlock {
+  const ex = embeddedExerciseRow(b.exercises)
   return {
     uid: `block-${b.id ?? Math.random().toString(36).slice(2)}`,
     exercise_id: b.exercise_id,
-    exercise_name: b.exercises?.name ?? b.exercise_name ?? 'Ejercicio',
-    muscle_group: b.exercises?.muscle_group ?? 'General',
-    gif_url: b.exercises?.gif_url ?? undefined,
-    video_url: b.exercises?.video_url ?? undefined,
+    exercise_name: ex?.name ?? b.exercise_name ?? 'Ejercicio',
+    muscle_group: ex?.muscle_group ?? 'General',
+    gif_url: ex?.gif_url ?? undefined,
+    video_url: ex?.video_url ?? undefined,
     sets: b.sets ?? 3,
     reps: b.reps ?? '8-10',
     target_weight_kg: b.target_weight_kg != null ? String(b.target_weight_kg) : undefined,
@@ -199,7 +211,7 @@ export default function ProgramBuilderScreen() {
   const isTemplate = mode === 'template' || !!templateId
   const { theme } = useTheme()
   const router = useRouter()
-  const searchRef = useRef<BottomSheetModal>(null)
+  const searchRef = useRef<BottomSheet>(null)
   const editorRef = useRef<BottomSheetModal>(null)
   const templateRef = useRef<BottomSheetModal>(null)
   const assignRef = useRef<BottomSheetModal>(null)
@@ -211,6 +223,9 @@ export default function ProgramBuilderScreen() {
   const [saving, setSaving] = useState(false)
   const [programId, setProgramId] = useState<string | null>(null)
   const [initial, setInitial] = useState<DayState[]>(emptyDays())
+  // Catálogo completo precargado (1:1 web): alimenta el sheet de añadir + enriquece media de bloques.
+  const [catalog, setCatalog] = useState<ExerciseRow[]>([])
+  const catById = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog])
 
   // Program meta
   const [name, setName] = useState('Programa principal')
@@ -237,6 +252,14 @@ export default function ProgramBuilderScreen() {
   const [modeLabel, setModeLabel] = useState<string | null>(null)
   const [showHint, setShowHint] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [dirty, setDirty] = useState(false) // cambios sin guardar (badge top bar 1:1 web)
+  const [configOpen, setConfigOpen] = useState(false) // para el ping ámbar de la tuerca
+  // Tour de onboarding (F9)
+  const [tourOpen, setTourOpen] = useState(false)
+  const [tourMode, setTourMode] = useState<'short' | 'full'>('short')
+  const [seenTour, setSeenTour] = useState(true)
+  const tourTargets = useRef<Map<string, any>>(new Map())
+  const autoTourTried = useRef(false)
   const simpleHydrated = useRef(false)
   const slideDir = useRef(0)
 
@@ -251,6 +274,11 @@ export default function ProgramBuilderScreen() {
 
   const liveDays = useRef(days)
   useEffect(() => { liveDays.current = days }, [days])
+
+  // Precarga del catálogo de ejercicios (una vez). Resiliente: si falla, queda vacío.
+  useEffect(() => {
+    listCoachExercises().then(({ exercises }) => setCatalog(exercises)).catch(() => {})
+  }, [])
 
   function variantDays(plans: any[], v: 'A' | 'B', structure: ProgramStructureType, len: number): DayState[] {
     const built = buildDaySkeleton(structure, len, [])
@@ -326,6 +354,14 @@ export default function ProgramBuilderScreen() {
     return () => clearTimeout(t)
   }, [name, structureType, durationType, weeks, cycleLength, abMode, variant, days, otherDays, programNotes, startDate, startDateFlexible, phases, pendingDraft, draftKey])
 
+  // Marca "sin guardar" tras la primera edición real (post-hidratación).
+  const dirtySkip = useRef(true)
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    if (dirtySkip.current) { dirtySkip.current = false; return }
+    setDirty(true)
+  }, [name, days, otherDays, structureType, durationType, weeks, cycleLength, abMode, programNotes, startDate, startDateFlexible, phases, durationDays])
+
   // Modo Simple: cargar persistido + guardar al cambiar.
   useEffect(() => {
     AsyncStorage.getItem('builder:simpleMode')
@@ -336,6 +372,12 @@ export default function ProgramBuilderScreen() {
   useEffect(() => {
     if (!simpleHydrated.current) return
     AsyncStorage.setItem('builder:simpleMode', isSimpleMode ? '1' : '0').catch(() => {})
+  }, [isSimpleMode])
+
+  // Sheet de catálogo persistente: cerrado en Simple (lo abre el FAB verde), anclado a 12% en Normal.
+  useEffect(() => {
+    if (isSimpleMode) searchRef.current?.close()
+    else searchRef.current?.snapToIndex(0)
   }, [isSimpleMode])
 
   // Reshape both variants when structure / cycle length changes (preserve blocks).
@@ -367,8 +409,28 @@ export default function ProgramBuilderScreen() {
 
   function openEditor(uid: string) { setEditingUid(uid); editorRef.current?.present() }
 
+  // Tab de día 1:1 web: etiqueta (3 letras) + nº de ejercicios (rest→ZZZ, vacío→·).
+  function renderDayTab(d: DayState, fixed: boolean) {
+    const active = d.id === activeDayId
+    const count = d.blocks.length
+    return (
+      <TouchableOpacity key={d.id} onPress={() => { slideDir.current = d.id > activeDayId ? 1 : -1; setActiveDayId(d.id) }} activeOpacity={0.85}
+        style={[styles.dayTab, fixed ? { width: 58 } : { flex: 1 }, active && { backgroundColor: theme.background, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 }]}>
+        <Text style={[styles.dayTabLabel, { color: active ? theme.foreground : theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>{dayLabel(structureType, d).slice(0, 3)}</Text>
+        {d.is_rest ? (
+          <Text style={[styles.dayTabCount, { color: '#818CF8' }]}>ZZZ</Text>
+        ) : count > 0 ? (
+          <Text style={[styles.dayTabCount, { color: active ? theme.primary : theme.mutedForeground }]}>{count}</Text>
+        ) : (
+          <Text style={[styles.dayTabCount, { color: theme.mutedForeground, opacity: 0.4 }]}>·</Text>
+        )}
+      </TouchableOpacity>
+    )
+  }
+
   // Lista del día agrupada por sección (encabezado + bloques) para el DraggableFlatList.
   const listItems = useMemo<BuilderRow[]>(() => {
+    if (currentDay?.is_rest) return []
     const blocks = currentDay?.blocks ?? []
     const rows: BuilderRow[] = []
     for (const section of SECTION_ORDER) {
@@ -396,19 +458,60 @@ export default function ProgramBuilderScreen() {
 
   function addToSection(section: BuilderSection) {
     setPendingSection(section)
-    searchRef.current?.present()
+    searchRef.current?.snapToIndex(2)
   }
 
   function pokeHint() {
     setShowHint(true)
     setTimeout(() => setShowHint(false), 2500)
   }
+  // ── Tour de onboarding (F9) ──────────────────────────────────────────────
+  const regTour = (id: string) => (node: any) => {
+    if (node) tourTargets.current.set(id, node)
+    else tourTargets.current.delete(id)
+  }
+  const getTourRect = useCallback((id: string) => new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
+    const node = tourTargets.current.get(id)
+    if (!node?.measureInWindow) { resolve(null); return }
+    node.measureInWindow((x: number, y: number, width: number, height: number) => resolve({ x, y, width, height }))
+  }), [])
+  const tourSteps = useMemo<TourStep[]>(() => {
+    const base: TourStep[] = [
+      { id: 'top-config-button', title: 'Empezá en Configurar', description: 'Definí estructura, duración y fases del programa en la tuerca ámbar.', placement: 'bottom' },
+      { id: 'ab-toggle', title: 'Semanas A/B', description: 'Activá rutinas alternas A/B para microciclos semanales.', placement: 'bottom' },
+      { id: 'days-board', title: 'Armá cada día', description: 'Tocá un día para editarlo; deslizá a los lados para cambiar de día.', placement: 'bottom' },
+      { id: 'more-menu', title: 'Más opciones', description: 'Plantillas, balance muscular, vista previa, asignar, imprimir y deshacer/rehacer.', placement: 'bottom' },
+      { id: 'save-button', title: 'Guardá al terminar', description: 'El disquete guarda el programa para seguir editándolo o asignarlo.', placement: 'bottom' },
+    ]
+    return tourMode === 'short' ? [base[0], base[2], base[4]] : base
+  }, [tourMode])
+  function openTour() {
+    if (isSimpleMode) setIsSimpleMode(false)
+    setTourMode('full')
+    setTourOpen(true)
+  }
+  function handleCloseTour() {
+    setTourOpen(false)
+    if (tourMode === 'short') {
+      setSeenTour(true)
+      AsyncStorage.setItem('builder_onboarding_seen_short_v1', '1').catch(() => {})
+    }
+  }
+  // Auto-tour corto la primera vez (tras cargar).
+  useEffect(() => {
+    if (loading || autoTourTried.current) return
+    autoTourTried.current = true
+    AsyncStorage.getItem('builder_onboarding_seen_short_v1').then((v) => {
+      if (!v) { setSeenTour(false); setTourMode('short'); setTourOpen(true) }
+    }).catch(() => {})
+  }, [loading])
   function toggleSimpleMode() {
     const next = !isSimpleMode
     setModeLabel(next ? 'Modo Simple' : 'Modo Normal')
     Haptics.selectionAsync().catch(() => {})
-    setTimeout(() => { setIsSimpleMode(next); if (next) pokeHint() }, 200)
-    setTimeout(() => setModeLabel(null), 1600)
+    // Swap de UI cuando el overlay negro cubre todo (~480ms, 1:1 web), limpia a ~2.2s.
+    setTimeout(() => { setIsSimpleMode(next); if (next) pokeHint() }, 480)
+    setTimeout(() => setModeLabel(null), 2200)
   }
 
   // Swipe horizontal para cambiar de día (ventaja nativa sobre los chips de la web).
@@ -555,6 +658,7 @@ export default function ProgramBuilderScreen() {
         variantSets: currentVariantSets(),
       })
       setProgramId(pid)
+      setDirty(false)
       AsyncStorage.removeItem(draftKey).catch(() => {})
       router.back()
     } catch (e: any) {
@@ -570,19 +674,69 @@ export default function ProgramBuilderScreen() {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={[styles.root, { backgroundColor: theme.background }]}>
-      {/* Top bar */}
+      {/* Top bar 1:1 web: ← / nombre+estado / ⋮ ? ⚙(ping) 💾 */}
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.topBtn}><Text style={[styles.topBtnText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cancelar</Text></TouchableOpacity>
-        <View style={styles.undoRow}>
-          <TouchableOpacity onPress={undo} disabled={!canUndo} hitSlop={8}><Undo2 size={20} color={canUndo ? theme.foreground : theme.muted} /></TouchableOpacity>
-          <TouchableOpacity onPress={redo} disabled={!canRedo} hitSlop={8}><Redo2 size={20} color={canRedo ? theme.foreground : theme.muted} /></TouchableOpacity>
-          <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={8}><MoreVertical size={20} color={theme.foreground} /></TouchableOpacity>
-          <TouchableOpacity onPress={() => configRef.current?.present()} hitSlop={8} style={[styles.gearBtn, { borderColor: '#F59E0B66' }]}><Settings size={18} color="#F59E0B" /></TouchableOpacity>
-        </View>
-        <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.topBtn}>
-          {saving ? <ActivityIndicator size="small" color={theme.primary} /> : <Text style={[styles.topBtnText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Guardar</Text>}
+        <TouchableOpacity onPress={() => router.back()} hitSlop={8} style={styles.backBtn}>
+          <ArrowLeft size={22} color={theme.foreground} />
         </TouchableOpacity>
+
+        <View style={styles.titleWrap}>
+          <Text numberOfLines={1} style={[styles.progTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            {(name || 'Nuevo programa').toUpperCase()}
+          </Text>
+          {dirty ? (
+            <View style={styles.statusRow}>
+              <View style={styles.statusDot} />
+              <Text style={[styles.statusText, { fontFamily: 'Inter_700Bold' }]}>SIN GUARDAR</Text>
+            </View>
+          ) : clientName ? (
+            <Text numberOfLines={1} style={[styles.statusMuted, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{clientName}</Text>
+          ) : null}
+        </View>
+
+        <View style={styles.topActions}>
+          <TouchableOpacity ref={regTour('more-menu')} onPress={() => setMenuOpen(true)} hitSlop={6} style={styles.iconBtn}><MoreVertical size={20} color={theme.foreground} /></TouchableOpacity>
+          <View>
+            {!seenTour ? (
+              <MotiView pointerEvents="none" from={{ opacity: 0.4, scale: 1 }} animate={{ opacity: 0, scale: 1.7 }}
+                transition={{ loop: true, type: 'timing', duration: 1500 }} style={[styles.pingAmber, { backgroundColor: theme.primary }]} />
+            ) : null}
+            <TouchableOpacity ref={regTour('help-button')} onPress={openTour} hitSlop={6} style={[styles.iconOutline, { borderColor: theme.primary + '66' }]}><CircleHelp size={17} color={theme.primary} /></TouchableOpacity>
+          </View>
+          <View>
+            {!configOpen ? (
+              <MotiView pointerEvents="none" from={{ opacity: 0.45, scale: 1 }} animate={{ opacity: 0, scale: 1.7 }}
+                transition={{ loop: true, type: 'timing', duration: 1500 }} style={styles.pingAmber} />
+            ) : null}
+            <TouchableOpacity ref={regTour('top-config-button')} onPress={() => { setConfigOpen(true); configRef.current?.present() }} hitSlop={6} style={[styles.gearBtn, { borderColor: '#F59E0B66' }]}>
+              <Settings size={17} color="#F59E0B" />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity ref={regTour('save-button')} onPress={handleSave} disabled={saving} activeOpacity={0.85} style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
+            {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : <Save size={18} color={theme.primaryForeground} />}
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Barra A/B visible 1:1 web (solo Normal) */}
+      {!isSimpleMode ? (
+        <View style={[styles.abBar, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity ref={regTour('ab-toggle')} onPress={() => toggleAb(!abMode)} activeOpacity={0.8}
+            style={[styles.abToggle, { borderColor: abMode ? theme.primary : theme.border, backgroundColor: abMode ? theme.primary + '1A' : 'transparent' }]}>
+            <Text style={[styles.abTag, { color: abMode ? theme.primary : theme.mutedForeground }]}>A/B</Text>
+            <Text numberOfLines={1} style={[styles.abLabelTxt, { color: abMode ? theme.primary : theme.mutedForeground }]}>{abMode ? 'Semanas alternas activas' : 'Activar semanas A/B'}</Text>
+          </TouchableOpacity>
+          {abMode ? (
+            <View style={[styles.abSeg, { backgroundColor: theme.secondary }]}>
+              {(['A', 'B'] as const).map((v) => (
+                <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Montserrat_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>Sem {v}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       {pendingDraft ? (
         <View style={[styles.draftBanner, { borderColor: theme.border, backgroundColor: theme.card }]}>
@@ -601,10 +755,10 @@ export default function ProgramBuilderScreen() {
       <GestureDetector gesture={dayGesture}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <MotiView
-          key={isSimpleMode ? `d-${activeDayId}` : 'list'}
-          from={isSimpleMode ? { opacity: 0, translateX: slideDir.current * 36 } : { opacity: 1, translateX: 0 }}
+          key={`day-${activeDayId}`}
+          from={{ opacity: 0, translateX: slideDir.current * SLIDE }}
           animate={{ opacity: 1, translateX: 0 }}
-          transition={{ type: 'timing', duration: 220 }}
+          transition={{ type: 'timing', duration: 260 }}
           style={{ flex: 1 }}
         >
         <DraggableFlatList
@@ -613,40 +767,48 @@ export default function ProgramBuilderScreen() {
           onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
           onDragEnd={({ data }) => handleDragEnd(data)}
           activationDistance={14}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: isSimpleMode ? 96 : 150 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={{ gap: 14, paddingBottom: 14 }}>
-              {!isSimpleMode ? (<>
-              {clientName ? <Text style={[styles.subTitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Programa de {clientName}</Text> : null}
-              <TextInput value={name} onChangeText={setName} placeholder="Nombre del programa" placeholderTextColor={theme.mutedForeground}
-                style={[styles.nameInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} />
-
+              {isSimpleMode && abMode ? (
+                <View style={[styles.abSeg, { backgroundColor: theme.secondary, alignSelf: 'center' }]}>
+                  {(['A', 'B'] as const).map((v) => (
+                    <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
+                      <Text style={{ fontSize: 11, fontFamily: 'Montserrat_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>{v}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
               {!isSimpleMode && phases.length ? <ProgramPhasesBar phases={phases} weeks={weeks} /> : null}
 
-              </>) : null}
+              {days.length <= 7 ? (
+                <View ref={regTour('days-board')} collapsable={false} style={[styles.dayTabBar, { backgroundColor: theme.secondary }]}>
+                  {days.map((d) => renderDayTab(d, false))}
+                </View>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View ref={regTour('days-board')} collapsable={false} style={[styles.dayTabBar, { backgroundColor: theme.secondary }]}>
+                    {days.map((d) => renderDayTab(d, true))}
+                  </View>
+                </ScrollView>
+              )}
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
-                {days.map((d) => {
-                  const active = d.id === activeDayId
-                  const has = d.blocks.length > 0
-                  return (
-                    <TouchableOpacity key={d.id} onPress={() => setActiveDayId(d.id)} activeOpacity={0.8}
-                      style={[styles.dayChip, { backgroundColor: active ? theme.primary : theme.secondary, borderColor: active ? theme.primary : theme.border }]}>
-                      <Text style={[styles.dayChipText, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{dayLabel(structureType, d)}</Text>
-                      {d.is_rest ? <Moon size={11} color={active ? theme.primaryForeground : theme.mutedForeground} /> : has ? <View style={[styles.dot, { backgroundColor: active ? theme.primaryForeground : theme.primary }]} /> : null}
-                    </TouchableOpacity>
-                  )
-                })}
-              </ScrollView>
-
+              <View style={[styles.dayCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
               <View style={styles.dayHeader}>
-                <TextInput value={currentDay.title} onChangeText={(v) => updateDayTitle(currentDay.id, v)} placeholder={`Título de ${currentDay.name}`} placeholderTextColor={theme.mutedForeground}
-                  style={[styles.dayTitleInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                {currentDay.is_rest ? (
+                  <View style={[styles.dayTitleInput, styles.restTitleBox, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                    <Moon size={14} color="#818CF8" />
+                    <Text style={[styles.restTitleText, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>DÍA DE DESCANSO</Text>
+                  </View>
+                ) : (
+                  <TextInput value={currentDay.title} onChangeText={(v) => updateDayTitle(currentDay.id, v)} placeholder={`Título de ${currentDay.name}`} placeholderTextColor={theme.mutedForeground}
+                    style={[styles.dayTitleInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: theme.fontSans }]} />
+                )}
                 <TouchableOpacity onPress={() => toggleRestDay(currentDay.id)} activeOpacity={0.8}
                   style={[styles.restBtn, { borderColor: currentDay.is_rest ? theme.primary : theme.border, backgroundColor: currentDay.is_rest ? theme.primary + '1A' : 'transparent' }]}>
-                  <Moon size={15} color={currentDay.is_rest ? theme.primary : theme.mutedForeground} />
+                  {currentDay.is_rest ? <Sun size={15} color={theme.primary} /> : <Moon size={15} color={theme.mutedForeground} />}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setCopyOpen(true)} activeOpacity={0.8} style={[styles.restBtn, { borderColor: theme.border }]}>
                   <Copy size={15} color={theme.mutedForeground} />
@@ -668,13 +830,7 @@ export default function ProgramBuilderScreen() {
                   </View>
                 </View>
               ) : null}
-
-              {currentDay.is_rest ? (
-                <View style={[styles.restBanner, { borderColor: '#6366F133', backgroundColor: '#6366F114' }]}>
-                  <Moon size={16} color="#818CF8" />
-                  <Text style={[styles.restBannerText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>DÍA DE DESCANSO</Text>
-                </View>
-              ) : null}
+              </View>
             </View>
           }
           renderItem={({ item, drag, isActive }) => {
@@ -693,32 +849,79 @@ export default function ProgramBuilderScreen() {
                 </View>
               )
             }
+            const cat = catById.get(item.block.exercise_id)
+            const secBlocks = (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === item.section)
+            const pos = secBlocks.findIndex((b) => b.uid === item.block.uid)
+            const next = secBlocks[pos + 1]
+            const isLastInSec = pos === secBlocks.length - 1
+            const linkedToNext = !!item.block.superset_group && item.block.superset_group === next?.superset_group
             return (
-              <BuilderBlockCard
-                block={item.block}
-                drag={drag}
-                isActive={isActive}
-                onEdit={openEditor}
-                onRemove={(uid) => removeBlock(activeDayId, uid)}
-                onUpdate={updateBlock}
-                onSetSection={(uid, s) => setBlockSection(activeDayId, uid, s)}
-                onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
-              />
+              <View>
+                <BuilderBlockCard
+                  block={item.block}
+                  drag={drag}
+                  isActive={isActive}
+                  onEdit={openEditor}
+                  onRemove={(uid) => removeBlock(activeDayId, uid)}
+                  onUpdate={updateBlock}
+                  onSetSection={(uid, s) => setBlockSection(activeDayId, uid, s)}
+                  onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
+                  catGif={cat?.gif_url}
+                  catImage={cat?.image_url}
+                  catVideo={cat?.video_url}
+                />
+                {!isLastInSec ? (
+                  linkedToNext ? (
+                    <View style={styles.ssConnector}>
+                      <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
+                      <TouchableOpacity onPress={() => toggleSuperset(activeDayId, item.block.uid)} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
+                        <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>SS · {item.block.superset_group}</Text>
+                      </TouchableOpacity>
+                      <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
+                    </View>
+                  ) : (
+                    <View style={styles.ssConnector}>
+                      <TouchableOpacity onPress={() => toggleSuperset(activeDayId, item.block.uid)} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
+                        <Link2 size={13} color={theme.mutedForeground} />
+                        <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Superserie</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                ) : null}
+              </View>
             )
           }}
           ListFooterComponent={
-            <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.8}
-              style={[styles.addBtn, { borderColor: theme.border, backgroundColor: theme.card }]}>
-              <Plus size={18} color={theme.primary} />
-              <Text style={[styles.addText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Agregar ejercicio a {currentDay.name}</Text>
-            </TouchableOpacity>
+            currentDay.is_rest ? (
+              <View style={styles.restPanel}>
+                <Moon size={40} color="#818CF866" />
+                <Text style={[styles.restPanelTitle, { color: '#818CF8', fontFamily: 'Montserrat_700Bold' }]}>DÍA DE DESCANSO</Text>
+                <Text style={[styles.restPanelSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Recuperación activa y descanso</Text>
+                <TouchableOpacity onPress={() => toggleRestDay(currentDay.id)} activeOpacity={0.85} style={[styles.restPanelBtn, { borderColor: '#818CF855' }]}>
+                  <Text style={[styles.restPanelBtnText, { color: '#818CF8', fontFamily: 'Inter_700Bold' }]}>Añadir ejercicios</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.8}
+                style={[styles.addBtn, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                <Plus size={18} color={theme.primary} />
+                <Text style={[styles.addText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Agregar ejercicio a {currentDay.name}</Text>
+              </TouchableOpacity>
+            )
           }
         />
         </MotiView>
       </KeyboardAvoidingView>
       </GestureDetector>
 
-      <ExerciseSearchSheet ref={searchRef} onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: pendingSection }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }} />
+      <ExerciseSearchSheet
+        ref={searchRef}
+        exercises={catalog}
+        dayBlockCount={currentDay?.blocks.length ?? 0}
+        dayName={currentDay?.name ?? ''}
+        simpleMode={isSimpleMode}
+        onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: pendingSection }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
+      />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}
         onSetSection={setBlockSection.bind(null, activeDayId)} onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)}
         days={days.map((d) => ({ id: d.id, name: d.name }))} currentDayId={activeDayId} clientId={isTemplate ? undefined : clientId}
@@ -741,7 +944,7 @@ export default function ProgramBuilderScreen() {
         startDate={startDate} setStartDate={setStartDate}
         programNotes={programNotes} setProgramNotes={setProgramNotes}
         phases={phases} setPhases={setPhases}
-        onClose={() => {}}
+        onClose={() => setConfigOpen(false)}
       />
 
       {/* Copy day modal */}
@@ -764,17 +967,20 @@ export default function ProgramBuilderScreen() {
         <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
           <View style={[styles.menuCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             {[
-              { icon: Eye, label: 'Vista previa', on: () => { setMenuOpen(false); previewRef.current?.present() } },
-              { icon: Scale, label: 'Balance muscular', on: () => { setMenuOpen(false); balanceRef.current?.present() } },
-              { icon: Layers, label: 'Cargar plantilla', on: () => { setMenuOpen(false); templateRef.current?.present() } },
-              { icon: Users, label: 'Asignar a alumnos', on: () => { setMenuOpen(false); assignRef.current?.present() } },
-              { icon: Printer, label: 'Imprimir / PDF', on: handlePrint },
+              { icon: Eye, label: 'Vista previa', on: () => { setMenuOpen(false); previewRef.current?.present() }, dim: false },
+              { icon: Scale, label: 'Balance muscular', on: () => { setMenuOpen(false); balanceRef.current?.present() }, dim: false },
+              { icon: Layers, label: 'Cargar plantilla', on: () => { setMenuOpen(false); templateRef.current?.present() }, dim: false },
+              { icon: Users, label: 'Asignar a alumnos', on: () => { setMenuOpen(false); assignRef.current?.present() }, dim: false },
+              { icon: Printer, label: 'Imprimir / PDF', on: handlePrint, dim: false },
+              { icon: Undo2, label: 'Deshacer', on: () => { if (canUndo) { setMenuOpen(false); undo() } }, dim: !canUndo },
+              { icon: Redo2, label: 'Rehacer', on: () => { if (canRedo) { setMenuOpen(false); redo() } }, dim: !canRedo },
             ].map((it) => {
               const Icon = it.icon
+              const color = it.dim ? theme.muted : theme.foreground
               return (
                 <TouchableOpacity key={it.label} onPress={it.on} activeOpacity={0.8} style={styles.menuItem}>
-                  <Icon size={17} color={theme.foreground} />
-                  <Text style={[styles.menuItemText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
+                  <Icon size={17} color={color} />
+                  <Text style={[styles.menuItemText, { color, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -791,18 +997,20 @@ export default function ProgramBuilderScreen() {
 
       {/* Toggle Modo Simple/Normal (Sparkles) */}
       <TouchableOpacity onPress={toggleSimpleMode} activeOpacity={0.85}
-        style={[styles.fabMode, { backgroundColor: isSimpleMode ? theme.card : theme.primary, borderColor: theme.border, borderWidth: isSimpleMode ? 1 : 0 }]}>
+        style={[styles.fabMode, { bottom: isSimpleMode ? 28 : 116, backgroundColor: isSimpleMode ? theme.card : theme.primary, borderColor: theme.border, borderWidth: isSimpleMode ? 1 : 0 }]}>
         <Sparkles size={20} color={isSimpleMode ? theme.mutedForeground : theme.primaryForeground} />
       </TouchableOpacity>
 
       {/* Label de transición */}
       {modeLabel ? (
-        <View pointerEvents="none" style={styles.modeLabelWrap}>
-          <View style={[styles.modeLabel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Sparkles size={14} color={theme.primary} />
-            <Text style={[styles.modeLabelText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{modeLabel}</Text>
-          </View>
-        </View>
+        <MotiView pointerEvents="none" style={styles.modeOverlay}
+          from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: 'timing', duration: 240 }}>
+          <MotiView from={{ opacity: 0, scale: 0.9, translateY: 8 }} animate={{ opacity: 1, scale: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 340, delay: 140 }} style={{ alignItems: 'center', gap: 22 }}>
+            <Image source={require('../../assets/eva-icon.png')} style={{ width: 76, height: 76 }} contentFit="contain" tintColor="#fff" />
+            <Text style={styles.modeOverlayText}>{modeLabel}</Text>
+          </MotiView>
+        </MotiView>
       ) : null}
 
       {/* Flechas hint de swipe (solo Simple) */}
@@ -812,16 +1020,60 @@ export default function ProgramBuilderScreen() {
           <View style={[styles.hint, styles.hintRight]}><ChevronRight size={30} color={theme.primary} /></View>
         </View>
       ) : null}
+
+      <BuilderOnboardingTour
+        open={tourOpen}
+        steps={tourSteps}
+        getRect={getTourRect}
+        onClose={handleCloseTour}
+        remeasureSignal={`${activeDayId}-${abMode}-${tourMode}`}
+      />
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1 },
   topBtn: { minWidth: 64 }, topBtnText: { fontSize: 15 },
   undoRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  gearBtn: { borderWidth: 1, borderRadius: 9, padding: 5 },
+  backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  titleWrap: { flex: 1, minWidth: 0 },
+  progTitle: { fontSize: 14, letterSpacing: 1 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F97316' },
+  statusText: { fontSize: 9, letterSpacing: 0.8, color: '#F97316' },
+  statusMuted: { fontSize: 10, letterSpacing: 0.6, marginTop: 1, textTransform: 'uppercase' },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  iconOutline: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  gearBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  pingAmber: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 9, backgroundColor: '#F59E0B' },
+  saveBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  abBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
+  abToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 1 },
+  abTag: { fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
+  abLabelTxt: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
+  abSeg: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 10, marginLeft: 'auto' },
+  abSegItem: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 7 },
+  dayCard: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
+  ssConnector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 6, marginBottom: 8 },
+  ssLine: { flex: 1, height: 1 },
+  ssPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  ssPillTxt: { fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase' },
+  ssLinkBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  ssLinkTxt: { fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase' },
+  dayTabBar: { flexDirection: 'row', alignItems: 'stretch', gap: 3, padding: 4, borderRadius: 14 },
+  dayTab: { paddingVertical: 7, paddingHorizontal: 4, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  dayTabLabel: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' },
+  dayTabCount: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  restTitleBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  restTitleText: { fontSize: 11, letterSpacing: 1 },
+  restPanel: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48, gap: 8 },
+  restPanelTitle: { fontSize: 12, letterSpacing: 2 },
+  restPanelSub: { fontSize: 12, opacity: 0.7 },
+  restPanelBtn: { marginTop: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 },
+  restPanelBtnText: { fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
   menuBackdrop: { flex: 1, alignItems: 'flex-end', paddingTop: 64, paddingRight: 12 },
   menuCard: { width: 224, borderWidth: 1, borderRadius: 14, paddingVertical: 6, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
@@ -891,6 +1143,8 @@ const styles = StyleSheet.create({
   blockCardCompact: { padding: 9 },
   fabMode: { position: 'absolute', right: 16, bottom: 28, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6 },
   fabAdd: { position: 'absolute', right: 16, bottom: 86, width: 56, height: 56, borderRadius: 28, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 },
+  modeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+  modeOverlayText: { color: '#fff', fontSize: 26, fontFamily: 'Montserrat_700Bold', letterSpacing: 6, textTransform: 'uppercase' },
   modeLabelWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   modeLabel: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 11 },
   modeLabelText: { fontSize: 14 },

@@ -100,6 +100,40 @@ export function exerciseThumb(row: {
   return yt ? youtubeThumb(yt) : null
 }
 
+/** Normaliza acentos + minúsculas (1:1 web `normalizeString`). */
+export function normalizeString(str: string): string {
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
+/** Filtra ejercicios por término + grupo muscular (1:1 web `filterExercises`, sin el diccionario de sinónimos). */
+export function filterExercises<T extends {
+  name: string
+  muscle_group: string | null
+  secondary_muscles?: string[] | null
+  body_part?: string | null
+  equipment?: string | null
+}>(exercises: T[], searchTerm: string, selectedMuscleGroup: string): T[] {
+  const search = normalizeString(searchTerm)
+  const group = normalizeString(selectedMuscleGroup)
+  return exercises.filter((ex) => {
+    const muscle = normalizeString(ex.muscle_group ?? '')
+    const secondary = (ex.secondary_muscles ?? []).map((m) => normalizeString(m))
+    const matchesGroup = group === 'todos' || group === 'all' || group === 'todos los músculos' || muscle === group
+    if (!matchesGroup) return false
+    if (!search) return true
+    const name = normalizeString(ex.name)
+    const bodyPart = normalizeString(ex.body_part ?? '')
+    const equipment = normalizeString(ex.equipment ?? '')
+    return (
+      name.includes(search) ||
+      muscle.includes(search) ||
+      bodyPart.includes(search) ||
+      equipment.includes(search) ||
+      secondary.some((sm) => sm.includes(search))
+    )
+  })
+}
+
 const SELECT_COLUMNS =
   'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id, org_id'
 // Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.

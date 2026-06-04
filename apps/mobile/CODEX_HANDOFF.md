@@ -205,3 +205,16 @@ npx expo export --platform android   # debe terminar en "Exported: dist"
 - Convive con modos Simple/Normal ya hechos. Nuevas libs: `expo-print ~15.0.8` + `expo-sharing ~14.0.8` (pnpm).
 - Validado cada tanda: `npx tsc --noEmit` PASS + `npx expo export --platform android` PASS. **Falta verificar en device lado a lado con la web.**
 - Siguiente (no ahora): pasada de optimización móvil tras confirmar el 1:1 en device.
+
+## Claude update - 2026-06-04 - Builder RN pulido fino a 1:1 (Tandas A-E, F1-F9)
+- Continuación del 1:1: tras auditar device vs web (capturas), se cerraron los gaps finos. Plan: `~/.claude/plans/dynamic-churning-bonbon.md`.
+- **F1 gifs:** `program-builder` precarga catálogo (`listCoachExercises`) → `catById`; `mapDbBlock` array-safe (`embeddedExerciseRow`); `BuilderBlockCard` recibe `catGif/catImage/catVideo` → la miniatura cae al catálogo por `exercise_id` (arregla cuadros teal). 
+- **F2 catálogo persistente:** `ExerciseSearchSheet` reescrito a `<BottomSheet>` no-modal (snaps 12/42/85%), handle colapsado "Añadir ejercicio · N", lista completa por default con `BottomSheetFlatList` + `filterExercises`/`normalizeString` (portados a `lib/exercises.ts`) + chips + recientes + preview. `addToSection`→`snapToIndex(2)`; efecto cierra en Simple/ancla en Normal; padding del día + FAB subidos.
+- **F3 top bar:** ←/nombre uppercase+"SIN GUARDAR" (estado `dirty`)/⋮ (con undo-redo dentro)/? (ping si !seenTour)/⚙ ámbar con **ping Moti** (cuando config cerrada)/💾 disquete (icono `Save`).
+- **F4:** quitado el input de nombre duplicado del cuerpo (solo en ⚙ + top bar).
+- **F5:** day-tabs segmentadas con **nº de ejercicios** por día (rest→ZZZ, vacío→·); **día de descanso** = panel centrado (Moon + título + sub + "Añadir ejercicios"), listItems vacío + header con label DESCANSO + toggle Sun.
+- **F6:** contenedor **card del día** (marco); **connector superserie** entre bloques (SS·X / botón punteado "Superserie", trailing en cada card, no items del FlatList); **"?" ayuda** de secciones/superserie en `BuilderBlockCard` (Modal).
+- **F7:** **barra A/B visible** bajo la top bar (Normal) + mini segmented en Simple; quitado A/B del `ProgramConfigSheet`.
+- **F8 animaciones:** overlay de modo **cinematic** (negro full + `assets/eva-icon.png` tint blanco + label, swap ~480ms / limpia ~2.2s); **slide translateX** direccional al cambiar de día (Moti, `SLIDE`=22% ancho) en ambos modos.
+- **F9 tour:** `components/coach/BuilderOnboardingTour.tsx` (spotlight Modal con cutout de 4 paneles + ring + card de pasos Saltar/Atrás/Siguiente/Finalizar). Anclas medidas con `measureInWindow` vía registro de refs (`regTour`): ⚙/?/💾/⋮/A-B/day-tabs. Short auto la 1ª vez (`builder_onboarding_seen_short_v1`), full por el botón ?.
+- Validado cada tanda: `npx tsc --noEmit` PASS + `npx expo export --platform android` PASS. **Falta verificar en device lado a lado.**

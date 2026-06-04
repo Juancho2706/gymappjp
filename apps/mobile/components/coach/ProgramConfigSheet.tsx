@@ -77,18 +77,6 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
           )}
         </Field>
 
-        {p.structureType === 'weekly' ? (
-          <>
-            <View style={[styles.row, { borderColor: theme.border }]}>
-              <Text style={[styles.rowLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Semanas A/B (alterna 2 rutinas)</Text>
-              <Switch on={p.abMode} onToggle={() => p.onToggleAb(!p.abMode)} />
-            </View>
-            {p.abMode ? (
-              <Seg theme={theme} options={[{ v: 'A', l: 'Semana A' }, { v: 'B', l: 'Semana B' }]} value={p.variant} onChange={(v) => p.onSwitchVariant(v as 'A' | 'B')} />
-            ) : null}
-          </>
-        ) : null}
-
         <View style={[styles.row, { borderColor: theme.border }]}>
           <Text style={[styles.rowLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Inicio flexible (el alumno decide)</Text>
           <Switch on={p.startDateFlexible} onToggle={() => p.setStartDateFlexible(!p.startDateFlexible)} />

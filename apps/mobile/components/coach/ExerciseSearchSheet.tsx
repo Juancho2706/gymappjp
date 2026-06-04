@@ -1,25 +1,17 @@
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import { Activity, Clock, Dumbbell, Eye, Play, Plus, Search, X } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
-import { exerciseThumb, youtubeId, MUSCLE_GROUPS } from '../../lib/exercises'
+import { exerciseThumb, filterExercises, youtubeId, MUSCLE_GROUPS, type ExerciseRow } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import type { BuilderBlock } from '../../lib/plan-builder/types'
 
 const RECENTS_KEY = 'builder_recent_exercises'
 
-interface Exercise {
-  id: string
-  name: string
-  muscle_group: string | null
-  gif_url: string | null
-  image_url: string | null
-  video_url: string | null
-}
+type Ex = Pick<ExerciseRow, 'id' | 'name' | 'muscle_group' | 'gif_url' | 'image_url' | 'video_url' | 'secondary_muscles' | 'body_part' | 'equipment'>
 
 function hexToRgba(hex: string, a: number): string {
   const c = hex.replace('#', '')
@@ -27,59 +19,61 @@ function hexToRgba(hex: string, a: number): string {
   return `rgba(${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)},${a})`
 }
 
-interface ExerciseSearchSheetProps {
+interface Props {
+  /** Catálogo completo precargado (1:1 web). */
+  exercises: ExerciseRow[]
+  /** Nº de ejercicios del día activo (para el label colapsado). */
+  dayBlockCount: number
+  dayName: string
+  /** En modo Simple el sheet vive cerrado y se abre con el FAB verde. */
+  simpleMode: boolean
   onSelect: (block: BuilderBlock) => void
 }
 
-/** Catálogo 1:1 con la web (DraggableExerciseCatalog): buscador + filtro por músculo +
- *  recientes + miniaturas (gif/imagen/YouTube) tintadas por músculo + preview. */
-export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSheetProps>(
-  function ExerciseSearchSheet({ onSelect }, ref) {
+/** Catálogo persistente jalable 1:1 web (handle colapsado → buscador+chips → catálogo completo).
+ *  Lista completa por defecto + filtro en memoria + miniaturas (gif/imagen/YouTube) + preview. */
+export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
+  function ExerciseSearchSheet({ exercises, dayBlockCount, dayName, simpleMode, onSelect }, ref) {
     const { theme } = useTheme()
+    const localRef = useRef<BottomSheet | null>(null)
     const [query, setQuery] = useState('')
     const [muscle, setMuscle] = useState('Todos')
-    const [results, setResults] = useState<Exercise[]>([])
-    const [loading, setLoading] = useState(false)
-    const [recents, setRecents] = useState<Exercise[]>([])
-    const [preview, setPreview] = useState<Exercise | null>(null)
-    const snapPoints = useMemo(() => ['75%', '95%'], [])
+    const [index, setIndex] = useState(simpleMode ? -1 : 0)
+    const [recents, setRecents] = useState<Ex[]>([])
+    const [preview, setPreview] = useState<Ex | null>(null)
+    const snapPoints = useMemo(() => ['12%', '42%', '85%'], [])
+
+    const setRefs = useCallback((r: BottomSheet | null) => {
+      localRef.current = r
+      if (typeof ref === 'function') ref(r)
+      else if (ref) (ref as React.MutableRefObject<BottomSheet | null>).current = r
+    }, [ref])
 
     useEffect(() => {
       AsyncStorage.getItem(RECENTS_KEY).then((raw) => {
         if (!raw) return
-        try { setRecents(JSON.parse(raw) as Exercise[]) } catch {}
+        try { setRecents(JSON.parse(raw) as Ex[]) } catch {}
       }).catch(() => {})
     }, [])
 
-    function pushRecent(ex: Exercise) {
+    function pushRecent(ex: Ex) {
       const next = [ex, ...recents.filter((r) => r.id !== ex.id)].slice(0, 8)
       setRecents(next)
       AsyncStorage.setItem(RECENTS_KEY, JSON.stringify(next)).catch(() => {})
     }
 
-    const run = useCallback(async (text: string, m: string) => {
-      if (text.trim().length < 2 && m === 'Todos') { setResults([]); return }
-      setLoading(true)
-      let q = supabase.from('exercises').select('id, name, muscle_group, gif_url, image_url, video_url').order('name').limit(60)
-      if (text.trim().length >= 2) q = q.ilike('name', `%${text.trim()}%`)
-      if (m !== 'Todos') q = q.eq('muscle_group', m)
-      const { data } = await q
-      setResults((data as Exercise[]) ?? [])
-      setLoading(false)
-    }, [])
+    const filtered = useMemo(() => filterExercises(exercises, query, muscle), [exercises, query, muscle])
+    const showRecents = query.trim() === '' && muscle === 'Todos' && recents.length > 0
 
-    function onQuery(text: string) { setQuery(text); run(text, muscle) }
-    function onMuscle(m: string) { setMuscle(m); run(query, m) }
-
-    function handleSelect(exercise: Exercise) {
-      pushRecent(exercise)
+    function handleSelect(ex: Ex) {
+      pushRecent(ex)
       onSelect({
         uid: `block-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        exercise_id: exercise.id,
-        exercise_name: exercise.name,
-        muscle_group: exercise.muscle_group ?? 'General',
-        gif_url: exercise.gif_url ?? undefined,
-        video_url: exercise.video_url ?? undefined,
+        exercise_id: ex.id,
+        exercise_name: ex.name,
+        muscle_group: ex.muscle_group ?? 'General',
+        gif_url: ex.gif_url ?? undefined,
+        video_url: ex.video_url ?? undefined,
         sets: 3,
         reps: '8-10',
         rest_time: '60s',
@@ -87,16 +81,14 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
         superset_group: null,
         is_override: false,
       })
-      setQuery('')
-      setResults([])
-      ;(ref as React.RefObject<BottomSheetModal>).current?.dismiss()
+      localRef.current?.snapToIndex(0)
     }
 
-    function renderItem(ex: Exercise, key: string) {
+    function renderItem({ item: ex }: { item: Ex }) {
       const color = getMuscleColor(ex.muscle_group)
       const thumb = exerciseThumb(ex)
       return (
-        <TouchableOpacity key={key} style={[styles.row, { borderColor: theme.border, backgroundColor: theme.card }]} onPress={() => handleSelect(ex)} activeOpacity={0.8}>
+        <TouchableOpacity style={[styles.row, { borderColor: theme.border, backgroundColor: theme.card }]} onPress={() => handleSelect(ex)} activeOpacity={0.8}>
           <View style={[styles.thumb, { backgroundColor: hexToRgba(color, 0.15) }]}>
             {thumb ? <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" transition={120} /> : <Activity size={18} color={color} />}
           </View>
@@ -113,60 +105,84 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
       )
     }
 
-    const showRecents = query.trim().length < 2 && muscle === 'Todos' && recents.length > 0
     const pthumb = preview ? exerciseThumb(preview) : null
     const pyt = preview ? youtubeId(preview.video_url) : null
     const pIsYt = !!preview && !preview.gif_url && !preview.image_url && !!pyt
 
+    // Handle custom: grabber + (colapsado) label "Añadir ejercicio · N en {día}".
+    const renderHandle = () => (
+      <Pressable onPress={() => localRef.current?.snapToIndex(2)} style={styles.handle}>
+        <View style={[styles.grabber, { backgroundColor: theme.mutedForeground }]} />
+        {index <= 0 ? (
+          <View style={styles.collapsedRow}>
+            <Plus size={15} color={theme.primary} />
+            <Text style={[styles.collapsedText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Añadir ejercicio</Text>
+            <Text style={[styles.collapsedHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>· {dayBlockCount} en {dayName}</Text>
+          </View>
+        ) : null}
+      </Pressable>
+    )
+
     return (
-      <BottomSheetModal
-        ref={ref}
-        index={0}
+      <BottomSheet
+        ref={setRefs}
+        index={simpleMode ? -1 : 0}
         snapPoints={snapPoints}
         enableDynamicSizing={false}
-        enablePanDownToClose
-        backgroundStyle={{ backgroundColor: theme.card }}
-        handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
+        enablePanDownToClose={simpleMode}
+        onChange={setIndex}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        handleComponent={renderHandle}
+        backgroundStyle={{ backgroundColor: theme.card, borderTopWidth: 1, borderColor: theme.border }}
+        style={styles.sheetShadow}
       >
-        <View style={styles.headerRow}>
-          <Activity size={16} color={theme.primary} />
-          <Text style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Catálogo de Ejercicios</Text>
-        </View>
-
-        <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
-          <Search size={16} color={theme.mutedForeground} />
-          <TextInput value={query} onChangeText={onQuery} placeholder="Buscar por nombre..." placeholderTextColor={theme.mutedForeground}
-            style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]} autoFocus />
-          {loading && <ActivityIndicator size="small" color={theme.primary} />}
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={{ maxHeight: 44 }}>
-          {['Todos', ...MUSCLE_GROUPS].map((m) => {
-            const on = muscle === m
-            return (
-              <TouchableOpacity key={m} onPress={() => onMuscle(m)} activeOpacity={0.8}
-                style={[styles.chip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{m}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-
-        <BottomSheetScrollView contentContainerStyle={styles.list}>
-          {showRecents ? (
-            <>
-              <View style={styles.recentHead}>
-                <Clock size={13} color={theme.mutedForeground} />
-                <Text style={[styles.recentLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Usados recientemente</Text>
+        <BottomSheetFlatList
+          data={filtered}
+          keyExtractor={(ex) => ex.id}
+          renderItem={renderItem}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            <View style={{ gap: 10 }}>
+              <View style={styles.headerRow}>
+                <Activity size={16} color={theme.primary} />
+                <Text style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Catálogo de Ejercicios</Text>
               </View>
-              {recents.map((ex) => renderItem(ex, `r-${ex.id}`))}
-            </>
-          ) : null}
-          {results.length === 0 && (query.length >= 2 || muscle !== 'Todos') && !loading ? (
+              <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                <Search size={16} color={theme.mutedForeground} />
+                <TextInput value={query} onChangeText={setQuery} placeholder="Buscar por nombre..." placeholderTextColor={theme.mutedForeground}
+                  style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]} />
+                {query.length ? <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}><X size={15} color={theme.mutedForeground} /></TouchableOpacity> : null}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={{ maxHeight: 42 }}>
+                {['Todos', ...MUSCLE_GROUPS].map((m) => {
+                  const on = muscle === m
+                  return (
+                    <TouchableOpacity key={m} onPress={() => setMuscle(m)} activeOpacity={0.8}
+                      style={[styles.chip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{m}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+              {showRecents ? (
+                <>
+                  <View style={styles.recentHead}>
+                    <Clock size={13} color={theme.mutedForeground} />
+                    <Text style={[styles.recentLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Usados recientemente</Text>
+                  </View>
+                  {recents.map((ex) => <View key={`r-${ex.id}`}>{renderItem({ item: ex })}</View>)}
+                  <Text style={[styles.recentLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold', marginTop: 4 }]}>Todos los ejercicios</Text>
+                </>
+              ) : null}
+            </View>
+          }
+          ListEmptyComponent={
             <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin resultados</Text>
-          ) : null}
-          {results.map((ex) => renderItem(ex, ex.id))}
-        </BottomSheetScrollView>
+          }
+        />
 
         {/* Preview */}
         <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
@@ -190,20 +206,26 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
             </Pressable>
           </Pressable>
         </Modal>
-      </BottomSheetModal>
+      </BottomSheet>
     )
   }
 )
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+  sheetShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 16 },
+  handle: { paddingTop: 8, paddingBottom: 6, alignItems: 'center', gap: 6 },
+  grabber: { width: 38, height: 4, borderRadius: 2, opacity: 0.4 },
+  collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 2 },
+  collapsedText: { fontSize: 13 },
+  collapsedHint: { fontSize: 12 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 15 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 44 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 44 },
   searchInput: { flex: 1, fontSize: 15 },
-  filterRow: { paddingHorizontal: 16, gap: 7, paddingBottom: 6 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7, height: 34, justifyContent: 'center' },
-  list: { paddingHorizontal: 16, paddingBottom: 24, gap: 8 },
-  recentHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2, paddingHorizontal: 2 },
+  filterRow: { gap: 7, paddingBottom: 2, paddingRight: 8 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, height: 34, justifyContent: 'center' },
+  list: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
+  recentHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 },
   recentLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   empty: { textAlign: 'center', fontSize: 14, marginTop: 24 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 9, borderWidth: 1, borderRadius: 12 },
