@@ -7,8 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronDown, ChevronRight, Copy, Eye, GripVertical, Layers, Link2, Moon, Plus, Redo2, Scale, Undo2, Users, X } from 'lucide-react-native'
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, GripVertical, Layers, Link2, Moon, Plus, Redo2, Scale, Sparkles, Undo2, Users, X } from 'lucide-react-native'
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist'
+import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../lib/supabase'
@@ -225,6 +226,12 @@ export default function ProgramBuilderScreen() {
   const [pendingDraft, setPendingDraft] = useState<any | null>(null)
   const hydratedRef = useRef(false)
   const draftKey = `builder_draft_${templateId ?? clientId ?? 'new'}`
+  // Modo Simple/Normal (1:1 web). Default Normal. Persistido.
+  const [isSimpleMode, setIsSimpleMode] = useState(false)
+  const [modeLabel, setModeLabel] = useState<string | null>(null)
+  const [showHint, setShowHint] = useState(false)
+  const simpleHydrated = useRef(false)
+  const slideDir = useRef(0)
 
   const [activeDayId, setActiveDayId] = useState(1)
   const [editingUid, setEditingUid] = useState<string | null>(null)
@@ -311,6 +318,18 @@ export default function ProgramBuilderScreen() {
     return () => clearTimeout(t)
   }, [name, structureType, durationType, weeks, cycleLength, abMode, variant, days, otherDays, programNotes, startDate, startDateFlexible, phases, pendingDraft, draftKey])
 
+  // Modo Simple: cargar persistido + guardar al cambiar.
+  useEffect(() => {
+    AsyncStorage.getItem('builder:simpleMode')
+      .then((v) => { if (v === '1') setIsSimpleMode(true) })
+      .catch(() => {})
+      .finally(() => { simpleHydrated.current = true })
+  }, [])
+  useEffect(() => {
+    if (!simpleHydrated.current) return
+    AsyncStorage.setItem('builder:simpleMode', isSimpleMode ? '1' : '0').catch(() => {})
+  }, [isSimpleMode])
+
   // Reshape both variants when structure / cycle length changes (preserve blocks).
   useEffect(() => {
     if (!reshapeReady.current) return
@@ -370,13 +389,28 @@ export default function ProgramBuilderScreen() {
     searchRef.current?.present()
   }
 
+  function pokeHint() {
+    setShowHint(true)
+    setTimeout(() => setShowHint(false), 2500)
+  }
+  function toggleSimpleMode() {
+    const next = !isSimpleMode
+    setModeLabel(next ? 'Modo Simple' : 'Modo Normal')
+    Haptics.selectionAsync().catch(() => {})
+    if (next) setMetaOpen(false)
+    setTimeout(() => { setIsSimpleMode(next); if (next) pokeHint() }, 200)
+    setTimeout(() => setModeLabel(null), 1600)
+  }
+
   // Swipe horizontal para cambiar de día (ventaja nativa sobre los chips de la web).
   function changeDay(dir: 1 | -1) {
     const idx = days.findIndex((d) => d.id === activeDayId)
     const next = days[idx + dir]
     if (!next) return
+    slideDir.current = dir
     setActiveDayId(next.id)
     Haptics.selectionAsync().catch(() => {})
+    if (isSimpleMode) pokeHint()
   }
   const dayGesture = useMemo(
     () =>
@@ -385,7 +419,7 @@ export default function ProgramBuilderScreen() {
         Gesture.Fling().direction(Directions.RIGHT).runOnJS(true).onEnd(() => changeDay(-1))
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [days, activeDayId]
+    [days, activeDayId, isSimpleMode]
   )
 
   function buildMeta(isActive: boolean): ProgramMetaPayload {
@@ -542,6 +576,13 @@ export default function ProgramBuilderScreen() {
 
       <GestureDetector gesture={dayGesture}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <MotiView
+          key={isSimpleMode ? `d-${activeDayId}` : 'list'}
+          from={isSimpleMode ? { opacity: 0, translateX: slideDir.current * 36 } : { opacity: 1, translateX: 0 }}
+          animate={{ opacity: 1, translateX: 0 }}
+          transition={{ type: 'timing', duration: 220 }}
+          style={{ flex: 1 }}
+        >
         <DraggableFlatList
           data={listItems}
           keyExtractor={(item) => (item.type === 'header' ? `h-${item.section}` : item.block.uid)}
@@ -553,6 +594,7 @@ export default function ProgramBuilderScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={{ gap: 14, paddingBottom: 14 }}>
+              {!isSimpleMode ? (<>
               {clientName ? <Text style={[styles.subTitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Programa de {clientName}</Text> : null}
               <TextInput value={name} onChangeText={setName} placeholder="Nombre del programa" placeholderTextColor={theme.mutedForeground}
                 style={[styles.nameInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} />
@@ -653,6 +695,8 @@ export default function ProgramBuilderScreen() {
                 </TouchableOpacity>
               </View>
 
+              </>) : null}
+
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
                 {days.map((d) => {
                   const active = d.id === activeDayId
@@ -698,7 +742,7 @@ export default function ProgramBuilderScreen() {
             const b = item.block
             return (
               <ScaleDecorator>
-                <View style={[styles.blockCard, { backgroundColor: theme.card, borderColor: b.superset_group ? theme.primary + '66' : theme.border, opacity: isActive ? 0.92 : 1, marginBottom: 8 }]}>
+                <View style={[styles.blockCard, isSimpleMode && styles.blockCardCompact, { backgroundColor: theme.card, borderColor: b.superset_group ? theme.primary + '66' : theme.border, opacity: isActive ? 0.92 : 1, marginBottom: isSimpleMode ? 6 : 8 }]}>
                   <TouchableOpacity onLongPress={drag} delayLongPress={140} hitSlop={8} style={{ paddingRight: 2 }}>
                     <GripVertical size={18} color={theme.mutedForeground} />
                   </TouchableOpacity>
@@ -723,6 +767,7 @@ export default function ProgramBuilderScreen() {
             </TouchableOpacity>
           }
         />
+        </MotiView>
       </KeyboardAvoidingView>
       </GestureDetector>
 
@@ -749,6 +794,37 @@ export default function ProgramBuilderScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+      ) : null}
+
+      {/* FAB "+" verde (solo en Simple) */}
+      {isSimpleMode ? (
+        <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.85} style={styles.fabAdd}>
+          <Plus size={26} color="#fff" strokeWidth={3} />
+        </TouchableOpacity>
+      ) : null}
+
+      {/* Toggle Modo Simple/Normal (Sparkles) */}
+      <TouchableOpacity onPress={toggleSimpleMode} activeOpacity={0.85}
+        style={[styles.fabMode, { backgroundColor: isSimpleMode ? theme.card : theme.primary, borderColor: theme.border, borderWidth: isSimpleMode ? 1 : 0 }]}>
+        <Sparkles size={20} color={isSimpleMode ? theme.mutedForeground : theme.primaryForeground} />
+      </TouchableOpacity>
+
+      {/* Label de transición */}
+      {modeLabel ? (
+        <View pointerEvents="none" style={styles.modeLabelWrap}>
+          <View style={[styles.modeLabel, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Sparkles size={14} color={theme.primary} />
+            <Text style={[styles.modeLabelText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{modeLabel}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Flechas hint de swipe (solo Simple) */}
+      {isSimpleMode && showHint ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <View style={[styles.hint, styles.hintLeft]}><ChevronLeft size={30} color={theme.primary} /></View>
+          <View style={[styles.hint, styles.hintRight]}><ChevronRight size={30} color={theme.primary} /></View>
         </View>
       ) : null}
     </SafeAreaView>
@@ -832,6 +908,15 @@ const styles = StyleSheet.create({
   reorder: { gap: 2 },
   addBtn: { height: 48, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 },
   addText: { fontSize: 14 },
+  blockCardCompact: { padding: 9 },
+  fabMode: { position: 'absolute', right: 16, bottom: 28, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6 },
+  fabAdd: { position: 'absolute', right: 16, bottom: 86, width: 56, height: 56, borderRadius: 28, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 },
+  modeLabelWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  modeLabel: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 11 },
+  modeLabelText: { fontSize: 14 },
+  hint: { position: 'absolute', top: '46%' },
+  hintLeft: { left: 8 },
+  hintRight: { right: 8 },
   modalWrap: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 60 },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
   modalCard: { width: '82%', borderWidth: 1, borderRadius: 16, padding: 14, gap: 4 },

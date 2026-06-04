@@ -83,6 +83,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheetModal, ExerciseSearchSh
         ref={ref}
         index={0}
         snapPoints={snapPoints}
+        enableDynamicSizing={false}
         enablePanDownToClose
         backgroundStyle={{ backgroundColor: theme.card }}
         handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}

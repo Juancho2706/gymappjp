@@ -89,6 +89,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       ref={ref}
       index={0}
       snapPoints={['90%']}
+      enableDynamicSizing={false}
       enablePanDownToClose
       onDismiss={onClose}
       keyboardBehavior="interactive"

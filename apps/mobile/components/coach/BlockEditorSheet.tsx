@@ -73,7 +73,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
   }, [block?.exercise_name, clientId])
 
   if (!draft) {
-    return <BottomSheetModal ref={ref} index={0} snapPoints={['85%']} enablePanDownToClose backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}><View /></BottomSheetModal>
+    return <BottomSheetModal ref={ref} index={0} snapPoints={['85%']} enableDynamicSizing={false} enablePanDownToClose backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}><View /></BottomSheetModal>
   }
 
   function patch(fields: Partial<BuilderBlock>) {
@@ -89,6 +89,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
       ref={ref}
       index={0}
       snapPoints={['85%']}
+      enableDynamicSizing={false}
       enablePanDownToClose
       onDismiss={onClose}
       backgroundStyle={{ backgroundColor: theme.card }}

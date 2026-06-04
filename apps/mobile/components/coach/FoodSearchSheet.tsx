@@ -41,6 +41,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
       ref={ref}
       index={0}
       snapPoints={snapPoints}
+      enableDynamicSizing={false}
       enablePanDownToClose
       onChange={(i) => { if (i >= 0 && mode === 'search' && results.length === 0 && query.length === 0) run('') }}
       onDismiss={() => setMode('search')}
