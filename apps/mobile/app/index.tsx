@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -5,6 +6,9 @@ import { Activity, ChevronRight, Dumbbell } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../context/ThemeContext'
 import { AppBackground } from '../components/AppBackground'
+import { EvaLoaderScreen } from '../components/EvaLoader'
+import { supabase } from '../lib/supabase'
+import { getCoachProfile } from '../lib/coach'
 
 const LETTERS = [
   { c: 'E', color: '#8B5CF6' },
@@ -15,6 +19,33 @@ const LETTERS = [
 export default function RoleSelector() {
   const router = useRouter()
   const { theme } = useTheme()
+  // Auto-login: si hay sesión persistida, ir directo al dashboard (coach o alumno) sin pasar por el selector.
+  const [checking, setChecking] = useState(true)
+  const routed = useRef(false)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession()
+        if (!data.session) { setChecking(false); return }
+        const coach = await getCoachProfile()
+        if (routed.current) return
+        routed.current = true
+        router.replace(coach ? '/coach/home' : '/alumno/home')
+      } catch {
+        setChecking(false)
+      }
+    })()
+  }, [router])
+
+  if (checking) {
+    return (
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
+        <AppBackground />
+        <SafeAreaView style={{ flex: 1 }}><EvaLoaderScreen subtitle="Cargando…" /></SafeAreaView>
+      </View>
+    )
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
