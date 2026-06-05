@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -14,6 +15,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Swipeable } from 'react-native-gesture-handler'
+import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import {
@@ -23,6 +25,7 @@ import {
   EyeOff,
   Flame,
   LayoutGrid,
+  List as ListIcon,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -36,17 +39,39 @@ import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
 import {
   buildStats,
   filterClients,
   getCoachDirectoryClients,
+  getCoachDirectoryPulse,
   sortClients,
   type DirectoryClient,
   type DirectoryRiskFilter,
   type DirectorySortKey,
+  type PulseRow,
+  type SortDir,
   type StatusFilter,
 } from '../../../lib/clients-directory'
+import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin } from '../../../lib/client-actions'
+import { getCoachProfile } from '../../../lib/coach'
 import { apiFetch } from '../../../lib/api'
+
+const CARD_GAP = 12
+const CARD_STEP = CLIENT_CARD_HEIGHT + CARD_GAP
+
+// Item con animación de "stack": al scrollear abajo las cards se apilan arriba; al subir, salen y bajan.
+function StackCardItem({ index, scrollY, headerH, children }: { index: number; scrollY: SharedValue<number>; headerH: number; children: React.ReactNode }) {
+  const animStyle = useAnimatedStyle(() => {
+    const slot = index * CARD_STEP
+    const diff = scrollY.value - headerH - slot
+    const translateY = diff > 0 ? diff - interpolate(diff, [0, CARD_STEP], [0, 8], Extrapolation.CLAMP) : 0
+    const scale = interpolate(diff, [0, CARD_STEP], [1, 0.94], Extrapolation.CLAMP)
+    const opacity = interpolate(diff, [0, CARD_STEP * 2, CARD_STEP * 4], [1, 1, 0.4], Extrapolation.CLAMP)
+    return { transform: [{ translateY }, { scale }], opacity }
+  })
+  return <Animated.View style={[{ marginBottom: CARD_GAP }, animStyle]}>{children}</Animated.View>
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -609,8 +634,24 @@ export default function ClientesScreen() {
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [pulseById, setPulseById] = useState<Map<string, PulseRow>>(new Map())
+  const [coachSlug, setCoachSlug] = useState<string>('')
+  const scrollY = useSharedValue(0)
+  const [headerH, setHeaderH] = useState(0)
+  const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    AsyncStorage.getItem('eva_alumnos_view').then((v) => { if (v === 'cards' || v === 'list') setViewMode(v) })
+    getCoachProfile().then((c) => { if (c?.slug) setCoachSlug(c.slug) }).catch(() => {})
+  }, [])
+  function toggleView() {
+    const next = viewMode === 'list' ? 'cards' : 'list'
+    setViewMode(next)
+    AsyncStorage.setItem('eva_alumnos_view', next).catch(() => {})
+  }
   useEffect(() => {
     AsyncStorage.getItem('eva_alumnos_alerts_dismissed').then((raw) => {
       if (raw) { try { setDismissed(JSON.parse(raw)) } catch {} }
@@ -624,14 +665,16 @@ export default function ClientesScreen() {
     setClients(data)
     setLoading(false)
     setRefreshing(false)
+    // Pulse (métricas ricas) en paralelo — las cards lo muestran cuando llega.
+    getCoachDirectoryPulse().then(setPulseById).catch(() => {})
   }
 
   const stats = useMemo(() => buildStats(clients), [clients])
 
   const displayed = useMemo(() => {
-    const filtered = filterClients(clients, search, riskFilter, statusFilter)
-    return sortClients(filtered, sortKey)
-  }, [clients, search, riskFilter, statusFilter, sortKey])
+    const filtered = filterClients(clients, search, riskFilter, statusFilter, pulseById)
+    return sortClients(filtered, sortKey, sortDir)
+  }, [clients, search, riskFilter, statusFilter, sortKey, sortDir, pulseById])
 
   const urgentBanner = stats.urgentCount > 0
   const expiredBanner = stats.expiredProgramCount > 0
@@ -660,6 +703,70 @@ export default function ClientesScreen() {
     { key: 'ontrack', label: 'On track', value: stats.onTrackCount, icon: LayoutGrid, color: '#3B82F6', filter: 'on_track' as DirectoryRiskFilter },
     { key: 'noprogram', label: 'Sin plan', value: stats.noProgramCount, icon: Dumbbell, color: '#8B5CF6', filter: 'no_program' as DirectoryRiskFilter },
   ]
+
+  // ── Acciones rápidas por alumno ──────────────────────────────────────────
+  function handleWhatsApp(c: DirectoryClient) {
+    if (!c.phone || !coachSlug) return
+    openWhatsApp(c.phone, c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
+  }
+  function handleShare(c: DirectoryClient) {
+    if (!coachSlug) return
+    shareLogin(c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
+  }
+  function handleToggle(c: DirectoryClient) {
+    setClientStatus(c.id, { is_active: !c.isActive }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.'))
+  }
+  function handleReset(c: DirectoryClient) {
+    resetClientPassword(c.id)
+      .then((temp) => Alert.alert('Contraseña reseteada', `Contraseña temporal de ${c.fullName}: ${temp}\n\nDeberá cambiarla al ingresar.`))
+      .catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.'))
+  }
+  function handleDelete(c: DirectoryClient) {
+    Alert.alert('Eliminar alumno', `¿Eliminar a ${c.fullName}? No se puede deshacer.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => deleteClient(c.id).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')) },
+    ])
+  }
+  const goProfile = (c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`)
+  const goWorkout = (c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`)
+  const goNutrition = () => router.push('/coach/nutricion')
+
+  const headerNode = (
+    <>
+      <View style={styles.statsGrid}>
+        {STAT_TILES.map((tile) => (
+          <StatTile key={tile.key} value={tile.value} label={tile.label} icon={tile.icon} color={tile.color}
+            selected={riskFilter === tile.filter && tile.filter !== 'all'}
+            onPress={() => setRiskFilter(riskFilter === tile.filter ? 'all' : tile.filter)} sub={tile.sub} />
+        ))}
+      </View>
+      {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
+        <AlertBanner message={`🔴 ${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`} color="#EF4444" onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('urgent', stats.urgentCount)} />
+      )}
+      {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
+        <AlertBanner message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`} color="#F97316" onPress={() => setRiskFilter('expired_program')} onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)} />
+      )}
+      {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
+        <AlertBanner message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color="#F59E0B" onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
+      )}
+      <View style={styles.sortRow}>
+        <Text style={[styles.sortLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} · Orden: {sortLabel} ({sortDir === 'asc' ? '↑' : '↓'})
+        </Text>
+      </View>
+    </>
+  )
+  const emptyNode = (
+    <View style={styles.emptyWrap}>
+      <Users size={36} color={theme.mutedForeground} strokeWidth={1.5} />
+      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+        {search || hasActiveFilters ? 'Sin resultados' : 'Sin alumnos aún'}
+      </Text>
+      <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        {search || hasActiveFilters ? 'Probá ajustando los filtros o la búsqueda.' : 'Usa el botón + para agregar tu primer alumno.'}
+      </Text>
+    </View>
+  )
 
   if (loading) {
     return (
@@ -697,6 +804,12 @@ export default function ClientesScreen() {
           />
         </View>
         <TouchableOpacity
+          style={[styles.iconBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
+          onPress={toggleView}
+        >
+          {viewMode === 'list' ? <LayoutGrid size={18} color={theme.mutedForeground} /> : <ListIcon size={18} color={theme.mutedForeground} />}
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[
             styles.iconBtn,
             {
@@ -712,11 +825,42 @@ export default function ClientesScreen() {
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
           onPress={() => setShowSortSheet(true)}
+          onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
         >
           <RefreshCw size={16} color={theme.mutedForeground} />
         </TouchableOpacity>
       </View>
 
+      {viewMode === 'cards' ? (
+        <Animated.FlatList
+          data={displayed}
+          keyExtractor={(c) => c.id}
+          renderItem={({ item, index }) => (
+            <StackCardItem index={index} scrollY={scrollY} headerH={headerH}>
+              <ClientCard
+                client={item}
+                pulse={pulseById.get(item.id)}
+                onPress={() => goProfile(item)}
+                onWhatsApp={item.phone && coachSlug ? () => handleWhatsApp(item) : undefined}
+                onShareLogin={() => handleShare(item)}
+                onToggleStatus={() => handleToggle(item)}
+                onResetPw={() => handleReset(item)}
+                onDelete={() => handleDelete(item)}
+                onWorkout={() => goWorkout(item)}
+                onNutrition={goNutrition}
+              />
+            </StackCardItem>
+          )}
+          contentContainerStyle={styles.cardsList}
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          onRefresh={() => load(true)}
+          refreshing={refreshing}
+          ListHeaderComponent={<View onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}>{headerNode}</View>}
+          ListEmptyComponent={emptyNode}
+        />
+      ) : (
       <FlatList
         data={displayed}
         keyExtractor={(c) => c.id}
@@ -821,6 +965,7 @@ export default function ClientesScreen() {
           </View>
         }
       />
+      )}
 
       {/* FAB: Nuevo Alumno */}
       <TouchableOpacity
@@ -907,6 +1052,7 @@ const styles = StyleSheet.create({
   sortRow: { paddingHorizontal: 16, paddingBottom: 8 },
   sortLabel: { fontSize: 11 },
   list: { paddingHorizontal: 16, paddingBottom: 100, gap: 8 },
+  cardsList: { paddingHorizontal: 16, paddingBottom: 140 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 40 },
   emptyTitle: { fontSize: 18 },
   emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 20 },

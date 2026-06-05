@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { getCoachProfile } from './coach'
+import { apiFetch } from './api'
 
 export type AttentionFlag =
   | 'SIN_WORKOUT_7D'
@@ -17,6 +18,28 @@ export type DirectoryRiskFilter =
   | 'expired_program'
   | 'password_reset'
   | 'no_program'
+  | 'with_program'
+  | 'nutrition_low'
+
+export type SortDir = 'asc' | 'desc'
+
+/** Métricas ricas por alumno (1:1 web DirectoryPulseRow) servidas por /api/mobile/coach/clients/pulse. */
+export interface PulseRow {
+  clientId: string
+  percentage: number
+  nutritionPercentage: number
+  weightHistory30d: { date: string; value: number }[]
+  adherenceHistory4w: number[]
+  currentWeight: number | null
+  weightDelta7d: number | null
+  latestEnergyLevel: number | null
+  streak: number
+  planCurrentWeek: number | null
+  planTotalWeeks: number | null
+  attentionScore: number
+  attentionFlags?: string[]
+  lastWorkoutDate: string | null
+}
 
 export type DirectorySortKey =
   | 'attention_score'
@@ -42,6 +65,25 @@ export interface DirectoryClient {
   attentionFlags: AttentionFlag[]
   lastWorkoutDate: string | null
   lastCheckinDate: string | null
+  subscriptionStartDate: string | null
+}
+
+/** Días restantes de suscripción (start + 1 mes − hoy). null si no hay fecha. */
+export function subscriptionDaysRemaining(startDate: string | null): number | null {
+  if (!startDate) return null
+  const end = new Date(startDate)
+  end.setMonth(end.getMonth() + 1)
+  return Math.ceil((end.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+}
+
+/** Pulse (métricas ricas) por id de alumno, vía endpoint mobile (reusa el cálculo web). */
+export async function getCoachDirectoryPulse(): Promise<Map<string, PulseRow>> {
+  try {
+    const res = await apiFetch<{ pulse: PulseRow[] }>('/api/mobile/coach/clients/pulse', { authenticated: true })
+    return new Map((res.pulse ?? []).map((p) => [p.clientId, p]))
+  } catch {
+    return new Map()
+  }
 }
 
 export interface DirectoryStats {
@@ -75,7 +117,7 @@ export async function getCoachDirectoryClients(): Promise<DirectoryClient[]> {
   const [clientsRes, workoutLogsRes, checkInsRes] = await Promise.all([
     supabase
       .from('clients')
-      .select('id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, workout_programs(id, name, start_date, weeks_to_repeat, is_active)')
+      .select('id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)')
       .eq('coach_id', coach.id)
       .order('full_name'),
     supabase
@@ -139,6 +181,7 @@ export async function getCoachDirectoryClients(): Promise<DirectoryClient[]> {
       attentionFlags: flags,
       lastWorkoutDate: lastWorkoutMap.get(c.id) ?? null,
       lastCheckinDate: lastCheckinMap.get(c.id) ?? null,
+      subscriptionStartDate: c.subscription_start_date ?? null,
     }
   })
 }
@@ -161,7 +204,8 @@ export function filterClients(
   clients: DirectoryClient[],
   search: string,
   riskFilter: DirectoryRiskFilter,
-  statusFilter: StatusFilter
+  statusFilter: StatusFilter,
+  pulseById?: Map<string, PulseRow>
 ): DirectoryClient[] {
   return clients.filter((c) => {
     const q = search.toLowerCase()
@@ -183,25 +227,31 @@ export function filterClients(
     else if (riskFilter === 'expired_program') matchesRisk = c.planDaysRemaining !== null && c.planDaysRemaining <= 0
     else if (riskFilter === 'password_reset') matchesRisk = c.forcePwChange
     else if (riskFilter === 'no_program') matchesRisk = !c.hasActiveProgram
+    else if (riskFilter === 'with_program') matchesRisk = c.hasActiveProgram
+    else if (riskFilter === 'nutrition_low') {
+      const p = pulseById?.get(c.id)
+      matchesRisk = !!p && (p.attentionFlags?.includes('NUTRICION_RIESGO') || (p.nutritionPercentage > 0 && p.nutritionPercentage < 50))
+    }
 
     return matchesSearch && matchesStatus && matchesRisk
   })
 }
 
-export function sortClients(clients: DirectoryClient[], key: DirectorySortKey): DirectoryClient[] {
+export function sortClients(clients: DirectoryClient[], key: DirectorySortKey, dir: SortDir = 'desc'): DirectoryClient[] {
+  const sign = dir === 'asc' ? -1 : 1
   return [...clients].sort((a, b) => {
-    if (key === 'name_asc') return a.fullName.localeCompare(b.fullName)
+    if (key === 'name_asc') return a.fullName.localeCompare(b.fullName) * (dir === 'asc' ? 1 : -1)
     if (key === 'plan_days') {
       const da = a.planDaysRemaining ?? 9999
       const db = b.planDaysRemaining ?? 9999
-      return da - db
+      return (da - db) * (dir === 'asc' ? 1 : -1)
     }
     if (key === 'last_workout') {
       const da = a.lastWorkoutDate ? new Date(a.lastWorkoutDate).getTime() : 0
       const db = b.lastWorkoutDate ? new Date(b.lastWorkoutDate).getTime() : 0
-      return db - da
+      return (db - da) * sign
     }
-    // default: attention_score desc
-    return b.attentionScore - a.attentionScore
+    // attention_score
+    return (b.attentionScore - a.attentionScore) * sign
   })
 }
