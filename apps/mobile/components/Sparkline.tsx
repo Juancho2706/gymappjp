@@ -42,7 +42,9 @@ export function Sparkline({
 
   const area = `${line} L ${width} ${height} L 0 ${height} Z`
 
-  const gradId = 'sparkline-fill'
+  // Id único por color — evita colisión de <defs> entre múltiples sparklines (todas
+  // las áreas tomaban el gradiente de la primera = mismo color).
+  const gradId = `spark-${stroke.replace(/[^a-zA-Z0-9]/g, '')}`
 
   return (
     <Svg width={width} height={height}>

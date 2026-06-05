@@ -637,6 +637,7 @@ export default function ClientesScreen() {
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [pulseById, setPulseById] = useState<Map<string, PulseRow>>(new Map())
+  const [pulseError, setPulseError] = useState(false)
   const [coachSlug, setCoachSlug] = useState<string>('')
   const scrollY = useSharedValue(0)
   const [headerH, setHeaderH] = useState(0)
@@ -665,8 +666,16 @@ export default function ClientesScreen() {
     setClients(data)
     setLoading(false)
     setRefreshing(false)
-    // Pulse (métricas ricas) en paralelo — las cards lo muestran cuando llega.
-    getCoachDirectoryPulse().then(setPulseById).catch(() => {})
+    loadPulse()
+  }
+
+  // Pulse (métricas ricas) en paralelo — las cards lo muestran cuando llega.
+  // Ya NO se traga el error en silencio: marca pulseError → banner con reintento.
+  function loadPulse() {
+    setPulseError(false)
+    getCoachDirectoryPulse()
+      .then(setPulseById)
+      .catch(() => setPulseError(true))
   }
 
   const stats = useMemo(() => buildStats(clients), [clients])
@@ -748,6 +757,12 @@ export default function ClientesScreen() {
       )}
       {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
         <AlertBanner message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color="#F59E0B" onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
+      )}
+      {pulseError && (
+        <TouchableOpacity activeOpacity={0.85} onPress={loadPulse} style={[styles.pulseErr, { backgroundColor: '#EF444414', borderColor: '#EF444440' }]}>
+          <Text style={[styles.pulseErrTxt, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>No se pudieron cargar las métricas (peso/adherencia).</Text>
+          <Text style={[styles.pulseErrAction, { color: '#EF4444', fontFamily: 'Inter_700Bold' }]}>Reintentar</Text>
+        </TouchableOpacity>
       )}
       <View style={styles.sortRow}>
         <Text style={[styles.sortLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -1051,6 +1066,9 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
   sortRow: { paddingHorizontal: 16, paddingBottom: 8 },
   sortLabel: { fontSize: 11 },
+  pulseErr: { marginHorizontal: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  pulseErrTxt: { fontSize: 12, flexShrink: 1 },
+  pulseErrAction: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 },
   list: { paddingHorizontal: 16, paddingBottom: 100, gap: 8 },
   cardsList: { paddingHorizontal: 16, paddingBottom: 140 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 40 },

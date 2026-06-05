@@ -7,7 +7,7 @@ import { Sparkline } from '../Sparkline'
 import { subscriptionDaysRemaining, type DirectoryClient, type PulseRow } from '../../lib/clients-directory'
 
 /** Altura fija de la card (modo cards) — usada por la animación de stack. */
-export const CLIENT_CARD_HEIGHT = 326
+export const CLIENT_CARD_HEIGHT = 362
 const CONTENT_W = Dimensions.get('window').width - 32 - 28 // pantalla - margen lista - padding card
 
 interface Props {
@@ -117,28 +117,41 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.sparkLabel, { color: theme.mutedForeground }]}>Adherencia (4 sem)</Text>
-          {(pulse?.adherenceHistory4w?.length ?? 0) >= 2 ? <Sparkline values={pulse!.adherenceHistory4w} width={CONTENT_W / 2 - 6} height={28} color="#10B981" filled={false} /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
+          {(pulse?.adherenceHistory4w?.length ?? 0) >= 2 ? <Sparkline values={pulse!.adherenceHistory4w} width={CONTENT_W / 2 - 6} height={28} color="#10B981" /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
         </View>
       </View>
 
-      {/* Programa + nutrición */}
-      <View style={styles.metaRow}>
-        {client.activeProgramName ? (
-          <View style={[styles.metaPill, { backgroundColor: theme.primary + '14', borderColor: theme.primary + '22' }]}>
+      {/* Programa (con barra de progreso de semanas) */}
+      {client.activeProgramName ? (
+        <View style={[styles.block, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '22' }]}>
+          <View style={styles.blockTop}>
             <Dumbbell size={12} color={theme.primary} />
-            <Text numberOfLines={1} style={[styles.metaText, { color: theme.foreground }]}>{client.activeProgramName}</Text>
-            <Text style={[styles.metaDim, { color: theme.mutedForeground }]}>Sem {weekCur ?? '—'}/{weekTot ?? '—'} · {client.planDaysRemaining != null ? `${Math.max(0, client.planDaysRemaining)}d` : '—'}</Text>
+            <Text numberOfLines={1} style={[styles.blockName, { color: theme.foreground }]}>{client.activeProgramName}</Text>
+            <Text style={[styles.blockDim, { color: theme.foreground }]}>Sem {weekCur ?? '—'}/{weekTot ?? '—'}</Text>
           </View>
-        ) : (
-          <View style={[styles.metaPill, { borderColor: theme.border, borderStyle: 'dashed' }]}>
-            <Text style={[styles.metaDim, { color: theme.mutedForeground }]}>Sin programa</Text>
+          <Bar value={weekTot && weekTot > 0 ? Math.min(1, (weekCur ?? 0) / weekTot) : 0} color={theme.primary} theme={theme} />
+        </View>
+      ) : (
+        <View style={[styles.metaPill, { borderColor: theme.border, borderStyle: 'dashed' }]}>
+          <Text style={[styles.metaDim, { color: theme.mutedForeground }]}>Sin programa</Text>
+        </View>
+      )}
+
+      {/* Nutrición (barra de adherencia) */}
+      {nutri > 0 ? (
+        <View style={[styles.block, { backgroundColor: (nutriRisk ? '#EF4444' : '#10B981') + '12', borderColor: (nutriRisk ? '#EF4444' : '#10B981') + '28' }]}>
+          <View style={styles.blockTop}>
+            <Apple size={12} color={nutriRisk ? '#EF4444' : '#10B981'} />
+            <Text numberOfLines={1} style={[styles.blockName, { color: nutriRisk ? '#EF4444' : theme.foreground }]}>{nutriRisk ? 'Baja adherencia nutricional' : 'Nutrición'}</Text>
+            <Text style={[styles.blockDim, { color: nutriRisk ? '#EF4444' : theme.foreground }]}>{nutri}%</Text>
           </View>
-        )}
-      </View>
-      <View style={styles.subRow}>
-        {nutri > 0 ? <Text style={[styles.subTxt, { color: nutriRisk ? '#EF4444' : theme.mutedForeground }]}>🍎 Nutri {nutri}%{nutriRisk ? ' ⚠' : ''}</Text> : null}
-        {subDays != null ? <Text style={[styles.subTxt, { color: subDays <= 5 ? '#EF4444' : theme.mutedForeground }]}>Suscripción: {subDays > 0 ? `${subDays}d` : 'vencida'}</Text> : null}
-      </View>
+          <Bar value={Math.min(1, nutri / 100)} color={nutriRisk ? '#EF4444' : '#10B981'} theme={theme} />
+        </View>
+      ) : null}
+
+      {subDays != null ? (
+        <Text style={[styles.subTxt, { color: subDays <= 5 ? '#EF4444' : theme.mutedForeground }]}>Suscripción: {subDays > 0 ? `${subDays}d restantes` : 'vencida'}</Text>
+      ) : null}
 
       {/* Footer actions */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
@@ -164,6 +177,14 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
           </View>
         </Pressable>
       </Modal>
+    </View>
+  )
+}
+
+function Bar({ value, color, theme }: { value: number; color: string; theme: any }) {
+  return (
+    <View style={[styles.barTrack, { backgroundColor: theme.muted }]}>
+      <View style={{ height: '100%', borderRadius: 99, width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`, backgroundColor: color }} />
     </View>
   )
 }
@@ -208,6 +229,11 @@ const styles = StyleSheet.create({
   metaPill: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
   metaText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
   metaDim: { fontSize: 10, marginLeft: 'auto', fontFamily: 'Inter_600SemiBold' },
+  block: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, gap: 5 },
+  blockTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  blockName: { fontSize: 11.5, fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
+  blockDim: { fontSize: 10.5, marginLeft: 'auto', fontFamily: 'Montserrat_700Bold' },
+  barTrack: { height: 5, borderRadius: 99, overflow: 'hidden' },
   subRow: { flexDirection: 'row', gap: 12 },
   subTxt: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.3 },
   footer: { flexDirection: 'row', gap: 6, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 9, marginTop: 'auto' },
