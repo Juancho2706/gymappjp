@@ -5,6 +5,7 @@ import {
   isoDateAddDays,
 } from './date-utils'
 import { isMissingColumnError, selectWithFallback } from './db-compat'
+import type { WorkoutLogRow } from './profile-analytics'
 import {
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
@@ -25,6 +26,8 @@ export interface CoachClientDetail {
   is_active: boolean | null
   is_archived: boolean | null
   goal_weight_kg: number | null
+  height_cm: number | null
+  initial_weight_kg: number | null
   subscription_start_date: string | null
   created_at: string
 }
@@ -84,6 +87,7 @@ export interface PaymentEntry {
   service_description: string | null
   status: string | null
   period_months: number | null
+  receipt_url?: string | null
 }
 
 export interface ActiveProgramInfo {
@@ -375,6 +379,25 @@ function buildStrengthSeries(rows: any[]): DaySeriesPoint[] {
   return [...map].sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, v: Math.round(v) }))
 }
 
+// Logs crudos (planos) para análisis de fuerza/tonelaje/PR — alimenta lib/profile-analytics.
+function buildWorkoutLogRows(rows: any[]): WorkoutLogRow[] {
+  const out: WorkoutLogRow[] = []
+  for (const row of rows) {
+    const block = row.workout_blocks
+    const name = block?.exercises?.name ?? row.exercise_name_at_log ?? 'Ejercicio'
+    const id = block?.exercise_id ?? `name:${String(name).toLowerCase()}`
+    out.push({
+      exerciseId: String(id),
+      exerciseName: String(name),
+      muscleGroup: block?.exercises?.muscle_group ?? null,
+      weightKg: row.weight_kg == null ? null : Number(row.weight_kg),
+      reps: row.reps_done == null ? null : Number(row.reps_done),
+      loggedAt: String(row.logged_at ?? ''),
+    })
+  }
+  return out
+}
+
 export async function getCoachClientDetail(clientId: string): Promise<{
   client: CoachClientDetail | null
   checkIns: CheckInEntry[]
@@ -393,6 +416,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   nutritionMonthlyAvgPct: number
   nutritionStreakDays: number
   favoriteFoods: FavoriteFoodEntry[]
+  workoutLogs: WorkoutLogRow[]
+  workoutDates371: string[]
 }> {
   // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
   // ricas fallen en una prod sin columnas enterprise/Codex.
@@ -401,7 +426,9 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     .select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at')
     .eq('id', clientId)
     .maybeSingle()
-  const baseClient = (clientData as CoachClientDetail | null) ?? null
+  const baseClient: CoachClientDetail | null = clientData
+    ? ({ ...(clientData as any), height_cm: null, initial_weight_kg: null } as CoachClientDetail)
+    : null
   const EMPTY = {
     client: baseClient,
     checkIns: [] as CheckInEntry[],
@@ -420,6 +447,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     nutritionMonthlyAvgPct: 0,
     nutritionStreakDays: 0,
     favoriteFoods: [] as FavoriteFoodEntry[],
+    workoutLogs: [] as WorkoutLogRow[],
+    workoutDates371: [] as string[],
   }
   try {
   const { iso: todayIso } = getTodayInSantiago()
@@ -427,6 +456,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   const fourteenDaysAgo = isoDateAddDays(todayIso, -14)
   const thirtyDaysAgo = isoDateAddDays(todayIso, -30)
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
+  const since371 = new Date(Date.now() - 371 * 86400000).toISOString()
 
   const workoutLogAnalyticsSelect = `
     weight_kg, reps_done, exercise_name_at_log, logged_at,
@@ -436,23 +466,20 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     )
   `
 
-  const [clientRes, checkInRes, paymentRes, programRes, nutritionRes, logsRes, nutritionLogsRes, sessionsRes, prLogsRes, volumeLogsRes, favoriteFoodsRes] =
+  const [clientRes, checkInRes, paymentRes, programRes, nutritionRes, logsRes, nutritionLogsRes, sessionsRes, prLogsRes, volumeLogsRes, favoriteFoodsRes, activity371Res] =
     await Promise.all([
-      supabase
-        .from('clients')
-        .select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at')
-        .eq('id', clientId)
-        .maybeSingle(),
+      selectWithFallback<any>(
+        () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, height_cm, initial_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle(),
+        () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle()
+      ),
       selectWithFallback<any>(
         () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
         () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
       ),
-      supabase
-        .from('client_payments')
-        .select('id, amount, payment_date, service_description, status, period_months')
-        .eq('client_id', clientId)
-        .order('payment_date', { ascending: false })
-        .limit(20),
+      selectWithFallback<any>(
+        () => supabase.from('client_payments').select('id, amount, payment_date, service_description, status, period_months, receipt_url').eq('client_id', clientId).order('payment_date', { ascending: false }).limit(20),
+        () => supabase.from('client_payments').select('id, amount, payment_date, service_description, status, period_months').eq('client_id', clientId).order('payment_date', { ascending: false }).limit(20)
+      ),
       supabase
         .from('workout_programs')
         .select(`
@@ -517,6 +544,12 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .eq('client_id' as never, clientId as never)
         .eq('preference_type' as never, 'favorite' as never)
         .limit(20),
+      supabase
+        .from('workout_logs')
+        .select('logged_at')
+        .eq('client_id', clientId)
+        .gte('logged_at', since371)
+        .limit(20000),
     ])
 
   const rawProgram = programRes.data as any
@@ -562,6 +595,10 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   const workoutDays30 = new Set<string>()
   for (const row of (logsRes.data as { logged_at: string }[] | null) ?? []) {
     workoutDays30.add(getSantiagoIsoYmdForUtcInstant(row.logged_at))
+  }
+  const workoutDays371 = new Set<string>()
+  for (const row of (activity371Res.data as { logged_at: string }[] | null) ?? []) {
+    workoutDays371.add(getSantiagoIsoYmdForUtcInstant(row.logged_at))
   }
 
   const workoutThisWeek = new Set<string>()
@@ -609,8 +646,13 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     activityByDate.get(day) && (activityByDate.get(day)!.checkIn = true)
   }
 
+  const richClient = clientRes.data as any
+  const client: CoachClientDetail | null = baseClient
+    ? { ...baseClient, height_cm: richClient?.height_cm ?? null, initial_weight_kg: richClient?.initial_weight_kg ?? null }
+    : null
+
   return {
-    client: baseClient,
+    client,
     checkIns,
     payments: (paymentRes.data as PaymentEntry[] | null) ?? [],
     activeProgram: program,
@@ -649,12 +691,16 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       .map((row) => row.foods)
       .filter(Boolean) as any[])
       .map((food) => ({ id: food.id as string, name: food.name as string })),
+    workoutLogs: buildWorkoutLogRows((prLogsRes.data as any[] | null) ?? []),
+    workoutDates371: [...workoutDays371].sort(),
   }
   } catch (e) {
     console.warn('[coach-client-detail] partial load', e)
     return EMPTY
   }
 }
+
+export type CoachClientDetailData = Awaited<ReturnType<typeof getCoachClientDetail>>
 
 export async function getCoachClientDayDetail(clientId: string, date: string): Promise<ClientDayDetail> {
   const { startIso, endIso } = getSantiagoUtcBoundsForDay(date)
@@ -722,7 +768,7 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
 
 export async function updateCoachClient(
   clientId: string,
-  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; subscription_start_date?: string | null }
+  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; height_cm?: number | null; initial_weight_kg?: number | null; subscription_start_date?: string | null }
 ): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from('clients').update(fields).eq('id', clientId)
   if (error) return { ok: false, error: error.message }
@@ -748,6 +794,12 @@ export async function markCoachCheckInReviewed(clientId: string, checkInId: stri
 
 export async function setCoachClientArchived(clientId: string, archived: boolean): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from('clients').update({ is_archived: archived }).eq('id', clientId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+export async function deleteCoachClientPayment(clientId: string, paymentId: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.from('client_payments').delete().eq('id', paymentId).eq('client_id', clientId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
