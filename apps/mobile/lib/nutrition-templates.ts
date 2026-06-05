@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
-import { emptyPlanDraft, type DraftMeal, type PlanDraft } from './nutrition-builder'
+import { emptyPlanDraft, parseSwapOptions, serializeSwapOptions, type DraftMeal, type PlanDraft } from './nutrition-builder'
 
 // Coach nutrition TEMPLATES — mirrors web `nutrition.service.ts`
 // (createOrUpdateTemplateFromJson / propagateTemplateChanges). Templates live in
@@ -33,7 +33,7 @@ const TEMPLATE_SELECT = `
     id, name, description, order_index, day_of_week,
     template_meal_groups (
       saved_meals (
-        saved_meal_items ( food_id, quantity, unit, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit ) )
+        saved_meal_items ( food_id, quantity, unit, swap_options, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid ) )
       )
     )
   )
@@ -87,7 +87,8 @@ export async function getTemplateDraft(templateId: string): Promise<PlanDraft | 
         fats_g: fi.foods?.fats_g ?? 0,
         serving_size: fi.foods?.serving_size ?? 100,
         serving_unit: fi.foods?.serving_unit ?? 'g',
-        is_liquid: (fi.foods?.serving_unit ?? 'g') === 'ml',
+        is_liquid: !!fi.foods?.is_liquid || (fi.foods?.serving_unit ?? 'g') === 'ml',
+        swapOptions: parseSwapOptions(fi.swap_options),
       })),
     }))
   return {
@@ -152,10 +153,13 @@ export async function saveTemplate(draft: PlanDraft): Promise<{ ok: boolean; tem
       if (smErr) throw smErr
 
       await supabase.from('saved_meal_items').insert(
-        meal.items.map((it) => ({ saved_meal_id: savedMeal.id, food_id: it.food_id, quantity: Math.round(it.quantity) || 0, unit: it.unit }))
+        meal.items.map((it) => ({ saved_meal_id: savedMeal.id, food_id: it.food_id, quantity: Math.round(it.quantity) || 0, unit: it.unit, swap_options: serializeSwapOptions(it.swapOptions) }))
       )
       await supabase.from('template_meal_groups').insert({ template_meal_id: tMeal.id, saved_meal_id: savedMeal.id, order_index: 0 })
     }
+
+    // Re-propagar a los alumnos sincronizados (plan activo con esta plantilla y no personalizado).
+    await propagateTemplate(templateId!, coachId)
 
     return { ok: true, templateId: templateId ?? undefined }
   } catch (e: any) {
@@ -209,7 +213,7 @@ export async function assignTemplateToClients(templateId: string, clientIds: str
         const items = templateMealItems(tMeal)
         if (items.length) {
           await supabase.from('food_items').insert(
-            items.map((it: any) => ({ meal_id: nm.id, food_id: it.food_id, quantity: it.quantity, unit: it.unit }))
+            items.map((it: any) => ({ meal_id: nm.id, food_id: it.food_id, quantity: it.quantity, unit: it.unit, swap_options: it.swap_options ?? [] }))
           )
         }
       }
@@ -217,5 +221,51 @@ export async function assignTemplateToClients(templateId: string, clientIds: str
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'No se pudo asignar la plantilla.' }
+  }
+}
+
+/** Re-propaga la plantilla a los alumnos SINCRONIZADOS (plan activo con template_id = esta y is_custom = false). */
+async function propagateTemplate(templateId: string, coachId: string): Promise<void> {
+  const { data: synced } = await supabase
+    .from('nutrition_plans')
+    .select('id')
+    .eq('template_id', templateId)
+    .eq('coach_id', coachId)
+    .eq('is_active', true)
+    .eq('is_custom', false)
+  if (!synced?.length) return
+
+  const { data: t } = await supabase.from('nutrition_plan_templates').select(TEMPLATE_SELECT).eq('id', templateId).maybeSingle()
+  if (!t) return
+  const tmpl = t as any
+  const mealsSorted = [...(tmpl.template_meals ?? [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+
+  for (const plan of synced) {
+    const planId = (plan as any).id as string
+    // Macros/nombre/instrucciones desde la plantilla.
+    await supabase.from('nutrition_plans').update({
+      name: tmpl.name, daily_calories: tmpl.daily_calories, protein_g: tmpl.protein_g,
+      carbs_g: tmpl.carbs_g, fats_g: tmpl.fats_g, instructions: tmpl.instructions ?? null,
+    }).eq('id', planId)
+    // Reemplazar comidas + alimentos.
+    const { data: oldMeals } = await supabase.from('nutrition_meals').select('id').eq('plan_id', planId)
+    const oldIds = (oldMeals ?? []).map((m: any) => m.id)
+    if (oldIds.length) {
+      await supabase.from('food_items').delete().in('meal_id', oldIds)
+      await supabase.from('nutrition_meals').delete().in('id', oldIds)
+    }
+    for (let i = 0; i < mealsSorted.length; i++) {
+      const tMeal = mealsSorted[i]
+      const { data: nm } = await supabase.from('nutrition_meals')
+        .insert({ plan_id: planId, name: tMeal.name, description: tMeal.description ?? '', order_index: i, day_of_week: tMeal.day_of_week ?? null })
+        .select('id').single()
+      if (!nm) continue
+      const items = templateMealItems(tMeal)
+      if (items.length) {
+        await supabase.from('food_items').insert(
+          items.map((it: any) => ({ meal_id: nm.id, food_id: it.food_id, quantity: it.quantity, unit: it.unit, swap_options: it.swap_options ?? [] }))
+        )
+      }
+    }
   }
 }

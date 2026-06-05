@@ -67,6 +67,25 @@ export function calculateFoodItemMacros(item: FoodItemForMacros) {
   }
 }
 
+// ─── Swap options (intercambios) — helpers 1:1 con la web ───────────────────
+export function swapOptionIsLiquid(opt: { is_liquid?: boolean | null; serving_unit?: string | null }): boolean {
+  if (String(opt.serving_unit ?? '').toLowerCase() === 'ml') return true
+  if (typeof opt.is_liquid === 'boolean') return opt.is_liquid
+  return false
+}
+
+export function swapOptionAllowedUnits(isLiquid: boolean): readonly ('g' | 'un' | 'ml')[] {
+  return isLiquid ? (['ml', 'un'] as const) : (['g', 'un'] as const)
+}
+
+/** Coacciona la unidad guardada a una permitida para ese alimento (corrige JSON legacy). */
+export function coerceSwapOptionUnit(unit: string | null | undefined, isLiquid: boolean): 'g' | 'un' | 'ml' {
+  const allowed = swapOptionAllowedUnits(isLiquid) as readonly string[]
+  const u = String(unit ?? '').toLowerCase()
+  if (allowed.includes(u)) return u as 'g' | 'un' | 'ml'
+  return isLiquid ? 'ml' : 'g'
+}
+
 export function sumMealMacros(meal: { food_items: FoodItemForMacros[] }) {
   return meal.food_items.reduce(
     (acc, item) => {

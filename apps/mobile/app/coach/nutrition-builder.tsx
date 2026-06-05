@@ -3,23 +3,28 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, S
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronLeft, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react-native'
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
+import { FoodSwapSheet } from '../../components/coach/FoodSwapSheet'
 import {
   DAY_OF_WEEK,
+  draftItemMacros,
   draftTotals,
   emptyPlanDraft,
   foodToDraftItem,
+  getClientFoodFavorites,
   getPlanDraft,
   newMeal,
   saveClientPlan,
   type DraftMeal,
   type FoodRow,
   type PlanDraft,
+  type SwapOption,
 } from '../../lib/nutrition-builder'
+import { coerceSwapOptionUnit } from '../../lib/nutrition-utils'
 import { getTemplateDraft, saveTemplate } from '../../lib/nutrition-templates'
 
 function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: boolean }) {
@@ -33,13 +38,20 @@ export default function NutritionBuilderScreen() {
   const { clientId, clientName, planId, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; planId?: string; templateId?: string; mode?: string }>()
   const isTemplate = mode === 'template' || !!templateId
   const foodSheetRef = useRef<BottomSheetModal>(null)
+  const swapSheetRef = useRef<BottomSheetModal>(null)
   const activeMealRef = useRef<string | null>(null)
+  // 'food' = agregar alimento a la comida; 'swap' = agregar alternativa al alimento target.
+  const [searchMode, setSearchMode] = useState<'food' | 'swap'>('food')
 
   const [draft, setDraft] = useState<PlanDraft>(emptyPlanDraft())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   // Objetivos = suma de alimentos automáticamente, salvo que el coach los edite a mano.
   const [macrosManual, setMacrosManual] = useState(false)
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  // Target del editor de intercambios (qué alimento de qué comida).
+  const [swapTarget, setSwapTarget] = useState<{ mealUid: string; itemUid: string } | null>(null)
+  const [showEmptyWarn, setShowEmptyWarn] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -57,6 +69,12 @@ export default function NutritionBuilderScreen() {
     })()
   }, [planId, templateId])
 
+  // Favoritos del alumno (solo planes de alumno) → resaltar en el buscador.
+  useEffect(() => {
+    if (isTemplate || !clientId) return
+    getClientFoodFavorites(clientId).then(setFavoriteIds).catch(() => {})
+  }, [clientId, isTemplate])
+
   const totals = draftTotals(draft.meals)
 
   // Auto: objetivos siguen la suma de alimentos (salvo edición manual del coach).
@@ -70,17 +88,77 @@ export default function NutritionBuilderScreen() {
   function updateMeal(uid: string, p: Partial<DraftMeal>) { setMeals((ms) => ms.map((m) => (m.uid === uid ? { ...m, ...p } : m))) }
   function removeMeal(uid: string) { setMeals((ms) => ms.filter((m) => m.uid !== uid).map((m, i) => ({ ...m, order_index: i }))) }
   function addMeal() { setMeals((ms) => [...ms, newMeal(ms.length)]) }
+  function moveMeal(uid: string, dir: -1 | 1) {
+    setMeals((ms) => {
+      const i = ms.findIndex((m) => m.uid === uid); const j = i + dir
+      if (i < 0 || j < 0 || j >= ms.length) return ms
+      const next = [...ms]; const tmp = next[i]; next[i] = next[j]; next[j] = tmp
+      return next.map((m, idx) => ({ ...m, order_index: idx }))
+    })
+  }
+  function moveItem(mealUid: string, itemUid: string, dir: -1 | 1) {
+    setMeals((ms) => ms.map((m) => {
+      if (m.uid !== mealUid) return m
+      const i = m.items.findIndex((it) => it.uid === itemUid); const j = i + dir
+      if (i < 0 || j < 0 || j >= m.items.length) return m
+      const items = [...m.items]; const tmp = items[i]; items[i] = items[j]; items[j] = tmp
+      return { ...m, items }
+    }))
+  }
 
   function openFoodSearch(mealUid: string) {
+    setSearchMode('food')
     activeMealRef.current = mealUid
     foodSheetRef.current?.present()
   }
 
+  function openSwap(mealUid: string, itemUid: string) {
+    setSwapTarget({ mealUid, itemUid })
+    swapSheetRef.current?.present()
+  }
+  function onAddSwapPress() {
+    setSearchMode('swap')
+    foodSheetRef.current?.present()
+  }
+
+  // Mutador genérico sobre el alimento target del editor de intercambios.
+  function patchTargetSwaps(fn: (opts: SwapOption[]) => SwapOption[]) {
+    if (!swapTarget) return
+    setMeals((ms) => ms.map((m) => (m.uid !== swapTarget.mealUid ? m : {
+      ...m,
+      items: m.items.map((it) => (it.uid !== swapTarget.itemUid ? it : { ...it, swapOptions: fn(it.swapOptions ?? []) })),
+    })))
+  }
+  function addSwapToTarget(food: FoodRow) {
+    const target = swapTarget
+    if (!target) return
+    const isLiquid = !!food.is_liquid || food.serving_unit === 'ml'
+    const opt: SwapOption = {
+      food_id: food.id,
+      quantity: food.serving_size || 100,
+      unit: coerceSwapOptionUnit(food.serving_unit, isLiquid),
+      food: { name: food.name, calories: food.calories, protein_g: food.protein_g, carbs_g: food.carbs_g, fats_g: food.fats_g, serving_size: food.serving_size || 100, serving_unit: food.serving_unit ?? 'g', is_liquid: isLiquid, brand: food.brand ?? null },
+    }
+    patchTargetSwaps((opts) => (opts.some((o) => o.food_id === opt.food_id) ? opts : [...opts, opt]))
+  }
+  function updateSwap(swapFoodId: string, quantity: number, unit: 'g' | 'un' | 'ml') {
+    patchTargetSwaps((opts) => opts.map((o) => (o.food_id === swapFoodId ? { ...o, quantity, unit } : o)))
+  }
+  function removeSwap(swapFoodId: string) {
+    patchTargetSwaps((opts) => opts.filter((o) => o.food_id !== swapFoodId))
+  }
+
   function handleFoodSelected(food: FoodRow) {
+    if (searchMode === 'swap') { addSwapToTarget(food); return }
     const mealUid = activeMealRef.current
     if (!mealUid) return
     setMeals((ms) => ms.map((m) => (m.uid === mealUid ? { ...m, items: [...m.items, foodToDraftItem(food)] } : m)))
   }
+
+  const swapItem = swapTarget
+    ? draft.meals.find((m) => m.uid === swapTarget.mealUid)?.items.find((it) => it.uid === swapTarget.itemUid) ?? null
+    : null
+  const swapExcluded = swapItem ? [swapItem.food_id, ...(swapItem.swapOptions ?? []).map((o) => o.food_id)] : []
 
   function updateItemQty(mealUid: string, itemUid: string, raw: string) {
     const q = Number(raw.replace(/[^0-9.]/g, '')) || 0
@@ -95,6 +173,13 @@ export default function NutritionBuilderScreen() {
 
   async function save() {
     if (draft.name.trim().length < 2) { Alert.alert('Falta el nombre', isTemplate ? 'Indicá un nombre para la plantilla.' : 'Indicá un nombre para el plan.'); return }
+    if (draft.meals.length === 0) { Alert.alert('Sin comidas', 'Agregá al menos una comida antes de guardar.'); return }
+    const empties = draft.meals.filter((m) => m.items.length === 0)
+    if (empties.length > 0) {
+      setShowEmptyWarn(true)
+      Alert.alert('Comidas incompletas', `Completá al menos 1 alimento en: ${empties.map((m) => m.name || 'Sin nombre').join(', ')}.`)
+      return
+    }
     setSaving(true)
     const res = isTemplate ? await saveTemplate(draft) : await saveClientPlan(clientId!, draft)
     setSaving(false)
@@ -167,12 +252,18 @@ export default function NutritionBuilderScreen() {
 
           {/* Meals */}
           <Label theme={theme}>Comidas</Label>
-          {draft.meals.map((meal) => (
+          {draft.meals.map((meal, mealIdx) => (
             <MotiView key={meal.uid} from={{ opacity: 0, translateY: 8 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 220 }}
               style={[styles.mealCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
               <View style={styles.mealTop}>
                 <TextInput value={meal.name} onChangeText={(v) => updateMeal(meal.uid, { name: v })} placeholder="Nombre comida" placeholderTextColor={theme.mutedForeground}
                   style={[styles.mealName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} />
+                <TouchableOpacity onPress={() => moveMeal(meal.uid, -1)} disabled={mealIdx === 0} hitSlop={6} style={styles.moveBtn}>
+                  <ChevronUp size={17} color={mealIdx === 0 ? theme.muted : theme.mutedForeground} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => moveMeal(meal.uid, 1)} disabled={mealIdx === draft.meals.length - 1} hitSlop={6} style={styles.moveBtn}>
+                  <ChevronDown size={17} color={mealIdx === draft.meals.length - 1 ? theme.muted : theme.mutedForeground} />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => removeMeal(meal.uid)} hitSlop={8} activeOpacity={0.7}>
                   <Trash2 size={17} color={theme.destructive} />
                 </TouchableOpacity>
@@ -192,42 +283,67 @@ export default function NutritionBuilderScreen() {
               </ScrollView>
 
               {/* Items */}
-              {meal.items.map((it) => (
-                <View key={it.uid} style={[styles.itemRow, { borderColor: theme.border }]}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.name}</Text>
-                    {(() => {
-                      const f = it.serving_size > 0 ? it.quantity / it.serving_size : 0
-                      return (
+              {meal.items.map((it, itemIdx) => {
+                const im = draftItemMacros(it)
+                const swapCount = it.swapOptions?.length ?? 0
+                return (
+                  <View key={it.uid} style={{ gap: 6 }}>
+                    <View style={[styles.itemRow, { borderColor: theme.border }]}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.name}</Text>
                         <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                          {Math.round(it.calories * f)} kcal · P{Math.round(it.protein_g * f)} C{Math.round(it.carbs_g * f)} G{Math.round(it.fats_g * f)}
+                          {Math.round(im.calories)} kcal · P{Math.round(im.protein)} C{Math.round(im.carbs)} G{Math.round(im.fats)}
                         </Text>
-                      )
-                    })()}
+                      </View>
+                      <TextInput
+                        value={String(it.quantity)}
+                        onChangeText={(v) => updateItemQty(meal.uid, it.uid, v)}
+                        keyboardType="number-pad"
+                        textAlignVertical="center"
+                        style={[styles.qtyInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, fontFamily: theme.fontSans }]}
+                      />
+                      <View style={styles.unitWrap}>
+                        {unitsForFood(it).map((u) => {
+                          const active = it.unit === u
+                          return (
+                            <TouchableOpacity key={u} onPress={() => updateItemUnit(meal.uid, it.uid, u)} activeOpacity={0.8}
+                              style={[styles.unitChip, active && { backgroundColor: theme.primary }]}>
+                              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
+                            </TouchableOpacity>
+                          )
+                        })}
+                      </View>
+                      <TouchableOpacity onPress={() => removeItem(meal.uid, it.uid)} hitSlop={6} activeOpacity={0.7}>
+                        <X size={16} color={theme.mutedForeground} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.itemActionRow}>
+                      <TouchableOpacity onPress={() => openSwap(meal.uid, it.uid)} activeOpacity={0.8}
+                        style={[styles.swapBtn, { flex: 1, borderColor: swapCount ? theme.primary + '66' : theme.border, backgroundColor: swapCount ? theme.primary + '12' : 'transparent' }]}>
+                        <ArrowLeftRight size={13} color={swapCount ? theme.primary : theme.mutedForeground} />
+                        <Text style={[styles.swapBtnText, { color: swapCount ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+                          {swapCount ? `${swapCount} alternativa${swapCount !== 1 ? 's' : ''}` : 'Configurar cambios'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => moveItem(meal.uid, it.uid, -1)} disabled={itemIdx === 0} hitSlop={6} style={styles.moveBtn}>
+                        <ChevronUp size={16} color={itemIdx === 0 ? theme.muted : theme.mutedForeground} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => moveItem(meal.uid, it.uid, 1)} disabled={itemIdx === meal.items.length - 1} hitSlop={6} style={styles.moveBtn}>
+                        <ChevronDown size={16} color={itemIdx === meal.items.length - 1 ? theme.muted : theme.mutedForeground} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <TextInput
-                    value={String(it.quantity)}
-                    onChangeText={(v) => updateItemQty(meal.uid, it.uid, v)}
-                    keyboardType="number-pad"
-                    textAlignVertical="center"
-                    style={[styles.qtyInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, fontFamily: theme.fontSans }]}
-                  />
-                  <View style={styles.unitWrap}>
-                    {unitsForFood(it).map((u) => {
-                      const active = it.unit === u
-                      return (
-                        <TouchableOpacity key={u} onPress={() => updateItemUnit(meal.uid, it.uid, u)} activeOpacity={0.8}
-                          style={[styles.unitChip, active && { backgroundColor: theme.primary }]}>
-                          <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
-                        </TouchableOpacity>
-                      )
-                    })}
-                  </View>
-                  <TouchableOpacity onPress={() => removeItem(meal.uid, it.uid)} hitSlop={6} activeOpacity={0.7}>
-                    <X size={16} color={theme.mutedForeground} />
-                  </TouchableOpacity>
+                )
+              })}
+
+              {showEmptyWarn && meal.items.length === 0 ? (
+                <View style={[styles.warnBox, { borderColor: '#F9731640', backgroundColor: '#F9731614' }]}>
+                  <Text style={[styles.warnText, { color: '#F97316', fontFamily: 'Inter_600SemiBold' }]}>Comida vacía: agregá al menos 1 alimento.</Text>
                 </View>
-              ))}
+              ) : null}
+
+              <TextInput value={meal.notes} onChangeText={(v) => updateMeal(meal.uid, { notes: v })} placeholder="Nota para el alumno (opcional)" placeholderTextColor={theme.mutedForeground} maxLength={500} multiline
+                style={[styles.notesInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
 
               <TouchableOpacity onPress={() => openFoodSearch(meal.uid)} activeOpacity={0.8}
                 style={[styles.addFood, { borderColor: theme.primary + '55' }]}>
@@ -244,7 +360,14 @@ export default function NutritionBuilderScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <FoodSearchSheet ref={foodSheetRef} onSelect={handleFoodSelected} />
+      <FoodSearchSheet
+        ref={foodSheetRef}
+        onSelect={handleFoodSelected}
+        excludedIds={searchMode === 'swap' ? swapExcluded : undefined}
+        favoriteIds={!isTemplate && favoriteIds.size ? favoriteIds : undefined}
+        title={searchMode === 'swap' ? 'Agregar alternativa' : undefined}
+      />
+      <FoodSwapSheet ref={swapSheetRef} item={swapItem} onAddPress={onAddSwapPress} onUpdateSwap={updateSwap} onRemoveSwap={removeSwap} />
     </SafeAreaView>
   )
 }
@@ -308,6 +431,13 @@ const styles = StyleSheet.create({
   unitChip: { paddingHorizontal: 7, paddingVertical: 6, borderRadius: 7 },
   addFood: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 10 },
   addFoodText: { fontSize: 13 },
+  swapBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 9, paddingVertical: 8 },
+  swapBtnText: { fontSize: 11.5 },
+  itemActionRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  moveBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  warnBox: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  warnText: { fontSize: 12, lineHeight: 16 },
+  notesInput: { minHeight: 56, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingTop: 9, fontSize: 14, textAlignVertical: 'top' },
   addMeal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingVertical: 14, marginTop: 4 },
   addMealText: { fontSize: 14 },
 })

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Apple, BadgeCheck, CheckCircle2, Copy, Layers, Pencil, Plus, Trash2, Users, UtensilsCrossed } from 'lucide-react-native'
+import { Apple, BadgeCheck, CheckCircle2, ChevronRight, Copy, HelpCircle, Layers, Link2, Pencil, Plus, Trash2, Users, UtensilsCrossed } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
@@ -10,42 +10,47 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, MacroPill, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
-import { deletePlan, duplicatePlanToClient, getClientPlans, setPlanActive, type PlanSummary } from '../../../lib/nutrition-builder'
+import { deletePlan, duplicatePlanToClient, getClientPlans, listCoachFoods, setPlanActive, type PlanSummary } from '../../../lib/nutrition-builder'
 import { assignTemplateToClients, deleteTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
 
 interface Client { id: string; full_name: string }
+type HubTab = 'templates' | 'clients' | 'foods'
 
 export default function CoachNutricionScreen() {
   const { theme } = useTheme()
   const router = useRouter()
+  const [tab, setTab] = useState<HubTab>('templates')
   const [clients, setClients] = useState<Client[]>([])
+  const [templates, setTemplates] = useState<TemplateSummary[]>([])
+  const [foodsCount, setFoodsCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [plans, setPlans] = useState<PlanSummary[]>([])
-  const [loadingClients, setLoadingClients] = useState(true)
   const [loadingPlans, setLoadingPlans] = useState(false)
+
   const [copyPlan, setCopyPlan] = useState<PlanSummary | null>(null)
   const [copyBusy, setCopyBusy] = useState(false)
-  const [templatesOpen, setTemplatesOpen] = useState(false)
-  const [templates, setTemplates] = useState<TemplateSummary[]>([])
   const [assignTemplate, setAssignTemplate] = useState<TemplateSummary | null>(null)
   const [assignIds, setAssignIds] = useState<string[]>([])
   const [tplBusy, setTplBusy] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
 
-  useEffect(() => { loadClients() }, [])
+  useEffect(() => { loadAll() }, [])
 
-  async function loadClients() {
-    setLoadingClients(true)
+  async function loadAll() {
+    setLoading(true)
     const coach = await getCoachProfile()
-    if (!coach) { setLoadingClients(false); return }
-    const { data } = await supabase
-      .from('clients')
-      .select('id, full_name')
-      .eq('coach_id', coach.id)
-      .eq('is_archived', false)
-      .eq('is_active', true)
-      .order('full_name')
-    setClients(data ?? [])
-    setLoadingClients(false)
+    if (!coach) { setLoading(false); return }
+    const [{ data: cl }, tpl, foods] = await Promise.all([
+      supabase.from('clients').select('id, full_name').eq('coach_id', coach.id).eq('is_archived', false).eq('is_active', true).order('full_name'),
+      listTemplates(),
+      listCoachFoods().catch(() => []),
+    ])
+    setClients(cl ?? [])
+    setTemplates(tpl)
+    setFoodsCount(foods.length)
+    setLoading(false)
   }
 
   const loadPlans = useCallback(async (clientId: string) => {
@@ -60,7 +65,6 @@ export default function CoachNutricionScreen() {
     loadPlans(client.id)
   }
 
-  // Reload the selected client's plans when returning from the builder.
   useFocusEffect(useCallback(() => {
     if (selectedClient) loadPlans(selectedClient.id)
   }, [selectedClient, loadPlans]))
@@ -77,7 +81,6 @@ export default function CoachNutricionScreen() {
     if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo activar.'); return }
     loadPlans(selectedClient.id)
   }
-
   function confirmDelete(plan: PlanSummary) {
     if (!selectedClient) return
     Alert.alert('Eliminar plan', `¿Eliminar "${plan.name}"? No se puede deshacer.`, [
@@ -89,7 +92,6 @@ export default function CoachNutricionScreen() {
       } },
     ])
   }
-
   async function copyToClient(targetId: string) {
     if (!copyPlan) return
     setCopyBusy(true)
@@ -98,11 +100,6 @@ export default function CoachNutricionScreen() {
     setCopyPlan(null)
     if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo copiar.'); return }
     Alert.alert('Plan copiado', 'El plan quedó activo para el alumno elegido.')
-  }
-
-  async function openTemplates() {
-    setTemplatesOpen(true)
-    setTemplates(await listTemplates())
   }
   function confirmDeleteTemplate(t: TemplateSummary) {
     Alert.alert('Eliminar plantilla', `¿Eliminar "${t.name}"?`, [
@@ -126,118 +123,182 @@ export default function CoachNutricionScreen() {
     if (selectedClient) loadPlans(selectedClient.id)
   }
 
+  const TABS: { key: HubTab; label: string; icon: any }[] = [
+    { key: 'templates', label: 'Plantillas', icon: Layers },
+    { key: 'clients', label: 'Alumnos', icon: Users },
+    { key: 'foods', label: 'Alimentos', icon: Apple },
+  ]
+
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScreenHeader
-        title="Nutricion"
-        subtitle={selectedClient ? `Planes de ${selectedClient.full_name}` : 'Selecciona un alumno'}
+        title="Nutrición"
+        subtitle="Centro de protocolos y alimentos"
         trailing={
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity onPress={openTemplates} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border }]}>
-              <Layers size={18} color={theme.foreground} />
-            </TouchableOpacity>
-            {selectedClient ? (
-              <TouchableOpacity onPress={() => openBuilder()} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: theme.primary }]}>
-                <Plus size={20} color={theme.primaryForeground} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <TouchableOpacity onPress={() => setGuideOpen(true)} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: '#F59E0B22', borderWidth: 1, borderColor: '#F59E0B55' }]}>
+            <HelpCircle size={18} color="#F59E0B" />
+          </TouchableOpacity>
         }
       />
 
-      {loadingClients ? (
-        <EvaLoaderScreen subtitle="Cargando alumnos…" />
+      {loading ? (
+        <EvaLoaderScreen subtitle="Cargando nutrición…" />
       ) : (
         <View style={{ flex: 1 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
-            {clients.map((c) => {
-              const active = selectedClient?.id === c.id
+          {/* Stats */}
+          <View style={styles.statsRow}>
+            <Stat theme={theme} value={templates.length} label="Plantillas" />
+            <Stat theme={theme} value={clients.length} label="Alumnos" />
+            <Stat theme={theme} value={foodsCount} label="Alimentos" />
+          </View>
+
+          {/* Tabs */}
+          <View style={[styles.tabBar, { backgroundColor: theme.secondary }]}>
+            {TABS.map((t) => {
+              const on = tab === t.key
+              const Icon = t.icon
               return (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.clientChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary : theme.secondary, borderRadius: theme.radius.lg }]}
-                  onPress={() => selectClient(c)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
-                    {c.full_name}
-                  </Text>
+                <TouchableOpacity key={t.key} onPress={() => setTab(t.key)} activeOpacity={0.85}
+                  style={[styles.tab, on && { backgroundColor: theme.background }]}>
+                  <Icon size={15} color={on ? theme.primary : theme.mutedForeground} />
+                  <Text style={[styles.tabText, { color: on ? theme.foreground : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{t.label}</Text>
                 </TouchableOpacity>
               )
             })}
-          </ScrollView>
+          </View>
 
-          {!selectedClient ? (
-            <EmptyState icon={UtensilsCrossed} title="Elige un alumno" subtitle="Toca un nombre arriba para ver y crear sus planes de nutricion." />
-          ) : loadingPlans ? (
-            <EvaLoaderScreen subtitle="Cargando planes…" />
-          ) : plans.length === 0 ? (
+          {tab === 'templates' ? (
+            <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+              <Button label="Nueva plantilla" leftIcon={Plus} onPress={() => router.push('/coach/nutrition-builder?mode=template')} full />
+              {templates.length === 0 ? (
+                <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginTop: 8 }]}>Aún no tenés plantillas. Creá una para reutilizar planes entre alumnos.</Text>
+              ) : (
+                templates.map((t) => (
+                  <View key={t.id} style={[styles.tplCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
+                    <Text style={[styles.tplName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{t.name}</Text>
+                    <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{t.daily_calories ?? 0} kcal · {t.mealCount} comida{t.mealCount !== 1 ? 's' : ''}</Text>
+                    <View style={styles.tplActions}>
+                      <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => router.push(`/coach/nutrition-builder?templateId=${t.id}`)}>
+                        <Pencil size={14} color={theme.foreground} /><Text style={[styles.tplBtnText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => { setAssignIds([]); setAssignTemplate(t) }}>
+                        <Users size={14} color={theme.primary} /><Text style={[styles.tplBtnText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Asignar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => confirmDeleteTemplate(t)}>
+                        <Trash2 size={14} color={theme.destructive} /><Text style={[styles.tplBtnText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Borrar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          ) : tab === 'clients' ? (
             <View style={{ flex: 1 }}>
-              <EmptyState icon={Apple} title="Sin planes de nutricion" subtitle="Toca + para crear el primer plan de este alumno." />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
+                {clients.map((c) => {
+                  const active = selectedClient?.id === c.id
+                  return (
+                    <TouchableOpacity key={c.id} style={[styles.clientChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary : theme.secondary, borderRadius: theme.radius.lg }]}
+                      onPress={() => selectClient(c)} activeOpacity={0.8}>
+                      <Text style={[styles.chipText, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{c.full_name}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+
+              {!selectedClient ? (
+                <EmptyState icon={UtensilsCrossed} title="Elegí un alumno" subtitle="Tocá un nombre arriba para ver y crear sus planes." />
+              ) : loadingPlans ? (
+                <EvaLoaderScreen subtitle="Cargando planes…" />
+              ) : (
+                <FlatList
+                  data={plans}
+                  keyExtractor={(p) => p.id}
+                  ListHeaderComponent={
+                    <TouchableOpacity onPress={() => openBuilder()} activeOpacity={0.85} style={[styles.newPlanBtn, { borderColor: theme.primary + '55' }]}>
+                      <Plus size={16} color={theme.primary} />
+                      <Text style={[styles.newPlanText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Nuevo plan para {selectedClient.full_name}</Text>
+                    </TouchableOpacity>
+                  }
+                  ListEmptyComponent={<EmptyState icon={Apple} title="Sin planes" subtitle="Creá el primer plan de este alumno." />}
+                  renderItem={({ item, index }) => (
+                    <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 320, delay: Math.min(index * 50, 400) }}>
+                      <TouchableOpacity activeOpacity={0.85} onPress={() => openBuilder(item.id)}
+                        style={[styles.planCard, { backgroundColor: theme.card, borderColor: item.is_active ? theme.success : theme.border, borderWidth: item.is_active ? 2 : 1, borderRadius: theme.radius.xl }]}>
+                        <View style={styles.planTop}>
+                          <View style={styles.titleRow}>
+                            <Apple size={18} color={theme.primary} strokeWidth={1.75} />
+                            <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]} numberOfLines={2}>{item.name}</Text>
+                          </View>
+                          {item.is_active ? (
+                            <View style={[styles.activeBadge, { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm }]}>
+                              <BadgeCheck size={12} color={theme.success} /><Text style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>Activo</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        {/* Badge sincronizado / personalizado */}
+                        {item.template_id ? (
+                          item.is_custom ? (
+                            <View style={[styles.syncBadge, { borderColor: '#F59E0B55', backgroundColor: '#F59E0B14' }]}>
+                              <Pencil size={11} color="#F59E0B" /><Text style={[styles.syncText, { color: '#F59E0B' }]}>PERSONALIZADO</Text>
+                            </View>
+                          ) : (
+                            <View style={[styles.syncBadge, { borderColor: theme.success + '55', backgroundColor: theme.success + '14' }]}>
+                              <Link2 size={11} color={theme.success} /><Text style={[styles.syncText, { color: theme.success }]}>SINCRONIZADO</Text>
+                            </View>
+                          )
+                        ) : null}
+                        <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{item.mealCount} comida{item.mealCount !== 1 ? 's' : ''}</Text>
+                        {(item.daily_calories || item.protein_g || item.carbs_g || item.fats_g) ? (
+                          <View style={styles.macrosRow}>
+                            {item.daily_calories != null && <MacroPill label="kcal" value={item.daily_calories} color={theme.primary} />}
+                            {item.protein_g != null && <MacroPill label="P" value={item.protein_g} color="#EF4444" />}
+                            {item.carbs_g != null && <MacroPill label="C" value={item.carbs_g} color="#F59E0B" />}
+                            {item.fats_g != null && <MacroPill label="G" value={item.fats_g} color="#8B5CF6" />}
+                          </View>
+                        ) : null}
+                        <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
+                          {!item.is_active ? (
+                            <TouchableOpacity onPress={() => activate(item)} activeOpacity={0.8} style={styles.actionBtn}>
+                              <CheckCircle2 size={15} color={theme.success} /><Text style={[styles.actionText, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Activar</Text>
+                            </TouchableOpacity>
+                          ) : <View style={styles.actionBtn} />}
+                          <TouchableOpacity onPress={() => setCopyPlan(item)} activeOpacity={0.8} style={styles.actionBtn}>
+                            <Copy size={15} color={theme.primary} /><Text style={[styles.actionText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Copiar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => confirmDelete(item)} activeOpacity={0.8} style={styles.actionBtn}>
+                            <Trash2 size={15} color={theme.destructive} /><Text style={[styles.actionText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Eliminar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    </MotiView>
+                  )}
+                  contentContainerStyle={styles.planList}
+                  showsVerticalScrollIndicator={false}
+                />
+              )}
             </View>
           ) : (
-            <FlatList
-              data={plans}
-              keyExtractor={(p) => p.id}
-              renderItem={({ item, index }) => (
-                <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 320, delay: Math.min(index * 50, 400) }}>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => openBuilder(item.id)}
-                    style={[styles.planCard, { backgroundColor: theme.card, borderColor: item.is_active ? theme.success : theme.border, borderWidth: item.is_active ? 2 : 1, borderRadius: theme.radius.xl }]}>
-                    <View style={styles.planTop}>
-                      <View style={styles.titleRow}>
-                        <Apple size={18} color={theme.primary} strokeWidth={1.75} />
-                        <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]} numberOfLines={2}>{item.name}</Text>
-                      </View>
-                      {item.is_active ? (
-                        <View style={[styles.activeBadge, { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm }]}>
-                          <BadgeCheck size={12} color={theme.success} />
-                          <Text style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>Activo</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                      {item.mealCount} comida{item.mealCount !== 1 ? 's' : ''}
-                    </Text>
-                    {(item.daily_calories || item.protein_g || item.carbs_g || item.fats_g) ? (
-                      <View style={styles.macrosRow}>
-                        {item.daily_calories != null && <MacroPill label="kcal" value={item.daily_calories} color={theme.primary} />}
-                        {item.protein_g != null && <MacroPill label="P" value={item.protein_g} color="#EF4444" />}
-                        {item.carbs_g != null && <MacroPill label="C" value={item.carbs_g} color="#F59E0B" />}
-                        {item.fats_g != null && <MacroPill label="G" value={item.fats_g} color="#8B5CF6" />}
-                      </View>
-                    ) : null}
-                    <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
-                      {!item.is_active ? (
-                        <TouchableOpacity onPress={() => activate(item)} activeOpacity={0.8} style={styles.actionBtn}>
-                          <CheckCircle2 size={15} color={theme.success} />
-                          <Text style={[styles.actionText, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Activar</Text>
-                        </TouchableOpacity>
-                      ) : <View style={styles.actionBtn} />}
-                      <TouchableOpacity onPress={() => setCopyPlan(item)} activeOpacity={0.8} style={styles.actionBtn}>
-                        <Copy size={15} color={theme.primary} />
-                        <Text style={[styles.actionText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Copiar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => confirmDelete(item)} activeOpacity={0.8} style={styles.actionBtn}>
-                        <Trash2 size={15} color={theme.destructive} />
-                        <Text style={[styles.actionText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Eliminar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
-                </MotiView>
-              )}
-              contentContainerStyle={styles.planList}
-              showsVerticalScrollIndicator={false}
-            />
+            <View style={styles.tabBody}>
+              <TouchableOpacity onPress={() => router.push('/coach/foods')} activeOpacity={0.85}
+                style={[styles.foodsCta, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+                <View style={[styles.foodsIcon, { backgroundColor: theme.primary + '1A' }]}><Apple size={22} color={theme.primary} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Biblioteca de alimentos</Text>
+                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{foodsCount} alimento{foodsCount !== 1 ? 's' : ''} · crear / editar / borrar</Text>
+                </View>
+                <ChevronRight size={20} color={theme.mutedForeground} />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       )}
 
+      {/* Copiar plan a otro alumno */}
       <NativeDialog open={!!copyPlan} title="Copiar plan a otro alumno" onClose={() => setCopyPlan(null)}>
         <View style={{ gap: 8 }}>
-          <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Se crea como plan activo del alumno elegido (su plan anterior queda inactivo).
-          </Text>
+          <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Se crea como plan activo del alumno elegido (su plan anterior queda inactivo).</Text>
           {clients.filter((c) => c.id !== selectedClient?.id).map((c) => (
             <TouchableOpacity key={c.id} disabled={copyBusy} onPress={() => copyToClient(c.id)} activeOpacity={0.8}
               style={[styles.copyRow, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg, opacity: copyBusy ? 0.5 : 1 }]}>
@@ -245,50 +306,13 @@ export default function CoachNutricionScreen() {
               <Copy size={15} color={theme.primary} />
             </TouchableOpacity>
           ))}
-          {clients.filter((c) => c.id !== selectedClient?.id).length === 0 ? (
-            <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No hay otros alumnos.</Text>
-          ) : null}
         </View>
       </NativeDialog>
 
-      {/* Plantillas de nutrición */}
-      <NativeDialog open={templatesOpen} title="Plantillas de nutrición" onClose={() => setTemplatesOpen(false)}>
-        <View style={{ gap: 10 }}>
-          <Button label="Nueva plantilla" leftIcon={Plus} onPress={() => { setTemplatesOpen(false); router.push('/coach/nutrition-builder?mode=template') }} full />
-          {templates.length === 0 ? (
-            <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Aún no tenés plantillas. Creá una para reutilizar planes entre alumnos.</Text>
-          ) : (
-            <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
-              {templates.map((t) => (
-                <View key={t.id} style={[styles.tplCard, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
-                  <Text style={[styles.tplName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{t.name}</Text>
-                  <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                    {t.daily_calories ?? 0} kcal · {t.mealCount} comida{t.mealCount !== 1 ? 's' : ''}
-                  </Text>
-                  <View style={styles.tplActions}>
-                    <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => { setTemplatesOpen(false); router.push(`/coach/nutrition-builder?templateId=${t.id}`) }}>
-                      <Pencil size={14} color={theme.foreground} /><Text style={[styles.tplBtnText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Editar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => { setTemplatesOpen(false); setAssignIds([]); setAssignTemplate(t) }}>
-                      <Users size={14} color={theme.primary} /><Text style={[styles.tplBtnText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Asignar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => confirmDeleteTemplate(t)}>
-                      <Trash2 size={14} color={theme.destructive} /><Text style={[styles.tplBtnText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Borrar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-      </NativeDialog>
-
-      {/* Asignar plantilla a alumnos */}
+      {/* Asignar plantilla */}
       <NativeDialog open={!!assignTemplate} title={`Asignar "${assignTemplate?.name ?? ''}"`} onClose={() => setAssignTemplate(null)}>
         <View style={{ gap: 8 }}>
-          <Text style={[styles.copyHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Cada alumno elegido recibe esta plantilla como plan activo (el anterior queda inactivo).
-          </Text>
+          <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cada alumno elegido recibe esta plantilla como plan activo (queda SINCRONIZADO).</Text>
           <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
             {clients.map((c) => {
               const on = assignIds.includes(c.id)
@@ -304,16 +328,54 @@ export default function CoachNutricionScreen() {
           <Button label={tplBusy ? 'Asignando...' : `Asignar a ${assignIds.length} alumno(s)`} onPress={doAssign} disabled={tplBusy || assignIds.length === 0} full />
         </View>
       </NativeDialog>
+
+      {/* Guía: logística synced/custom */}
+      <NativeDialog open={guideOpen} title="Cómo funciona" onClose={() => setGuideOpen(false)}>
+        <View style={{ gap: 12 }}>
+          <GuideRow theme={theme} color={theme.primary} title="1. Plantillas (moldes)" text="Son moldes reutilizables. No pertenecen a un alumno hasta que las asignás. Si editás una plantilla, los alumnos SINCRONIZADOS se actualizan con ese molde." />
+          <GuideRow theme={theme} color={theme.success} title="2. Alumnos (planes activos)" text="Al asignar una plantilla, el plan del alumno queda SINCRONIZADO con el molde." />
+          <GuideRow theme={theme} color="#F59E0B" title="3. Edición individual (custom)" text="Si ajustás el plan solo para un alumno, pasa a PERSONALIZADO y deja de seguir el molde (editar la plantilla ya no lo cambia)." />
+        </View>
+      </NativeDialog>
     </SafeAreaView>
+  )
+}
+
+function Stat({ theme, value, label }: { theme: any; value: number; label: string }) {
+  return (
+    <View style={[styles.stat, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+      <Text style={[styles.statValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{label}</Text>
+    </View>
+  )
+}
+
+function GuideRow({ theme, color, title, text }: { theme: any; color: string; title: string; text: string }) {
+  return (
+    <View style={{ gap: 3 }}>
+      <Text style={[styles.guideTitle, { color, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text>
+      <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{text}</Text>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  pickerRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
+  statsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10 },
+  stat: { flex: 1, borderWidth: 1, paddingVertical: 10, alignItems: 'center', gap: 2 },
+  statValue: { fontSize: 20 },
+  statLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  tabBar: { flexDirection: 'row', gap: 3, marginHorizontal: 16, padding: 4, borderRadius: 14, marginBottom: 8 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 10 },
+  tabText: { fontSize: 12 },
+  tabBody: { paddingHorizontal: 16, paddingBottom: 110, gap: 10 },
+  hint: { fontSize: 12, lineHeight: 17 },
+  pickerRow: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
   clientChip: { paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, maxWidth: 180 },
   chipText: { fontSize: 13, letterSpacing: 0.3 },
+  newPlanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 12, marginBottom: 10 },
+  newPlanText: { fontSize: 13 },
   planList: { paddingHorizontal: 16, paddingBottom: 110, gap: 10 },
   planCard: { padding: 16, gap: 8 },
   planTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
@@ -321,12 +383,13 @@ const styles = StyleSheet.create({
   planName: { fontSize: 16, letterSpacing: -0.2, flex: 1 },
   activeBadge: { paddingHorizontal: 8, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 4 },
   activeBadgeText: { fontSize: 11, letterSpacing: 0.3 },
+  syncBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  syncText: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   planSub: { fontSize: 13 },
   macrosRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
   actionRow: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, marginTop: 6, paddingTop: 10, gap: 10 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   actionText: { fontSize: 13 },
-  copyHint: { fontSize: 12, lineHeight: 17 },
   copyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
   copyName: { fontSize: 14, flex: 1 },
   tplCard: { borderWidth: 1, padding: 12, gap: 4 },
@@ -334,4 +397,8 @@ const styles = StyleSheet.create({
   tplActions: { flexDirection: 'row', gap: 14, marginTop: 6 },
   tplBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   tplBtnText: { fontSize: 13 },
+  foodsCta: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 16 },
+  foodsIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  foodsTitle: { fontSize: 15 },
+  guideTitle: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.3 },
 })

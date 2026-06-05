@@ -34,6 +34,24 @@ export interface FoodRow {
   brand: string | null
 }
 
+/** Alternativa de intercambio para un alimento (1:1 con web `food_items.swap_options`). */
+export interface SwapOption {
+  food_id: string
+  quantity: number
+  unit: 'g' | 'un' | 'ml'
+  food: {
+    name: string
+    calories: number
+    protein_g: number
+    carbs_g: number
+    fats_g: number
+    serving_size: number
+    serving_unit: string | null
+    is_liquid?: boolean | null
+    brand?: string | null
+  }
+}
+
 export interface DraftFoodItem {
   uid: string
   food_id: string
@@ -48,6 +66,7 @@ export interface DraftFoodItem {
   serving_size: number
   serving_unit: string
   is_liquid: boolean
+  swapOptions: SwapOption[]
 }
 
 export interface DraftMeal {
@@ -80,6 +99,8 @@ export interface PlanSummary {
   carbs_g: number | null
   fats_g: number | null
   is_active: boolean
+  is_custom?: boolean | null
+  template_id?: string | null
   mealCount: number
 }
 
@@ -114,7 +135,60 @@ export function foodToDraftItem(food: FoodRow): DraftFoodItem {
     serving_size: food.serving_size || 100,
     serving_unit: food.serving_unit || 'g',
     is_liquid: !!food.is_liquid || food.serving_unit === 'ml',
+    swapOptions: [],
   }
+}
+
+/** Parsea el JSON `food_items.swap_options` (shape web) a SwapOption[]. */
+export function parseSwapOptions(raw: unknown): SwapOption[] {
+  if (!Array.isArray(raw)) return []
+  const out: SwapOption[] = []
+  for (const o of raw) {
+    if (!o || typeof o !== 'object') continue
+    const x = o as Record<string, any>
+    if (!x.food_id) continue
+    const isLiquid = typeof x.is_liquid === 'boolean' ? x.is_liquid : String(x.serving_unit ?? '').toLowerCase() === 'ml'
+    out.push({
+      food_id: String(x.food_id),
+      quantity: Number(x.quantity) || 0,
+      unit: coerceSwapUnit(x.unit, isLiquid),
+      food: {
+        name: String(x.name ?? 'Alimento'),
+        calories: Number(x.calories) || 0,
+        protein_g: Number(x.protein_g) || 0,
+        carbs_g: Number(x.carbs_g) || 0,
+        fats_g: Number(x.fats_g) || 0,
+        serving_size: Number(x.serving_size) || 100,
+        serving_unit: x.serving_unit ?? null,
+        is_liquid: isLiquid,
+        brand: x.brand ?? null,
+      },
+    })
+  }
+  return out
+}
+
+function coerceSwapUnit(unit: unknown, isLiquid: boolean): 'g' | 'un' | 'ml' {
+  const allowed = isLiquid ? ['ml', 'un'] : ['g', 'un']
+  const u = String(unit ?? '').toLowerCase()
+  return (allowed.includes(u) ? u : isLiquid ? 'ml' : 'g') as 'g' | 'un' | 'ml'
+}
+
+/** Serializa SwapOption[] al JSON que guarda la web en `food_items.swap_options`. */
+export function serializeSwapOptions(opts: SwapOption[] | undefined): any[] {
+  return (opts ?? []).map((o) => ({
+    food_id: o.food_id,
+    name: o.food.name,
+    calories: o.food.calories,
+    protein_g: o.food.protein_g,
+    carbs_g: o.food.carbs_g,
+    fats_g: o.food.fats_g,
+    serving_size: o.food.serving_size,
+    serving_unit: o.food.serving_unit ?? null,
+    quantity: o.quantity,
+    unit: coerceSwapUnit(o.unit, !!o.food.is_liquid || o.food.serving_unit === 'ml'),
+    is_liquid: !!o.food.is_liquid || o.food.serving_unit === 'ml',
+  }))
 }
 
 /** Live macro totals from the draft meals (scaled by quantity / serving_size). */
@@ -122,14 +196,24 @@ export function draftTotals(meals: DraftMeal[]): { kcal: number; protein: number
   let kcal = 0, protein = 0, carbs = 0, fats = 0
   for (const meal of meals) {
     for (const it of meal.items) {
-      const factor = it.serving_size > 0 ? it.quantity / it.serving_size : 0
-      kcal += it.calories * factor
-      protein += it.protein_g * factor
-      carbs += it.carbs_g * factor
-      fats += it.fats_g * factor
+      // Fórmula canónica (1:1 alumno/web): g/ml → qty/100; un → qty·serving/100.
+      const m = draftItemMacros(it)
+      kcal += m.calories; protein += m.protein; carbs += m.carbs; fats += m.fats
     }
   }
   return { kcal: Math.round(kcal), protein: Math.round(protein), carbs: Math.round(carbs), fats: Math.round(fats) }
+}
+
+/** Macros de un ítem del builder según cantidad+unidad (canónico, 1:1 con `calculateFoodItemMacros`). */
+export function draftItemMacros(it: { quantity: number; unit: string; calories: number; protein_g: number; carbs_g: number; fats_g: number; serving_size: number }): { calories: number; protein: number; carbs: number; fats: number } {
+  const u = (it.unit || 'g').toLowerCase()
+  const factor = u === 'g' || u === 'ml' ? it.quantity / 100 : (it.quantity * (it.serving_size || 100)) / 100
+  return { calories: it.calories * factor, protein: it.protein_g * factor, carbs: it.carbs_g * factor, fats: it.fats_g * factor }
+}
+
+/** Macros de una opción de intercambio (misma fórmula canónica). */
+export function swapMacros(opt: SwapOption): { calories: number; protein: number; carbs: number; fats: number } {
+  return draftItemMacros({ quantity: opt.quantity, unit: opt.unit, calories: opt.food.calories, protein_g: opt.food.protein_g, carbs_g: opt.food.carbs_g, fats_g: opt.food.fats_g, serving_size: opt.food.serving_size || 100 })
 }
 
 export const FOOD_CATEGORIES = [
@@ -235,7 +319,7 @@ export async function searchFoods(query: string): Promise<FoodRow[]> {
 export async function getClientPlans(clientId: string): Promise<PlanSummary[]> {
   const { data } = await supabase
     .from('nutrition_plans')
-    .select('id, name, daily_calories, protein_g, carbs_g, fats_g, is_active, nutrition_meals ( id )')
+    .select('id, name, daily_calories, protein_g, carbs_g, fats_g, is_active, is_custom, template_id, nutrition_meals ( id )')
     .eq('client_id', clientId)
     .order('is_active', { ascending: false })
     .order('created_at', { ascending: false })
@@ -248,8 +332,16 @@ export async function getClientPlans(clientId: string): Promise<PlanSummary[]> {
     carbs_g: p.carbs_g,
     fats_g: p.fats_g,
     is_active: p.is_active,
+    is_custom: p.is_custom ?? null,
+    template_id: p.template_id ?? null,
     mealCount: p.nutrition_meals?.length ?? 0,
   }))
+}
+
+/** IDs de alimentos favoritos del alumno (read-only, para resaltar en el buscador). */
+export async function getClientFoodFavorites(clientId: string): Promise<Set<string>> {
+  const { data } = await supabase.from('client_food_favorites').select('food_id').eq('client_id', clientId)
+  return new Set((data ?? []).map((r: any) => r.food_id as string))
 }
 
 export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
@@ -262,7 +354,7 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
 
   const { data: meals } = await supabase
     .from('nutrition_meals')
-    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid ) )')
+    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, swap_options, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid ) )')
     .eq('plan_id', planId)
     .order('order_index', { ascending: true })
 
@@ -286,6 +378,7 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
       serving_size: fi.foods?.serving_size ?? 100,
       serving_unit: fi.foods?.serving_unit ?? 'g',
       is_liquid: !!fi.foods?.is_liquid || fi.foods?.serving_unit === 'ml',
+      swapOptions: parseSwapOptions(fi.swap_options),
     })),
   }))
 
@@ -390,7 +483,7 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
 async function insertItems(mealId: string, items: DraftFoodItem[]): Promise<void> {
   if (items.length === 0) return
   await supabase.from('food_items').insert(
-    items.map((it) => ({ meal_id: mealId, food_id: it.food_id, quantity: Math.round(it.quantity) || 0, unit: it.unit }))
+    items.map((it) => ({ meal_id: mealId, food_id: it.food_id, quantity: Math.round(it.quantity) || 0, unit: it.unit, swap_options: serializeSwapOptions(it.swapOptions) }))
   )
 }
 

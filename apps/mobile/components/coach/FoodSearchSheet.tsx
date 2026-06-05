@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetFlatList, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { Plus, Search } from 'lucide-react-native'
+import { Plus, Search, Star } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import {
   FOOD_CATEGORIES,
@@ -14,15 +14,30 @@ import {
 
 interface Props {
   onSelect: (food: FoodRow) => void
+  /** Oculta estos alimentos (p. ej. el base + swaps ya agregados). */
+  excludedIds?: string[]
+  /** Resalta ★ y ordena arriba los favoritos del alumno. */
+  favoriteIds?: Set<string>
+  /** Título opcional del header (p. ej. "Agregar alternativa"). */
+  title?: string
 }
 
-export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function FoodSearchSheet({ onSelect }, ref) {
+export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function FoodSearchSheet({ onSelect, excludedIds, favoriteIds, title }, ref) {
   const { theme } = useTheme()
   const [mode, setMode] = useState<'search' | 'create'>('search')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
   const [loading, setLoading] = useState(false)
   const snapPoints = useMemo(() => ['75%', '95%'], [])
+
+  const displayed = useMemo(() => {
+    const ex = excludedIds && excludedIds.length ? new Set(excludedIds) : null
+    let list = ex ? results.filter((r) => !ex.has(r.id)) : results
+    if (favoriteIds && favoriteIds.size) {
+      list = [...list].sort((a, b) => (favoriteIds.has(b.id) ? 1 : 0) - (favoriteIds.has(a.id) ? 1 : 0))
+    }
+    return list
+  }, [results, excludedIds, favoriteIds])
 
   const run = useCallback(async (text: string) => {
     setQuery(text)
@@ -52,6 +67,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
     >
       {mode === 'search' ? (
         <>
+          {title ? <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text> : null}
           <View style={styles.headerRow}>
             <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
               <Search size={16} color={theme.mutedForeground} />
@@ -65,7 +81,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
           </View>
 
           <BottomSheetFlatList
-            data={results}
+            data={displayed}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
@@ -74,18 +90,24 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
                 {query.length >= 2 ? `Sin resultados. Toca + para crear "${query}".` : 'Escribí para buscar, o toca + para crear.'}
               </Text>
             ) : null}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={[styles.row, { borderColor: theme.border }]} onPress={() => pick(item)} activeOpacity={0.7}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
-                    {item.name}{item.brand ? ` · ${item.brand}` : ''}
-                  </Text>
-                  <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                    {item.calories} kcal · P{item.protein_g} C{item.carbs_g} G{item.fats_g} / {item.serving_size}{item.serving_unit}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
+            renderItem={({ item }) => {
+              const fav = favoriteIds?.has(item.id)
+              return (
+                <TouchableOpacity style={[styles.row, { borderColor: fav ? theme.primary + '66' : theme.border, backgroundColor: fav ? theme.primary + '0D' : 'transparent' }]} onPress={() => pick(item)} activeOpacity={0.7}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.nameRow}>
+                      {fav ? <Star size={13} color={theme.primary} fill={theme.primary} /> : null}
+                      <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
+                        {item.name}{item.brand ? ` · ${item.brand}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                      {item.calories} kcal · P{item.protein_g} C{item.carbs_g} G{item.fats_g} / {item.serving_size}{item.serving_unit}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )
+            }}
           />
         </>
       ) : (
@@ -199,8 +221,10 @@ const styles = StyleSheet.create({
   createBtn: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: 16, paddingBottom: 24, gap: 6 },
   empty: { textAlign: 'center', fontSize: 14, marginTop: 24, paddingHorizontal: 16 },
+  sheetTitle: { fontSize: 15, marginHorizontal: 16, marginBottom: 8 },
   row: { paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderRadius: 10 },
-  foodName: { fontSize: 14 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  foodName: { fontSize: 14, flexShrink: 1 },
   foodMacros: { fontSize: 12, marginTop: 3 },
   form: { paddingHorizontal: 16, paddingBottom: 40, gap: 12 },
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
