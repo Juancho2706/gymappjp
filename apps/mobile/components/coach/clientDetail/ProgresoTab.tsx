@@ -143,7 +143,7 @@ function BmiBar({ bmi }: { bmi: number }) {
           const w = ((seg.upTo - lo) / (BMI_MAX - BMI_MIN)) * 100
           return <View key={i} style={{ width: `${w}%`, backgroundColor: seg.color }} />
         })}
-        <View style={[styles.bmiMarker, { left: `${pct * 100}%`, borderColor: theme.background }]} />
+        <View style={[styles.bmiMarker, { left: `${pct * 100}%` }]} />
       </View>
       <View style={styles.bmiLabels}>
         <Text style={[styles.bmiLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Bajo</Text>
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   tipMeta: { fontSize: 12 },
   bmiValue: { fontSize: 30, letterSpacing: -0.5 },
   bmiTrack: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', position: 'relative' },
-  bmiMarker: { position: 'absolute', top: -3, width: 4, height: 18, borderRadius: 2, backgroundColor: '#111', borderWidth: 1, marginLeft: -2 },
+  bmiMarker: { position: 'absolute', top: -4, width: 5, height: 20, borderRadius: 3, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#0F172A', marginLeft: -2.5 },
   bmiLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   bmiLabel: { fontSize: 9.5 },
   compRow: { flexDirection: 'row', gap: 14 },

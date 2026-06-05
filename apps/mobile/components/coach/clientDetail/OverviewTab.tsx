@@ -99,6 +99,7 @@ export function OverviewTab({
       <View style={cd.grid2}>
         <MetricBox value={`${bestStreak}d`} label="Mejor racha" color="#F59E0B" />
         <MetricBox value={String(sessions30d)} label="Sesiones 30d" />
+        <MetricBox value={String(workoutDates371.length)} label="Entrenos (año)" />
         <MetricBox value={`${compliance.nutritionWeeklyAvgPct}%`} label="Adherencia" />
         <MetricBox value={delta30 != null ? `${delta30 > 0 ? '+' : ''}${delta30} kg` : '—'} label="Δ peso 30d" color={delta30 == null ? undefined : delta30 > 0 ? '#EF4444' : theme.success} />
         <MetricBox value={currentWeek && activeProgram ? `${currentWeek}/${activeProgram.weeks_to_repeat}` : '—'} label="Semana plan" />

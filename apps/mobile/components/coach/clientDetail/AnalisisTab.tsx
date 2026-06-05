@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Activity, AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Dumbbell, Radar, TrendingUp } from 'lucide-react-native'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -20,7 +20,7 @@ import {
   detectVolumeImbalances,
   type ExerciseStrengthSeries,
 } from '../../../lib/profile-analytics'
-import type { ActivityDay, ClientDayDetail, CoachClientDetailData } from '../../../lib/coach-client-detail'
+import type { ClientDayDetail, CoachClientDetailData } from '../../../lib/coach-client-detail'
 
 export function AnalisisTab({
   data,
@@ -36,26 +36,29 @@ export function AnalisisTab({
   dayLoading: boolean
 }) {
   const { theme } = useTheme()
-  const { workoutLogs, muscleVolume } = data
+  const { workoutLogs, muscleVolume, muscleVolumeReps, hasTrained, workoutDates371 } = data
 
   const prs = useMemo(() => findWeeklyWeightPRs(workoutLogs), [workoutLogs])
   const strengthCards = useMemo(() => selectStrengthCardExercises(workoutLogs, 4), [workoutLogs])
   const tonnage = useMemo(() => buildDailyTonnageSeries(workoutLogs, 21), [workoutLogs])
   const imbalances = useMemo(() => detectVolumeImbalances(muscleVolume), [muscleVolume])
   const maxVolume = Math.max(1, ...muscleVolume.map((r) => r.volume))
+  const maxSets = Math.max(1, ...muscleVolumeReps.map((r) => r.sets))
 
   const tonnagePoints: BarComposedPoint[] = tonnage.map((p, i) => ({ i, bar: p.tonnage, avg: p.movingAvg ?? p.tonnage, label: p.label }))
 
-  const hasData = workoutLogs.length > 0 || muscleVolume.length > 0
-  if (!hasData) {
-    return <EmptyState icon={Dumbbell} title="Sin entrenamientos" subtitle="Aún no hay logs de entrenamiento registrados." />
+  // ¿Hay datos con peso? Si no, caemos a volumen por series (calistenia/cardio).
+  const hasWeighted = workoutLogs.length > 0 || muscleVolume.length > 0
+
+  if (!hasTrained) {
+    return <EmptyState icon={Dumbbell} title="Sin entrenamientos" subtitle="Este alumno aún no registra entrenamientos." />
   }
 
   return (
     <View style={{ gap: 14 }}>
       <WeeklyPRBanner prs={prs} />
 
-      {/* Strength cards por ejercicio */}
+      {/* Strength cards por ejercicio (solo con peso) */}
       {strengthCards.length ? (
         <View style={{ gap: 12 }}>
           <Text style={[cd.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Fuerza por ejercicio (1RM estimado)</Text>
@@ -63,7 +66,7 @@ export function AnalisisTab({
         </View>
       ) : null}
 
-      {/* Radar muscular 30d */}
+      {/* Radar muscular 30d (con peso) */}
       {muscleVolume.length >= 3 ? (
         <StatCard>
           <CardHeader icon={Radar} title="Balance muscular (30d)" />
@@ -71,7 +74,7 @@ export function AnalisisTab({
         </StatCard>
       ) : null}
 
-      {/* Volumen por grupo + alertas de desbalance */}
+      {/* Volumen por grupo (con peso) + alertas de desbalance */}
       {muscleVolume.length ? (
         <StatCard>
           <CardHeader icon={BarChart3} title="Volumen por grupo (30d)" />
@@ -95,8 +98,8 @@ export function AnalisisTab({
         </StatCard>
       ) : null}
 
-      {/* Tonelaje (barras + media móvil) */}
-      {tonnagePoints.length >= 1 ? (
+      {/* Tonelaje (con peso) */}
+      {hasWeighted && tonnagePoints.length >= 1 ? (
         <StatCard>
           <CardHeader icon={TrendingUp} title="Tonelaje diario + media móvil 7" />
           <BarComposed points={tonnagePoints} barColor={theme.primary} lineColor="#F59E0B" suffix=" kg" />
@@ -104,9 +107,26 @@ export function AnalisisTab({
         </StatCard>
       ) : null}
 
-      {/* Historial de sesiones */}
+      {/* Volumen por SERIES — fallback sin peso (calistenia/cardio) */}
+      {!hasWeighted && muscleVolumeReps.length ? (
+        <StatCard>
+          <CardHeader icon={BarChart3} title="Volumen por grupo · series (30d)" />
+          {muscleVolumeReps.slice(0, 7).map((row) => (
+            <View key={row.muscleGroup} style={{ gap: 6 }}>
+              <View style={cd.row}>
+                <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{row.muscleGroup}</Text>
+                <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{row.sets} series · {row.reps} reps</Text>
+              </View>
+              <ProgressBar value={row.sets / maxSets} color={theme.primary} height={6} />
+            </View>
+          ))}
+          <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Este alumno entrena sin carga registrada — se mide por series y reps.</Text>
+        </StatCard>
+      ) : null}
+
+      {/* Historial de sesiones (todo el año) */}
       <SessionHistory
-        activity={data.activity}
+        workoutDates={workoutDates371}
         selectedDate={selectedDate}
         onSelectDate={onSelectDate}
         dayDetail={dayDetail}
@@ -118,10 +138,12 @@ export function AnalisisTab({
 
 function StrengthCard({ series }: { series: ExerciseStrengthSeries }) {
   const { theme } = useTheme()
+  const [active, setActive] = useState<number | null>(null)
   const trend = strengthTrendDeltaKg(series.series)
   const peakIdx = maxOneRMIndex(series.series)
   const peak = series.series[peakIdx]
   const points: AreaPoint[] = series.series.map((p, i) => ({ i, y: p.oneRm, label: p.label }))
+  const sel = active != null && active >= 0 && active < series.series.length ? series.series[active] : null
 
   return (
     <StatCard>
@@ -129,10 +151,15 @@ function StrengthCard({ series }: { series: ExerciseStrengthSeries }) {
         trend != null ? <Pill label={`${trend > 0 ? '▲ +' : trend < 0 ? '▼ ' : ''}${trend} kg`} tone={trend > 0 ? 'success' : trend < 0 ? 'danger' : undefined} /> : null
       } />
       {points.length >= 2 ? (
-        <AreaTrend points={points} color="#06B6D4" suffix=" kg" decimals={1} height={150} />
+        <AreaTrend points={points} color="#06B6D4" suffix=" kg" decimals={1} height={150} onActiveIndex={setActive} />
       ) : (
         <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Necesita más sesiones para graficar.</Text>
       )}
+      {sel ? (
+        <Text style={[cd.sub, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+          {sel.label} · {sel.weightKg} kg × {sel.reps} → 1RM {sel.oneRm} kg
+        </Text>
+      ) : null}
       <View style={cd.grid2}>
         {peak ? <MetricBox value={`${peak.oneRm} kg`} label="Pico 1RM" sub={peak.label} color="#06B6D4" /> : null}
         <MetricBox value={`${series.series.length}`} label="Sesiones" />
@@ -142,23 +169,25 @@ function StrengthCard({ series }: { series: ExerciseStrengthSeries }) {
   )
 }
 
-function SessionHistory({ activity, selectedDate, onSelectDate, dayDetail, loading }: {
-  activity: ActivityDay[]
+function SessionHistory({ workoutDates, selectedDate, onSelectDate, dayDetail, loading }: {
+  workoutDates: string[]
   selectedDate: string
   onSelectDate: (date: string) => void
   dayDetail: ClientDayDetail | null
   loading: boolean
 }) {
   const { theme } = useTheme()
+  // Días con entreno, más reciente primero (todo el año).
   const sessions = useMemo(
-    () => [...activity].filter((d) => d.workout).sort((a, b) => a.date.localeCompare(b.date)),
-    [activity]
+    () => [...new Set(workoutDates)].sort((a, b) => b.localeCompare(a)),
+    [workoutDates]
   )
-  const sidx = sessions.findIndex((d) => d.date === selectedDate)
+  const sidx = sessions.findIndex((d) => d === selectedDate)
+  // go(1) = ir a sesión más vieja (index+1); go(-1) = más reciente.
   const go = (delta: 1 | -1) => {
     const ni = sidx + delta
     if (ni < 0 || ni >= sessions.length) return
-    onSelectDate(sessions[ni]!.date)
+    onSelectDate(sessions[ni]!)
     Haptics.selectionAsync().catch(() => {})
   }
   const swipe = Gesture.Race(
@@ -172,13 +201,15 @@ function SessionHistory({ activity, selectedDate, onSelectDate, dayDetail, loadi
     <GestureDetector gesture={swipe}>
       <View style={{ gap: 12 }}>
         <StatCard>
-          <CardHeader icon={Activity} title="Historial de sesiones" />
+          <CardHeader icon={Activity} title="Historial de sesiones" right={
+            <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{sessions.length} sesiones</Text>
+          } />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
             {sessions.map((d) => {
-              const date = new Date(`${d.date}T12:00:00`)
-              const on = d.date === selectedDate
+              const date = new Date(`${d}T12:00:00`)
+              const on = d === selectedDate
               return (
-                <TouchableOpacity key={d.date} activeOpacity={0.82} onPress={() => onSelectDate(d.date)}
+                <TouchableOpacity key={d} activeOpacity={0.82} onPress={() => onSelectDate(d)}
                   style={[styles.chip, { backgroundColor: on ? theme.primary : theme.secondary, borderColor: on ? theme.primary : theme.border, borderRadius: theme.radius.lg }]}>
                   <Text style={[styles.chipDow, { color: on ? theme.primaryForeground : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{date.toLocaleDateString('es-CL', { weekday: 'short' }).slice(0, 3)}</Text>
                   <Text style={[styles.chipNum, { color: on ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{date.getDate()}</Text>
@@ -189,7 +220,7 @@ function SessionHistory({ activity, selectedDate, onSelectDate, dayDetail, loadi
           <View style={styles.navRow}>
             <TouchableOpacity onPress={() => go(-1)} disabled={sidx <= 0} hitSlop={8}><ChevronLeft size={22} color={sidx <= 0 ? theme.muted : theme.foreground} /></TouchableOpacity>
             <Text style={[styles.navDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(selectedDate)}</Text>
-            <TouchableOpacity onPress={() => go(1)} disabled={sidx >= sessions.length - 1} hitSlop={8}><ChevronRight size={22} color={sidx >= sessions.length - 1 ? theme.muted : theme.foreground} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => go(1)} disabled={sidx < 0 || sidx >= sessions.length - 1} hitSlop={8}><ChevronRight size={22} color={sidx < 0 || sidx >= sessions.length - 1 ? theme.muted : theme.foreground} /></TouchableOpacity>
           </View>
         </StatCard>
 

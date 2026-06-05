@@ -164,7 +164,9 @@ export default function ClientDetailScreen() {
         nutritionMonthPct: data.nutritionMonthlyAvgPct,
         nutritionStreak: data.nutritionStreakDays,
         sessions30d: data.sessions30d,
-        weightSeries: derived.series.map((c) => ({ date: c.date, weight: Number(c.weight) })),
+        sessionsYear: data.workoutDates371.length,
+        checkInsTotal: data.checkIns.length,
+        checkIns: data.checkIns.map((c) => ({ date: c.date, weight: c.weight, energy: c.energy_level, notes: c.notes, photo: c.front_photo_url })),
         prs: data.personalRecords.map((r) => ({ exerciseName: r.exerciseName, weightKg: r.maxWeightKg, reps: r.repsAtMax ?? 0, oneRm: round1(epleyOneRM(r.maxWeightKg, r.repsAtMax ?? 0)) })),
       })
     } catch (e: any) {
@@ -247,14 +249,18 @@ export default function ClientDetailScreen() {
             <FacturacionTab data={data} reload={load} onAddPayment={() => setPayOpen(true)} onOpenPhoto={onOpenPhoto} />
           )}
 
-          <View style={{ height: 6 }} />
-          <Button
-            label={client.is_archived ? 'Reactivar alumno' : 'Archivar alumno'}
-            variant={client.is_archived ? 'outline' : 'ghost'}
-            leftIcon={client.is_archived ? ArchiveRestore : Archive}
-            onPress={confirmArchive}
-            full
-          />
+          {tab === 'overview' ? (
+            <>
+              <View style={{ height: 6 }} />
+              <Button
+                label={client.is_archived ? 'Reactivar alumno' : 'Archivar alumno'}
+                variant={client.is_archived ? 'outline' : 'ghost'}
+                leftIcon={client.is_archived ? ArchiveRestore : Archive}
+                onPress={confirmArchive}
+                full
+              />
+            </>
+          ) : null}
         </View>
       </ScrollView>
 

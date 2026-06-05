@@ -138,6 +138,12 @@ export interface MuscleVolumeEntry {
   volume: number
 }
 
+export interface MuscleVolumeSetsEntry {
+  muscleGroup: string
+  sets: number
+  reps: number
+}
+
 export interface ComplianceSummary {
   workoutsThisWeek: number
   workoutsPrevWeek: number
@@ -281,6 +287,23 @@ function buildMuscleVolume(rows: any[]): MuscleVolumeEntry[] {
     .sort((a, b) => b.volume - a.volume)
 }
 
+// Volumen por SERIES/REPS por grupo — agnóstico al peso (calistenia/cardio).
+// Cada fila de workout_logs = 1 serie registrada.
+function buildMuscleVolumeBySets(rows: any[]): MuscleVolumeSetsEntry[] {
+  const map = new Map<string, { sets: number; reps: number }>()
+  for (const row of rows) {
+    const group = row.workout_blocks?.exercises?.muscle_group?.trim() || 'Otro'
+    const reps = Number(row.reps_done ?? 0)
+    const cur = map.get(group) ?? { sets: 0, reps: 0 }
+    cur.sets += 1
+    cur.reps += reps > 0 ? reps : 0
+    map.set(group, cur)
+  }
+  return [...map.entries()]
+    .map(([muscleGroup, v]) => ({ muscleGroup, sets: v.sets, reps: v.reps }))
+    .sort((a, b) => b.sets - a.sets)
+}
+
 function buildNutritionMeals(rawNutrition: any): { entries: NutritionMealPlanEntry[]; macroMeals: MealWithFoodItems[] } {
   const meals = ((rawNutrition?.nutrition_meals ?? []) as any[])
     .slice()
@@ -417,7 +440,10 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   nutritionStreakDays: number
   favoriteFoods: FavoriteFoodEntry[]
   workoutLogs: WorkoutLogRow[]
+  workoutLogsAll: WorkoutLogRow[]
+  muscleVolumeReps: MuscleVolumeSetsEntry[]
   workoutDates371: string[]
+  hasTrained: boolean
 }> {
   // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
   // ricas fallen en una prod sin columnas enterprise/Codex.
@@ -448,7 +474,10 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     nutritionStreakDays: 0,
     favoriteFoods: [] as FavoriteFoodEntry[],
     workoutLogs: [] as WorkoutLogRow[],
+    workoutLogsAll: [] as WorkoutLogRow[],
+    muscleVolumeReps: [] as MuscleVolumeSetsEntry[],
     workoutDates371: [] as string[],
+    hasTrained: false,
   }
   try {
   const { iso: todayIso } = getTodayInSantiago()
@@ -692,7 +721,10 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       .filter(Boolean) as any[])
       .map((food) => ({ id: food.id as string, name: food.name as string })),
     workoutLogs: buildWorkoutLogRows((prLogsRes.data as any[] | null) ?? []),
+    workoutLogsAll: buildWorkoutLogRows((volumeLogsRes.data as any[] | null) ?? []),
+    muscleVolumeReps: buildMuscleVolumeBySets((volumeLogsRes.data as any[] | null) ?? []),
     workoutDates371: [...workoutDays371].sort(),
+    hasTrained: workoutDays371.size > 0 || workoutDays30.size > 0 || ((volumeLogsRes.data as any[] | null)?.length ?? 0) > 0,
   }
   } catch (e) {
     console.warn('[coach-client-detail] partial load', e)
