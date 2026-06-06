@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Share, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
+import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import QRCode from 'react-native-qrcode-svg'
 import { Camera, Check, ImageIcon, Info, Lock, Palette, Share2, Sparkles, Type } from 'lucide-react-native'
@@ -63,6 +64,7 @@ function contrastInfo(hex: string): { txt: string; ratio: number; aa: boolean; a
 
 export default function MiMarcaScreen() {
   const { theme, setBranding } = useTheme()
+  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [orgManaged, setOrgManaged] = useState(false)
@@ -269,6 +271,13 @@ export default function MiMarcaScreen() {
               <EvaLoader size="sm" />
             )}
           </View>
+          {/* M-F6: preview full-screen de la app del alumno con la marca actual */}
+          <Button
+            label="Ver app del alumno (pantalla completa)"
+            variant="outline"
+            onPress={() => router.push({ pathname: '/coach/brand-preview', params: { color, name: brandName, logo: logoUrl ?? '', loaderText } })}
+            full
+          />
         </View>
 
         {orgManaged ? (
@@ -421,6 +430,14 @@ export default function MiMarcaScreen() {
             <Button label="Compartir link" variant="outline" leftIcon={Share2} onPress={shareLink} full />
           </SectionCard>
         ) : null}
+
+        {/* M-F5 (reemplazo): la cuenta NO se borra desde la app — se solicita por correo. */}
+        <SectionCard theme={theme} icon={Lock} title="Cuenta">
+          <Text style={[styles.dangerText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            La eliminación de cuenta no se hace desde la app. Escribinos a contacto@eva-app.cl y gestionamos la baja (datos, pagos y app de tus alumnos) según la Ley 21.719.
+          </Text>
+          <Button label="Solicitar baja por correo" variant="outline" onPress={() => Linking.openURL('mailto:contacto@eva-app.cl?subject=' + encodeURIComponent('Solicitud de baja de cuenta EVA')).catch(() => {})} full />
+        </SectionCard>
       </ScrollView>
     </SafeAreaView>
   )
@@ -504,6 +521,7 @@ const styles = StyleSheet.create({
   qrWrap: { alignItems: 'center', gap: 8, paddingVertical: 6 },
   qrBox: { padding: 12, borderRadius: 14, borderWidth: 1 },
   qrHint: { fontSize: 11.5, textAlign: 'center' },
+  dangerText: { fontSize: 12.5, lineHeight: 18 },
   scroll: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120, gap: 14 },
   scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   scoreLabel: { fontSize: 12 },

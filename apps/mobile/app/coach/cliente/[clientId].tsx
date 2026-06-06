@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Apple, Archive, ArchiveRestore, BarChart3, CreditCard, Dumbbell, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
+import { Apple, Archive, ArchiveRestore, BarChart3, Clock, CreditCard, Dumbbell, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
@@ -43,6 +43,17 @@ import { exportProgressPdf } from '../../../lib/progress-pdf'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
+
+// A-F18: etiqueta relativa de "última actividad".
+function relActivityLabel(iso: string | null): string {
+  if (!iso) return 'Sin actividad'
+  const d = Math.floor((Date.now() - new Date(`${iso}T12:00:00`).getTime()) / 86400000)
+  if (d <= 0) return 'Hoy'
+  if (d === 1) return 'Ayer'
+  if (d < 30) return `Hace ${d}d`
+  const m = Math.floor(d / 30)
+  return `Hace ${m} mes${m === 1 ? '' : 'es'}`
+}
 
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string; clientName?: string }>()
@@ -135,10 +146,23 @@ export default function ClientDetailScreen() {
     // Attention
     let attention: string | null = null
     if (data.compliance && data.compliance.checkInCompliancePercent < 40) attention = 'Check-ins irregulares — conviene contactar.'
-    else if (data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 40) attention = 'Adherencia nutricional baja esta semana.'
+    else if (data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60) attention = 'Adherencia nutricional baja esta semana.'
     else if (data.checkIns[0] && !data.checkIns[0].reviewed_at) attention = 'Hay un check-in sin revisar.'
 
-    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention }
+    // A-F18: última actividad (workout o check-in más reciente) + semana de programa.
+    const lastWorkout = data.workoutDates371.length ? data.workoutDates371[data.workoutDates371.length - 1] : null
+    const lastCheckin = data.checkIns[0]?.date ?? null
+    const lastActivityIso = [lastWorkout, lastCheckin].filter(Boolean).sort().pop() ?? null
+    let programWeek: string | null = null
+    if (data.activeProgram?.start_date && data.activeProgram.weeks_to_repeat) {
+      const start = new Date(`${data.activeProgram.start_date}T12:00:00`).getTime()
+      if (Number.isFinite(start)) {
+        const wk = Math.min(Math.max(1, Math.ceil((Math.max(0, (Date.now() - start) / 86400000) + 1) / 7)), Math.max(1, data.activeProgram.weeks_to_repeat))
+        programWeek = `${wk}/${data.activeProgram.weeks_to_repeat}`
+      }
+    }
+
+    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention, lastActivityIso, programWeek }
   }, [data, client])
 
   async function onExportPdf() {
@@ -197,13 +221,15 @@ export default function ClientDetailScreen() {
   chips.push({ icon: Apple, label: 'Adherencia', value: `${data.compliance?.nutritionWeeklyAvgPct ?? 0}%` })
   chips.push({ icon: Dumbbell, label: 'Entrenos sem', value: `${data.compliance?.workoutsThisWeek ?? 0}/${data.compliance?.workoutsTarget ?? 1}` })
   if (derived.today) chips.push({ icon: Salad, label: 'Comidas hoy', value: `${derived.today.mealsDone}/${derived.today.mealsTotal}` })
+  chips.push({ icon: Clock, label: 'Última actividad', value: relActivityLabel(derived.lastActivityIso) })
+  if (derived.programWeek) chips.push({ icon: LayoutGrid, label: 'Programa', value: `Sem ${derived.programWeek}` })
 
   const tabs: TabItem[] = [
     { value: 'overview', label: 'Resumen', icon: LayoutGrid },
     { value: 'progreso', label: 'Progreso', icon: TrendingUp, badge: data.checkIns.length || null },
     { value: 'analisis', label: 'Análisis', icon: BarChart3, badge: derived.weeklyPRs.length || null },
     { value: 'plan', label: 'Plan', icon: Dumbbell, badge: data.activeProgram?.planCount || null },
-    { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 40 ? '!' : null },
+    { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
     { value: 'facturacion', label: 'Pagos', icon: CreditCard, badge: derived.pendingPays || null },
   ]
 

@@ -259,12 +259,12 @@ A-F12 detalle: RN valida solo "no vacío" en cliente, placeholder dice **"Min. 6
 | **A-F15** | S2 | **Nutrición: historial/foodswaps/metadata faltantes** | Sin tabla de log 30d, sin "último día registrado", **sin food swaps** del alumno, sin badge CUSTOM/SYNCED, rings, instrucciones, suplementos/nota. | Pasada dedicada al tab nutrición del detalle. |
 | **A-F16** | S2 | **Plan: grilla/phases/historial/CTA** | Sin grilla semanal L–D, sin `ProgramPhasesBar`, sin historial de logs por ejercicio en el sheet, empty state sin CTA. | Enriquecer `PlanTab`. |
 | **A-F17** | S3 | Foto-comparación estática | RN columnas before/after fijas; web tiene slider arrastrable `PhotoComparisonSlider`. (**PDF export ya en paridad** vía expo-print.) | Nice-to-have: slider gestual. |
-| **A-F18** | S3 | Hero: campos faltantes | Sin "Última actividad" ni chip "Programa Sem x/y"; chip "Adherencia" mide nutrición% (web mide entrenos). | Añadir campos + corregir etiqueta. |
+| **A-F18** | S3 | ✅ Hero: campos faltantes | Añadidos chips "Última actividad" (relativo) y "Programa · Sem X" (semana activa); hero más completo. | — Hecho. |
 | **A-F19** | S2 | **Silent-catch residual (soft errors)** | `clients-directory.ts:135-137` y los 12 queries paralelos de `coach-client-detail.ts:498-582` leen `.data ?? []` **sin inspeccionar `.error`** (los soft-errors de Supabase no lanzan). Una query fallida degrada a vacío → todos "en riesgo" / charts vacíos, sin avisar. Familia TX-1 (distinto del pulse ya corregido). | Inspeccionar `.error` y mostrar estado "datos limitados / reintentar". |
 | **A-F20** | S2 | **Contrato de datos del detalle incompleto** | RN omite `attentionScore`, `oneRMDelta`, `planCurrentWeek/TotalWeeks/DaysRemaining`, `currentStreak` workout, `client_intake`, `nutritionPlanCycles`, `templates`, `nutritionPlanHistoryEntries`, `profileLastActivityAt`. | Completar el fetch del detalle (habilita A-F1/F5/F6/F15/F18). |
 | **A-F21** | S3 | FAB diverge | RN tiene "Registrar pago" pero omite "Check-in alumno" del web. | Añadir atajo check-in. |
 | **A-F22** | S3 | Rings sin delta semanal | Web muestra ↑/↓ vs semana anterior; RN solo valor actual. | Añadir delta. |
-| **A-F23** | S3 | Umbral nutrición 40% vs 60% | Badge RN dispara <40%, web <60% (e inconsistente con `getProfileTopAlert`). | Unificar umbral. |
+| **A-F23** | S3 | ✅ Umbral nutrición 40% vs 60% | Unificado a **<60** en detalle (`[clientId].tsx`), directorio (`clients-directory.ts`) y lista (`clientes.tsx`), consistente con `getProfileTopAlert`. | — Hecho. |
 | **A-F24** | S3 | Billing: total cobrado | `totalCobrado` RN suma todos los pagos; web solo `paid`. Status del nuevo pago implícito. | Sumar solo `paid`; fijar status explícito. |
 | **A-F25** | S3 | Portal alumnos copiable | loginUrl click-to-copy del header web ausente en RN. | Añadir copy en header/settings. |
 | **A-F26** | S3 | Filtro grupo muscular (Análisis) | Strength cards web filtran por grupo; RN muestra top-4 fijo. | Añadir pills de filtro. |
@@ -349,12 +349,12 @@ A-F12 detalle: RN valida solo "no vacío" en cliente, placeholder dice **"Min. 6
 | **P-F6** | S2 | Assign más débil | RN solo multi-select cliente; faltan start-date/flexible, duration-weeks, days-of-week, search, aviso sobrescritura. Ningún path RN envía email "programa asignado". | Portar opciones de `AssignToClientsDialog` + email. |
 | **P-F7** | S2 | `is_override` sin badge en card | Web muestra Base/Modif. en el bloque; RN solo en editor sheet. Coach no ve overrides de un vistazo en programas vinculados. | Añadir badge en `BuilderBlockCard`. |
 | **P-F8** | S2 | Cycle-length clamp inconsistente | RN clampa 1–7 (load)/1–31 (skeleton); web sin clamp. Cíclico de 8–31 días (web) se trunca a 7 al abrir en RN. | Alinear el clamp con web. |
-| **P-F9** | S2 | Preview de menor fidelidad | RN `ProgramPreviewSheet` sin agrupación secciones/superset, sin stat-cards, sin muscle-chips, sin rest-days (filtra `blocks>0`). | Portar agrupación + stats. |
+| **P-F9** | S2 | ✅ Preview de menor fidelidad | RN `ProgramPreviewSheet` ahora con stat-cards (días/ejercicios/series) + muscle-chips + rest-days + agrupación secciones/superset. | — Hecho. |
 | **P-F10** | S2 | Silent-catch en reads (builder + hub) | Catálogo `.catch(()=>{})`, load programa/plantilla ignora `.error` (→ programa en blanco), `loadLibrary` silent-catch. | Inspeccionar `.error` + UI de error. Ver **TX-1**. |
 | **P-F11** | S3 | Tier-gating ausente | Sin recheck de límite al crear/asignar programa (bajo impacto: web tampoco hard-gatea conteo de programas). | Ver **TX-7**. |
 | **P-F12** | S3 | Client-eligibility + sort mismatch | Clientes RN `is_archived=false` vs web `is_active=true`; sort RN `updated_at` vs web `created_at`. | Alinear predicado + orden. |
 | **P-F13** | S3 | Hub: filtro "Sin fases" + fecha edición | RN sin pill "Sin fases" ni fecha "Act." en la card. | Añadir ambos. |
-| **P-F14** | S2 | Mutaciones multi-tabla sin atomicidad | `persistProgram` delete-then-reinsert directo en device, sin transacción → estado parcial ante fallo. | Mover a server action/RPC transaccional. Ver **TX-8**. |
+| **P-F14** | S2 | ✅ (client-side) Mutaciones sin atomicidad | `persistProgram` ahora **insert-then-delete** (inserta planes/bloques nuevos antes de borrar viejos) → sin pérdida ante fallo a mitad. RPC transaccional real diferido (no tocar Supabase). | — Hecho client-side. |
 | **P-F15** | S3 | Sin InfoTooltips en editor | 5 tooltips educativos (RIR/RPE/Tempo/Rest/Notes) ausentes en RN. | Portar tooltips. |
 | **P-F16** | S3 | Notes sin contador | Web x/1000 con warn; RN multiline sin límite visible. | Añadir contador. |
 | **P-F17** | S3 | Phase color 6 presets | Web hex libre (`input type=color`); RN cicla 6 colores. | Picker de color. |
@@ -589,8 +589,8 @@ Card RN = thumbnail (gif→image→YT thumb→icon) + nombre + `muscle·equipmen
 | **Color**: presets + picker nativo + contraste WCAG + paleta + reset | presets + hex TextInput + `useBrandColors` toggle (**sin picker/contraste/paleta/reset**) | 🟡 M-F8/M-F9 |
 | **Loader**: toggle + texto + icon-mode + gradient/solid (**renderizado**) | misma UI (**pero no renderiza — ghost**) | 🔴 M-F1 |
 | Share/QR card | Share card (code + URL + share nativo, **sin QR**) | 🟡 M-F7 |
-| `BrandThemePreview` sticky + link a `/preview` | — | 🔴 M-F6 |
-| DangerZone (eliminar cuenta) | — | 🔴 M-F5 |
+| `BrandThemePreview` sticky + link a `/preview` | **ruta `brand-preview` full-screen** (header marca + entreno + nutrición + check-in + tab bar + light/dark) | ✅ M-F6 |
+| DangerZone (eliminar cuenta) | **"Solicitar baja por correo" → mailto contacto@eva-app.cl** (sin auto-borrado, por decisión) | ✅ M-F5 (reemplazo) |
 | Tour 9 pasos | — | 🔴 M-F10 |
 
 ### 6.3 Capa de datos (función)
@@ -620,8 +620,8 @@ Card RN = thumbnail (gif→image→YT thumb→icon) + nombre + `muscle·equipmen
 | **M-F2** | S2 | `full_name` no editable | `updateCoachBrandSettings` no escribe `full_name` (verificado); web sí (requerido, billing/soporte). | Añadir campo + write. |
 | **M-F3** | S2 | `slug` (URL app) no editable | Web permite cambiar slug (lock 30d + uniqueness + previous_slugs); RN read-only. | Portar edición de slug (idealmente vía endpoint). |
 | **M-F4** | S2 | Sin tier-gate `canUseBranding` | RN gatea solo `orgManaged`; free-tier edita/guarda branding que web bloquea con paywall. | Gate por capability. Ver **TX-7**. |
-| **M-F5** | S2 | Danger Zone / eliminar cuenta ausente | Web `deleteCoachAccountAction` (erasure Ley 21.719). RN sin equivalente. Legal/compliance. | Endpoint service-role + UI de borrado. |
-| **M-F6** | S2 | Sin preview dashboard alumno | Web `/preview` full-screen + `BrandThemePreview` (4 tabs + dark); RN card chica. | Portar preview navegable. |
+| **M-F5** | S2 | ✅ (reemplazo) Sin auto-borrado de cuenta | Decisión usuario: el coach NO se auto-borra. RN expone "Solicitar baja por correo" → `mailto:contacto@eva-app.cl`; la baja (erasure Ley 21.719) se gestiona manual. | — Hecho (mailto). |
+| **M-F6** | S2 | ✅ Preview dashboard alumno | Ruta `app/coach/brand-preview.tsx` full-screen con la marca actual (header + entreno + nutrición + progreso + check-in + tab bar) + light/dark. | — Hecho. |
 | **M-F7** | S2 | Sin QR del link | Web `QRCodeSVG`; RN solo share link. (Conocido: falta lib.) | Añadir `react-native-qrcode-svg`. |
 | **M-F8** | S2 | Sin contraste WCAG / paleta / reset | Web muestra AA/fail + ratio + 5 swatches + restaurar; RN nada → color ilegible sin feedback. | Portar `getContrastInfo` + swatches. |
 | **M-F9** | S2 | Sin color picker nativo | Web `<input type=color>` (brand + loader solid); RN solo hex TextInput. | Picker de color RN. |
@@ -821,10 +821,10 @@ Nav chrome: `components/coach/CoachMobileChrome.tsx` (`CoachMobileHeader` + `Coa
 
 > Sin cambios de schema (solo columnas/tablas existentes). Cada tanda valida `tsc` + `expo export`. Estados: ✅ hecho · 🔧 en curso · ⏳ pendiente.
 >
-> **Implementado a la fecha (~57 ítems, todos validados verde):** los 7 S1 · TX-4(safe)/5/6(local)/7/9 · A-F3/F4/F5/F6/F8/F9/F10/F11/F13(parcial)/F14/F22/F24 · N-F1/F2/F3/F5/F7/F15/F16/F21/F6(full)/F25 · P-F1/F2/F3/F4/F5/F7/F8 · M-F1/F2/F3/F4/F7/F8/F9/F11/F14 · E-F1/F2/F3/F5/F7/F8 · SU-F1/F5 · SO-F1/F3/F4/F5 · O-F1/F2. **Dep:** `react-native-qrcode-svg`. **Endpoint nuevo:** `api/mobile/coach/slug`.
+> **Implementado a la fecha (~63 ítems, todos validados verde):** los 7 S1 · TX-4(safe)/5/6(local)/7/9 · A-F3/F4/F5/F6/F8/F9/F10/F11/F13(parcial)/F14/F18/F22/F23/F24 · N-F1/F2/F3/F5/F7/F15/F16/F21/F6(full)/F25 · P-F1/F2/F3/F4/F5/F7/F8/F9/F14(client-side) · M-F1/F2/F3/F4/F5(reemplazo mailto)/F6/F7/F8/F9/F11/F14 · E-F1/F2/F3/F5/F7/F8 · SU-F1/F5 · SO-F1/F3/F4/F5 · O-F1/F2. **Deps:** `react-native-qrcode-svg`. **Endpoint nuevo:** `api/mobile/coach/slug`. **Pantalla nueva:** `app/coach/brand-preview.tsx` (M-F6).
 >
-> **Quedan SOLO 2 con blocker duro** (no por código): **M-F5** (destructivo → confirmación explícita) y **P-F14** (RPC Supabase → vedado por "no tocar Supabase"). Lo demás del documento está implementado.
-> **Restante = límite real:** (a) **bloqueado por dep** (el usuario corre `pnpm install`): M-F7 QR, M-F9 picker, TX-6 `@eva/schemas`; (b) **bloqueado por endpoint server**: M-F5 borrar-cuenta, M-F3 slug, A-F13 archive-emails; (c) **net-new grande que necesita endpoint de adherencia**: N-F6 board all-clients, A-F14 import CSV; (d) **diferido por riesgo standalone**: TX-4 org-filter reads, E-F5, P-F3/F14 unify transaccional; (e) **polish S3**.
+> **Cerrado todo lo accionable sin tocar Supabase live.** Decisiones del usuario (2026-06-05): **M-F5 descartado** (sin auto-borrado; reemplazado por flujo "Solicitar baja por correo" → `mailto:contacto@eva-app.cl`); **P-F14 hecho client-side** (reorder insert-then-delete, sin RPC); **M-F6 hecho** (preview full-screen del alumno con la marca actual). No queda blocker duro abierto.
+> **Diferido por decisión/riesgo (no por falta de código):** RPC transaccional real para builder (P-F3/F14 unify) y org-filter reads profundos (TX-4 extra paths, E-F5) — vedados por "no tocar Supabase live". Borrado real de cuenta = correo manual a contacto@eva-app.cl.
 
 ### Wave 0 — S1 correctness ✅ (validada tsc + export)
 | ID | Estado | Qué se hizo |
@@ -871,9 +871,9 @@ Nav chrome: `components/coach/CoachMobileChrome.tsx` (`CoachMobileHeader` + `Coa
 
 **Ejercicios** (parcial): E-F3 ✅, E-F7 ✅, E-F8 ✅, E-F1 ✅ (subir imagen del device → resize PNG → Storage `exercise-media` → `image_url`; create/update ahora escriben `image_url`). Falta: E-F5 org path (riesgo standalone), E-F2 validación URL.
 
-**Mi Marca** (mayormente ✅): M-F1 · M-F2 · M-F4 · M-F8 · M-F14 · M-F7 QR · M-F9 picker · M-F11 zod · **M-F3 ✅ slug editable** (nuevo endpoint `api/mobile/coach/slug` con uniqueness + lock 30d + previous_slugs; UI en Identidad; ambos typechean limpio). Restante: M-F5 danger-zone (**destructivo → requiere confirmación explícita**), M-F6 preview navegable (pantalla nueva).
+**Mi Marca** (✅): M-F1 · M-F2 · M-F4 · M-F8 · M-F14 · M-F7 QR · M-F9 picker · M-F11 zod · **M-F3 ✅ slug editable** (endpoint `api/mobile/coach/slug` con uniqueness + lock 30d + previous_slugs). **M-F5 ✅ (reemplazo):** sin auto-borrado; SectionCard "Cuenta" con `Button "Solicitar baja por correo"` → `mailto:contacto@eva-app.cl` (decisión usuario). **M-F6 ✅:** nueva ruta `app/coach/brand-preview.tsx` = preview full-screen de la app del alumno con la marca actual (header de marca, entreno de hoy, ring de nutrición, progreso, check-in, tab bar) + toggle light/dark; recibe color/nombre/logo/loaderText por params desde Mi Marca.
 
-**Programas** (parcial): P-F1/F2/F3/F4/F5/F7/F8 ✅ (P-F5 = guard de bloques sets≥1+reps en el save). P-F6 ✅ (assign con duración + aviso). Falta: P-F9 (fidelidad del preview, cosmético), P-F14 (atomicidad → idealmente server RPC).
+**Programas** (✅): P-F1/F2/F3/F4/F5/F7/F8 ✅ (P-F5 = guard de bloques sets≥1+reps en el save). P-F6 ✅ (assign con duración + aviso). **P-F9 ✅** (`ProgramPreviewSheet`: stat-cards días/ejercicios/series + muscle-chips + rest-days + agrupación secciones/superset). **P-F14 ✅ (client-side):** `persistProgram` ahora inserta planes/bloques nuevos **antes** de borrar los viejos (insert-then-delete) → sin pérdida ante fallo a mitad, sin RPC.
 
 **Facturación (Alumnos):** A-F24 ✅ (total cobrado solo `paid`).
 
@@ -884,12 +884,12 @@ Nav chrome: `components/coach/CoachMobileChrome.tsx` (`CoachMobileHeader` + `Coa
 ### Bloqueados — actualizado
 - ~~Deps~~ ✅ **RESUELTO**: instalé `react-native-qrcode-svg` → M-F7 QR hecho; M-F9 picker hecho **sin** dep extra (paleta HSL); TX-6 cubierto con **zod local** (M-F11) hasta poder compartir `@eva/schemas`.
 - **M-F3** ✅ (endpoint `api/mobile/coach/slug`). **N-F6-full** ✅ (board client-side). **A-F14** ✅ (import por pegado, reusa el endpoint de crear alumno). **A-F13** ✅ parcial (recheck de límite; el email sigue siendo un side-effect de bajo valor).
-- **Quedan exactamente 2 features con blocker DURO** (no por falta de código):
-  - **M-F5 eliminar-cuenta** → **destructivo/irreversible** (borra cuenta + PII + cancela MP). NO se construye sin tu "sí" explícito (regla de seguridad de acciones irreversibles).
-  - **P-F14 builder transaccional** → requiere **RPC/migración en Supabase**, vedado por tu regla "no tocar el Supabase live / sin modificar tablas".
-  - Resto = **polish S3 cosmético** (A-F18 chips de hero, A-F23 umbral, P-F9 fidelidad de preview, M-F6 preview navegable, N-F26/F27 refactor/test).
+- **Resueltos los antiguos blockers (2026-06-05):**
+  - **M-F5 eliminar-cuenta** → **descartado por el usuario.** El coach NO puede auto-borrarse; en su lugar "Solicitar baja por correo" → `mailto:contacto@eva-app.cl` (baja gestionada manualmente). Cumple el objetivo legal sin endpoint destructivo client-side.
+  - **P-F14 builder** → **hecho client-side** (insert-then-delete) sin RPC. La versión RPC transaccional queda diferida (vedado tocar Supabase live).
+  - **M-F6** → hecho (preview full-screen). **A-F18/A-F23/P-F9** → hechos. **N-F26/F27** (refactor/test) = único S3 restante, no afecta UX.
 
 ### Features grandes restantes (net-new multi-archivo)
 N-F6 board all-clients (pantalla nueva), N-F15 propagación in-place (riesgo orphan logs → idealmente server), E-F1 media pipeline (expo-image-picker + Storage), P-F3/F14 unificar editor builder org-aware + transaccional, M-F6 preview navegable, A-F14 import CSV.
 
-### Wave 3 — Polish S3 🔧 (A-F22 ✅, M-F14 ✅ límites de texto; restan A-F18/F23, P-F15–F19, N-F20, etc.)
+### Wave 3 — Polish S3 🔧 (A-F22 ✅, M-F14 ✅, **A-F18 ✅** chips de hero [última actividad + Programa Sem X], **A-F23 ✅** umbral nutrición unificado a <60, **P-F9 ✅** fidelidad preview; restan P-F15–F19, N-F20 — tooltips/contadores cosméticos)

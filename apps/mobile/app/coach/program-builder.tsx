@@ -197,12 +197,13 @@ async function persistProgram(opts: {
     if (ins.error) throw ins.error
     pid = (ins.data as { id: string }).id
   }
+  // P-F14 (client-side): reordenar para no perder datos ante fallo a mitad.
+  // 1) capturar los planes viejos, 2) insertar TODO lo nuevo, 3) recién borrar los viejos.
+  // Si falla en (2), el programa viejo sigue intacto (a lo sumo quedan filas nuevas a depurar
+  // en el próximo guardado), en vez de quedar vacío como con delete-primero.
   const { data: oldPlans } = await supabase.from('workout_plans').select('id').eq('program_id', pid)
   const oldIds = (oldPlans ?? []).map((p) => (p as { id: string }).id)
-  if (oldIds.length) {
-    await supabase.from('workout_blocks').delete().in('plan_id', oldIds)
-    await supabase.from('workout_plans').delete().in('id', oldIds)
-  }
+
   for (const set of opts.variantSets) {
     for (const day of set.days) {
       if (day.blocks.length === 0) continue
@@ -216,6 +217,12 @@ async function persistProgram(opts: {
       const { error: blkErr } = await supabase.from('workout_blocks').insert(inserts)
       if (blkErr) throw blkErr
     }
+  }
+
+  // Inserción nueva OK → ahora sí limpiar los planes viejos.
+  if (oldIds.length) {
+    await supabase.from('workout_blocks').delete().in('plan_id', oldIds)
+    await supabase.from('workout_plans').delete().in('id', oldIds)
   }
   return pid as string
 }

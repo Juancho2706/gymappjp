@@ -241,7 +241,7 @@ export function filterClients(
     else if (riskFilter === 'with_program') matchesRisk = c.hasActiveProgram
     else if (riskFilter === 'nutrition_low') {
       const p = pulseById?.get(c.id)
-      matchesRisk = !!p && (p.attentionFlags?.includes('NUTRICION_RIESGO') || (p.nutritionPercentage > 0 && p.nutritionPercentage < 50))
+      matchesRisk = !!p && (p.attentionFlags?.includes('NUTRICION_RIESGO') || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60))
     }
 
     return matchesSearch && matchesStatus && matchesRisk

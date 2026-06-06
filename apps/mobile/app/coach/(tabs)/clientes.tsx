@@ -717,7 +717,7 @@ export default function ClientesScreen() {
   const syncBanner = stats.pendingSyncCount > 0
   // A-F10: contador de adherencia nutricional baja (desde el pulse) para banner de triage.
   const nutritionLowCount = useMemo(
-    () => [...pulseById.values()].filter((p) => (p.attentionFlags?.includes('NUTRICION_RIESGO')) || (p.nutritionPercentage > 0 && p.nutritionPercentage < 50)).length,
+    () => [...pulseById.values()].filter((p) => (p.attentionFlags?.includes('NUTRICION_RIESGO')) || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60)).length,
     [pulseById]
   )
 
