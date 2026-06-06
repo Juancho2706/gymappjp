@@ -5,6 +5,7 @@ import {
   isoDateAddDays,
 } from './date-utils'
 import { isMissingColumnError, selectWithFallback } from './db-compat'
+import { getCoachProfile } from './coach'
 import type { WorkoutLogRow } from './profile-analytics'
 import {
   calculateConsumedMacrosWithCompletionFallback,
@@ -825,6 +826,21 @@ export async function markCoachCheckInReviewed(clientId: string, checkInId: stri
 }
 
 export async function setCoachClientArchived(clientId: string, archived: boolean): Promise<{ ok: boolean; error?: string }> {
+  // A-F13 (parcial): al REACTIVAR, rechequear el límite del plan (la web bloquea si está lleno).
+  // El email de archivado/reactivado sigue requiriendo endpoint server (Resend).
+  if (!archived) {
+    const coach = await getCoachProfile()
+    if (coach?.maxClients && coach.maxClients > 0) {
+      const { count } = await supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', coach.id)
+        .eq('is_archived', false)
+      if ((count ?? 0) >= coach.maxClients) {
+        return { ok: false, error: `Alcanzaste el límite de tu plan (${coach.maxClients} alumnos activos). Subí de plan para reactivar.` }
+      }
+    }
+  }
   const { error } = await supabase.from('clients').update({ is_archived: archived }).eq('id', clientId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }

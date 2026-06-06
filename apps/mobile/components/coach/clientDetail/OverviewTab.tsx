@@ -10,6 +10,7 @@ import {
   buildProfileActivityCalendar,
   longestActivityStreak,
 } from '../../../lib/profile-analytics'
+import { getProfileTopAlert, type ProfileAlertType } from '../../../lib/profile-top-alert'
 import {
   markCoachCheckInReviewed,
   updateCoachClient,
@@ -22,6 +23,17 @@ function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activePr
   if (!Number.isFinite(start)) return null
   const diffDays = Math.max(0, Math.floor((Date.now() - start) / 86400000))
   return Math.min(Math.max(1, Math.ceil((diffDays + 1) / 7)), Math.max(1, program.weeks_to_repeat))
+}
+
+function TopAlertBanner({ type, message }: { type: ProfileAlertType; message: string }) {
+  const { theme } = useTheme()
+  const color = type === 'danger' ? theme.destructive : type === 'warning' ? '#F59E0B' : type === 'success' ? '#10B981' : theme.primary
+  return (
+    <View style={[styles.alertBanner, { backgroundColor: color + '14', borderColor: color + '40' }]}>
+      <View style={[styles.alertDot, { backgroundColor: color }]} />
+      <Text style={[styles.alertMsg, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{message}</Text>
+    </View>
+  )
 }
 
 export function OverviewTab({
@@ -77,15 +89,28 @@ export function OverviewTab({
     return sorted.find((p) => p.day_of_week! >= todayDow) ?? sorted[0]
   }, [activeProgram, todayDow])
 
+  // A-F5: banner de triage (motor de 7 reglas portado).
+  const planDaysRemaining = activeProgram?.end_date
+    ? Math.ceil((new Date(`${activeProgram.end_date}T23:59:59`).getTime() - Date.now()) / 86400000)
+    : undefined
+  const lastWorkoutDate = workoutDates371.length ? workoutDates371[workoutDates371.length - 1] : null
+  const topAlert = getProfileTopAlert({
+    checkIns,
+    compliance: { nutritionCompliancePercent: compliance.nutritionWeeklyAvgPct, planDaysRemaining, currentStreak: bestStreak },
+    lastWorkoutDate,
+    oneRMDelta: null,
+  })
+
   return (
     <View style={{ gap: 14 }}>
+      {topAlert ? <TopAlertBanner type={topAlert.type} message={topAlert.message} /> : null}
       {/* Compliance rings */}
       <StatCard>
         <CardHeader icon={Flame} title="Cumplimiento semanal" />
         <View style={styles.ringRow}>
-          <Ring label="Entreno" hint={`${compliance.workoutsThisWeek}/${compliance.workoutsTarget}`} value={workoutPct} color={theme.primary} />
-          <Ring label="Nutrición" hint={`${compliance.nutritionWeeklyAvgPct}%`} value={nutritionPct} color={compliance.nutritionWeeklyAvgPct >= 70 ? theme.success : compliance.nutritionWeeklyAvgPct >= 50 ? '#F59E0B' : theme.destructive} />
-          <Ring label="Check-in" hint={`${compliance.checkInCompliancePercent}%`} value={checkPct} color={compliance.checkInCompliancePercent >= 70 ? theme.success : compliance.checkInCompliancePercent >= 40 ? '#F59E0B' : theme.destructive} />
+          <Ring label="Entreno" hint={`${compliance.workoutsThisWeek}/${compliance.workoutsTarget}`} value={workoutPct} color={theme.primary} delta={compliance.workoutsThisWeek - compliance.workoutsPrevWeek} unit="" />
+          <Ring label="Nutrición" hint={`${compliance.nutritionWeeklyAvgPct}%`} value={nutritionPct} color={compliance.nutritionWeeklyAvgPct >= 70 ? theme.success : compliance.nutritionWeeklyAvgPct >= 50 ? '#F59E0B' : theme.destructive} delta={compliance.nutritionWeeklyAvgPct - compliance.nutritionPrevWeeklyAvgPct} unit="pts" />
+          <Ring label="Check-in" hint={`${compliance.checkInCompliancePercent}%`} value={checkPct} color={compliance.checkInCompliancePercent >= 70 ? theme.success : compliance.checkInCompliancePercent >= 40 ? '#F59E0B' : theme.destructive} delta={compliance.checkInCompliancePercent - compliance.checkInCompliancePercentWeekAgo} unit="pts" />
         </View>
       </StatCard>
 
@@ -167,12 +192,17 @@ export function OverviewTab({
   )
 }
 
-function Ring({ label, hint, value, color }: { label: string; hint: string; value: number; color: string }) {
+function Ring({ label, hint, value, color, delta, unit }: { label: string; hint: string; value: number; color: string; delta?: number; unit?: string }) {
   const { theme } = useTheme()
   return (
     <View style={styles.ringItem}>
       <ComplianceRing value={value} label={label} color={color} size={68} />
       <Text style={[styles.ringHint, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{hint}</Text>
+      {delta != null && delta !== 0 ? (
+        <Text style={[styles.ringDelta, { color: delta > 0 ? theme.success : theme.destructive, fontFamily: theme.fontSans }]}>
+          {delta > 0 ? '↑' : '↓'}{Math.abs(delta)}{unit ? ` ${unit}` : ''}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -276,9 +306,13 @@ function BioField({ label, value, onChangeText, placeholder }: { label: string; 
 }
 
 const styles = StyleSheet.create({
+  alertBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
+  alertDot: { width: 8, height: 8, borderRadius: 4 },
+  alertMsg: { fontSize: 12.5, flex: 1, lineHeight: 17 },
   ringRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingTop: 4 },
   ringItem: { flex: 1, alignItems: 'center', gap: 4 },
   ringHint: { fontSize: 13 },
+  ringDelta: { fontSize: 10 },
   weekRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   weekLabel: { fontSize: 12 },
   weekVal: { fontSize: 14 },

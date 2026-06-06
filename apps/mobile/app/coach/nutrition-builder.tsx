@@ -3,10 +3,12 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, S
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react-native'
+import { ArrowLeftRight, Calculator, ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
+import { Button, NativeDialog } from '../../components'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
+import { calcMacros, ACTIVITY_LABELS, GOAL_ADJUSTMENTS, type ActivityKey, type GoalKey } from '../../lib/macro-calculator'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import { FoodSwapSheet } from '../../components/coach/FoodSwapSheet'
 import {
@@ -52,6 +54,9 @@ export default function NutritionBuilderScreen() {
   // Target del editor de intercambios (qué alimento de qué comida).
   const [swapTarget, setSwapTarget] = useState<{ mealUid: string; itemUid: string } | null>(null)
   const [showEmptyWarn, setShowEmptyWarn] = useState(false)
+  // N-F3: calculadora de metas (Mifflin-St Jeor).
+  const [calcOpen, setCalcOpen] = useState(false)
+  const [calc, setCalc] = useState({ weight: '', height: '', age: '', gender: 'M' as 'M' | 'F', activity: 'moderate' as ActivityKey, goal: 'maintain' as GoalKey })
 
   useEffect(() => {
     (async () => {
@@ -240,6 +245,8 @@ export default function NutritionBuilderScreen() {
             <MacroField theme={theme} label="Gras (g)" value={draft.fats_g} onChange={(n) => { setMacrosManual(true); patch({ fats_g: n }) }} />
           </View>
 
+          <Button label="Calcular metas (Mifflin-St Jeor)" variant="outline" leftIcon={Calculator} onPress={() => setCalcOpen(true)} full />
+
           {/* Live totals from foods */}
           <View style={[styles.totals, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
             <Text style={[styles.totalsLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Suma de alimentos</Text>
@@ -368,6 +375,28 @@ export default function NutritionBuilderScreen() {
         title={searchMode === 'swap' ? 'Agregar alternativa' : undefined}
       />
       <FoodSwapSheet ref={swapSheetRef} item={swapItem} onAddPress={onAddSwapPress} onUpdateSwap={updateSwap} onRemoveSwap={removeSwap} />
+
+      {/* N-F3: calculadora de metas (Mifflin-St Jeor) */}
+      <NativeDialog open={calcOpen} title="Calcular metas" onClose={() => setCalcOpen(false)}>
+        <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <CalcField theme={theme} label="Peso (kg)" value={calc.weight} onChangeText={(v: string) => setCalc((c) => ({ ...c, weight: v }))} />
+            <CalcField theme={theme} label="Altura (cm)" value={calc.height} onChangeText={(v: string) => setCalc((c) => ({ ...c, height: v }))} />
+            <CalcField theme={theme} label="Edad" value={calc.age} onChangeText={(v: string) => setCalc((c) => ({ ...c, age: v }))} />
+          </View>
+          <CalcChips theme={theme} label="Sexo" value={calc.gender} options={[{ k: 'M', l: 'Hombre' }, { k: 'F', l: 'Mujer' }]} onPick={(k) => setCalc((c) => ({ ...c, gender: k as 'M' | 'F' }))} />
+          <CalcChips theme={theme} label="Actividad" value={calc.activity} options={(Object.keys(ACTIVITY_LABELS) as ActivityKey[]).map((k) => ({ k, l: ACTIVITY_LABELS[k] }))} onPick={(k) => setCalc((c) => ({ ...c, activity: k as ActivityKey }))} />
+          <CalcChips theme={theme} label="Objetivo" value={calc.goal} options={(Object.keys(GOAL_ADJUSTMENTS) as GoalKey[]).map((k) => ({ k, l: GOAL_ADJUSTMENTS[k].label }))} onPick={(k) => setCalc((c) => ({ ...c, goal: k as GoalKey }))} />
+          <Button label="Aplicar metas sugeridas" onPress={() => {
+            const w = Number(calc.weight), h = Number(calc.height), a = Number(calc.age)
+            if (!(w > 0 && h > 0 && a > 0)) { Alert.alert('Datos incompletos', 'Indicá peso, altura y edad.'); return }
+            const g = calcMacros(w, h, a, calc.gender, calc.activity, calc.goal)
+            setMacrosManual(true)
+            patch({ daily_calories: g.calories, protein_g: g.protein, carbs_g: g.carbs, fats_g: g.fats })
+            setCalcOpen(false)
+          }} full />
+        </ScrollView>
+      </NativeDialog>
     </SafeAreaView>
   )
 }
@@ -382,6 +411,35 @@ function Field({ theme, label, multiline, ...rest }: any) {
       <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
       <TextInput placeholderTextColor={theme.mutedForeground} multiline={multiline}
         style={[styles.input, multiline && { height: 80, textAlignVertical: 'top', paddingTop: 10 }, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} {...rest} />
+    </View>
+  )
+}
+
+function CalcField({ theme, label, value, onChangeText }: { theme: any; label: string; value: string; onChangeText: (v: string) => void }) {
+  return (
+    <View style={{ flex: 1, gap: 5 }}>
+      <Text style={[styles.macroLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <TextInput value={value} onChangeText={onChangeText} keyboardType="number-pad" placeholder="0" placeholderTextColor={theme.mutedForeground}
+        style={[styles.macroInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+    </View>
+  )
+}
+
+function CalcChips({ theme, label, value, options, onPick }: { theme: any; label: string; value: string; options: { k: string; l: string }[]; onPick: (k: string) => void }) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {options.map((o) => {
+          const on = o.k === value
+          return (
+            <TouchableOpacity key={o.k} onPress={() => onPick(o.k)} activeOpacity={0.8}
+              style={{ borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{o.l}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
     </View>
   )
 }

@@ -1,6 +1,36 @@
 import * as ImageManipulator from 'expo-image-manipulator'
 import { decode } from 'base64-arraybuffer'
+import { z } from 'zod'
 import { supabase } from './supabase'
+import { apiFetch } from './api'
+
+// M-F3: cambio de slug vía endpoint mobile (uniqueness + lock 30d server-side).
+export async function updateCoachSlug(slug: string): Promise<{ ok: boolean; slug?: string; error?: string }> {
+  try {
+    const r = await apiFetch<{ ok: true; slug: string }>('/api/mobile/coach/slug', { method: 'POST', authenticated: true, body: { slug } })
+    return { ok: true, slug: r.slug }
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'No se pudo cambiar la URL.' }
+  }
+}
+
+// M-F11/TX-6: schema local (mismos límites que la web) hasta poder compartir @eva/schemas.
+const brandEditableSchema = z
+  .object({
+    brandName: z.string().trim().min(2, 'El nombre de marca debe tener al menos 2 caracteres.').max(60, 'El nombre de marca es muy largo (máx 60).'),
+    welcomeMessage: z.string().max(240, 'El mensaje de bienvenida supera 240 caracteres.').nullable().optional(),
+    loaderText: z.string().max(10, 'El texto del loader supera 10 caracteres.').nullable().optional(),
+    welcomeModalContent: z.string().max(1000, 'El contenido del modal supera 1000 caracteres.').nullable().optional(),
+    welcomeModalType: z.enum(['text', 'video']),
+  })
+  .passthrough()
+  .superRefine((v: any, ctx) => {
+    if (v.welcomeModalType === 'video' && typeof v.welcomeModalContent === 'string' && v.welcomeModalContent.trim()) {
+      if (!/(youtube\.com|youtu\.be|vimeo\.com)/i.test(v.welcomeModalContent)) {
+        ctx.addIssue({ code: 'custom', message: 'El video debe ser un enlace de YouTube o Vimeo.', path: ['welcomeModalContent'] })
+      }
+    }
+  })
 
 // Coach white-label branding. Reads + writes the coach's own `coaches` row
 // directly under the session (RLS `coaches_update_own` allows id = auth.uid()).
@@ -26,6 +56,7 @@ export interface CoachBrandSettings {
 }
 
 export interface CoachBrandEditable {
+  fullName?: string
   brandName: string
   primaryColor: string
   useBrandColors: boolean
@@ -77,6 +108,11 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
   const name = input.brandName.trim()
   if (name.length < 2) return { ok: false, error: 'El nombre de marca debe tener al menos 2 caracteres.' }
   if (!/^#[0-9a-fA-F]{6}$/.test(input.primaryColor)) return { ok: false, error: 'Color de marca inválido (usá formato #RRGGBB).' }
+  // M-F11/TX-6: validación con zod local (límites + refine de video) — mismos límites que la web.
+  const brandValidation = brandEditableSchema.safeParse(input)
+  if (!brandValidation.success) {
+    return { ok: false, error: brandValidation.error.issues[0]?.message ?? 'Datos de marca inválidos.' }
+  }
 
   // Bump welcome_modal_version when the modal changes so students re-see it (web parity).
   const { data: current } = await supabase
@@ -95,6 +131,8 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
   const { error } = await supabase
     .from('coaches')
     .update({
+      // M-F2: full_name editable desde Mi Marca (antes no se escribía).
+      ...(input.fullName != null && input.fullName.trim() ? { full_name: input.fullName.trim() } : {}),
       brand_name: name,
       primary_color: input.primaryColor,
       use_brand_colors_coach: input.useBrandColors,

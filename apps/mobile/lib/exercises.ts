@@ -1,5 +1,9 @@
+import * as ImageManipulator from 'expo-image-manipulator'
+import { decode } from 'base64-arraybuffer'
 import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
+import { getCoachProfile } from './coach'
+import { getCoachOrgContext } from './org'
 
 // Coach exercise library. Reads via Supabase (RLS: system exercises +
 // coach-owned). Mutations run under the coach session (RLS enforces coach_id =
@@ -70,6 +74,7 @@ export interface ExerciseInput {
   instructions?: string[]
   video_url?: string | null
   gif_url?: string | null
+  image_url?: string | null
 }
 
 /** Extrae el ID (11 chars) de una URL de YouTube (watch, youtu.be, embed, shorts). */
@@ -155,11 +160,14 @@ async function currentCoachId(): Promise<string | null> {
 
 export async function listCoachExercises(): Promise<{ exercises: ExerciseRow[]; coachId: string | null }> {
   const coachId = await currentCoachId()
-  // Catálogo sistema (coach_id+org_id null) OR propios. Filtro rico usa org_id;
+  // E-F5: incluir el catálogo de la ORG (coach_id null + org_id = mi org) además del sistema y los propios.
+  const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
+  // Catálogo sistema (coach_id+org_id null) OR org OR propios. Filtro rico usa org_id;
   // fallback (prod sin org_id) usa solo coach_id.
+  const orgClause = orgId ? `,and(coach_id.is.null,org_id.eq.${orgId})` : ''
   const richFilter = coachId
-    ? `and(coach_id.is.null,org_id.is.null),coach_id.eq.${coachId}`
-    : `and(coach_id.is.null,org_id.is.null)`
+    ? `and(coach_id.is.null,org_id.is.null),coach_id.eq.${coachId}${orgClause}`
+    : `and(coach_id.is.null,org_id.is.null)${orgClause}`
   const minFilter = coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : `coach_id.is.null`
 
   const res = await selectWithFallback<any>(
@@ -172,9 +180,25 @@ export async function listCoachExercises(): Promise<{ exercises: ExerciseRow[]; 
   return { exercises, coachId }
 }
 
+// E-F2: validación de URLs de media (video = YouTube válido; gif/imagen = http(s)).
+function validateExerciseMedia(input: ExerciseInput): string | null {
+  if (input.video_url && !youtubeId(input.video_url)) return 'El video debe ser un enlace de YouTube válido.'
+  if (input.gif_url && !/^https?:\/\//i.test(input.gif_url)) return 'La URL del GIF debe empezar con http.'
+  if (input.image_url && !/^https?:\/\//i.test(input.image_url)) return 'La URL de la imagen debe empezar con http.'
+  return null
+}
+
 export async function createExercise(input: ExerciseInput): Promise<{ ok: boolean; id?: string; error?: string }> {
   const coachId = await currentCoachId()
   if (!coachId) return { ok: false, error: 'No autenticado.' }
+  const mediaErr = validateExerciseMedia(input)
+  if (mediaErr) return { ok: false, error: mediaErr }
+
+  // E-F7: enforce tier en la mutación (no solo en UI). Free no crea ejercicios propios.
+  const profile = await getCoachProfile()
+  if (!canCreateCustomExercises(profile?.subscriptionTier)) {
+    return { ok: false, error: 'Tu plan no permite crear ejercicios propios. Actualizá a Starter o superior.' }
+  }
 
   const name = input.name.trim()
   if (name.length < 2) return { ok: false, error: 'El nombre debe tener al menos 2 caracteres.' }
@@ -202,6 +226,7 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
       instructions: input.instructions ?? [],
       video_url: input.video_url ?? null,
       gif_url: input.gif_url ?? null,
+      image_url: input.image_url ?? null,
       source: 'coach',
     })
     .select('id')
@@ -220,6 +245,8 @@ export async function updateExercise(
 
   const name = input.name.trim()
   if (name.length < 2) return { ok: false, error: 'El nombre debe tener al menos 2 caracteres.' }
+  const mediaErr = validateExerciseMedia(input)
+  if (mediaErr) return { ok: false, error: mediaErr }
 
   const { count } = await supabase
     .from('exercises')
@@ -241,12 +268,52 @@ export async function updateExercise(
       instructions: input.instructions ?? [],
       video_url: input.video_url ?? null,
       gif_url: input.gif_url ?? null,
+      image_url: input.image_url ?? null,
     })
     .eq('id', id)
     .eq('coach_id', coachId)
 
   if (error) return { ok: false, error: error.message }
   return { ok: true }
+}
+
+// E-F1: subir una imagen del ejercicio desde el device (resize→PNG 800) al bucket
+// `exercise-media`. Devuelve la URL pública (cache-busted) para guardar en image_url.
+export async function uploadExerciseImage(uri: string): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'No autenticado.' }
+  try {
+    const manipulated = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }],
+      { compress: 0.85, format: ImageManipulator.SaveFormat.PNG, base64: true }
+    )
+    if (!manipulated.base64) return { ok: false, error: 'No se pudo procesar la imagen.' }
+    const path = `${user.id}/${Date.now()}.png`
+    const { error: upErr } = await supabase.storage
+      .from('exercise-media')
+      .upload(path, decode(manipulated.base64), { contentType: 'image/png', upsert: true })
+    if (upErr) return { ok: false, error: upErr.message }
+    const { data: { publicUrl } } = supabase.storage.from('exercise-media').getPublicUrl(path)
+    return { ok: true, url: `${publicUrl}?t=${Date.now()}` }
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'Error al subir la imagen.' }
+  }
+}
+
+// E-F8: clonar un ejercicio (sistema o propio) a uno propio editable.
+export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id?: string; error?: string }> {
+  return createExercise({
+    name: `${row.name} (copia)`,
+    muscle_group: row.muscle_group ?? '',
+    equipment: row.equipment ?? null,
+    difficulty: (row.difficulty as ExerciseInput['difficulty']) ?? null,
+    body_part: row.body_part ?? null,
+    secondary_muscles: row.secondary_muscles ?? [],
+    instructions: row.instructions ?? [],
+    video_url: row.video_url ?? null,
+    gif_url: row.gif_url ?? null,
+  })
 }
 
 export async function deleteExercise(id: string): Promise<{ ok: boolean; error?: string }> {

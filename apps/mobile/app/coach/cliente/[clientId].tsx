@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Apple, Archive, ArchiveRestore, BarChart3, CreditCard, Dumbbell, LayoutGrid, MessageCircle, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
+import { Apple, Archive, ArchiveRestore, BarChart3, CreditCard, Dumbbell, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
@@ -244,7 +244,8 @@ export default function ClientDetailScreen() {
           ) : tab === 'plan' ? (
             <PlanTab data={data} onEdit={openBuilder} />
           ) : tab === 'nutricion' ? (
-            <NutricionTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading} />
+            <NutricionTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading}
+              onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
           ) : (
             <FacturacionTab data={data} reload={load} onAddPayment={() => setPayOpen(true)} onOpenPhoto={onOpenPhoto} />
           )}
@@ -267,6 +268,7 @@ export default function ClientDetailScreen() {
       {/* FAB */}
       <Fab open={fabOpen} onToggle={() => setFabOpen((v) => !v)} actions={[
         { icon: MessageCircle, label: 'WhatsApp', color: '#25D366', onPress: () => { setFabOpen(false); openWhatsApp() } },
+        { icon: Pencil, label: 'Editar datos', onPress: () => { setFabOpen(false); setEditOpen(true) } },
         { icon: CreditCard, label: 'Registrar pago', onPress: () => { setFabOpen(false); setPayOpen(true) } },
         { icon: Dumbbell, label: 'Editar programa', onPress: () => { setFabOpen(false); openBuilder() } },
       ]} />

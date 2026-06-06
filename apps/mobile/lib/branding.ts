@@ -7,6 +7,12 @@ export interface CoachBranding {
   primaryColor: string
   displayName: string
   inviteCode: string
+  // M-F1: loader personalizado del coach (lo consume EvaLoader). Opcionales por DB-compat.
+  logoUrl?: string | null
+  useCustomLoader?: boolean
+  loaderText?: string | null
+  loaderIconMode?: 'eva' | 'coach' | 'none' | string | null
+  loaderTextColor?: string | null
 }
 
 const BRANDING_KEY = 'eva_coach_branding'
@@ -27,21 +33,26 @@ export function normalizeCoachIdentifier(input: string): string {
     : raw.toLowerCase().replace(/[^a-z0-9-]/g, '')
 }
 
+const BRANDING_COLS_RICH =
+  'id, slug, primary_color, display_name, invite_code, logo_url, use_custom_loader, loader_text, loader_icon_mode, loader_text_color'
+const BRANDING_COLS_MIN = 'id, slug, primary_color, display_name, invite_code'
+
 export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
   const identifier = normalizeCoachIdentifier(identifierInput)
-  const query = supabase
-    .from('coaches')
-    .select('id, slug, primary_color, display_name, invite_code')
-
-  const { data, error } = await (
-    INVITE_CODE_RE.test(identifier)
-      ? query.eq('invite_code', identifier).maybeSingle()
+  const runQuery = (cols: string) => {
+    const q = supabase.from('coaches').select(cols)
+    return INVITE_CODE_RE.test(identifier)
+      ? q.eq('invite_code', identifier).maybeSingle()
       : SLUG_RE.test(identifier)
-        ? query.eq('slug', identifier).maybeSingle()
-        : query.eq('invite_code', '__invalid__').maybeSingle()
-  )
+        ? q.eq('slug', identifier).maybeSingle()
+        : q.eq('invite_code', '__invalid__').maybeSingle()
+  }
 
-  if (error || !data) return null
+  // M-F1: intenta columnas de loader; si la DB no las tiene, cae a las mínimas.
+  let res = (await runQuery(BRANDING_COLS_RICH)) as { data: any; error: any }
+  if (res.error) res = (await runQuery(BRANDING_COLS_MIN)) as { data: any; error: any }
+  const data = res.data
+  if (res.error || !data) return null
 
   const branding: CoachBranding = {
     coachId: data.id,
@@ -49,6 +60,11 @@ export async function fetchBrandingByCoachIdentifier(identifierInput: string): P
     primaryColor: data.primary_color ?? '#007AFF',
     displayName: data.display_name ?? data.slug,
     inviteCode: data.invite_code,
+    logoUrl: data.logo_url ?? null,
+    useCustomLoader: data.use_custom_loader ?? false,
+    loaderText: data.loader_text ?? null,
+    loaderIconMode: data.loader_icon_mode ?? null,
+    loaderTextColor: data.loader_text_color ?? null,
   }
 
   await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(branding))

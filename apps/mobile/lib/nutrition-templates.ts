@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
+import { selectWithFallback } from './db-compat'
 import { emptyPlanDraft, parseSwapOptions, serializeSwapOptions, type DraftMeal, type PlanDraft } from './nutrition-builder'
 
 // Coach nutrition TEMPLATES — mirrors web `nutrition.service.ts`
@@ -42,11 +43,16 @@ const TEMPLATE_SELECT = `
 export async function listTemplates(): Promise<TemplateSummary[]> {
   const coachId = await currentCoachId()
   if (!coachId) return []
-  const { data } = await supabase
-    .from('nutrition_plan_templates')
-    .select('id, name, daily_calories, protein_g, carbs_g, fats_g, template_meals ( id )')
-    .eq('coach_id', coachId)
-    .order('updated_at', { ascending: false })
+  // N-F5/TX-4: scoping de org explícito (fallback seguro si no existe la columna org_id).
+  const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
+  const cols = 'id, name, daily_calories, protein_g, carbs_g, fats_g, template_meals ( id )'
+  const { data } = await selectWithFallback<any>(
+    () => {
+      const q = supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId)
+      return (orgId ? q.eq('org_id', orgId) : q.is('org_id', null)).order('updated_at', { ascending: false })
+    },
+    () => supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId).order('updated_at', { ascending: false })
+  )
   return (data ?? []).map((t: any) => ({
     id: t.id, name: t.name, daily_calories: t.daily_calories, protein_g: t.protein_g,
     carbs_g: t.carbs_g, fats_g: t.fats_g, mealCount: t.template_meals?.length ?? 0,
@@ -247,25 +253,40 @@ async function propagateTemplate(templateId: string, coachId: string): Promise<v
       name: tmpl.name, daily_calories: tmpl.daily_calories, protein_g: tmpl.protein_g,
       carbs_g: tmpl.carbs_g, fats_g: tmpl.fats_g, instructions: tmpl.instructions ?? null,
     }).eq('id', planId)
-    // Reemplazar comidas + alimentos.
-    const { data: oldMeals } = await supabase.from('nutrition_meals').select('id').eq('plan_id', planId)
-    const oldIds = (oldMeals ?? []).map((m: any) => m.id)
-    if (oldIds.length) {
-      await supabase.from('food_items').delete().in('meal_id', oldIds)
-      await supabase.from('nutrition_meals').delete().in('id', oldIds)
-    }
+    // N-F15: propagación IN-PLACE — emparejar comidas por order_index para PRESERVAR el
+    // meal_id (así `nutrition_meal_logs` del alumno no quedan huérfanos). Antes borraba+recreaba.
+    const { data: oldMealsRaw } = await supabase.from('nutrition_meals').select('id, order_index').eq('plan_id', planId)
+    const oldMeals = [...((oldMealsRaw ?? []) as any[])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+
     for (let i = 0; i < mealsSorted.length; i++) {
       const tMeal = mealsSorted[i]
-      const { data: nm } = await supabase.from('nutrition_meals')
-        .insert({ plan_id: planId, name: tMeal.name, description: tMeal.description ?? '', order_index: i, day_of_week: tMeal.day_of_week ?? null })
-        .select('id').single()
-      if (!nm) continue
       const items = templateMealItems(tMeal)
+      const existing = oldMeals[i]
+      let mealId: string | null = null
+      if (existing) {
+        await supabase.from('nutrition_meals')
+          .update({ name: tMeal.name, description: tMeal.description ?? '', order_index: i, day_of_week: tMeal.day_of_week ?? null })
+          .eq('id', existing.id)
+        mealId = existing.id
+        await supabase.from('food_items').delete().eq('meal_id', mealId)
+      } else {
+        const { data: nm } = await supabase.from('nutrition_meals')
+          .insert({ plan_id: planId, name: tMeal.name, description: tMeal.description ?? '', order_index: i, day_of_week: tMeal.day_of_week ?? null })
+          .select('id').single()
+        mealId = nm ? (nm as any).id : null
+      }
+      if (!mealId) continue
       if (items.length) {
         await supabase.from('food_items').insert(
-          items.map((it: any) => ({ meal_id: nm.id, food_id: it.food_id, quantity: it.quantity, unit: it.unit, swap_options: it.swap_options ?? [] }))
+          items.map((it: any) => ({ meal_id: mealId, food_id: it.food_id, quantity: it.quantity, unit: it.unit, swap_options: it.swap_options ?? [] }))
         )
       }
+    }
+    // Borrar comidas sobrantes (plantilla con menos comidas que el plan previo).
+    const surplus = oldMeals.slice(mealsSorted.length).map((m: any) => m.id)
+    if (surplus.length) {
+      await supabase.from('food_items').delete().in('meal_id', surplus)
+      await supabase.from('nutrition_meals').delete().in('id', surplus)
     }
   }
 }

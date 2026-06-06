@@ -29,6 +29,7 @@ import {
   Users,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import * as Haptics from 'expo-haptics'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext } from '../../../lib/org'
@@ -288,6 +289,27 @@ export default function BuilderScreen() {
     setSelectedClientIds((prev) => prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [...prev, clientId])
   }
 
+  function confirmSync(program: ProgramItem) {
+    Alert.alert(
+      'Sincronizar con plantilla',
+      `Se aplicarán los cambios de la plantilla base a "${program.name}", respetando los bloques que modificaste manualmente.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sincronizar',
+          onPress: async () => {
+            setActionBusy(`sync-${program.id}`)
+            const result = await syncProgramFromTemplate(program)
+            setActionBusy(null)
+            if (!result.ok) { Alert.alert('No se pudo sincronizar', result.error ?? 'Intenta nuevamente.'); return }
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+            await loadLibrary()
+          },
+        },
+      ]
+    )
+  }
+
   if (loading) {
     return (
       <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
@@ -380,7 +402,7 @@ export default function BuilderScreen() {
               onAssign={() => openAssign(item)}
               onDuplicate={() => openDuplicate(item)}
               onDelete={() => confirmDelete(item)}
-              onSync={() => Alert.alert('Sincronizar', 'El merge con overrides queda para el siguiente micro-bloque.')}
+              onSync={() => confirmSync(item)}
               busy={actionBusy?.endsWith(item.id) ?? false}
             />
           </MotiView>
@@ -951,6 +973,83 @@ function blockInsertFromSource(block: ProgramBlock, planId: string) {
     section: ['warmup', 'main', 'cooldown'].includes(String(block.section)) ? block.section : 'main',
     is_override: false,
   }
+}
+
+// P-F1: merge de bloques para Sync template→alumno (port 1:1 de workout.service.mergeBlocksForSync):
+// conserva el bloque del alumno si está marcado override; si no, toma el de la plantilla; si la
+// plantilla no tiene ese índice, conserva el del alumno.
+function mergeBlocksForSync(clientBlocks: ProgramBlock[] | null | undefined, templateBlocks: ProgramBlock[] | null | undefined): ProgramBlock[] {
+  const C = [...(clientBlocks ?? [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+  const T = [...(templateBlocks ?? [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+  const maxL = Math.max(C.length, T.length)
+  const out: ProgramBlock[] = []
+  for (let j = 0; j < maxL; j += 1) {
+    const c = C[j]
+    const t = T[j]
+    if (c?.is_override) out.push(c)
+    else if (t) out.push({ ...t, is_override: false })
+    else if (c) out.push(c)
+  }
+  return out
+}
+
+function blockInsertMerged(block: ProgramBlock, planId: string, orderIndex: number) {
+  return { ...blockInsertFromSource(block, planId), order_index: orderIndex, is_override: !!block.is_override }
+}
+
+async function syncProgramFromTemplate(program: ProgramItem): Promise<{ ok: boolean; error?: string }> {
+  const coach = await getCoachProfile()
+  if (!coach) return { ok: false, error: 'Coach no encontrado.' }
+  if (!program.client_id) return { ok: false, error: 'Solo los programas de alumno se sincronizan.' }
+  if (!program.source_template_id) return { ok: false, error: 'Este programa no tiene plantilla base vinculada.' }
+
+  const tplSelect = `id, workout_plans ( id, day_of_week, title, group_name, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes, superset_group, progression_type, progression_value, is_override ) )`
+  const { data: tpl, error: tErr } = await supabase
+    .from('workout_programs')
+    .select(tplSelect)
+    .eq('id', program.source_template_id)
+    .eq('coach_id', coach.id)
+    .is('client_id', null)
+    .maybeSingle()
+  if (tErr || !tpl) return { ok: false, error: 'La plantilla base no existe o ya no está disponible.' }
+
+  const tplPlans = ((tpl as any).workout_plans ?? []) as ProgramPlan[]
+  const clientPlans = sortedPlans(program)
+  const oldPlanIds = clientPlans.map((p) => p.id)
+  if (oldPlanIds.length) {
+    await supabase.from('workout_blocks').delete().in('plan_id', oldPlanIds)
+    await supabase.from('workout_plans').delete().in('id', oldPlanIds)
+  }
+
+  let syncedDays = 0
+  for (const cp of clientPlans) {
+    const tp = tplPlans.find(
+      (p) => p.day_of_week === cp.day_of_week && String(p.week_variant || 'A') === String(cp.week_variant || 'A')
+    )
+    const merged = mergeBlocksForSync(cp.workout_blocks, tp?.workout_blocks)
+    if (!merged.length) continue
+    const { data: newPlan, error: pErr } = await supabase
+      .from('workout_plans')
+      .insert({
+        coach_id: coach.id,
+        program_id: program.id,
+        client_id: program.client_id,
+        day_of_week: cp.day_of_week,
+        title: cp.title,
+        group_name: cp.group_name ?? null,
+        assigned_date: cp.assigned_date ?? null,
+        week_variant: cp.week_variant ?? 'A',
+      })
+      .select('id')
+      .single()
+    if (pErr || !newPlan) return { ok: false, error: pErr?.message ?? 'No se pudo sincronizar un día.' }
+    const blocks = merged.map((b, i) => blockInsertMerged(b, (newPlan as { id: string }).id, i))
+    const { error: bErr } = await supabase.from('workout_blocks').insert(blocks)
+    if (bErr) return { ok: false, error: bErr.message }
+    syncedDays += 1
+  }
+  if (syncedDays === 0) return { ok: false, error: 'No hay días con ejercicios para sincronizar.' }
+  return { ok: true }
 }
 
 async function copyPlansAndBlocks(source: ProgramItem, newProgramId: string, coachId: string, clientId: string | null, assignedDate: string | null): Promise<{ ok: boolean; error?: string }> {

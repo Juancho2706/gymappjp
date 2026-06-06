@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import {
   Apple,
-  Bell,
   ClipboardList,
   CreditCard,
   Dumbbell,
@@ -83,6 +82,16 @@ const NAV_META: Record<string, NavMeta> = {
     label: 'Soporte',
     shortLabel: 'Ayuda',
     icon: LifeBuoy,
+  },
+  'check-ins': {
+    label: 'Check-ins',
+    shortLabel: 'Check-ins',
+    icon: ClipboardList,
+  },
+  perfil: {
+    label: 'Mi cuenta',
+    shortLabel: 'Cuenta',
+    icon: Settings,
   },
 }
 
@@ -157,14 +166,8 @@ export function CoachMobileHeader() {
       </View>
 
       <View style={styles.headerActions}>
-        <TouchableOpacity
-          activeOpacity={0.75}
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Noticias"
-        >
-          <Bell size={20} color={theme.mutedForeground} strokeWidth={2.2} />
-        </TouchableOpacity>
+        {/* O-F2/TX-3: el botón "Noticias" no tenía acción (botón muerto). Removido hasta
+            que exista una pantalla de novedades. */}
         <TouchableOpacity
           activeOpacity={0.75}
           style={styles.headerButton}

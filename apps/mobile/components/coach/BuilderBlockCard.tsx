@@ -75,6 +75,12 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
             <View style={[styles.badge, { backgroundColor: hexToRgba(secC, 0.14), borderColor: hexToRgba(secC, 0.4) }]}>
               <Text style={[styles.badgeT, { color: secC }]}>{SECTION_SHORT[sec]}</Text>
             </View>
+            {/* P-F7: badge de override (bloque modificado vs plantilla base). */}
+            {block.is_override ? (
+              <View style={[styles.badge, { backgroundColor: hexToRgba('#F59E0B', 0.14), borderColor: hexToRgba('#F59E0B', 0.4) }]}>
+                <Text style={[styles.badgeT, { color: '#F59E0B' }]}>MODIF.</Text>
+              </View>
+            ) : null}
 
             {editing ? (
               <View style={styles.qrow}>

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Activity, Apple, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, Moon, Salad, Scale } from 'lucide-react-native'
+import { Activity, Apple, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, Moon, Pencil, Salad, Scale } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { EmptyState, ComplianceRing, ProgressBar, MacroPill } from '../../../components'
+import { Button, EmptyState, ComplianceRing, ProgressBar, MacroPill } from '../../../components'
 import { EvaLoader } from '../../../components/EvaLoader'
 import { BarComposed, type BarComposedPoint } from '../charts/BarComposed'
 import { StatCard, CardHeader, MetricBox, cd, formatDate, adherenceColor } from './shared'
@@ -18,12 +18,14 @@ export function NutricionTab({
   onSelectDate,
   dayDetail,
   dayLoading,
+  onEditNutrition,
 }: {
   data: CoachClientDetailData
   selectedDate: string
   onSelectDate: (date: string) => void
   dayDetail: ClientDayDetail | null
   dayLoading: boolean
+  onEditNutrition?: () => void
 }) {
   const { theme } = useTheme()
   const { activeNutrition, nutritionTimeline, nutritionMonthlyAvgPct, nutritionStreakDays, compliance, favoriteFoods, checkIns } = data
@@ -43,7 +45,12 @@ export function NutricionTab({
   )
 
   if (!activeNutrition) {
-    return <EmptyState icon={Apple} title="Sin plan de nutrición" subtitle="Este alumno no tiene un plan activo." />
+    return (
+      <View style={{ gap: 14 }}>
+        <EmptyState icon={Apple} title="Sin plan de nutrición" subtitle="Este alumno no tiene un plan activo." />
+        {onEditNutrition ? <Button label="Asignar plan de nutrición" leftIcon={Apple} onPress={onEditNutrition} full /> : null}
+      </View>
+    )
   }
 
   const today = nutritionTimeline.find((t) => t.date === todayIso) ?? nutritionTimeline[0]
@@ -74,7 +81,9 @@ export function NutricionTab({
 
       {/* Plan + macros */}
       <StatCard>
-        <CardHeader icon={Salad} title="Plan activo" />
+        <CardHeader icon={Salad} title="Plan activo" right={
+          onEditNutrition ? <TouchableOpacity onPress={onEditNutrition} hitSlop={8}><Pencil size={16} color={theme.primary} /></TouchableOpacity> : undefined
+        } />
         <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{activeNutrition.name}</Text>
         <View style={styles.macroRow}>
           {activeNutrition.daily_calories != null && <MacroPill label="kcal" value={activeNutrition.daily_calories} color={theme.primary} />}
@@ -82,6 +91,7 @@ export function NutricionTab({
           {activeNutrition.carbs_g != null && <MacroPill label="C" value={activeNutrition.carbs_g} color="#F59E0B" />}
           {activeNutrition.fats_g != null && <MacroPill label="G" value={activeNutrition.fats_g} color="#8B5CF6" />}
         </View>
+        {onEditNutrition ? <Button label="Editar / asignar plan" variant="outline" leftIcon={Pencil} onPress={onEditNutrition} full /> : null}
       </StatCard>
 
       {/* Rings de hoy */}

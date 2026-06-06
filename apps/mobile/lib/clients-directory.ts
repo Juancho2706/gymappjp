@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
 import { getCoachProfile } from './coach'
+import { getCoachOrgContext } from './org'
+import { selectWithFallback } from './db-compat'
 import { apiFetch } from './api'
 
 export type AttentionFlag =
@@ -46,8 +48,10 @@ export type DirectorySortKey =
   | 'name_asc'
   | 'last_workout'
   | 'plan_days'
+  | 'adherence'
+  | 'weight_change'
 
-export type StatusFilter = 'any' | 'active' | 'paused' | 'archived'
+export type StatusFilter = 'any' | 'active' | 'paused' | 'archived' | 'pending_sync'
 
 export interface DirectoryClient {
   id: string
@@ -113,13 +117,19 @@ export async function getCoachDirectoryClients(): Promise<DirectoryClient[]> {
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  // TX-4: scoping de org explícito (no solo RLS). Seguro en standalone vía selectWithFallback:
+  // si la columna org_id no existe en una prod vieja, cae a la query sin filtro de org.
+  const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
+  const clientsSelect = 'id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)'
 
   const [clientsRes, workoutLogsRes, checkInsRes] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)')
-      .eq('coach_id', coach.id)
-      .order('full_name'),
+    selectWithFallback<any>(
+      () => {
+        const q = supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id)
+        return (orgId ? q.eq('org_id', orgId) : q.is('org_id', null)).order('full_name')
+      },
+      () => supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id).order('full_name')
+    ),
     supabase
       .from('workout_logs')
       .select('client_id, logged_at')
@@ -218,6 +228,7 @@ export function filterClients(
     if (statusFilter === 'active') matchesStatus = !c.isArchived && c.isActive && !c.forcePwChange
     else if (statusFilter === 'paused') matchesStatus = !c.isArchived && !c.isActive
     else if (statusFilter === 'archived') matchesStatus = c.isArchived
+    else if (statusFilter === 'pending_sync') matchesStatus = !c.isArchived && c.forcePwChange
     else matchesStatus = !c.isArchived
 
     let matchesRisk = true
@@ -237,7 +248,12 @@ export function filterClients(
   })
 }
 
-export function sortClients(clients: DirectoryClient[], key: DirectorySortKey, dir: SortDir = 'desc'): DirectoryClient[] {
+export function sortClients(
+  clients: DirectoryClient[],
+  key: DirectorySortKey,
+  dir: SortDir = 'desc',
+  pulseById?: Map<string, PulseRow>
+): DirectoryClient[] {
   const sign = dir === 'asc' ? -1 : 1
   return [...clients].sort((a, b) => {
     if (key === 'name_asc') return a.fullName.localeCompare(b.fullName) * (dir === 'asc' ? 1 : -1)
@@ -249,6 +265,16 @@ export function sortClients(clients: DirectoryClient[], key: DirectorySortKey, d
     if (key === 'last_workout') {
       const da = a.lastWorkoutDate ? new Date(a.lastWorkoutDate).getTime() : 0
       const db = b.lastWorkoutDate ? new Date(b.lastWorkoutDate).getTime() : 0
+      return (db - da) * sign
+    }
+    if (key === 'adherence') {
+      const da = pulseById?.get(a.id)?.percentage ?? -1
+      const db = pulseById?.get(b.id)?.percentage ?? -1
+      return (db - da) * sign
+    }
+    if (key === 'weight_change') {
+      const da = Math.abs(pulseById?.get(a.id)?.weightDelta7d ?? 0)
+      const db = Math.abs(pulseById?.get(b.id)?.weightDelta7d ?? 0)
       return (db - da) * sign
     }
     // attention_score

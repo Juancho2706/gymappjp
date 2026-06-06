@@ -24,7 +24,9 @@ export const STATUS_LABELS: Record<string, string> = {
   canceled: 'Cancelada',
   expired: 'Vencida',
   past_due: 'Pago pendiente',
+  pending_payment: 'Pago pendiente',
   paused: 'Pausada',
+  org_managed: 'Gestionada por tu organización',
 }
 
 export async function getCoachSubscriptionOverview(): Promise<CoachSubscriptionOverview | null> {

@@ -12,7 +12,7 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { ExercisePreviewSheet } from '../../../components/coach/ExercisePreviewSheet'
-import { canCreateCustomExercises, exerciseThumb, listCoachExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../../lib/exercises'
+import { canCreateCustomExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../../lib/exercises'
 import { getCoachProfile } from '../../../lib/coach'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -67,14 +67,13 @@ export default function EjerciciosScreen() {
   }, [exercises])
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return exercises.filter((e) => {
+    // E-F3: búsqueda amplia normalizada (nombre+músculo+body_part+equipo+secundarios) vía filterExercises.
+    const bySource = exercises.filter((e) => {
       if (source === 'system' && e.isOwn) return false
       if (source === 'own' && !e.isOwn) return false
-      if (muscle && e.muscle_group !== muscle) return false
-      if (q && !e.name.toLowerCase().includes(q)) return false
       return true
     })
+    return filterExercises(bySource, query.trim(), muscle || 'todos')
   }, [exercises, query, muscle, source])
 
   // Agrupado por músculo (header + filas) para el FlashList.
@@ -115,6 +114,19 @@ export default function EjerciciosScreen() {
     setEditTarget(row)
     // Pequeño delay para no encimar dos modales (dismiss → present).
     setTimeout(() => formRef.current?.present(), 280)
+  }
+
+  // E-F8: duplicar un ejercicio del sistema a uno propio editable.
+  async function handleCloneFromPreview(row: ExerciseRow) {
+    if (!canCreate) {
+      Alert.alert('Función Pro', 'Duplicar ejercicios a tu biblioteca requiere un plan de pago.')
+      return
+    }
+    previewRef.current?.dismiss()
+    const r = await cloneExercise(row)
+    if (!r.ok) { Alert.alert('No se pudo duplicar', r.error ?? 'Intenta nuevamente.'); return }
+    Alert.alert('Ejercicio duplicado', 'Se copió a tus ejercicios. Ahora podés editarlo.')
+    load('refresh')
   }
 
   if (loading) {
@@ -210,6 +222,7 @@ export default function EjerciciosScreen() {
         ref={previewRef}
         exercise={previewTarget}
         onEdit={openEditFromPreview}
+        onClone={handleCloneFromPreview}
         onClose={() => setPreviewTarget(null)}
       />
       <ExerciseFormSheet ref={formRef} exercise={editTarget} onSaved={() => load('refresh')} onClose={() => setEditTarget(null)} />

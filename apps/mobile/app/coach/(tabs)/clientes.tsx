@@ -30,13 +30,14 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Upload,
   Users,
   UserPlus,
   X,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
-import { ScreenHeader } from '../../../components'
+import { Button, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
@@ -272,8 +273,14 @@ const alertStyles = StyleSheet.create({
 
 // ─── Client Row ───────────────────────────────────────────────────────────────
 
-function ClientRow({ item, index, theme, router }: { item: DirectoryClient; index: number; theme: any; router: any }) {
+function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClient; index: number; theme: any; router: any; pulse?: PulseRow }) {
   const planLabel = daysLabel(item.planDaysRemaining)
+  // A-F4: métricas en la fila (antes solo en cards). Adherencia + peso±Δ + último log.
+  const adherence = pulse?.percentage ?? null
+  const adherenceColor = adherence == null ? theme.mutedForeground : adherence >= 70 ? '#10B981' : adherence >= 40 ? '#F59E0B' : '#EF4444'
+  const lastDays = item.lastWorkoutDate ? Math.floor((Date.now() - new Date(item.lastWorkoutDate).getTime()) / 86400000) : null
+  const lastColor = lastDays == null ? theme.mutedForeground : lastDays < 3 ? '#10B981' : lastDays < 7 ? '#F59E0B' : '#EF4444'
+  const lastLabel = lastDays == null ? 'Sin entrenos' : lastDays <= 0 ? 'Hoy' : lastDays === 1 ? 'Ayer' : `${lastDays}d`
   const planColor =
     item.planDaysRemaining !== null && item.planDaysRemaining <= 0
       ? '#EF4444'
@@ -341,13 +348,26 @@ function ClientRow({ item, index, theme, router }: { item: DirectoryClient; inde
                 </>
               )}
             </View>
+            {pulse ? (
+              <View style={rowStyles.metricsRow}>
+                {adherence != null ? <Text style={[rowStyles.metric, { color: adherenceColor, fontFamily: 'Inter_700Bold' }]}>{adherence}% adh</Text> : null}
+                <View style={[rowStyles.metricDot, { backgroundColor: lastColor }]} />
+                <Text style={[rowStyles.metric, { color: theme.mutedForeground }]}>{lastLabel}</Text>
+                {pulse.currentWeight != null ? (
+                  <Text style={[rowStyles.metric, { color: theme.mutedForeground }]} numberOfLines={1}>
+                    · {pulse.currentWeight}kg{pulse.weightDelta7d != null && pulse.weightDelta7d !== 0 ? ` ${pulse.weightDelta7d > 0 ? '↑' : '↓'}${Math.abs(pulse.weightDelta7d)}` : ''}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         </View>
 
         {/* Right: status + score + chevron */}
         <View style={rowStyles.right}>
           <StatusChip client={item} />
-          <ScoreBadge score={item.attentionScore} />
+          {/* A-F6: usar el attentionScore del pulse (autoritativo) cuando llega; si no, el local. */}
+          <ScoreBadge score={pulse?.attentionScore ?? item.attentionScore} />
           <ChevronRight size={16} color={theme.mutedForeground} />
         </View>
       </TouchableOpacity>
@@ -373,6 +393,9 @@ const rowStyles = StyleSheet.create({
   planRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   planName: { fontSize: 10, flexShrink: 1 },
   planDays: { fontSize: 10, fontWeight: '700', flexShrink: 0 },
+  metricsRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
+  metric: { fontSize: 10, flexShrink: 1 },
+  metricDot: { width: 6, height: 6, borderRadius: 3 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
 })
 
@@ -383,12 +406,15 @@ const SORT_OPTIONS: { label: string; value: DirectorySortKey }[] = [
   { label: 'Nombre A→Z', value: 'name_asc' },
   { label: 'Última sesión', value: 'last_workout' },
   { label: 'Días plan restantes', value: 'plan_days' },
+  { label: 'Adherencia', value: 'adherence' },
+  { label: 'Peso: mayor cambio', value: 'weight_change' },
 ]
 
 const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Todos', value: 'any' },
   { label: 'Activos', value: 'active' },
   { label: 'Pausados', value: 'paused' },
+  { label: 'Cambio de contraseña pendiente', value: 'pending_sync' },
   { label: 'Archivados', value: 'archived' },
 ]
 
@@ -633,6 +659,7 @@ export default function ClientesScreen() {
   const [showSortSheet, setShowSortSheet] = useState(false)
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -682,12 +709,17 @@ export default function ClientesScreen() {
 
   const displayed = useMemo(() => {
     const filtered = filterClients(clients, search, riskFilter, statusFilter, pulseById)
-    return sortClients(filtered, sortKey, sortDir)
+    return sortClients(filtered, sortKey, sortDir, pulseById)
   }, [clients, search, riskFilter, statusFilter, sortKey, sortDir, pulseById])
 
   const urgentBanner = stats.urgentCount > 0
   const expiredBanner = stats.expiredProgramCount > 0
   const syncBanner = stats.pendingSyncCount > 0
+  // A-F10: contador de adherencia nutricional baja (desde el pulse) para banner de triage.
+  const nutritionLowCount = useMemo(
+    () => [...pulseById.values()].filter((p) => (p.attentionFlags?.includes('NUTRICION_RIESGO')) || (p.nutritionPercentage > 0 && p.nutritionPercentage < 50)).length,
+    [pulseById]
+  )
 
   // Swipe-to-dismiss alerts: hidden until the next day OR until the count changes.
   const todayIso = new Date().toISOString().slice(0, 10)
@@ -723,12 +755,37 @@ export default function ClientesScreen() {
     shareLogin(c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
   }
   function handleToggle(c: DirectoryClient) {
-    setClientStatus(c.id, { is_active: !c.isActive }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.'))
+    // TX-5: confirmar acción reversible pero sensible (pausa/activa acceso del alumno).
+    const pausing = c.isActive
+    Alert.alert(
+      pausing ? 'Pausar alumno' : 'Activar alumno',
+      pausing ? `${c.fullName} perderá acceso a la app hasta reactivarlo.` : `${c.fullName} recuperará el acceso a la app.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: pausing ? 'Pausar' : 'Activar',
+          style: pausing ? 'destructive' : 'default',
+          onPress: () => setClientStatus(c.id, { is_active: !c.isActive }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+        },
+      ]
+    )
   }
   function handleReset(c: DirectoryClient) {
-    resetClientPassword(c.id)
-      .then((temp) => Alert.alert('Contraseña reseteada', `Contraseña temporal de ${c.fullName}: ${temp}\n\nDeberá cambiarla al ingresar.`))
-      .catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.'))
+    // TX-5: confirmar — resetear contraseña es irreversible (invalida la actual).
+    Alert.alert(
+      'Resetear contraseña',
+      `Se generará una contraseña temporal para ${c.fullName}. La actual dejará de funcionar.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Resetear',
+          style: 'destructive',
+          onPress: () => resetClientPassword(c.id)
+            .then((temp) => Alert.alert('Contraseña reseteada', `Contraseña temporal de ${c.fullName}: ${temp}\n\nDeberá cambiarla al ingresar.`))
+            .catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+        },
+      ]
+    )
   }
   function handleDelete(c: DirectoryClient) {
     Alert.alert('Eliminar alumno', `¿Eliminar a ${c.fullName}? No se puede deshacer.`, [
@@ -757,6 +814,9 @@ export default function ClientesScreen() {
       )}
       {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
         <AlertBanner message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color="#F59E0B" onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
+      )}
+      {nutritionLowCount > 0 && !isDismissed('nutrition_low', nutritionLowCount) && (
+        <AlertBanner message={`🥗 ${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con adherencia nutricional baja`} color="#10B981" onPress={() => setRiskFilter('nutrition_low')} onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)} />
       )}
       {pulseError && (
         <TouchableOpacity activeOpacity={0.85} onPress={loadPulse} style={[styles.pulseErr, { backgroundColor: '#EF444414', borderColor: '#EF444440' }]}>
@@ -880,7 +940,7 @@ export default function ClientesScreen() {
         data={displayed}
         keyExtractor={(c) => c.id}
         renderItem={({ item, index }) => (
-          <ClientRow item={item} index={index} theme={theme} router={router} />
+          <ClientRow item={item} index={index} theme={theme} router={router} pulse={pulseById.get(item.id)} />
         )}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
@@ -982,6 +1042,15 @@ export default function ClientesScreen() {
       />
       )}
 
+      {/* A-F14: FAB secundario Importar (paste CSV) */}
+      <TouchableOpacity
+        style={[styles.fabSecondary, { backgroundColor: theme.card, borderColor: theme.border }]}
+        onPress={() => setShowImport(true)}
+        activeOpacity={0.85}
+      >
+        <Upload size={20} color={theme.primary} />
+      </TouchableOpacity>
+
       {/* FAB: Nuevo Alumno */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: theme.primary }]}
@@ -1016,7 +1085,84 @@ export default function ClientesScreen() {
         onCreated={() => load()}
         theme={theme}
       />
+
+      <NativeDialog open={showImport} title="Importar alumnos" onClose={() => setShowImport(false)}>
+        <ImportClientsForm theme={theme} onDone={() => { setShowImport(false); load() }} onCancel={() => setShowImport(false)} />
+      </NativeDialog>
     </SafeAreaView>
+  )
+}
+
+// A-F14: import por pegado (sin dep de file-picker). Reusa el endpoint de crear alumno.
+function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: () => void; onCancel: () => void }) {
+  const [text, setText] = useState('')
+  const [ageOk, setAgeOk] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ ok: number; fail: number; errors: string[] } | null>(null)
+
+  const rows = useMemo(() => {
+    return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+      const [name, email, phone] = l.split(',').map((s) => (s ?? '').trim())
+      return { name: name ?? '', email: email ?? '', phone: phone ?? '' }
+    }).filter((r) => r.name && r.email.includes('@'))
+  }, [text])
+
+  async function run() {
+    if (!ageOk) { Alert.alert('Confirmá edad', 'Confirmá que los alumnos son 14+ o con consentimiento de tutor.'); return }
+    if (!rows.length) { Alert.alert('Sin filas válidas', 'Usá una línea por alumno: nombre,email,telefono'); return }
+    setBusy(true)
+    let ok = 0, fail = 0; const errors: string[] = []
+    for (const r of rows) {
+      try {
+        await apiFetch('/api/mobile/coach/clients', {
+          method: 'POST', authenticated: true,
+          body: { fullName: r.name, email: r.email.toLowerCase(), phone: r.phone, subscriptionStartDate: new Date().toISOString().slice(0, 10), tempPassword: `Eva${Math.floor(100000 + Math.random() * 900000)}!`, ageConfirmed: true },
+        })
+        ok += 1
+      } catch (e: any) {
+        fail += 1
+        if (errors.length < 5) errors.push(`${r.name}: ${e?.message ?? 'error'}`)
+      }
+    }
+    setBusy(false)
+    setResult({ ok, fail, errors })
+  }
+
+  if (result) {
+    return (
+      <View style={{ gap: 12 }}>
+        <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold', fontSize: 16 }}>{result.ok} creados · {result.fail} con error</Text>
+        {result.errors.map((e, i) => <Text key={i} style={{ color: theme.destructive, fontSize: 12 }}>{e}</Text>)}
+        <Button label="Listo" onPress={onDone} full />
+      </View>
+    )
+  }
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 12.5 }}>
+        Pegá una línea por alumno: <Text style={{ fontFamily: 'Inter_700Bold' }}>nombre,email,telefono</Text>. Cada uno recibe una contraseña temporal.
+      </Text>
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        multiline
+        placeholder={'Juan Pérez,juan@mail.com,+569...\nAna Díaz,ana@mail.com'}
+        placeholderTextColor={theme.mutedForeground}
+        style={{ minHeight: 120, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, padding: 12, textAlignVertical: 'top', fontFamily: theme.fontSans }}
+      />
+      <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{rows.length} alumno(s) válido(s) detectado(s).</Text>
+      <TouchableOpacity activeOpacity={0.82} onPress={() => setAgeOk((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, padding: 12, backgroundColor: theme.secondary }}>
+        <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: ageOk ? theme.primary : theme.border, backgroundColor: ageOk ? theme.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+          {ageOk ? <X size={14} color="#fff" /> : null}
+        </View>
+        <Text style={{ color: theme.mutedForeground, fontSize: 12.5, flex: 1, fontFamily: theme.fontSans }}>Alumnos 14+ o con consentimiento de tutor legal.</Text>
+      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={busy} style={{ flex: 1 }} />
+        <Button label={busy ? 'Importando…' : `Importar ${rows.length}`} onPress={run} disabled={busy || rows.length === 0} style={{ flex: 1 }} />
+      </View>
+    </View>
   )
 }
 
@@ -1088,5 +1234,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  fabSecondary: {
+    position: 'absolute',
+    right: 24,
+    bottom: 142,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
 })

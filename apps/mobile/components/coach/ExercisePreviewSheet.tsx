@@ -2,7 +2,7 @@ import { forwardRef } from 'react'
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
-import { Dumbbell, Globe, Pencil, Play, Target, User, Wrench } from 'lucide-react-native'
+import { Copy, Dumbbell, Globe, Pencil, Play, Target, User, Wrench } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { exerciseThumb, youtubeId, type ExerciseRow } from '../../lib/exercises'
 
@@ -16,6 +16,8 @@ interface Props {
   exercise: ExerciseRow | null
   /** Solo para ejercicios propios: abre el form de edición. */
   onEdit?: (exercise: ExerciseRow) => void
+  /** E-F8: duplicar a un ejercicio propio editable (sistema o propio). */
+  onClone?: (exercise: ExerciseRow) => void
   onClose?: () => void
 }
 
@@ -26,7 +28,7 @@ interface Props {
  * del video + botón "Ver en YouTube" (sin webview).
  */
 export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function ExercisePreviewSheet(
-  { exercise, onEdit, onClose },
+  { exercise, onEdit, onClone, onClose },
   ref
 ) {
   const { theme } = useTheme()
@@ -145,6 +147,17 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
               >
                 <Pencil size={16} color={theme.primaryForeground} />
                 <Text style={[styles.editText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>Editar ejercicio</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {!exercise.isOwn && onClone ? (
+              <TouchableOpacity
+                onPress={() => onClone(exercise)}
+                activeOpacity={0.85}
+                style={[styles.editBtn, { backgroundColor: theme.primary + '1A', borderWidth: 1, borderColor: theme.primary + '44' }]}
+              >
+                <Copy size={16} color={theme.primary} />
+                <Text style={[styles.editText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Duplicar a mis ejercicios</Text>
               </TouchableOpacity>
             ) : null}
           </>

@@ -99,6 +99,8 @@ export type MobileDashboardData = {
   agenda: MobileAgendaItem[]
   expiringPrograms: MobileExpiringProgramItem[]
   recentActivities: MobileActivityItem[]
+  /** D-F1: true cuando el endpoint falló y se usó el cálculo local degradado (adherencia heurística, sin nutrición/peso/streak). */
+  degraded?: boolean
 }
 
 type ClientRow = {
@@ -678,17 +680,22 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     agenda,
     expiringPrograms,
     recentActivities: activities.slice(0, 8),
+    degraded: true,
   }
 }
 
 export async function getCoachDashboardDataMobile(): Promise<MobileDashboardData | null> {
-  try {
-    const payload = await apiFetch<MobileDashboardApiResponse>('/api/mobile/coach/dashboard', {
-      method: 'GET',
-      authenticated: true,
-    })
-    return mapApiDashboard(payload)
-  } catch {
-    return getCoachDashboardDataMobileLocal()
+  // D-F1: reintentar el endpoint una vez antes de degradar al cálculo local.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const payload = await apiFetch<MobileDashboardApiResponse>('/api/mobile/coach/dashboard', {
+        method: 'GET',
+        authenticated: true,
+      })
+      return mapApiDashboard(payload)
+    } catch {
+      // sigue al siguiente intento; si se agotan, cae al fallback degradado
+    }
   }
+  return getCoachDashboardDataMobileLocal()
 }

@@ -1,7 +1,9 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { Trash2 } from 'lucide-react-native'
+import { Image } from 'expo-image'
+import * as ImagePicker from 'expo-image-picker'
+import { ImagePlus, Trash2, X } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import {
   DIFFICULTY_OPTIONS,
@@ -10,6 +12,7 @@ import {
   createExercise,
   deleteExercise,
   updateExercise,
+  uploadExerciseImage,
   type ExerciseRow,
 } from '../../lib/exercises'
 
@@ -35,8 +38,24 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   const [instructions, setInstructions] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
   const [gifUrl, setGifUrl] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // E-F1: subir imagen del ejercicio desde galería del device.
+  async function pickImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) { setError('Permiso de galería denegado.'); return }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 })
+    if (res.canceled || !res.assets?.[0]?.uri) return
+    setUploading(true)
+    setError(null)
+    const up = await uploadExerciseImage(res.assets[0].uri)
+    setUploading(false)
+    if (!up.ok || !up.url) { setError(up.error ?? 'No se pudo subir la imagen.'); return }
+    setImageUrl(up.url)
+  }
 
   // Reset form whenever the target exercise changes (open for create/edit).
   useEffect(() => {
@@ -50,6 +69,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setInstructions(exercise?.instructions?.join('\n') ?? '')
     setVideoUrl(exercise?.video_url ?? '')
     setGifUrl(exercise?.gif_url ?? '')
+    setImageUrl(exercise?.image_url ?? '')
   }, [exercise])
 
   async function save() {
@@ -66,6 +86,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       instructions: instructions.split('\n').map((s) => s.trim()).filter(Boolean),
       video_url: videoUrl.trim() || null,
       gif_url: gifUrl.trim() || null,
+      image_url: imageUrl.trim() || null,
     }
     const res = editing ? await updateExercise(exercise!.id, input) : await createExercise(input)
     setSaving(false)
@@ -123,6 +144,24 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
 
         <Field theme={theme} label="Video (YouTube)" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
         <Field theme={theme} label="GIF (URL)" value={gifUrl} onChangeText={setGifUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" />
+
+        {/* E-F1: imagen desde el device */}
+        <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Imagen del ejercicio</Text>
+        <View style={styles.imgRow}>
+          {imageUrl ? (
+            <View>
+              <Image source={{ uri: imageUrl }} style={[styles.imgThumb, { borderColor: theme.border }]} contentFit="cover" transition={150} />
+              <TouchableOpacity onPress={() => setImageUrl('')} style={[styles.imgClear, { backgroundColor: theme.destructive }]} hitSlop={6}>
+                <X size={12} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <TouchableOpacity onPress={pickImage} disabled={uploading} activeOpacity={0.85}
+            style={[styles.imgBtn, { borderColor: theme.primary + '55', backgroundColor: theme.primary + '12' }]}>
+            {uploading ? <ActivityIndicator size="small" color={theme.primary} /> : <ImagePlus size={18} color={theme.primary} />}
+            <Text style={[styles.imgBtnText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>{uploading ? 'Subiendo…' : imageUrl ? 'Cambiar imagen' : 'Subir imagen'}</Text>
+          </TouchableOpacity>
+        </View>
 
         <Field theme={theme} label="Instrucciones" value={instructions} onChangeText={setInstructions} placeholder="Una instrucción por línea" multiline />
 
@@ -199,6 +238,11 @@ const styles = StyleSheet.create({
   errorBox: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
   fieldLabel: { fontSize: 12 },
+  imgRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  imgThumb: { width: 64, height: 64, borderRadius: 10, borderWidth: 1 },
+  imgClear: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  imgBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 12 },
+  imgBtnText: { fontSize: 13 },
   input: { height: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },

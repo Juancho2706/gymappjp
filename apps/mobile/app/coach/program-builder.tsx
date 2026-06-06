@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../lib/supabase'
 import { isMissingColumnError, selectWithFallback } from '../../lib/db-compat'
 import { getCoachProfile } from '../../lib/coach'
+import { getCoachOrgContext } from '../../lib/org'
 import { useTheme } from '../../context/ThemeContext'
 import { ExerciseSearchSheet } from '../../components/coach/ExerciseSearchSheet'
 import { BlockEditorSheet } from '../../components/coach/BlockEditorSheet'
@@ -161,17 +162,29 @@ async function persistProgram(opts: {
   programId: string | null
   meta: ProgramMetaPayload
   variantSets: { variant: 'A' | 'B'; days: DayState[] }[]
+  orgId?: string | null
 }): Promise<string> {
   let pid = opts.programId
+  // P-F2: un alumno solo puede tener UN programa activo. Antes de activar este,
+  // desactivar cualquier otro activo del mismo alumno (evita doble programa activo).
+  async function deactivateOtherActive(exceptId: string | null) {
+    if (!opts.clientId || !opts.meta.is_active) return
+    let q = supabase.from('workout_programs').update({ is_active: false }).eq('client_id', opts.clientId).eq('is_active', true)
+    if (exceptId) q = q.neq('id', exceptId)
+    await q
+  }
   if (pid) {
+    await deactivateOtherActive(pid)
     const upd = await supabase.from('workout_programs').update(opts.meta).eq('id', pid)
     if (upd.error && isMissingColumnError(upd.error)) {
       await supabase.from('workout_programs').update(baseMeta(opts.meta)).eq('id', pid)
     }
   } else {
+    await deactivateOtherActive(null)
+    // P-F3: setear org_id en enterprise (antes el editor lo dejaba null). Fallback sin la columna.
     let ins = await supabase
       .from('workout_programs')
-      .insert({ client_id: opts.clientId, coach_id: opts.coachId, ...opts.meta })
+      .insert({ client_id: opts.clientId, coach_id: opts.coachId, ...(opts.orgId ? { org_id: opts.orgId } : {}), ...opts.meta })
       .select('id')
       .single()
     if (ins.error && isMissingColumnError(ins.error)) {
@@ -322,11 +335,15 @@ export default function ProgramBuilderScreen() {
         reshapeReady.current = true; hydratedRef.current = true; setLoading(false); return
       }
 
+      // P-F4: scoping de org en la lectura (rich); si falta la columna, fallback sin filtro.
+      const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
       // Carga rica (con meta extra) → si faltan columnas, fallback al set base.
       const { data: prog } = await selectWithFallback<any>(
         () => {
           const q = supabase.from('workout_programs').select(PROGRAM_SELECT_RICH)
-          return templateId ? q.eq('id', templateId).maybeSingle() : q.eq('client_id', clientId!).eq('is_active', true).maybeSingle()
+          if (templateId) return q.eq('id', templateId).maybeSingle()
+          const cq = q.eq('client_id', clientId!).eq('is_active', true)
+          return (orgId ? cq.eq('org_id', orgId) : cq.is('org_id', null)).maybeSingle()
         },
         () => {
           const q = supabase.from('workout_programs').select(PROGRAM_SELECT)
@@ -337,7 +354,8 @@ export default function ProgramBuilderScreen() {
       if (prog) {
         const structure = (prog.program_structure_type as ProgramStructureType) ?? 'weekly'
         const plans = (prog.workout_plans ?? []) as any[]
-        const len = structure === 'cycle' ? Math.max(1, Math.min(7, prog.cycle_length ?? 4)) : 7
+        // P-F8: ciclos de hasta 31 días (antes truncaba a 7 al abrir).
+        const len = structure === 'cycle' ? Math.max(1, Math.min(31, prog.cycle_length ?? 4)) : 7
         const hasB = plans.some((p: any) => (p.week_variant ?? 'A') === 'B')
         setProgramId(prog.id)
         setName(prog.name ?? 'Programa principal')
@@ -591,8 +609,9 @@ export default function ProgramBuilderScreen() {
     try {
       const coach = await getCoachProfile()
       if (!coach) throw new Error('Coach no encontrado')
+      const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
       for (const cid of clientIds) {
-        await persistProgram({ coachId: coach.id, clientId: cid, programId: null, meta: buildMeta(true), variantSets: currentVariantSets() })
+        await persistProgram({ coachId: coach.id, clientId: cid, programId: null, meta: buildMeta(true), variantSets: currentVariantSets(), orgId })
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       Alert.alert('Listo', `Programa asignado a ${clientIds.length} alumno${clientIds.length === 1 ? '' : 's'}.`)
@@ -675,16 +694,22 @@ export default function ProgramBuilderScreen() {
     if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre para el programa.'); return }
     const hasAny = days.some((d) => d.blocks.length > 0) || (abMode && otherDays.some((d) => d.blocks.length > 0))
     if (!hasAny) { Alert.alert('Sin ejercicios', 'Agrega al menos un ejercicio en algún día.'); return }
+    // P-F5: guard de bloques (web bloquea save si sets<1 o reps vacío) — evita persistir incompletos.
+    const allBlocks = [...days, ...(abMode ? otherDays : [])].flatMap((d) => d.blocks)
+    const invalid = allBlocks.find((b) => !b.sets || b.sets < 1 || !String(b.reps ?? '').trim())
+    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisá "${invalid.exercise_name}": necesita series (≥1) y reps.`); return }
     setSaving(true)
     try {
       const coach = await getCoachProfile()
       if (!coach) throw new Error('Coach no encontrado')
+      const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
       const pid = await persistProgram({
         coachId: coach.id,
         clientId: isTemplate ? null : (clientId ?? null),
         programId,
         meta: buildMeta(isTemplate ? false : true),
         variantSets: currentVariantSets(),
+        orgId,
       })
       setProgramId(pid)
       setDirty(false)

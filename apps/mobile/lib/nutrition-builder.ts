@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
+import { getTodayInSantiago, isoDateAddDays } from './date-utils'
 
 // Coach nutrition plan builder — mirrors the web `upsertClientNutritionPlanJson`
 // (apps/web .../coach/nutrition-plans). Writes nutrition_plans → nutrition_meals
@@ -316,6 +317,82 @@ export async function searchFoods(query: string): Promise<FoodRow[]> {
   return (data as FoodRow[] | null) ?? []
 }
 
+// N-F6-full: board de adherencia (7 días) por alumno con plan activo — cálculo client-side
+// (RLS coach-scoped), espejo simplificado de getActivePlansBoardData web.
+export interface NutritionBoardRow {
+  clientId: string
+  clientName: string
+  planName: string
+  sparkline7d: number[]
+  avg7d: number
+  todayKcal: number
+  targetKcal: number | null
+}
+
+export async function getNutritionBoard(): Promise<NutritionBoardRow[]> {
+  const coachId = await currentCoachId()
+  if (!coachId) return []
+  const { iso: today } = getTodayInSantiago()
+  const days = Array.from({ length: 7 }, (_, i) => isoDateAddDays(today, -(6 - i))) // viejo→hoy
+
+  const { data: plans } = await supabase
+    .from('nutrition_plans')
+    .select('id, client_id, name, daily_calories, clients ( full_name )')
+    .eq('coach_id', coachId)
+    .eq('is_active', true)
+  const planList = (plans ?? []) as any[]
+  if (!planList.length) return []
+
+  const planIds = planList.map((p) => p.id)
+  const clientIds = [...new Set(planList.map((p) => p.client_id))]
+  const [{ data: logs }, { data: meals }] = await Promise.all([
+    supabase.from('daily_nutrition_logs').select('client_id, plan_id, log_date, nutrition_meal_logs ( meal_id, is_completed )').in('client_id', clientIds).gte('log_date', days[0]),
+    supabase.from('nutrition_meals').select('id, plan_id, day_of_week').in('plan_id', planIds),
+  ])
+
+  const mealsByPlan = new Map<string, { id: string; day_of_week: number | null }[]>()
+  for (const m of (meals ?? []) as any[]) {
+    const arr = mealsByPlan.get(m.plan_id) ?? []
+    arr.push({ id: m.id, day_of_week: m.day_of_week ?? null })
+    mealsByPlan.set(m.plan_id, arr)
+  }
+  const logsByKey = new Map<string, any[]>()
+  for (const l of (logs ?? []) as any[]) {
+    const k = `${l.client_id}|${l.plan_id}`
+    const arr = logsByKey.get(k) ?? []
+    arr.push(l)
+    logsByKey.set(k, arr)
+  }
+  const isoDow = (d: string) => { const js = new Date(`${d}T12:00:00`).getDay(); return js === 0 ? 7 : js }
+
+  return planList.map((plan) => {
+    const planMeals = mealsByPlan.get(plan.id) ?? []
+    const planLogs = logsByKey.get(`${plan.client_id}|${plan.id}`) ?? []
+    const sparkline7d = days.map((d) => {
+      const applicable = planMeals.filter((m) => m.day_of_week == null || m.day_of_week === isoDow(d))
+      const denom = applicable.length
+      if (denom === 0) return 0
+      const ids = new Set(applicable.map((m) => m.id))
+      const log = planLogs.find((x) => x.log_date === d)
+      const done = ((log?.nutrition_meal_logs ?? []) as any[]).filter((x) => x.is_completed && ids.has(x.meal_id)).length
+      return Math.min(100, Math.round((done / denom) * 100))
+    })
+    const avg7d = Math.round(sparkline7d.reduce((a, b) => a + b, 0) / 7)
+    const targetKcal = plan.daily_calories ?? null
+    const todayPct = sparkline7d[6] ?? 0
+    const todayKcal = targetKcal ? Math.round((targetKcal * todayPct) / 100) : 0
+    return {
+      clientId: plan.client_id,
+      clientName: plan.clients?.full_name ?? 'Alumno',
+      planName: plan.name ?? 'Plan',
+      sparkline7d,
+      avg7d,
+      todayKcal,
+      targetKcal,
+    }
+  }).sort((a, b) => a.avg7d - b.avg7d) // peor adherencia primero (triage)
+}
+
 export async function getClientPlans(clientId: string): Promise<PlanSummary[]> {
   const { data } = await supabase
     .from('nutrition_plans')
@@ -338,10 +415,16 @@ export async function getClientPlans(clientId: string): Promise<PlanSummary[]> {
   }))
 }
 
-/** IDs de alimentos favoritos del alumno (read-only, para resaltar en el buscador). */
+/** IDs de alimentos favoritos del alumno (read-only, para resaltar en el buscador).
+ * N-F1: la tabla real es `client_food_preferences` con `preference_type='favorite'`
+ * (NO existe `client_food_favorites`). Antes devolvía siempre vacío (soft-error tragado). */
 export async function getClientFoodFavorites(clientId: string): Promise<Set<string>> {
-  const { data } = await supabase.from('client_food_favorites').select('food_id').eq('client_id', clientId)
-  return new Set((data ?? []).map((r: any) => r.food_id as string))
+  const { data } = await supabase
+    .from('client_food_preferences' as never)
+    .select('food_id')
+    .eq('client_id' as never, clientId as never)
+    .eq('preference_type' as never, 'favorite' as never)
+  return new Set(((data ?? []) as any[]).map((r) => r.food_id as string))
 }
 
 export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
@@ -554,7 +637,8 @@ export async function duplicatePlanToClient(sourcePlanId: string, targetClientId
     const mealIds = (meals ?? []).map((m: any) => m.id)
 
     const { data: items } = mealIds.length
-      ? await supabase.from('food_items').select('meal_id, food_id, quantity, unit').in('meal_id', mealIds)
+      // N-F16: incluir swap_options para no perder las sustituciones al copiar.
+      ? await supabase.from('food_items').select('meal_id, food_id, quantity, unit, swap_options').in('meal_id', mealIds)
       : { data: [] as any[] }
     const itemsByMeal = new Map<string, any[]>()
     for (const it of (items as any[]) ?? []) {
@@ -584,7 +668,7 @@ export async function duplicatePlanToClient(sourcePlanId: string, targetClientId
       if (mErr) throw mErr
       const its = itemsByMeal.get(m.id) ?? []
       if (its.length) {
-        await supabase.from('food_items').insert(its.map((fi) => ({ meal_id: nm.id, food_id: fi.food_id, quantity: fi.quantity, unit: fi.unit })))
+        await supabase.from('food_items').insert(its.map((fi) => ({ meal_id: nm.id, food_id: fi.food_id, quantity: fi.quantity, unit: fi.unit, swap_options: fi.swap_options ?? [] })))
       }
     }
 

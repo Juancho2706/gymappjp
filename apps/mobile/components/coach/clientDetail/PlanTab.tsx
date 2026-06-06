@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
@@ -6,6 +6,7 @@ import { ChevronDown, Dumbbell, LayoutGrid, Moon, Pencil } from 'lucide-react-na
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, ProgressBar } from '../../../components'
 import { StatCard, CardHeader, Pill, cd, dayName } from './shared'
+import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import type { CoachClientDetailData, ProgramBlock, ProgramDay } from '../../../lib/coach-client-detail'
 
 function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activeProgram']>): number | null {
@@ -29,6 +30,15 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
   }
   const currentWeek = resolveProgramWeek(program)
 
+  // A-F2: resolver variante AB/cíclica activa (no renderizar planes crudo).
+  const structure = (program.program_structure_type as 'weekly' | 'cycle' | null) || 'weekly'
+  const abMode = !!program.ab_mode
+  const activeVariant = resolveActiveWeekVariantForDisplay(program, currentWeek)
+  const plansView = useMemo(
+    () => filterPlansForStructureView(program.workoutPlans, structure, { abMode, activeVariant }),
+    [program.workoutPlans, structure, abMode, activeVariant]
+  )
+
   function openBlock(block: ProgramBlock) {
     setSelected(block)
     sheetRef.current?.present()
@@ -46,7 +56,7 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
         <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{program.name}</Text>
         <View style={cd.metaRow}>
           <Pill label={program.program_structure_type === 'cycle' ? 'Cíclico' : 'Semanal'} />
-          {program.ab_mode ? <Pill label="A/B" tone="warning" /> : null}
+          {program.ab_mode ? <Pill label={`A/B · ${activeVariant} esta sem.`} tone="warning" /> : null}
           <Pill label={`${program.weeks_to_repeat} sem.`} />
           {program.cycle_length ? <Pill label={`Ciclo ${program.cycle_length}d`} /> : null}
           <Pill label={`${program.planCount} días`} />
@@ -62,8 +72,8 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
         ) : null}
       </StatCard>
 
-      {program.workoutPlans.length ? program.workoutPlans.map((plan) => (
-        <DayCard key={plan.id} plan={plan} isToday={plan.day_of_week === todayDow} open={expanded.has(plan.id)} onToggle={() => toggle(plan.id)} onBlock={openBlock} />
+      {plansView.length ? plansView.map((plan) => (
+        <DayCard key={plan.id} plan={plan} isToday={structure !== 'cycle' && plan.day_of_week === todayDow} open={expanded.has(plan.id)} onToggle={() => toggle(plan.id)} onBlock={openBlock} />
       )) : (
         <Text style={[cd.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Programa sin días cargados.</Text>
       )}

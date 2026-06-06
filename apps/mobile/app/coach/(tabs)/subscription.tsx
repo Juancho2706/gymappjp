@@ -56,7 +56,11 @@ export default function SubscriptionScreen() {
   const statusActive = profile.subscriptionStatus === 'active' || profile.subscriptionStatus === 'trialing'
   const max = profile.maxClients ?? 0
   const usage = max > 0 ? clientCount / max : 0
-  const renewLabel = profile.subscriptionStatus === 'trialing' ? 'Prueba hasta' : 'Próxima renovación'
+  // SU-F1: etiquetar cada estado (antes "canceled" mostraba "Próxima renovación" engañoso).
+  const renewLabel =
+    profile.subscriptionStatus === 'trialing' ? 'Prueba hasta'
+      : profile.subscriptionStatus === 'canceled' ? 'Acceso hasta'
+        : 'Próxima renovación'
   const renewDate = profile.subscriptionStatus === 'trialing' ? profile.trialEndsAt : profile.currentPeriodEnd
 
   return (

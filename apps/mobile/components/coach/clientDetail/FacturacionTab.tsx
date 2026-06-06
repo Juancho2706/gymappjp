@@ -34,7 +34,9 @@ export function FacturacionTab({
   const { theme } = useTheme()
   const { payments, client } = data
 
-  const totalCobrado = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+  // A-F24: "Total cobrado" suma solo pagos efectivamente pagados (web hace igual).
+  const isPaid = (s: string | null) => { const v = (s ?? '').toLowerCase(); return v === 'paid' || v === 'aprobado' || v === 'approved' || v === 'pagado' || v === '' }
+  const totalCobrado = payments.reduce((sum, p) => sum + (isPaid(p.status) ? (Number(p.amount) || 0) : 0), 0)
   const last = payments[0] ?? null
   const nextRenewal = last && last.period_months ? addMonths(last.payment_date, last.period_months) : null
 

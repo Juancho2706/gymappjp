@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import Constants from 'expo-constants'
 import { MotiView } from 'moti'
 import { ChevronDown, ExternalLink, Mail } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
@@ -10,9 +11,25 @@ import { AppBackground } from '../../../components/AppBackground'
 const SUPPORT_EMAIL = 'soporte@eva-app.cl'
 const HELP_URL = 'https://eva-app.cl/ayuda'
 
+// SO-F1/F3/F4: prefill el mailto con contexto de triage (versión app + plataforma).
+function buildSupportMailto(): string {
+  const version = Constants.expoConfig?.version ?? '—'
+  const subject = 'Soporte EVA (coach)'
+  const body = [
+    'Hola equipo EVA,',
+    '',
+    'Mi consulta / problema:',
+    '',
+    '',
+    '---',
+    `App: EVA Coach v${version} · ${Platform.OS} ${String(Platform.Version)}`,
+  ].join('\n')
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
 const FAQ: { q: string; a: string }[] = [
   { q: '¿Cómo agrego un alumno?', a: 'Entrá a "Alumnos" y tocá el botón +. Completá nombre y datos; podés compartirle tu enlace o código de invitación desde "Mi Marca".' },
-  { q: '¿Cómo creo un programa de entrenamiento?', a: 'En "Planes" elegí al alumno, armá los días y agregá ejercicios desde el buscador. Podés definir series, reps, peso, tempo, RIR, superseries y progresiones.' },
+  { q: '¿Cómo creo un programa de entrenamiento?', a: 'En "Programas" elegí al alumno, armá los días y agregá ejercicios desde el buscador. Podés definir series, reps, peso, tempo, RIR, superseries y progresiones.' },
   { q: '¿Cómo creo ejercicios propios?', a: 'En "Ejercicios" tocá +, completá nombre y grupo muscular, y opcionalmente video, GIF, equipo e instrucciones. Aparecerán en el buscador del builder.' },
   { q: '¿Cómo personalizo mi marca?', a: 'En "Mi Marca" cambiás tu logo, color de marca y el loader. Tus alumnos verán la app con tu identidad.' },
   { q: '¿Cómo cobro a mis alumnos?', a: 'Registrás los pagos manualmente en el detalle de cada alumno. Tu suscripción a EVA se gestiona y paga desde la web.' },
@@ -30,7 +47,7 @@ export default function SupportScreen() {
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
         {/* Contact */}
-        <Button label="Escribinos por email" leftIcon={Mail} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {})} full />
+        <Button label="Escribinos por email" leftIcon={Mail} onPress={() => Linking.openURL(buildSupportMailto()).catch(() => {})} full />
         <Button label="Centro de ayuda" variant="outline" leftIcon={ExternalLink} onPress={() => Linking.openURL(HELP_URL).catch(() => {})} full />
 
         <Section title="Preguntas frecuentes">

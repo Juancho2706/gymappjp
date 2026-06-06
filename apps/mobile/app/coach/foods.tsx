@@ -14,6 +14,7 @@ import {
   createCustomFood,
   deleteFood,
   listCoachFoods,
+  searchFoods,
   updateFood,
   type FoodRow,
   type FoodUnit,
@@ -27,21 +28,30 @@ export default function CoachFoodsScreen() {
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<FoodRow | null>(null)
   const [creating, setCreating] = useState(false)
+  // N-F21: scope de búsqueda — "mine" (CRUD propios) o "all" (catálogo global, read-only).
+  const [scope, setScope] = useState<'mine' | 'all'>('mine')
 
   async function load() {
     setLoading(true)
     try {
-      setFoods(await listCoachFoods())
+      setFoods(scope === 'all' ? await searchFoods(query) : await listCoachFoods())
     } finally {
       setLoading(false)
     }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [scope])
+  // En catálogo global el filtrado es server-side → recargar al tipear.
+  useEffect(() => {
+    if (scope !== 'all') return
+    const t = setTimeout(() => { searchFoods(query).then(setFoods).catch(() => {}) }, 300)
+    return () => clearTimeout(t)
+  }, [query, scope])
 
   const filtered = useMemo(() => {
+    if (scope === 'all') return foods
     const q = query.trim().toLowerCase()
     return q ? foods.filter((f) => f.name.toLowerCase().includes(q)) : foods
-  }, [foods, query])
+  }, [foods, query, scope])
 
   function confirmDelete(food: FoodRow) {
     Alert.alert('Eliminar alimento', `¿Eliminar "${food.name}"?`, [
@@ -77,6 +87,18 @@ export default function CoachFoodsScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.scopeRow}>
+        {(['mine', 'all'] as const).map((s) => {
+          const on = scope === s
+          return (
+            <TouchableOpacity key={s} onPress={() => setScope(s)} activeOpacity={0.8}
+              style={[styles.scopeChip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
+              <Text style={{ fontSize: 12.5, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{s === 'mine' ? 'Míos' : 'Catálogo'}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+
       <View style={styles.searchWrap}>
         <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
           <Search size={16} color={theme.mutedForeground} />
@@ -99,14 +121,20 @@ export default function CoachFoodsScreen() {
           }
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-              <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.8} onPress={() => setEditing(item)}>
+              <TouchableOpacity style={{ flex: 1 }} activeOpacity={scope === 'mine' ? 0.8 : 1} onPress={() => { if (scope === 'mine') setEditing(item) }}>
                 <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{item.name}</Text>
                 <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                   {item.calories} kcal · P{item.protein_g} C{item.carbs_g} G{item.fats_g} / {item.serving_size}{item.serving_unit}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setEditing(item)} hitSlop={8} style={styles.iconBtn}><Pencil size={16} color={theme.mutedForeground} /></TouchableOpacity>
-              <TouchableOpacity onPress={() => confirmDelete(item)} hitSlop={8} style={styles.iconBtn}><Trash2 size={16} color={theme.destructive} /></TouchableOpacity>
+              {scope === 'mine' ? (
+                <>
+                  <TouchableOpacity onPress={() => setEditing(item)} hitSlop={8} style={styles.iconBtn}><Pencil size={16} color={theme.mutedForeground} /></TouchableOpacity>
+                  <TouchableOpacity onPress={() => confirmDelete(item)} hitSlop={8} style={styles.iconBtn}><Trash2 size={16} color={theme.destructive} /></TouchableOpacity>
+                </>
+              ) : (
+                <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Catálogo</Text>
+              )}
             </View>
           )}
         />
@@ -213,6 +241,8 @@ const styles = StyleSheet.create({
   backText: { fontSize: 13 },
   title: { fontSize: 16 },
   addBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  scopeRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+  scopeChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
   searchWrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 46 },
   searchInput: { flex: 1, fontSize: 15 },
