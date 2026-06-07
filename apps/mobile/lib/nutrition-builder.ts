@@ -303,16 +303,29 @@ export async function deleteFood(id: string): Promise<{ ok: boolean; error?: str
   return { ok: true }
 }
 
-export async function searchFoods(query: string): Promise<FoodRow[]> {
+// P5: filtros de búsqueda (categoría + scope + calorías) y límite alto (antes .limit(40) fijo
+// hacía que nunca se vieran todos los alimentos). Paridad con el food picker web.
+export type FoodScope = 'all' | 'system' | 'mine'
+export interface SearchFoodsOptions {
+  category?: string | null // 'todos'/undefined = todas
+  scope?: FoodScope
+  maxCalories?: number | null
+  limit?: number
+}
+
+export async function searchFoods(query: string, opts: SearchFoodsOptions = {}): Promise<FoodRow[]> {
   const coachId = await currentCoachId()
-  const filter = coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null'
+  const { category, scope = 'all', maxCalories, limit = 500 } = opts
   let q = supabase
     .from('foods')
     .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
-    .or(filter)
-    .order('name')
-    .limit(40)
+  if (scope === 'mine' && coachId) q = q.eq('coach_id', coachId)
+  else if (scope === 'system') q = q.is('coach_id', null)
+  else q = q.or(coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null')
+  if (category && category !== 'todos') q = q.eq('category', category)
+  if (maxCalories != null && maxCalories > 0) q = q.lte('calories', maxCalories)
   if (query.trim().length >= 2) q = q.ilike('name', `%${query.trim()}%`)
+  q = q.order('name').limit(limit)
   const { data } = await q
   return (data as FoodRow[] | null) ?? []
 }

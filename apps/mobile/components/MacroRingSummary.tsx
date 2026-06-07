@@ -1,9 +1,16 @@
+import { useEffect } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { AlertTriangle } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useTheme } from '../context/ThemeContext'
 import { ProgressBar } from './ProgressBar'
+
+// P5: paleta de macros compartida (rings + siglas en filas de alimentos).
+export const MACRO_COLORS = { kcal: '#10B981', protein: '#f97316', carbs: '#3b82f6', fats: '#eab308' } as const
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 interface MacroRingProps {
   consumed: number
@@ -23,6 +30,13 @@ function MacroRing({ consumed, target, label, color, size = 80 }: MacroRingProps
   const strokeDash = circumference * Math.min(pct, 1)
   const ringColor = over ? theme.destructive : color
 
+  // P5: animar el llenado del ring cada vez que cambian los macros automáticos.
+  const offset = useSharedValue(circumference)
+  useEffect(() => {
+    offset.value = withTiming(circumference - strokeDash, { duration: 600, easing: Easing.out(Easing.cubic) })
+  }, [strokeDash, circumference, offset])
+  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: offset.value }))
+
   return (
     <View style={styles.ringWrap}>
       <View style={{ width: size, height: size }}>
@@ -35,7 +49,7 @@ function MacroRing({ consumed, target, label, color, size = 80 }: MacroRingProps
             strokeWidth={strokeWidth}
             fill="none"
           />
-          <Circle
+          <AnimatedCircle
             cx={size / 2}
             cy={size / 2}
             r={radius}
@@ -43,7 +57,7 @@ function MacroRing({ consumed, target, label, color, size = 80 }: MacroRingProps
             strokeWidth={strokeWidth}
             fill="none"
             strokeDasharray={`${circumference} ${circumference}`}
-            strokeDashoffset={circumference - strokeDash}
+            animatedProps={animatedProps}
             strokeLinecap="round"
             transform={`rotate(-90 ${size / 2} ${size / 2})`}
           />
@@ -52,14 +66,14 @@ function MacroRing({ consumed, target, label, color, size = 80 }: MacroRingProps
           {over ? (
             <AlertTriangle size={16} color={theme.destructive} strokeWidth={2.5} />
           ) : (
-            <Text style={[styles.ringValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            <Text style={[styles.ringValue, { color: ringColor, fontFamily: 'Montserrat_800ExtraBold' }]}>
               {Math.round(consumed)}
             </Text>
           )}
         </View>
       </View>
       <View style={styles.ringLabelWrap}>
-        <Text style={[styles.ringLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text style={[styles.ringLabel, { color: ringColor, fontFamily: 'Montserrat_700Bold' }]}>
           {label}
         </Text>
         <Text style={[styles.ringTarget, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -127,9 +141,9 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
       />
 
       <View style={styles.ringsRow}>
-        <MacroRing consumed={protein.consumed} target={protein.target} label="Proteína" color="#f97316" />
-        <MacroRing consumed={carbs.consumed} target={carbs.target} label="Carbos" color="#3b82f6" />
-        <MacroRing consumed={fats.consumed} target={fats.target} label="Grasas" color="#eab308" />
+        <MacroRing consumed={protein.consumed} target={protein.target} label="Proteína" color={MACRO_COLORS.protein} />
+        <MacroRing consumed={carbs.consumed} target={carbs.target} label="Carbos" color={MACRO_COLORS.carbs} />
+        <MacroRing consumed={fats.consumed} target={fats.target} label="Grasas" color={MACRO_COLORS.fats} />
       </View>
     </MotiView>
   )

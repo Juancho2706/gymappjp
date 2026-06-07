@@ -114,6 +114,9 @@ type CheckInRow = {
   id: string
   client_id: string
   created_at: string
+  date?: string | null
+  weight?: number | null
+  energy_level?: number | null
 }
 
 type WorkoutLogRow = {
@@ -446,7 +449,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       .eq('coach_id', coach.id),
     supabase
       .from('check_ins')
-      .select('id, client_id, created_at')
+      .select('id, client_id, created_at, date, weight, energy_level')
       .gte('created_at', thirtyDaysAgoIso)
       .order('created_at', { ascending: false })
       .limit(300),
@@ -482,6 +485,75 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
 
   const latestCheckIn = latestByClient(checkIns, 'created_at')
   const latestWorkout = latestByClient(workoutLogs, 'logged_at')
+
+  // P6: métricas reforzadas client-side (antes solo llegaban por el endpoint) ───
+  const checkInsByClient = new Map<string, CheckInRow[]>()
+  for (const ci of checkIns) {
+    const arr = checkInsByClient.get(ci.client_id) ?? []
+    arr.push(ci)
+    checkInsByClient.set(ci.client_id, arr)
+  }
+  function weightStatsFor(clientId: string): { current: number | null; delta7d: number | null; history: { date: string; value: number }[] } {
+    const rows = (checkInsByClient.get(clientId) ?? [])
+      .filter((c) => c.weight != null)
+      .map((c) => ({ date: (c.date ?? c.created_at).slice(0, 10), value: Number(c.weight), ts: new Date(c.date ?? c.created_at).getTime() }))
+      .sort((a, b) => a.ts - b.ts)
+    if (!rows.length) return { current: null, delta7d: null, history: [] }
+    const current = rows[rows.length - 1].value
+    const sevenAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const prior = [...rows].reverse().find((r) => r.ts <= sevenAgo) ?? rows[0]
+    const delta7d = Math.round((current - prior.value) * 10) / 10
+    return { current, delta7d, history: rows.map((r) => ({ date: r.date, value: r.value })) }
+  }
+  function latestEnergyFor(clientId: string): number | null {
+    const rows = (checkInsByClient.get(clientId) ?? []).filter((c) => c.energy_level != null)
+    if (!rows.length) return null
+    rows.sort((a, b) => new Date(b.date ?? b.created_at).getTime() - new Date(a.date ?? a.created_at).getTime())
+    return Number(rows[0].energy_level)
+  }
+  // Streak de entrenos: días consecutivos (terminando hoy o ayer) con ≥1 log.
+  const workoutDaysByClient = new Map<string, Set<string>>()
+  for (const w of workoutLogs) {
+    const set = workoutDaysByClient.get(w.client_id) ?? new Set<string>()
+    set.add(w.logged_at.slice(0, 10))
+    workoutDaysByClient.set(w.client_id, set)
+  }
+  function streakFor(clientId: string): number {
+    const days = workoutDaysByClient.get(clientId)
+    if (!days || days.size === 0) return 0
+    let streak = 0
+    const cursor = new Date(today)
+    if (!days.has(cursor.toISOString().slice(0, 10))) cursor.setDate(cursor.getDate() - 1)
+    while (days.has(cursor.toISOString().slice(0, 10))) {
+      streak += 1
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    return streak
+  }
+  // Nutrición 7d: % de días (de 7) con ≥1 comida completada (directo de Supabase, RLS coach-scoped).
+  const nutritionPctByClient = new Map<string, number>()
+  try {
+    const sevenAgoDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const { data: nutriRows } = await supabase
+      .from('daily_nutrition_logs')
+      .select('client_id, log_date, nutrition_meal_logs(is_completed)')
+      .gte('log_date', sevenAgoDate)
+    const daysByClient = new Map<string, Set<string>>()
+    for (const row of (nutriRows ?? []) as Array<{ client_id: string; log_date: string; nutrition_meal_logs: { is_completed: boolean | null }[] | null }>) {
+      if (!clientIds.has(row.client_id)) continue
+      const meals = row.nutrition_meal_logs ?? []
+      if (meals.some((m) => m.is_completed)) {
+        const set = daysByClient.get(row.client_id) ?? new Set<string>()
+        set.add(row.log_date)
+        daysByClient.set(row.client_id, set)
+      }
+    }
+    for (const [cid, set] of daysByClient) {
+      nutritionPctByClient.set(cid, Math.round((set.size / 7) * 100))
+    }
+  } catch {
+    // tabla/columna ausente → queda 0 (ya no hay banner)
+  }
 
   const riskItems: MobileRiskAlertItem[] = []
   for (const client of clients) {
@@ -587,27 +659,34 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       ? new Date(latestWorkoutRow.logged_at).getTime() >= new Date(sevenDaysAgoIso).getTime()
       : false
     const adherencePct = hasWorkout7d ? 100 : hasWorkout30d ? 65 : hasCheckIn30d ? 45 : 0
+    const weight = weightStatsFor(client.id)
+    const nutritionPct = nutritionPctByClient.get(client.id) ?? 0
 
     return {
       clientId: client.id,
       clientName: client.full_name,
       adherencePct,
-      nutritionPct: 0,
+      nutritionPct,
       adherenceHint: latestWorkoutRow ? `Ultimo entreno: ${latestWorkoutRow.logged_at.slice(0, 10)}` : 'Sin entrenos en 30 dias',
-      nutritionHint: 'Sin datos de nutricion',
+      nutritionHint: nutritionPct > 0 ? `${nutritionPct}% de adherencia (7d)` : 'Sin datos de nutricion',
       adherenceHistory4w: [],
-      weightHistory30d: [],
-      currentWeight: null,
-      weightDelta7d: null,
+      weightHistory30d: weight.history,
+      currentWeight: weight.current,
+      weightDelta7d: weight.delta7d,
       oneRMDelta: null,
-      streak: 0,
-      latestEnergyLevel: null,
+      streak: streakFor(client.id),
+      latestEnergyLevel: latestEnergyFor(client.id),
       planDaysRemaining: null,
       planCurrentWeek: null,
       planTotalWeeks: null,
       attentionScore: 0,
     }
   })
+
+  const clientsWithNutrition = clientStats.filter((s) => s.nutritionPct > 0)
+  const avgNutrition = clientsWithNutrition.length > 0
+    ? Math.round(clientsWithNutrition.reduce((sum, s) => sum + s.nutritionPct, 0) / clientsWithNutrition.length)
+    : 0
 
   const activities: MobileActivityItem[] = []
   clients.slice(0, 5).forEach((client) => {
@@ -658,7 +737,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
 
   return {
     coach,
-    publicCode: null,
+    publicCode: coach.inviteCode ? { inviteCode: coach.inviteCode, shouldConfirm: false } : null,
     onboardingGuide: {},
     activePlans: plansCountResult.count ?? 0,
     hasStudentSignal30d: checkIns.length > 0 || workoutLogs.length > 0,
@@ -674,13 +753,13 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       totalClients: clients.length,
       riskCount: topRiskClients.length,
       avgAdherence,
-      avgNutrition: 0,
+      avgNutrition,
     },
     topRiskClients,
     agenda,
     expiringPrograms,
     recentActivities: activities.slice(0, 8),
-    degraded: true,
+    degraded: false,
   }
 }
 

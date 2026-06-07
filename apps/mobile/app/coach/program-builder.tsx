@@ -10,7 +10,7 @@ import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handl
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import BottomSheet, { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { ArrowLeft, ChevronLeft, ChevronRight, CircleHelp, Copy, Eye, Layers, Link2, Moon, MoreVertical, Plus, Printer, Redo2, Save, Scale, Settings, Sparkles, Sun, Undo2, Users, X } from 'lucide-react-native'
-import DraggableFlatList from 'react-native-draggable-flatlist'
+import { NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
@@ -42,11 +42,6 @@ const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const SLIDE = Math.round(Dimensions.get('window').width * 0.22) // desplazamiento del slide de día
 const SECTION_ORDER: BuilderSection[] = ['warmup', 'main', 'cooldown']
 const SECTION_LABEL: Record<BuilderSection, string> = { warmup: 'Calentamiento', main: 'Principal', cooldown: 'Enfriamiento' }
-
-// Item de la lista del día: encabezado de sección o bloque (ejercicio).
-type BuilderRow =
-  | { type: 'header'; section: BuilderSection; count: number }
-  | { type: 'block'; block: BuilderBlock; section: BuilderSection }
 
 // Una superserie no puede cruzar secciones → limpiar grupos que quedaron repartidos.
 function clearCrossSectionSupersets(blocks: BuilderBlock[]): BuilderBlock[] {
@@ -305,7 +300,7 @@ export default function ProgramBuilderScreen() {
   useEffect(() => {
     dayTx.value = slideDir.current * SLIDE
     dayTx.value = withTiming(0, { duration: 170, easing: Easing.out(Easing.cubic) })
-    listRef.current?.scrollToOffset?.({ offset: 0, animated: false })
+    listRef.current?.scrollTo?.({ y: 0, animated: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDayId])
 
@@ -478,37 +473,104 @@ export default function ProgramBuilderScreen() {
     )
   }
 
-  // Lista del día agrupada por sección (encabezado + bloques) para el DraggableFlatList.
-  const listItems = useMemo<BuilderRow[]>(() => {
-    if (currentDay?.is_rest) return []
-    const blocks = currentDay?.blocks ?? []
-    const rows: BuilderRow[] = []
-    for (const section of SECTION_ORDER) {
-      const inSec = blocks.filter((b) => (b.section ?? 'main') === section)
-      rows.push({ type: 'header', section, count: inSec.length })
-      for (const b of inSec) rows.push({ type: 'block', block: b, section })
-    }
-    return rows
-  }, [currentDay])
+  // P8: bloques de una sección (orden estable). El drag SOLO reordena dentro de su sección;
+  // el cambio de sección se hace con los botones CAL/PRI/ENF (setBlockSection) → invariante imposible de romper.
+  const blocksInSection = useCallback(
+    (section: BuilderSection) => (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === section),
+    [currentDay],
+  )
 
-  // Al soltar: reconstruir bloques desde el orden plano + reasignar sección según el header anterior.
-  function handleDragEnd(data: BuilderRow[]) {
-    let cur: BuilderSection = 'warmup'
-    let changed = false
+  // Al soltar dentro de una sección: recomponer el día preservando el orden del resto de secciones.
+  function reorderSection(section: BuilderSection, reordered: BuilderBlock[]) {
+    if (!currentDay) return
     const rebuilt: BuilderBlock[] = []
-    for (const row of data) {
-      if (row.type === 'header') { cur = row.section; continue }
-      const orig = row.block.section ?? 'main'
-      if (orig !== cur) changed = true
-      rebuilt.push(orig === cur ? row.block : { ...row.block, section: cur })
+    for (const sec of SECTION_ORDER) {
+      rebuilt.push(...(sec === section ? reordered : (currentDay.blocks ?? []).filter((b) => (b.section ?? 'main') === sec)))
     }
     setDayBlocks(currentDay.id, clearCrossSectionSupersets(rebuilt))
-    Haptics.impactAsync(changed ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
   }
 
   function addToSection(section: BuilderSection) {
     setPendingSection(section)
     searchRef.current?.snapToIndex(2)
+  }
+
+  // P8: render de un bloque dentro de su sección (incluye el conector de superserie).
+  function renderSectionBlock({ item, drag, isActive }: { item: BuilderBlock; drag: () => void; isActive: boolean }) {
+    const block = item
+    const section = block.section ?? 'main'
+    const cat = catById.get(block.exercise_id)
+    const secBlocks = (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === section)
+    const pos = secBlocks.findIndex((b) => b.uid === block.uid)
+    const next = secBlocks[pos + 1]
+    const isLastInSec = pos === secBlocks.length - 1
+    const linkedToNext = !!block.superset_group && block.superset_group === next?.superset_group
+    return (
+      <View>
+        <BuilderBlockCard
+          block={block}
+          drag={drag}
+          isActive={isActive}
+          onEdit={openEditor}
+          onRemove={(uid) => removeBlock(activeDayId, uid)}
+          onUpdate={updateBlock}
+          onSetSection={(uid, s) => setBlockSection(activeDayId, uid, s)}
+          onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
+          catGif={cat?.gif_url}
+          catImage={cat?.image_url}
+          catVideo={cat?.video_url}
+        />
+        {!isLastInSec ? (
+          linkedToNext ? (
+            <View style={styles.ssConnector}>
+              <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
+              <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
+                <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>SS · {block.superset_group}</Text>
+              </TouchableOpacity>
+              <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
+            </View>
+          ) : (
+            <View style={styles.ssConnector}>
+              <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
+                <Link2 size={13} color={theme.mutedForeground} />
+                <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Superserie</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        ) : null}
+      </View>
+    )
+  }
+
+  // P8: encabezado fijo + lista draggable acotada a una sola sección.
+  function renderSection(section: BuilderSection) {
+    const secColor = section === 'warmup' ? '#F59E0B' : section === 'cooldown' ? '#38BDF8' : theme.primary
+    const blocks = blocksInSection(section)
+    return (
+      <View key={section} style={{ gap: 8 }}>
+        <View style={[styles.sectionHeader, { borderColor: secColor + '55', backgroundColor: secColor + '12' }]}>
+          <View style={[styles.sectionDot, { backgroundColor: secColor }]} />
+          <Text style={[styles.sectionTitle, { color: secColor, fontFamily: 'Montserrat_700Bold' }]}>{SECTION_LABEL[section].toUpperCase()}</Text>
+          <View style={[styles.sectionCount, { borderColor: secColor + '55' }]}>
+            <Text style={[styles.sectionCountText, { color: secColor, fontFamily: theme.fontSans }]}>{blocks.length}</Text>
+          </View>
+          <TouchableOpacity onPress={() => addToSection(section)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: secColor + '55' }]}>
+            <Plus size={14} color={secColor} />
+          </TouchableOpacity>
+        </View>
+        {blocks.length ? (
+          <NestableDraggableFlatList
+            data={blocks}
+            keyExtractor={(b) => b.uid}
+            onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
+            onDragEnd={({ data }) => reorderSection(section, data)}
+            activationDistance={14}
+            renderItem={renderSectionBlock}
+          />
+        ) : null}
+      </View>
+    )
   }
 
   function pokeHint() {
@@ -832,33 +894,26 @@ export default function ProgramBuilderScreen() {
       <GestureDetector gesture={dayGesture}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Animated.View style={[{ flex: 1 }, daySlideStyle]}>
-        <DraggableFlatList
+        <NestableScrollContainer
           ref={listRef}
-          data={listItems}
-          keyExtractor={(item) => (item.type === 'header' ? `h-${item.section}` : item.block.uid)}
-          onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
-          onDragEnd={({ data }) => handleDragEnd(data)}
-          activationDistance={14}
           contentContainerStyle={scrollContentStyle}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
-          ListHeaderComponent={
-            <View style={{ gap: 10, paddingBottom: 6 }}>
-              {isSimpleMode && abMode ? (
-                <View style={[styles.abSeg, { backgroundColor: theme.secondary, alignSelf: 'center' }]}>
-                  {(['A', 'B'] as const).map((v) => (
-                    <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
-                      <Text style={{ fontSize: 11, fontFamily: 'Montserrat_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>{v}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-              {!isSimpleMode && phases.length ? <ProgramPhasesBar phases={phases} weeks={weeks} /> : null}
+        >
+          {/* Encabezado del día (AB + fases + card de título/volumen) */}
+          <View style={{ gap: 10, paddingBottom: 6 }}>
+            {isSimpleMode && abMode ? (
+              <View style={[styles.abSeg, { backgroundColor: theme.secondary, alignSelf: 'center' }]}>
+                {(['A', 'B'] as const).map((v) => (
+                  <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Montserrat_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>{v}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+            {!isSimpleMode && phases.length ? <ProgramPhasesBar phases={phases} weeks={weeks} /> : null}
 
-              <View style={[styles.dayCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
+            <View style={[styles.dayCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
               <View style={styles.dayHeader}>
                 {currentDay.is_rest ? (
                   <View style={[styles.dayTitleInput, styles.restTitleBox, { borderColor: theme.border, backgroundColor: theme.card }]}>
@@ -893,86 +948,30 @@ export default function ProgramBuilderScreen() {
                   </View>
                 </View>
               ) : null}
-              </View>
             </View>
-          }
-          renderItem={({ item, drag, isActive }) => {
-            if (item.type === 'header') {
-              const secColor = item.section === 'warmup' ? '#F59E0B' : item.section === 'cooldown' ? '#38BDF8' : theme.primary
-              return (
-                <View style={[styles.sectionHeader, { borderColor: secColor + '55', backgroundColor: secColor + '12' }]}>
-                  <View style={[styles.sectionDot, { backgroundColor: secColor }]} />
-                  <Text style={[styles.sectionTitle, { color: secColor, fontFamily: 'Montserrat_700Bold' }]}>{SECTION_LABEL[item.section].toUpperCase()}</Text>
-                  <View style={[styles.sectionCount, { borderColor: secColor + '55' }]}>
-                    <Text style={[styles.sectionCountText, { color: secColor, fontFamily: theme.fontSans }]}>{item.count}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => addToSection(item.section)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: secColor + '55' }]}>
-                    <Plus size={14} color={secColor} />
-                  </TouchableOpacity>
-                </View>
-              )
-            }
-            const cat = catById.get(item.block.exercise_id)
-            const secBlocks = (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === item.section)
-            const pos = secBlocks.findIndex((b) => b.uid === item.block.uid)
-            const next = secBlocks[pos + 1]
-            const isLastInSec = pos === secBlocks.length - 1
-            const linkedToNext = !!item.block.superset_group && item.block.superset_group === next?.superset_group
-            return (
-              <View>
-                <BuilderBlockCard
-                  block={item.block}
-                  drag={drag}
-                  isActive={isActive}
-                  onEdit={openEditor}
-                  onRemove={(uid) => removeBlock(activeDayId, uid)}
-                  onUpdate={updateBlock}
-                  onSetSection={(uid, s) => setBlockSection(activeDayId, uid, s)}
-                  onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
-                  catGif={cat?.gif_url}
-                  catImage={cat?.image_url}
-                  catVideo={cat?.video_url}
-                />
-                {!isLastInSec ? (
-                  linkedToNext ? (
-                    <View style={styles.ssConnector}>
-                      <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
-                      <TouchableOpacity onPress={() => toggleSuperset(activeDayId, item.block.uid)} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
-                        <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>SS · {item.block.superset_group}</Text>
-                      </TouchableOpacity>
-                      <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
-                    </View>
-                  ) : (
-                    <View style={styles.ssConnector}>
-                      <TouchableOpacity onPress={() => toggleSuperset(activeDayId, item.block.uid)} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
-                        <Link2 size={13} color={theme.mutedForeground} />
-                        <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Superserie</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )
-                ) : null}
-              </View>
-            )
-          }}
-          ListFooterComponent={
-            currentDay.is_rest ? (
-              <View style={styles.restPanel}>
-                <Moon size={40} color="#818CF866" />
-                <Text style={[styles.restPanelTitle, { color: '#818CF8', fontFamily: 'Montserrat_700Bold' }]}>DÍA DE DESCANSO</Text>
-                <Text style={[styles.restPanelSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Recuperación activa y descanso</Text>
-                <TouchableOpacity onPress={() => toggleRestDay(currentDay.id)} activeOpacity={0.85} style={[styles.restPanelBtn, { borderColor: '#818CF855' }]}>
-                  <Text style={[styles.restPanelBtnText, { color: '#818CF8', fontFamily: 'Inter_700Bold' }]}>Añadir ejercicios</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
+          </View>
+
+          {/* P8: una lista draggable por sección (headers fijos) o panel de descanso */}
+          {currentDay.is_rest ? (
+            <View style={styles.restPanel}>
+              <Moon size={40} color="#818CF866" />
+              <Text style={[styles.restPanelTitle, { color: '#818CF8', fontFamily: 'Montserrat_700Bold' }]}>DÍA DE DESCANSO</Text>
+              <Text style={[styles.restPanelSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Recuperación activa y descanso</Text>
+              <TouchableOpacity onPress={() => toggleRestDay(currentDay.id)} activeOpacity={0.85} style={[styles.restPanelBtn, { borderColor: '#818CF855' }]}>
+                <Text style={[styles.restPanelBtnText, { color: '#818CF8', fontFamily: 'Inter_700Bold' }]}>Añadir ejercicios</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ gap: 14 }}>
+              {SECTION_ORDER.map(renderSection)}
               <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.8}
                 style={[styles.addBtn, { borderColor: theme.border, backgroundColor: theme.card }]}>
                 <Plus size={18} color={theme.primary} />
                 <Text style={[styles.addText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Agregar ejercicio a {currentDay.name}</Text>
               </TouchableOpacity>
-            )
-          }
-        />
+            </View>
+          )}
+        </NestableScrollContainer>
         </Animated.View>
       </KeyboardAvoidingView>
       </GestureDetector>

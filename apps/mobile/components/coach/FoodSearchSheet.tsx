@@ -1,16 +1,25 @@
 import { forwardRef, useCallback, useMemo, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetFlatList, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Plus, Search, Star } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
+import { MACRO_COLORS } from '../MacroRingSummary'
 import {
   FOOD_CATEGORIES,
   FOOD_UNITS,
   createCustomFood,
   searchFoods,
   type FoodRow,
+  type FoodScope,
   type FoodUnit,
 } from '../../lib/nutrition-builder'
+
+const CATEGORY_FILTERS = ['todos', ...FOOD_CATEGORIES] as const
+const SCOPE_FILTERS: { key: FoodScope; label: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'system', label: 'Sistema' },
+  { key: 'mine', label: 'Míos' },
+]
 
 interface Props {
   onSelect: (food: FoodRow) => void
@@ -28,6 +37,8 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [category, setCategory] = useState<string>('todos')
+  const [scope, setScope] = useState<FoodScope>('all')
   const snapPoints = useMemo(() => ['75%', '95%'], [])
 
   const displayed = useMemo(() => {
@@ -39,12 +50,15 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
     return list
   }, [results, excludedIds, favoriteIds])
 
-  const run = useCallback(async (text: string) => {
+  const run = useCallback(async (text: string, cat: string = category, sc: FoodScope = scope) => {
     setQuery(text)
     setLoading(true)
-    setResults(await searchFoods(text))
+    setResults(await searchFoods(text, { category: cat, scope: sc }))
     setLoading(false)
-  }, [])
+  }, [category, scope])
+
+  function applyCategory(cat: string) { setCategory(cat); run(query, cat, scope) }
+  function applyScope(sc: FoodScope) { setScope(sc); run(query, category, sc) }
 
   function pick(food: FoodRow) {
     onSelect(food)
@@ -80,6 +94,30 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
             </TouchableOpacity>
           </View>
 
+          {/* P5: filtros — scope (Sistema/Míos) + categoría */}
+          <View style={styles.scopeRow}>
+            {SCOPE_FILTERS.map((s) => {
+              const active = scope === s.key
+              return (
+                <TouchableOpacity key={s.key} onPress={() => applyScope(s.key)} activeOpacity={0.8}
+                  style={[styles.scopeChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '14' : 'transparent' }]}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{s.label}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll} contentContainerStyle={styles.catRow}>
+            {CATEGORY_FILTERS.map((c) => {
+              const active = category === c
+              return (
+                <TouchableOpacity key={c} onPress={() => applyCategory(c)} activeOpacity={0.8}
+                  style={[styles.catFilterChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '14' : 'transparent' }]}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground, textTransform: 'capitalize' }}>{c}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+
           <BottomSheetFlatList
             data={displayed}
             keyExtractor={(item) => item.id}
@@ -101,9 +139,13 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
                         {item.name}{item.brand ? ` · ${item.brand}` : ''}
                       </Text>
                     </View>
-                    <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                      {item.calories} kcal · P{item.protein_g} C{item.carbs_g} G{item.fats_g} / {item.serving_size}{item.serving_unit}
-                    </Text>
+                    <View style={styles.macroLine}>
+                      <Text style={[styles.macroSeg, { color: MACRO_COLORS.kcal }]}>{item.calories} kcal</Text>
+                      <Text style={[styles.macroSeg, { color: MACRO_COLORS.protein }]}>P{item.protein_g}</Text>
+                      <Text style={[styles.macroSeg, { color: MACRO_COLORS.carbs }]}>C{item.carbs_g}</Text>
+                      <Text style={[styles.macroSeg, { color: MACRO_COLORS.fats }]}>G{item.fats_g}</Text>
+                      <Text style={[styles.macroServing, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>/ {item.serving_size}{item.serving_unit}</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               )
@@ -222,10 +264,17 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 24, gap: 6 },
   empty: { textAlign: 'center', fontSize: 14, marginTop: 24, paddingHorizontal: 16 },
   sheetTitle: { fontSize: 15, marginHorizontal: 16, marginBottom: 8 },
+  scopeRow: { flexDirection: 'row', gap: 6, marginHorizontal: 16, marginBottom: 8 },
+  scopeChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  catScroll: { flexGrow: 0, maxHeight: 36, marginBottom: 10 },
+  catRow: { paddingHorizontal: 16, gap: 6, alignItems: 'center' },
+  catFilterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5 },
   row: { paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderRadius: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   foodName: { fontSize: 14, flexShrink: 1 },
-  foodMacros: { fontSize: 12, marginTop: 3 },
+  macroLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
+  macroSeg: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  macroServing: { fontSize: 12 },
   form: { paddingHorizontal: 16, paddingBottom: 40, gap: 12 },
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   formTitle: { fontSize: 17 },

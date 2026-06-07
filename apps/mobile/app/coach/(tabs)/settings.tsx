@@ -146,10 +146,12 @@ export default function MiMarcaScreen() {
 
   async function shareLink() {
     if (!settings) return
-    const url = `https://eva-app.cl/c/${settings.slug}`
-    const code = settings.inviteCode ? ` Código: ${settings.inviteCode}.` : ''
+    // P4: el código es el identificador principal (permanente). El slug solo si es legacy.
+    const publicId = settings.inviteCode || settings.slug
+    const url = `https://eva-app.cl/c/${publicId}`
+    const codeLine = settings.inviteCode ? ` Tu código: ${settings.inviteCode}.` : ''
     try {
-      await Share.share({ message: `Entrená conmigo en ${brandName || 'mi app'}: ${url}.${code}` })
+      await Share.share({ message: `Entrená conmigo en ${brandName || 'mi app'}: ${url}.${codeLine}` })
     } catch {}
   }
 
@@ -299,10 +301,18 @@ export default function MiMarcaScreen() {
             <SectionCard theme={theme} icon={Type} title="Identidad">
               <Field theme={theme} label="Tu nombre" value={fullName} onChangeText={setFullName} placeholder="Nombre y apellido" />
               <Field theme={theme} label="Nombre de marca" value={brandName} onChangeText={setBrandName} placeholder="Mi Gimnasio" />
-              {/* M-F3: slug editable (URL de la app del alumno) — guardado por endpoint con uniqueness + lock 30d. */}
-              <Field theme={theme} label="URL de tu app (eva-app.cl/c/...)" value={slug} onChangeText={(v: string) => setSlug(v.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="mi-gimnasio" autoCapitalize="none" />
-              {settings && slug.trim().toLowerCase() !== settings.slug ? (
-                <Button label={savingSlug ? 'Guardando URL…' : 'Cambiar URL'} variant="outline" onPress={saveSlug} disabled={savingSlug} full />
+              {/* P4: el CÓDIGO es el identificador principal — permanente, no editable. */}
+              {settings?.inviteCode ? (
+                <InfoRow label="Tu código (permanente)" value={settings.inviteCode} last={!settings.hasLegacySlug} />
+              ) : null}
+              {/* P4: el editor de slug (URL) queda solo para coaches que ya la personalizaron (legacy). */}
+              {settings?.hasLegacySlug ? (
+                <>
+                  <Field theme={theme} label="URL legacy (eva-app.cl/c/...)" value={slug} onChangeText={(v: string) => setSlug(v.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="mi-gimnasio" autoCapitalize="none" />
+                  {slug.trim().toLowerCase() !== settings.slug ? (
+                    <Button label={savingSlug ? 'Guardando URL…' : 'Cambiar URL'} variant="outline" onPress={saveSlug} disabled={savingSlug} full />
+                  ) : null}
+                </>
               ) : null}
             </SectionCard>
 
@@ -419,13 +429,17 @@ export default function MiMarcaScreen() {
                 <Text style={[styles.codeText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>{settings.inviteCode}</Text>
               </View>
             ) : null}
-            <InfoRow label="URL" value={`eva-app.cl/c/${settings.slug}`} last />
+            {/* P4: URL principal por código (permanente). El slug solo se muestra como enlace alternativo legacy. */}
+            <InfoRow label="URL" value={`eva-app.cl/c/${settings.inviteCode || settings.slug}`} last={!settings.hasLegacySlug} />
+            {settings.hasLegacySlug ? (
+              <InfoRow label="Enlace alternativo (legacy)" value={`eva-app.cl/c/${settings.slug}`} last />
+            ) : null}
             {/* M-F7: QR del acceso del alumno (escaneable para instalar/entrar). */}
             <View style={styles.qrWrap}>
               <View style={[styles.qrBox, { backgroundColor: '#FFFFFF', borderColor: theme.border }]}>
                 <QRCode value={`https://eva-app.cl/c/${settings.inviteCode || settings.slug}/login`} size={150} backgroundColor="#FFFFFF" color="#0F172A" />
               </View>
-              <Text style={[styles.qrHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Tu alumno escanea y entra a tu app.</Text>
+              <Text style={[styles.qrHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Tu alumno escanea y entra a tu app. Tu código es permanente.</Text>
             </View>
             <Button label="Compartir link" variant="outline" leftIcon={Share2} onPress={shareLink} full />
           </SectionCard>

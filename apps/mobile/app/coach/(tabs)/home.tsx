@@ -88,18 +88,6 @@ export default function CoachHomeScreen() {
         />
       }
     >
-      {data.degraded ? (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => load('refresh')}
-          style={[styles.degradedBanner, { backgroundColor: '#F59E0B14', borderColor: '#F59E0B40', borderRadius: theme.radius.xl }]}
-        >
-          <Text style={[styles.degradedText, { color: '#F59E0B', fontFamily: 'Inter_600SemiBold' }]}>
-            Datos limitados — no se pudieron cargar todas las métricas.
-          </Text>
-          <Text style={[styles.degradedAction, { color: '#F59E0B', fontFamily: 'Inter_700Bold' }]}>Reintentar</Text>
-        </TouchableOpacity>
-      ) : null}
       <MobileBillingBanners coach={data.coach} activeClientCount={data.kpi.totalClients} />
       {showTierBanners ? (
         <MobileTierUsageBanners coach={data.coach} totalClients={data.kpi.totalClients} />
@@ -176,15 +164,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
-  degradedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-  },
-  degradedText: { fontSize: 12.5, flexShrink: 1 },
-  degradedAction: { fontSize: 12.5, textTransform: 'uppercase', letterSpacing: 0.4 },
 })

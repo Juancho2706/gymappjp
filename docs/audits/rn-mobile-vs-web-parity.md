@@ -817,6 +817,26 @@ Nav chrome: `components/coach/CoachMobileChrome.tsx` (`CoachMobileHeader` + `Coa
 
 ---
 
+## Tanda 2026-06-06 — 8 fixes de feedback en device (P1–P8) ✅
+
+> Reportados por el usuario sobre capturas reales. Todos validados verde (`tsc` + `expo export --platform android`). Sin cambios de schema Supabase live.
+
+| ID | Pantalla | Qué se hizo | Archivos |
+|----|----------|-------------|----------|
+| **P8** | Builder | **Bug grave**: se podían soltar ejercicios sobre/antes de "Calentamiento". Refactor a `NestableScrollContainer` + **una lista draggable por sección** (CAL/PRI/ENF) con headers estáticos; el drag solo reordena dentro de su sección; cambiar de sección sigue por los botones CAL/PRI/ENF (`setBlockSection`). Bug imposible por construcción. | `app/coach/program-builder.tsx` |
+| **P7** | Ejercicios | Chips de filtro gigantes (ScrollView sin altura acotada → se estiraban). Fix `flexGrow:0`/`maxHeight` + `alignItems:'center'` + chip compacto (py 8→5, font 13→12). | `app/coach/(tabs)/ejercicios.tsx` |
+| **P6** | Dashboard | Quitado el banner "Datos limitados" (web no lo tiene) y **reforzado el fallback local**: nutrición % (7d), peso actual/Δ7d/historial, streak, energía y `publicCode` ahora se calculan client-side directo de Supabase (RLS) → ya no se pierden métricas si el endpoint falla. | `app/coach/(tabs)/home.tsx`, `lib/coach-dashboard.ts`, `lib/coach.ts` |
+| **P4** | Mi Marca | **Código como identificador primario** (permanente, read-only; `invite_code` ya existe live). QR/compartir usan el código. Editor de slug solo para coaches con slug legacy personalizado (`slug_changed_at`/`previous_slugs`). Sin tocar schema. | `app/coach/(tabs)/settings.tsx`, `lib/coach-brand.ts` |
+| **P5** | Nutrición | Buscador de alimentos: quitado `.limit(40)` fijo (límite 500 + carga inicial), filtros **categoría + Sistema/Míos + calorías**, siglas kcal/P/C/G con color, y **ring de macros animado** (reanimated `AnimatedCircle` sobre `strokeDashoffset`) con labels a color. | `lib/nutrition-builder.ts`, `components/coach/FoodSearchSheet.tsx`, `components/MacroRingSummary.tsx` |
+| **P3** | Alumnos | Import por **CSV** (paridad web): selector de archivo (`expo-document-picker` + `expo-file-system`), parser portado (`lib/import-clients.ts`, comillas + auto-skip header), **preview con válidos/inválidos por fila**; mantiene pegar texto + consentimiento 14+. Reusa `POST /api/mobile/coach/clients`. | `app/coach/(tabs)/clientes.tsx`, `lib/import-clients.ts` |
+| **P1** | Soporte | Rework: FAQ ampliada y categorizada (`lib/support-faq.ts`, ~22 preguntas), `components/Accordion.tsx` reusable, agrupación con sub-encabezados. **Quitado "Centro de ayuda"** (link roto a `/ayuda`). | `app/coach/(tabs)/support.tsx`, `lib/support-faq.ts`, `components/Accordion.tsx` |
+| **P2** | Programas | "Sync" auditado: **no es redundante** (paridad 1:1 con web `syncProgramFromTemplate`/`mergeBlocksForSync`, respeta overrides). Se mantiene; copy del diálogo clarificado (override se conserva, resto se reemplaza). | `app/coach/(tabs)/builder.tsx` |
+
+**Deps nuevas:** `expo-document-picker`, `expo-file-system` (P3). **Sin nuevas:** P8 usa `NestableDraggableFlatList` de la lib ya instalada.
+**Decisiones del usuario (2026-06-06):** código primario + slug legacy (P4); quitar banner + reforzar fallback (P6); import CSV (P3); fix DnD estructural (P8); quitar "Centro de ayuda" (P1); filtros categoría+scope+calorías (P5).
+
+---
+
 ## Estado de remediación (implementación)
 
 > Sin cambios de schema (solo columnas/tablas existentes). Cada tanda valida `tsc` + `expo export`. Estados: ✅ hecho · 🔧 en curso · ⏳ pendiente.

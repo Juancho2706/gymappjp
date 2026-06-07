@@ -3,6 +3,7 @@ import { decode } from 'base64-arraybuffer'
 import { z } from 'zod'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
+import { selectWithFallback } from './db-compat'
 
 // M-F3: cambio de slug vía endpoint mobile (uniqueness + lock 30d server-side).
 export async function updateCoachSlug(slug: string): Promise<{ ok: boolean; slug?: string; error?: string }> {
@@ -42,6 +43,8 @@ export interface CoachBrandSettings {
   brandName: string
   slug: string
   inviteCode: string | null
+  /** P4: el coach personalizó su slug (cambió la URL alguna vez) → mantener editor de slug legacy. */
+  hasLegacySlug: boolean
   primaryColor: string
   useBrandColors: boolean
   logoUrl: string | null
@@ -74,19 +77,24 @@ export async function getCoachBrandSettings(): Promise<CoachBrandSettings | null
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data } = await supabase
-    .from('coaches')
-    .select('id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type')
-    .eq('id', user.id)
-    .maybeSingle()
+  const baseCols = 'id, full_name, brand_name, slug, invite_code, primary_color, use_brand_colors_coach, logo_url, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, welcome_message, welcome_modal_enabled, welcome_modal_content, welcome_modal_type'
+  // P4: traer slug_changed_at/previous_slugs para saber si el slug es legacy personalizado.
+  // selectWithFallback: si esas columnas no existen en una prod vieja, cae a la query base.
+  const { data } = await selectWithFallback<any>(
+    () => supabase.from('coaches').select(`${baseCols}, slug_changed_at, previous_slugs`).eq('id', user.id).maybeSingle(),
+    () => supabase.from('coaches').select(baseCols).eq('id', user.id).maybeSingle(),
+  )
 
   if (!data) return null
+  const prevSlugs = (data as { previous_slugs?: string[] | null }).previous_slugs
+  const hasLegacySlug = Boolean((data as { slug_changed_at?: string | null }).slug_changed_at) || (Array.isArray(prevSlugs) && prevSlugs.length > 0)
   return {
     id: data.id,
     fullName: data.full_name ?? '',
     brandName: data.brand_name ?? '',
     slug: data.slug ?? '',
     inviteCode: data.invite_code ?? null,
+    hasLegacySlug,
     primaryColor: data.primary_color ?? '#007AFF',
     useBrandColors: Boolean(data.use_brand_colors_coach),
     logoUrl: data.logo_url ?? null,

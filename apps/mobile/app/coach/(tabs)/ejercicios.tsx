@@ -181,7 +181,7 @@ export default function EjerciciosScreen() {
       </View>
 
       {/* Muscle filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
         <FilterChip theme={theme} label="Todos" active={muscle === null} onPress={() => setMuscle(null)} />
         {muscleOptions.map((m) => (
           <FilterChip key={m} theme={theme} label={m} active={muscle === m} onPress={() => setMuscle(m)} />
@@ -248,8 +248,8 @@ function SourceTab({ theme, label, count, active, onPress }: { theme: any; label
 function FilterChip({ theme, label, active, onPress }: { theme: any; label: string; active: boolean; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}
-      style={[styles.filterChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '1A' : 'transparent' }]}>
-      <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{label}</Text>
+      style={[styles.filterChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '14' : 'transparent' }]}>
+      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -300,8 +300,9 @@ const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 16, paddingBottom: 10 },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 46 },
   searchInput: { flex: 1, fontSize: 15 },
-  filterRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
-  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  filterScroll: { flexGrow: 0, maxHeight: 40 },
+  filterRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12, alignItems: 'center' },
+  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   listWrap: { flex: 1 },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
   dot: { width: 7, height: 7, borderRadius: 4 },

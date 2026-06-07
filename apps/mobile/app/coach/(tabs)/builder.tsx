@@ -292,7 +292,7 @@ export default function BuilderScreen() {
   function confirmSync(program: ProgramItem) {
     Alert.alert(
       'Sincronizar con plantilla',
-      `Se aplicarán los cambios de la plantilla base a "${program.name}", respetando los bloques que modificaste manualmente.`,
+      `Se traen los cambios de la plantilla base a "${program.name}".\n\n• Los ejercicios marcados como override (ajustes manuales del alumno) se conservan.\n• El resto se reemplaza con la versión de la plantilla.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {

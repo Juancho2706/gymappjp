@@ -57,6 +57,9 @@ import {
 import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin } from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
 import { apiFetch } from '../../../lib/api'
+import * as DocumentPicker from 'expo-document-picker'
+import * as FileSystem from 'expo-file-system/legacy'
+import { parseClientsCsv, type ParsedClientRow } from '../../../lib/import-clients'
 
 const CARD_GAP = 12
 const CARD_STEP = CLIENT_CARD_HEIGHT + CARD_GAP
@@ -1093,26 +1096,48 @@ export default function ClientesScreen() {
   )
 }
 
-// A-F14: import por pegado (sin dep de file-picker). Reusa el endpoint de crear alumno.
+// P3: import por CSV (subir archivo o pegar texto) con preview validado. Reusa el endpoint de crear alumno.
 function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: () => void; onCancel: () => void }) {
   const [text, setText] = useState('')
+  const [rows, setRows] = useState<ParsedClientRow[]>([])
+  const [fileName, setFileName] = useState<string | null>(null)
   const [ageOk, setAgeOk] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [showAll, setShowAll] = useState(false)
   const [result, setResult] = useState<{ ok: number; fail: number; errors: string[] } | null>(null)
 
-  const rows = useMemo(() => {
-    return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
-      const [name, email, phone] = l.split(',').map((s) => (s ?? '').trim())
-      return { name: name ?? '', email: email ?? '', phone: phone ?? '' }
-    }).filter((r) => r.name && r.email.includes('@'))
-  }, [text])
+  const validRows = useMemo(() => rows.filter((r) => r.valid), [rows])
+  const invalidCount = rows.length - validRows.length
+
+  async function pickFile() {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/comma-separated-values', 'application/csv', 'application/vnd.ms-excel', 'text/plain'],
+        copyToCacheDirectory: true,
+      })
+      if (res.canceled || !res.assets?.[0]) return
+      const asset = res.assets[0]
+      const content = await FileSystem.readAsStringAsync(asset.uri)
+      setFileName(asset.name ?? 'archivo.csv')
+      setText('')
+      setRows(parseClientsCsv(content))
+    } catch {
+      Alert.alert('No se pudo leer el archivo', 'Revisá que sea un CSV de texto (nombre,email,telefono).')
+    }
+  }
+
+  function onPaste(value: string) {
+    setText(value)
+    setFileName(null)
+    setRows(parseClientsCsv(value))
+  }
 
   async function run() {
     if (!ageOk) { Alert.alert('Confirmá edad', 'Confirmá que los alumnos son 14+ o con consentimiento de tutor.'); return }
-    if (!rows.length) { Alert.alert('Sin filas válidas', 'Usá una línea por alumno: nombre,email,telefono'); return }
+    if (!validRows.length) { Alert.alert('Sin filas válidas', 'Cada fila debe tener nombre y email válido.'); return }
     setBusy(true)
     let ok = 0, fail = 0; const errors: string[] = []
-    for (const r of rows) {
+    for (const r of validRows) {
       try {
         await apiFetch('/api/mobile/coach/clients', {
           method: 'POST', authenticated: true,
@@ -1138,20 +1163,47 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
     )
   }
 
+  const previewRows = showAll ? rows : rows.slice(0, 6)
+
   return (
     <View style={{ gap: 12 }}>
       <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 12.5 }}>
-        Pegá una línea por alumno: <Text style={{ fontFamily: 'Inter_700Bold' }}>nombre,email,telefono</Text>. Cada uno recibe una contraseña temporal.
+        Subí un CSV con columnas <Text style={{ fontFamily: 'Inter_700Bold' }}>nombre,email,telefono</Text> (una fila por alumno) o pegá el texto. Cada alumno recibe una contraseña temporal.
       </Text>
+
+      <Button label={fileName ? `Archivo: ${fileName}` : 'Subir CSV'} variant="outline" leftIcon={Upload} onPress={pickFile} full />
+
       <TextInput
         value={text}
-        onChangeText={setText}
+        onChangeText={onPaste}
         multiline
-        placeholder={'Juan Pérez,juan@mail.com,+569...\nAna Díaz,ana@mail.com'}
+        placeholder={'…o pegá aquí:\nnombre,email,telefono\nJuan Pérez,juan@mail.com,+569...'}
         placeholderTextColor={theme.mutedForeground}
-        style={{ minHeight: 120, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, padding: 12, textAlignVertical: 'top', fontFamily: theme.fontSans }}
+        style={{ minHeight: 90, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, padding: 12, textAlignVertical: 'top', fontFamily: theme.fontSans }}
       />
-      <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{rows.length} alumno(s) válido(s) detectado(s).</Text>
+
+      {rows.length ? (
+        <View style={{ gap: 6 }}>
+          <Text style={{ color: theme.foreground, fontSize: 12.5, fontFamily: 'Inter_700Bold' }}>
+            {validRows.length} válido(s){invalidCount ? ` · ${invalidCount} con error` : ''}
+          </Text>
+          {previewRows.map((r, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: r.valid ? theme.border : theme.destructive + '55', borderRadius: theme.radius.md, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: r.valid ? 'transparent' : theme.destructive + '0D' }}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: r.valid ? '#10B981' : theme.destructive }} />
+              <Text numberOfLines={1} style={{ flex: 1, color: theme.foreground, fontSize: 12.5, fontFamily: theme.fontSans }}>
+                {r.name || '(sin nombre)'} · {r.email || '(sin email)'}
+              </Text>
+              {!r.valid ? <Text style={{ color: theme.destructive, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>{r.error}</Text> : null}
+            </View>
+          ))}
+          {rows.length > 6 ? (
+            <TouchableOpacity onPress={() => setShowAll((v) => !v)} activeOpacity={0.7}>
+              <Text style={{ color: theme.primary, fontSize: 12.5, fontFamily: 'Inter_600SemiBold' }}>{showAll ? 'Ver menos' : `Ver tabla completa (${rows.length})`}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
       <TouchableOpacity activeOpacity={0.82} onPress={() => setAgeOk((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, padding: 12, backgroundColor: theme.secondary }}>
         <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: ageOk ? theme.primary : theme.border, backgroundColor: ageOk ? theme.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
           {ageOk ? <X size={14} color="#fff" /> : null}
@@ -1160,7 +1212,7 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
       </TouchableOpacity>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={busy} style={{ flex: 1 }} />
-        <Button label={busy ? 'Importando…' : `Importar ${rows.length}`} onPress={run} disabled={busy || rows.length === 0} style={{ flex: 1 }} />
+        <Button label={busy ? 'Importando…' : `Importar ${validRows.length}`} onPress={run} disabled={busy || validRows.length === 0} style={{ flex: 1 }} />
       </View>
     </View>
   )
