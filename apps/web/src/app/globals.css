@@ -270,6 +270,13 @@ html {
   ::-webkit-scrollbar-thumb:hover {
     background: var(--primary);
   }
+
+  /* Ocultar el reveal/clear nativo de Edge/IE en inputs password — ya hay un
+     toggle de ojo propio (PasswordInput); esto evita el doble ícono de ojo. */
+  input[type='password']::-ms-reveal,
+  input[type='password']::-ms-clear {
+    display: none;
+  }
 }
 
 /* ============================================================
