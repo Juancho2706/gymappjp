@@ -102,7 +102,11 @@ export async function proxy(request: NextRequest) {
             !url.pathname.startsWith('/org') &&
             !url.pathname.startsWith('/invite') &&
             !url.pathname.startsWith('/enterprise') &&
-            !url.pathname.startsWith('/api')
+            !url.pathname.startsWith('/api') &&
+            // Shared auth pages live at the app root (route group (auth)); don't prefix
+            // them with /org or they 404 on the enterprise subdomain (forgot/reset password).
+            !url.pathname.startsWith('/forgot-password') &&
+            !url.pathname.startsWith('/reset-password')
         ) {
             url.pathname = '/org' + url.pathname
         }
