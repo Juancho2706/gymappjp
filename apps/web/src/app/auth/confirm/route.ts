@@ -21,6 +21,14 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/login?error=confirmation_expired`)
     }
 
+    // Password recovery: land on the reset form with the recovery session active,
+    // not on the dashboard. (Covers token_hash-style recovery links.)
+    if (type === 'recovery') {
+        const next = searchParams.get('next')
+        const dest = next && next.startsWith('/') && !next.startsWith('//') ? next : '/reset-password'
+        return NextResponse.redirect(`${origin}${dest}`)
+    }
+
     // Activate free tier coach whose registration was pending email confirmation.
     const adminDb = createServiceRoleClient()
     const { data: coach } = await adminDb

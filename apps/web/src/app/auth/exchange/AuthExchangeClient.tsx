@@ -28,6 +28,15 @@ function ExchangeInner() {
                 return
             }
 
+            // Password recovery (or any explicit internal next): the session is now set,
+            // so send the user straight to that page (e.g. /reset-password) instead of the
+            // default post-login redirect. Guard against open redirects.
+            const next = searchParams.get('next')
+            if (next && next.startsWith('/') && !next.startsWith('//')) {
+                window.location.replace(next)
+                return
+            }
+
             const { data: coach } = await supabase
                 .from('coaches')
                 .select('id, active_org_id')
