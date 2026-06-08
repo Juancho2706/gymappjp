@@ -28,6 +28,8 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
+import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
+import type { WorkspaceSummary } from '@/domain/auth/types'
 
 const navItems = [
     {
@@ -89,9 +91,11 @@ interface CoachSidebarProps {
         orgName: string
         orgRole: string
     } | null
+    workspaces?: WorkspaceSummary[]
+    currentWorkspaceLabel?: string
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -177,6 +181,12 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     </span>
                 </div>
                 <div className="flex items-center gap-3">
+                    <WorkspaceSwitcher
+                        variant="brand"
+                        align="down"
+                        currentLabel={currentWorkspaceLabel ?? ''}
+                        workspaces={workspaces ?? []}
+                    />
                     <NewsBellButton />
                     {pathname === '/coach/settings' && (
                         <button
@@ -345,6 +355,17 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                             <ThemeToggle />
                         </div>
                     </div>
+
+                    {!isCollapsed && (workspaces?.length ?? 0) > 1 && (
+                        <div className="px-2 w-full">
+                            <WorkspaceSwitcher
+                                variant="brand"
+                                align="up"
+                                currentLabel={currentWorkspaceLabel ?? ''}
+                                workspaces={workspaces ?? []}
+                            />
+                        </div>
+                    )}
 
                     <button
                         onClick={handleSignOut}

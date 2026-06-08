@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { OrgSignOutButton } from './OrgSignOutButton'
-import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 
 type NavChild = {
@@ -259,7 +259,7 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="flex-1">
-                            <WorkspaceSwitcher currentLabel={org.name} workspaces={workspaces} />
+                            <WorkspaceSwitcher currentLabel={org.name} workspaces={workspaces} variant="dark" align="up" />
                         </div>
                         <OrgSignOutButton />
                     </div>
@@ -274,7 +274,7 @@ export function OrgEnterpriseNav({ slug, org, workspaces }: OrgNavProps) {
                         <p className="truncate text-sm font-semibold text-white">{org.name}</p>
                         <p className="text-[10px] uppercase tracking-[0.12em] text-amber-300">Enterprise</p>
                     </div>
-                    <WorkspaceSwitcher currentLabel={org.name} workspaces={workspaces} />
+                    <WorkspaceSwitcher currentLabel={org.name} workspaces={workspaces} variant="dark" align="down" />
                     <OrgSignOutButton compact />
                 </div>
                 {/* Sub-navigation chips — only show for active group with children */}

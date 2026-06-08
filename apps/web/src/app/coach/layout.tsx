@@ -14,7 +14,7 @@ import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { getCoachEnterpriseContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
-import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { resolvePreferredWorkspace, listUserWorkspaces } from '@/services/auth/workspace.service'
 
 export const metadata: Metadata = {
     title: {
@@ -46,9 +46,18 @@ export default async function CoachLayout({
     ])
 
     const supabase = await createClient()
-    const activeWorkspace = await resolvePreferredWorkspace(supabase, coach.id)
+    const [activeWorkspace, workspaces] = await Promise.all([
+        resolvePreferredWorkspace(supabase, coach.id),
+        listUserWorkspaces(supabase, coach.id),
+    ])
     const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
     const enterpriseContext = await getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null)
+    const currentWorkspaceLabel =
+        activeWorkspace?.label ??
+        enterpriseContext?.orgName ??
+        coach.brand_name ??
+        coach.full_name ??
+        'Mi negocio EVA'
 
     const primaryColor =
         enterpriseContext?.primaryColor
@@ -114,6 +123,8 @@ export default async function CoachLayout({
                     primaryColor={primaryColor}
                     subscriptionStatus={activeEnterpriseCoach ? 'org_managed' : coach.subscription_status}
                     enterpriseContext={enterpriseContext}
+                    workspaces={workspaces}
+                    currentWorkspaceLabel={currentWorkspaceLabel}
                 />
                 <CoachMainWrapper>
                     {/* Background ambient glow */}
