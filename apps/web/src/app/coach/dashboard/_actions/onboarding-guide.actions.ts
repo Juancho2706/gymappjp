@@ -39,10 +39,28 @@ export async function persistOnboardingGuideAction(
         return { ok: false, error: 'No autenticado' }
     }
 
+    // Merge con el guide existente — NO reemplazar. Antes hacía un replace total que
+    // pisaba otras keys del mismo jsonb (invite_code_confirmed, brand_tour_seen),
+    // lo que hacía reaparecer el modal de "código corto" en cada carga del dashboard.
+    const { data: current } = await supabase
+        .from('coaches')
+        .select('onboarding_guide')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    const existing =
+        current?.onboarding_guide != null &&
+        typeof current.onboarding_guide === 'object' &&
+        !Array.isArray(current.onboarding_guide)
+            ? (current.onboarding_guide as Record<string, unknown>)
+            : {}
+
+    const merged: Json = { ...existing, ...parsed.data }
+
     const { error } = await supabase
         .from('coaches')
         .update({
-            onboarding_guide: parsed.data as Json,
+            onboarding_guide: merged,
             updated_at: new Date().toISOString(),
         })
         .eq('id', user.id)
