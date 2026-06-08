@@ -102,7 +102,8 @@ export async function proxy(request: NextRequest) {
         if (
             !url.pathname.startsWith('/org') &&
             !url.pathname.startsWith('/invite') &&
-            !url.pathname.startsWith('/enterprise')
+            !url.pathname.startsWith('/enterprise') &&
+            !url.pathname.startsWith('/api')
         ) {
             url.pathname = '/org' + url.pathname
         }

@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { EnterpriseNav } from './_components/sections/EnterpriseNav'
 import { EnterpriseHero } from './_components/sections/EnterpriseHero'
 import { EnterpriseProblemStatement } from './_components/sections/EnterpriseProblemStatement'
-import { EnterpriseTechStack } from './_components/sections/EnterpriseTechStack'
 import { EnterpriseFeatureBento } from './_components/sections/EnterpriseFeatureBento'
 import { EnterpriseUseCases } from './_components/sections/EnterpriseUseCases'
 import { EnterpriseROIComparison } from './_components/sections/EnterpriseROIComparison'
@@ -35,7 +34,6 @@ export default function EnterpriseLandingPage() {
       <main id="main-content">
         <EnterpriseHero />
         <EnterpriseProblemStatement />
-        <EnterpriseTechStack />
         <EnterpriseFeatureBento />
         <EnterpriseUseCases />
         <EnterpriseROIComparison />
