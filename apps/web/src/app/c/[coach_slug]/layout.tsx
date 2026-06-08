@@ -129,6 +129,9 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         ? BRAND_APP_ICON
         : (headersList.get('x-coach-logo-url') || BRAND_APP_ICON)
     const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
+    // B-9: enterprise client whose coach left the org — show a reassignment prompt.
+    const isOrphan = headersList.get('x-workspace-orphan') === 'true'
+    const orphanOrgName = headersList.get('x-orphan-org-name') ?? ''
     const coachId = headersList.get('x-coach-id') ?? ''
     const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
     const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
@@ -214,6 +217,14 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     <AppDownloadBanner brandName={brandName} primaryColor={primaryColor} />
 
                     <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
+                        {isOrphan && (
+                            <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
+                                <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+                                    Tu coach ya no está disponible en {orphanOrgName || 'tu organización'}.
+                                    Hablá con {orphanOrgName || 'tu organización'} para que te asignen un nuevo coach.
+                                </div>
+                            </div>
+                        )}
                         {children}
                         {isFreeTier && (
                             <a

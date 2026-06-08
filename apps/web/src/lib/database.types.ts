@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -996,6 +976,7 @@ export type Database = {
           food_ids: string[]
           id: string
           name: string
+          org_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1004,6 +985,7 @@ export type Database = {
           food_ids?: string[]
           id?: string
           name: string
+          org_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1012,6 +994,7 @@ export type Database = {
           food_ids?: string[]
           id?: string
           name?: string
+          org_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1020,6 +1003,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_swap_groups_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1036,6 +1026,7 @@ export type Database = {
           is_liquid: boolean
           name: string
           name_search: string | null
+          org_id: string | null
           protein_g: number
           serving_size: number
           serving_unit: string | null
@@ -1051,6 +1042,7 @@ export type Database = {
           is_liquid?: boolean
           name: string
           name_search?: string | null
+          org_id?: string | null
           protein_g: number
           serving_size: number
           serving_unit?: string | null
@@ -1066,6 +1058,7 @@ export type Database = {
           is_liquid?: boolean
           name?: string
           name_search?: string | null
+          org_id?: string | null
           protein_g?: number
           serving_size?: number
           serving_unit?: string | null
@@ -1076,6 +1069,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "foods_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1904,6 +1904,7 @@ export type Database = {
           coach_id: string | null
           deleted_at: string | null
           id: string
+          invite_code: string | null
           invited_at: string | null
           joined_at: string | null
           last_health_score: number | null
@@ -1917,6 +1918,7 @@ export type Database = {
           coach_id?: string | null
           deleted_at?: string | null
           id?: string
+          invite_code?: string | null
           invited_at?: string | null
           joined_at?: string | null
           last_health_score?: number | null
@@ -1930,6 +1932,7 @@ export type Database = {
           coach_id?: string | null
           deleted_at?: string | null
           id?: string
+          invite_code?: string | null
           invited_at?: string | null
           joined_at?: string | null
           last_health_score?: number | null
@@ -2384,16 +2387,19 @@ export type Database = {
           coach_id: string
           id: string
           name: string
+          org_id: string | null
         }
         Insert: {
           coach_id: string
           id?: string
           name: string
+          org_id?: string | null
         }
         Update: {
           coach_id?: string
           id?: string
           name?: string
+          org_id?: string | null
         }
         Relationships: [
           {
@@ -2401,6 +2407,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_meals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -2992,6 +3005,7 @@ export type Database = {
         Returns: Json
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      generate_unique_invite_code: { Args: never; Returns: string }
       get_admin_audit_logs_paginated: {
         Args: {
           p_action?: string
@@ -3196,6 +3210,7 @@ export type Database = {
           is_liquid: boolean
           name: string
           name_search: string | null
+          org_id: string | null
           protein_g: number
           serving_size: number
           serving_unit: string | null
@@ -3340,11 +3355,7 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
 } as const
-

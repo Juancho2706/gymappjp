@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { JoinForm } from './_components/JoinForm'
+import { resolveInvite } from './_lib/resolve-invite'
 
 interface Props {
     params: Promise<{ invite_code: string }>
@@ -9,25 +10,26 @@ interface Props {
 export async function generateMetadata({ params }: Props) {
     const { invite_code } = await params
     const admin = createServiceRoleClient()
-    const { data: coach } = await admin
-        .from('coaches')
-        .select('brand_name')
-        .eq('invite_code', invite_code)
-        .maybeSingle()
-    return { title: coach ? `Únete a ${coach.brand_name}` : 'Únete' }
+    const invite = await resolveInvite(admin, invite_code)
+    return { title: invite ? `Únete a ${invite.brandName}` : 'Únete' }
 }
 
 export default async function JoinPage({ params }: Props) {
     const { invite_code } = await params
     const admin = createServiceRoleClient()
 
-    const { data: coach } = await admin
-        .from('coaches')
-        .select('id, brand_name, primary_color, logo_url, welcome_message, slug')
-        .eq('invite_code', invite_code)
-        .maybeSingle()
+    // B-7: resolve scope from the code — enterprise codes show ORG branding,
+    // standalone codes show coach branding.
+    const invite = await resolveInvite(admin, invite_code)
+    if (!invite) notFound()
 
-    if (!coach) notFound()
+    const coach = {
+        brand_name: invite.brandName,
+        primary_color: invite.primaryColor,
+        logo_url: invite.logoUrl,
+        welcome_message: invite.welcomeMessage,
+        slug: invite.coachSlug,
+    }
 
     const color = coach.primary_color ?? '#10B981'
 

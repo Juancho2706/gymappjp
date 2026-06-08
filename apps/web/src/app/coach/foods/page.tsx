@@ -5,13 +5,18 @@ import { getFoodLibrary } from '@/app/coach/nutrition-plans/_data/nutrition-coac
 import { FoodBrowser } from './_components/FoodBrowser'
 import { AddFoodSheet } from './_components/AddFoodSheet'
 import { getCoachFoodsUser } from './_data/foods.queries'
+import { createClient } from '@/lib/supabase/server'
+import { resolveCoachScope } from '@/services/auth/coach-scope.service'
 
 export default async function CoachFoodsPage() {
   const user = await getCoachFoodsUser()
   if (!user) redirect('/login')
 
   const coachId = user.id
-  const { foods, total } = await getFoodLibrary(coachId, { page: 0, pageSize: 120 })
+  // Fase 2C: scope foods to the active workspace (standalone vs org).
+  const scope = await resolveCoachScope(await createClient(), coachId)
+  const orgId = scope.ok ? scope.orgId : null
+  const { foods, total } = await getFoodLibrary(coachId, { page: 0, pageSize: 120, orgId })
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in mb-24 md:mb-0 px-4 md:px-6 space-y-8">

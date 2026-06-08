@@ -517,6 +517,22 @@ export async function proxy(request: NextRequest) {
                     requestHeaders.set('x-coach-loader-icon-mode', orgRow.loader_icon_mode === 'text' ? 'none' : 'coach')
                     requestHeaders.set('x-workspace-brand-source', 'organization')
                 }
+            } else if (client.org_id && !orgMembershipActive) {
+                // B-9: enterprise client whose coach is no longer an active member of the org.
+                // Don't fall back to the (departed) coach's branding — show neutral EVA branding
+                // and flag the client as orphaned so the app can prompt them to contact the org
+                // for reassignment to another coach.
+                const { data: orphanOrg } = await supabase
+                    .from('organizations')
+                    .select('name')
+                    .eq('id', client.org_id)
+                    .maybeSingle()
+                requestHeaders.set('x-coach-brand-name', 'EVA')
+                requestHeaders.set('x-coach-primary-color', SYSTEM_PRIMARY_COLOR)
+                requestHeaders.set('x-coach-logo-url', BRAND_APP_ICON)
+                requestHeaders.set('x-workspace-brand-source', 'orphan')
+                requestHeaders.set('x-workspace-orphan', 'true')
+                requestHeaders.set('x-orphan-org-name', orphanOrg?.name ?? '')
             }
 
             // Default behavior if columns are missing or false

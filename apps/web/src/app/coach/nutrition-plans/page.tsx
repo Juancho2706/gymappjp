@@ -134,7 +134,7 @@ export default async function NutritionPlansPage() {
     getCoachTemplates(coachId, orgId),
     getActivePlansBoardData(coachId, orgId),
     getCoachClients(coachId, orgId),
-    getFoodLibrary(coachId, { page: 0, pageSize: 120 }),
+    getFoodLibrary(coachId, { page: 0, pageSize: 120, orgId }),
     orgId ? getCoachOrgNutritionTemplates(orgId) : Promise.resolve([]),
   ])
 

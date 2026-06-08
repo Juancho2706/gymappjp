@@ -5,6 +5,7 @@ import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { generateTempPassword, getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
 
 const AssignClientSchema = z.object({
     clientId: z.guid(),
@@ -309,9 +310,26 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         metadata: { email: parsed.data.email, coach_id: coachId },
     })
 
+    // B-10: when the alumno is created already assigned to a coach, email their access
+    // (single temp password) instead of manual-only delivery. Pool clients (no coach yet)
+    // are emailed later when assigned. Credentials are also returned for manual fallback.
+    if (coachId && parsed.data.email) {
+        sendTransactionalEmail({
+            to: parsed.data.email,
+            subject: `${org.name} — tu acceso`,
+            html: `
+                <p>Hola ${parsed.data.full_name},</p>
+                <p>${org.name} creó tu cuenta de alumno en EVA.</p>
+                <p><strong>Acceso:</strong> ${loginUrl}</p>
+                <p><strong>Email:</strong> ${parsed.data.email}</p>
+                <p><strong>Contraseña temporal:</strong> ${tempPassword}</p>
+                <p>Te pediremos cambiarla al ingresar.</p>
+            `,
+        }).catch(() => null)
+    }
+
     revalidatePath(`/org/${orgSlug}/clients`)
-    // Credentials returned for manual delivery — students are NOT emailed.
-    return { success: true, clientId: client.id, email: parsed.data.email, tempPassword, loginUrl }
+    return { success: true, clientId: client.id, email: parsed.data.email, tempPassword, loginUrl, emailed: !!coachId }
 }
 
 export async function importClientsFromCSVAction(

@@ -330,13 +330,18 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
     if (authError || !authData.user) return { error: authError?.message ?? 'No se pudo crear el usuario' }
 
     let inviteCode: string | null = null
+    // B-7: enterprise alumno code (organization_members.invite_code) — distinct from the
+    // coach's standalone coaches.invite_code, and unique across BOTH code spaces.
+    let enterpriseCode: string | null = null
 
     if (parsed.data.role === 'coach') {
-        const [slug, generatedInviteCode] = await Promise.all([
+        const [slug, generatedInviteCode, enterpriseCodeRes] = await Promise.all([
             generateUniqueCoachSlug(admin, `${org.slug}-${parsed.data.full_name}`),
             generateUniqueInviteCode(admin),
+            admin.rpc('generate_unique_invite_code'),
         ])
         inviteCode = generatedInviteCode
+        enterpriseCode = enterpriseCodeRes.data ?? null
 
         const { error: coachError } = await admin.from('coaches').insert({
             id: authData.user.id,
@@ -367,6 +372,7 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
         role: parsed.data.role,
         status: 'active',
         joined_at: new Date().toISOString(),
+        invite_code: enterpriseCode,
     })
     if (memberError) {
         await admin.auth.admin.deleteUser(authData.user.id)
@@ -406,14 +412,15 @@ export async function createEnterpriseCoachAction(orgSlug: string, formData: For
             <p><strong>Login:</strong> ${parsed.data.role === 'coach' ? `${appUrl}/login` : `${appUrl}/org/login`}</p>
             <p><strong>Email:</strong> ${email}</p>
             <p><strong>Contraseña temporal:</strong> ${tempPassword}</p>
-            ${inviteCode ? `<p><strong>Código de alumnos:</strong> ${inviteCode}</p>` : ''}
+            ${enterpriseCode ? `<p><strong>Código de alumnos (organización):</strong> ${enterpriseCode}</p>` : ''}
         `,
     }).catch(() => null)
 
     revalidatePath(`/org/${orgSlug}/coaches`)
     revalidatePath(`/org/${orgSlug}/team`)
     revalidatePath(`/org/${orgSlug}/audit`)
-    return { success: true, email, tempPassword, inviteCode, role: parsed.data.role }
+    // B-7: the alumno-facing code for an enterprise coach is the org code, not the standalone one.
+    return { success: true, email, tempPassword, inviteCode: enterpriseCode, role: parsed.data.role }
 }
 
 export async function inviteCoachAction(orgSlug: string, formData: FormData) {
@@ -461,6 +468,12 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
         .maybeSingle()
     if (existing) return { error: existing.status === 'active' ? 'Ya es miembro' : 'Ya tiene invitación pendiente' }
 
+    // B-7: a coach linked to an org gets a distinct ENTERPRISE invite code (unique across
+    // both code spaces). Their standalone coaches.invite_code stays untouched → two codes.
+    const enterpriseCode = parsed.data.role === 'coach'
+        ? (await admin.rpc('generate_unique_invite_code')).data ?? null
+        : null
+
     const { error: insertError } = await admin
         .from('organization_members')
         .insert({
@@ -470,6 +483,7 @@ export async function inviteCoachAction(orgSlug: string, formData: FormData) {
             role: parsed.data.role,
             status: 'active',
             joined_at: new Date().toISOString(),
+            invite_code: enterpriseCode,
         })
     if (insertError) return { error: insertError.message }
 
@@ -519,6 +533,23 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
     if (!target) return { error: 'Miembro no encontrado' }
     if (target.role === 'org_owner') return { error: 'No se puede remover al propietario' }
 
+    // F6: never orphan enterprise clients. Block removal while the coach still has org clients
+    // assigned; the admin must reassign them or send them to the unassigned pool first
+    // (unassignAllOrgClientsFromCoachAction). Standalone clients (org_id NULL) are never touched.
+    if (target.role === 'coach' && target.coach_id) {
+        const { count: assignedClients } = await admin
+            .from('clients')
+            .select('id', { count: 'exact', head: true })
+            .eq('org_id', org.id)
+            .eq('coach_id', target.coach_id)
+        if ((assignedClients ?? 0) > 0) {
+            return {
+                error: `Este coach tiene ${assignedClients} alumno(s) de la organización asignados. Reasignalos a otro coach o quitalos del coach (pasan al pool sin asignar) antes de removerlo.`,
+                blockedByAssignedClients: assignedClients ?? 0,
+            }
+        }
+    }
+
     const { error } = await admin
         .from('organization_members')
         .update({ deleted_at: new Date().toISOString(), status: 'revoked' })
@@ -556,6 +587,47 @@ export async function removeCoachAction(orgSlug: string, memberId: string) {
     return { success: true }
 }
 
+/**
+ * F6: send all of a coach's ORG clients to the org's unassigned pool — org_id stays set
+ * (they remain enterprise clients), coach_id is cleared. Standalone clients (org_id NULL)
+ * are never touched. Used by the "quitar todos los alumnos" button so the coach can then
+ * be removed without orphaning anyone.
+ */
+export async function unassignAllOrgClientsFromCoachAction(orgSlug: string, coachId: string) {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: moved, error } = await admin
+        .from('clients')
+        .update({ coach_id: null })
+        .eq('org_id', org.id)
+        .eq('coach_id', coachId)
+        .select('id')
+    if (error) return { error: error.message }
+
+    await admin
+        .from('coach_client_assignments')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('org_id', org.id)
+        .eq('coach_id', coachId)
+        .is('deleted_at', null)
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'org_clients.unassigned_from_coach',
+        targetType: 'coach',
+        targetId: coachId,
+        metadata: { coach_id: coachId, moved_count: moved?.length ?? 0, destination: 'unassigned_pool' },
+    })
+
+    revalidatePath(`/org/${orgSlug}/coaches`)
+    revalidatePath(`/org/${orgSlug}/clients`)
+    return { success: true, moved: moved?.length ?? 0 }
+}
+
 export async function resetEnterpriseCoachPasswordAction(orgSlug: string, coachId: string) {
     const context = await resolveOrgAdminContext(orgSlug)
     if ('error' in context) return { error: context.error }
@@ -585,6 +657,63 @@ export async function resetEnterpriseCoachPasswordAction(orgSlug: string, coachI
         targetId: coachId,
         metadata: {},
     })
+
+    return { success: true, tempPassword }
+}
+
+/**
+ * B-11: reset an ENTERPRISE alumno's password from the org panel (mirror of the coach reset).
+ * Scoped to clients that belong to this org; standalone clients (org_id NULL) are not reachable.
+ */
+export async function resetEnterpriseClientPasswordAction(orgSlug: string, clientId: string) {
+    const context = await resolveOrgAdminContext(orgSlug)
+    if ('error' in context) return { error: context.error }
+
+    const admin = createServiceRoleClient()
+    const { org, user } = context
+
+    const { data: client } = await admin
+        .from('clients')
+        .select('id, email, full_name, coach_id')
+        .eq('id', clientId)
+        .eq('org_id', org.id)
+        .maybeSingle()
+    if (!client) return { error: 'Alumno no pertenece a esta organización' }
+
+    const tempPassword = generateTempPassword()
+    const { error } = await admin.auth.admin.updateUserById(clientId, { password: tempPassword })
+    if (error) return { error: error.message }
+    await admin.from('clients').update({ force_password_change: true }).eq('id', clientId)
+
+    await writeOrgAuditEvent(admin, {
+        orgId: org.id,
+        actorId: user.id,
+        action: 'enterprise_client.password_reset',
+        targetType: 'client',
+        targetId: clientId,
+        metadata: {},
+    })
+
+    // B-10: email the new credentials to the alumno (instead of manual-only sharing).
+    if (client.email) {
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+        const coachSlug = client.coach_id
+            ? (await admin.from('coaches').select('slug').eq('id', client.coach_id).maybeSingle()).data?.slug
+            : null
+        const loginUrl = coachSlug ? `${appUrl}/c/${coachSlug}/login` : `${appUrl}/login`
+        sendTransactionalEmail({
+            to: client.email,
+            subject: `${org.name} — nueva contraseña de acceso`,
+            html: `
+                <p>Hola ${client.full_name ?? ''},</p>
+                <p>${org.name} restableció tu contraseña de acceso.</p>
+                <p><strong>Acceso:</strong> ${loginUrl}</p>
+                <p><strong>Email:</strong> ${client.email}</p>
+                <p><strong>Contraseña temporal:</strong> ${tempPassword}</p>
+                <p>Te pediremos cambiarla al ingresar.</p>
+            `,
+        }).catch(() => null)
+    }
 
     return { success: true, tempPassword }
 }

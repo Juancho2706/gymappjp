@@ -270,7 +270,7 @@ export default async function OrgCoachesPage({ params }: Props) {
                                                     role={member.role}
                                                     clientCount={assigned}
                                                     otherCoaches={otherCoaches}
-                                                    inviteCode={member.coach?.invite_code ?? null}
+                                                    inviteCode={member.invite_code ?? null}
                                                     canManageRole={isAdmin}
                                                     coachSlug={member.coach?.slug ?? undefined}
                                                 />
@@ -280,14 +280,14 @@ export default async function OrgCoachesPage({ params }: Props) {
                                                     <RoleIcon className="h-3 w-3" aria-hidden="true" />
                                                     {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] ?? member.role}
                                                 </span>
-                                                {member.coach?.invite_code && (
+                                                {member.invite_code && (
                                                     <span className="hidden lg:inline-flex items-center gap-1">
                                                         <span className="rounded-md bg-zinc-800 px-2 py-1 font-mono text-[10px] text-zinc-300">
-                                                            {member.coach.invite_code}
+                                                            {member.invite_code}
                                                         </span>
                                                         <CoachQRButton
-                                                            inviteCode={member.coach.invite_code}
-                                                            coachName={member.coach.full_name ?? 'Coach'}
+                                                            inviteCode={member.invite_code}
+                                                            coachName={member.coach?.full_name ?? 'Coach'}
                                                             siteUrl={siteUrl}
                                                         />
                                                     </span>

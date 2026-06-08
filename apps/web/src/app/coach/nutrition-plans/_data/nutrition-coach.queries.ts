@@ -280,6 +280,20 @@ export type FoodLibraryOptions = {
   maxCalories?: number
   page?: number
   pageSize?: number
+  /** Active workspace org (Fase 2C): null = standalone (system + own), set = org (system + org foods). */
+  orgId?: string | null
+}
+
+/**
+ * Workspace-aware foods filter (Fase 2C): mirrors getExerciseCatalog.
+ *  - enterprise: system (coach_id NULL, org_id NULL) + org foods (org_id = orgId)
+ *  - standalone:  system + own (coach_id = me, org_id NULL)
+ * RLS still enforces the boundary; this picks the right workspace's catalog.
+ */
+function foodWorkspaceFilter(coachId: string, orgId: string | null): string {
+  return orgId
+    ? `and(coach_id.is.null,org_id.is.null),org_id.eq.${orgId}`
+    : `and(coach_id.is.null,org_id.is.null),and(coach_id.eq.${coachId},org_id.is.null)`
 }
 
 /**
@@ -287,12 +301,12 @@ export type FoodLibraryOptions = {
  */
 export const getFoodLibrary = cache(async (coachId: string, options: FoodLibraryOptions = {}) => {
   const supabase = await createClient()
-  const { search, category, maxCalories, page = 0, pageSize = DEFAULT_FOOD_PAGE_SIZE } = options
+  const { search, category, maxCalories, page = 0, pageSize = DEFAULT_FOOD_PAGE_SIZE, orgId = null } = options
 
   let query = supabase
     .from('foods')
     .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id, is_liquid, brand', { count: 'exact' })
-    .or(`coach_id.is.null,coach_id.eq.${coachId}`)
+    .or(foodWorkspaceFilter(coachId, orgId))
     .order('coach_id', { ascending: false })
     .order('name')
     .range(page * pageSize, (page + 1) * pageSize - 1)
@@ -440,12 +454,12 @@ export const getCoachSavedMeals = cache(async (coachId: string) => {
 /**
  * Todos los alimentos visibles para el coach (lista completa — misma semántica que la page legacy).
  */
-export const getCoachFoodsCatalog = cache(async (coachId: string) => {
+export const getCoachFoodsCatalog = cache(async (coachId: string, orgId: string | null = null) => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('foods')
     .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id, is_liquid, brand')
-    .or(`coach_id.eq.${coachId},coach_id.is.null`)
+    .or(foodWorkspaceFilter(coachId, orgId))
     .order('name')
   return data ?? []
 })

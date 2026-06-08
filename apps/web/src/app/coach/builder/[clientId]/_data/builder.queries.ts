@@ -28,12 +28,18 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         .eq('coach_id', user.id)
     clientQuery = applyOrgScope(clientQuery, orgId)
 
+    // Fase 2C / F7: scope exercises to the active workspace — standalone shows system + own,
+    // enterprise shows system + the org catalog (RLS enforces the boundary either way).
+    const exercisesFilter = orgId
+        ? `and(coach_id.is.null,org_id.is.null),org_id.eq.${orgId}`
+        : `and(coach_id.is.null,org_id.is.null),and(coach_id.eq.${user.id},org_id.is.null)`
+
     const [clientResult, exercisesResult] = await Promise.all([
         clientQuery.maybeSingle(),
         supabase
             .from('exercises')
             .select('*')
-            .or(`coach_id.is.null,coach_id.eq.${user.id}`)
+            .or(exercisesFilter)
             .order('muscle_group')
             .order('name'),
     ])

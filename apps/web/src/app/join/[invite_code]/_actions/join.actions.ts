@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { z } from 'zod/v4'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitInviteAccept } from '@/lib/rate-limit'
+import { resolveInvite } from '../_lib/resolve-invite'
 
 const JoinSchema = z.object({
     full_name: z.string().min(2).max(120),
@@ -28,12 +29,11 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
 
     const admin = createServiceRoleClient()
 
-    const { data: coach } = await admin
-        .from('coaches')
-        .select('id, slug')
-        .eq('invite_code', inviteCode)
-        .maybeSingle()
-    if (!coach) return { error: 'Código de invitación inválido' }
+    // B-7: the code itself decides the scope. An ENTERPRISE code (organization_members.invite_code)
+    // creates an org-scoped alumno (org_id set + coach assignment); a STANDALONE code
+    // (coaches.invite_code) creates a standalone alumno (org_id null). Single source of truth.
+    const invite = await resolveInvite(admin, inviteCode)
+    if (!invite) return { error: 'Código de invitación inválido' }
 
     const { data: existing } = await admin
         .from('clients')
@@ -50,17 +50,13 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
     })
     if (authErr) return { error: authErr.message }
 
-    // F3: a coach's personal invite_code ALWAYS creates a STANDALONE client (org_id NULL).
-    // Enterprise clients are created only through org flows (org-admin / enterprise roles /
-    // EVA enterprise RN app / the org-linked "add client" menu) — never via self-signup.
-    // This keeps the standalone and enterprise client-creation paths from diverging.
     const { error: insertErr } = await admin.from('clients').insert({
         id: newUser.user.id,
         full_name: parsed.data.full_name,
         email: parsed.data.email,
         phone: parsed.data.phone || null,
-        coach_id: coach.id,
-        org_id: null,
+        coach_id: invite.coachId,
+        org_id: invite.orgId,
         is_active: true,
         force_password_change: false,
         age_confirmed_at: new Date().toISOString(),
@@ -71,5 +67,15 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         return { error: insertErr.message }
     }
 
-    return { success: true, coachSlug: coach.slug }
+    // Enterprise self-signup: record the coach↔client assignment in the org.
+    if (invite.scope === 'enterprise') {
+        await admin.from('coach_client_assignments').insert({
+            org_id: invite.orgId,
+            client_id: newUser.user.id,
+            coach_id: invite.coachId,
+            assigned_by: invite.coachId,
+        })
+    }
+
+    return { success: true, coachSlug: invite.coachSlug }
 }

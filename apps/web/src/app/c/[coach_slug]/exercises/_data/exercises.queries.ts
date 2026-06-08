@@ -10,7 +10,7 @@ export const getClientExerciseCatalogData = cache(async () => {
     const clientResponse = await (supabase as any)
         .from('clients')
         .select(`
-            id, coach_id,
+            id, coach_id, org_id,
             coaches ( brand_name, primary_color )
         `)
         .eq('id', user.id)
@@ -19,10 +19,16 @@ export const getClientExerciseCatalogData = cache(async () => {
     const client = clientResponse.data
     if (!client) return { user, client: null, exercises: [] }
 
+    // F9 / Fase 2C: enterprise alumno sees system + their org's exercises; standalone alumno
+    // sees system + their coach's. RLS enforces the boundary; this filters to the right set.
+    const exercisesFilter = client.org_id
+        ? `and(coach_id.is.null,org_id.is.null),org_id.eq.${client.org_id}`
+        : `and(coach_id.is.null,org_id.is.null),and(coach_id.eq.${client.coach_id},org_id.is.null)`
+
     const exercisesResponse = await supabase
         .from('exercises')
         .select(EXERCISE_CATALOG_COLUMNS)
-        .or(`coach_id.is.null,coach_id.eq.${client.coach_id}`)
+        .or(exercisesFilter)
         .order('name')
 
     return { user, client, exercises: exercisesResponse.data ?? [] }

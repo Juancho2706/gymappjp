@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { listUserWorkspaces, setLastWorkspace, workspaceKey } from '@/services/auth/workspace.service'
 import { workspaceHome } from './workspace-home'
 
@@ -23,6 +24,15 @@ export async function selectWorkspaceAction(formData: FormData) {
         const url = new URL('/workspace/select', 'https://placeholder.local')
         url.searchParams.set('error', 'persist_failed')
         redirect(url.pathname + url.search)
+    }
+
+    // F10: keep coaches.active_org_id in sync with the chosen workspace, then refresh the
+    // session so the JWT auth hook (which reads active_org_id) re-issues claims for the
+    // right org immediately — avoiding a window where the DB preference and the JWT disagree.
+    if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach') {
+        const nextOrgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
+        await createServiceRoleClient().from('coaches').update({ active_org_id: nextOrgId }).eq('id', user.id)
+        await supabase.auth.refreshSession()
     }
 
     redirect(workspaceHome(workspace))
