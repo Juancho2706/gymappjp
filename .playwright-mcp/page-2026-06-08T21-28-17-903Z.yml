@@ -1,0 +1,37 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img "Gym Prueba" [ref=e7]
+      - heading "Gym Prueba" [level=1] [ref=e8]
+      - paragraph [ref=e9]: Tu plataforma de entrenamiento
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - heading "Accede a tu entrenamiento" [level=2] [ref=e12]
+        - paragraph [ref=e13]: Tu organización te envió las credenciales por email
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Email
+          - generic [ref=e17]:
+            - img
+            - textbox "Email" [ref=e18]:
+              - /placeholder: tu@email.com
+        - generic [ref=e19]:
+          - generic [ref=e20]:
+            - generic [ref=e21]: Contraseña
+            - link "¿Olvidaste tu contraseña?" [ref=e22] [cursor=pointer]:
+              - /url: /forgot-password?org_slug=org-prueba
+          - generic [ref=e23]:
+            - img
+            - textbox "Contraseña" [ref=e24]:
+              - /placeholder: ••••••••
+        - button "Ingresar" [ref=e26]
+    - paragraph [ref=e27]: Impulsado por EVA
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e38] [cursor=pointer]:
+    - generic [ref=e41]:
+      - text: Rendering
+      - generic [ref=e42]:
+        - generic [ref=e43]: .
+        - generic [ref=e44]: .
+        - generic [ref=e45]: .
+  - alert [ref=e37]

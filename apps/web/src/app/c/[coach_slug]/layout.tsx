@@ -11,6 +11,7 @@ import {
 } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
+import { BasePathProvider } from '@/components/client/BasePathProvider'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { AppDownloadBanner } from '@/components/AppDownloadBanner'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
@@ -158,6 +159,11 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     // Generate fallback favicon SVG (initial + color) if no logo
     const faviconUrl = logoUrl || generateFaviconSvg(brandName, primaryColor)
 
+    // F2: in-app link prefix. The proxy sets x-client-base-path when serving this tree under the
+    // enterprise area (/e/[org_slug] → rewrite → /c/[coach_slug]); otherwise it's the standalone
+    // /c path. Default keeps /c/* byte-identical.
+    const basePath = headersList.get('x-client-base-path') || `/c/${coach_slug}`
+
     if (!coachId) {
         redirect('/not-found')
     }
@@ -205,10 +211,12 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 data-brand-name={brandName}
             >
                 <NetworkProvider brandName={brandName} logoUrl={logoUrl} primaryColor={primaryColor}>
+                  <BasePathProvider value={basePath}>
                     <OfflineNutritionQueueSync />
                     <OfflineWorkoutQueueSync />
                     <ClientNav
                         coachSlug={coach_slug}
+                        basePath={basePath}
                         coachBrand={brandName}
                         coachLogoUrl={logoUrl}
                         initialUseBrandColors={initialUseBrandColors}
@@ -245,6 +253,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                             </a>
                         </div>
                     </main>
+                  </BasePathProvider>
                 </NetworkProvider>
             </div>
         </>

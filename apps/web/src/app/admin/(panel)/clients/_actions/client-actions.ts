@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
+import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
 const UpdateClientSchema = z.object({
     clientId: z.string().uuid(),
@@ -114,6 +115,15 @@ export async function createClientAction(
         await adminClient.auth.admin.deleteUser(authData.user.id)
         return { error: clientError.message }
     }
+
+    // F1: materialize identity (admin-created clients are standalone — no org_id). Non-fatal.
+    const identity = await createClientIdentity({
+        accountId: authData.user.id,
+        clientId: authData.user.id,
+        coachId: coach_id,
+        orgId: null,
+    })
+    if (!identity.ok) console.error('createClientIdentity (non-fatal, admin):', identity.error)
 
     await logAdminAction(adminClient, 'client.create', 'clients', authData.user.id, {
         coach_id,

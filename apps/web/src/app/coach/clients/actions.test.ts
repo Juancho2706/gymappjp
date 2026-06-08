@@ -23,6 +23,12 @@ vi.mock('next/cache', () => ({
   revalidatePath: revalidatePathMock,
 }))
 
+// F1: identity write is a non-fatal side effect (own service-role client) — stub it so the
+// action test doesn't reach a real Supabase client.
+vi.mock('@/infrastructure/db/client-membership.repository', () => ({
+  createClientIdentity: vi.fn().mockResolvedValue({ ok: true }),
+}))
+
 import { createClientAction } from './_actions/clients.actions'
 
 function buildFormData() {

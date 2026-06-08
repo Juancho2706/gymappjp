@@ -20,7 +20,10 @@ export function InfoTooltip({ title, content, className, iconClassName }: InfoTo
   const [open, setOpen] = React.useState(false)
 
   return (
-    <div
+    // <span> (not <div>): InfoTooltip is frequently placed inside <p>/inline text; a <div> there
+    // is invalid HTML and triggers a hydration error. inline-flex keeps the same visual layout,
+    // and the Radix trigger (<button>) + portaled content stay valid phrasing content.
+    <span
       className={cn("inline-flex items-center justify-center", className)}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -48,6 +51,6 @@ export function InfoTooltip({ title, content, className, iconClassName }: InfoTo
           <p className="text-xs text-muted-foreground leading-relaxed">{content}</p>
         </PopoverContent>
       </Popover>
-    </div>
+    </span>
   )
 }

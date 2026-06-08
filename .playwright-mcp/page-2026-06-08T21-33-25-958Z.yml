@@ -1,0 +1,277 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - paragraph [ref=e8]: Jose Fit
+        - button "Contraer menú" [ref=e9]:
+          - img [ref=e10]
+      - navigation [ref=e14]:
+        - link "Dashboard" [ref=e15] [cursor=pointer]:
+          - /url: /coach/dashboard
+          - img [ref=e16]
+          - generic [ref=e21]: Dashboard
+        - link "Alumnos" [ref=e22] [cursor=pointer]:
+          - /url: /coach/clients
+          - img [ref=e23]
+          - generic [ref=e28]: Alumnos
+        - link "Programas" [ref=e29] [cursor=pointer]:
+          - /url: /coach/workout-programs
+          - img [ref=e30]
+          - generic [ref=e33]: Programas
+        - link "Ejercicios" [ref=e34] [cursor=pointer]:
+          - /url: /coach/exercises
+          - img [ref=e35]
+          - generic [ref=e41]: Ejercicios
+        - link "Nutrición" [ref=e42] [cursor=pointer]:
+          - /url: /coach/nutrition-plans
+          - img [ref=e43]
+          - generic [ref=e46]: Nutrición
+        - link "Mi Marca" [ref=e47] [cursor=pointer]:
+          - /url: /coach/settings
+          - img [ref=e48]
+          - generic [ref=e51]: Mi Marca
+        - link "Suscripción" [ref=e52] [cursor=pointer]:
+          - /url: /coach/subscription
+          - img [ref=e53]
+          - generic [ref=e55]: Suscripción
+        - link "Soporte" [ref=e56] [cursor=pointer]:
+          - /url: /coach/support
+          - img [ref=e57]
+          - generic [ref=e64]: Soporte
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - paragraph [ref=e68]: Terminal
+            - paragraph [ref=e69]: Jose Fit
+          - generic [ref=e70]:
+            - button "Novedades" [ref=e72]:
+              - img [ref=e73]
+            - button "Cambiar a modo claro" [ref=e76]:
+              - img [ref=e78]
+        - button "Cambiar workspace" [disabled] [ref=e86]:
+          - img [ref=e471]
+          - generic [ref=e89]: Jose Fit
+        - button "Desconectar" [ref=e90]:
+          - img [ref=e91]
+          - generic [ref=e94]: Desconectar
+        - link "Privacidad · ARCO" [ref=e95] [cursor=pointer]:
+          - /url: mailto:privacidad@eva-app.cl
+    - main [ref=e96]:
+      - generic [ref=e134]:
+        - generic [ref=e135]:
+          - generic [ref=e136]:
+            - paragraph [ref=e137]: lunes, 8 de junio
+            - heading "Buenas tardes, Jose" [level=1] [ref=e138]
+            - paragraph [ref=e139]: Tienes 2 pendientes hoy.
+          - generic [ref=e140]:
+            - generic [ref=e141]:
+              - button "Registrar alumno" [ref=e142]:
+                - img [ref=e143]
+                - generic [ref=e146]: + Alumno
+              - link "Crear programa" [ref=e147] [cursor=pointer]:
+                - /url: /coach/workout-programs
+                - img [ref=e148]
+                - generic [ref=e152]: + Programa
+              - link "Crear plan de nutricion" [ref=e153] [cursor=pointer]:
+                - /url: /coach/nutrition-plans/new
+                - img [ref=e154]
+                - generic [ref=e157]: + Nutricion
+              - button "Registrar pago" [ref=e158]:
+                - img [ref=e159]
+                - generic [ref=e162]: + Pago
+            - generic [ref=e163]:
+              - img [ref=e164]
+              - generic [ref=e167]: "Notificaciones, offline y gestos: todo mejor en la app de EVA"
+        - generic [ref=e170]:
+          - paragraph [ref=e171]: Seguís con pasos pendientes en tu guía de inicio.
+          - button "Continuar guía" [ref=e172]
+        - generic [ref=e174]:
+          - 'button "Ingresos del mes $0 0% Mes anterior: $0 Ver detalle →" [ref=e177]':
+            - generic [ref=e178]:
+              - generic [ref=e179]:
+                - generic [ref=e180]: Ingresos del mes
+                - img [ref=e181]
+              - generic [ref=e184]:
+                - generic [ref=e185]: $0
+                - generic [ref=e186]:
+                  - img [ref=e187]
+                  - text: 0%
+              - generic [ref=e190]: "Mes anterior: $0"
+              - generic [ref=e191]: Ver detalle →
+          - link "Alumnos activos 2 Ver detalle →" [ref=e194] [cursor=pointer]:
+            - /url: /coach/clients
+            - generic [ref=e195]:
+              - generic [ref=e196]:
+                - generic [ref=e197]: Alumnos activos
+                - img [ref=e198]
+              - generic [ref=e203]: "2"
+              - generic [ref=e204]: Ver detalle →
+          - link "En riesgo 1 Requieren atencion inmediata Ver detalle →" [ref=e207] [cursor=pointer]:
+            - /url: "#focus-list"
+            - generic [ref=e208]:
+              - generic [ref=e209]:
+                - generic [ref=e210]: En riesgo
+                - img [ref=e211]
+              - generic [ref=e213]: "1"
+              - generic [ref=e214]: Requieren atencion inmediata
+              - generic [ref=e215]: Ver detalle →
+          - 'button "Adherencia 4% Nutricion: 50% Ver detalle →" [ref=e218]':
+            - generic [ref=e219]:
+              - generic [ref=e220]:
+                - generic [ref=e221]: Adherencia
+                - img [ref=e222]
+              - generic [ref=e224]: 4%
+              - generic [ref=e225]: "Nutricion: 50%"
+              - generic [ref=e226]: Ver detalle →
+        - generic [ref=e227]:
+          - generic [ref=e230]:
+            - generic [ref=e231]:
+              - generic [ref=e232]:
+                - img [ref=e233]
+                - heading "Focus list" [level=2] [ref=e235]
+              - link "Ver todos" [ref=e236] [cursor=pointer]:
+                - /url: /coach/clients?filter=risk
+            - list [ref=e237]:
+              - listitem [ref=e238] [cursor=pointer]:
+                - generic [ref=e239]:
+                  - generic [ref=e240]: Diana
+                  - generic [ref=e241]: Adherencia critica · sin ejercicio en 7 dias
+                - generic [ref=e242]:
+                  - generic [ref=e243]: "45"
+                  - img [ref=e244]
+          - generic [ref=e249]:
+            - generic [ref=e250]:
+              - img [ref=e251]
+              - generic [ref=e254]: Proxima accion
+            - heading "Adherencia promedio < 60%" [level=3] [ref=e255]
+            - paragraph [ref=e256]: Revisa patrones de abandono y ajusta cargas o frecuencia.
+            - link "Ver detalle" [ref=e257] [cursor=pointer]:
+              - /url: "#adherencia"
+              - text: Ver detalle
+              - img [ref=e258]
+        - generic [ref=e260]:
+          - generic [ref=e263]:
+            - generic [ref=e264]:
+              - generic [ref=e265]:
+                - img [ref=e266]
+                - heading "Agenda de hoy" [level=2] [ref=e270]
+              - generic [ref=e271]: 1 pendientes
+            - list [ref=e272]:
+              - listitem [ref=e273]:
+                - link "Diana Sin ejercicio esta semana" [ref=e274] [cursor=pointer]:
+                  - /url: /coach/clients/d01efa48-c3e7-4476-a403-e9f55912352b
+                  - generic [ref=e275]:
+                    - generic [ref=e276]: 💪
+                    - generic [ref=e277]:
+                      - generic [ref=e278]: Diana
+                      - generic [ref=e279]: Sin ejercicio esta semana
+                  - img [ref=e280]
+          - generic [ref=e284]:
+            - generic [ref=e285]:
+              - img [ref=e286]
+              - heading "Programas por vencer" [level=2] [ref=e289]
+            - paragraph [ref=e290]: Sin programas vencidos ni por vencer.
+        - generic [ref=e293]:
+          - generic [ref=e294]:
+            - img [ref=e295]
+            - heading "Actividad reciente" [level=2] [ref=e297]
+          - list [ref=e298]:
+            - listitem [ref=e299]:
+              - link "Carolina completó una sesión Workout registrado 21h" [ref=e300] [cursor=pointer]:
+                - /url: /coach/clients/f02e4d72-9c0a-4ba7-b1d9-4f9fc8dda008
+                - img [ref=e302]
+                - generic [ref=e308]:
+                  - generic [ref=e309]: Carolina completó una sesión
+                  - generic [ref=e310]: Workout registrado
+                - generic [ref=e311]: 21h
+            - listitem [ref=e312]:
+              - link "Carolina completó una sesión Workout registrado 59d" [ref=e313] [cursor=pointer]:
+                - /url: /coach/clients/f02e4d72-9c0a-4ba7-b1d9-4f9fc8dda008
+                - img [ref=e315]
+                - generic [ref=e321]:
+                  - generic [ref=e322]: Carolina completó una sesión
+                  - generic [ref=e323]: Workout registrado
+                - generic [ref=e324]: 59d
+            - listitem [ref=e325]:
+              - link "Carolina completó una sesión Workout registrado 61d" [ref=e326] [cursor=pointer]:
+                - /url: /coach/clients/f02e4d72-9c0a-4ba7-b1d9-4f9fc8dda008
+                - img [ref=e328]
+                - generic [ref=e334]:
+                  - generic [ref=e335]: Carolina completó una sesión
+                  - generic [ref=e336]: Workout registrado
+                - generic [ref=e337]: 61d
+            - listitem [ref=e338]:
+              - link "Carolina completó una sesión Workout registrado 62d" [ref=e339] [cursor=pointer]:
+                - /url: /coach/clients/f02e4d72-9c0a-4ba7-b1d9-4f9fc8dda008
+                - img [ref=e341]
+                - generic [ref=e347]:
+                  - generic [ref=e348]: Carolina completó una sesión
+                  - generic [ref=e349]: Workout registrado
+                - generic [ref=e350]: 62d
+            - listitem [ref=e351]:
+              - link "Carolina completó una sesión Workout registrado 62d" [ref=e352] [cursor=pointer]:
+                - /url: /coach/clients/f02e4d72-9c0a-4ba7-b1d9-4f9fc8dda008
+                - img [ref=e354]
+                - generic [ref=e360]:
+                  - generic [ref=e361]: Carolina completó una sesión
+                  - generic [ref=e362]: Workout registrado
+                - generic [ref=e363]: 62d
+            - listitem [ref=e364]:
+              - link "Diana se ha unido Pendiente de onboarding 65d" [ref=e365] [cursor=pointer]:
+                - /url: /coach/clients/d01efa48-c3e7-4476-a403-e9f55912352b
+                - img [ref=e367]
+                - generic [ref=e370]:
+                  - generic [ref=e371]: Diana se ha unido
+                  - generic [ref=e372]: Pendiente de onboarding
+                - generic [ref=e373]: 65d
+            - listitem [ref=e374]:
+              - link "Carolina se ha unido Onboarding completado 89d" [ref=e375] [cursor=pointer]:
+                - /url: /coach/clients/f02e4d72-9c0a-4ba7-b1d9-4f9fc8dda008
+                - img [ref=e377]
+                - generic [ref=e380]:
+                  - generic [ref=e381]: Carolina se ha unido
+                  - generic [ref=e382]: Onboarding completado
+                - generic [ref=e383]: 89d
+        - generic [ref=e385]:
+          - generic [ref=e387]:
+            - generic [ref=e389]:
+              - img [ref=e391]
+              - heading "Sesiones 30 Días" [level=2] [ref=e394]
+            - application [ref=e398]:
+              - generic [ref=e405]:
+                - generic [ref=e408]: 07/06
+                - generic [ref=e409]:
+                  - generic [ref=e411]: "0"
+                  - generic [ref=e413]: "1"
+                  - generic [ref=e415]: "2"
+                  - generic [ref=e417]: "3"
+                  - generic [ref=e419]: "4"
+          - generic [ref=e421]:
+            - generic [ref=e423]:
+              - img [ref=e425]
+              - heading "Crecimiento de Alumnos" [level=2] [ref=e427]
+            - application [ref=e431]:
+              - generic [ref=e445]:
+                - generic [ref=e446]:
+                  - generic [ref=e448]: Ene
+                  - generic [ref=e450]: Feb
+                  - generic [ref=e452]: Mar
+                  - generic [ref=e454]: Abr
+                  - generic [ref=e456]: May
+                  - generic [ref=e458]: Jun
+                - generic [ref=e459]:
+                  - generic [ref=e461]: "0"
+                  - generic [ref=e463]: "1"
+                  - generic [ref=e465]: "2"
+                  - generic [ref=e467]: "3"
+                  - generic [ref=e469]: "4"
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e473] [cursor=pointer]:
+    - generic [ref=e476]:
+      - text: Rendering
+      - generic [ref=e477]:
+        - generic [ref=e478]: .
+        - generic [ref=e479]: .
+        - generic [ref=e480]: .
+  - alert [ref=e113]
+  - generic [ref=e470]: Ene

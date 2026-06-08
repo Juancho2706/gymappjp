@@ -1,0 +1,71 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Jose Fit logo" [ref=e7]
+          - generic [ref=e8]:
+            - paragraph [ref=e9]: Mi Coach
+            - paragraph [ref=e10]: Jose Fit
+        - button "Contraer menú" [ref=e11]:
+          - img [ref=e12]
+      - navigation [ref=e16]:
+        - link "Inicio" [ref=e17] [cursor=pointer]:
+          - /url: /c/josefit/dashboard
+          - img [ref=e18]
+          - generic [ref=e21]: Inicio
+        - link "Plan Alimenticio" [ref=e22] [cursor=pointer]:
+          - /url: /c/josefit/nutrition
+          - img [ref=e23]
+          - generic [ref=e26]: Plan Alimenticio
+        - link "Aprender" [ref=e27] [cursor=pointer]:
+          - /url: /c/josefit/exercises
+          - img [ref=e28]
+          - generic [ref=e34]: Aprender
+        - link "Check-in" [ref=e35] [cursor=pointer]:
+          - /url: /c/josefit/check-in
+          - img [ref=e36]
+          - generic [ref=e39]: Check-in
+          - img [ref=e40]
+      - button "Cerrar sesión" [ref=e43]:
+        - img [ref=e44]
+        - generic [ref=e47]: Cerrar sesión
+    - main [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - link "Volver" [ref=e51] [cursor=pointer]:
+            - /url: /c/josefit/dashboard
+            - img [ref=e52]
+            - text: Volver
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - heading "Check-in Mensual" [level=1] [ref=e56]
+              - paragraph [ref=e57]: Registra tu progreso para que tu coach pueda ajustar tu plan.
+            - button "Información adicional" [ref=e59] [cursor=pointer]:
+              - img [ref=e60]
+          - paragraph [ref=e62]: EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
+        - main [ref=e63]:
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - generic [ref=e68]:
+                - paragraph [ref=e69]: Tu último check-in
+                - paragraph [ref=e70]: 91 kg · Energía 4/10
+                - paragraph [ref=e71]: Hoy
+              - generic [ref=e72]:
+                - generic [ref=e73]: Peso actual (kg)
+                - textbox "Peso actual (kg)" [ref=e74]:
+                  - /placeholder: "75.5"
+              - generic [ref=e75]:
+                - generic [ref=e76]: Nivel de energía (1–10)
+                - generic [ref=e77]:
+                  - slider "Nivel de energía (1–10)" [ref=e78]: "7"
+                  - generic [ref=e79]: "7"
+            - button "Continuar" [disabled] [ref=e81]:
+              - text: Continuar
+              - img [ref=e82]
+      - link "Privacidad · ARCO" [ref=e85] [cursor=pointer]:
+        - /url: mailto:privacidad@eva-app.cl
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e91] [cursor=pointer]:
+    - img [ref=e92]
+  - alert [ref=e95]

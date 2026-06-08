@@ -21,6 +21,7 @@ import {
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
 import { resolveCoachScope as getCoachClientScope, applyOrgScope as applyClientScope } from '@/services/auth/coach-scope.service'
+import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
 export type CreateClientState = {
     error?: string
@@ -136,6 +137,15 @@ export async function createClientAction(
         }
         return { error: 'Error al guardar el alumno en la base de datos.' }
     }
+
+    // F1: materialize identity (account + membership). Non-fatal — reads fall back to clients.
+    const identity = await createClientIdentity({
+        accountId: newAuthUser.user.id,
+        clientId: newAuthUser.user.id,
+        coachId: coach.id,
+        orgId: scope.orgId,
+    })
+    if (!identity.ok) console.error('createClientIdentity (non-fatal):', identity.error)
 
     if (scope.orgId) {
         const { error: assignErr } = await admin.from('coach_client_assignments').insert({

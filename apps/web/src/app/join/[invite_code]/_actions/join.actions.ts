@@ -5,6 +5,7 @@ import { z } from 'zod/v4'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitInviteAccept } from '@/lib/rate-limit'
 import { resolveInvite } from '../_lib/resolve-invite'
+import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
 const JoinSchema = z.object({
     full_name: z.string().min(2).max(120),
@@ -66,6 +67,16 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         await admin.auth.admin.deleteUser(newUser.user.id)
         return { error: insertErr.message }
     }
+
+    // F1: materialize identity (account + membership) with the scope the code resolved to.
+    // Non-fatal — reads fall back to the clients row.
+    const identity = await createClientIdentity({
+        accountId: newUser.user.id,
+        clientId: newUser.user.id,
+        coachId: invite.coachId,
+        orgId: invite.orgId,
+    })
+    if (!identity.ok) console.error('createClientIdentity (non-fatal):', identity.error)
 
     // Enterprise self-signup: record the coach↔client assignment in the org.
     if (invite.scope === 'enterprise') {

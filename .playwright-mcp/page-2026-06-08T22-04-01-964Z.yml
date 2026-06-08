@@ -1,0 +1,40 @@
+- generic [active] [ref=e1]:
+  - main [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img [ref=e9]
+        - heading "Jose Fit" [level=1] [ref=e15]
+        - paragraph [ref=e16]: Tu plataforma de entrenamiento personalizado
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - heading "Accede a tu entrenamiento" [level=2] [ref=e19]
+          - paragraph [ref=e20]: Tu coach te envió las credenciales por email
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - generic [ref=e23]: Email
+            - generic [ref=e24]:
+              - img
+              - textbox "Email" [ref=e25]:
+                - /placeholder: tu@email.com
+          - generic [ref=e26]:
+            - generic [ref=e27]:
+              - generic [ref=e28]: Contraseña
+              - link "¿Olvidaste tu contraseña?" [ref=e29] [cursor=pointer]:
+                - /url: /forgot-password?coach_slug=josefit
+            - generic [ref=e30]:
+              - img
+              - textbox "Contraseña" [ref=e31]:
+                - /placeholder: ••••••••
+          - button "Ingresar" [ref=e33]
+      - paragraph [ref=e34]: Impulsado por EVA
+    - link "Privacidad · ARCO" [ref=e36] [cursor=pointer]:
+      - /url: mailto:privacidad@eva-app.cl
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e47] [cursor=pointer]:
+    - generic [ref=e50]:
+      - text: Compiling
+      - generic [ref=e51]:
+        - generic [ref=e52]: .
+        - generic [ref=e53]: .
+        - generic [ref=e54]: .
+  - alert [ref=e46]: Ingresar | Jose Fit | Jose Fit

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { generateTempPassword, getOrgAdminContext, writeOrgAuditEvent } from '@/services/org/org.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
 const AssignClientSchema = z.object({
     clientId: z.guid(),
@@ -303,6 +304,15 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
         return { error: insertErr.message }
     }
 
+    // F1: materialize identity (enterprise membership; coach may be null for a pool client).
+    const identity = await createClientIdentity({
+        accountId: newAuthUser.user.id,
+        clientId: client.id,
+        coachId,
+        orgId: org.id,
+    })
+    if (!identity.ok) console.error('createClientIdentity (non-fatal):', identity.error)
+
     if (coachId) {
         await admin.from('coach_client_assignments').insert({
             org_id: org.id,
@@ -425,6 +435,15 @@ export async function importClientsFromCSVAction(
             results.push({ email: parsed.data.email, success: false, error: insertErr.message })
             continue
         }
+
+        // F1: materialize identity (enterprise membership) per imported row. Non-fatal.
+        const identity = await createClientIdentity({
+            accountId: newAuthUser.user.id,
+            clientId: client.id,
+            coachId: coachIdForInsert,
+            orgId: org.id,
+        })
+        if (!identity.ok) console.error('createClientIdentity (non-fatal, csv):', identity.error)
 
         if (coachIdForInsert) {
             try {

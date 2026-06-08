@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e7]:
+    - link "EVA — inicio" [ref=e9] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e11]: EVA
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - heading "Bienvenido de vuelta" [level=2] [ref=e15]
+        - paragraph [ref=e16]: Ingresa tus credenciales para acceder al panel
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e20]: Email
+          - generic [ref=e21]:
+            - generic:
+              - img
+            - textbox "Email" [ref=e22]:
+              - /placeholder: coach@ejemplo.com
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: Contraseña
+            - link "¿Olvidaste tu contraseña?" [ref=e27] [cursor=pointer]:
+              - /url: /forgot-password
+          - generic [ref=e28]:
+            - generic:
+              - img
+            - textbox "Contraseña" [ref=e29]:
+              - /placeholder: ••••••••
+            - button "Mostrar contraseña" [ref=e31]:
+              - img [ref=e32]
+        - button "Ingresar al Panel" [ref=e36]:
+          - img [ref=e37]
+          - text: Ingresar al Panel
+        - generic [ref=e41]: o ingresá con
+        - button "Continuar con Google" [ref=e43]:
+          - img [ref=e44]
+          - text: Continuar con Google
+        - generic [ref=e51]: ¿Nuevo en EVA?
+        - link "Crear cuenta" [ref=e54] [cursor=pointer]:
+          - /url: /register
+          - text: Crear cuenta
+          - img [ref=e55]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e62] [cursor=pointer]:
+    - img [ref=e63]

@@ -29,12 +29,16 @@ import { BRAND_APP_ICON } from '@/lib/brand-assets'
 
 interface Props {
     coachSlug: string
+    /** F2: URL prefix for in-app links — `/c/${coachSlug}` for standalone, `/e/${orgSlug}` under
+     *  the enterprise area. Defaults to `/c/${coachSlug}` so existing /c rendering is unchanged. */
+    basePath?: string
     coachBrand: string
     coachLogoUrl: string
     initialUseBrandColors?: boolean
 }
 
-export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrandColors = true }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true }: Props) {
+    const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -73,22 +77,22 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
 
     const navItems = [
         {
-            href: `/c/${coachSlug}/dashboard`,
+            href: `${base}/dashboard`,
             label: 'Inicio',
             icon: Home,
         },
         {
-            href: `/c/${coachSlug}/nutrition`,
+            href: `${base}/nutrition`,
             label: 'Plan Alimenticio',
             icon: Apple,
         },
         {
-            href: `/c/${coachSlug}/exercises`,
+            href: `${base}/exercises`,
             label: 'Aprender',
             icon: Dumbbell,
         },
         {
-            href: `/c/${coachSlug}/check-in`,
+            href: `${base}/check-in`,
             label: 'Check-in',
             icon: CheckCircle,
         },
@@ -96,7 +100,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
 
     async function handleSignOut() {
         await supabase.auth.signOut()
-        router.push(`/c/${coachSlug}/login`)
+        router.push(`${base}/login`)
         router.refresh()
     }
 
@@ -208,7 +212,7 @@ export function ClientNav({ coachSlug, coachBrand, coachLogoUrl, initialUseBrand
                         const isActive =
                             pathname === item.href ||
                             pathname.startsWith(item.href + '/workout') ||
-                            (item.href === `/c/${coachSlug}/dashboard` && pathname === `/c/${coachSlug}/workout-history`) ||
+                            (item.href === `${base}/dashboard` && pathname === `${base}/workout-history`) ||
                             isNavigating === item.href
                         const Icon = item.icon
                         return (

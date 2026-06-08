@@ -1,0 +1,63 @@
+- generic [ref=e1]:
+  - generic [active]:
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - navigation [ref=e51]:
+            - button "previous" [disabled] [ref=e52]:
+              - img "previous" [ref=e53]
+            - generic [ref=e55]:
+              - generic [ref=e56]: 1/
+              - text: "1"
+            - button "next" [disabled] [ref=e57]:
+              - img "next" [ref=e58]
+          - img
+        - generic [ref=e60]:
+          - link "Next.js 16.2.6 (stale) Turbopack" [ref=e61] [cursor=pointer]:
+            - /url: https://nextjs.org/docs/messages/version-staleness
+            - img [ref=e62]
+            - generic "There is a newer version (16.2.7) available, upgrade recommended!" [ref=e64]: Next.js 16.2.6 (stale)
+            - generic [ref=e65]: Turbopack
+          - img
+      - dialog "Runtime TypeError" [ref=e67]:
+        - generic [ref=e70]:
+          - generic [ref=e71]:
+            - generic [ref=e72]:
+              - generic [ref=e74]: Runtime TypeError
+              - generic [ref=e75]:
+                - button "Copy Error Info" [ref=e76] [cursor=pointer]:
+                  - img [ref=e77]
+                - button "No related documentation found" [disabled] [ref=e79]:
+                  - img [ref=e80]
+                - button "Attach Node.js inspector" [ref=e82] [cursor=pointer]:
+                  - img [ref=e83]
+            - generic [ref=e92]: Cannot read properties of null (reading 'enqueueModel')
+          - generic [ref=e95]:
+            - paragraph [ref=e96]:
+              - text: Call Stack
+              - generic [ref=e97]: "7"
+            - button "Show 7 ignore-listed frame(s)" [ref=e98] [cursor=pointer]:
+              - text: Show 7 ignore-listed frame(s)
+              - img [ref=e99]
+        - generic [ref=e101]: "1"
+        - generic [ref=e102]: "2"
+    - generic [ref=e32] [cursor=pointer]:
+      - button "Open Next.js Dev Tools" [ref=e33]:
+        - img [ref=e34]
+      - generic [ref=e103]:
+        - button "Open issues overlay" [ref=e104]:
+          - generic [ref=e105]:
+            - generic [ref=e106]: "0"
+            - generic [ref=e107]: "1"
+          - generic [ref=e108]: Issue
+        - button "Collapse issues badge" [ref=e109]:
+          - img [ref=e110]
+  - generic [ref=e113]:
+    - generic [ref=e114]:
+      - img [ref=e116]
+      - generic [ref=e118]: Algo salió mal
+      - generic [ref=e119]: Ha ocurrido un error inesperado crítico en la aplicación. Nuestros ingenieros han sido notificados.
+    - generic [ref=e121]: Cannot read properties of null (reading 'enqueueModel')
+    - button "Intentar nuevamente" [ref=e123]:
+      - img
+      - text: Intentar nuevamente
