@@ -568,8 +568,11 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
+    // Excluye assets estáticos del middleware. Incluye json/webmanifest/fonts/media:
+    // si no, en el host enterprise el rewrite /org prefijaba p.ej. /lottie/*.json
+    // → /org/lottie/*.json → 404 (animaciones Lottie del landing no cargaban).
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|api/manifest/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|api/manifest/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|json|webmanifest|woff|woff2|ttf|otf|mp4|webm|mp3|txt|xml|lottie)$).*)',
     ],
 }
 
