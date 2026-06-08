@@ -443,9 +443,25 @@ export async function proxy(request: NextRequest) {
 
             type ClientWithBrand = Client & { use_coach_brand_colors?: boolean }
             let client: ClientWithBrand | null = null
+            // F2: org branding may only be painted when the accessing coach is an ACTIVE
+            // member of the client's org. A direct coach_id match is NOT enough — a coach
+            // removed from the org must stop showing org white-label to their (now orphaned)
+            // enterprise client and fall back to coach branding.
+            let orgMembershipActive = false
             if (rawClientData) {
                 if (rawClientData.coach_id === coach.id) {
                     client = rawClientData as unknown as ClientWithBrand
+                    if (rawClientData.org_id) {
+                        const { data: orgMember } = await supabase
+                            .from('organization_members')
+                            .select('id')
+                            .eq('org_id', rawClientData.org_id)
+                            .eq('coach_id', coach.id)
+                            .eq('status', 'active')
+                            .is('deleted_at', null)
+                            .maybeSingle()
+                        orgMembershipActive = !!orgMember
+                    }
                 } else if (rawClientData.org_id) {
                     const { data: orgMember } = await supabase
                         .from('organization_members')
@@ -455,7 +471,10 @@ export async function proxy(request: NextRequest) {
                         .eq('status', 'active')
                         .is('deleted_at', null)
                         .maybeSingle()
-                    if (orgMember) client = rawClientData as unknown as ClientWithBrand
+                    if (orgMember) {
+                        client = rawClientData as unknown as ClientWithBrand
+                        orgMembershipActive = true
+                    }
                 }
             }
 
@@ -466,7 +485,7 @@ export async function proxy(request: NextRequest) {
                 return NextResponse.redirect(redirectUrl)
             }
 
-            if (client.org_id) {
+            if (client.org_id && orgMembershipActive) {
                 const { data: orgBrand } = await supabase
                     .from('organizations')
                     .select('name, primary_color, logo_url, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, accent_light, accent_dark, logo_url_dark, neutral_tint')
