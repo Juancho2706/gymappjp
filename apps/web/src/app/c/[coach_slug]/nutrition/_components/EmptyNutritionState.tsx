@@ -3,13 +3,15 @@
 import Link from 'next/link'
 import { ArrowLeft, Apple } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useBasePath } from '@/components/client/BasePathProvider'
 
 export function EmptyNutritionState({ coachSlug }: { coachSlug: string }) {
+  const base = useBasePath(`/c/${coachSlug}`)
   return (
     <div className="min-h-dvh bg-background">
       <header className="px-4 py-3.5 pt-safe flex items-center gap-3 border-b border-border/10">
         <Link
-          href={`/c/${coachSlug}/dashboard`}
+          href={`${base}/dashboard`}
           className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/50"
         >
           <ArrowLeft className="w-5 h-5" />

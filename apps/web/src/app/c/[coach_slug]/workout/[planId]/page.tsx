@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 import { getWorkoutExecutionData } from './_data/workout-execution.queries'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export const metadata: Metadata = { title: 'Rutina | EVA' }
 
@@ -11,11 +12,12 @@ interface Props {
 
 export default async function WorkoutExecutionPage({ params }: Props) {
     const { coach_slug, planId } = await params
+    const base = await getClientBasePath(coach_slug)
     const data = await getWorkoutExecutionData(planId)
     const { user, plan } = data
 
-    if (!user) redirect(`/c/${coach_slug}/login`)
-    if (!plan) redirect(`/c/${coach_slug}/dashboard`)
+    if (!user) redirect(`${base}/login`)
+    if (!plan) redirect(`${base}/dashboard`)
 
     return (
         <WorkoutExecutionClient

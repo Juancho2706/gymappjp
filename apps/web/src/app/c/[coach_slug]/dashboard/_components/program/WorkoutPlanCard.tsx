@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Check, ChevronRight } from 'lucide-react'
 import { fadeSlideLeft, staggerContainer, springs } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
+import { useBasePath } from '@/components/client/BasePathProvider'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
@@ -20,6 +21,7 @@ export function WorkoutPlanCards({
     /** True si hubo entreno registrado hoy (plan del día). */
     workoutLoggedToday: boolean
 }) {
+    const base = useBasePath(`/c/${coachSlug}`)
     return (
         <motion.div className="grid grid-cols-1 gap-2" variants={staggerContainer(0.05)} initial="hidden" animate="show">
             {plans.map((p, i) => {
@@ -28,7 +30,7 @@ export function WorkoutPlanCards({
                 const done = isToday && workoutLoggedToday
                 return (
                     <motion.div key={p.id} variants={fadeSlideLeft} transition={springs.smooth} custom={i}>
-                        <Link href={`/c/${coachSlug}/workout/${p.id}`}>
+                        <Link href={`${base}/workout/${p.id}`}>
                             <motion.div
                                 whileHover={{ x: 4 }}
                                 className={cn(

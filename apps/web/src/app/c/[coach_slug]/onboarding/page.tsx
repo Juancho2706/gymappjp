@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { OnboardingForm } from './OnboardingForm'
 import { getClientOnboardingState } from './_data/onboarding.queries'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -8,11 +9,12 @@ interface Props {
 
 export default async function OnboardingPage({ params }: Props) {
     const { coach_slug } = await params
+    const base = await getClientBasePath(coach_slug)
     const { user, onboardingCompleted } = await getClientOnboardingState()
-    if (!user) redirect(`/c/${coach_slug}/login`)
+    if (!user) redirect(`${base}/login`)
 
     if (onboardingCompleted) {
-        redirect(`/c/${coach_slug}/dashboard`)
+        redirect(`${base}/dashboard`)
     }
 
     return (

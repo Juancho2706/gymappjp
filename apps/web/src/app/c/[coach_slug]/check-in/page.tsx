@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { CheckInForm } from './CheckInForm'
 import { getCheckInPageData } from './_data/check-in.queries'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export const metadata: Metadata = { title: 'Check-in Mensual | EVA' }
 
@@ -14,15 +15,16 @@ interface Props {
 
 export default async function ClientCheckInPage({ params }: Props) {
     const { coach_slug } = await params
+    const base = await getClientBasePath(coach_slug)
     const { user, coachPrimaryColor, lastCheckIn } = await getCheckInPageData(coach_slug)
-    if (!user) redirect(`/c/${coach_slug}/login`)
-    if (!coachPrimaryColor) redirect(`/c/${coach_slug}/dashboard`)
+    if (!user) redirect(`${base}/login`)
+    if (!coachPrimaryColor) redirect(`${base}/dashboard`)
 
     return (
         <div className="min-h-dvh pb-20 bg-background">
             <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-xl border-b border-border/10 px-4 py-4 pt-safe">
                 <Link
-                    href={`/c/${coach_slug}/dashboard`}
+                    href={`${base}/dashboard`}
                     className="inline-flex items-center gap-1.5 text-sm font-medium mb-4 transition-colors hover:opacity-80"
                     style={{ color: coachPrimaryColor }}
                 >

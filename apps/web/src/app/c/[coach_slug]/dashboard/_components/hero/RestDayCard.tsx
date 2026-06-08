@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { GlassCard } from '@/components/ui/glass-card'
+import { useBasePath } from '@/components/client/BasePathProvider'
 
 interface RestDayCardProps {
     coachSlug: string
@@ -11,6 +12,7 @@ interface RestDayCardProps {
 }
 
 export function RestDayCard({ coachSlug, nextWorkoutTitle, nextWorkoutDayLabel }: RestDayCardProps) {
+    const base = useBasePath(`/c/${coachSlug}`)
     return (
         <GlassCard className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-purple-50/30 p-6 text-center dark:from-gray-900 dark:to-slate-900">
             <motion.div
@@ -30,7 +32,7 @@ export function RestDayCard({ coachSlug, nextWorkoutTitle, nextWorkoutDayLabel }
             ) : (
                 <p className="mt-2 text-sm text-muted-foreground">Recupera bien para la próxima sesión.</p>
             )}
-            <Link href={`/c/${coachSlug}/nutrition`} className="mt-4 inline-block text-xs font-semibold text-[color:var(--theme-primary)]">
+            <Link href={`${base}/nutrition`} className="mt-4 inline-block text-xs font-semibold text-[color:var(--theme-primary)]">
                 Ver nutrición →
             </Link>
         </GlassCard>

@@ -6,6 +6,7 @@ import { getCheckInHistory30Days } from '../../_data/dashboard.queries'
 import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
 import { WeightSparkline } from './WeightSparkline'
 import { TrendArrow, type Trend } from './TrendArrow'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 function computeTrend(weights: { created_at: string; weight: number | null }[]): { trend: Trend; delta: number } {
     const pts = weights.filter((w) => w.weight != null).map((w) => ({ ...w, weight: w.weight as number }))
@@ -23,6 +24,7 @@ function computeTrend(weights: { created_at: string; weight: number | null }[]):
 }
 
 export async function WeightWidget({ userId, coachSlug }: { userId: string; coachSlug: string }) {
+    const base = await getClientBasePath(coachSlug)
     const rows = await getCheckInHistory30Days(userId)
     const withW = rows.filter((r) => r.weight != null)
     const { iso: todayIso } = getTodayInSantiago()
@@ -33,7 +35,7 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
                 <Scale className="mx-auto mb-2 h-10 w-10 text-muted-foreground" />
                 <p className="text-sm font-medium text-foreground">Aún sin registros de peso</p>
                 <Link
-                    href={`/c/${coachSlug}/check-in`}
+                    href={`${base}/check-in`}
                     className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-xs font-semibold text-[color:var(--theme-primary)]"
                 >
                     Check-in completo →
@@ -57,7 +59,7 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
             <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Peso</span>
                 <Link
-                    href={`/c/${coachSlug}/check-in`}
+                    href={`${base}/check-in`}
                     className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-[10px] font-semibold text-[color:var(--theme-primary)]"
                 >
                     Registrar

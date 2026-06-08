@@ -12,8 +12,10 @@ import {
 } from '@/lib/nutrition-utils'
 import { MacroBar } from './MacroBar'
 import { MealCompletionRow } from './MealCompletionRow'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export async function NutritionDailySummary({ userId, coachSlug }: { userId: string; coachSlug: string }) {
+    const base = await getClientBasePath(coachSlug)
     const plan = await getActiveNutritionPlan(userId)
     const { iso: today } = getTodayInSantiago()
 
@@ -138,7 +140,7 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
                         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Hoy</span>
                     </div>
                 </div>
-                <Link href={`/c/${coachSlug}/nutrition`} className="shrink-0 text-[10px] font-semibold text-[color:var(--theme-primary)]">
+                <Link href={`${base}/nutrition`} className="shrink-0 text-[10px] font-semibold text-[color:var(--theme-primary)]">
                     Ver todo →
                 </Link>
             </div>
@@ -180,7 +182,7 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
                 ))}
             </div>
             <Link
-                href={`/c/${coachSlug}/nutrition`}
+                href={`${base}/nutrition`}
                 className="animate-pulse-cta block rounded-xl bg-emerald-500/15 px-4 py-2.5 text-center text-xs font-bold text-emerald-700 ring-1 ring-emerald-500/50 transition-colors hover:bg-emerald-500/25 dark:text-emerald-300"
             >
                 Ver plan completo con macros →

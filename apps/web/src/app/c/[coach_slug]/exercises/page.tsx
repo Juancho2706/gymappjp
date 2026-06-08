@@ -4,6 +4,7 @@ import { ClientExerciseCatalog } from "./ClientExerciseCatalog";
 import { Dumbbell } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { getClientExerciseCatalogData } from "./_data/exercises.queries";
+import { getClientBasePath } from "@/lib/client/base-path";
 
 export const metadata: Metadata = {
   title: "Catálogo de Ejercicios | EVA",
@@ -15,9 +16,10 @@ interface Props {
 
 export default async function ClientExercisesPage({ params }: Props) {
   const { coach_slug } = await params;
+  const base = await getClientBasePath(coach_slug);
   const { user, client, exercises } = await getClientExerciseCatalogData();
-  if (!user) redirect(`/c/${coach_slug}/login`);
-  if (!client) redirect(`/c/${coach_slug}/login`);
+  if (!user) redirect(`${base}/login`);
+  if (!client) redirect(`${base}/login`);
 
   const coachBranding = Array.isArray(client.coaches)
     ? client.coaches[0]

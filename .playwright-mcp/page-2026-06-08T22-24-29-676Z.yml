@@ -1,0 +1,146 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Jose Fit logo" [ref=e7]
+          - generic [ref=e8]:
+            - paragraph [ref=e9]: Mi Coach
+            - paragraph [ref=e10]: Jose Fit
+        - button "Contraer menú" [ref=e11]:
+          - img [ref=e12]
+      - navigation [ref=e16]:
+        - link "Inicio" [ref=e17] [cursor=pointer]:
+          - /url: /c/josefit/dashboard
+          - img [ref=e18]
+          - generic [ref=e21]: Inicio
+          - img [ref=e22]
+        - link "Plan Alimenticio" [ref=e24] [cursor=pointer]:
+          - /url: /c/josefit/nutrition
+          - img [ref=e25]
+          - generic [ref=e28]: Plan Alimenticio
+        - link "Aprender" [ref=e29] [cursor=pointer]:
+          - /url: /c/josefit/exercises
+          - img [ref=e30]
+          - generic [ref=e36]: Aprender
+        - link "Check-in" [ref=e37] [cursor=pointer]:
+          - /url: /c/josefit/check-in
+          - img [ref=e38]
+          - generic [ref=e41]: Check-in
+      - button "Cerrar sesión" [ref=e43]:
+        - img [ref=e44]
+        - generic [ref=e47]: Cerrar sesión
+    - main [ref=e48]:
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e55]:
+            - generic [ref=e56]:
+              - paragraph [ref=e57]: Jose Fit
+              - generic [ref=e58]:
+                - paragraph [ref=e59]: lunes, 8 de junio
+                - heading "Buenas tardes, Carolina" [level=1] [ref=e60]:
+                  - generic [ref=e61]: Buenas
+                  - generic [ref=e62]: tardes,
+                  - generic [ref=e63]: Carolina
+            - generic [ref=e64]:
+              - generic [ref=e65]:
+                - img [ref=e66]
+                - generic [ref=e68]: "2"
+                - generic [ref=e69]: días
+              - button "Configuración" [ref=e70]:
+                - img
+                - generic [ref=e71]: Configuración
+          - generic [ref=e73]:
+            - generic [ref=e74]:
+              - generic [ref=e75]: L
+              - generic [ref=e76]: "8"
+            - generic [ref=e79]:
+              - generic [ref=e80]: M
+              - generic [ref=e81]: "9"
+            - generic [ref=e84]:
+              - generic [ref=e85]: X
+              - generic [ref=e86]: "10"
+            - generic [ref=e88]:
+              - generic [ref=e89]: J
+              - generic [ref=e90]: "11"
+            - generic [ref=e92]:
+              - generic [ref=e93]: V
+              - generic [ref=e94]: "12"
+            - generic [ref=e96]:
+              - generic [ref=e97]: S
+              - generic [ref=e98]: "13"
+            - generic [ref=e100]:
+              - generic [ref=e101]: D
+              - generic [ref=e102]: "14"
+          - generic [ref=e126]:
+            - heading "Actividad reciente" [level=2] [ref=e128]
+            - generic [ref=e130]:
+              - img [ref=e132]
+              - generic [ref=e138]:
+                - paragraph [ref=e139]: domingo, 7 jun
+                - paragraph [ref=e140]: 6 series registradas
+              - generic [ref=e141]: 6 series
+            - link "Ver historial completo →" [ref=e142] [cursor=pointer]:
+              - /url: /c/josefit/workout-history
+        - complementary [ref=e144]:
+          - generic [ref=e145]:
+            - generic [ref=e146]:
+              - paragraph [ref=e147]: Últimos 30 días
+              - button "Información adicional" [ref=e149] [cursor=pointer]:
+                - img [ref=e150]
+            - generic [ref=e152]:
+              - generic [ref=e153]:
+                - img [ref=e155]:
+                  - generic [ref=e158]: 0%
+                - generic [ref=e159]: Entrenos
+              - generic [ref=e160]:
+                - img [ref=e162]:
+                  - generic [ref=e165]: 0%
+                - generic [ref=e166]: Nutrición
+              - generic [ref=e167]:
+                - img [ref=e169]:
+                  - generic [ref=e172]: 0%
+                - generic [ref=e173]: Check-ins
+          - generic [ref=e177]:
+            - generic [ref=e178]:
+              - generic [ref=e179]:
+                - img [ref=e180]
+                - generic [ref=e183]:
+                  - paragraph [ref=e184]: Prueba2
+                  - text: Hoy
+              - link "Ver todo →" [ref=e185] [cursor=pointer]:
+                - /url: /c/josefit/nutrition
+            - generic [ref=e187]:
+              - generic [ref=e188]: Calorías
+              - generic [ref=e189]: 2516 / 4054 kcal
+            - generic [ref=e193]:
+              - generic [ref=e194]: Proteína
+              - generic [ref=e195]: 48/72g
+            - generic [ref=e198]:
+              - generic [ref=e199]: Carbos
+              - generic [ref=e200]: 446/485g
+            - generic [ref=e203]:
+              - generic [ref=e204]: Grasas
+              - generic [ref=e205]: 70/218g
+            - button "Comida 1" [ref=e208]:
+              - img [ref=e210]
+              - generic [ref=e212]: Comida 1
+            - link "Ver plan completo con macros →" [ref=e213] [cursor=pointer]:
+              - /url: /c/josefit/nutrition
+          - button "Hábitos del día Información adicional 0.8L agua 1/5" [ref=e215]:
+            - img [ref=e216]
+            - generic [ref=e219]:
+              - generic [ref=e220]:
+                - generic [ref=e221]: Hábitos del día
+                - button "Información adicional" [ref=e223] [cursor=pointer]:
+                  - img [ref=e224]
+              - paragraph [ref=e226]: 0.8L agua
+            - generic [ref=e227]:
+              - generic [ref=e228]: 1/5
+              - img [ref=e229]
+      - link "Privacidad · ARCO" [ref=e233] [cursor=pointer]:
+        - /url: mailto:privacidad@eva-app.cl
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e239] [cursor=pointer]:
+    - img [ref=e240]
+  - alert [ref=e243]

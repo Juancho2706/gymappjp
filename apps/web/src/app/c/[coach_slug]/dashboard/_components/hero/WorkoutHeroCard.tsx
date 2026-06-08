@@ -9,6 +9,7 @@ import { springs } from '@/lib/animation-presets'
 import { QuickLogSheet } from './QuickLogSheet'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
+import { useBasePath } from '@/components/client/BasePathProvider'
 
 export interface HeroBlock {
     id: string
@@ -39,6 +40,7 @@ export function WorkoutHeroCard({
     coachSlug,
 }: WorkoutHeroCardProps) {
     const { t } = useTranslation()
+    const base = useBasePath(`/c/${coachSlug}`)
     const pct = totalSetsTarget > 0 ? Math.min(100, (totalSetsLogged / totalSetsTarget) * 100) : 0
     const show = blocks.slice(0, 4)
     const more = blocks.length - show.length
@@ -94,7 +96,7 @@ export function WorkoutHeroCard({
             </p>
             <div className="flex flex-wrap gap-2">
                 <GlassButton variant="brand" size="sm" asChild>
-                    <Link href={`/c/${coachSlug}/workout/${planId}`}>{isAlreadyLogged ? 'Ver registro' : 'Empezar entrenamiento'}</Link>
+                    <Link href={`${base}/workout/${planId}`}>{isAlreadyLogged ? 'Ver registro' : 'Empezar entrenamiento'}</Link>
                 </GlassButton>
                 {!isAlreadyLogged && blocks.length > 0 ? (
                     <QuickLogSheet

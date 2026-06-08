@@ -9,6 +9,7 @@ import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { tryLoadNutritionRecoveryBundle } from '@/lib/nutrition-plan-local-cache'
 import { EmptyNutritionState } from './EmptyNutritionState'
 import { NutritionShell } from './NutritionShell'
+import { useBasePath } from '@/components/client/BasePathProvider'
 import type { DayAdherence } from './AdherenceStrip'
 
 type Mode = 'loading' | 'empty' | 'cached'
@@ -31,6 +32,7 @@ type CachedPlan = {
  */
 export function NutritionNoPlanFromServer({ coachSlug, userId }: { coachSlug: string; userId: string }) {
   const router = useRouter()
+  const base = useBasePath(`/c/${coachSlug}`)
   const hadCachedRef = useRef(false)
   const [mode, setMode] = useState<Mode>('loading')
   const [bundle, setBundle] = useState<ReturnType<typeof tryLoadNutritionRecoveryBundle>>(null)
@@ -92,7 +94,7 @@ export function NutritionNoPlanFromServer({ coachSlug, userId }: { coachSlug: st
 
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/10 px-4 py-3.5 pt-safe flex items-center gap-3">
         <Link
-          href={`/c/${coachSlug}/dashboard`}
+          href={`${base}/dashboard`}
           className="w-9 h-9 flex items-center justify-center -ml-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
         >
           <ArrowLeft className="w-5 h-5" />

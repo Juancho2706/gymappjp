@@ -28,17 +28,20 @@ import {
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
+import { getClientBasePath } from '@/lib/client/base-path'
+
 interface Props {
     params: Promise<{ coach_slug: string }>
 }
 
 export default async function ClientDashboardPage({ params }: Props) {
     const { coach_slug } = await params
+    const base = await getClientBasePath(coach_slug)
     const user = await getClientDashboardUser()
-    if (!user) redirect(`/c/${coach_slug}/login`)
+    if (!user) redirect(`${base}/login`)
 
     const { client } = await getClientProfile(user.id)
-    if (!client) redirect(`/c/${coach_slug}/login`)
+    if (!client) redirect(`${base}/login`)
 
     const coachRow = client.coaches
     const coachBranding = Array.isArray(coachRow) ? coachRow[0] : coachRow

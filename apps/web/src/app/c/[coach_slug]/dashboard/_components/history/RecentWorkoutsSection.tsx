@@ -2,8 +2,10 @@ import Link from 'next/link'
 import { GlassCard } from '@/components/ui/glass-card'
 import { buildWorkoutLogDaySummaries, getRecentWorkoutLogs } from '../../_data/dashboard.queries'
 import { WorkoutLogItems } from './WorkoutLogItem'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export async function RecentWorkoutsSection({ userId, coachSlug }: { userId: string; coachSlug: string }) {
+    const base = await getClientBasePath(coachSlug)
     const logs = await getRecentWorkoutLogs(userId)
     if (logs.length === 0) return null
 
@@ -16,7 +18,7 @@ export async function RecentWorkoutsSection({ userId, coachSlug }: { userId: str
             </div>
             <WorkoutLogItems items={items} />
             <Link
-                href={`/c/${coachSlug}/workout-history`}
+                href={`${base}/workout-history`}
                 prefetch
                 className="block border-t border-border/40 py-3 text-center text-[10px] font-semibold text-[color:var(--theme-primary)]"
             >

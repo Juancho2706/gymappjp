@@ -5,6 +5,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { TrendingUp, Scale, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { useBasePath } from '@/components/client/BasePathProvider'
 
 interface CheckIn {
     date: string
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug }: Props) {
+    const base = useBasePath(`/c/${coachSlug}`)
     const [mounted, setMounted] = useState(false)
     const chartRef = useRef<HTMLDivElement>(null)
     const [chartWidth, setChartWidth] = useState(0)
@@ -66,7 +68,7 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                     </div>
                     {coachSlug && (
                         <Link
-                            href={`/c/${coachSlug}/check-in`}
+                            href={`${base}/check-in`}
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90 active:scale-95 text-white"
                             style={{ backgroundColor: primaryColor }}
                         >

@@ -17,15 +17,18 @@ import { getClientNutritionUser } from './_data/nutrition-auth.queries'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
+import { getClientBasePath } from '@/lib/client/base-path'
+
 interface Props {
   params: Promise<{ coach_slug: string }>
 }
 
 export default async function ClientNutritionPage({ params }: Props) {
   const { coach_slug } = await params
+  const base = await getClientBasePath(coach_slug)
   const { user, hasClientRow } = await getClientNutritionUser()
-  if (!user) redirect(`/c/${coach_slug}/login`)
-  if (!hasClientRow) redirect(`/c/${coach_slug}/login`)
+  if (!user) redirect(`${base}/login`)
+  if (!hasClientRow) redirect(`${base}/login`)
 
   const plan = await getActiveNutritionPlan(user.id)
   if (!plan) {
@@ -49,7 +52,7 @@ export default async function ClientNutritionPage({ params }: Props) {
 
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/10 px-4 py-3.5 pt-safe flex items-center gap-3">
         <Link
-          href={`/c/${coach_slug}/dashboard`}
+          href={`${base}/dashboard`}
           className="w-9 h-9 flex items-center justify-center -ml-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
         >
           <ArrowLeft className="w-5 h-5" />

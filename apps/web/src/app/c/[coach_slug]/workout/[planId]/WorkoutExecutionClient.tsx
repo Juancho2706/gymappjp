@@ -18,6 +18,7 @@ import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
+import { useBasePath } from '@/components/client/BasePathProvider'
 import {
     effectiveWorkoutSection,
     groupContiguousSupersetRuns,
@@ -152,6 +153,7 @@ export function WorkoutExecutionClient({
     activeWeekVariant = null,
 }: Props) {
     const router = useRouter()
+    const base = useBasePath(`/c/${coachSlug}`)
     const { t } = useTranslation()
     const reducedMotion = useReducedMotion()
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -195,7 +197,7 @@ export function WorkoutExecutionClient({
                 </div>
                 <h1 className="text-xl font-bold text-foreground mb-2">Rutina sin ejercicios</h1>
                 <p className="text-sm text-muted-foreground mb-6">Esta rutina ya no tiene ejercicios asociados. Tu coach probablemente esté actualizando tu plan.</p>
-                <Link href={`/c/${coachSlug}/dashboard`} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
+                <Link href={`${base}/dashboard`} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
                     Volver al Dashboard
                 </Link>
             </div>
@@ -260,7 +262,7 @@ export function WorkoutExecutionClient({
                 >
                     <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
                         <div className="flex items-center justify-between mb-3 gap-2">
-                            <Link href={`/c/${coachSlug}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                            <Link href={`${base}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors shrink-0">
                                 <ArrowLeft className="w-6 h-6" />
                             </Link>
                             <div className="min-w-0 px-2 text-center flex-1">
@@ -555,7 +557,7 @@ export function WorkoutExecutionClient({
                         logs={sessionLogs}
                         blocks={plan.workout_blocks}
                         exerciseMaxes={exerciseMaxes}
-                        onDone={() => router.push(`/c/${coachSlug}/dashboard`)}
+                        onDone={() => router.push(`${base}/dashboard`)}
                     />,
                     document.body
                 ) : null}

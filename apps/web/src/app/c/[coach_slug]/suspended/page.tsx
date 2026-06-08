@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { AlertCircle, LogOut } from 'lucide-react'
 import { getSuspendedCoachData } from '../_data/client-root.queries'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -8,8 +9,9 @@ interface Props {
 
 export default async function SuspendedPage({ params }: Props) {
     const { coach_slug } = await params
+    const base = await getClientBasePath(coach_slug)
     const { user, coach: coachData } = await getSuspendedCoachData(coach_slug)
-    if (!user) redirect(`/c/${coach_slug}/login`)
+    if (!user) redirect(`${base}/login`)
 
     const brandName = coachData?.brand_name || 'tu Coach'
 

@@ -4,8 +4,10 @@ import { getLastCheckIn } from '../../_data/dashboard.queries'
 import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { CheckInBannerFrame } from './CheckInBannerFrame'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export async function CheckInBanner({ userId, coachSlug }: { userId: string; coachSlug: string }) {
+    const base = await getClientBasePath(coachSlug)
     const last = await getLastCheckIn(userId)
     const { iso: todayIso } = getTodayInSantiago()
 
@@ -18,7 +20,7 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
                     <p className="text-xs text-muted-foreground">Peso y energía en segundos</p>
                 </div>
                 <Link
-                    href={`/c/${coachSlug}/check-in`}
+                    href={`${base}/check-in`}
                     className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-[color:var(--theme-primary)]"
                 >
                     Ir
@@ -60,7 +62,7 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
                 <p className="text-xs text-muted-foreground">{dateText}</p>
             </div>
             <Link
-                href={`/c/${coachSlug}/check-in`}
+                href={`${base}/check-in`}
                 className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-background/80 px-4 text-xs font-semibold shadow-sm"
             >
                 Check-in

@@ -6,6 +6,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { buildWorkoutLogDaySummaries, getWorkoutHistoryLogsFull } from '@/app/c/[coach_slug]/dashboard/_data/dashboard.queries'
 import { WorkoutLogItems } from '@/app/c/[coach_slug]/dashboard/_components/history/WorkoutLogItem'
 import { getWorkoutHistoryUser } from './_data/workout-history.queries'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export const metadata: Metadata = { title: 'Historial de entrenos' }
 
@@ -15,9 +16,10 @@ interface Props {
 
 export default async function ClientWorkoutHistoryPage({ params }: Props) {
     const { coach_slug } = await params
+    const base = await getClientBasePath(coach_slug)
     const { user, hasClientRow } = await getWorkoutHistoryUser()
-    if (!user) redirect(`/c/${coach_slug}/login`)
-    if (!hasClientRow) redirect(`/c/${coach_slug}/login`)
+    if (!user) redirect(`${base}/login`)
+    if (!hasClientRow) redirect(`${base}/login`)
 
     const logs = await getWorkoutHistoryLogsFull(user.id)
     const items = buildWorkoutLogDaySummaries(logs)
@@ -26,7 +28,7 @@ export default async function ClientWorkoutHistoryPage({ params }: Props) {
         <div className="min-h-dvh bg-background">
             <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border/10 bg-background/95 px-4 py-3 pt-safe backdrop-blur-xl">
                 <Link
-                    href={`/c/${coach_slug}/dashboard`}
+                    href={`${base}/dashboard`}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                     aria-label="Volver al inicio"
                 >

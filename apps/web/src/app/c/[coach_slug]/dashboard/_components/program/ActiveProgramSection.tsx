@@ -10,8 +10,10 @@ import {
 } from '@/lib/workout/programWeekVariant'
 import { ProgramPhaseBar, type PhaseSeg } from './ProgramPhaseBar'
 import { WorkoutPlanCards } from './WorkoutPlanCard'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export async function ActiveProgramSection({ userId, coachSlug }: { userId: string; coachSlug: string }) {
+    const base = await getClientBasePath(coachSlug)
     const [program, allPlans, logs] = await Promise.all([
         getActiveProgram(userId),
         getClientWorkoutPlans(userId),
@@ -87,7 +89,7 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
             <ProgramPhaseBar phases={phases} currentWeek={currentWeek} totalWeeks={totalWeeks} />
             <WorkoutPlanCards coachSlug={coachSlug} plans={programPlans} todayDow={todayDow} workoutLoggedToday={workoutLoggedToday} />
             {todayPlan ? (
-                <Link href={`/c/${coachSlug}/workout/${todayPlan.id}`} className="block text-center text-[10px] font-semibold text-[color:var(--theme-primary)]">
+                <Link href={`${base}/workout/${todayPlan.id}`} className="block text-center text-[10px] font-semibold text-[color:var(--theme-primary)]">
                     Ver entreno de hoy →
                 </Link>
             ) : null}

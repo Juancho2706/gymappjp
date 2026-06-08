@@ -10,6 +10,7 @@ import imageCompression from 'browser-image-compression'
 import { submitCheckinAction, type CheckinState } from './_actions/check-in.actions'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
+import { useBasePath } from '@/components/client/BasePathProvider'
 
 const initialState: CheckinState = {}
 
@@ -30,6 +31,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 
 export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props) {
     const router = useRouter()
+    const base = useBasePath(`/c/${coachSlug}`)
     const reducedMotion = useReducedMotion()
     const [state, formAction] = useActionState(submitCheckinAction, initialState)
 
@@ -162,7 +164,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                 </p>
                 <button
                     type="button"
-                    onClick={() => router.push(`/c/${coachSlug}/dashboard`)}
+                    onClick={() => router.push(`${base}/dashboard`)}
                     className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all text-white w-full"
                     style={{ backgroundColor: coachPrimaryColor }}
                 >

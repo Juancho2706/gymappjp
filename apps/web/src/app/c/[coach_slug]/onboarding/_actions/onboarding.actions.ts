@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export type OnboardingState = {
     error?: string
@@ -66,5 +67,5 @@ export async function submitIntakeForm(
     }
 
     revalidatePath(`/c/${coachSlug}/onboarding`)
-    redirect(`/c/${coachSlug}/dashboard`)
+    redirect(`${await getClientBasePath(coachSlug)}/dashboard`)
 }
