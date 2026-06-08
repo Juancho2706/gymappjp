@@ -134,9 +134,9 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
         .eq('org_id', org.id)
     if (updateError) return { error: updateError.message }
 
-    // First assignment of a pool client that never logged in: they have no usable
-    // credentials (creation does not set a known password). Reset + return them so
-    // the admin shares manually. Students are NOT emailed.
+    // B-10: assigning a coach to a pool client is the moment the alumno gets their usable
+    // access. Generate the (single) temp password HERE and EMAIL it to the alumno (plus
+    // return it for manual fallback) — instead of relying on a confusing creation-time password.
     const isFirstAssignmentOfPoolClient = !client.coach_id && client.force_password_change && client.email
     let credentials: { email: string; tempPassword: string; loginUrl: string | null } | undefined
     if (isFirstAssignmentOfPoolClient) {
@@ -145,6 +145,18 @@ export async function assignClientToCoach(orgSlug: string, clientId: string, coa
         if (!pwErr) {
             const loginUrl = await resolveOrgClientLoginUrl(admin, coachId)
             credentials = { email: client.email!, tempPassword, loginUrl }
+            sendTransactionalEmail({
+                to: client.email!,
+                subject: `${org.name} — tu acceso`,
+                html: `
+                    <p>Hola ${client.full_name ?? ''},</p>
+                    <p>Ya tienes coach asignado en ${org.name}. Estos son tus accesos:</p>
+                    <p><strong>Acceso:</strong> ${loginUrl ?? ''}</p>
+                    <p><strong>Email:</strong> ${client.email}</p>
+                    <p><strong>Contraseña temporal:</strong> ${tempPassword}</p>
+                    <p>Te pediremos cambiarla al ingresar.</p>
+                `,
+            }).catch(() => null)
         }
     }
 
@@ -329,7 +341,18 @@ export async function addClientToOrgAction(orgSlug: string, formData: FormData) 
     }
 
     revalidatePath(`/org/${orgSlug}/clients`)
-    return { success: true, clientId: client.id, email: parsed.data.email, tempPassword, loginUrl, emailed: !!coachId }
+    // B-10: only surface a usable temp password when the alumno already has a coach (and was
+    // emailed). For pool clients (no coach yet) the real credentials are issued + emailed at
+    // assignment (assignClientToCoach), so we don't show a confusing throwaway password here.
+    return {
+        success: true,
+        clientId: client.id,
+        email: parsed.data.email,
+        tempPassword: coachId ? tempPassword : undefined,
+        loginUrl,
+        emailed: !!coachId,
+        pendingAssignment: !coachId,
+    }
 }
 
 export async function importClientsFromCSVAction(

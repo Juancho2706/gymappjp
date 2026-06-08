@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { Loader2, X, AlertTriangle, ArrowRight } from 'lucide-react'
-import { removeCoachAction, bulkReassignClientsAction } from '../../_actions/org.actions'
+import { removeCoachAction, bulkReassignClientsAction, unassignAllOrgClientsFromCoachAction } from '../../_actions/org.actions'
 
 interface Coach {
     id: string
@@ -51,6 +51,19 @@ export function RemoveCoachDialog({
         setError(null)
         startTransition(async () => {
             const res = await bulkReassignClientsAction(orgSlug, coachId, targetCoachId, memberId)
+            if (res?.error) setError(res.error)
+            else setOpen(false)
+        })
+    }
+
+    // F6: send the coach's org clients to the unassigned pool (org_id intact, coach cleared),
+    // then remove the coach. Standalone clients are never touched.
+    function handleUnassignAndRemove() {
+        setError(null)
+        startTransition(async () => {
+            const unassign = await unassignAllOrgClientsFromCoachAction(orgSlug, coachId)
+            if (unassign?.error) { setError(unassign.error); return }
+            const res = await removeCoachAction(orgSlug, memberId)
             if (res?.error) setError(res.error)
             else setOpen(false)
         })
@@ -121,7 +134,7 @@ export function RemoveCoachDialog({
                             <p className="text-xs text-red-400 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2">{error}</p>
                         )}
 
-                        <div className="flex gap-2 pt-1">
+                        <div className="flex flex-wrap gap-2 pt-1">
                             <button
                                 onClick={handleClose}
                                 disabled={pending}
@@ -130,24 +143,36 @@ export function RemoveCoachDialog({
                                 Cancelar
                             </button>
 
-                            {hasClients && canReassign ? (
-                                <button
-                                    onClick={handleReassignAndRemove}
-                                    disabled={pending || !targetCoachId}
-                                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 transition-colors disabled:opacity-50"
-                                >
-                                    {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
-                                    Reasignar y remover
-                                </button>
-                            ) : (
+                            {!hasClients ? (
                                 <button
                                     onClick={handleRemoveOnly}
                                     disabled={pending}
                                     className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 transition-colors disabled:opacity-50"
                                 >
                                     {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                    Remover igual
+                                    Remover
                                 </button>
+                            ) : (
+                                <>
+                                    {canReassign && (
+                                        <button
+                                            onClick={handleReassignAndRemove}
+                                            disabled={pending || !targetCoachId}
+                                            className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+                                        >
+                                            {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
+                                            Reasignar y remover
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={handleUnassignAndRemove}
+                                        disabled={pending}
+                                        className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                                    >
+                                        {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                        Quitar alumnos (pool) y remover
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>

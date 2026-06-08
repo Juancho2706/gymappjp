@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
     AlertTriangle,
     CheckCircle2,
     ExternalLink,
+    KeyRound,
+    Loader2,
     Mail,
     Phone,
     User,
@@ -13,6 +15,7 @@ import {
     X,
 } from 'lucide-react'
 import type { ClientDisplayRow } from './ClientsListClient'
+import { resetEnterpriseClientPasswordAction } from '../../_actions/org.actions'
 
 interface AuditEvent {
     action: string
@@ -55,6 +58,17 @@ function formatDate(iso: string | null) {
 export function ClientDetailSheet({ orgSlug, client, onClose, coaches }: Props) {
     const [history, setHistory] = useState<AuditEvent[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
+    const [pending, startTransition] = useTransition()
+    const [resetResult, setResetResult] = useState<{ tempPassword?: string; error?: string } | null>(null)
+
+    function handleResetPassword() {
+        if (!client) return
+        setResetResult(null)
+        startTransition(async () => {
+            const res = await resetEnterpriseClientPasswordAction(orgSlug, client.id)
+            setResetResult(res?.error ? { error: res.error } : { tempPassword: res?.tempPassword })
+        })
+    }
 
     useEffect(() => {
         if (!client) { setHistory([]); return }
@@ -179,7 +193,24 @@ export function ClientDetailSheet({ orgSlug, client, onClose, coaches }: Props) 
                             <UserCheck className="h-3 w-3" />
                             Ver pagos
                         </Link>
+                        {/* B-11: reset the alumno's password from the org panel. */}
+                        <button
+                            onClick={handleResetPassword}
+                            disabled={pending}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                        >
+                            {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
+                            Reiniciar contraseña
+                        </button>
                     </div>
+                    {resetResult?.tempPassword && (
+                        <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                            Nueva contraseña temporal: <span className="font-mono font-bold">{resetResult.tempPassword}</span>. Se le envió por email; pídele que la cambie al ingresar.
+                        </div>
+                    )}
+                    {resetResult?.error && (
+                        <p className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{resetResult.error}</p>
+                    )}
                 </section>
 
                 {/* Assignment history */}
