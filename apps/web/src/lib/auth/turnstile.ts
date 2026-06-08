@@ -29,7 +29,7 @@ export async function verifyTurnstile(
 
     if (!token) return false
 
-    const secret = process.env.TURNSTILE_SECRET
+    const secret = process.env.TURNSTILE_SECRET_KEY
     if (!secret) {
         // Misconfigured env: fail-open up to threshold so dev/preview without secret still works.
         return failCount < failOpenMax

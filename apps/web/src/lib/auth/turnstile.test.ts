@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
-    vi.stubEnv('TURNSTILE_SECRET', 'test-secret')
+    vi.stubEnv('TURNSTILE_SECRET_KEY', 'test-secret')
 })
 
 afterEach(() => {
@@ -56,7 +56,7 @@ describe('verifyTurnstile', () => {
         expect(body).toContain('remoteip')
     })
 
-    it('fails open when TURNSTILE_SECRET not set', async () => {
+    it('fails open when TURNSTILE_SECRET_KEY not set', async () => {
         vi.unstubAllEnvs()
         expect(await verifyTurnstile('token', null)).toBe(true)
         expect(fetch).not.toHaveBeenCalled()
