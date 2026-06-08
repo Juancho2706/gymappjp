@@ -3,11 +3,7 @@ import { z } from 'zod'
 export const BrandSettingsSchema = z.object({
     full_name: z.string().min(2, 'Nombre requerido').max(100),
     brand_name: z.string().min(2, 'Nombre de marca requerido').max(100),
-    slug: z
-        .string()
-        .min(3, 'El slug debe tener al menos 3 caracteres')
-        .max(50)
-        .regex(/^[a-z0-9-]+$/, 'Solo letras minúsculas, números y guiones'),
+    // slug e invite_code son INMUTABLES (set-once en el registro) — no se editan en settings.
     primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color hexadecimal inválido'),
     use_brand_colors_coach: z.boolean().default(false),
     welcome_message: z.string().max(240, 'El mensaje debe tener maximo 240 caracteres').optional(),

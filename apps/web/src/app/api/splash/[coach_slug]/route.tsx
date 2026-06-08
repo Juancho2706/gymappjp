@@ -1,10 +1,12 @@
 import { ImageResponse } from 'next/og'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { coachIdentifierColumn } from '@/lib/coach/invite-code'
 
 // iOS PWA splash screen, generated on the fly (free, native next/og — no paid service).
-// Brand resolves from the coach row by slug; for org-managed coaches that row already
-// carries the org's published brand (name/color/logo), so the splash is white-label.
+// Brand resolves from the coach row by invite_code (primary) or legacy slug; for
+// org-managed coaches that row already carries the org's published brand
+// (name/color/logo), so the splash is white-label.
 export const runtime = 'nodejs'
 
 interface Params {
@@ -25,7 +27,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     const { data: coach } = await supabase
         .from('coaches')
         .select('brand_name, primary_color, logo_url')
-        .eq('slug', coach_slug)
+        .eq(coachIdentifierColumn(coach_slug), coach_slug)
         .maybeSingle()
 
     const bg = safeColor(coach?.primary_color, '#10B981')

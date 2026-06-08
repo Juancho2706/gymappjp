@@ -17,7 +17,6 @@ import { getApiBaseUrl } from '../../../lib/api'
 import {
   getCoachBrandSettings,
   updateCoachBrandSettings,
-  updateCoachSlug,
   uploadCoachLogo,
   type CoachBrandSettings,
 } from '../../../lib/coach-brand'
@@ -73,8 +72,6 @@ export default function MiMarcaScreen() {
   const [settings, setSettings] = useState<CoachBrandSettings | null>(null)
 
   const [fullName, setFullName] = useState('')
-  const [slug, setSlug] = useState('')
-  const [savingSlug, setSavingSlug] = useState(false)
   const [brandName, setBrandName] = useState('')
   const [color, setColor] = useState('#007AFF')
   const [useBrandColors, setUseBrandColors] = useState(false)
@@ -102,7 +99,6 @@ export default function MiMarcaScreen() {
       if (s) {
         setSettings(s)
         setFullName(s.fullName)
-        setSlug(s.slug ?? '')
         setBrandName(s.brandName)
         setColor(s.primaryColor)
         setUseBrandColors(s.useBrandColors)
@@ -153,18 +149,6 @@ export default function MiMarcaScreen() {
     try {
       await Share.share({ message: `Entrená conmigo en ${brandName || 'mi app'}: ${url}.${codeLine}` })
     } catch {}
-  }
-
-  async function saveSlug() {
-    const s = slug.trim().toLowerCase()
-    if (!settings || s === settings.slug) return
-    setSavingSlug(true)
-    const r = await updateCoachSlug(s)
-    setSavingSlug(false)
-    if (!r.ok) { Alert.alert('No se pudo cambiar la URL', r.error ?? 'Intentá de nuevo.'); setSlug(settings.slug); return }
-    setSettings((prev) => (prev ? { ...prev, slug: r.slug ?? prev.slug } : prev))
-    if (r.slug) setSlug(r.slug)
-    Alert.alert('URL actualizada', `Ahora tus alumnos entran a:\neva-app.cl/c/${r.slug}`)
   }
 
   async function save() {
@@ -305,14 +289,9 @@ export default function MiMarcaScreen() {
               {settings?.inviteCode ? (
                 <InfoRow label="Tu código (permanente)" value={settings.inviteCode} last={!settings.hasLegacySlug} />
               ) : null}
-              {/* P4: el editor de slug (URL) queda solo para coaches que ya la personalizaron (legacy). */}
-              {settings?.hasLegacySlug ? (
-                <>
-                  <Field theme={theme} label="URL legacy (eva-app.cl/c/...)" value={slug} onChangeText={(v: string) => setSlug(v.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="mi-gimnasio" autoCapitalize="none" />
-                  {slug.trim().toLowerCase() !== settings.slug ? (
-                    <Button label={savingSlug ? 'Guardando URL…' : 'Cambiar URL'} variant="outline" onPress={saveSlug} disabled={savingSlug} full />
-                  ) : null}
-                </>
+              {/* slug legacy: solo-lectura (inmutable). Sigue funcionando como alias para alumnos antiguos. */}
+              {settings?.hasLegacySlug && settings.slug ? (
+                <InfoRow label="URL legacy (alias, no editable)" value={`eva-app.cl/c/${settings.slug}`} last />
               ) : null}
             </SectionCard>
 

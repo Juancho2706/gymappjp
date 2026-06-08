@@ -62,6 +62,7 @@ export async function proxy(request: NextRequest) {
             pathname === '/forgot-password' ||
             pathname === '/reset-password' ||
             pathname === '/org/login' ||
+            pathname === '/login/enterprise-coach' ||
             /^\/c\/[^/]+\/login$/.test(pathname)
         if (authPost) {
             const rl = await rateLimitAuth(ip)

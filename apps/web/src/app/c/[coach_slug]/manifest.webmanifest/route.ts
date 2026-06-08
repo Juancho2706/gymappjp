@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
+import { coachIdentifierColumn } from '@/lib/coach/invite-code'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Tables } from '@/lib/database.types'
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     const { data: coachData } = await supabase
         .from('coaches')
         .select('id, brand_name, primary_color, logo_url, slug')
-        .eq('slug', coach_slug)
+        .eq(coachIdentifierColumn(coach_slug), coach_slug)
         .maybeSingle()
 
     const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug'> | null

@@ -2,18 +2,10 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import { decode } from 'base64-arraybuffer'
 import { z } from 'zod'
 import { supabase } from './supabase'
-import { apiFetch } from './api'
 import { selectWithFallback } from './db-compat'
 
-// M-F3: cambio de slug vía endpoint mobile (uniqueness + lock 30d server-side).
-export async function updateCoachSlug(slug: string): Promise<{ ok: boolean; slug?: string; error?: string }> {
-  try {
-    const r = await apiFetch<{ ok: true; slug: string }>('/api/mobile/coach/slug', { method: 'POST', authenticated: true, body: { slug } })
-    return { ok: true, slug: r.slug }
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'No se pudo cambiar la URL.' }
-  }
-}
+// slug + invite_code son INMUTABLES (set-once en el registro). No hay edición desde mobile.
+// El slug legacy se sigue leyendo (getCoachBrandSettings) y mostrando como alias read-only.
 
 // M-F11/TX-6: schema local (mismos límites que la web) hasta poder compartir @eva/schemas.
 const brandEditableSchema = z

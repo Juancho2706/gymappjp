@@ -6,7 +6,7 @@ import { useFormStatus } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Save, Palette, ExternalLink, Copy, Check, ImageIcon, Type, MessageSquare, SlidersHorizontal, QrCode, AlertTriangle, Calendar, Play, FileText, RotateCcw, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react'
+import { Loader2, Save, Palette, ExternalLink, Copy, Check, ImageIcon, Type, MessageSquare, SlidersHorizontal, QrCode, Play, FileText, RotateCcw, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react'
 import { updateBrandSettingsAction, type BrandSettingsState } from './_actions/settings.actions'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
@@ -54,17 +54,16 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         (coach.loader_icon_mode as 'eva' | 'coach' | 'none') ?? 'eva'
     )
     const [copied, setCopied] = useState(false)
-    const [slugInput, setSlugInput] = useState(coach.slug)
     const [welcomeModalEnabled, setWelcomeModalEnabled] = useState(coach.welcome_modal_enabled ?? false)
     const [welcomeModalContent, setWelcomeModalContent] = useState(coach.welcome_modal_content ?? '')
     const [welcomeModalType, setWelcomeModalType] = useState<'text' | 'video'>(coach.welcome_modal_type as 'text' | 'video' ?? 'text')
     const [welcomeMessageInput, setWelcomeMessageInput] = useState(coach.welcome_message ?? '')
-    const [slugLockNowMs, setSlugLockNowMs] = useState<number | null>(null)
 
     const palette = generateBrandPalette(selectedColor ?? '#007AFF')
     const publicStudentIdentifier = getCoachPublicIdentifier(coach)
     const studentUrl = `https://eva-app.cl/c/${publicStudentIdentifier}/login`
-    const legacyStudentUrl = `https://eva-app.cl/c/${slugInput}/login`
+    // slug legacy: solo lectura (inmutable). Sigue funcionando como alias para alumnos antiguos.
+    const legacyStudentUrl = coach.slug ? `https://eva-app.cl/c/${coach.slug}/login` : null
 
     const contrast = useMemo(() => getContrastInfo(selectedColor ?? '#007AFF'), [selectedColor])
 
@@ -92,29 +91,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             loaderText !== (coach.loader_text ?? '') ||
             loaderTextColor !== (coach.loader_text_color ?? '') ||
             loaderIconMode !== ((coach.loader_icon_mode as 'eva' | 'coach' | 'none') ?? 'eva') ||
-            slugInput !== coach.slug ||
             welcomeModalEnabled !== (coach.welcome_modal_enabled ?? false) ||
             welcomeModalContent !== (coach.welcome_modal_content ?? '') ||
             (welcomeModalType as string) !== ((coach.welcome_modal_type ?? 'text') as string) ||
             welcomeMessageInput !== (coach.welcome_message ?? '')
         )
-    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, slugInput, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, coach])
-
-    // Calcular días restantes para cambio de slug (Date.now solo en effect → cumple purity en render)
-    const slugLastChanged = coach.slug_changed_at ? new Date(coach.slug_changed_at) : null
-    const daysSinceSlugChange =
-        slugLastChanged && slugLockNowMs != null
-            ? Math.floor((slugLockNowMs - slugLastChanged.getTime()) / (1000 * 60 * 60 * 24))
-            : null
-    const slugChangeLocked =
-        coach.slug_changed_at != null &&
-        (slugLockNowMs === null || (daysSinceSlugChange !== null && daysSinceSlugChange < 30))
-    const daysRemaining =
-        daysSinceSlugChange !== null && slugChangeLocked ? Math.max(0, 30 - daysSinceSlugChange) : 0
-
-    useEffect(() => {
-        setSlugLockNowMs(Date.now())
-    }, [])
+    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, coach])
 
     useEffect(() => {
         if (state.success) {
@@ -242,65 +224,28 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     </div>
                 </div>
 
-                <div className="space-y-1.5">
-                    <Label htmlFor="slug" className="text-sm text-foreground font-semibold">
-                        URL legacy de tu app
-                    </Label>
-                    <div className="flex items-center gap-0">
-                        <div className="h-10 px-3 flex items-center bg-muted border border-r-0 border-border rounded-l-xl text-sm text-muted-foreground whitespace-nowrap">
-                            /c/
-                        </div>
-                        <Input
-                            id="slug"
-                            name="slug"
-                            value={slugInput}
-                            onChange={(e) => setSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                            required
-                            placeholder="mi-marca"
-                            disabled={slugChangeLocked}
-                            className="h-10 rounded-l-none bg-secondary border-border text-foreground rounded-r-xl focus:border-primary disabled:opacity-60"
-                        />
-                    </div>
-
-                    {/* Link preview */}
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <ExternalLink className="w-3 h-3 shrink-0" />
-                        <span className="truncate sm:hidden">eva-app.cl/c/{slugInput}</span>
-                        <span className="truncate hidden sm:inline">{legacyStudentUrl}</span>
-                    </div>
-
-                    {/* Slug change warning */}
-                    {slugChangeLocked && (
-                        <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <div>
-                                <p className="font-semibold">Cambio de URL bloqueado</p>
-                                <p>Cambiaste tu URL hace {daysSinceSlugChange} día{daysSinceSlugChange !== 1 ? 's' : ''}. Solo puedes cambiarla cada 30 días. Faltan {daysRemaining} día{daysRemaining !== 1 ? 's' : ''}.</p>
+                {coach.slug && (
+                    <div className="space-y-1.5">
+                        <Label className="text-sm text-foreground font-semibold">
+                            URL legacy (alias)
+                        </Label>
+                        <div className="flex items-center gap-0">
+                            <div className="h-10 px-3 flex items-center bg-muted border border-r-0 border-border rounded-l-xl text-sm text-muted-foreground whitespace-nowrap">
+                                /c/
+                            </div>
+                            <div className="h-10 px-3 flex items-center flex-1 bg-secondary border border-border rounded-r-xl text-sm text-foreground">
+                                {coach.slug}
                             </div>
                         </div>
-                    )}
-                    {!slugChangeLocked && slugInput !== coach.slug && (
-                        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <div>
-                                <p className="font-semibold">Atención: vas a cambiar tu URL</p>
-                                <p>Esto romperá todos los links y QR compartidos con tus alumnos. Una vez guardado, no podrás cambiarlo de nuevo por 30 días.</p>
-                            </div>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{legacyStudentUrl}</span>
                         </div>
-                    )}
-                    {!slugChangeLocked && slugInput === coach.slug && slugLastChanged && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                            <Calendar className="w-3 h-3" />
-                            <span>Último cambio: {slugLastChanged.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                        </div>
-                    )}
-                    <p className="text-[10px] text-muted-foreground">
-                        Alias web antiguo. Los links nuevos usan el código corto y este slug sigue funcionando para alumnos actuales.
-                    </p>
-                    {state.fieldErrors?.slug && (
-                        <p className="text-xs text-destructive">{state.fieldErrors.slug[0]}</p>
-                    )}
-                </div>
+                        <p className="text-[10px] text-muted-foreground">
+                            Alias web antiguo (no editable). Los links nuevos usan tu código corto; este slug sigue funcionando para tus alumnos actuales.
+                        </p>
+                    </div>
+                )}
 
                 <div className="space-y-1.5">
                     <div className="flex items-center gap-2">

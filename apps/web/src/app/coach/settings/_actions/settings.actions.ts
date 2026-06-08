@@ -21,7 +21,6 @@ export async function updateBrandSettingsAction(
     const raw = {
         full_name: formData.get('full_name') as string,
         brand_name: formData.get('brand_name') as string,
-        slug: formData.get('slug') as string,
         primary_color: formData.get('primary_color') as string,
         use_brand_colors_coach: formData.get('use_brand_colors_coach') === 'on',
         welcome_message: (formData.get('welcome_message') as string | null)?.trim() ?? '',
@@ -43,46 +42,13 @@ export async function updateBrandSettingsAction(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
-    // Fetch current coach row for slug change validation
+    // slug + invite_code son INMUTABLES (set-once en el registro). No se editan acá.
+    // Fetch current coach row solo para el versionado del welcome-modal.
     const { data: currentCoach } = await supabase
         .from('coaches')
-        .select('slug, slug_changed_at, previous_slugs, welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version')
+        .select('welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version')
         .eq('id', user.id)
         .single()
-
-    // Check slug uniqueness (exclude self)
-    if (parsed.data.slug !== currentCoach?.slug) {
-        const { data: existing } = await supabase
-            .from('coaches')
-            .select('id')
-            .eq('slug', parsed.data.slug)
-            .neq('id', user.id)
-            .maybeSingle()
-
-        if (existing) {
-            return { fieldErrors: { slug: ['Este slug ya está en uso por otro coach.'] } }
-        }
-
-        // Check 30-day restriction (only if slug_changed_at is set)
-        const lastChange = currentCoach?.slug_changed_at ? new Date(currentCoach.slug_changed_at) : null
-        const now = new Date()
-        const daysSinceChange = lastChange ? Math.floor((now.getTime() - lastChange.getTime()) / (1000 * 60 * 60 * 24)) : null
-        if (daysSinceChange !== null && daysSinceChange < 30) {
-            const daysRemaining = 30 - daysSinceChange
-            return {
-                fieldErrors: {
-                    slug: [`Solo puedes cambiar tu URL cada 30 días. Faltan ${daysRemaining} día${daysRemaining !== 1 ? 's' : ''}.`]
-                }
-            }
-        }
-    }
-
-    const isSlugChanging = parsed.data.slug !== currentCoach?.slug
-    const previousSlugs = currentCoach?.previous_slugs ?? []
-    if (isSlugChanging && currentCoach?.slug && !previousSlugs.includes(currentCoach.slug)) {
-        previousSlugs.push(currentCoach.slug)
-        if (previousSlugs.length > 10) previousSlugs.shift()
-    }
 
     // Increment welcome modal version if content or enabled state changed
     let welcomeModalVersion = currentCoach?.welcome_modal_version ?? 0
@@ -100,7 +66,6 @@ export async function updateBrandSettingsAction(
         .update({
             full_name: parsed.data.full_name,
             brand_name: parsed.data.brand_name,
-            slug: parsed.data.slug,
             primary_color: parsed.data.primary_color,
             use_brand_colors_coach: parsed.data.use_brand_colors_coach,
             welcome_message: parsed.data.welcome_message || null,
@@ -114,7 +79,6 @@ export async function updateBrandSettingsAction(
             welcome_modal_version: welcomeModalVersion,
             welcome_modal_updated_at: modalChanged ? new Date().toISOString() : undefined,
             updated_at: new Date().toISOString(),
-            ...(isSlugChanging ? { slug_changed_at: new Date().toISOString(), previous_slugs: previousSlugs } : {}),
         })
         .eq('id', user.id)
 
