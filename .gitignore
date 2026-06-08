@@ -89,6 +89,12 @@ test-results*/
 supabase/.branches/
 supabase/.temp/
 
+# DB dumps / backups (nunca subir — contienen schema/datos de prod)
+prod-schema.sql
+prod-data.sql
+*.dump.sql
+backup-*.sql
+
 # Untracked script outputs / personal notes
 scripts/WELCOME-NEWS-ITEM.md
 scripts/seed-welcome-news.sql

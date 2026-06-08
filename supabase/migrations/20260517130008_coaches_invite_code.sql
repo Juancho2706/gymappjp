@@ -59,9 +59,17 @@ CREATE TRIGGER coaches_invite_code_trigger
 ALTER TABLE coaches
   DROP CONSTRAINT IF EXISTS coaches_subscription_status_check;
 
+-- Superset of legacy + current-web + enterprise states. Kept in sync with
+-- 20260517160000 so this intermediate constraint never rejects EXISTING prod
+-- rows (e.g. the live 'trialing' coach) at apply time — otherwise the ALTER
+-- aborts mid-migration against populated data.
+ALTER TABLE coaches
+  DROP CONSTRAINT IF EXISTS coaches_subscription_status_check;
+
 ALTER TABLE coaches
   ADD CONSTRAINT coaches_subscription_status_check
   CHECK (subscription_status IN (
-    'active','inactive','trial','cancelled','past_due','paused',
-    'org_managed' -- nuevo: coach gestionado por una org enterprise
+    'active','inactive','trial','trialing','pending_email','pending_payment',
+    'past_due','canceled','cancelled','expired','paused',
+    'org_managed' -- coach gestionado por una org enterprise
   ));
