@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import type { Json } from '@/lib/database.types'
 
 export async function confirmCoachPublicCodeAction(): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -9,7 +10,12 @@ export async function confirmCoachPublicCodeAction(): Promise<{ ok: true } | { o
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { ok: false, error: 'No autenticado' }
 
-    const { data: coach } = await supabase
+    // Write con admin client (mismo patrón que updateBrandSettingsAction). El write
+    // user-scoped no estaba persistiendo el flag (el modal volvía en cada carga).
+    // Se re-lee con el admin justo antes para mergear sin pisar otras keys del guide.
+    const admin = await createRawAdminClient()
+
+    const { data: coach } = await admin
         .from('coaches')
         .select('onboarding_guide')
         .eq('id', user.id)
@@ -28,13 +34,13 @@ export async function confirmCoachPublicCodeAction(): Promise<{ ok: true } | { o
         invite_code_confirmed_at: new Date().toISOString(),
     }
 
-    const { error } = await supabase
+    const { error } = await admin
         .from('coaches')
         .update({ onboarding_guide: updated, updated_at: new Date().toISOString() })
         .eq('id', user.id)
 
     if (error) return { ok: false, error: error.message }
 
-    revalidatePath('/coach/dashboard')
+    revalidatePath('/coach/dashboard', 'layout')
     return { ok: true }
 }
