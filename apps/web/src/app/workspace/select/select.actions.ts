@@ -15,6 +15,15 @@ export async function selectWorkspaceAction(formData: FormData) {
     const workspace = workspaces.find(item => workspaceKey(item) === selectedKey)
     if (!workspace) redirect('/workspace/select')
 
-    await setLastWorkspace(supabase, workspace)
+    // Persist the choice. If the write fails (RLS / constraint / transient), DO NOT
+    // redirect as if it succeeded: the stale preference (e.g. enterprise_coach) would
+    // win on the next /coach/dashboard resolution and the user would silently "revert".
+    const { error } = await setLastWorkspace(supabase, workspace)
+    if (error) {
+        const url = new URL('/workspace/select', 'https://placeholder.local')
+        url.searchParams.set('error', 'persist_failed')
+        redirect(url.pathname + url.search)
+    }
+
     redirect(workspaceHome(workspace))
 }
