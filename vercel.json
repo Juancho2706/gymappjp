@@ -2,5 +2,62 @@
   "buildCommand": "pnpm --filter @eva/web build",
   "outputDirectory": "apps/web/.next",
   "installCommand": "pnpm install --frozen-lockfile",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/nutrition-cycles",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/nutrition-reminder",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/trial-expiry",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/org-health-alert",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/purge-data",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/payment-reminder",
+      "schedule": "0 9 1,6,11 * *"
+    },
+    {
+      "path": "/api/cron/audit-checksum",
+      "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/cron/mp-reconcile",
+      "schedule": "0 10 * * 5"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mercadopago.com https://challenges.cloudflare.com https://*.posthog.com https://us.i.posthog.com; frame-src https://challenges.cloudflare.com https://calendly.com; media-src 'self' blob:;"
+        }
+      ]
+    }
+  ]
 }
