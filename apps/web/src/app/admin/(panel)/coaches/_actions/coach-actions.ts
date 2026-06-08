@@ -306,8 +306,8 @@ export async function bulkCoachTierAction(coachIds: string[], tier: string, maxC
     return { success: true }
 }
 
-// Send announcement email to all active paid coaches about new features
-// (annual billing, Growth tier, Free tier for referrals).
+// Send announcement email to all active coaches (paid + free): EVA coming to
+// iOS/Android stores + apology for the structural changes during the transition.
 export async function sendAnnouncementEmailAction(): Promise<
     { success: true; sent: number; failed: number } | { error: string }
 > {
@@ -317,7 +317,6 @@ export async function sendAnnouncementEmailAction(): Promise<
         .from('coaches')
         .select('id, full_name, subscription_tier')
         .eq('subscription_status', 'active')
-        .neq('subscription_tier', 'free')
 
     if (error) return { error: error.message }
     if (!coaches?.length) return { success: true, sent: 0, failed: 0 }
