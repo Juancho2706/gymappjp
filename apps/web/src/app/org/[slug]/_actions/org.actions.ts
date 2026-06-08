@@ -236,17 +236,17 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
         brand_published_by: user.id,
     }).eq('id', org.id)
 
-    // Coach loader: org config drives it (not auto-derived). coaches.loader_text max 10.
-    const coachLoaderText = (eff.useCustomLoader && eff.loaderText ? eff.loaderText : eff.name)
-        .replace(/[^a-zA-Z0-9]/g, '')
-        .slice(0, 10)
-        .toUpperCase() || 'APP'
-    // org icon mode 'logo' → coach shows the (org) logo; 'text' → no icon, text only.
-    const coachIconMode = eff.loaderIconMode === 'text' ? 'none' : 'coach'
-
-    const { data: coachMembers, error: membersError } = await admin
+    // Org brand is applied to the ORG context only. It must NEVER be written back to
+    // coaches.* — those columns are the coach's OWN standalone white-label (login,
+    // /c/[slug], standalone students) and live in a separate product domain.
+    // The org brand reaches a coach's enterprise workspace + org-students at READ time:
+    //   - workspace-brand.service.ts → findWorkspaceOrgBrand() (enterprise_coach/staff)
+    //   - proxy.ts org-brand override block (org students on protected /c/* routes)
+    // Both read organizations.* live, so no copy into coaches is needed or wanted.
+    // Count active coach members purely for the audit metadata / success message.
+    const { count: coachCount, error: membersError } = await admin
         .from('organization_members')
-        .select('coach_id')
+        .select('coach_id', { count: 'exact', head: true })
         .eq('org_id', org.id)
         .eq('role', 'coach')
         .eq('status', 'active')
@@ -255,40 +255,20 @@ export async function publishEnterpriseBrandAction(orgSlug: string) {
 
     if (membersError) return { error: membersError.message }
 
-    const coachIds = [...new Set((coachMembers ?? []).map(member => member.coach_id).filter(Boolean))] as string[]
-
-    if (coachIds.length > 0) {
-        const { error: coachesError } = await admin
-            .from('coaches')
-            .update({
-                brand_name: eff.name,
-                primary_color: eff.primaryColor,
-                logo_url: eff.logoUrl ?? full.logo_url,
-                use_brand_colors_coach: true,
-                use_custom_loader: eff.useCustomLoader,
-                loader_text: coachLoaderText,
-                loader_text_color: eff.loaderTextColor ?? eff.primaryColor,
-                loader_icon_mode: coachIconMode,
-            })
-            .in('id', coachIds)
-
-        if (coachesError) return { error: coachesError.message }
-    }
-
     await writeOrgAuditEvent(admin, {
         orgId: org.id,
         actorId: user.id,
         action: 'brand.published',
         targetType: 'organization',
         targetId: org.id,
-        metadata: { coach_count: coachIds.length, primary_color: eff.primaryColor, has_logo: Boolean(eff.logoUrl) },
+        metadata: { coach_count: coachCount ?? 0, primary_color: eff.primaryColor, has_logo: Boolean(eff.logoUrl) },
     })
 
     revalidatePath(`/org/${orgSlug}`)
     revalidatePath(`/org/${orgSlug}/brand`)
     revalidatePath(`/org/${orgSlug}/coaches`)
     revalidatePath(`/org/${orgSlug}/audit`)
-    return { success: true, coachCount: coachIds.length }
+    return { success: true, coachCount: coachCount ?? 0 }
 }
 
 // Default: all enterprise staff roles that can perform operational mutations.
