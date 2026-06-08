@@ -19,7 +19,8 @@ import {
     sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
-import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+// F3: single source of truth for coach scope + org filtering (replaces the local copies).
+import { resolveCoachScope as getCoachClientScope, applyOrgScope as applyClientScope } from '@/services/auth/coach-scope.service'
 
 export type CreateClientState = {
     error?: string
@@ -30,31 +31,6 @@ export type CreateClientState = {
     clientName?: string
     upgradeRequired?: boolean
     currentLimit?: number
-}
-
-type CoachClientScope =
-    | { ok: true; orgId: string | null; isEnterprise: boolean }
-    | { ok: false; error: string }
-
-async function getCoachClientScope(
-    supabase: Awaited<ReturnType<typeof createClient>>,
-    userId: string
-): Promise<CoachClientScope> {
-    const workspace = await resolvePreferredWorkspace(supabase, userId)
-    if (!workspace || workspace.type === 'coach_standalone') {
-        return { ok: true, orgId: null, isEnterprise: false }
-    }
-    if (workspace.type === 'enterprise_coach') {
-        return { ok: true, orgId: workspace.orgId, isEnterprise: true }
-    }
-    return { ok: false, error: 'Workspace invalido para gestionar alumnos.' }
-}
-
-function applyClientScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
-    query: T,
-    orgId: string | null
-): T {
-    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
 }
 
 export async function createClientAction(

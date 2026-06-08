@@ -30,7 +30,7 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
 
     const { data: coach } = await admin
         .from('coaches')
-        .select('id, active_org_id, slug')
+        .select('id, slug')
         .eq('invite_code', inviteCode)
         .maybeSingle()
     if (!coach) return { error: 'Código de invitación inválido' }
@@ -50,13 +50,17 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
     })
     if (authErr) return { error: authErr.message }
 
+    // F3: a coach's personal invite_code ALWAYS creates a STANDALONE client (org_id NULL).
+    // Enterprise clients are created only through org flows (org-admin / enterprise roles /
+    // EVA enterprise RN app / the org-linked "add client" menu) — never via self-signup.
+    // This keeps the standalone and enterprise client-creation paths from diverging.
     const { error: insertErr } = await admin.from('clients').insert({
         id: newUser.user.id,
         full_name: parsed.data.full_name,
         email: parsed.data.email,
         phone: parsed.data.phone || null,
         coach_id: coach.id,
-        org_id: coach.active_org_id,
+        org_id: null,
         is_active: true,
         force_password_change: false,
         age_confirmed_at: new Date().toISOString(),
@@ -65,14 +69,6 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
     if (insertErr) {
         await admin.auth.admin.deleteUser(newUser.user.id)
         return { error: insertErr.message }
-    }
-
-    if (coach.active_org_id) {
-        await admin.from('coach_client_assignments').insert({
-            org_id: coach.active_org_id,
-            client_id: newUser.user.id,
-            coach_id: coach.id,
-        })
     }
 
     return { success: true, coachSlug: coach.slug }
