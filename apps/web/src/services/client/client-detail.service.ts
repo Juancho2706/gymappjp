@@ -1,6 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { resolveCheckinPhotoUrls } from '@/lib/storage/checkin-photos'
 import { cache } from 'react'
 import { revalidatePath } from 'next/cache'
 import { format, parseISO, subDays } from 'date-fns'
@@ -661,7 +663,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
         nutritionStreakDays,
         nutritionMonthlyAvgPct,
         todayIso,
-        checkIns: checkIns || [],
+        // P2: sign check-in photo paths (service-role; coaches have no storage SELECT policy).
+        checkIns: await resolveCheckinPhotoUrls(createServiceRoleClient(), checkIns || []),
         workoutHistory: workoutLogs || [],
         payments: payments || [],
         compliance,

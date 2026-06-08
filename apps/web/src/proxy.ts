@@ -22,6 +22,26 @@ import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
 
+/**
+ * F2/B-9: answer "is this coach an active member of this org?" from the proxy. The alumno's
+ * RLS-scoped client cannot read `organization_members` (policy `org_members_see_peers` gates it
+ * to active org members), so a direct table read here always returned null and mis-branded EVERY
+ * enterprise alumno as orphaned (neutral EVA) instead of their org's white-label. The SECURITY
+ * DEFINER RPC returns just the boolean without leaking any row.
+ */
+async function isCoachActiveOrgMember(
+    db: SupabaseClient<Database>,
+    orgId: string,
+    coachId: string,
+): Promise<boolean> {
+    const { data, error } = await db.rpc('is_coach_active_org_member', { p_org_id: orgId, p_coach_id: coachId })
+    if (error) {
+        console.error('[proxy] is_coach_active_org_member error:', error.message)
+        return false
+    }
+    return data === true
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
     const host = request.headers.get('host') ?? ''
@@ -62,7 +82,8 @@ export async function proxy(request: NextRequest) {
             pathname === '/forgot-password' ||
             pathname === '/reset-password' ||
             pathname === '/org/login' ||
-            /^\/c\/[^/]+\/login$/.test(pathname)
+            /^\/c\/[^/]+\/login$/.test(pathname) ||
+            /^\/e\/[^/]+\/login$/.test(pathname)
         if (authPost) {
             const rl = await rateLimitAuth(ip)
             if (!rl.ok) return jsonRateLimited(rl.retryAfter)
@@ -102,6 +123,9 @@ export async function proxy(request: NextRequest) {
             !url.pathname.startsWith('/org') &&
             !url.pathname.startsWith('/invite') &&
             !url.pathname.startsWith('/enterprise') &&
+            // P1.4: enterprise alumno area lives at /e/[org_slug]/* (its own route tree, org
+            // branding) — serve it directly on the subdomain, never /org-prefix it.
+            !url.pathname.startsWith('/e/') &&
             !url.pathname.startsWith('/api') &&
             // Shared auth pages/routes live at the app root (route group (auth) + /auth/*);
             // don't prefix them with /org or they 404 on the enterprise subdomain. Covers
@@ -135,8 +159,11 @@ export async function proxy(request: NextRequest) {
                 setAll(cookiesToSet) {
                     cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
                     supabaseResponse = NextResponse.next({ request })
+                    // P1.0: optionally scope auth cookies to a shared domain (AUTH_COOKIE_DOMAIN,
+                    // e.g. `.eva-app.cl`) for the future /e/* alumno area. Unset = current behavior.
+                    const cookieDomain = process.env.AUTH_COOKIE_DOMAIN || undefined
                     cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options)
+                        supabaseResponse.cookies.set(name, value, cookieDomain ? { ...options, domain: cookieDomain } : options)
                     )
                 },
             },
@@ -411,15 +438,7 @@ export async function proxy(request: NextRequest) {
             const isDirectClient = clientData?.coach_id === coach.id
             let isOrgClient = false
             if (!isDirectClient && clientData?.org_id) {
-                const { data: orgMember } = await supabase
-                    .from('organization_members')
-                    .select('id')
-                    .eq('org_id', clientData.org_id)
-                    .eq('coach_id', coach.id)
-                    .eq('status', 'active')
-                    .is('deleted_at', null)
-                    .maybeSingle()
-                isOrgClient = !!orgMember
+                isOrgClient = await isCoachActiveOrgMember(supabase, clientData.org_id, coach.id)
             }
 
             if (isDirectClient || isOrgClient) {
@@ -458,26 +477,10 @@ export async function proxy(request: NextRequest) {
                 if (rawClientData.coach_id === coach.id) {
                     client = rawClientData as unknown as ClientWithBrand
                     if (rawClientData.org_id) {
-                        const { data: orgMember } = await supabase
-                            .from('organization_members')
-                            .select('id')
-                            .eq('org_id', rawClientData.org_id)
-                            .eq('coach_id', coach.id)
-                            .eq('status', 'active')
-                            .is('deleted_at', null)
-                            .maybeSingle()
-                        orgMembershipActive = !!orgMember
+                        orgMembershipActive = await isCoachActiveOrgMember(supabase, rawClientData.org_id, coach.id)
                     }
                 } else if (rawClientData.org_id) {
-                    const { data: orgMember } = await supabase
-                        .from('organization_members')
-                        .select('id')
-                        .eq('org_id', rawClientData.org_id)
-                        .eq('coach_id', coach.id)
-                        .eq('status', 'active')
-                        .is('deleted_at', null)
-                        .maybeSingle()
-                    if (orgMember) {
+                    if (await isCoachActiveOrgMember(supabase, rawClientData.org_id, coach.id)) {
                         client = rawClientData as unknown as ClientWithBrand
                         orgMembershipActive = true
                     }
@@ -492,16 +495,21 @@ export async function proxy(request: NextRequest) {
             }
 
             if (client.org_id && orgMembershipActive) {
-                const { data: orgBrand } = await supabase
-                    .from('organizations')
-                    .select('name, primary_color, logo_url, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, accent_light, accent_dark, logo_url_dark, neutral_tint')
-                    .eq('id', client.org_id)
-                    .maybeSingle()
+                // F2/B-9: read org white-label via the gated SECURITY DEFINER RPC — the alumno
+                // has no RLS read on `organizations` (org_members_see_own_org), so a direct read
+                // returned null and the org branding silently fell back to the coach's.
+                const { data: orgBrandJson } = await supabase.rpc('get_org_branding', { p_org_id: client.org_id })
+                const orgBrand = (orgBrandJson && typeof orgBrandJson === 'object' && !Array.isArray(orgBrandJson))
+                    ? (orgBrandJson as Record<string, unknown>)
+                    : null
 
                 if (orgBrand) {
-                    requestHeaders.set('x-coach-brand-name', orgBrand.name ?? coach.brand_name)
-                    requestHeaders.set('x-coach-primary-color', orgBrand.primary_color || resolvedColor)
-                    requestHeaders.set('x-coach-logo-url', orgBrand.logo_url?.trim() || coach.logo_url?.trim() || BRAND_APP_ICON)
+                    const brandName = typeof orgBrand.name === 'string' ? orgBrand.name : ''
+                    const orgPrimary = typeof orgBrand.primary_color === 'string' ? orgBrand.primary_color : ''
+                    const orgLogo = typeof orgBrand.logo_url === 'string' ? orgBrand.logo_url.trim() : ''
+                    requestHeaders.set('x-coach-brand-name', brandName || coach.brand_name)
+                    requestHeaders.set('x-coach-primary-color', orgPrimary || resolvedColor)
+                    requestHeaders.set('x-coach-logo-url', orgLogo || coach.logo_url?.trim() || BRAND_APP_ICON)
                     // Per-mode white-label theme inputs (brand-kit resolves on render).
                     const ob = orgBrand as Record<string, unknown>
                     requestHeaders.set('x-coach-accent-light', String(ob.accent_light ?? '').trim())
@@ -522,17 +530,18 @@ export async function proxy(request: NextRequest) {
                 // Don't fall back to the (departed) coach's branding — show neutral EVA branding
                 // and flag the client as orphaned so the app can prompt them to contact the org
                 // for reassignment to another coach.
-                const { data: orphanOrg } = await supabase
-                    .from('organizations')
-                    .select('name')
-                    .eq('id', client.org_id)
-                    .maybeSingle()
+                // Org name via the gated RPC (the orphaned client keeps client.org_id, so the
+                // reader still returns it) — the direct table read is RLS-blocked for alumnos.
+                const { data: orphanBrandJson } = await supabase.rpc('get_org_branding', { p_org_id: client.org_id })
+                const orphanName = (orphanBrandJson && typeof orphanBrandJson === 'object' && !Array.isArray(orphanBrandJson))
+                    ? (orphanBrandJson as Record<string, unknown>).name
+                    : null
                 requestHeaders.set('x-coach-brand-name', 'EVA')
                 requestHeaders.set('x-coach-primary-color', SYSTEM_PRIMARY_COLOR)
                 requestHeaders.set('x-coach-logo-url', BRAND_APP_ICON)
                 requestHeaders.set('x-workspace-brand-source', 'orphan')
                 requestHeaders.set('x-workspace-orphan', 'true')
-                requestHeaders.set('x-orphan-org-name', orphanOrg?.name ?? '')
+                requestHeaders.set('x-orphan-org-name', typeof orphanName === 'string' ? orphanName : '')
             }
 
             // Default behavior if columns are missing or false

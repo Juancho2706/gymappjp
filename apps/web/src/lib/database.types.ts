@@ -160,6 +160,21 @@ export type Database = {
           },
         ]
       }
+      client_accounts: {
+        Row: {
+          created_at: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       client_food_preferences: {
         Row: {
           client_id: string
@@ -302,6 +317,71 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: true
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_memberships: {
+        Row: {
+          account_id: string
+          client_id: string
+          coach_id: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          org_id: string | null
+          scope: string
+          status: string
+        }
+        Insert: {
+          account_id: string
+          client_id: string
+          coach_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          org_id?: string | null
+          scope: string
+          status?: string
+        }
+        Update: {
+          account_id?: string
+          client_id?: string
+          coach_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          org_id?: string | null
+          scope?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_memberships_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_memberships_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_memberships_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_memberships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -3187,7 +3267,12 @@ export type Database = {
         }[]
       }
       immutable_unaccent: { Args: { "": string }; Returns: string }
+      get_org_branding: { Args: { p_org_id: string }; Returns: Json }
       is_active_org_member: { Args: { p_org_id: string }; Returns: boolean }
+      is_coach_active_org_member: {
+        Args: { p_coach_id: string; p_org_id: string }
+        Returns: boolean
+      }
       is_org_admin_member: { Args: { p_org_id: string }; Returns: boolean }
       is_org_coach_assigned_to_client: {
         Args: { p_client_id: string }

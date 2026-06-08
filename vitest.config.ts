@@ -13,6 +13,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './apps/web/src'),
       '@eva/brand-kit': path.resolve(__dirname, './packages/brand-kit/index.ts'),
+      // `server-only` throws outside an RSC; neutralize it for unit tests that transitively
+      // import server modules. Build-time boundary is still enforced by Next.js.
+      'server-only': path.resolve(__dirname, './vitest.server-only-stub.ts'),
     },
     coverage: {
       provider: 'v8',

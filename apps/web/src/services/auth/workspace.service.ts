@@ -97,6 +97,59 @@ export async function listUserWorkspaces(db: DB, userId: string): Promise<Worksp
     return dedupeWorkspaces(workspaces)
 }
 
+/**
+ * P1.2: alumno workspaces from `client_memberships` (the identity-split source of truth) —
+ * one entry per active membership (standalone / per-org). Lets a single account participate in
+ * BOTH worlds and powers the alumno workspace selector + the `/e/[org_slug]` area.
+ *
+ * Backward-compatible: if no memberships exist yet for the account (pre-backfill edge), falls
+ * back to the legacy `clients`-row logic in listUserWorkspaces. Does NOT touch the coach hot path.
+ */
+export async function listClientWorkspaces(db: DB, userId: string): Promise<WorkspaceSummary[]> {
+    const { data: memberships } = await db
+        .from('client_memberships')
+        .select('scope, org_id, coach_id, client_id, organizations(name, slug), coaches(slug, brand_name, full_name)')
+        .eq('account_id', userId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+
+    if (!memberships || memberships.length === 0) {
+        // Fallback: derive from the legacy clients row (back-compat for un-backfilled accounts).
+        return (await listUserWorkspaces(db, userId)).filter(
+            w => w.type === 'student_standalone' || w.type === 'student_enterprise',
+        )
+    }
+
+    const out: WorkspaceSummary[] = []
+    for (const m of memberships) {
+        const org = m.organizations as unknown as { name: string | null; slug: string | null } | null
+        const coach = m.coaches as unknown as { slug: string | null; brand_name: string | null; full_name: string | null } | null
+        if (m.scope === 'enterprise' && m.org_id) {
+            out.push({
+                type: 'student_enterprise',
+                userId,
+                clientId: m.client_id,
+                orgId: m.org_id,
+                coachId: m.coach_id,
+                label: org?.name ? `Entrenar con ${org.name}` : 'Alumno enterprise',
+                brandName: org?.name ?? null,
+                slug: coach?.slug ?? null,
+            })
+        } else if (m.scope === 'standalone' && m.coach_id) {
+            out.push({
+                type: 'student_standalone',
+                userId,
+                clientId: m.client_id,
+                coachId: m.coach_id,
+                label: `Entrenar con ${coach?.brand_name || coach?.full_name || 'mi coach'}`,
+                brandName: coach?.brand_name || coach?.full_name || null,
+                slug: coach?.slug ?? null,
+            })
+        }
+    }
+    return dedupeWorkspaces(out)
+}
+
 export async function resolvePreferredWorkspace(db: DB, userId: string): Promise<WorkspaceSummary | null> {
     const [preference, workspaces] = await Promise.all([
         findWorkspacePreference(db, userId),

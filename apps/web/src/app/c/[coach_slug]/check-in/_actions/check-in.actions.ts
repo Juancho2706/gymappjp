@@ -15,7 +15,7 @@ async function uploadToCheckinsBucket(
     userId: string,
     file: File,
     variant: 'front' | 'back'
-): Promise<{ ok: true; publicUrl: string } | { ok: false; message: string }> {
+): Promise<{ ok: true; path: string } | { ok: false; message: string }> {
     const timestamp = Date.now()
     const extension = file.name.split('.').pop()
     const rand = Math.random().toString(36).substring(7)
@@ -32,10 +32,9 @@ async function uploadToCheckinsBucket(
         return { ok: false, message: 'Error al subir la imagen de progreso.' }
     }
 
-    const {
-        data: { publicUrl },
-    } = adminDb.storage.from('checkins').getPublicUrl(uploadData.path)
-    return { ok: true, publicUrl }
+    // P2: store the PATH, not the public URL. Display layers resolve a signed URL via
+    // resolveCheckinPhotoUrls() so the bucket can be flipped private without breaking images.
+    return { ok: true, path: uploadData.path }
 }
 
 export async function submitCheckinAction(
@@ -63,21 +62,21 @@ export async function submitCheckinAction(
 
     const adminDb = createServiceRoleClient()
 
-    let photoUrl: string | null = null
-    let backPhotoUrl: string | null = null
+    let photoPath: string | null = null
+    let backPhotoPath: string | null = null
 
     const frontFile = parsed.data.photo as File | null | undefined
     if (frontFile && frontFile.size > 0) {
         const up = await uploadToCheckinsBucket(adminDb, user.id, frontFile, 'front')
         if (!up.ok) return { error: up.message }
-        photoUrl = up.publicUrl
+        photoPath = up.path
     }
 
     const backFile = parsed.data.back_photo as File | null | undefined
     if (backFile && backFile.size > 0) {
         const up = await uploadToCheckinsBucket(adminDb, user.id, backFile, 'back')
         if (!up.ok) return { error: up.message }
-        backPhotoUrl = up.publicUrl
+        backPhotoPath = up.path
     }
 
     const { error: insertError } = await adminDb.from('check_ins').insert({
@@ -85,8 +84,8 @@ export async function submitCheckinAction(
         weight: parsed.data.weight,
         energy_level: parsed.data.energy_level,
         notes: parsed.data.notes || null,
-        front_photo_url: photoUrl,
-        back_photo_url: backPhotoUrl,
+        front_photo_url: photoPath,
+        back_photo_url: backPhotoPath,
     })
 
     if (insertError) {
