@@ -24,6 +24,9 @@ interface Props {
   onToggle: () => void
   onSatisfaction?: (score: 1 | 2 | 3 | null) => void
   activeSwapMealIds?: Set<string>
+  /** Porción consumida (0-100). null = 100% por defecto. */
+  consumedPct?: number | null
+  onPortionChange?: (pct: number) => void
 }
 
 export function MealCardExpandable({
@@ -35,6 +38,8 @@ export function MealCardExpandable({
   onToggle,
   onSatisfaction,
   activeSwapMealIds,
+  consumedPct,
+  onPortionChange,
 }: Props) {
   const { theme } = useTheme()
   const [expanded, setExpanded] = useState(false)
@@ -114,6 +119,34 @@ export function MealCardExpandable({
               />
             ))}
 
+            {/* Porción consumida — solo si completado y es hoy */}
+            {isCompleted && isToday && onPortionChange && (
+              <View style={styles.satisfaction}>
+                <Text style={[styles.satisfactionLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  ¿Cuánto comiste?
+                </Text>
+                <View style={styles.satisfactionRow}>
+                  {[25, 50, 75, 100].map((pct) => {
+                    const active = (consumedPct ?? 100) === pct
+                    return (
+                      <TouchableOpacity
+                        key={pct}
+                        style={[styles.portionBtn, {
+                          backgroundColor: active ? theme.primary + '20' : theme.secondary,
+                          borderColor: active ? theme.primary : theme.border,
+                          borderRadius: theme.radius.md,
+                        }]}
+                        onPress={() => onPortionChange(pct)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={{ color: active ? theme.primary : theme.mutedForeground, fontSize: 12.5, fontFamily: 'Inter_600SemiBold' }}>{pct}%</Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+              </View>
+            )}
+
             {/* Satisfaction — solo si completado y es hoy */}
             {isCompleted && isToday && onSatisfaction && (
               <View style={styles.satisfaction}>
@@ -165,4 +198,5 @@ const styles = StyleSheet.create({
   satisfactionRow: { flexDirection: 'row', gap: 8 },
   satisfactionBtn: { width: 44, height: 44, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   satisfactionEmoji: { fontSize: 22 },
+  portionBtn: { flex: 1, height: 38, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 })

@@ -14,18 +14,30 @@ import {
 } from 'react-native'
 import { useKeepAwake } from 'expo-keep-awake'
 import * as Haptics from 'expo-haptics'
+import { Confetti } from 'react-native-fast-confetti'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Check, Dumbbell, Info, Trophy } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
+import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '../../../lib/date-utils'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
+import { haptics } from '../../../lib/haptics'
+import { useEvaMotion } from '../../../lib/motion'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, NativeDialog, OfflineBanner, ProgressBar, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RestTimer } from '../../../components/workout/RestTimer'
 import { WorkoutSummaryModal } from '../../../components/workout/WorkoutSummaryModal'
+
+/** Redondea y acota un input numérico a [min,max]; '' / NaN → null. Para RPE/RIR (columnas integer con CHECK). */
+function clampIntInRange(v: string, min: number, max: number): number | null {
+  if (!v) return null
+  const n = Math.round(parseFloat(v))
+  if (Number.isNaN(n)) return null
+  return Math.max(min, Math.min(max, n))
+}
 
 interface Exercise {
   id: string
@@ -100,6 +112,8 @@ export default function WorkoutExecutionScreen() {
   const [techniqueExercise, setTechniqueExercise] = useState<Exercise | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [prCelebration, setPrCelebration] = useState(false)
+  const motion = useEvaMotion()
   const restInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const scrollRef = useRef<ScrollView>(null)
   const sectionY = useRef<Record<string, number>>({})
@@ -179,12 +193,17 @@ export default function WorkoutExecutionScreen() {
   }
 
   async function loadTodayLogs(blockIds: string[]) {
-    const today = new Date().toISOString().slice(0, 10)
+    if (!clientId) return
+    // Fix S1: "hoy" en horario Santiago (no UTC) + acotar por límite superior + filtrar por client_id.
+    const { iso } = getTodayInSantiago()
+    const { startIso, endIso } = getSantiagoUtcBoundsForDay(iso)
     const { data } = await supabase
       .from('workout_logs')
       .select('block_id, set_number, weight_kg, reps_done, rpe, rir')
+      .eq('client_id', clientId)
       .in('block_id', blockIds)
-      .gte('logged_at', `${today}T00:00:00.000Z`)
+      .gte('logged_at', startIso)
+      .lt('logged_at', endIso)
 
     const next: Record<string, LogEntry[]> = {}
     for (const row of data ?? []) {
@@ -259,21 +278,57 @@ export default function WorkoutExecutionScreen() {
       set_number: setNumber,
       weight_kg: weight ? parseFloat(weight) : null,
       reps_done: reps ? parseInt(reps) : null,
-      rpe: rpe ? parseFloat(rpe) : null,
-      rir: rir ? parseInt(rir) : null,
+      // Fix S2: RPE/RIR son columnas integer con CHECK (1-10 / 0-10). Redondear+clamp
+      // evita que un 7.5 reviente el upsert y se trate (mal) como "offline".
+      rpe: clampIntInRange(rpe, 1, 10),
+      rir: clampIntInRange(rir, 0, 10),
       exercise_name_at_log: block.exercises?.name ?? null,
     }
 
-    const { error } = await supabase.from('workout_logs').upsert({
-      ...logData,
-      logged_at: new Date().toISOString(),
-    })
+    // Fix S1: NO upsert (sin onConflict/id es un INSERT → duplica filas). Select-then-
+    // update/insert acotado al día (igual que la web), y limpiar duplicados previos.
+    const { iso } = getTodayInSantiago()
+    const { startIso, endIso } = getSantiagoUtcBoundsForDay(iso)
+    let error: { message: string } | null = null
+    try {
+      const { data: existing } = await supabase
+        .from('workout_logs')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('block_id', block.id)
+        .eq('set_number', setNumber)
+        .gte('logged_at', startIso)
+        .lt('logged_at', endIso)
+        .order('logged_at', { ascending: false })
+      if (existing && existing.length > 0) {
+        const [keep, ...dups] = existing as { id: string }[]
+        const upd = await supabase.from('workout_logs').update(logData).eq('id', keep.id)
+        error = upd.error
+        if (dups.length) await supabase.from('workout_logs').delete().in('id', dups.map((d) => d.id))
+      } else {
+        const ins = await supabase.from('workout_logs').insert({ ...logData, logged_at: new Date().toISOString() })
+        error = ins.error
+      }
+    } catch (e: any) {
+      error = { message: e?.message ?? 'error' }
+    }
 
     if (error) {
       setIsOnline(false)
       await enqueueLog(logData)
     } else {
       setIsOnline(true)
+    }
+
+    // Deleite: ¿récord personal? El peso supera el máximo histórico (previousHistory ya cargado).
+    const exId = block.exercises?.id
+    const hist = exId ? previousHistory[exId] : undefined
+    const prevMax = hist?.length ? Math.max(...hist.map((h) => h.weight_kg ?? 0)) : 0
+    const w = weight ? parseFloat(weight) : 0
+    if (!error && prevMax > 0 && w > prevMax) {
+      setPrCelebration(true)
+      haptics.pr()
+      setTimeout(() => setPrCelebration(false), 2600)
     }
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -357,6 +412,14 @@ export default function WorkoutExecutionScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      {prCelebration ? (
+        <View pointerEvents="none" style={styles.prOverlay}>
+          {!motion.reduced ? <Confetti autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.cyan]} /> : null}
+          <View style={[styles.prBanner, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.prBannerText, { color: theme.primaryForeground }]}>🏆 ¡Nuevo récord!</Text>
+          </View>
+        </View>
+      ) : null}
       {restSeconds != null && (
         <RestTimer
           duration={restSeconds}
@@ -394,7 +457,7 @@ export default function WorkoutExecutionScreen() {
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
           >
             {allDone && (
               <MotiView
@@ -687,6 +750,9 @@ function TechniqueDialog({ exercise, onClose }: { exercise: Exercise | null; onC
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  prOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 90, zIndex: 50 },
+  prBanner: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 },
+  prBannerText: { fontSize: 15, fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -0.2 },
   progressHeader: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   progressTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   progressText: { fontSize: 13 },

@@ -1,8 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Check, Share2, Trophy, X, Zap } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
+import { Confetti } from 'react-native-fast-confetti'
 import { useTheme } from '../../context/ThemeContext'
+import { useEvaMotion } from '../../lib/motion'
+import { haptics } from '../../lib/haptics'
+import { AnimatedNumber } from '../AnimatedNumber'
 
 interface LogEntry {
   blockId: string
@@ -41,7 +45,11 @@ export function WorkoutSummaryModal({
   onClose,
 }: WorkoutSummaryModalProps) {
   const { theme } = useTheme()
+  const motion = useEvaMotion()
   const [shared, setShared] = useState(false)
+
+  // Deleite: al abrirse el resumen, celebrar (haptic de éxito). Confetti se renderiza abajo.
+  useEffect(() => { if (visible) haptics.success() }, [visible])
 
   const allLogs = useMemo(() => Object.values(logs).flat(), [logs])
 
@@ -99,6 +107,11 @@ export function WorkoutSummaryModal({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={[styles.root, { backgroundColor: theme.background }]}>
+        {/* Deleite: ráfaga de confetti del color de marca (respeta reduce-motion). */}
+        {visible && !motion.reduced ? (
+          <Confetti autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.cyan]} />
+        ) : null}
+
         {/* Sheet close handle */}
         <View style={[styles.handle, { backgroundColor: theme.border }]} />
 
@@ -130,9 +143,9 @@ export function WorkoutSummaryModal({
 
           {/* Stats */}
           <View style={styles.statsRow}>
-            <StatCard label="Sets" value={String(stats.completedSets)} theme={theme} />
-            <StatCard label="Reps" value={String(stats.totalReps)} theme={theme} />
-            <StatCard label="Volumen" value={`${Math.round(stats.totalVolume)} kg`} theme={theme} />
+            <StatCard label="Sets" value={stats.completedSets} theme={theme} />
+            <StatCard label="Reps" value={stats.totalReps} theme={theme} />
+            <StatCard label="Volumen" value={Math.round(stats.totalVolume)} suffix=" kg" theme={theme} />
           </View>
 
           {/* Exercise breakdown */}
@@ -224,11 +237,15 @@ export function WorkoutSummaryModal({
   )
 }
 
-function StatCard({ label, value, theme }: { label: string; value: string; theme: any }) {
+function StatCard({ label, value, suffix, theme }: { label: string; value: number; suffix?: string; theme: any }) {
   return (
     <View style={[styles.statCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
       <Text style={[styles.statLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <Text style={[styles.statValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
+      <AnimatedNumber
+        value={value}
+        format={(n) => `${Math.round(n)}${suffix ?? ''}`}
+        style={[styles.statValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+      />
     </View>
   )
 }

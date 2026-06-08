@@ -27,11 +27,11 @@ export default function ResetPasswordScreen() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  const passwordError = password.length > 0 && password.length < 6 ? 'Minimo 6 caracteres' : null
+  const passwordError = password.length > 0 && password.length < 8 ? 'Mínimo 8 caracteres' : null
   const confirmError = confirm.length > 0 && password !== confirm ? 'Las contrasenas no coinciden' : null
 
   async function handleSave() {
-    if (password.length < 6 || password !== confirm) return
+    if (password.length < 8 || password !== confirm) return
 
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password })
@@ -115,7 +115,7 @@ export default function ResetPasswordScreen() {
               Nueva contrasena
             </Text>
             <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Elige una contrasena segura de al menos 6 caracteres.
+              Elige una contrasena segura de al menos 8 caracteres.
             </Text>
 
             <View style={styles.form}>
@@ -141,7 +141,7 @@ export default function ResetPasswordScreen() {
                 rightIcon={ArrowRight}
                 onPress={handleSave}
                 loading={loading}
-                disabled={password.length < 6 || password !== confirm}
+                disabled={password.length < 8 || password !== confirm}
                 full
                 size="lg"
               />

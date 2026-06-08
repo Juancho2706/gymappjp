@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Apple, Bell, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
+import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
 import { useTheme } from '../../../context/ThemeContext'
@@ -100,7 +101,7 @@ export default function CoachPerfilScreen() {
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await signOutAndCleanup()
     await AsyncStorage.removeItem('eva_user_role')
     router.replace('/')
   }

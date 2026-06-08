@@ -22,13 +22,21 @@ import {
   Montserrat_800ExtraBold,
 } from '@expo-google-fonts/montserrat'
 import type { Session } from '@supabase/supabase-js'
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated'
 import { MotiView } from 'moti'
 import { supabase } from '../lib/supabase'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
 import { EvaSplash } from '../components/EvaSplash'
+import { AppErrorBoundary } from '../components/AppErrorBoundary'
+import { BiometricLock } from '../components/BiometricLock'
+import { isBiometricLockEnabled } from '../lib/biometric'
+import { AppState } from 'react-native'
 
 SplashScreen.preventAutoHideAsync()
+
+// Expo Router: fallback global ante un throw no atrapado (en vez de pantalla blanca).
+export { AppErrorBoundary as ErrorBoundary }
 
 configurePushHandler()
 
@@ -105,7 +113,28 @@ function RootLayoutNav() {
     syncPushToken(session.user.id, supabase)
   }, [session?.user.id])
 
-  return <Stack screenOptions={{ headerShown: false }} />
+  // Ola 0: bloqueo biométrico opt-in. Si hay sesión y el usuario lo activó, bloquear al
+  // entrar y al volver de background. Siempre con escape a contraseña (BiometricLock).
+  const [locked, setLocked] = useState(false)
+  useEffect(() => {
+    if (!session?.user.id) { setLocked(false); return }
+    isBiometricLockEnabled().then((on) => { if (on) setLocked(true) }).catch(() => {})
+  }, [session?.user.id])
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && session?.user.id) {
+        isBiometricLockEnabled().then((on) => { if (on) setLocked(true) }).catch(() => {})
+      }
+    })
+    return () => sub.remove()
+  }, [session?.user.id])
+
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }} />
+      {locked && session ? <BiometricLock onUnlock={() => setLocked(false)} /> : null}
+    </>
+  )
 }
 
 export default function RootLayout() {
@@ -128,6 +157,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ReducedMotionConfig mode={ReduceMotion.System} />
       <SafeAreaProvider>
         <BottomSheetModalProvider>
           <ThemeProvider>

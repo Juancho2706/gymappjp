@@ -168,3 +168,6 @@ export function contrastReport(theme: BrandTheme): ContrastReport {
 export function isThemeReadable(input: BrandThemeInput): boolean {
     return contrastReport(resolveBrandTheme(input)).passes
 }
+
+// Tokens de motion compartidos (duraciones/easings/springs). Pure TS.
+export * from './motion'

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { ExternalLink, KeyRound, LogOut, User, UserCog } from 'lucide-react-native'
+import { ExternalLink, Fingerprint, KeyRound, LogOut, User, UserCog } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
+import { signOutAndCleanup } from '../../../lib/auth-actions'
+import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
 import { getClientProfile } from '../../../lib/client'
 import { clearBranding } from '../../../lib/branding'
 import { useTheme } from '../../../context/ThemeContext'
@@ -80,11 +82,26 @@ export default function AlumnoPerfilScreen() {
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await signOutAndCleanup()
     await AsyncStorage.removeItem('eva_user_role')
     await clearBranding()
     setBranding(null)
     router.replace('/')
+  }
+
+  const [bioAvailable, setBioAvailable] = useState(false)
+  const [bioEnabled, setBioEnabled] = useState(false)
+  useEffect(() => {
+    isBiometricAvailable().then(setBioAvailable).catch(() => {})
+    isBiometricLockEnabled().then(setBioEnabled).catch(() => {})
+  }, [])
+  async function toggleBio(next: boolean) {
+    if (next) {
+      const ok = await authenticate('Confirmá para activar el bloqueo')
+      if (!ok) return
+    }
+    await setBiometricLockEnabled(next)
+    setBioEnabled(next)
   }
 
   const hasExtras = detail?.phone || detail?.goalWeightKg != null || detail?.subscriptionStartDate
@@ -177,6 +194,23 @@ export default function AlumnoPerfilScreen() {
               </Text>
             </TouchableOpacity>
           </Section>
+
+          {bioAvailable ? (
+            <Section title="Seguridad">
+              <View style={styles.actionRow}>
+                <Fingerprint size={16} color={theme.primary} strokeWidth={2} />
+                <Text style={[styles.actionLabel, { color: theme.foreground, fontFamily: theme.fontSans, flex: 1 }]}>
+                  Bloqueo con Face ID / huella
+                </Text>
+                <Switch
+                  value={bioEnabled}
+                  onValueChange={toggleBio}
+                  trackColor={{ true: theme.primary, false: theme.muted }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </Section>
+          ) : null}
 
           <Button
             label="Cerrar sesion"

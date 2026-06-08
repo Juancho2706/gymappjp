@@ -241,6 +241,9 @@ export default function AlumnoHomeScreen() {
       workoutCompliance,
       nutritionCompliance,
       checkInCompliance,
+      // Estado "sin datos" → ring gris en vez de 0% (no confundir sin-uso con mal-cumplimiento).
+      nutritionEmpty: data ? data.nutritionDates.size === 0 : true,
+      checkInEmpty: data ? data.checkIns.length === 0 : true,
       recentUnique,
       weights,
       currentWeight,
@@ -270,7 +273,7 @@ export default function AlumnoHomeScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
       >
         <WeekCalendar workoutDates={data?.workoutDates ?? new Set<string>()} plannedDays={derived.plannedDays} />
 
@@ -307,6 +310,7 @@ export default function AlumnoHomeScreen() {
         <WorkoutHero
           plan={derived.todayPlan}
           nextPlan={derived.nextPlan}
+          doneToday={!!derived.todayPlan && (data?.workoutDates.has(getTodayInSantiago().iso) ?? false)}
           onStart={(planId) => router.push(`/alumno/workout/${planId}`)}
         />
 
@@ -320,9 +324,9 @@ export default function AlumnoHomeScreen() {
               Cumplimiento 30 dias
             </Text>
             <View style={styles.ringsRow}>
-              <ComplianceRing value={derived.workoutCompliance} label="Workout" color={theme.primary} />
-              <ComplianceRing value={derived.nutritionCompliance} label="Nutricion" color="#10B981" />
-              <ComplianceRing value={derived.checkInCompliance} label="Check-in" color="#F59E0B" />
+              <ComplianceRing value={derived.workoutCompliance} label="Entrenos" color={theme.primary} />
+              <ComplianceRing value={derived.nutritionCompliance} label="Nutrición" color="#10B981" empty={derived.nutritionEmpty} />
+              <ComplianceRing value={derived.checkInCompliance} label="Check-in" color="#F59E0B" empty={derived.checkInEmpty} />
             </View>
           </Card>
         </MotiView>
@@ -408,7 +412,7 @@ function WeekCalendar({ workoutDates, plannedDays }: { workoutDates: Set<string>
   )
 }
 
-function WorkoutHero({ plan, nextPlan, onStart }: { plan: Plan | null; nextPlan: Plan | null; onStart: (id: string) => void }) {
+function WorkoutHero({ plan, nextPlan, doneToday, onStart }: { plan: Plan | null; nextPlan: Plan | null; doneToday: boolean; onStart: (id: string) => void }) {
   const { theme } = useTheme()
   return (
     <MotiView
@@ -432,10 +436,16 @@ function WorkoutHero({ plan, nextPlan, onStart }: { plan: Plan | null; nextPlan:
         </View>
         {plan ? (
           <>
-            <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
-              <View style={[styles.progressFill, { backgroundColor: theme.primary, width: '18%' }]} />
-            </View>
-            <Button label="Empezar" rightIcon={ChevronRight} onPress={() => onStart(plan.id)} full />
+            {/* Fix S1: progreso REAL (no más 18% hardcodeado). Si entrenó hoy → barra llena + "Completado". */}
+            {doneToday ? (
+              <>
+                <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
+                  <View style={[styles.progressFill, { backgroundColor: theme.success, width: '100%' }]} />
+                </View>
+                <Text style={{ color: theme.success, fontSize: 12.5, fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>✓ Completado hoy</Text>
+              </>
+            ) : null}
+            <Button label={doneToday ? 'Entrenar de nuevo' : 'Empezar'} rightIcon={ChevronRight} onPress={() => onStart(plan.id)} full />
           </>
         ) : (
           <Text style={[styles.restText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>

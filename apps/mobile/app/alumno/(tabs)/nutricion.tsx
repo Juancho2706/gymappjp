@@ -15,6 +15,8 @@ import {
 import { Apple, Share2 } from 'lucide-react-native'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
+import { useOnline } from '../../../lib/use-online'
+import { Accordion } from '../../../components/Accordion'
 import { getTodayInSantiago, isoDateAddDays, nutritionMealApplies } from '../../../lib/date-utils'
 import {
   calculateConsumedMacrosWithCompletionFallback,
@@ -28,6 +30,7 @@ import {
   getNutritionAdherence30d,
   getNutritionLogForDate,
   toggleMealCompletion,
+  updateMealConsumedPortion,
   updateMealSatisfaction,
 } from '../../../lib/nutrition.queries'
 import {
@@ -148,7 +151,10 @@ export default function AlumnoNutricionScreen() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [isOnline, setIsOnline] = useState(true)
+  // Fix S1: estado de conexión REAL (NetInfo). Antes arrancaba true y nunca bajaba con
+  // el plan ya cargado → toggles de comida sin señal se perdían. Al reconectar, flush.
+  const onReconnect = useCallback(() => { flushNutritionQueue(supabase).catch(() => {}) }, [])
+  const isOnline = useOnline(onReconnect)
   const [plan, setPlan] = useState<NutritionPlan | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(todayIso)
@@ -193,7 +199,6 @@ export default function AlumnoNutricionScreen() {
         setPlan(cached.plan as unknown as NutritionPlan)
         setCurrentLog(cached.dailyLog as unknown as DailyLog | null)
         setAdherence((cached.adherence as unknown as AdherenceDay[]) ?? [])
-        setIsOnline(false)
       }
       setLoading(false)
       setRefreshing(false)
@@ -289,8 +294,9 @@ export default function AlumnoNutricionScreen() {
     )
 
     if (!success) {
-      Alert.alert('Error', 'No se pudo guardar. Intenta de nuevo.')
-      await fetchLogForDate(selectedDate)
+      // Fix S1: el write falló (posible blip de red con plan ya cargado) → encolar en vez
+      // de perder el cambio. El optimistic update queda y la cola sincroniza luego.
+      await enqueueNutritionToggle({ clientId, planId: plan.id, mealId, completed: newCompleted, logId: logId ?? undefined, date: selectedDate })
     } else if (newLogId && !currentLog?.id) {
       setCurrentLog((prev) => prev ? { ...prev, id: newLogId } : null)
     }
@@ -310,6 +316,15 @@ export default function AlumnoNutricionScreen() {
       }
     })
     await updateMealSatisfaction(currentLog.id, mealId, score)
+  }
+
+  async function handlePortion(mealId: string, pct: number) {
+    if (!currentLog?.id) return
+    setCurrentLog((prev) => prev ? {
+      ...prev,
+      nutrition_meal_logs: prev.nutrition_meal_logs.map((l) => l.meal_id === mealId ? { ...l, consumed_quantity: pct } : l),
+    } : prev)
+    await updateMealConsumedPortion(currentLog.id, mealId, pct)
   }
 
   async function handleShare() {
@@ -411,7 +426,7 @@ export default function AlumnoNutricionScreen() {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
         >
           {!isOnline && <OfflineBanner visible />}
 
@@ -457,6 +472,12 @@ export default function AlumnoNutricionScreen() {
             </View>
           )}
 
+          {plan?.instructions ? (
+            <View style={{ marginTop: 4 }}>
+              <Accordion question="Indicaciones del coach" answer={plan.instructions} defaultOpen />
+            </View>
+          ) : null}
+
           {mealsForDay.length === 0 ? (
             <View style={styles.noMeals}>
               <Apple size={22} color={theme.mutedForeground} />
@@ -473,8 +494,10 @@ export default function AlumnoNutricionScreen() {
                   isToday={isToday}
                   isToggling={toggling === meal.id}
                   satisfactionScore={mealLog?.satisfaction_score ?? null}
+                  consumedPct={mealLog?.consumed_quantity ?? null}
                   onToggle={() => handleToggle(meal.id, completedMealIds.has(meal.id))}
                   onSatisfaction={(score) => handleSatisfaction(meal.id, score)}
+                  onPortionChange={(pct) => handlePortion(meal.id, pct)}
                 />
               )
             })

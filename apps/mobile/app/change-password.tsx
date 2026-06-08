@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext'
 import { Button } from '../components'
 import { AppBackground } from '../components/AppBackground'
 import { supabase } from '../lib/supabase'
+import { sessionFlags } from '../lib/session-flags'
 
 export default function ChangePasswordScreen() {
   const { theme } = useTheme()
@@ -23,8 +24,17 @@ export default function ChangePasswordScreen() {
     if (pwd !== confirm) { setError('Las contraseñas no coinciden.'); return }
     setSaving(true)
     const { error: err } = await supabase.auth.updateUser({ password: pwd })
+    if (err) { setSaving(false); setError(err.message); return }
+    // Ola 0: limpiar el flag de cambio forzado (best-effort; si RLS lo bloquea,
+    // el flag de sesión evita el loop del gate). La limpieza definitiva es server-side.
+    sessionFlags.pwChanged = true
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) await supabase.from('clients').update({ force_password_change: false }).eq('id', user.id)
+    } catch {
+      // no-op
+    }
     setSaving(false)
-    if (err) { setError(err.message); return }
     Alert.alert('Listo', 'Tu contraseña se actualizó.', [{ text: 'OK', onPress: () => router.back() }])
   }
 

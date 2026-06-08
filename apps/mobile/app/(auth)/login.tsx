@@ -16,6 +16,7 @@ import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-rea
 import { MotiView } from 'moti'
 import { LoginSchema } from '@eva/schemas'
 import { supabase } from '../../lib/supabase'
+import { translateAuthError } from '../../lib/auth-errors'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input } from '../../components'
 import { GlassCard } from '../../components/GlassCard'
@@ -51,7 +52,7 @@ export default function LoginScreen() {
     }
     const { error } = await supabase.auth.signInWithPassword(parsed.data)
     if (error) {
-      setError(error.message)
+      setError(translateAuthError(error.message))
       setLoading(false)
       return
     }

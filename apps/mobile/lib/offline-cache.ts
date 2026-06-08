@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { toggleMealCompletion } from './nutrition.queries'
+import { getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay } from './date-utils'
 
 const PLAN_PREFIX = 'eva_plan_'
 const LOG_QUEUE_KEY = 'eva_log_queue'
@@ -41,13 +42,44 @@ export async function flushLogQueue(supabase: SupabaseClient): Promise<number> {
   const queue: PendingLog[] = JSON.parse(raw)
   if (queue.length === 0) return 0
 
-  const { error } = await supabase.from('workout_logs').insert(
-    queue.map(({ queued_at: _q, ...log }) => ({ ...log, logged_at: new Date().toISOString() }))
-  )
-  if (error) return 0
-
-  await AsyncStorage.removeItem(LOG_QUEUE_KEY)
-  return queue.length
+  // Fix S1/S2: per-item resiliente (un registro malo no bloquea la cola) + dedup
+  // select-then-update/insert (no duplica) + preserva el timestamp original del entreno.
+  let flushed = 0
+  const remaining: PendingLog[] = []
+  for (const item of queue) {
+    const { queued_at, ...log } = item
+    const loggedAt = queued_at || new Date().toISOString()
+    const dayIso = getSantiagoIsoYmdForUtcInstant(loggedAt)
+    const { startIso, endIso } = getSantiagoUtcBoundsForDay(dayIso)
+    try {
+      const { data: existing, error: selErr } = await supabase
+        .from('workout_logs')
+        .select('id')
+        .eq('client_id', log.client_id)
+        .eq('block_id', log.block_id)
+        .eq('set_number', log.set_number)
+        .gte('logged_at', startIso)
+        .lt('logged_at', endIso)
+        .order('logged_at', { ascending: false })
+      if (selErr) { remaining.push(item); continue }
+      let opErr: { message: string } | null = null
+      if (existing && existing.length > 0) {
+        const [keep, ...dups] = existing as { id: string }[]
+        const upd = await supabase.from('workout_logs').update(log).eq('id', keep.id)
+        opErr = upd.error
+        if (dups.length) await supabase.from('workout_logs').delete().in('id', dups.map((d) => d.id))
+      } else {
+        const ins = await supabase.from('workout_logs').insert({ ...log, logged_at: loggedAt })
+        opErr = ins.error
+      }
+      if (opErr) remaining.push(item)
+      else flushed++
+    } catch {
+      remaining.push(item)
+    }
+  }
+  await AsyncStorage.setItem(LOG_QUEUE_KEY, JSON.stringify(remaining))
+  return flushed
 }
 
 export async function getPendingLogCount(): Promise<number> {

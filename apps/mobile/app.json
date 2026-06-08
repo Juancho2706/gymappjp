@@ -22,6 +22,7 @@
         "NSCameraUsageDescription": "Para enviar fotos de progreso a tu coach",
         "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
         "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento",
+        "NSFaceIDUsageDescription": "Usá Face ID para entrar a EVA de forma segura.",
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
@@ -101,7 +102,8 @@
       ],
       "./plugins/with-android-cleartext",
       "./plugins/with-gradle-jvmargs",
-      "./plugins/with-privacy-manifest"
+      "./plugins/with-privacy-manifest",
+      "expo-secure-store"
     ],
     "updates": {
       "url": "https://u.expo.dev/a5f4f7c0-861c-48b1-9ed6-fc46e7843844",

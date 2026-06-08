@@ -4,14 +4,14 @@ import { AlertCircle } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '../../context/ThemeContext'
 import { Button } from '../../components'
-import { supabase } from '../../lib/supabase'
+import { signOutAndCleanup } from '../../lib/auth-actions'
 
 export default function SuspendedScreen() {
   const { theme } = useTheme()
   const router = useRouter()
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await signOutAndCleanup()
     router.replace('/alumno/codigo')
   }
 

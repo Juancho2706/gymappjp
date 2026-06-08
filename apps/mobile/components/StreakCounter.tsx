@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { Flame } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { useTheme } from '../context/ThemeContext'
+import { useEvaMotion } from '../lib/motion'
 
 interface StreakCounterProps {
   days: number
@@ -8,7 +10,10 @@ interface StreakCounterProps {
 
 export function StreakCounter({ days }: StreakCounterProps) {
   const { theme } = useTheme()
+  const motion = useEvaMotion()
   const orange = '#F59E0B'
+  // Deleite: la llama "late" cuando hay racha activa (loop sutil). Reduce-motion → estática.
+  const animate = days > 0 && !motion.reduced
   return (
     <View
       style={[
@@ -20,7 +25,13 @@ export function StreakCounter({ days }: StreakCounterProps) {
         },
       ]}
     >
-      <Flame size={14} color={orange} strokeWidth={2.25} />
+      <MotiView
+        from={{ scale: 1 }}
+        animate={{ scale: animate ? 1.12 : 1 }}
+        transition={animate ? { loop: true, type: 'timing', duration: 900 } : { type: 'timing', duration: 0 }}
+      >
+        <Flame size={14} color={orange} strokeWidth={2.25} />
+      </MotiView>
       <Text style={[styles.value, { color: orange, fontFamily: 'Montserrat_700Bold' }]}>
         {days}
       </Text>

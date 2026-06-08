@@ -1,14 +1,31 @@
 import { useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
-import { Tabs } from 'expo-router'
+import { Tabs, useRouter } from 'expo-router'
 import { Apple, BookOpen, CheckCircle, History, Home, User } from 'lucide-react-native'
 import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
+import { getClientProfile } from '../../../lib/client'
+import { sessionFlags } from '../../../lib/session-flags'
 import { useTheme } from '../../../context/ThemeContext'
 
 export default function AlumnoTabsLayout() {
   const { theme } = useTheme()
+  const router = useRouter()
   const appState = useRef(AppState.currentState)
+
+  // Ola 0: gate de acceso a nivel navegación (cubre TODAS las tabs, no solo Home).
+  // Alumno pausado/archivado → /alumno/suspended. Cambio de clave forzado → /change-password.
+  useEffect(() => {
+    let mounted = true
+    getClientProfile()
+      .then((c) => {
+        if (!mounted || !c) return
+        if (c.blocked) router.replace('/alumno/suspended')
+        else if (c.forcePasswordChange && !sessionFlags.pwChanged) router.replace('/change-password')
+      })
+      .catch(() => {})
+    return () => { mounted = false }
+  }, [])
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (nextState) => {

@@ -83,6 +83,14 @@ export async function toggleMealCompletion(
   return { success: true, logId }
 }
 
+/** Porción consumida (0-100%) de una comida completada. El motor de macros la usa como multiplicador. */
+export async function updateMealConsumedPortion(dailyLogId: string, mealId: string, pct: number) {
+  return supabase.from('nutrition_meal_logs').upsert(
+    { daily_log_id: dailyLogId, meal_id: mealId, consumed_quantity: pct },
+    { onConflict: 'daily_log_id,meal_id' }
+  )
+}
+
 export async function updateMealSatisfaction(
   dailyLogId: string,
   mealId: string,

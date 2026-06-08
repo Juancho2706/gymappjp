@@ -69,40 +69,56 @@ export default function CheckInScreen() {
     if (data) setLastCheckIn(data as LastCheckIn)
   }
 
-  async function pickAndCompressPhoto(type: 'front' | 'back') {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar una foto.')
-      return
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-      allowsEditing: true,
-      aspect: [3, 4],
-    })
-    if (result.canceled || !result.assets[0]) return
-
-    const asset = result.assets[0]
-    if (!ALLOWED_MIME.includes(asset.mimeType ?? '')) {
+  // Comprime + valida tamaño + setea (se re-encoda a JPEG, así que la fuente puede ser cámara o galería).
+  async function processAsset(asset: ImagePicker.ImagePickerAsset, type: 'front' | 'back') {
+    const mime = asset.mimeType ?? 'image/jpeg'
+    if (!ALLOWED_MIME.includes(mime)) {
       Alert.alert('Formato no soportado', 'Solo JPG, PNG o WebP.')
       return
     }
-
     const compressed = await ImageManipulator.manipulateAsync(
       asset.uri,
       [{ resize: { width: 1920 } }],
       { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG }
     )
-
     const info = await FileSystem.getInfoAsync(compressed.uri)
     if (info.exists && 'size' in info && info.size > MAX_BYTES) {
       Alert.alert('Imagen muy grande', 'No se pudo comprimir suficiente. Intenta con otra imagen.')
       return
     }
-
     if (type === 'front') setFrontPhotoUri(compressed.uri)
     else setBackPhotoUri(compressed.uri)
+  }
+
+  async function pickFromGallery(type: 'front' | 'back') {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar una foto.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true, aspect: [3, 4] })
+    if (result.canceled || !result.assets[0]) return
+    await processAsset(result.assets[0], type)
+  }
+
+  // Cámara nativa (expo-image-picker; permiso NSCameraUsageDescription ya declarado).
+  async function takePhoto(type: 'front' | 'back') {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara para tomar la foto.')
+      return
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: true, aspect: [3, 4] })
+    if (result.canceled || !result.assets[0]) return
+    await processAsset(result.assets[0], type)
+  }
+
+  function choosePhotoSource(type: 'front' | 'back') {
+    Alert.alert('Foto de progreso', '¿Cómo querés agregarla?', [
+      { text: 'Tomar foto', onPress: () => takePhoto(type) },
+      { text: 'Elegir de galería', onPress: () => pickFromGallery(type) },
+      { text: 'Cancelar', style: 'cancel' },
+    ])
   }
 
   async function uploadPhoto(uri: string, clientId: string, suffix: string): Promise<string | null> {
@@ -247,8 +263,8 @@ export default function CheckInScreen() {
               theme={theme}
               frontPhotoUri={frontPhotoUri}
               backPhotoUri={backPhotoUri}
-              onPickFront={() => pickAndCompressPhoto('front')}
-              onPickBack={() => pickAndCompressPhoto('back')}
+              onPickFront={() => choosePhotoSource('front')}
+              onPickBack={() => choosePhotoSource('back')}
               onClearFront={() => setFrontPhotoUri(null)}
               onClearBack={() => setBackPhotoUri(null)}
             />

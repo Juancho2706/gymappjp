@@ -24,20 +24,33 @@ export function getApiBaseUrl(): string {
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const headers = new Headers(options.headers)
-  headers.set('Content-Type', 'application/json')
-
-  if (options.authenticated) {
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (token) headers.set('Authorization', `Bearer ${token}`)
+  const exec = (token: string | null) => {
+    const headers = new Headers(options.headers)
+    headers.set('Content-Type', 'application/json')
+    if (options.authenticated && token) headers.set('Authorization', `Bearer ${token}`)
+    return fetch(`${getApiBaseUrl()}${path}`, {
+      ...options,
+      headers,
+      body: options.body == null ? undefined : JSON.stringify(options.body),
+    })
   }
 
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...options,
-    headers,
-    body: options.body == null ? undefined : JSON.stringify(options.body),
-  })
+  let token: string | null = null
+  if (options.authenticated) {
+    const { data } = await supabase.auth.getSession()
+    token = data.session?.access_token ?? null
+  }
+
+  let res = await exec(token)
+
+  // Ola 0: manejo central de 401/sesión expirada. Refrescar una vez y reintentar;
+  // si sigue 401, cerrar sesión (el root layout redirige a login → sin "sesión zombi").
+  if (res.status === 401 && options.authenticated) {
+    const { data, error } = await supabase.auth.refreshSession()
+    const newToken = data.session?.access_token ?? null
+    if (!error && newToken) res = await exec(newToken)
+    if (res.status === 401) await supabase.auth.signOut().catch(() => {})
+  }
 
   const payload = await res.json().catch(() => null)
   if (!res.ok) {
