@@ -13,7 +13,7 @@ interface Props {
 export function CoachQRButton({ inviteCode, coachName, siteUrl }: Props) {
     const [open, setOpen] = useState(false)
     const [copied, setCopied] = useState(false)
-    const joinUrl = `${siteUrl}/join/${inviteCode}`
+    const joinUrl = `${siteUrl.replace(/\/+$/, '')}/join/${inviteCode}`
 
     const copy = async () => {
         await navigator.clipboard.writeText(joinUrl)
