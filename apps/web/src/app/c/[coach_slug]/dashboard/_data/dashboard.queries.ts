@@ -92,7 +92,6 @@ export const getActiveProgram = cache(async (clientId: string) => {
         )
         .eq('client_id', clientId)
         .eq('is_active', true)
-        .in('audience', ['all', 'clients'])
         .maybeSingle()
     return (data as ActiveProgramRow | null) ?? null
 })
@@ -212,7 +211,6 @@ export const getActiveNutritionPlan = cache(async (clientId: string) => {
         .select('id, name, daily_calories, protein_g, carbs_g, fats_g')
         .eq('client_id', clientId)
         .eq('is_active', true)
-        .in('audience', ['all', 'clients'])
         .maybeSingle()
     return data
 })
