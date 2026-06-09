@@ -5,7 +5,7 @@ import { LogoUploadForm } from './LogoUploadForm'
 import { WhatChangesList } from './_components/WhatChangesList'
 import { BrandSettingsTourClient } from './_components/BrandSettingsTourClient'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
-import { Check, Palette } from 'lucide-react'
+import { Check, Palette, Package, ChevronRight } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
 import { getCoachSettingsForUser } from './_data/settings.queries'
@@ -136,6 +136,21 @@ export default async function CoachSettingsPage() {
             </div>
 
             <div className="space-y-6">
+                {/* Módulos (entitlements) */}
+                <Link
+                    href="/coach/settings/modules"
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+                >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <Package className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground">Módulos</h3>
+                        <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, nutrición por intercambios</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+
                 {/* Logo upload */}
                 <LogoUploadForm
                     currentLogoUrl={coach.logo_url}
