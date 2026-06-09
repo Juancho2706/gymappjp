@@ -6,12 +6,11 @@
 --        optimizados (current_user_*_ids); APP-QUERY-SHAPES (replica exacta del WHERE de la app); revocacion.
 -- Actores: A1(owner TeamA), A2(mgr can_manage), A3(member), B1(owner TeamB), S1(standalone), E1(enterprise org).
 --
--- HALLAZGO (PRE-EXISTENTE, NO del team): las policies STANDALONE de nutrition_plans / workout_plans /
--- workout_programs tienen WITH CHECK = (org_id IS NULL AND coach_id = auth.uid()) SIN verificar que el
--- cliente sea del coach -> cualquier coach puede INSERTAR un plan/programa top-level para un client_id
--- ajeno (queda visible para ESE alumno via la policy *_client). Las tablas hijas (nutrition_meals,
--- food_items, daily_nutrition_logs, workout_blocks) SI estan encadenadas (chequean el padre) -> seguras.
--- El team policy bloquea correcto; el hueco es la policy standalone baseline. Hardening = migracion aparte.
+-- NOTA: habia un gap PRE-EXISTENTE (baseline) en el WITH CHECK standalone de nutrition_plans /
+-- workout_plans / workout_programs / nutrition_plan_cycles / nutrition_plan_history (coach_id=auth.uid()
+-- sin verificar propiedad del cliente). CERRADO por la migracion 20260609180000_harden_standalone_
+-- withcheck_client_ownership (exige EXISTS clients del coach). G3.6 ahora asserta el bloqueo.
+-- Tablas hijas (nutrition_meals/food_items/daily_logs/blocks) ya estaban encadenadas (seguras).
 BEGIN;
 
 -- ===================== SEED =====================
@@ -144,9 +143,10 @@ SET LOCAL request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-0000000000b1","r
 DO $$ DECLARE blk boolean; v int; BEGIN
   -- G3.5: B1 NO inserta food_item en meal de A (hija encadenada al padre/cliente)
   blk:=false; BEGIN INSERT INTO public.food_items (meal_id, food_id, quantity) VALUES ('a4000000-0000-0000-0000-000000000010',(SELECT id FROM public.foods LIMIT 1),1); EXCEPTION WHEN insufficient_privilege OR check_violation THEN blk:=true; END; IF NOT blk THEN RAISE EXCEPTION 'G3.5 B1 inserto food_item en meal de A'; END IF;
-  -- G3.6: frontera de TEAM — el pool de B1 NO incluye a A-alpha (el team policy no concede acceso).
-  -- (El INSERT directo de nutrition_plans por coach_id=self es el GAP PRE-EXISTENTE standalone; ver header.)
-  SELECT count(*) INTO v FROM public.current_user_pool_client_ids() WHERE current_user_pool_client_ids='a1000000-0000-0000-0000-000000000001'; IF v<>0 THEN RAISE EXCEPTION 'G3.6 B1 pool incluye A-alpha=%',v; END IF;
+  -- G3.6: B1 NO puede insertar nutrition_plan para A-alpha (gap cerrado por hardening 20260609180000).
+  blk:=false; BEGIN INSERT INTO public.nutrition_plans (client_id, coach_id, name) VALUES ('a1000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-0000000000b1','hack'); EXCEPTION WHEN insufficient_privilege OR check_violation THEN blk:=true; END; IF NOT blk THEN RAISE EXCEPTION 'G3.6 B1 inserto np para A-alpha (gap)'; END IF;
+  -- frontera de team adicional: el pool de B1 no incluye A-alpha
+  SELECT count(*) INTO v FROM public.current_user_pool_client_ids() WHERE current_user_pool_client_ids='a1000000-0000-0000-0000-000000000001'; IF v<>0 THEN RAISE EXCEPTION 'G3.6b B1 pool incluye A-alpha=%',v; END IF;
   -- G3.7: B1 NO inserta workout_block en plan de A (hija encadenada al plan)
   blk:=false; BEGIN INSERT INTO public.workout_blocks (plan_id, exercise_id, order_index, section) VALUES ('a3000000-0000-0000-0000-000000000ff1',(SELECT id FROM public.exercises LIMIT 1),1,'main'); EXCEPTION WHEN insufficient_privilege OR check_violation THEN blk:=true; END; IF NOT blk THEN RAISE EXCEPTION 'G3.7 B1 inserto block en plan de A'; END IF;
 END $$;
