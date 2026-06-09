@@ -4,8 +4,19 @@ import { revalidatePath } from 'next/cache'
 import { CreateTeamCoachSchema, AddExistingCoachSchema, UpdateTeamMemberRoleSchema } from '@eva/schemas'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 import { generateTempPassword, generateUniqueCoachSlug } from '@/services/org/org.service'
+import { generateUniqueInviteCode } from '@/services/coach/coach.service'
 import { resolveTeamManagerContext, writeTeamAuditEvent } from '@/services/team/team.service'
 import { getTierMaxClients } from '@/lib/constants'
+
+/** Mapea mensajes crudos de triggers/constraints de DB a copy amigable en español. */
+function friendlyTeamError(msg: string | undefined): string {
+    if (!msg) return 'No se pudo completar la acción. Intenta de nuevo.'
+    if (msg.includes('seat_limit')) return 'Límite de cupos alcanzado. Pide al administrador ampliar el equipo.'
+    if (msg.includes('owner')) return 'Esta acción solo la puede hacer el owner del equipo.'
+    if (msg.includes('can_manage')) return 'Solo el owner puede cambiar los permisos de gestión.'
+    if (msg.includes('duplicate key') || msg.includes('unique')) return 'Ese coach ya está en el equipo.'
+    return 'No se pudo completar la acción. Intenta de nuevo.'
+}
 
 /** Cupos activos usados ahora (user-scoped: RLS techo). Pre-check de UX; el trigger seat_guard es el guard duro. */
 async function countActiveMembers(supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>, teamId: string): Promise<number> {
@@ -60,12 +71,19 @@ export async function createTeamCoachAction(teamId: string, formData: FormData) 
     if (authError || !authData.user) return { error: authError?.message ?? 'No se pudo crear el usuario' }
     const newCoachId = authData.user.id
 
-    const slug = await generateUniqueCoachSlug(admin, parsed.data.full_name)
+    // invite_code: coaches.invite_code tiene DEFAULT '' y el trigger generador solo dispara con
+    // NULL -> si se omite, la fila queda con '' y el 2do coach colisiona en el unique. Lo generamos
+    // explicito (mismo patron que el flujo enterprise).
+    const [slug, inviteCode] = await Promise.all([
+        generateUniqueCoachSlug(admin, parsed.data.full_name),
+        generateUniqueInviteCode(admin),
+    ])
     const { error: coachError } = await admin.from('coaches').insert({
         id: newCoachId,
         full_name: parsed.data.full_name,
         brand_name: team.name,
         slug,
+        invite_code: inviteCode,
         primary_color: team.primary_color ?? '#10B981',
         logo_url: team.logo_url,
         subscription_status: 'active',
@@ -76,7 +94,7 @@ export async function createTeamCoachAction(teamId: string, formData: FormData) 
     })
     if (coachError) {
         await admin.auth.admin.deleteUser(newCoachId)
-        return { error: coachError.message }
+        return { error: friendlyTeamError(coachError.message) }
     }
 
     const { error: memberError } = await supabase.from('team_members').insert({
@@ -89,7 +107,7 @@ export async function createTeamCoachAction(teamId: string, formData: FormData) 
     if (memberError) {
         await admin.from('coaches').delete().eq('id', newCoachId)
         await admin.auth.admin.deleteUser(newCoachId)
-        return { error: memberError.message }
+        return { error: friendlyTeamError(memberError.message) }
     }
 
     await writeTeamAuditEvent(supabase, {
@@ -125,18 +143,27 @@ export async function addExistingCoachAction(teamId: string, formData: FormData)
     }
 
     const email = sanitizePlatformEmail(parsed.data.email)
-    const { data: users } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
-    const targetUser = users?.users.find(u => u.email === email)
-    if (!targetUser) return { error: 'No existe un coach con ese email.' }
+    // Lookup directo por email (RPC SECURITY DEFINER) -> no falla con >1000 usuarios como listUsers paginado.
+    const { data: targetCoachId } = await (admin.rpc as unknown as (fn: string, args: Record<string, string>) => PromiseLike<{ data: string | null }>)(
+        'get_coach_id_by_email', { p_email: email },
+    )
+    if (!targetCoachId) return { error: 'No existe un coach con ese email.' }
 
-    const { data: targetCoach } = await admin.from('coaches').select('id').eq('id', targetUser.id).maybeSingle()
-    if (!targetCoach) return { error: 'Ese usuario no es un coach en la plataforma.' }
+    // Aislamiento team<->enterprise: no absorber a un coach que ya pertenece a una organización.
+    const { data: orgMember } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('user_id', targetCoachId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (orgMember) return { error: 'Ese coach pertenece a una organización; no se puede sumar a un equipo.' }
 
     const { data: existing } = await admin
         .from('team_members')
         .select('id, status, deleted_at')
         .eq('team_id', teamId)
-        .eq('coach_id', targetCoach.id)
+        .eq('coach_id', targetCoachId)
         .maybeSingle()
 
     if (existing && existing.status === 'active' && !existing.deleted_at) {
@@ -148,16 +175,16 @@ export async function addExistingCoachAction(teamId: string, formData: FormData)
             .from('team_members')
             .update({ status: 'active', deleted_at: null, display_role: parsed.data.display_role || null })
             .eq('id', existing.id)
-        if (reErr) return { error: reErr.message }
+        if (reErr) return { error: friendlyTeamError(reErr.message) }
     } else {
         const { error: insErr } = await supabase.from('team_members').insert({
             team_id: teamId,
-            coach_id: targetCoach.id,
+            coach_id: targetCoachId,
             display_role: parsed.data.display_role || null,
             can_manage: false,
             status: 'active',
         })
-        if (insErr) return { error: insErr.message }
+        if (insErr) return { error: friendlyTeamError(insErr.message) }
     }
 
     await writeTeamAuditEvent(supabase, {
@@ -165,7 +192,7 @@ export async function addExistingCoachAction(teamId: string, formData: FormData)
         actorCoachId: user.id,
         action: 'team_member.linked',
         targetType: 'coach',
-        targetId: targetCoach.id,
+        targetId: targetCoachId,
         metadata: { email, reactivated: !!existing },
     })
 
@@ -192,7 +219,7 @@ export async function removeTeamMemberAction(teamId: string, memberId: string) {
         .from('team_members')
         .update({ status: 'revoked', deleted_at: new Date().toISOString() })
         .eq('id', memberId)
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyTeamError(error.message) }
 
     await writeTeamAuditEvent(supabase, {
         teamId,
@@ -215,15 +242,17 @@ export async function setTeamMemberManageAction(teamId: string, memberId: string
 
     const { data: member } = await admin
         .from('team_members')
-        .select('id, coach_id')
+        .select('id, coach_id, can_manage')
         .eq('id', memberId)
         .eq('team_id', teamId)
         .maybeSingle()
     if (!member) return { error: 'Miembro no encontrado.' }
     if (member.coach_id === team.owner_coach_id) return { error: 'El owner ya gestiona el equipo.' }
+    // No-op idempotente: ya está en el estado pedido -> evita bitácora duplicada (doble click/tabs).
+    if (member.can_manage === canManage) return { success: true }
 
     const { error } = await supabase.from('team_members').update({ can_manage: canManage }).eq('id', memberId)
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyTeamError(error.message) }
 
     await writeTeamAuditEvent(supabase, {
         teamId,
@@ -238,31 +267,20 @@ export async function setTeamMemberManageAction(teamId: string, memberId: string
     return { success: true }
 }
 
-/** Transfiere la propiedad del team a otro miembro activo. Solo owner. */
+/** Transfiere la propiedad del team a otro miembro activo. Solo owner. Atómico vía RPC. */
 export async function transferTeamOwnershipAction(teamId: string, newOwnerCoachId: string) {
     const ctx = await resolveTeamManagerContext(teamId, { requireOwner: true })
     if ('error' in ctx) return { error: ctx.error }
-    const { supabase, admin, user, team } = ctx
+    const { supabase, user, team } = ctx
 
     if (newOwnerCoachId === team.owner_coach_id) return { error: 'Ese coach ya es el owner.' }
 
-    const { data: target } = await admin
-        .from('team_members')
-        .select('id')
-        .eq('team_id', teamId)
-        .eq('coach_id', newOwnerCoachId)
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
-    if (!target) return { error: 'El nuevo owner debe ser un miembro activo del equipo.' }
-
-    // Mientras el llamante AUN es owner: deja al nuevo owner y al saliente como co-gestores
-    // (can_manage requiere owner; tras el swap ya no podria setearse desde el saliente).
-    await supabase.from('team_members').update({ can_manage: true }).eq('team_id', teamId).eq('coach_id', newOwnerCoachId)
-    await supabase.from('team_members').update({ can_manage: true }).eq('team_id', teamId).eq('coach_id', team.owner_coach_id)
-
-    const { error } = await supabase.from('teams').update({ owner_coach_id: newOwnerCoachId }).eq('id', teamId)
-    if (error) return { error: error.message }
+    // RPC atómico (una tx): auto-verifica owner=auth.uid() + nuevo owner activo, setea can_manage de
+    // ambos y hace el swap. Antes eran 3 writes sueltos sin tx -> fallo parcial dejaba estado inconsistente.
+    const { error } = await (supabase.rpc as unknown as (fn: string, args: Record<string, string>) => PromiseLike<{ error: { message: string } | null }>)(
+        'transfer_team_ownership', { p_team_id: teamId, p_new_owner: newOwnerCoachId },
+    )
+    if (error) return { error: friendlyTeamError(error.message) }
 
     await writeTeamAuditEvent(supabase, {
         teamId,
