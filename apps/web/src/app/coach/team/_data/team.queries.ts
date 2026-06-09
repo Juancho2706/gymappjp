@@ -18,6 +18,8 @@ export type TeamOverview = {
     members: TeamMemberView[]
     activeMemberCount: number
     poolClientCount: number
+    isOwner: boolean
+    isManager: boolean
 }
 
 /**
@@ -67,6 +69,9 @@ export const getCoachTeamOverview = cache(async (): Promise<{ userId: string | n
                 }
             })
 
+            const isOwner = t.owner_coach_id === user.id
+            const isManager = isOwner || (members.find((m) => m.coach_id === user.id)?.can_manage ?? false)
+
             return {
                 id: t.id,
                 name: t.name,
@@ -76,6 +81,8 @@ export const getCoachTeamOverview = cache(async (): Promise<{ userId: string | n
                 members,
                 activeMemberCount: members.length,
                 poolClientCount: poolRes.count ?? 0,
+                isOwner,
+                isManager,
             }
         })
     )

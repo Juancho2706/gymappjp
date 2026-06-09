@@ -14,3 +14,5 @@ export * from './workout'
 // SERVER-ONLY (web / Next.js server actions only)
 // OrgCreateCoachSchema, OrgInviteSchema, etc. reference org_id / coach_id from DB.
 export * from './org'
+// Team (pool) member management schemas.
+export * from './team'

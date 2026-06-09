@@ -1,21 +1,11 @@
 import { redirect } from 'next/navigation'
-import { Users, UserCheck, Crown } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Users, UserCheck } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getCoachTeamOverview } from './_data/team.queries'
+import TeamMembersManager from './_components/TeamMembersManager'
 
 export const metadata = { title: 'Mi Equipo' }
-
-function initialsOf(name: string): string {
-    return name
-        .split(' ')
-        .map((s) => s[0])
-        .filter(Boolean)
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
-}
 
 export default async function CoachTeamPage() {
     const { userId, teams } = await getCoachTeamOverview()
@@ -97,45 +87,17 @@ export default async function CoachTeamPage() {
                         </div>
 
                         <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base">Miembros ({team.activeMemberCount})</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <ul className="flex flex-col divide-y divide-border/50">
-                                    {team.members.map((m) => {
-                                        const isMemberOwner = m.coach_id === team.owner_coach_id
-                                        return (
-                                            <li key={m.id} className="flex items-center justify-between gap-4 py-3">
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    <Avatar size="default">
-                                                        <AvatarFallback>{initialsOf(m.name)}</AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex min-w-0 flex-col">
-                                                        <span className="truncate font-semibold">
-                                                            {m.name}
-                                                            {m.coach_id === userId && (
-                                                                <span className="font-normal text-muted-foreground"> (vos)</span>
-                                                            )}
-                                                        </span>
-                                                        <span className="truncate text-xs text-muted-foreground">
-                                                            {m.display_role || 'Coach'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex shrink-0 items-center gap-2">
-                                                    {isMemberOwner ? (
-                                                        <Badge variant="default" className="gap-1">
-                                                            <Crown className="h-3 w-3" />
-                                                            Owner
-                                                        </Badge>
-                                                    ) : (
-                                                        m.can_manage && <Badge variant="secondary">Gestor</Badge>
-                                                    )}
-                                                </div>
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
+                            <CardContent className="p-5">
+                                <TeamMembersManager
+                                    teamId={team.id}
+                                    ownerCoachId={team.owner_coach_id}
+                                    userId={userId}
+                                    isManager={team.isManager}
+                                    isOwner={team.isOwner}
+                                    seatLimit={team.seat_limit}
+                                    activeMemberCount={team.activeMemberCount}
+                                    members={team.members}
+                                />
                             </CardContent>
                         </Card>
                     </section>
