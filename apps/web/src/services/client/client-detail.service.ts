@@ -32,6 +32,7 @@ import {
 } from '@/lib/workout/programWeekVariant'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
+import { logTeamClientAccess } from '@/services/team/team.service'
 
 async function getCoachClientScope(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
     const workspace = await resolvePreferredWorkspace(supabase, userId)
@@ -244,6 +245,19 @@ export const getClientProfileData = cache(async (clientId: string) => {
 
     if (clientErr || !client) {
         throw new Error("Client not found")
+    }
+
+    // Bitacora de acceso a datos de salud (Ley 21.719): SOLO cuando un coach del pool accede a un
+    // alumno del team (viaTeam). Standalone/enterprise no generan bitacora de team. Best-effort.
+    if (viaTeam && client.team_id) {
+        await logTeamClientAccess(supabase, {
+            teamId: client.team_id,
+            actorCoachId: user.id,
+            clientId,
+            resource: 'client_profile',
+            action: 'view',
+            metadata: { full_name: client.full_name ?? null },
+        })
     }
 
     // ─── B0: PRs, volumen por grupo (30d), detalle de comidas ─────────────

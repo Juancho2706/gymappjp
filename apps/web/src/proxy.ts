@@ -520,6 +520,23 @@ export async function proxy(request: NextRequest) {
         tRequestHeaders.set('x-workspace-brand-source', 'organization')
         tRequestHeaders.set('x-client-base-path', `/t/${tTeamSlug}`)
 
+        // Consent gate (Ley 21.719): el alumno de pool debe otorgar acceso multidisciplinario
+        // ANTES de entrar (varios profesionales ven sus datos de salud). /consent se sirve sin rewrite.
+        if (tRest === '/consent') {
+            if (tCtx.has_pool_consent === true) {
+                const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/dashboard`; return NextResponse.redirect(r)
+            }
+            const resp = NextResponse.next({ request: { headers: tRequestHeaders } })
+            supabaseResponse.cookies.getAll().forEach(c => resp.cookies.set(c.name, c.value))
+            return resp
+        }
+        if (tCtx.has_pool_consent !== true) {
+            const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/consent`
+            const redirect = NextResponse.redirect(r)
+            supabaseResponse.cookies.getAll().forEach(c => redirect.cookies.set(c.name, c.value))
+            return redirect
+        }
+
         // Pool / orfandad (sin coach activo) → holding team-branded, sin rewrite.
         if (!tCtx.coach_slug || tCtx.coach_active !== true) {
             if (tRest === '/dashboard' || tRest === '/') {
