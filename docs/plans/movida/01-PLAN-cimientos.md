@@ -30,6 +30,8 @@ $$;
 ```
 La policy SELECT de `team_members` DEBE usar este helper (que bypasea RLS), nunca un `EXISTS` directo sobre `team_members` (replica el fix `20260517150000`).
 
+> ⚠️ **LECCIÓN DEL INCIDENTE 2026-06-09 (CRÍTICA — corrige este plan):** `is_team_member(<columna de la fila>)` dentro de una policy de **hot table** se evalúa **POR FILA** (el planner no puede cachear una función SECURITY DEFINER que recibe dato de la fila) → timeouts masivos → prod caída. **NO usar `is_team_member(rowcol)`/`EXISTS` correlacionado en policies de tablas con tráfico/volumen.** Patrón correcto (aplicado en prod, migr. `20260609160000`/`170000`): **helpers `SECURITY DEFINER STABLE` set-returning SIN parámetro de fila** (`current_user_team_ids()`, `current_user_pool_client_ids()`, `current_user_managed_team_ids()`, `current_user_pool_coach_ids()`, etc.) usados como **`col IN (SELECT helper())`** → InitPlan (1 eval/query) + hash join indexado. `is_team_member`/`is_team_manager` se mantienen SOLO para llamadas puntuales por RPC desde la app, NO dentro de policies de hot tables. Validar `EXPLAIN ANALYZE` (loops=1) + `get_advisors` (0 `auth_rls_initplan`) antes de aplicar. Ver [[feedback-db-changes-research-validate]].
+
 ### A.bis — Identidad y app del alumno de pool (LOCKED, prerrequisito)
 
 - **Scope:** agregar `team` al CHECK de `client_memberships` (`standalone|enterprise|team`) — expand-contract. Membership de pool: `scope='team'`, `team_id`, `client_id`, `account_id`. `clients.team_id` setea la pertenencia del registro cliente. `clients.coach_id` = creador/dueño.
