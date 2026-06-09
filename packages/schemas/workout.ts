@@ -58,6 +58,7 @@ export const WorkoutBlockSchema = z.object({
     progression_type: z.enum(['weight', 'reps']).nullable().optional(),
     progression_value: z.preprocess(preprocessOptionalFiniteProgression, optionalProgression),
     section: z.enum(['warmup', 'main', 'cooldown']).optional(),
+    section_template_id: z.string().uuid().nullable().optional(),
     is_override: z.boolean().optional(),
 })
 

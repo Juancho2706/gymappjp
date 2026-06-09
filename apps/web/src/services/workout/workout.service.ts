@@ -53,6 +53,19 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
     return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
 }
 
+// Areas (workout_section_templates) — expand-contract: cada bloque persiste section legacy + section_template_id.
+// Mapea la seccion legacy al area system; preserva un section_template_id explicito si ya viene del payload/origen.
+const LEGACY_SECTION_TEMPLATE_ID: Record<'warmup' | 'main' | 'cooldown', string> = {
+    warmup: '0000a5ec-0000-0000-0000-000000000001',
+    main: '0000a5ec-0000-0000-0000-000000000010',
+    cooldown: '0000a5ec-0000-0000-0000-000000000020',
+}
+function sectionTemplateIdFor(section: string | null | undefined, existing?: string | null): string {
+    if (existing) return existing
+    const s = section === 'warmup' || section === 'cooldown' ? section : 'main'
+    return LEGACY_SECTION_TEMPLATE_ID[s]
+}
+
 /**
  * Resuelve si el coach puede gestionar (full-access) un cliente: por propiedad directa
  * (coach_id + org) o por pertenencia al pool del team (solo standalone). Devuelve viaTeam
@@ -345,6 +358,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                 progression_type: block.progression_type ?? null,
                 progression_value: block.progression_value ?? null,
                 section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+                section_template_id: sectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id),
                 is_override: block.is_override ?? false,
             }))
 
@@ -574,6 +588,7 @@ export async function duplicateWorkoutProgramAction(
                 progression_type: block.progression_type ?? null,
                 progression_value: block.progression_value ?? null,
                 section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+                section_template_id: sectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id),
                 is_override: false,
             }))
 
@@ -791,6 +806,7 @@ export async function assignProgramToClientsAction(
                         progression_type: block.progression_type ?? null,
                         progression_value: block.progression_value ?? null,
                         section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+                        section_template_id: sectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id),
                         is_override: false,
                     }))
 
@@ -1026,6 +1042,7 @@ function mapDbBlockToWorkoutInput(b: any): WorkoutBlockInput {
         progression_type: progType,
         progression_value: b.progression_value ?? null,
         section: b.section && ['warmup', 'main', 'cooldown'].includes(b.section) ? b.section : 'main',
+        section_template_id: sectionTemplateIdFor(b.section, (b as { section_template_id?: string | null }).section_template_id),
         is_override: !!b.is_override,
     }
 }

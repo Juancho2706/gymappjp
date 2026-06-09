@@ -61,7 +61,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         .select(`
             id, title, assigned_date, day_of_week, week_variant, program_id,
             workout_blocks (
-                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, superset_group, progression_type, progression_value, is_override,
+                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, section_template_id, superset_group, progression_type, progression_value, is_override,
                 exercises ( id, name, muscle_group, video_url, gif_url, instructions )
             )
         `)
