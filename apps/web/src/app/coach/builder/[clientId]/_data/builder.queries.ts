@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
 
 type Client = Pick<Tables<'clients'>, 'id' | 'full_name' | 'email'>
 type Exercise = Tables<'exercises'>
@@ -20,13 +21,18 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+    // Pool (solo standalone): un miembro del team puede abrir el builder de un alumno del pool.
+    // RLS es el techo; si no es viaTeam mantenemos el scoping coach_id/org exacto (cero regresion).
+    const viaTeam = orgId ? false : await currentUserHasTeamAccessToClient(supabase, clientId)
 
     let clientQuery = supabase
         .from('clients')
         .select('id, full_name, email')
         .eq('id', clientId)
-        .eq('coach_id', user.id)
-    clientQuery = applyOrgScope(clientQuery, orgId)
+    if (!viaTeam) {
+        clientQuery = clientQuery.eq('coach_id', user.id)
+        clientQuery = applyOrgScope(clientQuery, orgId)
+    }
 
     // Fase 2C / F7: scope exercises to the active workspace — standalone shows system + own,
     // enterprise shows system + the org catalog (RLS enforces the boundary either way).
@@ -59,9 +65,11 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
                 )
             `)
             .eq('id', programId)
-            .eq('coach_id', user.id)
-        programQuery = applyOrgScope(programQuery, orgId)
-        const { data: program } = await programQuery.single()
+        if (!viaTeam) {
+            programQuery = programQuery.eq('coach_id', user.id)
+            programQuery = applyOrgScope(programQuery, orgId)
+        }
+        const { data: program } = await programQuery.maybeSingle()
         initialProgram = program ?? null
     }
 
