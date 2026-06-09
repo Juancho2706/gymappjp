@@ -1,6 +1,10 @@
 # NEXT STEPS — Prioridades actuales
 
-> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-08 (sesión de revisión multi-lente).
+> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-09 (sesión A.bis + F + A.bis3).
+
+### Estado actual (2026-06-09 tarde) — Plan 1 Cimientos casi cerrado
+**Hecho + en prod + testeado:** team pool (tablas/RLS optimizada/governance/áreas pipeline), guards de app (read/list/write workout+nutrición), entitlements + Settings>Módulos, **app del alumno de pool `/t/[team_slug]`** (proxy + RPC + login + branding), **consentimiento Ley 21.719** (gate + grant + bitácora `team_access_logs` + bucket privado salud), **gestión de miembros `/coach/team`** (crear/vincular/sacar/co-gestor/transferir, con hardening post review adversarial). Commits `7443ad5`, `63c0f53`, `c40dac2` en `feat/movida-platform`.
+**Próximo (en orden):** (1) **CEO panel `/admin` Teams** (provisión de teams + `seat_limit` por UI; hoy es por script). (2) **A.bis2** flujos de entrada al pool (sembrar `client_memberships` scope `team`). (3) **C Settings hub** (marca team vs personal). (4) **E awareness** (`last_edited_by` + badge). (5) **Builder áreas UI** (specced en `specs/movida-areas/`). Luego Plan 2 (entrenamiento polimórfico + cardio).
 
 ## Prioridad #1 — "Movida powered by EVA"
 
