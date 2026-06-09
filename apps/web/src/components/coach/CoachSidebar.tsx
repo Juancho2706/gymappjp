@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
     LayoutDashboard,
     Users,
+    UsersRound,
     Dumbbell,
     Settings,
     LogOut,
@@ -42,6 +43,12 @@ const navItems = [
         href: '/coach/clients',
         label: 'Alumnos',
         icon: Users,
+    },
+    {
+        href: '/coach/team',
+        label: 'Equipo',
+        shortLabel: 'Team',
+        icon: UsersRound,
     },
     {
         href: '/coach/workout-programs',
@@ -93,9 +100,10 @@ interface CoachSidebarProps {
     } | null
     workspaces?: WorkspaceSummary[]
     currentWorkspaceLabel?: string
+    hasTeam?: boolean
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, hasTeam }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -161,6 +169,8 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             },
         ]
         : navItems.filter((item) => {
+            // "Equipo" solo si el coach pertenece a un team (pool).
+            if (item.href === '/coach/team' && !hasTeam) return false
             if (!isOrgManaged) return true
             return item.href !== '/coach/settings' && item.href !== '/coach/subscription'
         })

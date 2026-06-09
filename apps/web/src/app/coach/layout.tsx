@@ -15,6 +15,7 @@ import { generateBrandPalette } from '@/lib/color-utils'
 import { getCoachEnterpriseContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace, listUserWorkspaces } from '@/services/auth/workspace.service'
+import { getCoachActiveTeamIds } from '@/services/auth/team.service'
 
 export const metadata: Metadata = {
     title: {
@@ -52,6 +53,8 @@ export default async function CoachLayout({
     ])
     const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
     const enterpriseContext = await getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null)
+    // Team (pool) membership: gobierna la visibilidad del item "Equipo" en el sidebar.
+    const hasTeam = (await getCoachActiveTeamIds(supabase, coach.id)).length > 0
     const currentWorkspaceLabel =
         activeWorkspace?.label ??
         enterpriseContext?.orgName ??
@@ -125,6 +128,7 @@ export default async function CoachLayout({
                     enterpriseContext={enterpriseContext}
                     workspaces={workspaces}
                     currentWorkspaceLabel={currentWorkspaceLabel}
+                    hasTeam={hasTeam}
                 />
                 <CoachMainWrapper>
                     {/* Background ambient glow */}
