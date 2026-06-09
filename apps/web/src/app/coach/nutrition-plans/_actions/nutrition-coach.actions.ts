@@ -16,6 +16,7 @@ import {
   type NutritionPlanCycleUpsertInput,
 } from '@/lib/nutrition-plan-cycle-schema'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
 
 // ─── Tipos públicos (usados por componentes del builder) ───────────────────────
 
@@ -237,13 +238,19 @@ export async function upsertClientNutritionPlanJson(
 
   const { id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, meals } = parsed.data
 
+  // Pool (solo standalone): un miembro del team puede editar la nutricion de un alumno del pool.
+  // supabase es user-scoped -> RLS (politicas team) es el techo real; solo relajamos el filtro app.
+  const viaTeam = orgId ? false : await currentUserHasTeamAccessToClient(supabase, clientId)
+
   try {
     let clientQuery = supabase
       .from('clients')
       .select('id')
       .eq('id', clientId)
-      .eq('coach_id', coachId)
-    clientQuery = applyOrgScope(clientQuery, orgId)
+    if (!viaTeam) {
+      clientQuery = clientQuery.eq('coach_id', coachId)
+      clientQuery = applyOrgScope(clientQuery, orgId)
+    }
     const { data: client } = await clientQuery.maybeSingle()
     if (!client) return { success: false, error: 'Alumno no encontrado.' }
 
@@ -284,8 +291,10 @@ export async function upsertClientNutritionPlanJson(
         .from('nutrition_plans')
         .update(planData)
         .eq('id', currentPlanId)
-        .eq('coach_id', coachId)
-      updatePlanQuery = applyOrgScope(updatePlanQuery, orgId)
+      if (!viaTeam) {
+        updatePlanQuery = updatePlanQuery.eq('coach_id', coachId)
+        updatePlanQuery = applyOrgScope(updatePlanQuery, orgId)
+      }
       const { error: updateError } = await updatePlanQuery
 
       if (updateError) throw updateError
