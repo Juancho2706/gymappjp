@@ -19,6 +19,7 @@ export type WorkspaceClientRow = {
     full_name: string | null
     coach_id: string | null
     org_id: string | null
+    team_id: string | null
 }
 
 export type WorkspaceMemberRow = {
@@ -82,7 +83,7 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
             .maybeSingle(),
         db
             .from('clients')
-            .select('id, full_name, coach_id, org_id')
+            .select('id, full_name, coach_id, org_id, team_id')
             .eq('id', userId)
             .maybeSingle(),
         db
@@ -121,7 +122,7 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
         ...(client?.coach_id ? [client.coach_id] : []),
     ] as string[])]
 
-    const [orgsRes, coachesRes] = await Promise.all([
+    const [orgsRes, coachesRes, clientTeamRes] = await Promise.all([
         orgIds.length
             ? db
                 .from('organizations')
@@ -134,13 +135,20 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
                 .select('id, full_name, brand_name, slug, logo_url, primary_color, subscription_status, active_org_id')
                 .in('id', coachIds)
             : Promise.resolve({ data: [] }),
+        client?.team_id
+            ? db.from('teams').select('id, name, slug, deleted_at').eq('id', client.team_id).maybeSingle()
+            : Promise.resolve({ data: null }),
     ])
+
+    const ctRaw = (clientTeamRes.data ?? null) as { id: string; name: string; slug: string; deleted_at: string | null } | null
+    const clientTeam = ctRaw && !ctRaw.deleted_at ? { id: ctRaw.id, name: ctRaw.name, slug: ctRaw.slug } : null
 
     return {
         coach,
         client,
         members,
         teams,
+        clientTeam,
         orgs: (orgsRes.data ?? []) as WorkspaceOrgRow[],
         coaches: (coachesRes.data ?? []) as WorkspaceCoachRow[],
     }

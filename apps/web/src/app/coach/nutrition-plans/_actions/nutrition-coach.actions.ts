@@ -107,7 +107,7 @@ async function requireCoachNutritionScope(coachId: string): Promise<CoachNutriti
   const { supabase, error } = await requireCoachSession(coachId)
   if (!supabase) return { ok: false, error: error ?? 'No autorizado.' }
   const workspace = await resolvePreferredWorkspace(supabase, coachId)
-  if (!workspace || workspace.type === 'coach_standalone') return { ok: true, supabase, orgId: null }
+  if (!workspace || workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { ok: true, supabase, orgId: null }
   if (workspace.type === 'enterprise_coach') return { ok: true, supabase, orgId: workspace.orgId }
   return { ok: false, error: 'Workspace invalido para gestionar nutricion.' }
 }

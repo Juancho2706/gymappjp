@@ -41,7 +41,7 @@ type CoachWorkoutScope =
 
 async function getCoachWorkoutScope(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<CoachWorkoutScope> {
     const workspace = await resolvePreferredWorkspace(supabase, userId)
-    if (!workspace || workspace.type === 'coach_standalone') return { ok: true, orgId: null }
+    if (!workspace || workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { ok: true, orgId: null }
     if (workspace.type === 'enterprise_coach') return { ok: true, orgId: workspace.orgId }
     return { ok: false, error: 'Workspace invalido para gestionar entrenamientos.' }
 }

@@ -32,7 +32,24 @@ export async function resolveBrandForWorkspace(db: DB, workspace: ActiveWorkspac
         }
     }
 
-    const coachId = workspace.type === 'coach_standalone' ? workspace.coachId : workspace.coachId
+    // Team (pool): marca del TEAM, nunca la personal del coach. source='organization' para que el
+    // alumno de pool y el coach en contexto team vean la marca del equipo.
+    if (workspace.type === 'coach_team' || workspace.type === 'student_team') {
+        const { data: team } = await db.from('teams').select('name, primary_color, logo_url').eq('id', workspace.teamId).maybeSingle()
+        const teamPrimary = team?.primary_color ?? SYSTEM_PRIMARY_COLOR
+        return {
+            workspaceType: workspace.type,
+            brandName: team?.name ?? 'EVA',
+            primaryColor: teamPrimary,
+            logoUrl: team?.logo_url ?? BRAND_APP_ICON,
+            loaderText: team?.name ?? 'EVA',
+            loaderIconMode: 'eva',
+            splashBgColor: teamPrimary,
+            source: 'organization',
+        }
+    }
+
+    const coachId = workspace.coachId
     const coach = await findWorkspaceCoachBrand(db, coachId)
     const coachPrimary = coach?.primary_color ?? SYSTEM_PRIMARY_COLOR
 

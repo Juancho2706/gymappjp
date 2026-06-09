@@ -23,12 +23,12 @@ export function canAccessWorkspacePath(workspace: ActiveWorkspace, pathname: str
     }
 
     if (pathname.startsWith('/coach/')) {
-        if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach') return { allowed: true }
+        if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach' || workspace.type === 'coach_team') return { allowed: true }
         return { allowed: false, reason: 'coach_routes_require_coach_workspace', redirectTo: defaultWorkspaceHome(workspace) }
     }
 
     if (pathname.startsWith('/c/')) {
-        if (workspace.type === 'student_standalone' || workspace.type === 'student_enterprise') return { allowed: true }
+        if (workspace.type === 'student_standalone' || workspace.type === 'student_enterprise' || workspace.type === 'student_team') return { allowed: true }
         return { allowed: false, reason: 'student_routes_require_student_workspace', redirectTo: defaultWorkspaceHome(workspace) }
     }
 
@@ -37,7 +37,8 @@ export function canAccessWorkspacePath(workspace: ActiveWorkspace, pathname: str
 
 export function defaultWorkspaceHome(workspace: ActiveWorkspace | WorkspaceSummary): string {
     if (workspace.type === 'enterprise_staff') return 'slug' in workspace && workspace.slug ? `/org/${workspace.slug}` : '/org/login'
-    if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach') return '/coach/dashboard'
+    if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach' || workspace.type === 'coach_team') return '/coach/dashboard'
+    if (workspace.type === 'student_team') return 'slug' in workspace && workspace.slug ? `/t/${workspace.slug}/dashboard` : '/login'
     if ('slug' in workspace && workspace.slug) return `/c/${workspace.slug}/dashboard`
     return '/login'
 }

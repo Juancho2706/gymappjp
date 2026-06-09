@@ -18,7 +18,9 @@ export type CoachScope =
 
 export async function resolveCoachScope(db: DB, userId: string): Promise<CoachScope> {
     const workspace = await resolvePreferredWorkspace(db, userId)
-    if (!workspace || workspace.type === 'coach_standalone') {
+    // coach_team se trata como scope org_id NULL; el acceso al pool lo gatean los checks per-client
+    // (currentUserHasTeamAccessToClient) + RLS, igual que un coach standalone con alumnos de pool.
+    if (!workspace || workspace.type === 'coach_standalone' || workspace.type === 'coach_team') {
         return { ok: true, orgId: null, isEnterprise: false, coachId: userId }
     }
     if (workspace.type === 'enterprise_coach') {

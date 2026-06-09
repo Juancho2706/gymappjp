@@ -15,6 +15,7 @@ export type WorkspaceType =
     | 'coach_team'
     | 'student_standalone'
     | 'student_enterprise'
+    | 'student_team'
 
 export type EnterpriseStaffRole = 'org_owner' | 'org_admin' | 'ops' | 'analyst' | 'brand_manager'
 
@@ -56,6 +57,12 @@ export type ActiveWorkspace =
         clientId: string
         orgId: string
         coachId: string | null
+    }
+    | {
+        type: 'student_team'
+        userId: string
+        clientId: string
+        teamId: string
     }
 
 export type WorkspaceSummary = ActiveWorkspace & {
