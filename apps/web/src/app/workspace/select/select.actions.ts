@@ -29,7 +29,8 @@ export async function selectWorkspaceAction(formData: FormData) {
     // F10: keep coaches.active_org_id in sync with the chosen workspace, then refresh the
     // session so the JWT auth hook (which reads active_org_id) re-issues claims for the
     // right org immediately — avoiding a window where the DB preference and the JWT disagree.
-    if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach') {
+    if (workspace.type === 'coach_standalone' || workspace.type === 'enterprise_coach' || workspace.type === 'coach_team') {
+        // team y standalone limpian active_org_id (org_id NULL); enterprise lo setea.
         const nextOrgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
         await createServiceRoleClient().from('coaches').update({ active_org_id: nextOrgId }).eq('id', user.id)
         await supabase.auth.refreshSession()

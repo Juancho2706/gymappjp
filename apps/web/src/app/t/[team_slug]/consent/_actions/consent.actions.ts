@@ -1,12 +1,11 @@
 'use server'
 
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
 export type TeamConsentState = {
     error?: string
-    success?: boolean
-    redirectUrl?: string
 }
 
 const CONSENT_TEXT_VERSION = 'v1'
@@ -100,5 +99,7 @@ export async function grantTeamConsentAction(
         if (insertError) return { error: 'No se pudo registrar el consentimiento. Intenta de nuevo.' }
     }
 
-    return { success: true, redirectUrl: `/t/${teamSlug}/dashboard` }
+    // Redirect server-side (evita el race del client push + el doble-submit). El proxy /t,
+    // con has_pool_consent=true, deja pasar a la app del alumno con marca del team.
+    redirect(`/t/${teamSlug}/dashboard`)
 }

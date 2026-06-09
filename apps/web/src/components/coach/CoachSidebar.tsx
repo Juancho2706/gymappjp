@@ -157,7 +157,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
 
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
     const isSubscriptionBlocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has(subscriptionStatus ?? '')
-    const isOrgManaged = subscriptionStatus === 'org_managed'
+    const isOrgManaged = subscriptionStatus === 'org_managed' || subscriptionStatus === 'team_managed'
     const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
     const visibleNavItems = isSubscriptionBlocked
         ? [

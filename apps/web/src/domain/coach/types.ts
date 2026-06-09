@@ -12,6 +12,7 @@ export type SubscriptionStatus =
     | 'pending_payment'
     | 'pending_email'
     | 'org_managed'
+    | 'team_managed'
 
 export type TierConfig = {
     label: string

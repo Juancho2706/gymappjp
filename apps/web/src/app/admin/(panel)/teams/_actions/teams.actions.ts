@@ -90,8 +90,8 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
         ])
         const { error: coachError } = await adminClient.from('coaches').insert({
             id: ownerCoachId, full_name: owner_full_name, brand_name: name, slug: coachSlug, invite_code: inviteCode,
-            primary_color: '#10B981', subscription_status: 'active', subscription_tier: 'free',
-            billing_cycle: 'monthly', payment_provider: 'admin', max_clients: getTierMaxClients('free'),
+            primary_color: '#10B981', subscription_status: 'team_managed', subscription_tier: 'scale',
+            billing_cycle: 'monthly', payment_provider: 'admin', max_clients: getTierMaxClients('scale'),
         })
         if (coachError) {
             await adminClient.auth.admin.deleteUser(ownerCoachId)

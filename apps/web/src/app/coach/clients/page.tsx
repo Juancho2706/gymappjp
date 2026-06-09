@@ -18,9 +18,10 @@ export default async function CoachClientsPage() {
     const supabase = await createClient()
     const workspace = await resolvePreferredWorkspace(supabase, coachSession.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+    const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
 
     const [clients, headersList, pulse] = await Promise.all([
-        getCoachClientsWithPrograms(coachSession.id, orgId),
+        getCoachClientsWithPrograms(coachSession.id, { orgId, activeTeamId }),
         headers(),
         getCoachClientsPulse(coachSession.id, orgId),
     ])

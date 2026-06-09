@@ -20,7 +20,7 @@ function asEnterpriseStaffRole(role: string): EnterpriseStaffRole {
 }
 
 export async function listUserWorkspaces(db: DB, userId: string): Promise<WorkspaceSummary[]> {
-    const { coach, client, members, orgs, coaches } = await findWorkspaceIdentityRows(db, userId)
+    const { coach, client, members, teams, orgs, coaches } = await findWorkspaceIdentityRows(db, userId)
     const orgById = new Map(orgs.map(org => [org.id, org]))
     const coachById = new Map(coaches.map(row => [row.id, row]))
 
@@ -66,6 +66,19 @@ export async function listUserWorkspaces(db: DB, userId: string): Promise<Worksp
                 slug: org.slug,
             })
         }
+    }
+
+    // Team (pool) workspaces — un coach puede ser standalone + enterprise + team a la vez.
+    for (const team of teams) {
+        workspaces.push({
+            type: 'coach_team',
+            userId,
+            coachId: coach?.id ?? userId,
+            teamId: team.teamId,
+            label: `${team.name} - Equipo`,
+            brandName: team.name,
+            slug: team.slug,
+        })
     }
 
     if (client?.org_id) {
@@ -184,6 +197,7 @@ export function workspaceKey(workspace: ActiveWorkspace): string {
     if (workspace.type === 'coach_standalone') return `${workspace.type}:${workspace.coachId}`
     if (workspace.type === 'enterprise_coach') return `${workspace.type}:${workspace.orgId}:${workspace.coachId}`
     if (workspace.type === 'enterprise_staff') return `${workspace.type}:${workspace.orgId}:${workspace.memberId}`
+    if (workspace.type === 'coach_team') return `${workspace.type}:${workspace.teamId}`
     if (workspace.type === 'student_standalone') return `${workspace.type}:${workspace.clientId}:${workspace.coachId}`
     return `${workspace.type}:${workspace.clientId}:${workspace.orgId}`
 }

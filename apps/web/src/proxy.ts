@@ -340,12 +340,12 @@ export async function proxy(request: NextRequest) {
         }
 
         if (
-            coach.subscription_status === 'org_managed' &&
+            (coach.subscription_status === 'org_managed' || coach.subscription_status === 'team_managed') &&
             (pathname.startsWith('/coach/subscription') || pathname.startsWith('/coach/settings'))
         ) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/coach/dashboard'
-            redirectUrl.searchParams.set('managed_by', 'org')
+            redirectUrl.searchParams.set('managed_by', coach.subscription_status === 'team_managed' ? 'team' : 'org')
             return NextResponse.redirect(redirectUrl)
         }
 
@@ -516,6 +516,17 @@ export async function proxy(request: NextRequest) {
         tRequestHeaders.set('x-coach-primary-color', tStr(tCtx.primary_color) || SYSTEM_PRIMARY_COLOR)
         tRequestHeaders.set('x-coach-logo-url', tStr(tCtx.logo_url).trim() || BRAND_APP_ICON)
         tRequestHeaders.set('x-coach-subscription-tier', 'pro')
+        // White-label tokens neutros del team (aún sin columnas de marca avanzada) -> ningún child
+        // del /c puede leer la marca personal del coach. loader-icon-mode='eva' (NO 'coach') evita
+        // que el logo personal del coach aparezca en el loader del alumno de pool.
+        tRequestHeaders.set('x-coach-accent-light', '')
+        tRequestHeaders.set('x-coach-accent-dark', '')
+        tRequestHeaders.set('x-coach-logo-url-dark', '')
+        tRequestHeaders.set('x-coach-neutral-tint', 'false')
+        tRequestHeaders.set('x-coach-loader-text', '')
+        tRequestHeaders.set('x-coach-use-custom-loader', 'false')
+        tRequestHeaders.set('x-coach-loader-text-color', '')
+        tRequestHeaders.set('x-coach-loader-icon-mode', 'eva')
         tRequestHeaders.set('x-client-use-brand-colors', 'true')
         tRequestHeaders.set('x-workspace-brand-source', 'organization')
         tRequestHeaders.set('x-client-base-path', `/t/${tTeamSlug}`)

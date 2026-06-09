@@ -86,11 +86,12 @@ export async function createTeamCoachAction(teamId: string, formData: FormData) 
         invite_code: inviteCode,
         primary_color: team.primary_color ?? '#10B981',
         logo_url: team.logo_url,
-        subscription_status: 'active',
-        subscription_tier: 'free',
+        // Coach gestionado por el team: acceso completo, sin billing individual (como org_managed).
+        subscription_status: 'team_managed',
+        subscription_tier: 'scale',
         billing_cycle: 'monthly',
         payment_provider: 'admin',
-        max_clients: getTierMaxClients('free'),
+        max_clients: getTierMaxClients('scale'),
     })
     if (coachError) {
         await admin.auth.admin.deleteUser(newCoachId)

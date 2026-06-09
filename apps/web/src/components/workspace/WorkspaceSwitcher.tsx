@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useRef, useEffect } from 'react'
-import { Building2, ChevronDown, Dumbbell, GraduationCap, Loader2, UserCog } from 'lucide-react'
+import { Building2, ChevronDown, Dumbbell, GraduationCap, Loader2, UserCog, UsersRound } from 'lucide-react'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import { selectWorkspaceAction } from '@/app/workspace/select/select.actions'
 import { workspaceKey } from '@/services/auth/workspace.service'
@@ -17,6 +17,7 @@ function iconFor(type: string) {
     if (type === 'enterprise_staff') return UserCog
     if (type === 'enterprise_coach') return Building2
     if (type === 'coach_standalone') return Dumbbell
+    if (type === 'coach_team') return UsersRound
     return GraduationCap
 }
 

@@ -29,6 +29,14 @@ export type WorkspaceMemberRow = {
     status: string
 }
 
+export type WorkspaceTeamRow = {
+    memberId: string
+    teamId: string
+    name: string
+    slug: string
+    ownerCoachId: string
+}
+
 export type WorkspaceOrgRow = {
     id: string
     slug: string
@@ -66,7 +74,7 @@ export type WorkspacePreferenceRow = {
 }
 
 export async function findWorkspaceIdentityRows(db: DB, userId: string) {
-    const [coachRes, clientRes, membersRes] = await Promise.all([
+    const [coachRes, clientRes, membersRes, teamsRes] = await Promise.all([
         db
             .from('coaches')
             .select('id, full_name, brand_name, slug, logo_url, primary_color, subscription_status, active_org_id')
@@ -83,11 +91,25 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
             .eq('user_id', userId)
             .eq('status', 'active')
             .is('deleted_at', null),
+        db
+            .from('team_members')
+            .select('id, team_id, teams(id, name, slug, owner_coach_id, deleted_at)')
+            .eq('coach_id', userId)
+            .eq('status', 'active')
+            .is('deleted_at', null),
     ])
 
     const coach = (coachRes.data ?? null) as WorkspaceCoachRow | null
     const client = (clientRes.data ?? null) as WorkspaceClientRow | null
     const members = (membersRes.data ?? []) as WorkspaceMemberRow[]
+
+    const teams: WorkspaceTeamRow[] = []
+    for (const row of (teamsRes.data ?? [])) {
+        const t = (row as { teams?: unknown }).teams
+        const team = (Array.isArray(t) ? t[0] : t) as { id: string; name: string; slug: string; owner_coach_id: string; deleted_at: string | null } | null
+        if (!team || team.deleted_at) continue
+        teams.push({ memberId: (row as { id: string }).id, teamId: team.id, name: team.name, slug: team.slug, ownerCoachId: team.owner_coach_id })
+    }
 
     const orgIds = [...new Set([
         ...members.map(member => member.org_id),
@@ -118,6 +140,7 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
         coach,
         client,
         members,
+        teams,
         orgs: (orgsRes.data ?? []) as WorkspaceOrgRow[],
         coaches: (coachesRes.data ?? []) as WorkspaceCoachRow[],
     }

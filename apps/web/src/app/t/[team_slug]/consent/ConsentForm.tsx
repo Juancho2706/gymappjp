@@ -1,8 +1,7 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
-import { useRouter } from 'next/navigation'
 import { Loader2, ShieldCheck } from 'lucide-react'
 import { grantTeamConsentAction, type TeamConsentState } from './_actions/consent.actions'
 import { cn } from '@/lib/utils'
@@ -39,11 +38,6 @@ function SubmitButton({ primaryColor, disabled }: { primaryColor: string; disabl
 export default function ConsentForm({ teamSlug, primaryColor, brandName }: Props) {
     const [state, formAction] = useActionState(grantTeamConsentAction, initialState)
     const [accepted, setAccepted] = useState(false)
-    const router = useRouter()
-
-    useEffect(() => {
-        if (state.success && state.redirectUrl) router.push(state.redirectUrl)
-    }, [state, router])
 
     return (
         <form action={formAction} className="bg-card border border-border rounded-2xl p-6 shadow-xl text-left">
