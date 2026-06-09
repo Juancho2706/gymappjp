@@ -31,6 +31,7 @@ import {
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
 
 async function getCoachClientScope(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
     const workspace = await resolvePreferredWorkspace(supabase, userId)
@@ -58,8 +59,13 @@ async function assertCoachClientReadAccess(
 
     const { data: client, error } = await clientQuery.maybeSingle()
     if (error) throw new Error('Client access check failed')
-    if (!client) throw new Error('Client not found')
-    return scope
+    if (client) return { ...scope, viaTeam: false as const }
+    // Team pool fallback: a pool member can access pool clients (RLS-verified).
+    // Worst case here is over-deny (UX), never a leak: every downstream read still runs under RLS.
+    if (await currentUserHasTeamAccessToClient(supabase, clientId)) {
+        return { ...scope, viaTeam: true as const }
+    }
+    throw new Error('Client not found')
 }
 
 export const getClientProfileData = cache(async (clientId: string) => {
@@ -67,7 +73,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error("Unauthorized")
-    const { orgId } = await assertCoachClientReadAccess(supabase, user.id, clientId)
+    const { orgId, viaTeam } = await assertCoachClientReadAccess(supabase, user.id, clientId)
 
     // Fetch client base data
     let clientQuery = supabase
@@ -78,9 +84,13 @@ export const getClientProfileData = cache(async (clientId: string) => {
             coaches ( slug )
         `)
         .eq('id', clientId)
-        .eq('coach_id', user.id)
 
-    clientQuery = orgId ? clientQuery.eq('org_id', orgId) : clientQuery.is('org_id', null)
+    // Pool (team) clients: authorized via team membership; let RLS gate the row.
+    // Standalone/enterprise: keep the exact pre-existing coach_id + org scoping (zero regression).
+    if (!viaTeam) {
+        clientQuery = clientQuery.eq('coach_id', user.id)
+        clientQuery = orgId ? clientQuery.eq('org_id', orgId) : clientQuery.is('org_id', null)
+    }
     const clientPromise = clientQuery.maybeSingle()
 
     // Fetch active workout program
