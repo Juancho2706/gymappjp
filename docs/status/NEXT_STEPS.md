@@ -27,6 +27,17 @@ Concepto pool = **`team`** (NO `workspace` — colisión). Alumno de pool = scop
 - [ ] Migración `teams`/`team_members`/`clients.team_id` + `client_memberships` scope `team` + RLS por-tabla + helper `is_team_member()` + tests `team-isolation` + `get_advisors` — **en un branch de Supabase Pro** (create→apply→seed→test→advisors→merge→**delete mismo día**); ver Director §3.
 - [ ] Pedir a Ani: export de ~300 alumnos · confirmar responsable del tratamiento (DPA) · valores kcal/macro por grupo de intercambio · fichas ISAK + reportes bioimpedancia · hoja del screening del kine. (kg/lb resuelto: ambos, default kg.)
 
+### Disciplina de testing (OBLIGATORIA desde 2026-06-09 — lección del smoke con 5 bugs)
+Cada ola, ANTES de reportar: `pnpm typecheck` + `pnpm build` + `pnpm test` (vitest) + suites SQL
+(`tests/team/*.sql` tx-rollback + `identity-consistency.sql` read-only) + **E2E Playwright del flujo
+tocado** (`npx playwright test tests/team/team-flows.spec.ts --workers=1` con credenciales `E2E_POOL_*`
+por env, contra dev server). Toda feature de UI nueva trae su spec E2E del happy path EN LA MISMA tanda.
+NUNCA reportar "verde" sin haber corrido la UI real: DB+build verdes NO garantizan el flujo (los 5 bugs
+del smoke pasaron typecheck+build+RLS). Reglas E2E (research 2026): sin `networkidle` (RSC streaming);
+`waitForURL` excluyendo la página de login del patrón; error overlay = `[data-nextjs-dialog]` en shadow
+DOM (no `nextjs-portal`); asserts bidireccionales en aislamiento (A aparece Y B no aparece); workers=1
+contra Supabase remota.
+
 ## Reglas clave
 - **Supabase Pro (1 mes, hasta ~2026-07-09): validar en branch efímero → merge a prod en verde → borrar branch el mismo día** (branch cobra por hora; créditos/Spend Cap NO lo cubren). Sigue: aditivo/expand-contract, migrations idempotentes/forward-only, snapshot pre-merge, data sintética + RLS tests + `get_advisors` en verde, **jamás destructivo sobre data de clientes**. Al expirar: volver a aditivo-en-LIVE.
 - Cálculo puro en `packages/calc/`; i18n keys es/en en el mismo commit; reglas mobile (`h-dvh`, safe-area) en módulos nuevos; kill-switch de operador + drift-guard de `database.types.ts` en CI.
