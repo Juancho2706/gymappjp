@@ -42,7 +42,7 @@ async function uniqueTeamSlug(admin: DB, base: string): Promise<string | null> {
 
 /** CEO crea un team + su owner (coach existente por email, o cuenta nueva). Aditivo. */
 export async function createTeamAction(_prev: CreateTeamResult | null, formData: FormData): Promise<CreateTeamResult> {
-    const { adminClient } = await assertAdmin()
+    const { user, adminClient } = await assertAdmin()
 
     const parsed = CreateTeamAdminSchema.safeParse(Object.fromEntries(formData))
     if (!parsed.success) return { error: parsed.error.issues.map(i => i.message).join(', ') }
@@ -107,7 +107,8 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
         .single()
     if (teamError || !team) {
         if (createdNewOwner) { await adminClient.from('coaches').delete().eq('id', ownerCoachId); await adminClient.auth.admin.deleteUser(ownerCoachId) }
-        return { error: teamError?.message ?? 'No se pudo crear el equipo' }
+        const friendly = teamError?.code === '23505' ? 'Ese identificador (slug) ya está en uso. Probá otro.' : (teamError?.message ?? 'No se pudo crear el equipo')
+        return { error: friendly }
     }
 
     const { error: memberError } = await adminClient.from('team_members').insert({
@@ -121,7 +122,7 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
 
     await logAdminAction(adminClient, 'team.create', 'teams', team.id, {
         slug, seat_limit, owner_mode, owner_email: email, modules: enabledModules,
-    })
+    }, user.email)
     revalidatePath('/admin/teams')
 
     return createdNewOwner
@@ -133,7 +134,7 @@ export type UpdateTeamResult = { success: true } | { error: string }
 
 /** CEO edita nombre, seat_limit y módulos de un team. No baja el cupo por debajo de los activos. */
 export async function updateTeamAction(teamId: string, formData: FormData): Promise<UpdateTeamResult> {
-    const { adminClient } = await assertAdmin()
+    const { user, adminClient } = await assertAdmin()
 
     const parsed = UpdateTeamAdminSchema.safeParse(Object.fromEntries(formData))
     if (!parsed.success) return { error: parsed.error.issues.map(i => i.message).join(', ') }
@@ -154,7 +155,7 @@ export async function updateTeamAction(teamId: string, formData: FormData): Prom
         .is('deleted_at', null)
     if (error) return { error: error.message }
 
-    await logAdminAction(adminClient, 'team.update', 'teams', teamId, { name, seat_limit, modules: enabledModules })
+    await logAdminAction(adminClient, 'team.update', 'teams', teamId, { name, seat_limit, modules: enabledModules }, user.email)
     revalidatePath('/admin/teams')
     return { success: true }
 }

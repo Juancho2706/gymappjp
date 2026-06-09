@@ -25,10 +25,16 @@ export async function logAdminAction(
     action: string,
     targetTable: string,
     targetId: string | null,
-    payload?: unknown
+    payload?: unknown,
+    actorEmail?: string | null
 ) {
-    const { data: userData } = await adminClient.auth.getUser()
-    const email = userData.user?.email ?? 'unknown'
+    // adminClient es service-role (sin sesión) -> getUser() devuelve null y el log quedaba como
+    // 'unknown'. Preferir el email del admin resuelto por assertAdmin (trazabilidad real).
+    let email = actorEmail ?? undefined
+    if (!email) {
+        const { data: userData } = await adminClient.auth.getUser()
+        email = userData.user?.email ?? 'unknown'
+    }
 
     // Fire-and-forget audit log — don't block the action on logging failures
     try {
