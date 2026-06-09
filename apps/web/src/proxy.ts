@@ -468,6 +468,78 @@ export async function proxy(request: NextRequest) {
     }
 
     // ============================================================
+    // 1.6 TEAM ALUMNO AREA — /t/[team_slug]/* (pool plano, same-domain). Espejo de /e/.
+    // Sirve al alumno de pool la MISMA app del cliente, TEAM-branded, manteniendo la URL en
+    // /t/[team_slug]/* (rewrite a /c/[coach_slug]/* + x-client-base-path). Una RPC gated resuelve todo.
+    // Los guards de estado del alumno (suspended/onboarding/force-pwd) los maneja la app /c destino.
+    // ============================================================
+    if (pathname.startsWith('/t/')) {
+        const tSegs = pathname.split('/')          // ['', 't', teamSlug, ...rest]
+        const tTeamSlug = tSegs[2] ?? ''
+        if (!tTeamSlug) return supabaseResponse
+        const tRest = '/' + tSegs.slice(3).join('/')
+
+        // Nuevo RPC aún no en database.types.ts -> cast localizado de la función rpc (existe en prod, migr. 20260609190000).
+        const teamCtx = (slug: string) =>
+            (supabase.rpc as unknown as (fn: string, args: Record<string, string>) => PromiseLike<{ data: unknown }>)(
+                'get_team_alumno_context', { p_team_slug: slug },
+            )
+
+        if (tRest === '/login') {
+            if (user) {
+                const { data: ctx } = await teamCtx(tTeamSlug)
+                if (ctx && (ctx as Record<string, unknown>).is_member === true) {
+                    const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/dashboard`
+                    return NextResponse.redirect(r)
+                }
+            }
+            return supabaseResponse
+        }
+
+        if (!user) {
+            const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/login`
+            const redirect = NextResponse.redirect(r)
+            supabaseResponse.cookies.getAll().forEach(c => redirect.cookies.set(c.name, c.value))
+            return redirect
+        }
+
+        const { data: tCtxRaw } = await teamCtx(tTeamSlug)
+        const tCtx = tCtxRaw as Record<string, unknown> | null
+        if (!tCtx) { const r = request.nextUrl.clone(); r.pathname = '/not-found'; return NextResponse.redirect(r) }
+        if (tCtx.is_member !== true) { const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/login`; return NextResponse.redirect(r) }
+
+        const tStr = (v: unknown) => (typeof v === 'string' ? v : '')
+        const tRequestHeaders = new Headers(request.headers)
+        tRequestHeaders.set('x-coach-id', tStr(tCtx.coach_id) || tStr(tCtx.team_id))
+        tRequestHeaders.set('x-coach-slug', tStr(tCtx.coach_slug))
+        tRequestHeaders.set('x-coach-brand-name', tStr(tCtx.name) || 'EVA')
+        tRequestHeaders.set('x-coach-primary-color', tStr(tCtx.primary_color) || SYSTEM_PRIMARY_COLOR)
+        tRequestHeaders.set('x-coach-logo-url', tStr(tCtx.logo_url).trim() || BRAND_APP_ICON)
+        tRequestHeaders.set('x-coach-subscription-tier', 'pro')
+        tRequestHeaders.set('x-client-use-brand-colors', 'true')
+        tRequestHeaders.set('x-workspace-brand-source', 'organization')
+        tRequestHeaders.set('x-client-base-path', `/t/${tTeamSlug}`)
+
+        // Pool / orfandad (sin coach activo) → holding team-branded, sin rewrite.
+        if (!tCtx.coach_slug || tCtx.coach_active !== true) {
+            if (tRest === '/dashboard' || tRest === '/') {
+                const resp = NextResponse.next({ request: { headers: tRequestHeaders } })
+                supabaseResponse.cookies.getAll().forEach(c => resp.cookies.set(c.name, c.value))
+                return resp
+            }
+            const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/dashboard`
+            return NextResponse.redirect(r)
+        }
+
+        // Alumno con coach → app del cliente bajo /c vía rewrite (URL queda en /t).
+        const tRewriteUrl = request.nextUrl.clone()
+        tRewriteUrl.pathname = `/c/${tStr(tCtx.coach_slug)}${tRest === '/' ? '/dashboard' : tRest}`
+        const tResponse = NextResponse.rewrite(tRewriteUrl, { request: { headers: tRequestHeaders } })
+        supabaseResponse.cookies.getAll().forEach(c => tResponse.cookies.set(c.name, c.value))
+        return tResponse
+    }
+
+    // ============================================================
     // 2. WHITE-LABEL route handling for /c/[coach_slug]/*
     // ============================================================
     if (pathname.startsWith('/c/')) {
