@@ -3267,6 +3267,7 @@ export type Database = {
         }[]
       }
       immutable_unaccent: { Args: { "": string }; Returns: string }
+      get_enterprise_alumno_context: { Args: { p_org_slug: string }; Returns: Json }
       get_org_branding: { Args: { p_org_id: string }; Returns: Json }
       is_active_org_member: { Args: { p_org_id: string }; Returns: boolean }
       is_coach_active_org_member: {

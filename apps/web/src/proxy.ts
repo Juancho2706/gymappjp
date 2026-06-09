@@ -366,6 +366,108 @@ export async function proxy(request: NextRequest) {
     }
 
     // ============================================================
+    // 1.5 ENTERPRISE ALUMNO AREA — /e/[org_slug]/* (F3, same-domain)
+    // Serves the enterprise student the SAME client app, ORG-branded, keeping the visible URL at
+    // /e/[org_slug]/* by rewriting to /c/[coach_slug]/* + an x-client-base-path header (the client
+    // app — F2 — builds its in-app links from that base). One gated RPC resolves everything.
+    // ============================================================
+    if (pathname.startsWith('/e/')) {
+        const eSegs = pathname.split('/')          // ['', 'e', orgSlug, ...rest]
+        const eOrgSlug = eSegs[2] ?? ''
+        if (!eOrgSlug) return supabaseResponse
+        const eRest = '/' + eSegs.slice(3).join('/')   // '/dashboard' | '/login' | '/'
+
+        // Login page is public. If already a member of this org, send them into the area.
+        if (eRest === '/login') {
+            if (user) {
+                const { data: ctx } = await supabase.rpc('get_enterprise_alumno_context', { p_org_slug: eOrgSlug })
+                if (ctx && (ctx as Record<string, unknown>).is_member === true) {
+                    const r = request.nextUrl.clone()
+                    r.pathname = `/e/${eOrgSlug}/dashboard`
+                    return NextResponse.redirect(r)
+                }
+            }
+            return supabaseResponse
+        }
+
+        // Protected — require auth
+        if (!user) {
+            const r = request.nextUrl.clone()
+            r.pathname = `/e/${eOrgSlug}/login`
+            const redirect = NextResponse.redirect(r)
+            supabaseResponse.cookies.getAll().forEach(c => redirect.cookies.set(c.name, c.value))
+            return redirect
+        }
+
+        const { data: eCtxRaw } = await supabase.rpc('get_enterprise_alumno_context', { p_org_slug: eOrgSlug })
+        const eCtx = eCtxRaw as Record<string, unknown> | null
+        if (!eCtx) {
+            const r = request.nextUrl.clone(); r.pathname = '/not-found'
+            return NextResponse.redirect(r)
+        }
+        if (eCtx.is_member !== true) {
+            const r = request.nextUrl.clone(); r.pathname = `/e/${eOrgSlug}/login`
+            return NextResponse.redirect(r)
+        }
+
+        // Org white-label request headers (mirror the /c org-branding block) + base path so the
+        // client app builds links under /e/[org_slug].
+        const eStr = (v: unknown) => (typeof v === 'string' ? v : '')
+        const eRequestHeaders = new Headers(request.headers)
+        eRequestHeaders.set('x-coach-id', eStr(eCtx.coach_id) || eStr(eCtx.org_id))
+        eRequestHeaders.set('x-coach-slug', eStr(eCtx.coach_slug))
+        eRequestHeaders.set('x-coach-brand-name', eStr(eCtx.name) || 'EVA')
+        eRequestHeaders.set('x-coach-primary-color', eStr(eCtx.primary_color) || SYSTEM_PRIMARY_COLOR)
+        eRequestHeaders.set('x-coach-logo-url', eStr(eCtx.logo_url).trim() || BRAND_APP_ICON)
+        eRequestHeaders.set('x-coach-subscription-tier', 'pro')
+        eRequestHeaders.set('x-coach-accent-light', eStr(eCtx.accent_light).trim())
+        eRequestHeaders.set('x-coach-accent-dark', eStr(eCtx.accent_dark).trim())
+        eRequestHeaders.set('x-coach-logo-url-dark', eStr(eCtx.logo_url_dark).trim())
+        eRequestHeaders.set('x-coach-neutral-tint', String(eCtx.neutral_tint === true))
+        eRequestHeaders.set('x-coach-loader-text', eStr(eCtx.loader_text).trim())
+        eRequestHeaders.set('x-coach-use-custom-loader', String(eCtx.use_custom_loader === true))
+        eRequestHeaders.set('x-coach-loader-text-color', eStr(eCtx.loader_text_color).trim())
+        eRequestHeaders.set('x-coach-loader-icon-mode', eCtx.loader_icon_mode === 'text' ? 'none' : 'coach')
+        eRequestHeaders.set('x-client-use-brand-colors', 'true')
+        eRequestHeaders.set('x-workspace-brand-source', 'organization')
+        eRequestHeaders.set('x-client-base-path', `/e/${eOrgSlug}`)
+
+        const eBlocked = eCtx.is_archived === true || eCtx.is_active === false
+        if (eBlocked && !eRest.includes('/suspended')) {
+            const r = request.nextUrl.clone(); r.pathname = `/e/${eOrgSlug}/suspended`
+            return NextResponse.redirect(r)
+        }
+
+        // Pool / orphan (no active coach) → org-branded holding dashboard, no rewrite.
+        if (!eCtx.coach_slug || eCtx.coach_active !== true) {
+            if (eRest === '/dashboard' || eRest === '/') {
+                const resp = NextResponse.next({ request: { headers: eRequestHeaders } })
+                supabaseResponse.cookies.getAll().forEach(c => resp.cookies.set(c.name, c.value))
+                return resp
+            }
+            const r = request.nextUrl.clone(); r.pathname = `/e/${eOrgSlug}/dashboard`
+            return NextResponse.redirect(r)
+        }
+
+        // Force-password / onboarding guards (targets are /e so this branch re-runs cleanly).
+        if (!eBlocked && eCtx.force_password_change === true && !eRest.includes('/change-password')) {
+            const r = request.nextUrl.clone(); r.pathname = `/e/${eOrgSlug}/change-password`
+            return NextResponse.redirect(r)
+        }
+        if (!eBlocked && eCtx.force_password_change !== true && eCtx.onboarding_completed === false && !eRest.includes('/onboarding')) {
+            const r = request.nextUrl.clone(); r.pathname = `/e/${eOrgSlug}/onboarding`
+            return NextResponse.redirect(r)
+        }
+
+        // Assigned alumno → render the client app under /c via rewrite (URL stays /e).
+        const eRewriteUrl = request.nextUrl.clone()
+        eRewriteUrl.pathname = `/c/${eStr(eCtx.coach_slug)}${eRest === '/' ? '/dashboard' : eRest}`
+        const eResponse = NextResponse.rewrite(eRewriteUrl, { request: { headers: eRequestHeaders } })
+        supabaseResponse.cookies.getAll().forEach(c => eResponse.cookies.set(c.name, c.value))
+        return eResponse
+    }
+
+    // ============================================================
     // 2. WHITE-LABEL route handling for /c/[coach_slug]/*
     // ============================================================
     if (pathname.startsWith('/c/')) {

@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e38]:
+    - complementary [ref=e39]:
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - img "Gym Prueba logo" [ref=e43]
+          - generic [ref=e44]:
+            - paragraph [ref=e45]: Mi Coach
+            - paragraph [ref=e46]: Gym Prueba
+        - button "Contraer menú" [ref=e47]:
+          - img [ref=e48]
+      - navigation [ref=e52]:
+        - link "Inicio" [ref=e53] [cursor=pointer]:
+          - /url: /e/org-prueba/dashboard
+          - img [ref=e54]
+          - generic [ref=e57]: Inicio
+          - img [ref=e58]
+        - link "Plan Alimenticio" [ref=e60] [cursor=pointer]:
+          - /url: /e/org-prueba/nutrition
+          - img [ref=e61]
+          - generic [ref=e64]: Plan Alimenticio
+        - link "Aprender" [ref=e65] [cursor=pointer]:
+          - /url: /e/org-prueba/exercises
+          - img [ref=e66]
+          - generic [ref=e72]: Aprender
+        - link "Check-in" [ref=e73] [cursor=pointer]:
+          - /url: /e/org-prueba/check-in
+          - img [ref=e74]
+          - generic [ref=e77]: Check-in
+        - button "Instalar App" [ref=e78]:
+          - img [ref=e79]
+          - generic [ref=e81]: Instalar App
+      - button "Cerrar sesión" [ref=e83]:
+        - img [ref=e84]
+        - generic [ref=e87]: Cerrar sesión
+    - main [ref=e88]:
+      - status [ref=e91]:
+        - generic [ref=e94]: EVA
+      - link "Privacidad · ARCO" [ref=e96] [cursor=pointer]:
+        - /url: mailto:privacidad@eva-app.cl
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e33] [cursor=pointer]:
+    - img [ref=e34]
+  - alert [ref=e37]: Dashboard | Gym Prueba

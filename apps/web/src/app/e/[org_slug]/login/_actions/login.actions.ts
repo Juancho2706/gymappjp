@@ -116,11 +116,11 @@ export async function enterpriseClientLoginAction(
     }
     await setLastWorkspace(supabase, workspace)
 
-    // Assigned alumno → org-branded client app (proxy paints org white-label via client.org_id).
-    // Pool/orphan alumno (no coach yet) → the enterprise area's holding screen.
-    const redirectUrl = coachSlug
-        ? `/c/${coachSlug}/dashboard`
-        : `/e/${orgSlug}/dashboard`
+    // F3: always land in the enterprise area. The proxy /e branch keeps the URL at /e/[org]/* and
+    // rewrites to the org-branded client app for assigned alumnos (or serves the holding screen for
+    // pool/orphan). coachSlug is unused for routing now but kept above for the workspace summary.
+    void coachSlug
+    const redirectUrl = `/e/${orgSlug}/dashboard`
 
     return { success: true, redirectUrl }
 }
