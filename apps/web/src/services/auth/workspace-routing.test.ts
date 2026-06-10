@@ -50,6 +50,12 @@ describe('canAccessWorkspacePath', () => {
         expect(canAccessWorkspacePath(ws.coachTeam, '/coach/settings').allowed).toBe(false)
     })
 
+    it('coach_team SÍ accede a /coach/settings/modules (toggles del team, gobernanza del owner)', () => {
+        expect(canAccessWorkspacePath(ws.coachTeam, '/coach/settings/modules').allowed).toBe(true)
+        expect(canAccessWorkspacePath(ws.coachStandalone, '/coach/settings/modules').allowed).toBe(true)
+        expect(canAccessWorkspacePath(ws.enterpriseCoach, '/coach/settings/modules').allowed).toBe(false)
+    })
+
     it('student_team accede a /c/* (lo sirve el rewrite del proxy /t)', () => {
         expect(canAccessWorkspacePath(ws.studentTeam, '/c/josefit/dashboard').allowed).toBe(true)
     })

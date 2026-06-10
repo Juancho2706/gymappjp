@@ -23,11 +23,11 @@ export type TeamOverview = {
 }
 
 /**
- * Overview del/los team(s) del coach actual para la pagina "Mi Equipo".
- * Cliente user-scoped -> RLS es el techo: `teams` devuelve solo los teams donde el
- * coach es miembro (team_teams_member_select); `team_members`/`clients` igual.
+ * Overview del team ACTIVO para la pagina "Mi Equipo" (modulo exclusivo del contexto coach_team).
+ * `activeTeamId` viene del workspace activo: un coach en dos pools solo ve el del contexto actual.
+ * Cliente user-scoped -> RLS es el techo: `teams` devuelve solo teams donde el coach es miembro.
  */
-export const getCoachTeamOverview = cache(async (): Promise<{ userId: string | null; teams: TeamOverview[] }> => {
+export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<{ userId: string | null; teams: TeamOverview[] }> => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { userId: null, teams: [] }
@@ -35,6 +35,7 @@ export const getCoachTeamOverview = cache(async (): Promise<{ userId: string | n
     const { data: teams } = await supabase
         .from('teams')
         .select('id, name, slug, seat_limit, owner_coach_id')
+        .eq('id', activeTeamId)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
 

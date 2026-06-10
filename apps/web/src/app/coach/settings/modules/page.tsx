@@ -16,10 +16,10 @@ export default async function CoachModulesPage() {
     return (
         <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
             <Link
-                href="/coach/settings"
+                href={ctx.scope === 'team' ? '/coach/team' : '/coach/settings'}
                 className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-                <ArrowLeft className="h-4 w-4" /> Opciones
+                <ArrowLeft className="h-4 w-4" /> {ctx.scope === 'team' ? 'Mi Equipo' : 'Opciones'}
             </Link>
 
             <div className="mb-6 flex items-start gap-3">

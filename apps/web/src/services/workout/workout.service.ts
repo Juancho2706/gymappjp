@@ -8,7 +8,7 @@ import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildProgramAssignedEmail } from '@/lib/email/transactional-templates'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
-import { currentUserHasTeamAccessToClient, getCoachActiveTeamIds } from '@/services/auth/team.service'
+import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
 
 // Re-export types for backward compatibility
 export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@eva/schemas'
@@ -36,13 +36,14 @@ export type AssignProgramOptions = {
 // --- ACTIONS ---
 
 type CoachWorkoutScope =
-    | { ok: true; orgId: string | null }
+    | { ok: true; orgId: string | null; activeTeamId: string | null }
     | { ok: false; error: string }
 
 async function getCoachWorkoutScope(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<CoachWorkoutScope> {
     const workspace = await resolvePreferredWorkspace(supabase, userId)
-    if (!workspace || workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { ok: true, orgId: null }
-    if (workspace.type === 'enterprise_coach') return { ok: true, orgId: workspace.orgId }
+    if (!workspace || workspace.type === 'coach_standalone') return { ok: true, orgId: null, activeTeamId: null }
+    if (workspace.type === 'coach_team') return { ok: true, orgId: null, activeTeamId: workspace.teamId }
+    if (workspace.type === 'enterprise_coach') return { ok: true, orgId: workspace.orgId, activeTeamId: null }
     return { ok: false, error: 'Workspace invalido para gestionar entrenamientos.' }
 }
 
@@ -67,39 +68,53 @@ function sectionTemplateIdFor(section: string | null | undefined, existing?: str
 }
 
 /**
- * Resuelve si el coach puede gestionar (full-access) un cliente: por propiedad directa
- * (coach_id + org) o por pertenencia al pool del team (solo standalone). Devuelve viaTeam
- * para que el caller acote mutaciones admin (service-role NO pasa por RLS).
+ * Resuelve si el coach puede gestionar (full-access) un cliente SEGÚN EL WORKSPACE ACTIVO
+ * (separación estricta de contextos): team activo ⇒ SOLO alumnos de ESE pool (colaborativo,
+ * sin filtro coach_id; RLS techo); enterprise ⇒ coach_id+org; standalone ⇒ propios NO-pool.
+ * Mutar un alumno de pool exige estar EN el contexto de ese team (no cualquier membresía).
+ * Devuelve viaTeam para que el caller acote mutaciones admin (service-role NO pasa por RLS).
  */
 async function resolveCoachClientAccess(
     db: Awaited<ReturnType<typeof createClient>>,
     coachId: string,
     clientId: string,
-    orgId: string | null
+    orgId: string | null,
+    activeTeamId: string | null = null
 ): Promise<{ ok: boolean; viaTeam: boolean }> {
+    if (activeTeamId) {
+        const { data: poolClient } = await db
+            .from('clients')
+            .select('id')
+            .eq('id', clientId)
+            .eq('team_id', activeTeamId)
+            .is('org_id', null)
+            .maybeSingle()
+        if (poolClient && (await currentUserHasTeamAccessToClient(db, clientId))) {
+            return { ok: true, viaTeam: true }
+        }
+        return { ok: false, viaTeam: false }
+    }
+
     let clientQuery = db
         .from('clients')
         .select('id')
         .eq('id', clientId)
         .eq('coach_id', coachId)
     clientQuery = applyOrgScope(clientQuery, orgId)
+    if (!orgId) clientQuery = clientQuery.is('team_id', null)
     const { data: client, error } = await clientQuery.maybeSingle()
-    if (error) return { ok: false, viaTeam: false }
-    if (client) return { ok: true, viaTeam: false }
-    // Pool fallback: solo standalone (orgId null). RLS valida la fila real.
-    if (!orgId && (await currentUserHasTeamAccessToClient(db, clientId))) {
-        return { ok: true, viaTeam: true }
-    }
-    return { ok: false, viaTeam: false }
+    if (error || !client) return { ok: false, viaTeam: false }
+    return { ok: true, viaTeam: false }
 }
 
 async function assertCoachCanManageWorkoutClient(
     db: Awaited<ReturnType<typeof createClient>>,
     coachId: string,
     clientId: string,
-    orgId: string | null
+    orgId: string | null,
+    activeTeamId: string | null = null
 ) {
-    const { ok } = await resolveCoachClientAccess(db, coachId, clientId, orgId)
+    const { ok } = await resolveCoachClientAccess(db, coachId, clientId, orgId, activeTeamId)
     if (!ok) throw new Error('Alumno no encontrado.')
 }
 
@@ -169,7 +184,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
 
     // Verificar que el coach pueda gestionar el alumno (propio o del pool del team)
     if (clientId) {
-        const access = await resolveCoachClientAccess(supabase, user.id, clientId, scope.orgId)
+        const access = await resolveCoachClientAccess(supabase, user.id, clientId, scope.orgId, scope.activeTeamId)
         if (!access.ok) return { error: 'Alumno no encontrado.' }
     }
 
@@ -394,7 +409,7 @@ export async function deleteWorkoutProgramAction(programId: string, clientId: st
 
     // Validar gestion del alumno (propio o del pool) antes de borrar su programa.
     if (clientId) {
-        const access = await resolveCoachClientAccess(supabase, user.id, clientId, scope.orgId)
+        const access = await resolveCoachClientAccess(supabase, user.id, clientId, scope.orgId, scope.activeTeamId)
         if (!access.ok) return { error: 'Alumno no encontrado.' }
     }
 
@@ -431,7 +446,7 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
 
     // Validar gestion del alumno (propio o del pool) antes de borrar su plan.
     if (clientId) {
-        const access = await resolveCoachClientAccess(supabase, user.id, clientId, scope.orgId)
+        const access = await resolveCoachClientAccess(supabase, user.id, clientId, scope.orgId, scope.activeTeamId)
         if (!access.ok) return { error: 'Alumno no encontrado.' }
     }
 
@@ -663,30 +678,24 @@ export async function assignProgramToClientsAction(
 
         if (templateError || !template) throw new Error('Plantilla no encontrada.')
 
+        // Destinos válidos según el workspace ACTIVO (3-vías, sin cruce de contextos):
+        // team = alumnos de ESE pool; enterprise = propios de la org; standalone = propios NO-pool.
         let ownedClientsQuery = adminDb
             .from('clients')
             .select('id, full_name, email')
-            .eq('coach_id', user.id)
             .in('id', clientIds)
-        ownedClientsQuery = applyOrgScope(ownedClientsQuery, scope.orgId)
+        if (scope.activeTeamId) {
+            ownedClientsQuery = ownedClientsQuery.eq('team_id', scope.activeTeamId).is('org_id', null)
+        } else {
+            ownedClientsQuery = ownedClientsQuery.eq('coach_id', user.id)
+            ownedClientsQuery = applyOrgScope(ownedClientsQuery, scope.orgId)
+            if (!scope.orgId) ownedClientsQuery = ownedClientsQuery.is('team_id', null)
+        }
         const { data: ownedClients, error: ownedClientsError } = await ownedClientsQuery
 
         if (ownedClientsError) throw new Error('No se pudo validar los alumnos seleccionados.')
 
         const accessibleClientMap = new Map((ownedClients || []).map((c) => [c.id, c]))
-        // Pool (solo standalone): incluir alumnos del pool del team como destinos validos.
-        if (!scope.orgId) {
-            const teamIds = await getCoachActiveTeamIds(supabase, user.id)
-            if (teamIds.length) {
-                const { data: poolClients } = await adminDb
-                    .from('clients')
-                    .select('id, full_name, email')
-                    .in('id', clientIds)
-                    .in('team_id', teamIds)
-                    .is('org_id', null)
-                for (const c of poolClients || []) accessibleClientMap.set(c.id, c)
-            }
-        }
         const ownedClientMap = accessibleClientMap
         const ownedClientIdSet = new Set(accessibleClientMap.keys())
         const failedClients: { clientId: string; reason: string }[] = []
@@ -884,7 +893,7 @@ export async function getExerciseHistoryAction(clientId: string, exerciseId: str
     if (!scope.ok) return { error: scope.error }
 
     try {
-        await assertCoachCanManageWorkoutClient(supabase, user.id, clientId, scope.orgId)
+        await assertCoachCanManageWorkoutClient(supabase, user.id, clientId, scope.orgId, scope.activeTeamId)
     } catch {
         return { data: [] }
     }
@@ -1146,30 +1155,24 @@ export async function getCoachClientsAction(): Promise<{
     const scope = await getCoachWorkoutScope(supabase, user.id)
     if (!scope.ok) return { error: scope.error }
 
+    // Picker scopeado por el workspace ACTIVO (3-vías): team = SOLO ese pool;
+    // enterprise = propios de la org; standalone = propios NO-pool. Sin cruce de contextos.
     const adminDb = await createRawAdminClient()
     const clientsById = new Map<string, { id: string; full_name: string | null }>()
     let clientsQuery = adminDb
         .from('clients')
         .select('id, full_name')
-        .eq('coach_id', user.id)
         .order('full_name', { ascending: true })
-    clientsQuery = applyOrgScope(clientsQuery, scope.orgId)
+    if (scope.activeTeamId) {
+        clientsQuery = clientsQuery.eq('team_id', scope.activeTeamId).is('org_id', null)
+    } else {
+        clientsQuery = clientsQuery.eq('coach_id', user.id)
+        clientsQuery = applyOrgScope(clientsQuery, scope.orgId)
+        if (!scope.orgId) clientsQuery = clientsQuery.is('team_id', null)
+    }
     const { data, error } = await clientsQuery
     if (error) return { error: error.message }
     for (const c of data || []) clientsById.set(c.id, c)
-
-    // Pool (solo standalone): sumar alumnos del pool del team.
-    if (!scope.orgId) {
-        const teamIds = await getCoachActiveTeamIds(supabase, user.id)
-        if (teamIds.length) {
-            const { data: poolData } = await adminDb
-                .from('clients')
-                .select('id, full_name')
-                .in('team_id', teamIds)
-                .is('org_id', null)
-            for (const c of poolData || []) clientsById.set(c.id, c)
-        }
-    }
 
     return {
         data: Array.from(clientsById.values())

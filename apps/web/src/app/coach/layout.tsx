@@ -12,10 +12,9 @@ import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { getCoachEnterpriseContext } from './_data/layout.queries'
+import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace, listUserWorkspaces } from '@/services/auth/workspace.service'
-import { getCoachActiveTeamIds } from '@/services/auth/team.service'
 
 export const metadata: Metadata = {
     title: {
@@ -52,9 +51,11 @@ export default async function CoachLayout({
         listUserWorkspaces(supabase, coach.id),
     ])
     const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
-    const enterpriseContext = await getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null)
-    // Team (pool) membership: gobierna la visibilidad del item "Equipo" en el sidebar.
-    const hasTeam = (await getCoachActiveTeamIds(supabase, coach.id)).length > 0
+    const activeTeamWorkspace = activeWorkspace?.type === 'coach_team' ? activeWorkspace : null
+    const [enterpriseContext, teamContext] = await Promise.all([
+        getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
+        getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
+    ])
     const currentWorkspaceLabel =
         activeWorkspace?.label ??
         enterpriseContext?.orgName ??
@@ -62,9 +63,12 @@ export default async function CoachLayout({
         coach.full_name ??
         'Mi negocio EVA'
 
+    // Marca por contexto: enterprise → org; team → team; standalone → la del coach.
     const primaryColor =
         enterpriseContext?.primaryColor
             ? enterpriseContext.primaryColor
+            : teamContext?.primaryColor
+            ? teamContext.primaryColor
             : coach.use_brand_colors_coach === false
             ? SYSTEM_PRIMARY_COLOR
             : (coach.primary_color || BRAND_PRIMARY_COLOR)
@@ -122,13 +126,19 @@ export default async function CoachLayout({
             <NewsFeedProvider initialUnreadCount={unreadCount} initialItems={newsItems}>
                 <CoachSidebar
                     coachName={coach.full_name}
-                    coachBrand={enterpriseContext?.orgName ?? coach.brand_name}
+                    coachBrand={enterpriseContext?.orgName ?? teamContext?.teamName ?? coach.brand_name}
                     primaryColor={primaryColor}
-                    subscriptionStatus={activeEnterpriseCoach ? 'org_managed' : coach.subscription_status}
+                    subscriptionStatus={
+                        activeEnterpriseCoach
+                            ? 'org_managed'
+                            : activeTeamWorkspace
+                            ? 'team_managed'
+                            : coach.subscription_status
+                    }
                     enterpriseContext={enterpriseContext}
                     workspaces={workspaces}
                     currentWorkspaceLabel={currentWorkspaceLabel}
-                    hasTeam={hasTeam}
+                    activeWorkspaceType={activeWorkspace?.type ?? null}
                 />
                 <CoachMainWrapper>
                     {/* Background ambient glow */}

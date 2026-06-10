@@ -38,6 +38,7 @@ export async function GET(req: Request) {
         .not('subscription_mp_id', 'is', null)
         .not('subscription_status', 'eq', 'free')
         .not('subscription_status', 'eq', 'org_managed')
+        .not('subscription_status', 'eq', 'team_managed')
 
     if (error) {
         console.error('[cron/mp-reconcile] query failed:', error)

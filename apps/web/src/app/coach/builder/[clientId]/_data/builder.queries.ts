@@ -2,7 +2,6 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
-import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
 
 type Client = Pick<Tables<'clients'>, 'id' | 'full_name' | 'email'>
 type Exercise = Tables<'exercises'>
@@ -21,17 +20,20 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-    // Pool (solo standalone): un miembro del team puede abrir el builder de un alumno del pool.
-    // RLS es el techo; si no es viaTeam mantenemos el scoping coach_id/org exacto (cero regresion).
-    const viaTeam = orgId ? false : await currentUserHasTeamAccessToClient(supabase, clientId)
+    const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
 
+    // Acceso por workspace ACTIVO (separación estricta): team ⇒ SOLO alumnos de ESE pool
+    // (colaborativo, sin filtro coach_id; RLS techo); standalone ⇒ propios NO-pool; enterprise ⇒ org.
     let clientQuery = supabase
         .from('clients')
         .select('id, full_name, email')
         .eq('id', clientId)
-    if (!viaTeam) {
+    if (activeTeamId) {
+        clientQuery = clientQuery.eq('team_id', activeTeamId).is('org_id', null)
+    } else {
         clientQuery = clientQuery.eq('coach_id', user.id)
         clientQuery = applyOrgScope(clientQuery, orgId)
+        if (!orgId) clientQuery = clientQuery.is('team_id', null)
     }
 
     // Fase 2C / F7: scope exercises to the active workspace — standalone shows system + own,
@@ -65,7 +67,11 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
                 )
             `)
             .eq('id', programId)
-        if (!viaTeam) {
+        if (activeTeamId) {
+            // Pool colaborativo: el programa del alumno del pool puede ser de otro coach del team.
+            // RLS valida la fila; el client gate de arriba ya exige que el alumno sea de ESTE pool.
+            programQuery = programQuery.eq('client_id', clientId).is('org_id', null)
+        } else {
             programQuery = programQuery.eq('coach_id', user.id)
             programQuery = applyOrgScope(programQuery, orgId)
         }

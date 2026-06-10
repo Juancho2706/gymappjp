@@ -1,14 +1,24 @@
 import { redirect } from 'next/navigation'
-import { Users, UserCheck } from 'lucide-react'
+import Link from 'next/link'
+import { Users, UserCheck, Package } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { getCoachTeamOverview } from './_data/team.queries'
 import TeamMembersManager from './_components/TeamMembersManager'
 
 export const metadata = { title: 'Mi Equipo' }
 
 export default async function CoachTeamPage() {
-    const { userId, teams } = await getCoachTeamOverview()
+    // Módulo EXCLUSIVO del contexto team: fuera de él, el módulo no existe (separación de flujos).
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) redirect('/login')
+    const workspace = await resolvePreferredWorkspace(supabase, user.id)
+    if (workspace?.type !== 'coach_team') redirect('/coach/dashboard')
+
+    const { userId, teams } = await getCoachTeamOverview(workspace.teamId)
     if (!userId) redirect('/login')
 
     if (teams.length === 0) {
@@ -43,9 +53,17 @@ export default async function CoachTeamPage() {
                                 <h1 className="font-display text-2xl font-bold tracking-tight">{team.name}</h1>
                                 <p className="text-sm text-muted-foreground">Pool compartido de coaches</p>
                             </div>
-                            <Badge variant={isOwner ? 'default' : 'secondary'} className="w-fit">
-                                {isOwner ? 'Owner' : 'Miembro'}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                                <Link
+                                    href="/coach/settings/modules"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                >
+                                    <Package className="h-3.5 w-3.5" /> Módulos
+                                </Link>
+                                <Badge variant={isOwner ? 'default' : 'secondary'} className="w-fit">
+                                    {isOwner ? 'Owner' : 'Miembro'}
+                                </Badge>
+                            </div>
                         </header>
 
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -341,7 +341,10 @@ export async function proxy(request: NextRequest) {
 
         if (
             (coach.subscription_status === 'org_managed' || coach.subscription_status === 'team_managed') &&
-            (pathname.startsWith('/coach/subscription') || pathname.startsWith('/coach/settings'))
+            (pathname.startsWith('/coach/subscription') || pathname.startsWith('/coach/settings')) &&
+            // Los toggles de MÓDULOS del team viven bajo /coach/settings/modules y el owner/co-gestor
+            // team_managed DEBE poder editarlos (la página resuelve el contexto team por sí misma).
+            !(coach.subscription_status === 'team_managed' && pathname.startsWith('/coach/settings/modules'))
         ) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/coach/dashboard'
@@ -432,8 +435,11 @@ export async function proxy(request: NextRequest) {
         eRequestHeaders.set('x-workspace-brand-source', 'organization')
         eRequestHeaders.set('x-client-base-path', `/e/${eOrgSlug}`)
 
+        // Suspended: redirigir SOLO si hay coach activo (la página se sirve vía rewrite a /c).
+        // Orphan suspendido cae al holding (sin esta condición: loop suspended<->dashboard).
         const eBlocked = eCtx.is_archived === true || eCtx.is_active === false
-        if (eBlocked && !eRest.includes('/suspended')) {
+        const eHasActiveCoach = !!eCtx.coach_slug && eCtx.coach_active === true
+        if (eBlocked && eHasActiveCoach && !eRest.includes('/suspended')) {
             const r = request.nextUrl.clone(); r.pathname = `/e/${eOrgSlug}/suspended`
             return NextResponse.redirect(r)
         }
@@ -471,7 +477,8 @@ export async function proxy(request: NextRequest) {
     // 1.6 TEAM ALUMNO AREA — /t/[team_slug]/* (pool plano, same-domain). Espejo de /e/.
     // Sirve al alumno de pool la MISMA app del cliente, TEAM-branded, manteniendo la URL en
     // /t/[team_slug]/* (rewrite a /c/[coach_slug]/* + x-client-base-path). Una RPC gated resuelve todo.
-    // Los guards de estado del alumno (suspended/onboarding/force-pwd) los maneja la app /c destino.
+    // Guards de estado (suspended/force-pwd/consent/onboarding) viven en ESTE branch (el rewrite
+    // no re-ejecuta los guards de /c); redirigen dentro de /t y la página se sirve vía rewrite.
     // ============================================================
     if (pathname.startsWith('/t/')) {
         const tSegs = pathname.split('/')          // ['', 't', teamSlug, ...rest]
@@ -531,8 +538,23 @@ export async function proxy(request: NextRequest) {
         tRequestHeaders.set('x-workspace-brand-source', 'organization')
         tRequestHeaders.set('x-client-base-path', `/t/${tTeamSlug}`)
 
-        // Consent gate (Ley 21.719): el alumno de pool debe otorgar acceso multidisciplinario
-        // ANTES de entrar (varios profesionales ven sus datos de salud). /consent se sirve sin rewrite.
+        const tHasActiveCoach = !!tCtx.coach_slug && tCtx.coach_active === true
+        const tBlocked = tCtx.is_archived === true || tCtx.is_active === false
+
+        // Guards de estado (espejo de /e): el rewrite NO re-ejecuta los guards del branch /c, así
+        // que deben vivir ACÁ. Redirigen DENTRO de /t/[slug]/* y la página real se sirve vía rewrite
+        // (la URL nunca se escapa a /c). Orphan (sin coach activo) cae al holding (no hay rewrite).
+        if (tBlocked && tHasActiveCoach && !tRest.includes('/suspended')) {
+            const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/suspended`
+            return NextResponse.redirect(r)
+        }
+        if (!tBlocked && tHasActiveCoach && tCtx.force_password_change === true && !tRest.includes('/change-password')) {
+            const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/change-password`
+            return NextResponse.redirect(r)
+        }
+
+        // Consent gate (Ley 21.719): tras password, ANTES de onboarding/app — el alumno de pool
+        // debe otorgar acceso multidisciplinario. /consent se sirve sin rewrite (página propia de /t).
         if (tRest === '/consent') {
             if (tCtx.has_pool_consent === true) {
                 const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/dashboard`; return NextResponse.redirect(r)
@@ -541,15 +563,20 @@ export async function proxy(request: NextRequest) {
             supabaseResponse.cookies.getAll().forEach(c => resp.cookies.set(c.name, c.value))
             return resp
         }
-        if (tCtx.has_pool_consent !== true) {
+        if (tCtx.has_pool_consent !== true && !tBlocked && tCtx.force_password_change !== true) {
             const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/consent`
             const redirect = NextResponse.redirect(r)
             supabaseResponse.cookies.getAll().forEach(c => redirect.cookies.set(c.name, c.value))
             return redirect
         }
 
+        if (!tBlocked && tHasActiveCoach && tCtx.force_password_change !== true && tCtx.onboarding_completed === false && !tRest.includes('/onboarding')) {
+            const r = request.nextUrl.clone(); r.pathname = `/t/${tTeamSlug}/onboarding`
+            return NextResponse.redirect(r)
+        }
+
         // Pool / orfandad (sin coach activo) → holding team-branded, sin rewrite.
-        if (!tCtx.coach_slug || tCtx.coach_active !== true) {
+        if (!tHasActiveCoach) {
             if (tRest === '/dashboard' || tRest === '/') {
                 const resp = NextResponse.next({ request: { headers: tRequestHeaders } })
                 supabaseResponse.cookies.getAll().forEach(c => resp.cookies.set(c.name, c.value))

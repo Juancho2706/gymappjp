@@ -2,7 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getCoach } from '@/lib/coach/get-coach'
-import { getCoachActiveTeamIds, isCurrentUserTeamManager } from '@/services/auth/team.service'
+import { isCurrentUserTeamManager } from '@/services/auth/team.service'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import { revalidatePath } from 'next/cache'
 
@@ -22,10 +23,13 @@ export async function saveModulesAction(input: Partial<Record<ModuleKey, boolean
     if (!coach) return { error: 'No autenticado.' }
     if (coach.subscription_status === 'org_managed') return { error: 'No disponible en cuentas gestionadas por una organización.' }
 
-    const teamIds = await getCoachActiveTeamIds(supabase, coach.id)
+    // Contexto = workspace ACTIVO (igual que getModulesContext): coach_team edita el team activo;
+    // cualquier otro contexto edita los módulos propios del coach.
+    const workspace = await resolvePreferredWorkspace(supabase, coach.id)
+    if (workspace?.type === 'enterprise_coach') return { error: 'No disponible en cuentas gestionadas por una organización.' }
 
-    if (teamIds.length > 0) {
-        const teamId = teamIds[0]
+    if (workspace?.type === 'coach_team') {
+        const teamId = workspace.teamId
         const isMgr = await isCurrentUserTeamManager(supabase, teamId)
         if (!isMgr) return { error: 'Solo el owner o co-gestor del equipo puede cambiar los módulos.' }
         const { error } = await supabase.from('teams').update({ enabled_modules: modules }).eq('id', teamId)

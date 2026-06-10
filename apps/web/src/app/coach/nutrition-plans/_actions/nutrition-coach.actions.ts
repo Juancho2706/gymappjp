@@ -16,7 +16,6 @@ import {
   type NutritionPlanCycleUpsertInput,
 } from '@/lib/nutrition-plan-cycle-schema'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
-import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
 
 // ─── Tipos públicos (usados por componentes del builder) ───────────────────────
 
@@ -100,15 +99,16 @@ async function requireCoachSession(coachId: string) {
 }
 
 type CoachNutritionScope =
-  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>>; orgId: string | null }
+  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>>; orgId: string | null; activeTeamId: string | null }
   | { ok: false; error: string }
 
 async function requireCoachNutritionScope(coachId: string): Promise<CoachNutritionScope> {
   const { supabase, error } = await requireCoachSession(coachId)
   if (!supabase) return { ok: false, error: error ?? 'No autorizado.' }
   const workspace = await resolvePreferredWorkspace(supabase, coachId)
-  if (!workspace || workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { ok: true, supabase, orgId: null }
-  if (workspace.type === 'enterprise_coach') return { ok: true, supabase, orgId: workspace.orgId }
+  if (!workspace || workspace.type === 'coach_standalone') return { ok: true, supabase, orgId: null, activeTeamId: null }
+  if (workspace.type === 'coach_team') return { ok: true, supabase, orgId: null, activeTeamId: workspace.teamId }
+  if (workspace.type === 'enterprise_coach') return { ok: true, supabase, orgId: workspace.orgId, activeTeamId: null }
   return { ok: false, error: 'Workspace invalido para gestionar nutricion.' }
 }
 
@@ -229,7 +229,7 @@ export async function upsertClientNutritionPlanJson(
 ): Promise<{ success: boolean; planId?: string; error?: string }> {
   const scope = await requireCoachNutritionScope(coachId)
   if (!scope.ok) return { success: false, error: scope.error }
-  const { supabase, orgId } = scope
+  const { supabase, orgId, activeTeamId } = scope
 
   const parsed = ClientPlanSchema.safeParse(data)
   if (!parsed.success) {
@@ -238,18 +238,19 @@ export async function upsertClientNutritionPlanJson(
 
   const { id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, meals } = parsed.data
 
-  // Pool (solo standalone): un miembro del team puede editar la nutricion de un alumno del pool.
-  // supabase es user-scoped -> RLS (politicas team) es el techo real; solo relajamos el filtro app.
-  const viaTeam = orgId ? false : await currentUserHasTeamAccessToClient(supabase, clientId)
-
   try {
+    // Acceso por workspace ACTIVO (separación estricta): team ⇒ SOLO alumnos de ESE pool
+    // (colaborativo; RLS techo); standalone ⇒ propios NO-pool; enterprise ⇒ org.
     let clientQuery = supabase
       .from('clients')
       .select('id')
       .eq('id', clientId)
-    if (!viaTeam) {
+    if (activeTeamId) {
+      clientQuery = clientQuery.eq('team_id', activeTeamId).is('org_id', null)
+    } else {
       clientQuery = clientQuery.eq('coach_id', coachId)
       clientQuery = applyOrgScope(clientQuery, orgId)
+      if (!orgId) clientQuery = clientQuery.is('team_id', null)
     }
     const { data: client } = await clientQuery.maybeSingle()
     if (!client) return { success: false, error: 'Alumno no encontrado.' }
@@ -291,7 +292,11 @@ export async function upsertClientNutritionPlanJson(
         .from('nutrition_plans')
         .update(planData)
         .eq('id', currentPlanId)
-      if (!viaTeam) {
+      if (activeTeamId) {
+        // Pool colaborativo: el plan puede ser de otro coach del team; el gate de arriba ya
+        // validó que el alumno es de ESTE pool y RLS valida la fila del plan.
+        updatePlanQuery = updatePlanQuery.eq('client_id', clientId).is('org_id', null)
+      } else {
         updatePlanQuery = updatePlanQuery.eq('coach_id', coachId)
         updatePlanQuery = applyOrgScope(updatePlanQuery, orgId)
       }

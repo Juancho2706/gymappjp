@@ -9,6 +9,7 @@ import {
   type MealWithFoodItems,
   type NutritionMealMacroSource,
 } from '@/lib/nutrition-utils'
+import type { CoachClientScope } from '@/app/coach/clients/_data/clients.queries'
 
 const DEFAULT_FOOD_PAGE_SIZE = 50
 
@@ -17,6 +18,17 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
   orgId: string | null
 ): T {
   return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+}
+
+/** Alumnos del pool del team activo (ids) — para scopear planes por contexto team en 2 pasos. */
+async function getPoolClientIds(teamId: string): Promise<string[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('team_id', teamId)
+    .is('org_id', null)
+  return (data ?? []).map((c) => c.id)
 }
 
 /**
@@ -113,25 +125,48 @@ export const getCoachTemplates = cache(async (coachId: string, orgId: string | n
 })
 
 /**
- * Planes nutricionales activos por coach (board / hub).
+ * Planes nutricionales activos (board / hub), scopeados por el workspace activo:
+ * enterprise = coach_id+org · team = planes de alumnos del pool (SIN filtro coach_id — colaborativo,
+ * RLS techo) · standalone = coach_id + org∅ (+ excluye planes de alumnos de pool del mismo coach).
  */
-export const getActiveClientPlans = cache(async (coachId: string, orgId: string | null = null) => {
+export const getActiveClientPlans = cache(async (coachId: string, scope: CoachClientScope) => {
   const supabase = await createClient()
   let query = supabase
     .from('nutrition_plans')
     .select(
       `
       id, client_id, template_id, name, is_custom, is_active, daily_calories, protein_g, carbs_g, fats_g, updated_at,
-      clients ( id, full_name ),
+      clients ( id, full_name, team_id ),
       nutrition_plan_templates ( name )
     `
     )
-    .eq('coach_id', coachId)
     .eq('is_active', true)
     .order('updated_at', { ascending: false })
-  query = applyOrgScope(query, orgId)
+
+  if (scope.orgId) {
+    query = query.eq('coach_id', coachId).eq('org_id', scope.orgId)
+  } else if (scope.activeTeamId) {
+    const poolIds = await getPoolClientIds(scope.activeTeamId)
+    if (poolIds.length === 0) return []
+    query = query.is('org_id', null).in('client_id', poolIds)
+  } else {
+    query = query.eq('coach_id', coachId).is('org_id', null)
+  }
+
   const { data } = await query
-  return data ?? []
+  const rows = data ?? []
+  if (scope.orgId || scope.activeTeamId) return rows
+  // Standalone: ALLOWLIST de clientes standalone (no denylist por embed: si RLS oculta el client,
+  // el embed viene null y un denylist "!team_id" incluiría el plan — fail-open). Mismo patrón que
+  // getWorkoutProgramsWithClients.
+  const { data: standaloneClients } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('coach_id', coachId)
+    .is('org_id', null)
+    .is('team_id', null)
+  const standaloneIds = new Set((standaloneClients ?? []).map((c) => c.id))
+  return rows.filter((p) => !p.client_id || standaloneIds.has(p.client_id as string))
 })
 
 export type ActivePlanBoardRow = {
@@ -151,8 +186,8 @@ export type ActivePlanBoardRow = {
 /**
  * Planes activos del coach + mini-serie 7d de adherencia y kcal de hoy (zona Santiago).
  */
-export const getActivePlansBoardData = cache(async (coachId: string, orgId: string | null = null): Promise<ActivePlanBoardRow[]> => {
-  const plans = await getActiveClientPlans(coachId, orgId)
+export const getActivePlansBoardData = cache(async (coachId: string, scope: CoachClientScope): Promise<ActivePlanBoardRow[]> => {
+  const plans = await getActiveClientPlans(coachId, scope)
   if (plans.length === 0) return []
 
   const supabase = await createClient()
@@ -383,10 +418,21 @@ export const getClientAdherence = cache(async (clientId: string, planId: string)
   return data ?? []
 })
 
+/** Filtro 3-vías de clientes por workspace activo (mismo patrón que getCoachClientsWithPrograms). */
+function applyClientScope<T extends { eq: (c: string, v: string) => T; is: (c: string, v: null) => T }>(
+  query: T,
+  coachId: string,
+  scope: CoachClientScope
+): T {
+  if (scope.orgId) return query.eq('coach_id', coachId).eq('org_id', scope.orgId)
+  if (scope.activeTeamId) return query.is('org_id', null).eq('team_id', scope.activeTeamId)
+  return query.eq('coach_id', coachId).is('org_id', null).is('team_id', null)
+}
+
 /**
- * Todos los clientes del coach con sus planes (activos o no), para asignación.
+ * Clientes para asignación, scopeados por el workspace activo (3-vías, sin cruce de contextos).
  */
-export const getCoachClients = cache(async (coachId: string, orgId: string | null = null) => {
+export const getCoachClients = cache(async (coachId: string, scope: CoachClientScope) => {
   const supabase = await createClient()
   let query = supabase
     .from('clients')
@@ -396,15 +442,14 @@ export const getCoachClients = cache(async (coachId: string, orgId: string | nul
       nutrition_plans ( id, name, is_active )
     `
     )
-    .eq('coach_id', coachId)
     .order('full_name')
-  query = orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+  query = applyClientScope(query, coachId, scope)
   const { data } = await query
   return data ?? []
 })
 
 /** Clientes activos con plan activo — mismo criterio que la página `nutrition-plans`. */
-export const getActiveClientsWithNutritionPlan = cache(async (coachId: string, orgId: string | null = null) => {
+export const getActiveClientsWithNutritionPlan = cache(async (coachId: string, scope: CoachClientScope) => {
   const supabase = await createClient()
   let query = supabase
     .from('clients')
@@ -415,11 +460,10 @@ export const getActiveClientsWithNutritionPlan = cache(async (coachId: string, o
       active_plans:nutrition_plans(id, name, template_id, is_active)
     `
     )
-    .eq('coach_id', coachId)
     .eq('is_active', true)
     .eq('active_plans.is_active', true)
     .order('full_name')
-  query = orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+  query = applyClientScope(query, coachId, scope)
   const { data } = await query
 
   return (data ?? []).map((c) => ({
@@ -429,10 +473,11 @@ export const getActiveClientsWithNutritionPlan = cache(async (coachId: string, o
   }))
 })
 
-/** Grupos / comidas guardadas del coach (catálogo en editor). */
-export const getCoachSavedMeals = cache(async (coachId: string) => {
+/** Grupos / comidas guardadas del coach (catálogo en editor). Librería PERSONAL: en enterprise se
+ * scopea por org (saved_meals.org_id); en standalone/team es la librería propia del coach. */
+export const getCoachSavedMeals = cache(async (coachId: string, orgId: string | null = null) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  let query = supabase
     .from('saved_meals')
     .select(
       `
@@ -448,6 +493,8 @@ export const getCoachSavedMeals = cache(async (coachId: string) => {
     )
     .eq('coach_id', coachId)
     .order('name')
+  query = applyOrgScope(query, orgId)
+  const { data } = await query
   return data ?? []
 })
 

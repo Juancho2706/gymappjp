@@ -4,19 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-    LayoutDashboard,
-    Users,
-    UsersRound,
-    Dumbbell,
-    Settings,
     LogOut,
-    Apple,
     PanelLeftClose,
     PanelLeft,
-    ClipboardList,
-    CreditCard,
     HelpCircle,
-    LifeBuoy,
     Building2,
     ChevronLeft,
     ChevronRight,
@@ -28,65 +19,9 @@ import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
-import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
-import type { WorkspaceSummary } from '@/domain/auth/types'
-
-const navItems = [
-    {
-        href: '/coach/dashboard',
-        label: 'Dashboard',
-        shortLabel: 'Inicio',
-        icon: LayoutDashboard,
-    },
-    {
-        href: '/coach/clients',
-        label: 'Alumnos',
-        icon: Users,
-    },
-    {
-        href: '/coach/team',
-        label: 'Equipo',
-        shortLabel: 'Team',
-        icon: UsersRound,
-    },
-    {
-        href: '/coach/workout-programs',
-        label: 'Programas',
-        shortLabel: 'Planes',
-        icon: ClipboardList,
-    },
-    {
-        href: '/coach/exercises',
-        label: 'Ejercicios',
-        shortLabel: 'Ejer.',
-        icon: Dumbbell,
-    },
-    {
-        href: '/coach/nutrition-plans',
-        label: 'Nutrición',
-        shortLabel: 'Nutri',
-        icon: Apple,
-    },
-    {
-        href: '/coach/settings',
-        label: 'Mi Marca',
-        shortLabel: 'Marca',
-        icon: Settings,
-    },
-    {
-        href: '/coach/subscription',
-        label: 'Suscripción',
-        shortLabel: 'Plan',
-        icon: CreditCard,
-    },
-    {
-        href: '/coach/support',
-        label: 'Soporte',
-        shortLabel: 'Ayuda',
-        icon: LifeBuoy,
-    },
-]
+import { getVisibleNavItems } from '@/components/coach/coach-nav'
+import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 
 interface CoachSidebarProps {
     coachName: string
@@ -100,10 +35,11 @@ interface CoachSidebarProps {
     } | null
     workspaces?: WorkspaceSummary[]
     currentWorkspaceLabel?: string
-    hasTeam?: boolean
+    /** Workspace ACTIVO — gobierna qué módulos del nav se muestran (separación de flujos). */
+    activeWorkspaceType?: WorkspaceType | null
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, hasTeam }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -156,24 +92,9 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     }
 
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
-    const isSubscriptionBlocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has(subscriptionStatus ?? '')
-    const isOrgManaged = subscriptionStatus === 'org_managed' || subscriptionStatus === 'team_managed'
     const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
-    const visibleNavItems = isSubscriptionBlocked
-        ? [
-            {
-                href: '/coach/reactivate',
-                label: 'Reactivar',
-                shortLabel: 'Pago',
-                icon: LayoutDashboard,
-            },
-        ]
-        : navItems.filter((item) => {
-            // "Equipo" solo si el coach pertenece a un team (pool).
-            if (item.href === '/coach/team' && !hasTeam) return false
-            if (!isOrgManaged) return true
-            return item.href !== '/coach/settings' && item.href !== '/coach/subscription'
-        })
+    // Registro nav-como-módulos: cada flujo (standalone/enterprise/team) ve SOLO sus módulos.
+    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus })
 
     return (
         <>

@@ -17,6 +17,13 @@ export function canAccessWorkspacePath(workspace: ActiveWorkspace, pathname: str
         return { allowed: false, reason: 'billing_requires_coach_standalone', redirectTo: defaultWorkspaceHome(workspace) }
     }
 
+    // Los toggles de MÓDULOS del team viven bajo /coach/settings/modules: el owner/co-gestor en
+    // contexto team DEBE poder editarlos (la página resuelve el contexto y gatea por gestor).
+    if (pathname.startsWith('/coach/settings/modules')) {
+        if (workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { allowed: true }
+        return { allowed: false, reason: 'modules_require_coach_workspace', redirectTo: defaultWorkspaceHome(workspace) }
+    }
+
     if (pathname.startsWith('/coach/settings')) {
         if (workspace.type === 'coach_standalone') return { allowed: true }
         return { allowed: false, reason: 'brand_settings_require_coach_standalone', redirectTo: defaultWorkspaceHome(workspace) }

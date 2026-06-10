@@ -97,13 +97,20 @@ async function handleWebhook(request: Request, rawBody: string) {
     const { data: coach } = await admin
         .from('coaches')
         .select(
-            'id, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id'
+            'id, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id'
         )
         .eq('id', result.coachId)
         .maybeSingle()
 
     if (!coach) {
         console.warn('[payments.webhook] coach not found', { traceId, coachId: result.coachId })
+        return NextResponse.json({ ok: true })
+    }
+
+    // Cuentas gestionadas (org/team pagan centralizado, sin billing individual): el webhook
+    // jamás debe mutar su suscripción, aunque alguien les setee un mp_id por error.
+    if (coach.subscription_status === 'org_managed' || coach.subscription_status === 'team_managed') {
+        console.warn('[payments.webhook] skipping managed coach', { traceId, coachId: coach.id, status: coach.subscription_status })
         return NextResponse.json({ ok: true })
     }
 
