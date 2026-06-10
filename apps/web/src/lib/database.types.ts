@@ -2942,40 +2942,67 @@ export type Database = {
       }
       teams: {
         Row: {
+          accent_dark: string | null
+          accent_light: string | null
           created_at: string
           deleted_at: string | null
           enabled_modules: Json
           id: string
+          loader_icon_mode: string
+          loader_text: string | null
+          loader_text_color: string | null
           logo_url: string | null
+          logo_url_dark: string | null
           name: string
+          neutral_tint: boolean
           owner_coach_id: string
           primary_color: string | null
           seat_limit: number
           slug: string
+          splash_bg_color: string | null
+          use_custom_loader: boolean
         }
         Insert: {
+          accent_dark?: string | null
+          accent_light?: string | null
           created_at?: string
           deleted_at?: string | null
           enabled_modules?: Json
           id?: string
+          loader_icon_mode?: string
+          loader_text?: string | null
+          loader_text_color?: string | null
           logo_url?: string | null
+          logo_url_dark?: string | null
           name: string
+          neutral_tint?: boolean
           owner_coach_id: string
           primary_color?: string | null
           seat_limit?: number
           slug: string
+          splash_bg_color?: string | null
+          use_custom_loader?: boolean
         }
         Update: {
+          accent_dark?: string | null
+          accent_light?: string | null
           created_at?: string
           deleted_at?: string | null
           enabled_modules?: Json
           id?: string
+          loader_icon_mode?: string
+          loader_text?: string | null
+          loader_text_color?: string | null
           logo_url?: string | null
+          logo_url_dark?: string | null
           name?: string
+          neutral_tint?: boolean
           owner_coach_id?: string
           primary_color?: string | null
           seat_limit?: number
           slug?: string
+          splash_bg_color?: string | null
+          use_custom_loader?: boolean
         }
         Relationships: [
           {

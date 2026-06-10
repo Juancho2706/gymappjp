@@ -331,42 +331,93 @@ export async function updateTeamMemberRoleAction(teamId: string, memberId: strin
  * de owner solo protege owner_coach_id/seat_limit, color/logo son editables por gestores).
  * Distinta de "Mi Marca" (marca PERSONAL del coach standalone, oculta en contexto team).
  */
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
+const LOADER_ICON_MODES = new Set(['logo', 'text', 'none', 'eva'])
+
+async function uploadTeamImage(
+    admin: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+    teamId: string,
+    file: File,
+    name: string
+): Promise<{ url?: string; error?: string }> {
+    if (file.size > 2 * 1024 * 1024) return { error: 'La imagen no puede superar 2 MB.' }
+    if (!file.type.startsWith('image/')) return { error: 'Solo se permiten imágenes.' }
+    const bytes = new Uint8Array((await file.arrayBuffer()).slice(0, 4))
+    const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8
+    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
+    if (!isJpeg && !isPng) return { error: 'El archivo no es una imagen válida (JPEG o PNG).' }
+    const ext = file.name.split('.').pop() ?? 'png'
+    const path = `teams/${teamId}/${name}.${ext}`
+    const { error: uploadError } = await admin.storage
+        .from('logos')
+        .upload(path, file, { upsert: true, contentType: file.type })
+    if (uploadError) return { error: 'Error al subir la imagen: ' + uploadError.message }
+    const { data: { publicUrl } } = admin.storage.from('logos').getPublicUrl(path)
+    return { url: `${publicUrl}?t=${Date.now()}` }
+}
+
+/**
+ * Marca COMPLETA del TEAM (paridad con el set white-label de organizations): nombre, color
+ * primario, acentos light/dark, tinte neutro, splash, logos claro/oscuro y loader (texto/color/
+ * modo/custom). Lo que ven el pool y los alumnos en /t y el shell del coach en contexto team.
+ * Solo owner/co-gestor (RLS team_teams_manager_update = techo; el trigger de owner solo protege
+ * owner_coach_id/seat_limit). Distinta de "Mi Marca" (marca PERSONAL standalone del coach).
+ */
 export async function updateTeamBrandAction(teamId: string, formData: FormData) {
     const ctx = await resolveTeamManagerContext(teamId)
     if ('error' in ctx) return { error: ctx.error }
     const { supabase, admin, user } = ctx
 
-    const rawColor = String(formData.get('primary_color') ?? '').trim()
-    const file = formData.get('logo') as File | null
+    const updates: Record<string, string | boolean | null> = {}
 
-    const updates: { primary_color?: string; logo_url?: string } = {}
-
-    if (rawColor) {
-        if (!/^#[0-9a-fA-F]{6}$/.test(rawColor)) return { error: 'Color inválido (formato #RRGGBB).' }
-        updates.primary_color = rawColor
+    const name = String(formData.get('name') ?? '').trim()
+    if (name) {
+        if (name.length < 2 || name.length > 80) return { error: 'Nombre del equipo: 2 a 80 caracteres.' }
+        updates.name = name
     }
 
-    if (file && file.size > 0) {
-        if (file.size > 2 * 1024 * 1024) return { error: 'El logo no puede superar 2 MB.' }
-        if (!file.type.startsWith('image/')) return { error: 'Solo se permiten imágenes.' }
-        const bytes = new Uint8Array((await file.arrayBuffer()).slice(0, 4))
-        const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8
-        const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
-        if (!isJpeg && !isPng) return { error: 'El archivo no es una imagen válida (JPEG o PNG).' }
-
-        // Storage via service-role (las policies del bucket logos son por carpeta de usuario);
-        // el gate real ya pasó: resolveTeamManagerContext (manager) — la carpeta es la del team.
-        const ext = file.name.split('.').pop() ?? 'png'
-        const path = `teams/${teamId}/logo.${ext}`
-        const { error: uploadError } = await admin.storage
-            .from('logos')
-            .upload(path, file, { upsert: true, contentType: file.type })
-        if (uploadError) return { error: 'Error al subir el logo: ' + uploadError.message }
-        const { data: { publicUrl } } = admin.storage.from('logos').getPublicUrl(path)
-        updates.logo_url = `${publicUrl}?t=${Date.now()}`
+    // Colores: vacío = limpiar (vuelve al default del sistema); hex válido = setear.
+    for (const field of ['primary_color', 'accent_light', 'accent_dark', 'splash_bg_color', 'loader_text_color'] as const) {
+        const raw = formData.get(field)
+        if (raw === null) continue
+        const v = String(raw).trim()
+        if (v === '') { updates[field] = null; continue }
+        if (!HEX_RE.test(v)) return { error: `Color inválido en ${field} (formato #RRGGBB).` }
+        updates[field] = v
     }
 
-    if (!updates.primary_color && !updates.logo_url) return { error: 'Nada que actualizar.' }
+    const loaderText = formData.get('loader_text')
+    if (loaderText !== null) {
+        const v = String(loaderText).trim()
+        if (v.length > 24) return { error: 'Texto del loader: máximo 24 caracteres.' }
+        updates.loader_text = v || null
+    }
+
+    const iconMode = formData.get('loader_icon_mode')
+    if (iconMode !== null) {
+        const v = String(iconMode)
+        if (!LOADER_ICON_MODES.has(v)) return { error: 'Modo de ícono del loader inválido.' }
+        updates.loader_icon_mode = v
+    }
+
+    if (formData.has('use_custom_loader')) updates.use_custom_loader = formData.get('use_custom_loader') === 'on' || formData.get('use_custom_loader') === 'true'
+    if (formData.has('neutral_tint')) updates.neutral_tint = formData.get('neutral_tint') === 'on' || formData.get('neutral_tint') === 'true'
+
+    // Logos: claro + oscuro (upload service-role tras el gate de manager; bucket logos público).
+    const logoFile = formData.get('logo') as File | null
+    if (logoFile && logoFile.size > 0) {
+        const up = await uploadTeamImage(admin, teamId, logoFile, 'logo')
+        if (up.error) return { error: up.error }
+        updates.logo_url = up.url!
+    }
+    const logoDarkFile = formData.get('logo_dark') as File | null
+    if (logoDarkFile && logoDarkFile.size > 0) {
+        const up = await uploadTeamImage(admin, teamId, logoDarkFile, 'logo-dark')
+        if (up.error) return { error: up.error }
+        updates.logo_url_dark = up.url!
+    }
+
+    if (Object.keys(updates).length === 0) return { error: 'Nada que actualizar.' }
 
     // Update user-scoped: RLS (manager) es el techo real del write en teams.
     const { error } = await supabase.from('teams').update(updates).eq('id', teamId)
@@ -378,7 +429,7 @@ export async function updateTeamBrandAction(teamId: string, formData: FormData) 
         action: 'team.brand_updated',
         targetType: 'team',
         targetId: teamId,
-        metadata: { primary_color: updates.primary_color ?? null, logo_updated: !!updates.logo_url },
+        metadata: { fields: Object.keys(updates) },
     })
 
     revalidatePath('/coach/team')

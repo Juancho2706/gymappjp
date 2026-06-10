@@ -17,6 +17,16 @@ export type TeamOverview = {
     owner_coach_id: string
     primary_color: string | null
     logo_url: string | null
+    logo_url_dark: string | null
+    accent_light: string | null
+    accent_dark: string | null
+    neutral_tint: boolean
+    splash_bg_color: string | null
+    loader_text: string | null
+    loader_text_color: string | null
+    loader_icon_mode: string
+    use_custom_loader: boolean
+    enabled_modules: Record<string, boolean>
     members: TeamMemberView[]
     activeMemberCount: number
     poolClientCount: number
@@ -36,7 +46,7 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
 
     const { data: teams } = await supabase
         .from('teams')
-        .select('id, name, slug, seat_limit, owner_coach_id, primary_color, logo_url')
+        .select('id, name, slug, seat_limit, owner_coach_id, primary_color, logo_url, logo_url_dark, accent_light, accent_dark, neutral_tint, splash_bg_color, loader_text, loader_text_color, loader_icon_mode, use_custom_loader, enabled_modules')
         .eq('id', activeTeamId)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
@@ -83,6 +93,18 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
                 owner_coach_id: t.owner_coach_id,
                 primary_color: t.primary_color,
                 logo_url: t.logo_url,
+                logo_url_dark: t.logo_url_dark,
+                accent_light: t.accent_light,
+                accent_dark: t.accent_dark,
+                neutral_tint: t.neutral_tint,
+                splash_bg_color: t.splash_bg_color,
+                loader_text: t.loader_text,
+                loader_text_color: t.loader_text_color,
+                loader_icon_mode: t.loader_icon_mode,
+                use_custom_loader: t.use_custom_loader,
+                enabled_modules: (t.enabled_modules && typeof t.enabled_modules === 'object'
+                    ? (t.enabled_modules as Record<string, boolean>)
+                    : {}),
                 members,
                 activeMemberCount: members.length,
                 poolClientCount: poolRes.count ?? 0,

@@ -523,17 +523,22 @@ export async function proxy(request: NextRequest) {
         tRequestHeaders.set('x-coach-primary-color', tStr(tCtx.primary_color) || SYSTEM_PRIMARY_COLOR)
         tRequestHeaders.set('x-coach-logo-url', tStr(tCtx.logo_url).trim() || BRAND_APP_ICON)
         tRequestHeaders.set('x-coach-subscription-tier', 'pro')
-        // White-label tokens neutros del team (aún sin columnas de marca avanzada) -> ningún child
-        // del /c puede leer la marca personal del coach. loader-icon-mode='eva' (NO 'coach') evita
-        // que el logo personal del coach aparezca en el loader del alumno de pool.
-        tRequestHeaders.set('x-coach-accent-light', '')
-        tRequestHeaders.set('x-coach-accent-dark', '')
-        tRequestHeaders.set('x-coach-logo-url-dark', '')
-        tRequestHeaders.set('x-coach-neutral-tint', 'false')
-        tRequestHeaders.set('x-coach-loader-text', '')
-        tRequestHeaders.set('x-coach-use-custom-loader', 'false')
-        tRequestHeaders.set('x-coach-loader-text-color', '')
-        tRequestHeaders.set('x-coach-loader-icon-mode', 'eva')
+        // White-label COMPLETO del TEAM (RPC v3, paridad con /e): la marca personal del coach
+        // nunca llega al alumno de pool. loader 'logo' muestra el logo del TEAM (x-coach-logo-url
+        // ya es el del team); 'text'/'none' sin ícono; 'eva' ícono EVA.
+        tRequestHeaders.set('x-coach-accent-light', tStr(tCtx.accent_light).trim())
+        tRequestHeaders.set('x-coach-accent-dark', tStr(tCtx.accent_dark).trim())
+        tRequestHeaders.set('x-coach-logo-url-dark', tStr(tCtx.logo_url_dark).trim())
+        tRequestHeaders.set('x-coach-neutral-tint', String(tCtx.neutral_tint === true))
+        tRequestHeaders.set('x-coach-loader-text', tStr(tCtx.loader_text).trim())
+        tRequestHeaders.set('x-coach-use-custom-loader', String(tCtx.use_custom_loader === true))
+        tRequestHeaders.set('x-coach-loader-text-color', tStr(tCtx.loader_text_color).trim())
+        tRequestHeaders.set(
+            'x-coach-loader-icon-mode',
+            tCtx.loader_icon_mode === 'logo' ? 'coach'
+                : tCtx.loader_icon_mode === 'eva' ? 'eva'
+                : 'none',
+        )
         tRequestHeaders.set('x-client-use-brand-colors', 'true')
         tRequestHeaders.set('x-workspace-brand-source', 'organization')
         tRequestHeaders.set('x-client-base-path', `/t/${tTeamSlug}`)
