@@ -324,3 +324,64 @@ export async function updateTeamMemberRoleAction(teamId: string, memberId: strin
     revalidatePath('/coach/team')
     return { success: true }
 }
+
+/**
+ * Marca del TEAM (color + logo) — la que ven el pool y los alumnos en /t y el shell del coach
+ * en contexto team. Solo owner/co-gestor (RLS team_teams_manager_update es el techo; el trigger
+ * de owner solo protege owner_coach_id/seat_limit, color/logo son editables por gestores).
+ * Distinta de "Mi Marca" (marca PERSONAL del coach standalone, oculta en contexto team).
+ */
+export async function updateTeamBrandAction(teamId: string, formData: FormData) {
+    const ctx = await resolveTeamManagerContext(teamId)
+    if ('error' in ctx) return { error: ctx.error }
+    const { supabase, admin, user } = ctx
+
+    const rawColor = String(formData.get('primary_color') ?? '').trim()
+    const file = formData.get('logo') as File | null
+
+    const updates: { primary_color?: string; logo_url?: string } = {}
+
+    if (rawColor) {
+        if (!/^#[0-9a-fA-F]{6}$/.test(rawColor)) return { error: 'Color inválido (formato #RRGGBB).' }
+        updates.primary_color = rawColor
+    }
+
+    if (file && file.size > 0) {
+        if (file.size > 2 * 1024 * 1024) return { error: 'El logo no puede superar 2 MB.' }
+        if (!file.type.startsWith('image/')) return { error: 'Solo se permiten imágenes.' }
+        const bytes = new Uint8Array((await file.arrayBuffer()).slice(0, 4))
+        const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8
+        const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
+        if (!isJpeg && !isPng) return { error: 'El archivo no es una imagen válida (JPEG o PNG).' }
+
+        // Storage via service-role (las policies del bucket logos son por carpeta de usuario);
+        // el gate real ya pasó: resolveTeamManagerContext (manager) — la carpeta es la del team.
+        const ext = file.name.split('.').pop() ?? 'png'
+        const path = `teams/${teamId}/logo.${ext}`
+        const { error: uploadError } = await admin.storage
+            .from('logos')
+            .upload(path, file, { upsert: true, contentType: file.type })
+        if (uploadError) return { error: 'Error al subir el logo: ' + uploadError.message }
+        const { data: { publicUrl } } = admin.storage.from('logos').getPublicUrl(path)
+        updates.logo_url = `${publicUrl}?t=${Date.now()}`
+    }
+
+    if (!updates.primary_color && !updates.logo_url) return { error: 'Nada que actualizar.' }
+
+    // Update user-scoped: RLS (manager) es el techo real del write en teams.
+    const { error } = await supabase.from('teams').update(updates).eq('id', teamId)
+    if (error) return { error: friendlyTeamError(error.message) }
+
+    await writeTeamAuditEvent(supabase, {
+        teamId,
+        actorCoachId: user.id,
+        action: 'team.brand_updated',
+        targetType: 'team',
+        targetId: teamId,
+        metadata: { primary_color: updates.primary_color ?? null, logo_updated: !!updates.logo_url },
+    })
+
+    revalidatePath('/coach/team')
+    revalidatePath('/coach', 'layout')
+    return { success: true }
+}

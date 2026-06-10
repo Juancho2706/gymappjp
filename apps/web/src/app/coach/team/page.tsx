@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { getCoachTeamOverview } from './_data/team.queries'
 import TeamMembersManager from './_components/TeamMembersManager'
+import { TeamBrandCard } from './_components/TeamBrandCard'
 
 export const metadata = { title: 'Mi Equipo' }
 
@@ -103,6 +104,18 @@ export default async function CoachTeamPage() {
                                 </CardContent>
                             </Card>
                         </div>
+
+                        <Card>
+                            <CardContent className="p-5">
+                                <TeamBrandCard
+                                    teamId={team.id}
+                                    teamName={team.name}
+                                    primaryColor={team.primary_color}
+                                    logoUrl={team.logo_url}
+                                    canEdit={team.isManager}
+                                />
+                            </CardContent>
+                        </Card>
 
                         <Card>
                             <CardContent className="p-5">

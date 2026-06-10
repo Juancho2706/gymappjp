@@ -25,6 +25,7 @@
     "audit:nutrition-empty-meals:baseline": "node scripts/snapshot-nutrition-audit-baseline.mjs",
     "audit:nutrition-empty-meals:delta": "node scripts/build-nutrition-audit-delta.mjs",
     "seed:enterprise-demo:local": "node scripts/seed-enterprise-demo-local.mjs",
+    "seed:e2e-personas": "node scripts/seed-e2e-personas.mjs --allow-remote",
     "audit:org-sensitive-actions": "node scripts/check-org-sensitive-actions-audit.mjs",
     "audit:checksum:manual": "node scripts/run-audit-checksum-manual.mjs",
     "test:e2e:enterprise-rls": "playwright test tests/enterprise/rls-isolation.spec.ts --workers=1",

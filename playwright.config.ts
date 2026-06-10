@@ -37,8 +37,28 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    /* Auth setup para la suite de separación: logea las 9 personas y persiste
+     * storageState en playwright/.auth/. Solo corre como dependencia del
+     * project 'separation'. [\\/] = separador portable Windows/POSIX. */
+    {
+      name: 'setup',
+      testMatch: /separation[\\/]auth\.setup\.ts$/,
+    },
+
     {
       name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      // tests/separation corre en su propio project (necesita el setup de auth).
+      testIgnore: /tests[\\/]separation[\\/]/,
+    },
+
+    /* Suite de separación de flujos (standalone / enterprise / team).
+     * Depende de 'setup' (storageStates). Correr con --workers=1. */
+    {
+      name: 'separation',
+      testMatch: /tests[\\/]separation[\\/].+\.spec\.ts$/,
+      dependencies: ['setup'],
+      fullyParallel: false,
       use: { ...devices['Desktop Chrome'] },
     },
 

@@ -15,6 +15,8 @@ export type TeamOverview = {
     slug: string
     seat_limit: number
     owner_coach_id: string
+    primary_color: string | null
+    logo_url: string | null
     members: TeamMemberView[]
     activeMemberCount: number
     poolClientCount: number
@@ -34,7 +36,7 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
 
     const { data: teams } = await supabase
         .from('teams')
-        .select('id, name, slug, seat_limit, owner_coach_id')
+        .select('id, name, slug, seat_limit, owner_coach_id, primary_color, logo_url')
         .eq('id', activeTeamId)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
@@ -79,6 +81,8 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
                 slug: t.slug,
                 seat_limit: t.seat_limit,
                 owner_coach_id: t.owner_coach_id,
+                primary_color: t.primary_color,
+                logo_url: t.logo_url,
                 members,
                 activeMemberCount: members.length,
                 poolClientCount: poolRes.count ?? 0,
