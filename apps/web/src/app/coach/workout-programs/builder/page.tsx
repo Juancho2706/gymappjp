@@ -9,13 +9,14 @@ export default async function TemplateBuilderPage(
 ) {
     const searchParams = await props.searchParams;
     const { programId } = searchParams
-    const { user, exercises, initialProgram } = await getTemplateBuilderData(programId)
+    const { user, exercises, initialProgram, areas } = await getTemplateBuilderData(programId)
     if (!user) redirect('/login')
 
     return (
         <WeeklyPlanBuilder
             exercises={exercises}
             initialProgram={initialProgram}
+            areas={areas}
         />
     )
 }

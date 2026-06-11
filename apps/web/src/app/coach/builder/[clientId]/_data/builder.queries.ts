@@ -1,7 +1,9 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
+import type { WorkoutArea } from '@/domain/workout/types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { listAvailableWorkoutAreas } from '@/services/workout/workout-areas.service'
 
 type Client = Pick<Tables<'clients'>, 'id' | 'full_name' | 'email'>
 type Exercise = Tables<'exercises'>
@@ -16,7 +18,7 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
 export const getBuilderData = cache(async (clientId: string, programId?: string) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null }
+    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null, areas: [] as WorkoutArea[] }
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
@@ -42,7 +44,7 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         ? `and(coach_id.is.null,org_id.is.null),org_id.eq.${orgId}`
         : `and(coach_id.is.null,org_id.is.null),and(coach_id.eq.${user.id},org_id.is.null)`
 
-    const [clientResult, exercisesResult] = await Promise.all([
+    const [clientResult, exercisesResult, areas] = await Promise.all([
         clientQuery.maybeSingle(),
         supabase
             .from('exercises')
@@ -50,6 +52,12 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
             .or(exercisesFilter)
             .order('muscle_group')
             .order('name'),
+        // Areas del builder (workout_section_templates) segun workspace activo.
+        // Enterprise: solo system por ahora (sin areas de org en v1).
+        listAvailableWorkoutAreas(supabase, {
+            coachId: orgId ? null : user.id,
+            teamId: activeTeamId,
+        }),
     ])
 
     let initialProgram = null
@@ -103,5 +111,6 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         exercises: (exercisesResult.data ?? []) as Exercise[],
         initialProgram,
         lastEditor,
+        areas,
     }
 })

@@ -8,6 +8,36 @@ export type WorkoutProgramRow = Tables['workout_programs']['Row']
 export type WorkoutPlanRow = Tables['workout_plans']['Row']
 export type WorkoutBlockRow = Tables['workout_blocks']['Row']
 export type WorkoutLogRow = Tables['workout_logs']['Row']
+export type WorkoutSectionTemplateRow = Tables['workout_section_templates']['Row']
+
+/**
+ * Areas disponibles segun el workspace ACTIVO (separacion estricta de contextos):
+ * team ⇒ system + las del team; standalone ⇒ system + propias; sin scope ⇒ solo system.
+ * RLS (wst_select) es el techo; estos filtros son defensa en profundidad.
+ */
+export async function findAvailableSectionTemplates(
+    db: DB,
+    scope: { coachId: string | null; teamId: string | null }
+): Promise<WorkoutSectionTemplateRow[]> {
+    let query = db
+        .from('workout_section_templates')
+        .select('id, name, slug, coach_id, team_id, sort_order, is_system, created_at, deleted_at')
+        .is('deleted_at', null)
+
+    if (scope.teamId) {
+        query = query.or(`is_system.eq.true,team_id.eq.${scope.teamId}`)
+    } else if (scope.coachId) {
+        query = query.or(`is_system.eq.true,and(coach_id.eq.${scope.coachId},team_id.is.null)`)
+    } else {
+        query = query.eq('is_system', true)
+    }
+
+    const { data } = await query
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+
+    return (data ?? []) as WorkoutSectionTemplateRow[]
+}
 
 export async function findWorkoutProgramById(
     db: DB,

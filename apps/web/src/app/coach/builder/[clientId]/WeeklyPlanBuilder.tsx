@@ -44,6 +44,7 @@ import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 import type { BuilderBlock, DayState, ProgramPhase } from './types'
+import type { WorkoutArea } from '@/domain/workout/types'
 import { getMuscleColor } from './muscle-colors'
 
 type Client = Tables<'clients'>
@@ -119,6 +120,7 @@ function mapDbBlockToBuilderBlock(
         progression_type: b.progression_type || null,
         progression_value: b.progression_value ?? null,
         section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+        section_template_id: b.section_template_id ?? null,
         is_override: !!b.is_override,
         dayId,
     }
@@ -155,6 +157,7 @@ function createDefaultBlock(exercise: Exercise): BuilderBlock {
         rest_time: '90s',
         notes: '',
         section: 'main',
+        section_template_id: null,
         is_override: false,
     }
 }
@@ -169,7 +172,7 @@ function trackRecentExercise(exerciseId: string) {
     } catch { /* silently ignore storage errors */ }
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null }) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [] }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[] }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -228,8 +231,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const initialDaysB = useMemo(() => getInitialDays('B'), [])
 
-    const builderA = usePlanBuilder(initialDaysA)
-    const builderB = usePlanBuilder(initialDaysB)
+    const builderA = usePlanBuilder(initialDaysA, areas)
+    const builderB = usePlanBuilder(initialDaysB, areas)
     const activeBuilder = activeVariant === 'A' ? builderA : builderB
 
     const {

@@ -19,6 +19,8 @@ export interface BuilderBlock {
     progression_type?: 'weight' | 'reps' | null
     progression_value?: number | null
     section?: BuilderSection
+    /** Area (workout_section_templates.id) — preferente sobre section legacy (expand-contract) */
+    section_template_id?: string | null
     is_override?: boolean
 }
 

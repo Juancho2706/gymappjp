@@ -100,6 +100,7 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                         progression_type: b.progression_type || null,
                         progression_value: b.progression_value ?? null,
                         section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+                        section_template_id: b.section_template_id ?? null,
                         is_override: false,
                     })),
             }

@@ -2,6 +2,7 @@
 
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react'
 import type { BuilderBlock, BuilderSection, DayState } from '../types'
+import type { WorkoutArea } from '@/domain/workout/types'
 import { arrayMove } from '@dnd-kit/sortable'
 
 export const DAYS_OF_WEEK = [
@@ -199,8 +200,15 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
 
 const MAX_HISTORY = 20
 
-export function usePlanBuilder(initialDays: DayState[]) {
-    const [days, dispatch] = useReducer(builderReducer, initialDays)
+export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutArea[] = []) {
+    // Las areas llegan por props (RSC) y el reducer las lee via ref para no recrear el estado.
+    const areasRef = useRef(areas)
+    useEffect(() => { areasRef.current = areas }, [areas])
+    const boundReducer = useCallback(
+        (state: DayState[], action: BuilderAction) => builderReducer(state, action),
+        []
+    )
+    const [days, dispatch] = useReducer(boundReducer, initialDays)
 
     // History tracking via refs to avoid extra re-renders on every change
     const historyRef = useRef<DayState[][]>([])

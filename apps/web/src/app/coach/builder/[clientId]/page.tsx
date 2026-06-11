@@ -17,7 +17,7 @@ export default async function BuilderPage(
     const { clientId } = params
     const { planId, programId } = searchParams
     void planId
-    const { user, client, exercises, initialProgram, lastEditor } = await getBuilderData(clientId, programId)
+    const { user, client, exercises, initialProgram, lastEditor, areas } = await getBuilderData(clientId, programId)
     if (!user) redirect('/login')
 
     const coach = await getCoach()
@@ -31,6 +31,7 @@ export default async function BuilderPage(
             initialProgram={initialProgram}
             coachName={coach?.brand_name ?? coach?.full_name ?? undefined}
             lastEditor={lastEditor}
+            areas={areas}
         />
     )
 }
