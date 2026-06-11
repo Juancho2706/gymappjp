@@ -64,11 +64,34 @@ en verde, 3 sections clásicos byte-identical (sin regresión), commit + push po
       autorizado, NO por tanda (regla 2026-06-10).
 
 ## F5 — Ejecución área-driven
-- [ ] `lib/workout-block-grouping.ts`: `effectiveArea(block)` + orden dinámico; mantener firma legacy para
-      preview/library (fallback) hasta migrarlos.
-- [ ] Query ejecución: traer nombre del área (join `workout_section_templates`) o lookup.
-- [ ] `WorkoutExecutionClient`: agrupar/titular por área con fallback. Plan viejo idéntico; plan con custom OK.
-- [ ] Migrar/revisar consumidores de `workout-block-grouping` (preview coach, library).
+- [x] Helper puro `executionAreaGroupsFor()` en `lib/workout-areas.ts` (NO se tocó
+      `workout-block-grouping.ts` — baseline F0 intacto): clásicos por la vía legacy exacta
+      (títulos/subtítulos/opacity actuales), áreas resueltas por nombre + `sort_order`
+      intercalado, ids no resueltos caen a la sección legacy. +5 tests.
+- [x] Query ejecución: resuelve nombres de áreas NO clásicas vía admin client acotado a los
+      ids del plan del alumno (RLS `wst_select` no deja al alumno ver áreas custom del
+      coach/team; data minimization — solo nombres que SU plan referencia; soft-deleted fuera).
+- [x] `WorkoutExecutionClient`: agrupa/titula por área con fallback; subtítulos para las 4
+      system extra por slug; custom sin subtítulo. Plan viejo idéntico (AC3).
+- [ ] Migrar consumidores de `workout-block-grouping` (preview coach `ProgramPreviewDialog`,
+      library `ProgramPreviewPanel`, print): quedan con fallback legacy A PROPÓSITO (bloques en
+      áreas custom se listan bajo "Principal" en el preview del coach). Follow-up menor post-gate.
+- [x] Review adversarial F4+F5 (workflow, 6 confirmados/0 refutados, todos corregidos):
+      1. **HIGH** `createRawAdminClient` NO bypasea RLS con sesión en cookies (supabase-js
+         prefiere el JWT de la sesión sobre la service key) → el lookup de áreas corría como el
+         ALUMNO y las custom nunca resolvían. Fix: `createServiceRoleClient()` (cliente puro sin
+         cookies) + **filtro de tenant** (system / coach del plan / team del alumno) — un id
+         cross-context jamás se resuelve. ⚠️ GOTCHA REPO-WIDE: auditar otros call sites de
+         `createRawAdminClient` que asuman bypass de RLS (follow-up).
+      2. **MEDIUM** assign/duplicate copiaban `section_template_id` verbatim → coerción
+         `scopedSectionTemplateIdFor` en ambos (sync ya pasa por el save). El filtro de tenant
+         de (1) es el backstop en el punto de salida.
+      3. **MEDIUM** rename no regeneraba slug (nombre viejo bloqueado + duplicados por rename)
+         → `updateWorkoutArea` regenera slug (seguro: bloques referencian por id).
+      4. **LOW** slug 'area' degenerado con nombres no latinos → sufijo determinístico.
+      5. **LOW** doble-submit por Enter en AreasManager → guardas isPending/min-length.
+      ⚠️ Para el gate E2E: probar área CUSTOM en ejecución del alumno (las system dan falso
+      verde porque `is_system=true` pasa la RLS igual).
 
 ## F6 — CONTRACT (futuro, evaluar)
 - [ ] Una vez todo en `section_template_id`: evaluar dropear el CHECK/columna `section` legacy.

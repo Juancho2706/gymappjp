@@ -1,7 +1,10 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
 import { resolveActiveWeekVariantForDisplay } from '@/lib/workout/programWeekVariant'
+import { classicSlugForAreaId } from '@/lib/workout-areas'
+import type { WorkoutArea } from '@/domain/workout/types'
 
 export interface ExerciseType {
     id: string
@@ -23,6 +26,7 @@ export interface BlockType {
     rest_time: string | null
     notes: string | null
     section: 'warmup' | 'main' | 'cooldown' | null
+    section_template_id: string | null
     superset_group: string | null
     progression_type: 'weight' | 'reps' | null
     progression_value: number | null
@@ -37,6 +41,7 @@ export interface PlanType {
     day_of_week: number | null
     week_variant: 'A' | 'B' | null
     program_id: string | null
+    coach_id: string | null
     workout_blocks: BlockType[]
 }
 
@@ -59,7 +64,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     const { data: rawPlan } = await supabase
         .from('workout_plans')
         .select(`
-            id, title, assigned_date, day_of_week, week_variant, program_id,
+            id, title, assigned_date, day_of_week, week_variant, program_id, coach_id,
             workout_blocks (
                 id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, section_template_id, superset_group, progression_type, progression_value, is_override,
                 exercises ( id, name, muscle_group, video_url, gif_url, instructions )
@@ -157,6 +162,39 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         })
     }
 
+    // F5: nombres de las areas que ESTE plan referencia. RLS wst_select no deja al alumno
+    // ver areas custom del coach/team, asi que se resuelven con el SERVICE ROLE client puro
+    // (createServiceRoleClient, sin cookies: createRawAdminClient hereda la sesion del request
+    // y correria como el alumno — bypass falso). Doble acotamiento (data minimization):
+    // SOLO ids ya presentes en el plan + SOLO areas del tenant del plan (system, coach del
+    // plan, o team del alumno) — un id cross-context copiado por assign/duplicate NO se
+    // resuelve y cae al bucket legacy. Soft-deleted fuera (fallback). Clasicos no se resuelven.
+    let areas: WorkoutArea[] = []
+    const areaIds = [...new Set(
+        plan.workout_blocks
+            .map(b => b.section_template_id)
+            .filter((id): id is string => !!id && !classicSlugForAreaId(id))
+    )]
+    if (areaIds.length > 0) {
+        const { data: clientRow } = await supabase
+            .from('clients')
+            .select('team_id')
+            .eq('id', user.id)
+            .maybeSingle()
+        const tenantFilters = ['is_system.eq.true']
+        if (plan.coach_id) tenantFilters.push(`coach_id.eq.${plan.coach_id}`)
+        if (clientRow?.team_id) tenantFilters.push(`team_id.eq.${clientRow.team_id}`)
+
+        const serviceDb = createServiceRoleClient()
+        const { data: areaRows } = await serviceDb
+            .from('workout_section_templates')
+            .select('id, name, slug, sort_order, is_system, coach_id, team_id')
+            .in('id', areaIds)
+            .or(tenantFilters.join(','))
+            .is('deleted_at', null)
+        areas = (areaRows ?? []) as WorkoutArea[]
+    }
+
     const blockIdsSet = new Set(plan.workout_blocks.map((b) => b.id))
     const exerciseMaxes: Record<string, number> = {}
 
@@ -175,5 +213,5 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         }
     })
 
-    return { user, plan, program, logs, previousHistory, exerciseMaxes, activeWeekVariant }
+    return { user, plan, program, logs, previousHistory, exerciseMaxes, activeWeekVariant, areas }
 })

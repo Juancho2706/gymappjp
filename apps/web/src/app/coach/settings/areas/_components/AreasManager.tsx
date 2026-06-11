@@ -34,7 +34,8 @@ export function AreasManager({
 
     function handleCreate() {
         const name = newName.trim()
-        if (!name) return
+        // Enter en el input no pasa por el disabled del boton: misma guarda aqui
+        if (isPending || name.length < 2) return
         startTransition(async () => {
             const res = await createAreaAction({ name })
             if (res.area) {
@@ -55,6 +56,7 @@ export function AreasManager({
     }
 
     function handleUpdate(area: WorkoutArea) {
+        if (isPending) return
         const name = editName.trim()
         const sort = Number.parseInt(editOrder, 10)
         const payload: { id: string; name?: string; sort_order?: number } = { id: area.id }
@@ -77,6 +79,7 @@ export function AreasManager({
     }
 
     function handleDelete(area: WorkoutArea) {
+        if (isPending) return
         startTransition(async () => {
             const res = await deleteAreaAction({ id: area.id })
             if (res.success) {

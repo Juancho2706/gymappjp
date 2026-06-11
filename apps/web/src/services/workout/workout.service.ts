@@ -77,10 +77,12 @@ function sectionTemplateIdFor(section: string | null | undefined, existing?: str
 }
 
 /**
- * Hardening F4: el payload del builder es client-controlled y los inserts van via service_role
- * (saltan RLS). Coerce: un section_template_id que NO este entre las areas visibles del usuario
- * (RLS-scoped via su propio client) se descarta → cae al mapeo legacy por section. Evita
- * persistir referencias a areas de otro coach/team.
+ * Hardening F4: el payload del builder es client-controlled y workout_blocks no valida la
+ * tenencia del FK section_template_id (ninguna policy mira el target del FK; ademas
+ * createRawAdminClient con sesion en cookies corre como el usuario, no como service_role).
+ * Coerce: un section_template_id que NO este entre las areas visibles del usuario (RLS-scoped
+ * via su propio client) se descarta → cae al mapeo legacy por section. Evita persistir
+ * referencias a areas de otro coach/team (stale o forjadas).
  */
 async function resolveAllowedAreaIds(
     db: Awaited<ReturnType<typeof createClient>>,
@@ -571,6 +573,9 @@ export async function duplicateWorkoutProgramAction(
     if (!scope.ok) return { error: scope.error }
 
     const adminDb = await createRawAdminClient()
+    // Coercion de areas (misma regla que el save): ids fuera de las areas visibles del coach
+    // (p.ej. de un team que abandono) caen al mapeo legacy al copiar.
+    const allowedAreaIds = await resolveAllowedAreaIds(supabase)
 
     try {
         // 1. Obtener el programa original
@@ -665,7 +670,7 @@ export async function duplicateWorkoutProgramAction(
                 progression_type: block.progression_type ?? null,
                 progression_value: block.progression_value ?? null,
                 section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
-                section_template_id: sectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id),
+                section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                 is_override: false,
             }))
 
@@ -714,6 +719,8 @@ export async function assignProgramToClientsAction(
     if (!clientIds.length) return { error: 'Selecciona al menos un alumno.' }
 
     const adminDb = await createRawAdminClient()
+    // Coercion de areas (misma regla que el save) al copiar plantilla -> alumnos.
+    const allowedAreaIds = await resolveAllowedAreaIds(supabase)
 
     const normalizedOptions: AssignProgramOptions = typeof options === 'string'
         ? { startDate: options }
@@ -878,7 +885,7 @@ export async function assignProgramToClientsAction(
                         progression_type: block.progression_type ?? null,
                         progression_value: block.progression_value ?? null,
                         section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
-                        section_template_id: sectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id),
+                        section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                         is_override: false,
                     }))
 

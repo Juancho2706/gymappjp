@@ -68,14 +68,20 @@ export async function createWorkoutArea(
     return { area: toDomain(row) }
 }
 
-/** Renombrar / reordenar area custom. RLS es el techo; el caller valida el contexto. */
+/**
+ * Renombrar / reordenar area custom. RLS es el techo; el caller valida el contexto.
+ * Renombrar REGENERA el slug (los bloques referencian por id, asi que es seguro): si no,
+ * el slug viejo bloquea ese nombre para siempre y permite nombres duplicados por la via rename.
+ */
 export async function updateWorkoutArea(
     db: DB,
     id: string,
     values: { name?: string; sort_order?: number }
 ): Promise<{ area?: WorkoutArea; error?: string }> {
     if (values.name === undefined && values.sort_order === undefined) return { error: 'Nada que actualizar.' }
-    const { row, error } = await updateSectionTemplate(db, id, values)
+    const patch: { name?: string; slug?: string; sort_order?: number } = { ...values }
+    if (values.name !== undefined) patch.slug = slugifyAreaName(values.name)
+    const { row, error } = await updateSectionTemplate(db, id, patch)
     const friendly = friendlyAreaError(error)
     if (friendly) return { error: friendly }
     if (!row) return { error: 'Área no encontrada o sin permiso para editarla.' }

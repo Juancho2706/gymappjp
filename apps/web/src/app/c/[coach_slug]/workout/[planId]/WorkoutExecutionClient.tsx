@@ -20,11 +20,11 @@ import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import {
-    effectiveWorkoutSection,
     groupContiguousSupersetRuns,
-    WORKOUT_SECTION_ORDER,
     type WorkoutSectionKey,
 } from '@/lib/workout-block-grouping'
+import { executionAreaGroupsFor } from '@/lib/workout-areas'
+import type { WorkoutArea } from '@/domain/workout/types'
 
 interface ExerciseType {
     id: string
@@ -46,6 +46,7 @@ interface BlockType {
     rest_time: string | null
     notes: string | null
     section: 'warmup' | 'main' | 'cooldown' | null
+    section_template_id: string | null
     superset_group: string | null
     progression_type: 'weight' | 'reps' | null
     progression_value: number | null
@@ -87,6 +88,8 @@ interface Props {
     coachSlug: string
     exerciseMaxes?: Record<string, number>
     activeWeekVariant?: 'A' | 'B' | null
+    /** Areas (no clasicas) referenciadas por el plan, resueltas server-side; vacio en planes viejos */
+    areas?: WorkoutArea[]
 }
 
 function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
@@ -143,6 +146,14 @@ const WORKOUT_SECTION_SUBTITLE: Record<WorkoutSectionKey, string> = {
     other: 'Ejercicios sin sección definida. Si no estás seguro, consulta a tu coach.',
 }
 
+/** Subtitulos de las areas system no clasicas (por slug); areas custom van sin subtitulo. */
+const SYSTEM_AREA_SUBTITLE: Record<string, string> = {
+    mobility: 'Trabajo de movilidad y rango articular, controlado y sin prisa.',
+    core_activation: 'Activa la zona media antes del trabajo principal.',
+    power: 'Movimientos explosivos: calidad antes que cantidad, descansos completos.',
+    conditioning: 'Acondicionamiento metabólico: mantén el ritmo que te indique tu coach.',
+}
+
 export function WorkoutExecutionClient({
     plan,
     program,
@@ -151,6 +162,7 @@ export function WorkoutExecutionClient({
     coachSlug,
     exerciseMaxes = {},
     activeWeekVariant = null,
+    areas = [],
 }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
@@ -179,15 +191,21 @@ export function WorkoutExecutionClient({
 
     const getExercise = (block: BlockType) => (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) || null
 
+    // F5: agrupacion por AREA con fallback legacy (AC3: plan viejo — solo section o
+    // clasicos — produce exactamente los grupos/titulos/subtitulos de siempre).
     const sectioned = useMemo(() => {
-        return WORKOUT_SECTION_ORDER.map((sectionKey) => {
-            const sectionBlocks = blocks
-                .filter((block) => effectiveWorkoutSection(block.section) === sectionKey)
-                .sort((a, b) => a.order_index - b.order_index)
-            const grouped = groupContiguousSupersetRuns(sectionBlocks)
-            return { sectionKey, title: WORKOUT_SECTION_TITLE[sectionKey], groups: grouped }
-        }).filter((section) => section.groups.length > 0)
-    }, [blocks])
+        return executionAreaGroupsFor(blocks, areas)
+            .map((areaGroup) => ({
+                sectionKey: areaGroup.key,
+                title: areaGroup.name ?? WORKOUT_SECTION_TITLE[areaGroup.legacySection ?? 'main'],
+                subtitle: areaGroup.legacySection
+                    ? WORKOUT_SECTION_SUBTITLE[areaGroup.legacySection]
+                    : (areaGroup.slug && SYSTEM_AREA_SUBTITLE[areaGroup.slug]) || null,
+                muted: areaGroup.legacySection === 'warmup' || areaGroup.legacySection === 'cooldown',
+                groups: groupContiguousSupersetRuns(areaGroup.blocks),
+            }))
+            .filter((section) => section.groups.length > 0)
+    }, [blocks, areas])
 
     if (!blocks.length) {
         return (
@@ -339,10 +357,7 @@ export function WorkoutExecutionClient({
                                             className="w-1 self-stretch min-h-[1.25rem] rounded-full shrink-0"
                                             style={{
                                                 backgroundColor: 'var(--theme-primary)',
-                                                opacity:
-                                                    section.sectionKey === 'warmup' || section.sectionKey === 'cooldown'
-                                                        ? 0.4
-                                                        : 1,
+                                                opacity: section.muted ? 0.4 : 1,
                                             }}
                                         />
                                         <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground shrink-0">
@@ -353,9 +368,11 @@ export function WorkoutExecutionClient({
                                             {section.groups.length} bloque(s)
                                         </span>
                                     </div>
-                                    <p className="text-xs leading-relaxed text-muted-foreground pl-4 border-l-2 border-border/60">
-                                        {WORKOUT_SECTION_SUBTITLE[section.sectionKey]}
-                                    </p>
+                                    {section.subtitle && (
+                                        <p className="text-xs leading-relaxed text-muted-foreground pl-4 border-l-2 border-border/60">
+                                            {section.subtitle}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-3">
                                     {section.groups.map((group, groupIndex) => (

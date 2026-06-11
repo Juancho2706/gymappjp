@@ -54,11 +54,11 @@ export async function insertSectionTemplate(
     return { row: (data as WorkoutSectionTemplateRow) ?? null, error: error?.message ?? null }
 }
 
-/** Update de area custom (nombre y/u orden). `is_system = false` como defensa extra ante RLS. */
+/** Update de area custom (nombre/slug y/u orden). `is_system = false` como defensa extra ante RLS. */
 export async function updateSectionTemplate(
     db: DB,
     id: string,
-    values: { name?: string; sort_order?: number }
+    values: { name?: string; slug?: string; sort_order?: number }
 ): Promise<{ row: WorkoutSectionTemplateRow | null; error: string | null }> {
     const { data, error } = await db
         .from('workout_section_templates')
