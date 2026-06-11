@@ -13,12 +13,13 @@ export default async function WorkoutProgramsPage() {
     const workspace = await resolvePreferredWorkspace(supabase, coach.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
-    const { programs, clients } = await getWorkoutProgramsWithClients(coach.id, { orgId, activeTeamId })
+    const { programs, clients, areas } = await getWorkoutProgramsWithClients(coach.id, { orgId, activeTeamId })
 
     return (
         <WorkoutProgramsClientShell
             initialPrograms={programs}
             availableClients={clients}
+            areas={areas}
         />
     )
 }

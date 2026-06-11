@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-programs-library'
 import type { CoachClientScope } from '@/app/coach/clients/_data/clients.queries'
+import { listAvailableWorkoutAreas } from '@/services/workout/workout-areas.service'
 import type { ProgramListModel } from '../libraryStats'
 
 /**
@@ -28,7 +29,16 @@ export const getWorkoutProgramsWithClients = cache(async (coachId: string, scope
         clientsQuery = clientsQuery.eq('coach_id', coachId).is('org_id', null).is('team_id', null)
     }
 
-    const clientsResponse = await clientsQuery
+    // Areas del builder visibles segun workspace activo (mismo patron que builder.queries):
+    // team ⇒ system + del team; standalone ⇒ system + propias; enterprise ⇒ solo system v1.
+    // El preview de la biblioteca las usa para titular bloques en areas custom/extra.
+    const [clientsResponse, areas] = await Promise.all([
+        clientsQuery,
+        listAvailableWorkoutAreas(supabase, {
+            coachId: scope.orgId ? null : coachId,
+            teamId: scope.activeTeamId,
+        }),
+    ])
     const clients = clientsResponse.data ?? []
 
     let programsQuery = supabase
@@ -61,5 +71,5 @@ export const getWorkoutProgramsWithClients = cache(async (coachId: string, scope
         })
     }
 
-    return { programs, clients }
+    return { programs, clients, areas }
 })

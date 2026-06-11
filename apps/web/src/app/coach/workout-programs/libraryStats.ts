@@ -33,6 +33,8 @@ export interface ProgramListModel {
             sets: number
             reps: string
             section?: 'warmup' | 'main' | 'cooldown' | null
+            /** Area (workout_section_templates.id) — preferente sobre section legacy (expand-contract) */
+            section_template_id?: string | null
             tempo?: string | null
             rir?: string | null
             rest_time?: string | null

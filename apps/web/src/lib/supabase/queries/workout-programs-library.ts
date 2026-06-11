@@ -17,6 +17,7 @@ export const LIBRARY_PROGRAM_LIST_SELECT = `
             sets,
             reps,
             section,
+            section_template_id,
             tempo,
             rir,
             rest_time,

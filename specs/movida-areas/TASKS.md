@@ -73,9 +73,11 @@ en verde, 3 sections clásicos byte-identical (sin regresión), commit + push po
       coach/team; data minimization — solo nombres que SU plan referencia; soft-deleted fuera).
 - [x] `WorkoutExecutionClient`: agrupa/titula por área con fallback; subtítulos para las 4
       system extra por slug; custom sin subtítulo. Plan viejo idéntico (AC3).
-- [ ] Migrar consumidores de `workout-block-grouping` (preview coach `ProgramPreviewDialog`,
-      library `ProgramPreviewPanel`, print): quedan con fallback legacy A PROPÓSITO (bloques en
-      áreas custom se listan bajo "Principal" en el preview del coach). Follow-up menor post-gate.
+- [x] Migrar consumidores de `workout-block-grouping`: `ProgramPreviewDialog` (builder) y
+      `ProgramPreviewPanel` (library) agrupan por área con fallback legacy byte-identical para
+      clásicos (sellado por tests propios de cada componente); library carga áreas y trae
+      `section_template_id` en su select. `PrintProgramDialog` NO agrupa por sección (render
+      plano) — sin cambios. `workout-block-grouping.ts` (baseline F0) intacto.
 - [x] Review adversarial F4+F5 (workflow, 6 confirmados/0 refutados, todos corregidos):
       1. **HIGH** `createRawAdminClient` NO bypasea RLS con sesión en cookies (supabase-js
          prefiere el JWT de la sesión sobre la service key) → el lookup de áreas corría como el

@@ -1,6 +1,6 @@
 'use client'
 
-import { Dumbbell, Eye, Flame, Wind } from 'lucide-react'
+import { Dumbbell, Eye, Flame, Layers, Wind } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,11 +19,13 @@ import {
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import {
-    effectiveWorkoutSection,
     groupContiguousSupersetRuns,
-    WORKOUT_SECTION_ORDER,
+    type SupersetGroupRow,
     type WorkoutSectionKey,
 } from '@/lib/workout-block-grouping'
+import { executionAreaGroupsFor } from '@/lib/workout-areas'
+import { buildAreaVMs } from '@/app/coach/builder/[clientId]/area-ui'
+import type { WorkoutArea } from '@/domain/workout/types'
 import { useSyncExternalStore } from 'react'
 import type { ProgramListModel } from '../libraryStats'
 
@@ -77,6 +79,53 @@ function librarySectionHeader(sectionKey: WorkoutSectionKey): {
     return { short, label: m.label, icon: m.icon, className: m.className }
 }
 
+export type LibrarySectionVM<T extends { id: string; order_index: number; superset_group: string | null }> = {
+    key: string
+    short: string
+    label: string
+    icon: React.ReactNode
+    className: string
+    groups: SupersetGroupRow<T>[]
+}
+
+/**
+ * Secciones del preview de la biblioteca agrupadas por AREA con fallback legacy
+ * (mismo helper que la ejecucion del alumno, `executionAreaGroupsFor`):
+ * - Programa SOLO clasico → exactamente los headers de siempre (CAL/PRI/ENF via
+ *   `librarySectionHeader`, contrato anti-regresion).
+ * - Bloques en areas custom/extra → header con el nombre real del area, estilo de
+ *   `buildAreaVMs` (mismos colores que el builder), intercalados por sort_order.
+ * - Ids no resueltos (area borrada / otro contexto) caen a la seccion legacy.
+ * Exportada solo para tests.
+ */
+export function buildLibrarySections<
+    T extends {
+        id: string
+        order_index: number
+        superset_group: string | null
+        section?: string | null
+        section_template_id?: string | null
+    },
+>(rows: T[], areas: readonly WorkoutArea[]): LibrarySectionVM<T>[] {
+    const vmById = new Map(buildAreaVMs(areas).map((vm) => [vm.id, vm]))
+    return executionAreaGroupsFor(rows, areas).map((areaGroup) => {
+        const groups = groupContiguousSupersetRuns(areaGroup.blocks)
+        if (areaGroup.legacySection) {
+            const header = librarySectionHeader(areaGroup.legacySection)
+            return { key: areaGroup.key, ...header, groups }
+        }
+        const vm = vmById.get(areaGroup.key)
+        return {
+            key: areaGroup.key,
+            short: vm?.shortLabel ?? '???',
+            label: areaGroup.name ?? 'Área',
+            icon: <Layers className="size-3" />,
+            className: vm?.badgeClass ?? 'text-muted-foreground bg-muted/30 border-border/40',
+            groups,
+        }
+    })
+}
+
 function renderLibraryExerciseRow(block: LibraryPlanBlock) {
     const chips = [
         block.tempo && `Tempo ${block.tempo}`,
@@ -120,7 +169,7 @@ function useIsDesktopMd() {
     return useSyncExternalStore(subscribeMd, getMdSnapshot, getMdServerSnapshot)
 }
 
-export function ProgramPreviewBody({ program }: { program: ProgramListModel }) {
+export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramListModel; areas?: WorkoutArea[] }) {
     const plans = [...(program.workout_plans ?? [])].sort((a, b) => a.day_of_week - b.day_of_week)
     const phases = program.program_phases ?? []
 
@@ -192,32 +241,25 @@ export function ProgramPreviewBody({ program }: { program: ProgramListModel }) {
                                     </Badge>
                                 </div>
                                 <div className="divide-y divide-border/50">
-                                    {WORKOUT_SECTION_ORDER.map((sectionKey) => {
-                                        const sectionBlocks = rows.filter(
-                                            (b) => effectiveWorkoutSection(b.section) === sectionKey
-                                        )
-                                        if (sectionBlocks.length === 0) return null
-                                        const header = librarySectionHeader(sectionKey)
-                                        const groups = groupContiguousSupersetRuns(sectionBlocks)
-
+                                    {buildLibrarySections(rows, areas).map((section) => {
                                         return (
-                                            <div key={sectionKey} className="space-y-0">
+                                            <div key={section.key} className="space-y-0">
                                                 <div
                                                     className={cn(
                                                         'flex flex-wrap items-center gap-2 border-b border-border/40 px-3 py-1.5 text-[11px] font-semibold sm:px-4',
-                                                        header.className,
+                                                        section.className,
                                                     )}
                                                 >
                                                     <span className="rounded border border-current/30 bg-background/40 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest">
-                                                        {header.short}
+                                                        {section.short}
                                                     </span>
                                                     <span className="flex items-center gap-1.5">
-                                                        {header.icon}
-                                                        {header.label}
+                                                        {section.icon}
+                                                        {section.label}
                                                     </span>
                                                 </div>
                                                 <div className="space-y-2 bg-background/20 px-2 py-2 sm:px-3">
-                                                    {groups.map((group) => (
+                                                    {section.groups.map((group) => (
                                                         <div
                                                             key={group.key}
                                                             className={cn(
@@ -267,9 +309,11 @@ export interface ProgramPreviewPanelProps {
     program: ProgramListModel | null
     open: boolean
     onOpenChange: (open: boolean) => void
+    /** Areas visibles del workspace activo — resuelve nombres de areas custom/extra (fallback legacy si falta). */
+    areas?: WorkoutArea[]
 }
 
-export function ProgramPreviewPanel({ program, open, onOpenChange }: ProgramPreviewPanelProps) {
+export function ProgramPreviewPanel({ program, open, onOpenChange, areas = [] }: ProgramPreviewPanelProps) {
     const isDesktop = useIsDesktopMd()
 
     if (!program) return null
@@ -300,7 +344,7 @@ export function ProgramPreviewPanel({ program, open, onOpenChange }: ProgramPrev
                         <DialogTitle>Vista previa de {program.name}</DialogTitle>
                     </DialogHeader>
                     {header}
-                    <ProgramPreviewBody program={program} />
+                    <ProgramPreviewBody program={program} areas={areas} />
                     <DialogFooter className="border-t border-border/80 bg-muted/10 px-4 py-3 sm:px-6">
                         {footer}
                     </DialogFooter>
@@ -316,7 +360,7 @@ export function ProgramPreviewPanel({ program, open, onOpenChange }: ProgramPrev
                     <SheetTitle className="sr-only">Vista previa de {program.name}</SheetTitle>
                     {header}
                 </SheetHeader>
-                <ProgramPreviewBody program={program} />
+                <ProgramPreviewBody program={program} areas={areas} />
                 <SheetFooter className="border-border bg-muted/10">{footer}</SheetFooter>
             </SheetContent>
         </Sheet>

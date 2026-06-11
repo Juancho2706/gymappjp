@@ -1796,6 +1796,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 durationDays={durationDays}
                 programNotes={programNotes}
                 clientName={client?.full_name}
+                areas={areas}
             />
 
             {!client && initialProgram?.id && (

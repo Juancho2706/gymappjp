@@ -62,6 +62,7 @@ import {
     type ProgramListModel,
     matchesProgramFilters,
 } from './libraryStats'
+import type { WorkoutArea } from '@/domain/workout/types'
 interface Client {
     id: string
     full_name: string
@@ -75,6 +76,8 @@ interface Client {
 interface WorkoutProgramsClientProps {
     initialPrograms: ProgramListModel[]
     availableClients: Client[]
+    /** Areas visibles del workspace activo — el preview titula bloques en areas custom/extra. */
+    areas?: WorkoutArea[]
 }
 
 const libraryEmptyCardClass =
@@ -159,6 +162,7 @@ function DesktopEmptyPanel() {
 
 interface DesktopDetailPanelProps {
     program: ProgramListModel
+    areas: WorkoutArea[]
     onClose: () => void
     isPending: boolean
     isActionPending: boolean
@@ -171,6 +175,7 @@ interface DesktopDetailPanelProps {
 
 function DesktopDetailPanel({
     program,
+    areas,
     onClose,
     isPending,
     isActionPending,
@@ -238,7 +243,7 @@ function DesktopDetailPanel({
             </div>
 
             {/* Body */}
-            <ProgramPreviewBody program={program} />
+            <ProgramPreviewBody program={program} areas={areas} />
 
             {/* Footer actions */}
             <div className="flex flex-wrap gap-2 border-t border-border/60 bg-muted/10 px-4 py-3">
@@ -294,6 +299,7 @@ function DesktopDetailPanel({
 export function WorkoutProgramsClient({
     initialPrograms,
     availableClients,
+    areas = [],
 }: WorkoutProgramsClientProps) {
     const router = useRouter()
     const reduceMotion = useReducedMotion()
@@ -688,6 +694,7 @@ export function WorkoutProgramsClient({
                     {selectedPanelProgram ? (
                         <DesktopDetailPanel
                             program={selectedPanelProgram}
+                            areas={areas}
                             onClose={() => setSelectedPanelProgram(null)}
                             isPending={isPending}
                             isActionPending={actionProgramId === selectedPanelProgram.id}
@@ -1039,7 +1046,7 @@ export function WorkoutProgramsClient({
                 </AlertDialogContent>
             </AlertDialog>
 
-            <ProgramPreviewPanel program={programToPreview} open={isPreviewOpen} onOpenChange={setIsPreviewOpen} />
+            <ProgramPreviewPanel program={programToPreview} open={isPreviewOpen} onOpenChange={setIsPreviewOpen} areas={areas} />
         </div>
     )
 }
