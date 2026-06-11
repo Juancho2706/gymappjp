@@ -267,6 +267,8 @@ export async function upsertClientNutritionPlanJson(
       instructions: instructions ?? null,
       is_active: true,
       is_custom: true,
+      // E (awareness): quién tocó el plan por última vez — visible para el resto del pool.
+      last_edited_by_coach_id: coachId,
     }
 
     let currentPlanId = id ?? null

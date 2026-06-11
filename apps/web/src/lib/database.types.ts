@@ -1839,6 +1839,7 @@ export type Database = {
           instructions: string | null
           is_active: boolean
           is_custom: boolean | null
+          last_edited_by_coach_id: string | null
           name: string
           org_id: string | null
           protein_g: number | null
@@ -1857,6 +1858,7 @@ export type Database = {
           instructions?: string | null
           is_active?: boolean
           is_custom?: boolean | null
+          last_edited_by_coach_id?: string | null
           name: string
           org_id?: string | null
           protein_g?: number | null
@@ -1875,6 +1877,7 @@ export type Database = {
           instructions?: string | null
           is_active?: boolean
           is_custom?: boolean | null
+          last_edited_by_coach_id?: string | null
           name?: string
           org_id?: string | null
           protein_g?: number | null
@@ -3316,6 +3319,7 @@ export type Database = {
           end_date: string | null
           id: string
           is_active: boolean
+          last_edited_by_coach_id: string | null
           name: string
           org_id: string | null
           program_notes: string | null
@@ -3339,6 +3343,7 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_active?: boolean
+          last_edited_by_coach_id?: string | null
           name: string
           org_id?: string | null
           program_notes?: string | null
@@ -3362,6 +3367,7 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_active?: boolean
+          last_edited_by_coach_id?: string | null
           name?: string
           org_id?: string | null
           program_notes?: string | null

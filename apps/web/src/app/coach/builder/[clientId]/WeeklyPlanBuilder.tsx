@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AppOnlyPopup } from '@/components/AppOnlyPopup'
+import { EditedByBadge } from '@/components/coach/EditedByBadge'
 import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './_actions/builder.actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
@@ -168,7 +169,7 @@ function trackRecentExercise(exerciseId: string) {
     } catch { /* silently ignore storage errors */ }
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string }) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -844,7 +845,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }, [toggleBlockOverride])
 
-    const handleSave = () => {
+    const handleSave = (force = false) => {
         if (!programName.trim()) { toast.error('El programa necesita un nombre.'); return }
         const allDaysToCheck = isABMode ? [...builderA.days, ...builderB.days] : days
         const hasExercises = allDaysToCheck.some(d => d.blocks.length > 0)
@@ -907,8 +908,19 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     : mapDays(days, 'A')
             }
 
-            const result = await saveWorkoutProgramAction(input)
-            if (result?.error) {
+            const result = await saveWorkoutProgramAction(input, {
+                expectedUpdatedAt: initialProgram?.updated_at ?? null,
+                force,
+            })
+            if (result?.conflict) {
+                // E (awareness): otro coach del pool guardó mientras editabas — nada se pisó.
+                const who = result.conflict.editedBy ?? 'Otro coach'
+                toast.warning(`${who} guardó cambios en este programa mientras editabas.`, {
+                    duration: 12000,
+                    action: { label: 'Ver lo nuevo', onClick: () => window.location.reload() },
+                    cancel: { label: 'Guardar igual', onClick: () => handleSave(true) },
+                })
+            } else if (result?.error) {
                 toast.error(result.error)
             } else {
                 toast.success('Programa guardado exitosamente.')
@@ -965,6 +977,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     <span className="hidden md:flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20 shrink-0">
                                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                                         CAMBIOS SIN GUARDAR
+                                    </span>
+                                )}
+                                {lastEditor && (
+                                    <span className="hidden md:inline-flex shrink-0">
+                                        <EditedByBadge name={lastEditor.name} at={lastEditor.at} />
                                     </span>
                                 )}
                             </div>
@@ -1187,7 +1204,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
                         {/* Save — always visible */}
                         <Button
-                            onClick={handleSave}
+                            onClick={() => handleSave()}
                             disabled={isPending || !programName.trim()}
                             data-tour-id="save-button"
                             size="sm"

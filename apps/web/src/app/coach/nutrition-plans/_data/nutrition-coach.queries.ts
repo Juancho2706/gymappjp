@@ -369,13 +369,19 @@ export const getFoodLibrary = cache(async (coachId: string, options: FoodLibrary
 /**
  * Plan activo de un alumno (validado por coach).
  */
-export const getClientNutritionPlan = cache(async (clientId: string, coachId: string, orgId: string | null = null) => {
+export const getClientNutritionPlan = cache(async (
+  clientId: string,
+  coachId: string,
+  orgId: string | null = null,
+  activeTeamId: string | null = null
+) => {
   const supabase = await createClient()
   let query = supabase
     .from('nutrition_plans')
     .select(
       `
       id, client_id, coach_id, template_id, name, is_custom, is_active, daily_calories, protein_g, carbs_g, fats_g,
+      updated_at, last_edited_by_coach_id,
       nutrition_meals (
         id, plan_id, name, order_index, day_of_week,
         food_items (
@@ -387,10 +393,16 @@ export const getClientNutritionPlan = cache(async (clientId: string, coachId: st
     `
     )
     .eq('client_id', clientId)
-    .eq('coach_id', coachId)
     .eq('is_active', true)
     .order('order_index', { referencedTable: 'nutrition_meals', ascending: true })
-  query = applyOrgScope(query, orgId)
+  if (activeTeamId) {
+    // Pool colaborativo: el plan puede ser de OTRO coach del team (el caller ya validó
+    // que el alumno pertenece al pool activo; RLS valida la fila del plan).
+    query = query.is('org_id', null)
+  } else {
+    query = query.eq('coach_id', coachId)
+    query = applyOrgScope(query, orgId)
+  }
   const { data } = await query.maybeSingle()
   return data
 })

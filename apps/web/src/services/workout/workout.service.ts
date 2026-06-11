@@ -16,6 +16,15 @@ export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@e
 export type ProgramState = {
     error?: string
     programId?: string
+    /** E (awareness): el programa cambió en el server desde que el coach lo abrió. No se guardó nada. */
+    conflict?: { editedBy: string | null; at: string }
+}
+
+/** E (awareness): chequeo optimista no destructivo — el caller decide recargar o forzar. */
+export type SaveProgramOptions = {
+    /** updated_at que el builder tenía al cargar; si difiere del actual ⇒ conflict (salvo force). */
+    expectedUpdatedAt?: string | null
+    force?: boolean
 }
 
 export type AssignProgramResult = {
@@ -131,7 +140,7 @@ async function deactivateActiveProgramsForClient(adminDb: any, clientId: string,
 /**
  * Guarda o actualiza un programa de entrenamiento completo, incluyendo sus planes y bloques.
  */
-export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Promise<ProgramState> {
+export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, saveOptions?: SaveProgramOptions): Promise<ProgramState> {
     const parsed = WorkoutProgramSchema.safeParse(payload)
 
     if (!parsed.success) {
@@ -245,6 +254,28 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                 }
             }
 
+            // E (awareness): conflicto no destructivo — si otro coach (pool) guardó desde que
+            // este builder cargó, NO pisar su trabajo: devolver conflict y que el coach decida.
+            if (saveOptions?.expectedUpdatedAt && !saveOptions.force) {
+                const { data: currentRow } = await adminDb
+                    .from('workout_programs')
+                    .select('updated_at, last_edited_by_coach_id')
+                    .eq('id', finalProgramId)
+                    .maybeSingle()
+                if (currentRow && currentRow.updated_at !== saveOptions.expectedUpdatedAt) {
+                    let editedBy: string | null = null
+                    if (currentRow.last_edited_by_coach_id && currentRow.last_edited_by_coach_id !== user.id) {
+                        const { data: editor } = await adminDb
+                            .from('coaches')
+                            .select('full_name, brand_name')
+                            .eq('id', currentRow.last_edited_by_coach_id)
+                            .maybeSingle()
+                        editedBy = editor?.full_name || editor?.brand_name || null
+                    }
+                    return { conflict: { editedBy, at: currentRow.updated_at } }
+                }
+            }
+
             // Actualizar programa existente
             let updateProgramQuery = adminDb
                 .from('workout_programs')
@@ -262,6 +293,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                     ab_mode: ab_mode ?? false,
                     program_phases: phasesForDb,
                     source_template_id: sourceTplId,
+                    last_edited_by_coach_id: user.id,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', finalProgramId)
@@ -324,6 +356,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Pr
                     ab_mode: ab_mode ?? false,
                     program_phases: phasesForDb,
                     source_template_id: sourceTplId,
+                    last_edited_by_coach_id: user.id,
                 })
                 .select('id')
                 .single()
@@ -563,6 +596,7 @@ export async function duplicateWorkoutProgramAction(
                 ab_mode: (original as any).ab_mode ?? false,
                 program_phases: (original as any).program_phases ?? [],
                 source_template_id: null,
+                last_edited_by_coach_id: user.id,
             })
             .select('id')
             .single()
@@ -775,6 +809,7 @@ export async function assignProgramToClientsAction(
                         ab_mode: (template as any).ab_mode ?? false,
                         program_phases: (template as any).program_phases ?? [],
                         source_template_id: templateId,
+                        last_edited_by_coach_id: user.id,
                     })
                     .select('id')
                     .single()

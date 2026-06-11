@@ -79,10 +79,29 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         initialProgram = program ?? null
     }
 
+    // E (awareness): nombre del último editor — solo interesa en el pool (contexto team)
+    // y solo si fue OTRO coach (el badge "editado por mí" es ruido).
+    let lastEditor: { name: string; at: string | null } | null = null
+    const editedBy = (initialProgram as { last_edited_by_coach_id?: string | null } | null)?.last_edited_by_coach_id
+    if (activeTeamId && editedBy && editedBy !== user.id) {
+        const { data: editor } = await supabase
+            .from('coaches')
+            .select('full_name, brand_name')
+            .eq('id', editedBy)
+            .maybeSingle()
+        if (editor) {
+            lastEditor = {
+                name: editor.full_name || editor.brand_name || 'Otro coach',
+                at: (initialProgram as { updated_at?: string | null } | null)?.updated_at ?? null,
+            }
+        }
+    }
+
     return {
         user,
         client: clientResult.data as Client | null,
         exercises: (exercisesResult.data ?? []) as Exercise[],
         initialProgram,
+        lastEditor,
     }
 })

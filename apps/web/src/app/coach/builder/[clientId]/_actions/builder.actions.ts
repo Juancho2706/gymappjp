@@ -4,6 +4,7 @@ import type {
     AssignProgramOptions,
     AssignProgramResult,
     ProgramState,
+    SaveProgramOptions,
 } from '@/services/workout/workout.service'
 import {
     assignProgramToClientsAction as assignProgramToClientsService,
@@ -21,10 +22,10 @@ import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats
 import type { WorkoutProgramInput } from '@eva/schemas'
 
 export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@eva/schemas'
-export type { AssignProgramOptions, AssignProgramResult, ProgramState } from '@/services/workout/workout.service'
+export type { AssignProgramOptions, AssignProgramResult, ProgramState, SaveProgramOptions } from '@/services/workout/workout.service'
 
-export async function saveWorkoutProgramAction(payload: WorkoutProgramInput): Promise<ProgramState> {
-    return saveWorkoutProgramService(payload)
+export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, saveOptions?: SaveProgramOptions): Promise<ProgramState> {
+    return saveWorkoutProgramService(payload, saveOptions)
 }
 
 export async function deleteWorkoutProgramAction(programId: string, clientId: string): Promise<{ error?: string }> {

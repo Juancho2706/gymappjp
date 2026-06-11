@@ -5,7 +5,8 @@ import { PlanBuilder } from '../../_components/PlanBuilder'
 import { getClientNutritionPlan, getClientAdherence } from '../../_data/nutrition-coach.queries'
 import { mapClientPlanRowToInitialData } from '../../_data/plan-builder-mappers'
 import { AdherenceStrip } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
-import { getClientNutritionPlanPageAuthData } from './_data/client-plan-page.queries'
+import { getClientNutritionPlanPageAuthData, getCoachDisplayName } from './_data/client-plan-page.queries'
+import { EditedByBadge } from '@/components/coach/EditedByBadge'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -13,13 +14,23 @@ interface Props {
 
 export default async function CoachClientNutritionPlanPage({ params }: Props) {
   const { clientId } = await params
-  const { user, client, intake, orgId } = await getClientNutritionPlanPageAuthData(clientId)
+  const { user, client, intake, orgId, activeTeamId } = await getClientNutritionPlanPageAuthData(clientId)
   if (!user) redirect('/login')
 
-  if (!client || client.coach_id !== user.id) notFound()
+  // El query de auth ya scopeó por workspace activo (team = pool colaborativo, sin
+  // exigir coach_id propio; standalone/org sí lo exigen dentro del query).
+  if (!client) notFound()
 
-  const plan = await getClientNutritionPlan(clientId, user.id, orgId ?? null)
+  const plan = await getClientNutritionPlan(clientId, user.id, orgId ?? null, activeTeamId ?? null)
   const initialData = plan ? mapClientPlanRowToInitialData(plan) : null
+
+  // E (awareness): badge solo en el pool y solo si el último editor fue OTRO coach.
+  let lastEditor: { name: string; at: string | null } | null = null
+  const editedBy = (plan as { last_edited_by_coach_id?: string | null } | null)?.last_edited_by_coach_id
+  if (activeTeamId && editedBy && editedBy !== user.id) {
+    const editor = await getCoachDisplayName(editedBy)
+    if (editor) lastEditor = { name: editor, at: (plan as { updated_at?: string | null } | null)?.updated_at ?? null }
+  }
 
   const adherence =
     plan?.id && plan.nutrition_meals?.length
@@ -41,7 +52,10 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-black tracking-tight">Plan nutricional</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight">Plan nutricional</h1>
+            {lastEditor && <EditedByBadge name={lastEditor.name} at={lastEditor.at} />}
+          </div>
           <p className="text-xs text-muted-foreground font-medium">{client.full_name}</p>
         </div>
         <Link
