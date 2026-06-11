@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
 import { ClientLoginSchema, ChangePasswordSchema } from '@eva/schemas'
 import type { Tables } from '@/lib/database.types'
@@ -107,7 +108,12 @@ export async function clientLoginAction(
                     slug: coach_slug,
                 }
         } else if (rawClient.org_id) {
-            const { data: orgMember } = await rawAdmin
+            // R2 (auditoria 2026-06-11): el alumno NO tiene lectura RLS sobre organization_members
+            // y rawAdmin corre con la sesion del alumno recien creada => esta rama (entrar por el
+            // slug de OTRO coach de su misma org) devolvia siempre null. Service role REAL,
+            // acotado a la verificacion exacta org+coach+activo.
+            const serviceDb = createServiceRoleClient()
+            const { data: orgMember } = await serviceDb
                 .from('organization_members')
                 .select('id, organizations(name)')
                 .eq('org_id', rawClient.org_id)

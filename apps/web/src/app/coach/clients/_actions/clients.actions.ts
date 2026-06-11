@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { CreateClientSchema, UpdateClientDataSchema } from '@eva/schemas'
@@ -152,14 +153,23 @@ export async function createClientAction(
     if (!identity.ok) console.error('createClientIdentity (non-fatal):', identity.error)
 
     if (scope.orgId) {
-        const { error: assignErr } = await admin.from('coach_client_assignments').insert({
+        // R1 (auditoria 2026-06-11): no existe policy de INSERT en coach_client_assignments para
+        // coaches (a proposito: seria escalada horizontal) y el admin client con cookies corre
+        // como el coach => RLS bloqueaba este insert en silencio y el alumno quedaba invisible.
+        // Service role REAL acotado (org y coach ya validados por resolveCoachScope) y FATAL con
+        // rollback: un alumno enterprise sin asignacion es un alumno huerfano.
+        const serviceDb = createServiceRoleClient()
+        const { error: assignErr } = await serviceDb.from('coach_client_assignments').insert({
             org_id: scope.orgId,
             coach_id: coach.id,
             client_id: newAuthUser.user.id,
             assigned_by: coachUser.id,
         })
         if (assignErr) {
-            console.error('Failed to create coach_client_assignment (non-fatal):', assignErr)
+            console.error('Failed to create coach_client_assignment (rolling back):', assignErr)
+            await serviceDb.from('clients').delete().eq('id', newAuthUser.user.id)
+            await admin.auth.admin.deleteUser(newAuthUser.user.id)
+            return { error: 'No se pudo asignar el alumno a tu cuenta. Intenta de nuevo.' }
         }
     }
 

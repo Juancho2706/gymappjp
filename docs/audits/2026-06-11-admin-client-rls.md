@@ -140,7 +140,13 @@ correcto para borrar/anonimizar data cruzada; fuera del alcance riesgoso.)
 
 ## 4. Hallazgos riesgosos priorizados
 
-### R1 — P0: `coach_client_assignments` INSERT falla silenciosamente (enterprise)
+> **Estado 2026-06-11 (post-auditoria):** R1 y R2 CORREGIDOS en codigo (mismo dia, commit en
+> `feat/movida-platform`): ambos sitios usan `createServiceRoleClient()` acotado; R1 ademas es
+> fatal con rollback (delete client + deleteUser). R3 (deuda estructural, 23 sitios OK-RLS +
+> eliminar las 2 factories bimodales) queda PENDIENTE como refactor incremental. Verificacion
+> E2E de R1/R2 (flujo enterprise real) va al gate autorizado.
+
+### R1 — P0: `coach_client_assignments` INSERT falla silenciosamente (enterprise) — ✅ CORREGIDO
 - **Sitio:** `apps/web/src/app/coach/clients/_actions/clients.actions.ts:155` (dentro de
   `createClientAction`, cliente de linea 102).
 - **Causa:** asume bypass; como coach autenticado no existe NINGUNA policy de INSERT en
@@ -155,7 +161,7 @@ correcto para borrar/anonimizar data cruzada; fuera del alcance riesgoso.)
   con rollback (deleteUser + delete client) si falla. NO crear policy de INSERT para coaches
   (seria escalada horizontal: cualquier coach org podria autoasignarse alumnos).
 
-### R2 — P1: login de alumno enterprise por slug de coach peer roto
+### R2 — P1: login de alumno enterprise por slug de coach peer roto — ✅ CORREGIDO
 - **Sitio:** `apps/web/src/app/c/[coach_slug]/login/_actions/login.actions.ts:110`.
 - **Causa:** asume bypass; el alumno (sesion recien creada por `signInWithPassword` en el mismo
   request) no tiene lectura RLS sobre `organization_members`.
