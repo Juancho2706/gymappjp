@@ -12,14 +12,13 @@ del usuario. Los specs E2E/SQL se ESCRIBEN en su tanda igual.
 
 ## F0 — Cimiento de módulo (sin DB)
 
-- [~] T0.1 — Kill-switch de operador en `services/entitlements.service.ts` — **PARCIAL (2026-06-11)**
-  - HECHO: `isMovementModuleKilled()` (env `DISABLED_MODULES`, CSV) implementado en
-    `services/assessment/movement-assessment.service.ts` y evaluado ANTES de todo gate en TODA
+- [x] T0.1 — Kill-switch de operador en `services/entitlements.service.ts` — **HECHO (2026-06-11)**
+  - `isModuleKilledByOperator()` (env `EVA_DISABLED_MODULES`, CSV) central en
+    `services/entitlements.service.ts`, evaluado en `hasModule` y ANTES de todo gate en TODA
     query/mutación del módulo (incl. vista del alumno). Unit test verde (killed ⇒ throw antes de
-    tocar scope/repo).
-  - DIFERIDO al cableado central: mover/levantar el check a `entitlements.service.ts#hasModule`
-    (archivo compartido — prohibido en corrida paralela) + documentar env var en `CLAUDE.md` y
-    `docs/operations/RUNBOOK.md`.
+    tocar scope/repo). El duplicado local `isMovementModuleKilled()` (env vieja `DISABLED_MODULES`)
+    fue eliminado del service en el cableado central. Env var documentada en `CLAUDE.md`;
+    pendiente menor: mención en `docs/operations/RUNBOOK.md`.
 - [ ] T0.2 — Enforcement de `entitlement` en el nav — **DIFERIDO al orquestador**
   - `components/coach/coach-nav.ts` y `CoachSidebar.tsx` son ARCHIVOS COMPARTIDOS PROHIBIDOS en
     esta corrida. El ítem NAV_MODULES exacto se entrega en el JSON de salida (navEntry).

@@ -14,9 +14,9 @@ import type { Database } from '@/lib/database.types'
  * - Queries que deben pasar RLS del usuario → `createClient()` de `@/lib/supabase/server`.
  * - Bypass real → `createServiceRoleClient()` de `@/lib/supabase/admin-client`, SOLO post-gate
  *   server-side y con filtros explicitos de tenant (org/team/coach).
- * Call sites restantes (corren como el usuario y pasan RLS — refactor R3 pendiente ahi):
- * coach/exercises/_actions/exercise-media.actions.ts y
- * c/[coach_slug]/dashboard/_actions/dashboard.actions.ts. Borrar este archivo al migrarlos.
+ * Sin call sites de produccion (2026-06-11): exercise-media.actions.ts y dashboard.actions.ts
+ * migrados. Solo queda un vi.mock legacy en (auth)/register/actions.test.ts — borrar este
+ * archivo junto con ese mock en una tanda con typecheck+vitest.
  */
 export async function createRawAdminClient() {
     const cookieStore = await cookies()

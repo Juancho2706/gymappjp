@@ -13,6 +13,7 @@ import {
     LogOut,
     CheckCircle,
     Dumbbell,
+    PersonStanding,
     PanelLeftClose,
     PanelLeft
 } from 'lucide-react'
@@ -35,9 +36,11 @@ interface Props {
     coachBrand: string
     coachLogoUrl: string
     initialUseBrandColors?: boolean
+    /** Espejo del modulo movement_assessment (resuelto server-side; gate real en la page). */
+    showMovement?: boolean
 }
 
-export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true, showMovement = false }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
@@ -96,6 +99,11 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
             label: 'Check-in',
             icon: CheckCircle,
         },
+        ...(showMovement ? [{
+            href: `${base}/movimiento`,
+            label: 'Movimiento',
+            icon: PersonStanding,
+        }] : []),
     ]
 
     async function handleSignOut() {

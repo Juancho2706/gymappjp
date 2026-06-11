@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { MovementAssessmentItem, MovementAssessmentWithItems } from '@/domain/assessment/types'
 
-vi.mock('@/services/entitlements.service', () => ({
+vi.mock('@/services/entitlements.service', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/services/entitlements.service')>()),
     assertModule: vi.fn(),
     hasModule: vi.fn(),
 }))
@@ -117,7 +118,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-    delete process.env.DISABLED_MODULES
+    delete process.env.EVA_DISABLED_MODULES
 })
 
 describe('gating (AC6)', () => {
@@ -140,8 +141,8 @@ describe('gating (AC6)', () => {
         expect(assertModule).not.toHaveBeenCalled()
     })
 
-    it('kill-switch DISABLED_MODULES apaga el modulo antes de todo', async () => {
-        process.env.DISABLED_MODULES = 'cardio, movement_assessment'
+    it('kill-switch EVA_DISABLED_MODULES apaga el modulo antes de todo', async () => {
+        process.env.EVA_DISABLED_MODULES = 'cardio, movement_assessment'
         await expect(finalizeMovementAssessment(db, USER, finalizeInput())).rejects.toThrow(/operador/)
         expect(assertCoachClientReadAccess).not.toHaveBeenCalled()
     })

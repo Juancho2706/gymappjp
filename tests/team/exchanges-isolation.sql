@@ -1,5 +1,7 @@
 -- Suite RLS — NUTRICION POR INTERCAMBIOS (exchange_groups / meal_exchange_targets /
--- nutrition_plan_day_variants + guard de team_id en nutrition_plan_templates, T10).
+-- nutrition_plan_day_variants + guard de team_id en nutrition_plan_templates, T10,
+-- + bitacora pdf_generate en team_access_logs, T11-T13 — AC7, delegado por
+-- tests/separation/nutrition-exchanges.spec.ts).
 -- tx + ROLLBACK (no persiste). Datos sinteticos prefijo e8c00000.
 -- Spec: specs/movida-intercambios/SPEC.md AC6/AC1 · Plan: PLAN.md §RLS · Patron: tests/team/areas-isolation.sql.
 -- Requiere 20260611093001_nutrition_exchanges.sql aplicada. Esperado: 'ALL PASSED'.
@@ -235,6 +237,63 @@ DO $t10$ DECLARE v_ins int; v_upd int; BEGIN
   GET DIAGNOSTICS v_ins=ROW_COUNT;
   IF v_ins<>1 THEN RAISE EXCEPTION 'T10 FAIL insert legitimo con team_id propio bloqueado'; END IF;
 END $t10$;
+RESET role;
+
+-- ============ T11 — coach A2: bitacora pdf_generate en team_access_logs (AC7) ============
+-- Espejo del contrato de logExchangePdfGenerated: coach del pool inserta la fila
+-- pdf_generate para alumno de SU pool bajo RLS authenticated (policy member_insert).
+SET LOCAL role authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"e8c00000-0000-0000-0000-0000000000a2","role":"authenticated"}',true);
+DO $t11$ DECLARE v_ins int; v_cnt int; BEGIN
+  INSERT INTO public.team_access_logs (team_id, actor_coach_id, client_id, resource, action, metadata)
+    VALUES ('e8c00000-0000-0000-0000-0000000000aa','e8c00000-0000-0000-0000-0000000000a2','e8c00000-0000-0000-0000-0000000000f1','nutrition_plan','pdf_generate','{"format":"compact","plan_id":"e8c00000-0000-0000-0000-00000000a111"}');
+  GET DIAGNOSTICS v_ins=ROW_COUNT;
+  IF v_ins<>1 THEN RAISE EXCEPTION 'T11 FAIL coach del pool no pudo insertar pdf_generate'; END IF;
+  SELECT count(*) INTO v_cnt FROM public.team_access_logs
+   WHERE team_id='e8c00000-0000-0000-0000-0000000000aa' AND action='pdf_generate';
+  IF v_cnt<1 THEN RAISE EXCEPTION 'T11 FAIL miembro no ve la fila pdf_generate cnt=%',v_cnt; END IF;
+  -- self-attribution: actor_coach_id forjado (A1) bloqueado por la policy
+  BEGIN
+    INSERT INTO public.team_access_logs (team_id, actor_coach_id, client_id, resource, action)
+      VALUES ('e8c00000-0000-0000-0000-0000000000aa','e8c00000-0000-0000-0000-0000000000a1','e8c00000-0000-0000-0000-0000000000f1','nutrition_plan','pdf_generate');
+    RAISE EXCEPTION 'T11 FAIL pdf_generate con actor forjado paso';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL; END;
+  -- alumno de OTRO pool (f2, team B) en la bitacora de team A bloqueado
+  BEGIN
+    INSERT INTO public.team_access_logs (team_id, actor_coach_id, client_id, resource, action)
+      VALUES ('e8c00000-0000-0000-0000-0000000000aa','e8c00000-0000-0000-0000-0000000000a2','e8c00000-0000-0000-0000-0000000000f2','nutrition_plan','pdf_generate');
+    RAISE EXCEPTION 'T11 FAIL pdf_generate con alumno de team B paso';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL; END;
+END $t11$;
+RESET role;
+
+-- ============ T12 — coach B1: no escribe ni lee la bitacora pdf_generate de team A ============
+SET LOCAL role authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"e8c00000-0000-0000-0000-0000000000b1","role":"authenticated"}',true);
+DO $t12$ DECLARE v_cnt int; BEGIN
+  BEGIN
+    INSERT INTO public.team_access_logs (team_id, actor_coach_id, client_id, resource, action)
+      VALUES ('e8c00000-0000-0000-0000-0000000000aa','e8c00000-0000-0000-0000-0000000000b1','e8c00000-0000-0000-0000-0000000000f1','nutrition_plan','pdf_generate');
+    RAISE EXCEPTION 'T12 FAIL coach ajeno inserto pdf_generate en team A';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL; END;
+  SELECT count(*) INTO v_cnt FROM public.team_access_logs
+   WHERE team_id='e8c00000-0000-0000-0000-0000000000aa' AND action='pdf_generate';
+  IF v_cnt<>0 THEN RAISE EXCEPTION 'T12 FAIL coach ajeno ve bitacora de team A cnt=%',v_cnt; END IF;
+END $t12$;
+RESET role;
+
+-- ============ T13 — alumno f1: su descarga NO genera bitacora (cero filas suyas, AC7) ============
+SET LOCAL role authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"e8c00000-0000-0000-0000-0000000000f1","role":"authenticated"}',true);
+DO $t13$ DECLARE v_cnt int; BEGIN
+  BEGIN
+    INSERT INTO public.team_access_logs (team_id, actor_coach_id, client_id, resource, action)
+      VALUES ('e8c00000-0000-0000-0000-0000000000aa','e8c00000-0000-0000-0000-0000000000a1','e8c00000-0000-0000-0000-0000000000f1','nutrition_plan','pdf_generate');
+    RAISE EXCEPTION 'T13 FAIL alumno inserto pdf_generate';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL; END;
+  SELECT count(*) INTO v_cnt FROM public.team_access_logs WHERE action='pdf_generate';
+  IF v_cnt<>0 THEN RAISE EXCEPTION 'T13 FAIL alumno ve filas pdf_generate cnt=%',v_cnt; END IF;
+END $t13$;
 RESET role;
 
 SELECT 'ALL PASSED' AS status;

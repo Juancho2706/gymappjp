@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { assertModule } from '@/services/entitlements.service'
-import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { getCoachClientScope, type CoachClientScope } from '@/services/client/client-scope.service'
 import { logTeamClientAccess } from '@/services/team/team.service'
 import { computeIsak } from '@/domain/bodycomp'
 import { BodyCompositionCreateSchema } from '@eva/schemas/bodycomp'
@@ -52,26 +52,6 @@ export async function assertBodyCompositionEnabled(): Promise<void> {
         if (e instanceof BodyCompositionKillSwitchError) throw e
         // Edge Config inaccesible -> fail open (no bloquear por un fallo de infra de flags).
     }
-}
-
-export type CoachClientScope = { orgId: string | null; activeTeamId: string | null }
-
-/**
- * Scope del coach por workspace ACTIVO (sin cruzar contextos). Replica la logica privada de
- * client-detail.service (no se importa para no tocar ese archivo): standalone | enterprise | team.
- */
-async function getCoachClientScope(db: DB, userId: string): Promise<CoachClientScope> {
-    const workspace = await resolvePreferredWorkspace(db, userId)
-    if (!workspace || workspace.type === 'coach_standalone') {
-        return { orgId: null, activeTeamId: null }
-    }
-    if (workspace.type === 'enterprise_coach') {
-        return { orgId: workspace.orgId, activeTeamId: null }
-    }
-    if (workspace.type === 'coach_team') {
-        return { orgId: null, activeTeamId: workspace.teamId }
-    }
-    throw new Error('Workspace not allowed for body composition operations')
 }
 
 export type WriteAccess = CoachClientScope & {

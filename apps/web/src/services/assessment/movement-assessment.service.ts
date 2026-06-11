@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { assertModule, hasModule } from '@/services/entitlements.service'
+import { assertModule, hasModule, isModuleKilledByOperator } from '@/services/entitlements.service'
 import { assertCoachClientReadAccess, getCoachClientScope } from '@/services/client/client-scope.service'
 import { logTeamClientAccess } from '@/services/team/team.service'
 import * as repo from '@/infrastructure/db/movement-assessment.repository'
@@ -29,7 +29,7 @@ type DB = SupabaseClient<Database>
 /**
  * Service del Screening de Movimiento de Ingreso (modulo `movement_assessment`).
  * TODA action/query del modulo pasa por aca, en ESTE orden (specs/movida-screening):
- *   1. kill-switch de operador (env DISABLED_MODULES) — ANTES de todo
+ *   1. kill-switch de operador (env EVA_DISABLED_MODULES) — ANTES de todo
  *   2. scoping 3-vias del workspace ACTIVO (guards compartidos client-scope.service)
  *   3. rechazo enterprise (v1: el modulo no se ofrece en contexto org)
  *   4. assertModule por contexto del ALUMNO (pool => su team manda; LOCKED #7)
@@ -51,20 +51,6 @@ export class MovementAssessmentError extends Error {
     }
 }
 
-/**
- * Kill-switch de operador EVA: env runtime `DISABLED_MODULES` (CSV de ModuleKey).
- * Se cambia en Vercel sin migracion ni release; apaga el modulo para TODOS.
- * Nota: el PLAN lo ubica en entitlements.service.ts (compartido) — vive aca hasta el
- * cableado central para no tocar archivos compartidos en paralelo.
- */
-export function isMovementModuleKilled(): boolean {
-    const csv = process.env.DISABLED_MODULES ?? ''
-    return csv
-        .split(',')
-        .map((s) => s.trim())
-        .includes(MODULE_KEY)
-}
-
 export type MovementClientContext = { viaTeam: boolean; teamId: string | null }
 
 /** Contexto + gates para operar sobre UN alumno (el contexto del ALUMNO manda). */
@@ -73,7 +59,7 @@ export async function resolveMovementClientContext(
     userId: string,
     clientId: string
 ): Promise<MovementClientContext> {
-    if (isMovementModuleKilled()) {
+    if (isModuleKilledByOperator(MODULE_KEY)) {
         throw new MovementAssessmentError('Modulo deshabilitado temporalmente por el operador.')
     }
     const access = await assertCoachClientReadAccess(db, userId, clientId)
@@ -93,7 +79,7 @@ export async function resolveMovementWorkspaceContext(
     db: DB,
     userId: string
 ): Promise<{ orgId: string | null; activeTeamId: string | null }> {
-    if (isMovementModuleKilled()) {
+    if (isModuleKilledByOperator(MODULE_KEY)) {
         throw new MovementAssessmentError('Modulo deshabilitado temporalmente por el operador.')
     }
     const scope = await getCoachClientScope(db, userId)
@@ -277,7 +263,7 @@ export async function getStudentMovementView(
     entitlementsDb: DB,
     userId: string
 ): Promise<StudentMovementView> {
-    if (isMovementModuleKilled()) return { enabled: false, clientName: null, finals: [] }
+    if (isModuleKilledByOperator(MODULE_KEY)) return { enabled: false, clientName: null, finals: [] }
     // Identidad legacy: clients.id = auth.uid() (mismo criterio que dashboard/check-in del alumno).
     const client = await repo.findClientScopeRow(db, userId)
     if (!client) return { enabled: false, clientName: null, finals: [] }
@@ -289,6 +275,25 @@ export async function getStudentMovementView(
     if (!enabled) return { enabled: false, clientName: client.full_name, finals: [] }
     const finals = await repo.findFinalAssessmentsWithItemsByClient(db, client.id)
     return { enabled: true, clientName: client.full_name, finals }
+}
+
+/**
+ * Espejo liviano para el nav del alumno (sin finals): mismo gate que
+ * getStudentMovementView — el gate real sigue siendo la page (notFound).
+ */
+export async function isStudentMovementEnabled(
+    db: DB,
+    entitlementsDb: DB,
+    userId: string
+): Promise<boolean> {
+    if (isModuleKilledByOperator(MODULE_KEY)) return false
+    const client = await repo.findClientScopeRow(db, userId)
+    if (!client) return false
+    return hasModule(
+        entitlementsDb,
+        MODULE_KEY,
+        client.team_id ? { teamId: client.team_id } : { coachId: client.coach_id }
+    )
 }
 
 // ─── Mutaciones ─────────────────────────────────────────────────────────────

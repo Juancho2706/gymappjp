@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import {
     EXERCISE_MEDIA_LIMITS,
@@ -100,8 +100,7 @@ export async function getSignedUploadUrlAction(params: {
     if (!coachLimit.ok) return { error: 'Demasiados uploads. Esperá un momento.', code: 'RATE_LIMIT' }
     if (!ipLimit.ok) return { error: 'Demasiados uploads desde esta red.', code: 'RATE_LIMIT' }
 
-    const admin = await createRawAdminClient()
-    const { data: existingFiles } = await admin.storage.from(BUCKET).list(coach.id, { limit: 1000 })
+    const { data: existingFiles } = await supabase.storage.from(BUCKET).list(coach.id, { limit: 1000 })
     const usedBytes = (existingFiles ?? []).reduce(
         (sum, f) => sum + (Number(f.metadata?.size) || 0),
         0
@@ -162,9 +161,9 @@ export async function confirmExerciseMediaUploadAction(
         return { error: dims.reason }
     }
 
-    // Audit (best-effort)
+    // Audit (best-effort) — admin_audit_logs solo acepta INSERT de service_role
     try {
-        const admin = await createRawAdminClient()
+        const admin = createServiceRoleClient()
         await admin.from('admin_audit_logs').insert({
             action: 'exercise.media.uploaded',
             admin_email: user.email ?? 'unknown',

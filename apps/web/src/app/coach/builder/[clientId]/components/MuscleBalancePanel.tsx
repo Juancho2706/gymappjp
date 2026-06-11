@@ -6,6 +6,7 @@ import {
     ResponsiveContainer, Tooltip
 } from 'recharts'
 import { getMuscleColor } from '../muscle-colors'
+import { effectiveExerciseType } from '@/lib/workout-exercise-type'
 import type { DayState } from '../types'
 
 interface MuscleBalancePanelProps {
@@ -14,18 +15,34 @@ interface MuscleBalancePanelProps {
     days: DayState[]
 }
 
-export function MuscleBalancePanel({ open, onClose, days }: MuscleBalancePanelProps) {
+/**
+ * Acumula series/ejercicios por grupo muscular contando SOLO bloques con tipo
+ * efectivo 'strength' (F4.5 specs/movida-entrenamiento): cardio/movilidad/roller
+ * no inflan el volumen muscular; legacy sin tipo resuelve strength y sí cuenta.
+ * Exportada solo para tests.
+ */
+export function buildMuscleBalance(days: DayState[]): {
+    muscleSetMap: Record<string, number>
+    muscleExMap: Record<string, number>
+} {
     const muscleSetMap: Record<string, number> = {}
     const muscleExMap: Record<string, number> = {}
 
     for (const day of days) {
         if (day.is_rest) continue
         for (const block of day.blocks) {
+            if (effectiveExerciseType(block, { exercise_type: block.exercise_type }) !== 'strength') continue
             const m = block.muscle_group || 'Otro'
             muscleSetMap[m] = (muscleSetMap[m] || 0) + (block.sets || 0)
             muscleExMap[m] = (muscleExMap[m] || 0) + 1
         }
     }
+
+    return { muscleSetMap, muscleExMap }
+}
+
+export function MuscleBalancePanel({ open, onClose, days }: MuscleBalancePanelProps) {
+    const { muscleSetMap, muscleExMap } = buildMuscleBalance(days)
 
     // All muscles sorted by sets desc, then alpha
     const allMuscles = Object.keys(muscleSetMap).sort((a, b) => (muscleSetMap[b] || 0) - (muscleSetMap[a] || 0))

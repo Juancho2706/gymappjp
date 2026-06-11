@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { revalidatePath } from 'next/cache'
 import { QuickWeightSchema } from '@eva/schemas'
 import { getTodayInSantiago } from '@/lib/date-utils'
@@ -25,8 +24,7 @@ export async function quickLogWeightAction(_prev: QuickWeightState, formData: Fo
     if (!user) return { error: 'No autenticado.' }
 
     const { iso: todayIso } = getTodayInSantiago()
-    const adminDb = await createRawAdminClient()
-    const { error: insertError } = await adminDb.from('check_ins').insert({
+    const { error: insertError } = await supabase.from('check_ins').insert({
         client_id: user.id,
         weight: parsed.data.weight,
         energy_level: null,
