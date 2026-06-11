@@ -124,3 +124,23 @@ export type WorkoutLogSetInput = z.infer<typeof WorkoutLogSetSchema>
 export type WorkoutBlockInput = z.infer<typeof WorkoutBlockSchema>
 export type WorkoutDayInput = z.infer<typeof WorkoutDaySchema>
 export type WorkoutProgramInput = z.infer<typeof WorkoutProgramSchema>
+
+// ─── Areas custom del builder (workout_section_templates) ───────────────────
+
+export const WorkoutAreaCreateSchema = z.object({
+    name: z.string().trim().min(2, 'El nombre necesita al menos 2 caracteres').max(40, 'Máximo 40 caracteres'),
+})
+
+export const WorkoutAreaUpdateSchema = z.object({
+    id: z.guid(),
+    name: z.string().trim().min(2, 'El nombre necesita al menos 2 caracteres').max(40, 'Máximo 40 caracteres').optional(),
+    sort_order: z.number().int().min(0).max(9999).optional(),
+})
+
+export const WorkoutAreaDeleteSchema = z.object({
+    id: z.guid(),
+})
+
+export type WorkoutAreaCreateInput = z.infer<typeof WorkoutAreaCreateSchema>
+export type WorkoutAreaUpdateInput = z.infer<typeof WorkoutAreaUpdateSchema>
+export type WorkoutAreaDeleteInput = z.infer<typeof WorkoutAreaDeleteSchema>

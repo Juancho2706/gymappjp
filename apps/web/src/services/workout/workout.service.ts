@@ -77,6 +77,31 @@ function sectionTemplateIdFor(section: string | null | undefined, existing?: str
 }
 
 /**
+ * Hardening F4: el payload del builder es client-controlled y los inserts van via service_role
+ * (saltan RLS). Coerce: un section_template_id que NO este entre las areas visibles del usuario
+ * (RLS-scoped via su propio client) se descarta → cae al mapeo legacy por section. Evita
+ * persistir referencias a areas de otro coach/team.
+ */
+async function resolveAllowedAreaIds(
+    db: Awaited<ReturnType<typeof createClient>>,
+): Promise<Set<string>> {
+    const { data } = await db
+        .from('workout_section_templates')
+        .select('id')
+        .is('deleted_at', null)
+    return new Set((data ?? []).map(r => r.id))
+}
+
+function scopedSectionTemplateIdFor(
+    section: string | null | undefined,
+    explicit: string | null | undefined,
+    allowedIds: Set<string>,
+): string {
+    const safe = explicit && allowedIds.has(explicit) ? explicit : null
+    return sectionTemplateIdFor(section, safe)
+}
+
+/**
  * Resuelve si el coach puede gestionar (full-access) un cliente SEGÚN EL WORKSPACE ACTIVO
  * (separación estricta de contextos): team activo ⇒ SOLO alumnos de ESE pool (colaborativo,
  * sin filtro coach_id; RLS techo); enterprise ⇒ coach_id+org; standalone ⇒ propios NO-pool.
@@ -170,6 +195,9 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
     if (!user) return { error: 'No autenticado.' }
     const scope = await getCoachWorkoutScope(supabase, user.id)
     if (!scope.ok) return { error: scope.error }
+
+    // Areas visibles para ESTE usuario (RLS via su client) — coerce de ids ajenos en el payload
+    const allowedAreaIds = await resolveAllowedAreaIds(supabase)
 
     let startDateToUse = startDate
 
@@ -406,7 +434,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
                 progression_type: block.progression_type ?? null,
                 progression_value: block.progression_value ?? null,
                 section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
-                section_template_id: sectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id),
+                section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                 is_override: block.is_override ?? false,
             }))
 

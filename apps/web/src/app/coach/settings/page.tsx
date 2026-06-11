@@ -5,7 +5,7 @@ import { LogoUploadForm } from './LogoUploadForm'
 import { WhatChangesList } from './_components/WhatChangesList'
 import { BrandSettingsTourClient } from './_components/BrandSettingsTourClient'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
-import { Check, Palette, Package, ChevronRight, Users } from 'lucide-react'
+import { Check, Palette, Package, ChevronRight, Users, LayoutList } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
 import { getCoachSettingsForUser } from './_data/settings.queries'
@@ -43,6 +43,20 @@ export default async function CoachSettingsPage() {
                     <div className="min-w-0 flex-1">
                         <h3 className="font-semibold text-foreground">Módulos del equipo</h3>
                         <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, intercambios</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+
+                <Link
+                    href="/coach/settings/areas"
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+                >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <LayoutList className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground">Áreas del builder</h3>
+                        <p className="text-xs text-muted-foreground">Áreas del equipo para armar los días (Movilidad, Potencia, custom…)</p>
                     </div>
                     <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </Link>
@@ -195,6 +209,21 @@ export default async function CoachSettingsPage() {
                     <div className="min-w-0 flex-1">
                         <h3 className="font-semibold text-foreground">Módulos</h3>
                         <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, nutrición por intercambios</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+
+                {/* Áreas custom del builder */}
+                <Link
+                    href="/coach/settings/areas"
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+                >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <LayoutList className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground">Áreas del builder</h3>
+                        <p className="text-xs text-muted-foreground">Organizá los días con tus propias áreas (Movilidad, Core, HYROX…)</p>
                     </div>
                     <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </Link>

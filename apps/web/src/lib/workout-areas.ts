@@ -75,3 +75,29 @@ export function orderedAreaIds(areas: readonly Pick<WorkoutArea, 'id' | 'sort_or
         .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
         .map(a => a.id)
 }
+
+// ─── CRUD de areas custom (F4) — helpers puros ───────────────────────────────
+
+/**
+ * Slug estable desde el nombre: sin diacriticos, kebab-case, solo [a-z0-9-].
+ * Unicidad por scope la garantizan los indices parciales *_slug_uidx (colision → error friendly).
+ */
+export function slugifyAreaName(name: string): string {
+    const slug = name
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50)
+    return slug || 'area'
+}
+
+/**
+ * sort_order para un area custom nueva: despues de la ultima existente (custom o system),
+ * con piso 100 para que las custom queden detras de las 7 system (max seed = 30) por defecto.
+ */
+export function nextCustomSortOrder(areas: readonly Pick<WorkoutArea, 'sort_order'>[]): number {
+    const maxExisting = areas.reduce((max, a) => Math.max(max, a.sort_order), 0)
+    return Math.max(100, maxExisting + 10)
+}

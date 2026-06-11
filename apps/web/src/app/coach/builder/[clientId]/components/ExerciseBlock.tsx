@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, X, Minus, Plus, CircleHelp, Check, ChevronDown } from 'lucide-react'
@@ -308,6 +309,12 @@ function ExerciseBlockInner({
                                                         </button>
                                                     ))}
                                                 </div>
+                                                <Link
+                                                    href="/coach/settings/areas"
+                                                    className="mt-1.5 flex min-h-[44px] items-center justify-center rounded-md border border-dashed border-border px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary md:min-h-[32px]"
+                                                >
+                                                    Gestionar áreas
+                                                </Link>
                                             </PopoverContent>
                                         </Popover>
                                         <Popover open={sectionHelpOpen} onOpenChange={setSectionHelpOpen}>

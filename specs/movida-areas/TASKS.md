@@ -49,10 +49,19 @@ en verde, 3 sections clásicos byte-identical (sin regresión), commit + push po
       `packages/schemas/workout.test.ts` (8 asserts). Byte-identical 3 clásicos: baselines verdes.
 
 ## F4 — CRUD áreas custom
-- [ ] Server actions (user-scoped, RLS `wst_*`): crear/renombrar/ordenar/soft-delete; contexto team vs standalone
-      (gestor edita team, standalone propio, system read-only).
-- [ ] UI mínima de gestión (lista + crear/editar). 
-- [ ] Test RLS: coach edita propias, team-gestor team, miembro no-gestor read-only, system no editable.
+- [x] Server actions (`/coach/settings/areas/_actions`, patrón Módulos): crear/renombrar/ordenar/
+      soft-delete vía `workout-areas.service` → `workout.repository` (cliente user-scoped, RLS `wst_*`
+      techo + check `isCurrentUserTeamManager` en team; standalone propio; enterprise/org_managed fuera).
+      Zod `WorkoutAreaCreate/Update/DeleteSchema`; slug sin diacríticos; sort custom desde 100.
+- [x] UI mínima: `/coach/settings/areas` (lista con badges del builder, system read-only, crear/editar
+      inline/eliminar con confirm). Entradas: cards en `/coach/settings` (ambos contextos) + link
+      "Gestionar áreas" en el picker del builder.
+- [x] Hardening del save (cierre del hallazgo del review F3): `scopedSectionTemplateIdFor` coerce
+      de `section_template_id` ajenos — el payload client-controlled solo persiste áreas visibles
+      por RLS para ESE usuario (1 SELECT liviano por save); lo demás cae al mapeo legacy.
+- [x] Test RLS: ya cubierto por `tests/team/areas-isolation.sql` (T2–T6: system no editable, coach
+      propias, team-gestor, miembro read-only, no-miembro sin acceso) — se corre en el gate E2E
+      autorizado, NO por tanda (regla 2026-06-10).
 
 ## F5 — Ejecución área-driven
 - [ ] `lib/workout-block-grouping.ts`: `effectiveArea(block)` + orden dinámico; mantener firma legacy para
