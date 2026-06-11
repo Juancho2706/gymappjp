@@ -1,6 +1,8 @@
 # SPEC — Áreas custom del builder (workout_section_templates)
 
-> Estado: pendiente de implementación (builder UI + ejecución). El **backend** (tabla
+> Estado: **builder UI dinámico HECHO (F1-F3, 2026-06-10)** — las 7 áreas system son seleccionables
+> en el builder (zonas DnD, selector por bloque, persistencia round-trip). Pendiente: F4 CRUD de
+> áreas custom y F5 ejecución del alumno área-driven. El **backend** (tabla
 > `workout_section_templates`, `workout_blocks.section_template_id`, 7 áreas system, backfill) y el
 > **pipeline de persistencia** (schema Zod `section_template_id`, `saveWorkoutProgramAction` mapea legacy→área
 > system en los 4 inserts, query de ejecución trae el campo) **ya están en prod / código**. Este SPEC cubre lo

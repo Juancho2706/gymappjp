@@ -1,48 +1,28 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, X, Minus, Plus, CircleHelp } from 'lucide-react'
+import { GripVertical, X, Minus, Plus, CircleHelp, Check, ChevronDown } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
-import type { BuilderBlock, BuilderSection } from '../types'
-
-function blockSection(b: BuilderBlock): BuilderSection {
-    return b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main'
-}
-
-const SECTION_SHORT: Record<BuilderSection, string> = {
-    warmup: 'CAL',
-    main: 'PRI',
-    cooldown: 'ENF',
-}
-
-const SECTION_FULL: Record<BuilderSection, string> = {
-    warmup: 'Calentamiento',
-    main: 'Principal',
-    cooldown: 'Enfriamiento',
-}
-
-function sectionBadgeClass(sec: BuilderSection): string {
-    if (sec === 'warmup') {
-        return 'border-amber-500/40 bg-amber-500/12 text-amber-900 dark:text-amber-100'
-    }
-    if (sec === 'cooldown') {
-        return 'border-sky-500/40 bg-sky-500/12 text-sky-900 dark:text-sky-100'
-    }
-    return 'border-primary/35 bg-primary/10 text-primary'
-}
+import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
+import { effectiveAreaKey } from '@/lib/workout-areas'
+import type { BuilderBlock } from '../types'
 
 interface ExerciseBlockProps {
     block: BuilderBlock
     dayId: number
+    /** Areas disponibles ya resueltas a VM (DayColumn las memoiza); vacio ⇒ 3 clasicos */
+    areaVMs?: BuilderAreaVM[]
+    /** Clave de area efectiva del bloque, precalculada por DayColumn */
+    currentAreaId?: string
     onEdit: (block: BuilderBlock) => void
     onRemove: (dayId: number, uid: string) => void
     onUpdate?: (block: BuilderBlock) => void
     onToggleSuperset?: () => void
-    onSetSection?: (section: BuilderSection) => void
+    onSetArea?: (areaId: string) => void
     onToggleOverride?: () => void
     /** Muestra badge Base/Modif. cuando hay plantilla vinculada */
     showTemplateLink?: boolean
@@ -53,8 +33,8 @@ interface ExerciseBlockProps {
 }
 
 function ExerciseBlockInner({
-    block, dayId, onEdit, onRemove, onUpdate, onToggleSuperset,
-    onSetSection, onToggleOverride, showTemplateLink, isDragPending, narrowLayout = false,
+    block, dayId, areaVMs, currentAreaId, onEdit, onRemove, onUpdate, onToggleSuperset,
+    onSetArea, onToggleOverride, showTemplateLink, isDragPending, narrowLayout = false,
 }: ExerciseBlockProps) {
     const {
         attributes,
@@ -76,6 +56,15 @@ function ExerciseBlockInner({
     const [quickSets, setQuickSets] = useState(block.sets ?? 3)
     const [quickReps, setQuickReps] = useState(block.reps ?? '8-12')
     const [sectionHelpOpen, setSectionHelpOpen] = useState(false)
+    const [areaPickerOpen, setAreaPickerOpen] = useState(false)
+
+    // Area efectiva del bloque (DayColumn precalcula la clave; standalone — DragOverlay — la resuelve aqui)
+    const vms = useMemo(() => areaVMs ?? buildAreaVMs([]), [areaVMs])
+    const areaKey = useMemo(
+        () => currentAreaId ?? effectiveAreaKey(block, new Set(vms.map(v => v.id))),
+        [currentAreaId, block, vms]
+    )
+    const currentArea = vms.find(v => v.id === areaKey) ?? vms.find(v => v.slug === 'main') ?? vms[0]
 
     const style = {
         transform: CSS.Translate.toString(transform),
@@ -196,11 +185,11 @@ function ExerciseBlockInner({
                                 <span
                                     className={cn(
                                         'shrink-0 rounded border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-tight',
-                                        sectionBadgeClass(blockSection(block)),
+                                        currentArea?.badgeClass,
                                     )}
-                                    title={SECTION_FULL[blockSection(block)]}
+                                    title={currentArea?.name}
                                 >
-                                    {SECTION_SHORT[blockSection(block)]}
+                                    {currentArea?.shortLabel}
                                 </span>
                                 {(block.sets || 0) > 0 && block.reps ? (
                                     <div
@@ -254,7 +243,7 @@ function ExerciseBlockInner({
                                 >
                                     {block.muscle_group}
                                 </div>
-                                {onSetSection && (
+                                {onSetArea && (
                                     <div
                                         className={cn(
                                             'flex shrink-0 items-stretch gap-0.5',
@@ -263,42 +252,64 @@ function ExerciseBlockInner({
                                         onClick={e => e.stopPropagation()}
                                         onPointerDown={e => e.stopPropagation()}
                                     >
-                                        <div
-                                            className="flex shrink-0 rounded-md overflow-hidden border border-border transition-opacity"
-                                            role="group"
-                                            aria-label="Mover ejercicio de sección"
-                                        >
-                                            {(['warmup', 'main', 'cooldown'] as const).map(s => (
-                                                <button
-                                                    key={s}
-                                                    type="button"
-                                                    className={cn(
-                                                        'min-h-[28px] min-w-[2.25rem] px-1 py-0.5 text-[8px] font-black uppercase tracking-tight transition-colors md:min-h-0 md:min-w-0',
-                                                        blockSection(block) === s
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'bg-muted/60 text-muted-foreground hover:bg-muted',
-                                                    )}
-                                                    title={
-                                                        s === 'warmup'
-                                                            ? 'Mover a calentamiento'
-                                                            : s === 'main'
-                                                              ? 'Mover a bloque principal'
-                                                              : 'Mover a enfriamiento'
-                                                    }
-                                                    aria-label={
-                                                        s === 'warmup'
-                                                            ? 'Mover a calentamiento'
-                                                            : s === 'main'
-                                                              ? 'Mover a bloque principal'
-                                                              : 'Mover a enfriamiento'
-                                                    }
-                                                    aria-pressed={blockSection(block) === s}
-                                                    onClick={() => onSetSection(s)}
-                                                >
-                                                    {SECTION_SHORT[s]}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <Popover open={areaPickerOpen} onOpenChange={setAreaPickerOpen}>
+                                            <PopoverTrigger
+                                                type="button"
+                                                className={cn(
+                                                    'flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 text-[8px] font-black uppercase tracking-tight text-muted-foreground transition-colors',
+                                                    'min-h-[28px] md:min-h-0 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                                )}
+                                                title={`Área: ${currentArea?.name ?? 'Principal'} — cambiar`}
+                                                aria-label="Cambiar área del ejercicio"
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                {currentArea?.shortLabel}
+                                                <ChevronDown className="size-2.5" strokeWidth={3} />
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                side="top"
+                                                align="end"
+                                                sideOffset={6}
+                                                className="w-56 border-border p-1.5 shadow-xl"
+                                            >
+                                                <p className="px-2 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                    Mover a área
+                                                </p>
+                                                <div className="max-h-[min(50vh,16rem)] space-y-0.5 overflow-y-auto">
+                                                    {vms.map(area => (
+                                                        <button
+                                                            key={area.id}
+                                                            type="button"
+                                                            className={cn(
+                                                                'flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold transition-colors',
+                                                                'min-h-[44px] md:min-h-0',
+                                                                area.id === areaKey
+                                                                    ? 'bg-primary/10 text-primary'
+                                                                    : 'text-foreground hover:bg-muted',
+                                                            )}
+                                                            aria-pressed={area.id === areaKey}
+                                                            onClick={() => {
+                                                                setAreaPickerOpen(false)
+                                                                if (area.id !== areaKey) onSetArea(area.id)
+                                                            }}
+                                                        >
+                                                            <span className="flex items-center gap-2">
+                                                                <span
+                                                                    className={cn(
+                                                                        'rounded border px-1 py-0.5 text-[8px] font-black uppercase tracking-tight',
+                                                                        area.badgeClass,
+                                                                    )}
+                                                                >
+                                                                    {area.shortLabel}
+                                                                </span>
+                                                                <span className="truncate">{area.name}</span>
+                                                            </span>
+                                                            {area.id === areaKey && <Check className="size-3.5 shrink-0" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
                                         <Popover open={sectionHelpOpen} onOpenChange={setSectionHelpOpen}>
                                             <PopoverTrigger
                                                 type="button"
@@ -307,7 +318,7 @@ function ExerciseBlockInner({
                                                     'min-h-[44px] min-w-[44px] md:min-h-[28px] md:min-w-[28px]',
                                                     'hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                                 )}
-                                                aria-label="Ayuda: secciones y superserie"
+                                                aria-label="Ayuda: áreas y superserie"
                                                 onClick={e => e.stopPropagation()}
                                             >
                                                 <CircleHelp className="size-[18px] md:size-3.5" strokeWidth={2} />
@@ -319,56 +330,42 @@ function ExerciseBlockInner({
                                                 className="w-[min(calc(100vw-1.5rem),20rem)] max-h-[min(70vh,24rem)] overflow-y-auto border-border p-3 text-xs leading-relaxed shadow-xl"
                                             >
                                                 <h4 className="mb-2 font-semibold text-foreground">
-                                                    Secciones del día (CAL / PRI / ENF)
+                                                    Áreas del día
                                                 </h4>
-                                                <ul className="mb-3 list-disc space-y-1 pl-4 text-muted-foreground">
-                                                    <li>
-                                                        <strong className="text-foreground">CAL</strong> (
-                                                        {SECTION_FULL.warmup}): prepara el cuerpo y las articulaciones
-                                                        antes del trabajo intenso.
-                                                    </li>
-                                                    <li>
-                                                        <strong className="text-foreground">PRI</strong> (
-                                                        {SECTION_FULL.main}): bloque principal del entreno (volumen e
-                                                        intensidad).
-                                                    </li>
-                                                    <li>
-                                                        <strong className="text-foreground">ENF</strong> (
-                                                        {SECTION_FULL.cooldown}): bajar pulsaciones y recuperación
-                                                        ligera al final.
-                                                    </li>
-                                                </ul>
+                                                <p className="mb-3 text-muted-foreground">
+                                                    Cada día se organiza por <strong className="text-foreground">áreas</strong>{' '}
+                                                    (Calentamiento, Principal, Enfriamiento, Movilidad, Potencia…). El badge
+                                                    de color muestra el área del ejercicio.
+                                                </p>
                                                 {narrowLayout ? (
                                                     <p className="mb-3 text-muted-foreground">
-                                                        Para cambiar de sección usa los botones{' '}
-                                                        <strong className="text-foreground">CAL</strong>,{' '}
-                                                        <strong className="text-foreground">PRI</strong> y{' '}
-                                                        <strong className="text-foreground">ENF</strong> en este bloque.
-                                                        Los ejercicios nuevos se añaden desde el menú inferior del
+                                                        Para mover un ejercicio de área usa el selector{' '}
+                                                        <strong className="text-foreground">con la flecha</strong> de este
+                                                        bloque. Los ejercicios nuevos se añaden desde el menú inferior del
                                                         catálogo.
                                                     </p>
                                                 ) : (
                                                     <p className="mb-3 text-muted-foreground">
-                                                        También puedes arrastrar el ejercicio a las zonas punteadas de{' '}
-                                                        <strong className="text-foreground">Calentamiento</strong>,{' '}
-                                                        <strong className="text-foreground">Principal</strong> o{' '}
-                                                        <strong className="text-foreground">Enfriamiento</strong> y
-                                                        soltarlo ahí.
+                                                        Para mover un ejercicio usa el selector{' '}
+                                                        <strong className="text-foreground">con la flecha</strong> de este
+                                                        bloque, o arrastra el ejercicio a la{' '}
+                                                        <strong className="text-foreground">zona punteada</strong> del área y
+                                                        suéltalo ahí.
                                                     </p>
                                                 )}
                                                 <h4 className="mb-2 font-semibold text-foreground">Superserie</h4>
                                                 <p className="mb-2 text-muted-foreground">
                                                     Une el ejercicio con el <strong className="text-foreground">siguiente</strong>{' '}
                                                     de la lista <strong className="text-foreground">solo si ambos están en la
-                                                    misma sección</strong> (CAL, PRI o ENF): no se puede enlazar calentamiento
-                                                    con principal. Cada pulsación crea un par (o amplía un tramo contiguo con
-                                                    la misma letra). Varios pares en la misma sección usan letras distintas (
-                                                    A, B…). Cada ejercicio mantiene sus propias series y repeticiones.
+                                                    misma área</strong>: no se puede enlazar, por ejemplo, calentamiento con
+                                                    principal. Cada pulsación crea un par (o amplía un tramo contiguo con la
+                                                    misma letra). Varios pares en la misma área usan letras distintas (A, B…).
+                                                    Cada ejercicio mantiene sus propias series y repeticiones.
                                                 </p>
                                                 <p className="text-muted-foreground">
                                                     {narrowLayout
-                                                        ? 'Si cambias la sección de uno de ellos con los botones CAL/PRI/ENF, el enlace se rompe automáticamente en todos los ejercicios de ese grupo.'
-                                                        : 'Si cambias la sección de uno de ellos (botones CAL/PRI/ENF o arrastrando a otra zona), el enlace se rompe automáticamente en todos los ejercicios de ese grupo.'}
+                                                        ? 'Si cambias el área de uno de ellos con el selector, el enlace se rompe automáticamente en todos los ejercicios de ese grupo.'
+                                                        : 'Si cambias el área de uno de ellos (selector o arrastrando a otra zona), el enlace se rompe automáticamente en todos los ejercicios de ese grupo.'}
                                                 </p>
                                             </PopoverContent>
                                         </Popover>

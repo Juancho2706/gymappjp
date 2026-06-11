@@ -45,6 +45,7 @@ import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 import type { BuilderBlock, DayState, ProgramPhase } from './types'
 import type { WorkoutArea } from '@/domain/workout/types'
+import { buildAreaVMs } from './area-ui'
 import { getMuscleColor } from './muscle-colors'
 
 type Client = Tables<'clients'>
@@ -238,9 +239,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const {
         days, dispatch, dispatchWithHistory,
         addExercise, removeBlock, updateBlock, updateDayTitle, copyDay, toggleRestDay, toggleSuperset,
-        setBlockSection, toggleBlockOverride,
+        setBlockArea, toggleBlockOverride,
         undo, redo, canUndo, canRedo,
     } = activeBuilder
+
+    const overlayAreaVMs = useMemo(() => buildAreaVMs(areas), [areas])
 
     const [programName, setProgramName] = useState(initialProgram?.name || '')
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
@@ -556,10 +559,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         const activeData = active.data.current
         const overData = over?.data?.current
 
-        if (over && activeData?.type === 'block' && overData?.type === 'section' && activeData.dayId === overData.dayId) {
+        if (over && activeData?.type === 'block' && overData?.type === 'area' && activeData.dayId === overData.dayId) {
             dispatchWithHistory({
-                type: 'SET_BLOCK_SECTION',
-                payload: { dayId: overData.dayId, uid: active.id as string, section: overData.section },
+                type: 'SET_BLOCK_AREA',
+                payload: { dayId: overData.dayId, uid: active.id as string, areaId: overData.areaId },
             })
             setActiveId(null)
             setActiveData(null)
@@ -571,7 +574,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         if (activeData?.type === 'new-exercise') {
             const dayId = over.data.current?.dayId
             if (dayId) {
-                handleAddExercise(dayId, activeData.exercise)
+                // Drop sobre la zona punteada de un area: el bloque nuevo nace en esa area
+                handleAddExercise(dayId, activeData.exercise, overData?.type === 'area' ? overData.areaId : undefined)
             }
         } else if (active.id !== over.id) {
             const dayId = activeData?.dayId
@@ -589,8 +593,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }
 
-    function handleAddExercise(dayId: number, exercise: Exercise) {
-        addExercise(dayId, createDefaultBlock(exercise))
+    function handleAddExercise(dayId: number, exercise: Exercise, areaId?: string) {
+        const block = createDefaultBlock(exercise)
+        addExercise(dayId, block)
+        if (areaId) {
+            // Raw dispatch (sin entrada de historia): el alta ya creo el snapshot,
+            // asi el undo revierte alta + area en un solo paso.
+            dispatch({ type: 'SET_BLOCK_AREA', payload: { dayId, uid: block.uid, areaId } })
+        }
         trackRecentExercise(exercise.id)
         setHasUnsavedChanges(true)
     }
@@ -626,10 +636,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }, [toggleSuperset])
 
-    const handleSetBlockSection = useCallback((d: number, u: string, s: import('./types').BuilderSection) => {
-        setBlockSection(d, u, s)
+    const handleSetBlockArea = useCallback((d: number, u: string, areaId: string) => {
+        setBlockArea(d, u, areaId)
         setHasUnsavedChanges(true)
-    }, [setBlockSection])
+    }, [setBlockArea])
 
     const dismissBuilderHint = useCallback(() => {
         setShowBuilderHint(false)
@@ -1457,6 +1467,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     isDragPending={isDragPending}
                                                     narrowLayout={isMobile}
                                                     compact={isMobile && isSimpleMode}
+                                                    areas={areas}
                                                     onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
                                                     onRemoveBlock={handleRemoveBlock}
@@ -1465,7 +1476,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     onCopyDay={handleCopyDay}
                                                     onToggleRest={handleToggleRest}
                                                     onToggleSuperset={handleToggleSuperset}
-                                                    onSetBlockSection={handleSetBlockSection}
+                                                    onSetBlockArea={handleSetBlockArea}
                                                     onToggleBlockOverride={handleToggleBlockOverride}
                                                     templateLinked={!!(client?.id && sourceTemplateId)}
                                                 />
@@ -1485,6 +1496,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             isCycleMode={programStructureType === 'cycle'}
                                             isDragPending={isDragPending}
                                             narrowLayout={isMobile}
+                                            areas={areas}
                                             onAddExercise={handleAddExercise}
                                             onEditBlock={setEditingBlock}
                                             onRemoveBlock={handleRemoveBlock}
@@ -1493,7 +1505,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             onCopyDay={handleCopyDay}
                                             onToggleRest={handleToggleRest}
                                             onToggleSuperset={handleToggleSuperset}
-                                            onSetBlockSection={handleSetBlockSection}
+                                            onSetBlockArea={handleSetBlockArea}
                                             onToggleBlockOverride={handleToggleBlockOverride}
                                             templateLinked={!!(client?.id && sourceTemplateId)}
                                         />
@@ -1709,6 +1721,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     <ExerciseBlock
                                         block={activeData.block}
                                         dayId={activeData.dayId}
+                                        areaVMs={overlayAreaVMs}
                                         onEdit={() => {}}
                                         onRemove={() => {}}
                                         narrowLayout={isMobile}

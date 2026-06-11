@@ -11,44 +11,38 @@ import { getMuscleColor } from '../muscle-colors'
 import { cn, filterExercises } from '@/lib/utils'
 import { ExerciseBlock } from './ExerciseBlock'
 import { DAYS_OF_WEEK } from '../hooks/usePlanBuilder'
-import type { BuilderBlock, BuilderSection, DayState } from '../types'
+import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
+import { effectiveAreaKey } from '@/lib/workout-areas'
+import type { DayState } from '../types'
+import type { WorkoutArea } from '@/domain/workout/types'
+import type { BuilderBlock } from '../types'
 import type { Tables } from '@/lib/database.types'
 
 type Exercise = Tables<'exercises'>
 
-function normSection(b: BuilderBlock): BuilderSection {
-    return b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main'
-}
-
-function SectionDropZone({
+function AreaDropZone({
     dayId,
-    section,
-    label,
+    area,
     showDropHint = true,
 }: {
     dayId: number
-    section: BuilderSection
-    label: string
+    area: BuilderAreaVM
     showDropHint?: boolean
 }) {
     const { setNodeRef, isOver } = useDroppable({
-        id: `section-${dayId}-${section}`,
-        data: { type: 'section', dayId, section },
+        id: `area-${dayId}-${area.id}`,
+        data: { type: 'area', dayId, areaId: area.id },
     })
     return (
         <div
             ref={setNodeRef}
             className={cn(
                 'text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-lg border border-dashed mb-1 transition-colors select-none',
-                section === 'warmup' &&
-                    'border-amber-500/45 bg-amber-500/[0.07] text-amber-950/85 dark:text-amber-100/90',
-                section === 'main' && 'border-border/80 bg-muted/15 text-muted-foreground/85',
-                section === 'cooldown' &&
-                    'border-sky-500/45 bg-sky-500/[0.07] text-sky-950/85 dark:text-sky-100/90',
+                area.zoneClass,
                 isOver && 'border-primary bg-primary/10 text-primary ring-1 ring-primary/25',
             )}
         >
-            {label}
+            {area.name}
             {showDropHint && (
                 <span className="font-normal normal-case opacity-60 ml-1">· soltar</span>
             )}
@@ -62,6 +56,8 @@ interface DayColumnProps {
     allDays?: DayState[]
     isCycleMode?: boolean
     isDragPending?: boolean
+    /** Areas disponibles (system + custom) — vacio ⇒ fallback a los 3 clasicos */
+    areas?: WorkoutArea[]
     onAddExercise: (dayId: number, exercise: Exercise) => void
     onEditBlock: (block: BuilderBlock) => void
     onRemoveBlock: (dayId: number, uid: string) => void
@@ -70,7 +66,7 @@ interface DayColumnProps {
     onCopyDay: (sourceId: number, targets: number[]) => void
     onToggleRest: (dayId: number) => void
     onToggleSuperset: (dayId: number, uid: string) => void
-    onSetBlockSection?: (dayId: number, uid: string, section: BuilderSection) => void
+    onSetBlockArea?: (dayId: number, uid: string, areaId: string) => void
     onToggleBlockOverride?: (uid: string) => void
     templateLinked?: boolean
     /** Viewport estrecho (mismo criterio que md en Tailwind): microcopia sin arrastrar/soltar a secciones */
@@ -85,6 +81,7 @@ function DayColumnInner({
     allDays,
     isCycleMode = false,
     isDragPending,
+    areas,
     onAddExercise,
     onEditBlock,
     onRemoveBlock,
@@ -93,7 +90,7 @@ function DayColumnInner({
     onCopyDay,
     onToggleRest,
     onToggleSuperset,
-    onSetBlockSection,
+    onSetBlockArea,
     onToggleBlockOverride,
     templateLinked,
     narrowLayout = false,
@@ -105,6 +102,12 @@ function DayColumnInner({
     const [search, setSearch] = useState('')
     const [isSearchOpen, setIsSearchOpen] = useState(false)
     const [selectedDaysToCopy, setSelectedDaysToCopy] = useState<number[]>([])
+
+    // Areas: VMs ordenados por sort_order + clave efectiva por bloque (fallback legacy)
+    const areaVMs = useMemo(() => buildAreaVMs(areas ?? []), [areas])
+    const areaById = useMemo(() => new Map(areaVMs.map(a => [a.id, a])), [areaVMs])
+    const knownAreaIds = useMemo(() => new Set(areaVMs.map(a => a.id)), [areaVMs])
+    const areaKeyOf = (b: BuilderBlock) => effectiveAreaKey(b, knownAreaIds)
 
     const totalSets = useMemo(() => blocks.reduce((sum, b) => sum + (b.sets || 0), 0), [blocks])
     const uniqueMuscles = useMemo(
@@ -321,30 +324,25 @@ function DayColumnInner({
                             const linkedToNext = !!block.superset_group && block.superset_group === nextBlock?.superset_group
                             const isLastBlock = idx === blocks.length - 1
                             const canLinkSuperset =
-                                !isLastBlock && !!nextBlock && normSection(block) === normSection(nextBlock)
-                            const prevSec = idx > 0 ? normSection(blocks[idx - 1]) : null
-                            const thisSec = normSection(block)
-                            const showSecHeader = thisSec !== prevSec
+                                !isLastBlock && !!nextBlock && areaKeyOf(block) === areaKeyOf(nextBlock)
+                            const prevKey = idx > 0 ? areaKeyOf(blocks[idx - 1]) : null
+                            const thisKey = areaKeyOf(block)
+                            const headerVM = thisKey !== prevKey ? areaById.get(thisKey) : undefined
 
                             return (
                                 <div key={block.uid}>
-                                    {showSecHeader && (
-                                        <SectionDropZone
+                                    {headerVM && (
+                                        <AreaDropZone
                                             dayId={dayId}
-                                            section={thisSec}
-                                            label={
-                                                thisSec === 'warmup'
-                                                    ? 'Calentamiento'
-                                                    : thisSec === 'main'
-                                                      ? 'Principal'
-                                                      : 'Enfriamiento'
-                                            }
+                                            area={headerVM}
                                             showDropHint={!narrowLayout}
                                         />
                                     )}
                                     <ExerciseBlock
                                         block={block}
                                         dayId={dayId}
+                                        areaVMs={areaVMs}
+                                        currentAreaId={thisKey}
                                         onEdit={onEditBlock}
                                         onRemove={onRemoveBlock}
                                         onUpdate={onUpdateBlock}
@@ -353,9 +351,9 @@ function DayColumnInner({
                                                 ? () => onToggleSuperset(dayId, block.uid)
                                                 : undefined
                                         }
-                                        onSetSection={
-                                            onSetBlockSection
-                                                ? (s) => onSetBlockSection(dayId, block.uid, s)
+                                        onSetArea={
+                                            onSetBlockArea
+                                                ? (areaId) => onSetBlockArea(dayId, block.uid, areaId)
                                                 : undefined
                                         }
                                         onToggleOverride={
@@ -400,12 +398,12 @@ function DayColumnInner({
                                                     title={
                                                         canLinkSuperset
                                                             ? 'Agrupar como superserie con el siguiente ejercicio'
-                                                            : 'Solo puedes enlazar con el siguiente ejercicio de la misma sección (CAL, PRI o ENF)'
+                                                            : 'Solo puedes enlazar con el siguiente ejercicio de la misma área'
                                                     }
                                                     aria-label={
                                                         canLinkSuperset
                                                             ? 'Agrupar como superserie con el siguiente ejercicio'
-                                                            : 'Superserie no disponible: el siguiente ejercicio es de otra sección'
+                                                            : 'Superserie no disponible: el siguiente ejercicio es de otra área'
                                                     }
                                                     className={cn(
                                                         'flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest px-3 py-2 max-md:py-2.5 rounded-full border border-dashed transition-colors',
@@ -426,24 +424,14 @@ function DayColumnInner({
 
                         {blocks.length === 0 && (
                             <div className="space-y-1">
-                                <SectionDropZone
-                                    dayId={dayId}
-                                    section="warmup"
-                                    label="Calentamiento"
-                                    showDropHint={!narrowLayout}
-                                />
-                                <SectionDropZone
-                                    dayId={dayId}
-                                    section="main"
-                                    label="Principal"
-                                    showDropHint={!narrowLayout}
-                                />
-                                <SectionDropZone
-                                    dayId={dayId}
-                                    section="cooldown"
-                                    label="Enfriamiento"
-                                    showDropHint={!narrowLayout}
-                                />
+                                {areaVMs.map(area => (
+                                    <AreaDropZone
+                                        key={area.id}
+                                        dayId={dayId}
+                                        area={area}
+                                        showDropHint={!narrowLayout}
+                                    />
+                                ))}
                                 <p className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-30 text-center pt-2 px-4">
                                     {narrowLayout
                                         ? 'Añade ejercicios desde el menú inferior o con la lupa del día'

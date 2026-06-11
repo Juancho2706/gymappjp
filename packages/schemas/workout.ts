@@ -58,7 +58,9 @@ export const WorkoutBlockSchema = z.object({
     progression_type: z.enum(['weight', 'reps']).nullable().optional(),
     progression_value: z.preprocess(preprocessOptionalFiniteProgression, optionalProgression),
     section: z.enum(['warmup', 'main', 'cooldown']).optional(),
-    section_template_id: z.string().uuid().nullable().optional(),
+    // z.guid(), NO z.uuid(): los UUIDs seed de las areas system (0000a5ec-*, version/variante 0)
+    // no cumplen RFC 9562 y el .uuid() estricto de Zod 4 los rechaza (rompe el save de todo plan).
+    section_template_id: z.guid().nullable().optional(),
     is_override: z.boolean().optional(),
 })
 

@@ -15,24 +15,38 @@ en verde, 3 sections clásicos byte-identical (sin regresión), commit + push po
       effectiveWorkoutSection 3 clásicos + fallbacks NULL/''/desconocido + WORKOUT_SECTION_ORDER +
       contratos de groupContiguousSupersetRuns). Corre local sin Supabase.
 - [x] Mapa exhaustivo de call sites del union duro: `CALLSITES.md` (scout 2026-06-10).
-- [ ] Baseline del reducer (`usePlanBuilder` SET_BLOCK_SECTION/TOGGLE_SUPERSET con fixtures) — al
-      arrancar F2 (requiere exportar el reducer puro o renderHook).
+- [x] Baseline del reducer (`usePlanBuilder` SET_BLOCK_SECTION/TOGGLE_SUPERSET con fixtures):
+      `hooks/usePlanBuilder.test.ts` — 8 asserts del comportamiento clasico escritos y verificados
+      en verde CONTRA el reducer viejo antes del refactor F2 (+8 asserts de areas post-refactor).
 - [ ] Snapshot E2E del render (builder + ejecución) — junto al gate E2E autorizado del plan.
 
-## F1 — Datos en el builder
-- [ ] `_data/builder.queries.ts` (o nuevo): cargar áreas disponibles (system + coach + team, `sort_order`).
-- [ ] `BuilderBlock.section_template_id?: string | null`; mapear al cargar bloques (DB→BuilderBlock).
-- [ ] Pasar `areas` como prop al builder (sin cambiar UI todavía).
+## F1 — Datos en el builder (commit d71e4c7)
+- [x] `_data/builder.queries.ts` + `_data/template-builder.queries.ts`: cargan áreas disponibles vía
+      `workout-areas.service` → `workout.repository.findAvailableSectionTemplates` (scope por workspace
+      activo: team ⇒ system+team; standalone ⇒ system+propias; enterprise ⇒ solo system v1).
+- [x] `BuilderBlock.section_template_id?: string | null`; mapeado en `mapDbBlockToBuilderBlock`,
+      `createDefaultBlock`, `TemplatePickerDialog` y select de `loadTemplateForBuilderAction`.
+- [x] `areas` como prop al builder (ambos entry points) hasta `usePlanBuilder` (sin cambiar UI).
 
-## F2 — Reducer por área
-- [ ] `usePlanBuilder`: normalización/agrupación por `section_template_id` con fallback `section`→área system.
-- [ ] Acción `SET_BLOCK_AREA(uid, areaId)` (deriva `section` bucket legacy: system→slug, custom→`main`).
-- [ ] Verificar 3 clásicos byte-identical.
+## F2 — Reducer por área (commit ce4a5ed)
+- [x] `lib/workout-areas.ts`: helpers puros (`effectiveAreaId/Key`, `legacyBucketFor`, `orderedAreaIds`).
+- [x] Acción `SET_BLOCK_AREA(uid, areaId)`: reagrupa por `sort_order` con fallback legacy y barrido
+      anti-pérdida; `SET_BLOCK_SECTION` delega (sincroniza section + section_template_id);
+      `TOGGLE_SUPERSET` exige misma área efectiva. Save persiste `section_template_id`.
+- [x] Verificar 3 clásicos byte-identical: baseline del reducer en verde sin cambios.
 
 ## F3 — UI builder dinámica
-- [ ] `DayColumn`: drop zones + headers desde áreas (orden `sort_order`), colores por índice/paleta.
-- [ ] `ExerciseBlock`: selector de área dinámico (dropdown), labels/colores del área, popup genérico.
-- [ ] Review adversarial (UI núcleo). Byte-identical 3 clásicos.
+- [x] `DayColumn`: `AreaDropZone` + headers desde áreas (`area-ui.ts`: VMs con orden `sort_order`,
+      clásicos con clases EXACTAS de antes, paleta por índice para el resto). Empty state lista
+      todas las áreas disponibles; drop de ejercicio nuevo sobre una zona lo crea EN esa área
+      (un solo paso de undo). Superserie exige misma área efectiva.
+- [x] `ExerciseBlock`: badge + selector de área dinámico (Popover "Mover a área", targets 44px
+      mobile), popup de ayuda genérico (sin CAL/PRI/ENF hardcodeado).
+- [x] Review adversarial (workflow 4 dimensiones + verificación por hallazgo): CRÍTICO real
+      encontrado y corregido — Zod 4 `.uuid()` estricto RFC 9562 rechazaba los UUIDs seed
+      `0000a5ec-*` (versión 0) → el save de TODO plan habría fallado al enviar
+      `section_template_id`. Fix: `z.guid()` solo en ese campo + contrato
+      `packages/schemas/workout.test.ts` (8 asserts). Byte-identical 3 clásicos: baselines verdes.
 
 ## F4 — CRUD áreas custom
 - [ ] Server actions (user-scoped, RLS `wst_*`): crear/renombrar/ordenar/soft-delete; contexto team vs standalone
