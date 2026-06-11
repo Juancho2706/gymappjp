@@ -67,3 +67,44 @@ describe('getVisibleNavItems — matriz por contexto', () => {
         expect(k).not.toContain('settings_team')
     })
 })
+
+describe('getVisibleNavItems — módulos toggleables (entitlements, specs movida)', () => {
+    it('sin enabledModules los items con entitlement quedan ocultos (default OFF)', () => {
+        const k = keys(getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' }))
+        expect(k).not.toContain('cardio')
+        expect(k).not.toContain('movement')
+    })
+
+    it('con el módulo ON aparecen en standalone y team, en su posición', () => {
+        const enabledModules = { cardio: true, movement_assessment: true }
+        for (const ws of ['coach_standalone', 'coach_team'] as const) {
+            const k = keys(getVisibleNavItems({
+                activeWorkspaceType: ws,
+                subscriptionStatus: ws === 'coach_team' ? 'team_managed' : 'active',
+                enabledModules,
+            }))
+            expect(k).toContain('cardio')
+            expect(k).toContain('movement')
+        }
+    })
+
+    it('ON parcial: solo aparece el módulo habilitado', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_team',
+            subscriptionStatus: 'team_managed',
+            enabledModules: { cardio: true },
+        }))
+        expect(k).toContain('cardio')
+        expect(k).not.toContain('movement')
+    })
+
+    it('enterprise NUNCA ve los módulos movida aunque estén ON (v1 fuera de enterprise)', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'enterprise_coach',
+            subscriptionStatus: 'org_managed',
+            enabledModules: { cardio: true, movement_assessment: true },
+        }))
+        expect(k).not.toContain('cardio')
+        expect(k).not.toContain('movement')
+    })
+})

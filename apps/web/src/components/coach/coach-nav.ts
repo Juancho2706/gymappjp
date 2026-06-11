@@ -8,11 +8,13 @@ import {
     ClipboardList,
     CreditCard,
     LifeBuoy,
+    HeartPulse,
+    PersonStanding,
     type LucideIcon,
 } from 'lucide-react'
 import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import type { WorkspaceType } from '@/domain/auth/types'
-import type { ModuleKey } from '@/services/entitlements.service'
+import type { EnabledModules, ModuleKey } from '@/services/entitlements.service'
 
 /**
  * NAV COMO REGISTRO DE MÓDULOS — única fuente de verdad del menú del coach.
@@ -46,6 +48,10 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'team', href: '/coach/team', label: 'Equipo', shortLabel: 'Team', icon: UsersRound, contexts: ['coach_team'] },
     { key: 'programs', href: '/coach/workout-programs', label: 'Programas', shortLabel: 'Planes', icon: ClipboardList, contexts: ALL },
     { key: 'exercises', href: '/coach/exercises', label: 'Ejercicios', shortLabel: 'Ejer.', icon: Dumbbell, contexts: ALL },
+    // Módulos toggleables (specs movida): visibles solo con el entitlement ON para el contexto
+    // activo (enabledModules en getVisibleNavItems); enterprise excluido en v1.
+    { key: 'cardio', href: '/coach/cardio', label: 'Cardio', shortLabel: 'Cardio', icon: HeartPulse, contexts: ['coach_standalone', 'coach_team'], entitlement: 'cardio' },
+    { key: 'movement', href: '/coach/movement', label: 'Movimiento', shortLabel: 'Movim.', icon: PersonStanding, contexts: ['coach_standalone', 'coach_team'], entitlement: 'movement_assessment' },
     { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: Apple, contexts: ALL },
     { key: 'brand', href: '/coach/settings', label: 'Mi Marca', shortLabel: 'Marca', icon: Settings, contexts: ['coach_standalone'] },
     // C (Settings hub): mismo href que 'brand' pero en contexto TEAM — la página es
@@ -68,6 +74,9 @@ export type VisibleNavContext = {
     /** Workspace ACTIVO del coach; null/undefined ⇒ standalone (coach single-contexto sin preferencia). */
     activeWorkspaceType?: WorkspaceType | null
     subscriptionStatus?: string | null
+    /** Módulos habilitados del CONTEXTO activo (team ⇒ del pool; standalone ⇒ propios).
+     *  Ausente/undefined ⇒ los items con `entitlement` se ocultan (default OFF). */
+    enabledModules?: EnabledModules | null
 }
 
 /**
@@ -93,6 +102,9 @@ export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
     return NAV_MODULES.filter((item) => {
         if (!item.contexts.includes(active)) return false
         if (isManaged && (item.key === 'brand' || item.key === 'billing')) return false
+        // Módulos toggleables: solo con el entitlement ON (el gate real es server-side
+        // via assertModule; esto es espejo visual — default OFF).
+        if (item.entitlement && ctx.enabledModules?.[item.entitlement] !== true) return false
         return true
     })
 }

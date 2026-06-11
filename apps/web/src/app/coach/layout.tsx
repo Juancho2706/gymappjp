@@ -15,6 +15,12 @@ import { generateBrandPalette } from '@/lib/color-utils'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace, listUserWorkspaces } from '@/services/auth/workspace.service'
+import {
+    applyOperatorKillSwitch,
+    getCoachEnabledModules,
+    getTeamEnabledModules,
+    type EnabledModules,
+} from '@/services/entitlements.service'
 
 export const metadata: Metadata = {
     title: {
@@ -52,9 +58,20 @@ export default async function CoachLayout({
     ])
     const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
     const activeTeamWorkspace = activeWorkspace?.type === 'coach_team' ? activeWorkspace : null
-    const [enterpriseContext, teamContext] = await Promise.all([
+    // Módulos toggleables del CONTEXTO activo (team ⇒ del pool; standalone ⇒ propios;
+    // enterprise ⇒ ninguno en v1). El nav los espeja; el gate real es assertModule.
+    const resolveEnabledModules = async (): Promise<EnabledModules> => {
+        if (activeEnterpriseCoach) return {}
+        const raw = activeTeamWorkspace
+            ? await getTeamEnabledModules(supabase, activeTeamWorkspace.teamId)
+            : await getCoachEnabledModules(supabase, coach.id)
+        return applyOperatorKillSwitch(raw)
+    }
+
+    const [enterpriseContext, teamContext, enabledModules] = await Promise.all([
         getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
         getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
+        resolveEnabledModules(),
     ])
     const currentWorkspaceLabel =
         activeWorkspace?.label ??
@@ -139,6 +156,7 @@ export default async function CoachLayout({
                     workspaces={workspaces}
                     currentWorkspaceLabel={currentWorkspaceLabel}
                     activeWorkspaceType={activeWorkspace?.type ?? null}
+                    enabledModules={enabledModules}
                 />
                 <CoachMainWrapper>
                     {/* Background ambient glow */}

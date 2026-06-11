@@ -25,7 +25,28 @@ export const MODULE_KEYS = [
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
 
-type EnabledModules = Partial<Record<ModuleKey, boolean>>
+export type EnabledModules = Partial<Record<ModuleKey, boolean>>
+
+/**
+ * Kill-switch de PLATAFORMA (flag de operador, por encima del entitlement del tenant):
+ * EVA_DISABLED_MODULES="cardio,body_composition" apaga el modulo para TODOS aunque el
+ * team/coach lo tenga ON. Requiere redeploy (decision v1 del Director §2.1). El toggle
+ * de Settings>Modulos NO se oculta: el gate real es server-side via hasModule/assertModule.
+ */
+export function isModuleKilledByOperator(key: ModuleKey): boolean {
+    const raw = process.env.EVA_DISABLED_MODULES ?? ''
+    if (!raw) return false
+    return raw.split(',').map((s) => s.trim()).filter(Boolean).includes(key)
+}
+
+/** Aplica el kill-switch de operador sobre un mapa de modulos (para UI/nav). */
+export function applyOperatorKillSwitch(modules: EnabledModules): EnabledModules {
+    const out: EnabledModules = {}
+    for (const key of MODULE_KEYS) {
+        out[key] = modules[key] === true && !isModuleKilledByOperator(key)
+    }
+    return out
+}
 
 function asModules(value: unknown): EnabledModules {
     return (value && typeof value === 'object' ? (value as EnabledModules) : {})
@@ -50,6 +71,7 @@ export async function hasModule(
     key: ModuleKey,
     ctx: { teamId?: string | null; coachId?: string | null }
 ): Promise<boolean> {
+    if (isModuleKilledByOperator(key)) return false
     if (ctx.teamId) {
         return (await getTeamEnabledModules(db, ctx.teamId))[key] === true
     }

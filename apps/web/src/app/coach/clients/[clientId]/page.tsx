@@ -1,10 +1,12 @@
 import { Suspense } from 'react'
 import { getClientProfileData } from './_actions/client-detail.actions'
-import { ArrowLeft, FileDown } from 'lucide-react'
+import { ArrowLeft, FileDown, HeartPulse, PersonStanding, Scale, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientProfileDashboard } from './ClientProfileDashboard'
 import { ClientProfileHero } from './ClientProfileHero'
+import { createClient } from '@/lib/supabase/server'
+import { hasModule } from '@/services/entitlements.service'
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
     const { clientId } = await params
@@ -76,7 +78,56 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 nutritionFirstPlanId={firstPlan?.id}
             />
 
+            <ModuleLinksRow clientId={clientId} />
+
             <ClientProfileDashboard data={data} />
+        </div>
+    )
+}
+
+/**
+ * Accesos a los módulos movida (cardio / screening / composición corporal) gateados
+ * server-side por el contexto del RECURSO (team del alumno ⇒ módulos del pool;
+ * standalone ⇒ del coach; enterprise fuera en v1). El gate real de cada página es
+ * assertModule — esto es espejo visual, igual que el nav.
+ */
+async function ModuleLinksRow({ clientId }: { clientId: string }) {
+    const supabase = await createClient()
+    const { data: row } = await supabase
+        .from('clients')
+        .select('team_id, org_id, coach_id')
+        .eq('id', clientId)
+        .maybeSingle()
+    if (!row || row.org_id) return null
+
+    const ctx = row.team_id ? { teamId: row.team_id } : { coachId: row.coach_id }
+    const [cardio, movement, bodycomp] = await Promise.all([
+        hasModule(supabase, 'cardio', ctx),
+        hasModule(supabase, 'movement_assessment', ctx),
+        hasModule(supabase, 'body_composition', ctx),
+    ])
+
+    const links = [
+        cardio ? { href: `/coach/cardio/${clientId}`, label: 'Perfil cardio', Icon: HeartPulse } : null,
+        movement ? { href: `/coach/movement/${clientId}`, label: 'Screening de movimiento', Icon: PersonStanding } : null,
+        bodycomp ? { href: `/coach/clients/${clientId}/bodycomp`, label: 'Composición corporal', Icon: Scale } : null,
+    ].filter((l): l is { href: string; label: string; Icon: typeof HeartPulse } => l !== null)
+
+    if (!links.length) return null
+
+    return (
+        <div className="flex flex-wrap gap-2 print:hidden">
+            {links.map(({ href, label, Icon }) => (
+                <Link
+                    key={href}
+                    href={href}
+                    className="group flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition-all hover:border-primary/30 hover:bg-card/80"
+                >
+                    <Icon className="h-4 w-4 text-primary" />
+                    {label}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+            ))}
         </div>
     )
 }

@@ -22,6 +22,7 @@ import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
 import { getVisibleNavItems } from '@/components/coach/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
+import type { EnabledModules } from '@/services/entitlements.service'
 
 interface CoachSidebarProps {
     coachName: string
@@ -37,9 +38,11 @@ interface CoachSidebarProps {
     currentWorkspaceLabel?: string
     /** Workspace ACTIVO — gobierna qué módulos del nav se muestran (separación de flujos). */
     activeWorkspaceType?: WorkspaceType | null
+    /** Módulos toggleables habilitados para el contexto activo (resuelto server-side en el layout). */
+    enabledModules?: EnabledModules | null
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType, enabledModules }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -94,7 +97,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
     const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
     // Registro nav-como-módulos: cada flujo (standalone/enterprise/team) ve SOLO sus módulos.
-    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus })
+    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules })
 
     return (
         <>
