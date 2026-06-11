@@ -885,6 +885,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             ? b.progression_value
                             : null,
                     section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
+                    section_template_id: b.section_template_id ?? null,
                     is_override: b.is_override ?? false,
                     order_index: idx
                 }))

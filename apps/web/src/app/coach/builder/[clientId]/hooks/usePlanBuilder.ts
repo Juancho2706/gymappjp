@@ -3,6 +3,13 @@
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react'
 import type { BuilderBlock, BuilderSection, DayState } from '../types'
 import type { WorkoutArea } from '@/domain/workout/types'
+import {
+    LEGACY_SECTION_AREA_ID,
+    classicSlugForAreaId,
+    effectiveAreaKey,
+    legacyBucketFor,
+    orderedAreaIds,
+} from '@/lib/workout-areas'
 import { arrayMove } from '@dnd-kit/sortable'
 
 export const DAYS_OF_WEEK = [
@@ -27,13 +34,16 @@ type BuilderAction =
     | { type: 'TOGGLE_REST_DAY'; payload: { dayId: number } }
     | { type: 'TOGGLE_SUPERSET'; payload: { dayId: number; uid: string } }
     | { type: 'SET_BLOCK_SECTION'; payload: { dayId: number; uid: string; section: BuilderSection } }
+    | { type: 'SET_BLOCK_AREA'; payload: { dayId: number; uid: string; areaId: string } }
     | { type: 'TOGGLE_OVERRIDE'; payload: { uid: string } }
 
-function normalizedSection(b: BuilderBlock): BuilderSection {
-    return b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main'
-}
+export type { BuilderAction }
 
-function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
+export function builderReducer(
+    state: DayState[],
+    action: BuilderAction,
+    areas: readonly WorkoutArea[] = []
+): DayState[] {
     switch (action.type) {
         case 'SET_DAYS':
             return action.payload
@@ -116,11 +126,29 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
         }
 
         case 'SET_BLOCK_SECTION': {
+            // Compat legacy: delega en SET_BLOCK_AREA con el area system equivalente
+            // (mantiene section y section_template_id sincronizados).
             const { dayId, uid, section } = action.payload
+            return builderReducer(
+                state,
+                { type: 'SET_BLOCK_AREA', payload: { dayId, uid, areaId: LEGACY_SECTION_AREA_ID[section] } },
+                areas
+            )
+        }
+
+        case 'SET_BLOCK_AREA': {
+            const { dayId, uid, areaId } = action.payload
             return state.map(d => {
                 if (d.id !== dayId) return d
                 const block = d.blocks.find(b => b.uid === uid)
                 if (!block) return d
+
+                const area = areas.find(a => a.id === areaId) ?? null
+                const bucket: BuilderSection = area
+                    ? legacyBucketFor(area)
+                    : (classicSlugForAreaId(areaId) ?? 'main')
+
+                // Mover de area rompe la superserie completa del bloque (igual que el legacy)
                 const groupId = block.superset_group?.trim() || null
                 const rest = d.blocks
                     .filter(b => b.uid !== uid)
@@ -130,14 +158,37 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
                         }
                         return b
                     })
-                const moved: BuilderBlock = { ...block, section, superset_group: null }
-                const warmup = rest.filter(b => normalizedSection(b) === 'warmup')
-                const main = rest.filter(b => normalizedSection(b) === 'main')
-                const cool = rest.filter(b => normalizedSection(b) === 'cooldown')
-                if (section === 'warmup') warmup.push(moved)
-                else if (section === 'main') main.push(moved)
-                else cool.push(moved)
-                return { ...d, blocks: [...warmup, ...main, ...cool] }
+                const moved: BuilderBlock = { ...block, section: bucket, section_template_id: areaId, superset_group: null }
+
+                // Reagrupar el dia por area en orden sort_order; areas desconocidas caen al
+                // bucket legacy y un barrido final garantiza no perder NINGUN bloque.
+                const order = orderedAreaIds(areas)
+                const known = new Set(order)
+                const groups = new Map<string, BuilderBlock[]>()
+                for (const b of rest) {
+                    const key = effectiveAreaKey(b, known)
+                    const group = groups.get(key)
+                    if (group) group.push(b)
+                    else groups.set(key, [b])
+                }
+                const targetKey = known.has(areaId) ? areaId : LEGACY_SECTION_AREA_ID[bucket]
+                const targetGroup = groups.get(targetKey)
+                if (targetGroup) targetGroup.push(moved)
+                else groups.set(targetKey, [moved])
+
+                const blocks: BuilderBlock[] = []
+                const used = new Set<string>()
+                for (const id of order) {
+                    const group = groups.get(id)
+                    if (group) {
+                        blocks.push(...group)
+                        used.add(id)
+                    }
+                }
+                for (const [id, group] of groups) {
+                    if (!used.has(id)) blocks.push(...group)
+                }
+                return { ...d, blocks }
             })
         }
 
@@ -174,7 +225,9 @@ function builderReducer(state: DayState[], action: BuilderAction): DayState[] {
                     // Last block can't link forward
                     if (idx === d.blocks.length - 1) return d
                     const nextBlock = d.blocks[idx + 1]
-                    if (normalizedSection(block) !== normalizedSection(nextBlock)) return d
+                    // Solo se enlazan bloques de la MISMA area efectiva (legacy: misma seccion)
+                    const knownAreaIds = new Set(orderedAreaIds(areas))
+                    if (effectiveAreaKey(block, knownAreaIds) !== effectiveAreaKey(nextBlock, knownAreaIds)) return d
                     // Reuse next block's group, or find a new letter
                     const groupToUse = nextBlock.superset_group || (() => {
                         const usedGroups = new Set(d.blocks.map(b => b.superset_group).filter(Boolean))
@@ -205,7 +258,7 @@ export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutA
     const areasRef = useRef(areas)
     useEffect(() => { areasRef.current = areas }, [areas])
     const boundReducer = useCallback(
-        (state: DayState[], action: BuilderAction) => builderReducer(state, action),
+        (state: DayState[], action: BuilderAction) => builderReducer(state, action, areasRef.current),
         []
     )
     const [days, dispatch] = useReducer(boundReducer, initialDays)
@@ -279,6 +332,10 @@ export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutA
         dispatchWithHistory({ type: 'SET_BLOCK_SECTION', payload: { dayId, uid, section } })
     }, [dispatchWithHistory])
 
+    const setBlockArea = useCallback((dayId: number, uid: string, areaId: string) => {
+        dispatchWithHistory({ type: 'SET_BLOCK_AREA', payload: { dayId, uid, areaId } })
+    }, [dispatchWithHistory])
+
     const toggleBlockOverride = useCallback((uid: string) => {
         dispatchWithHistory({ type: 'TOGGLE_OVERRIDE', payload: { uid } })
     }, [dispatchWithHistory])
@@ -295,6 +352,7 @@ export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutA
         toggleRestDay,
         toggleSuperset,
         setBlockSection,
+        setBlockArea,
         toggleBlockOverride,
         undo,
         redo,
