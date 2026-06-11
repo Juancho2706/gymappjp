@@ -11,8 +11,13 @@ en verde, 3 sections clásicos byte-identical (sin regresión), commit + push po
 - [x] Query ejecución trae `section_template_id`.
 
 ## F0 — Baselines anti-regresión
-- [ ] Snapshot byte-identical del render del builder (3 sections) para un día de ejemplo.
-- [ ] Snapshot de la ejecución del alumno (agrupación/headers) para un plan legacy.
+- [x] Baseline UNIT del núcleo compartido: `apps/web/src/lib/workout-block-grouping.test.ts` (9 asserts:
+      effectiveWorkoutSection 3 clásicos + fallbacks NULL/''/desconocido + WORKOUT_SECTION_ORDER +
+      contratos de groupContiguousSupersetRuns). Corre local sin Supabase.
+- [x] Mapa exhaustivo de call sites del union duro: `CALLSITES.md` (scout 2026-06-10).
+- [ ] Baseline del reducer (`usePlanBuilder` SET_BLOCK_SECTION/TOGGLE_SUPERSET con fixtures) — al
+      arrancar F2 (requiere exportar el reducer puro o renderHook).
+- [ ] Snapshot E2E del render (builder + ejecución) — junto al gate E2E autorizado del plan.
 
 ## F1 — Datos en el builder
 - [ ] `_data/builder.queries.ts` (o nuevo): cargar áreas disponibles (system + coach + team, `sort_order`).
